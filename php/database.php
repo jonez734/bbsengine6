@@ -1,12 +1,11 @@
 <?php
 
-require_once("MDB2.php");
+//require_once("MDB2.php");
 require_once("Log.php");
 
 /**
  * @since 20221116
  */
-/*
 function databaseconnect($dsn)
 {
   static $pdocache = [];
@@ -36,8 +35,8 @@ function databaseconnect($dsn)
   $pdocache[$dsn] = $pdo;
   return $pdo;
 }
-*/
 
+/*
 function &databaseconnect($dsn)
 {
   logentry("databaseconnect.100: dsn=".var_export($dsn, true));
@@ -65,5 +64,5 @@ function &databaseconnect($dsn)
 
   return $dbh;
 }
-
+*/
 ?>
