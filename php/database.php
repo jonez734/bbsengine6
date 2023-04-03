@@ -22,7 +22,7 @@ function databaseconnect($dsn)
     \PDO::ATTR_EMULATE_PREPARES   => false,
   ];
   
-  $user = "apache";
+  $user = "";
   
   $pass = "";
 
@@ -35,9 +35,8 @@ function databaseconnect($dsn)
   $pdocache[$dsn] = $pdo;
   return $pdo;
 }
-
 /*
-function &databaseconnect($dsn)
+function databaseconnect($dsn)
 {
   logentry("databaseconnect.100: dsn=".var_export($dsn, true));
 //  $dbh = MDB2::singleton($dsn);
@@ -65,4 +64,21 @@ function &databaseconnect($dsn)
   return $dbh;
 }
 */
+
+// def insert(dbh, table:str, dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
+function insert($dbh, $tablename, $data, $returnid=true, $primarykey="id", $mogrify=false)
+{
+    $keys = array_keys($data);
+    $keys = array_map("pg_escape_identifier", $keys);
+//    $keys = array_map('escape_mysql_identifier', $keys);
+    $fields = implode(",", $keys);
+//    $table = escape_mysql_identifier($table);
+    $placeholders = str_repeat('?,', count($keys) - 1) . '?';
+    $sql = "INSERT INTO ".pg_escape_identifier($tablename)."($fields) VALUES ($placeholders)";
+    if ($returnid === true)
+    {
+      $sql += " returning {$tablename}.{$primarykey}";
+    }
+    $dbh->prepare($sql)->execute(array_values($data));
+}  
 ?>
