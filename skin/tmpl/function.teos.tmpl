@@ -1,0 +1,6 @@
+{*<pre>uri: {$uri|var_export} title:{$title|var_export}</pre>*}
+{if $itemprop === true}
+<a class="tooltip teosfolder" data-contenturl="{$smarty.const.TEOSURL}{$uri}detail?bare" itemprop="url" href="{$smarty.const.TEOSURL}{$uri}"><span itemprop="title">{$title}</span></a>
+{else}
+<a class="tooltip teosfolder" data-contenturl="{$smarty.const.TEOSURL}{$uri}detail?bare" href="{$smarty.const.TEOSURL}{$uri}"><span>{$title}</span></a>
+{/if}

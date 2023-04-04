@@ -1,0 +1,96 @@
+@import "vars";
+@import "mixins";
+
+form {
+  margin: 5px;
+  padding: 0;
+
+/*
+  input, textarea {
+    @include transition(all 1.0s ease);
+    border: 2px solid $textcolor;
+    background-color: lighten($backgroundcolor, 5%); // #336699;
+    color: $textcolor;
+  }
+*/
+  fieldset {
+    border: 0;
+    margin: 0;
+    padding: 5px;
+
+    h1 {
+      background-color: #F0F0F0;
+      padding: 4px;
+      margin: 0;
+      color: #000000;
+      border: 0;
+      border-bottom: 2px solid #999999;
+    }
+
+    label {
+      color: $blurb-body-color;
+      &.error {
+        background-color: yellow;
+        color: #000;
+      }
+    }
+
+    input:focus, textarea:focus {
+      background-color: white;
+      border: 2px solid black;
+      color: #000000;
+    }
+  }
+
+	.row .element.error {
+	  &input, &textarea {
+     border: 2px solid red;
+    }
+	}
+}
+
+div.errors {
+  color: $form-errors-color;
+
+  h1 {
+    padding: 0.25em;
+    margin: 0;
+    color: $form-color;
+  }
+}
+
+.requiredstar {
+  color: red;
+}
+
+/**
+ * @since 2016nov03
+ * ripped from https://codepen.io/bbodine1/pen/novBm , decided not to use it
+ */
+/**
+ * @since 2016nov03
+ * https://codepen.io/jamesbarnett/pen/yILjk
+ */
+input[type=checkbox] {
+//  display:none; 
+  + label:before {
+   font-family: FontAwesome;
+   display: inline-block;
+   content: "\f096"; /* icon-checked-empty */
+   letter-spacing: 0.50em; 
+   transition: color 0.5s ease-in-out;
+   color: green;
+  }
+}
+
+input[type=checkbox]:checked {
+ + label:before {
+  content: "\f046"; /* icon-check */
+  letter-spacing: 0.38em;
+  color: red;
+ }
+}
+
+.captchaclass img {
+     margin-bottom: 0.25em;
+}

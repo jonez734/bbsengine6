@@ -1,0 +1,14 @@
+{if $currentmemberid > 0}
+{$credits = $currentmember.credits}
+<div class="end credits">
+ <div class="inner">
+  <span class="fa fa-money-bill fa-fw"></span>
+  {if $credits == 1}
+   &nbsp;{$credits} credit
+  {else if $credits > 1}
+   &nbsp;{$credits|number_format} credits
+  {/if}
+  {* {if $currentmember.flags.ADMIN===True}[&nbsp;<a href="{$smarty.const.ENGINEURL}member-edit-{$currentmemberid}">edit</a>&nbsp;]{/if}*}
+ </div>
+</div>
+{/if}

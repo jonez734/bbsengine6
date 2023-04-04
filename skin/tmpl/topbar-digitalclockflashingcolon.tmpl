@@ -1,0 +1,14 @@
+{$hr = date("g")}
+{$min = date("i")}
+{$mer = date("A")}
+{$zone = date("T")}
+<div id="clock" class="end" data-locked="true">
+<div class="inner">
+<span class="fa fa-clock fa-fw"></span>
+<span class="currenthours">{$hr}</span>
+<span class="flashingcolon">:</span>
+<span class="currentminutes">{$min}</span>
+<span class="meridian">{$mer}</span>
+<span class="currenttz">{$zone}</span>
+</div>
+</div>

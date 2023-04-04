@@ -1,0 +1,36 @@
+$page-backgroundcolor: gray;
+$page-color: white;
+
+$blurb-backgroundcolor: $page-backgroundcolor;
+$blurb-color: $page-color;
+
+$blurb-body-backgroundcolor: $page-backgroundcolor;
+$blurb-body-color: $page-color;
+
+$blurb-header-backgroundcolor: #006633;
+$blurb-header-color: white; 
+
+$blurb-footer-backgroundcolor: $blurb-body-backgroundcolor;
+$blurb-footer-color: $blurb-body-color;
+
+$blurb-metadata-color: $blurb-body-color; 
+$blurb-metadata-backgroundcolor: $blurb-body-backgroundcolor;
+
+$blurb-border-color: black; 
+
+$page-anchor-color: $page-color;
+$page-anchor-backgroundcolor: $page-backgroundcolor;
+
+$page-anchor-hover-color: $page-color;
+$page-anchor-hover-backgroundcolor: $page-backgroundcolor;
+
+$page-anchor-visited-color: darken($page-color, 10%);
+$page-anchor-visited-backgroundcolor: white;
+
+$form-color: $blurb-body-color;
+$form-backgroundcolor: $blurb-body-backgroundcolor;
+$form-errors-color: white;
+
+$notify-backgroundcolor: $blurb-backgroundcolor;
+$notify-color: $blurb-color;
+$notify-footer-backgroundcolor: #ababab;

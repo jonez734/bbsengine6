@@ -1,0 +1,32 @@
+{extends file="page.tmpl"}
+{$delay = $data.delay}
+{if $delay === 0}
+  {block name="head"}
+    <script src="{$smarty.const.ENGINEURL}js/redirectpage.js" defer></script>
+    <link rel="stylesheet" type="text/css" href="{$smarty.const.SKINURL}css/redirectpage.css" media="screen" />
+    <meta http-equiv="refresh" content="{$data.delay};url={$data.url}" /> {* prefer http 301 *}
+  {/block}
+  {block name="body"}<body></body>{/block}
+{else}
+  {block name="head" append}
+    <script src="{$smarty.const.ENGINEURL}js/redirectpage.js" defer></script>
+    <link rel="stylesheet" type="text/css" href="{$smarty.const.SKINURL}css/redirectpage.css" media="screen" />
+    {if $data.delay !== -1}
+      <meta http-equiv="refresh" content="{$data.delay};url={$data.url}" /> {* prefer http 301 *}
+    {/if}
+  {/block}
+{/if}
+{if $delay > 0}
+  {block name="body"}
+    {block name="content"}
+      <div class="blurb redirectpage vstretch">
+        <div class="header"><h1>page redirect</h1></div> {* header *}
+        <div class="body">
+          <p>{$data.message|escape}</p>
+          <p>this page should automagically redirect in <span class="counter">{$data.delay}</span> <span class="noun">seconds</span>. if not, use this link: <a href="{$data.url}">&lt;{$data.url}&gt;</a></p>
+        </div> {* body *}
+      </div> {* redirectpage *}
+    {/block}
+  {/block}
+{/if}
+{block name="title"}redirecting to {$data.url|escape}{/block}

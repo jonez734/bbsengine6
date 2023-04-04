@@ -1,0 +1,14 @@
+{extends file="page.tmpl"}
+{$statuscode = $data.statuscode}
+{$message = $data.message}
+{$title = $data.title}
+{block name="title"}{$statuscode} - {$title|default:"errormessage.tmpl title"} - {$message}{/block}
+{block name="head" append}
+<link rel="stylesheet" type="text/css" href="{$smarty.const.SKINURL}css/errormessage.css" media="screen" />
+{/block}
+{block name="content"}
+<div class="blurb errormessage vstretch">
+<div class="header"><h1>{$statuscode} - {$title|default:"NEEDINFO:title"}</h1></div>
+<div class="body"><p>{$message|default:"error message"}</p></div>
+</div>
+{/block}

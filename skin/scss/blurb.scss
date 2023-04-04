@@ -1,0 +1,91 @@
+@import "vars";
+@import "mixins";
+
+.blurb {
+  background-color: $blurb-backgroundcolor;
+  color: $blurb-color;
+  margin: 0.5em;
+  // @include bordergradient(lighten($blurb-border-color, 10%), darken($blurb-border-color, 10%), top left, to bottom right);
+  border: 0.125em solid $blurb-border-color;
+  overflow: hidden;
+  
+  flex: 0;
+
+  @include boxshadow();
+  @include textshadow();
+
+  .header {
+    h1, h2, h3 {
+		font-family: serif;
+		margin: 0px;
+  		padding: 10px;
+  		font-weight: bold;
+  		font-size: 1.50em;
+  		color: red;
+  		@include textshadow(); // 4px, 3px, 3px, rgba(0,0,0,0.4)); // darken($backgroundcolor, 2%));
+		@include backgroundgradient($blurb-header-backgroundcolor, darken($blurb-header-backgroundcolor, 2%));
+		color: $blurb-header-color;
+		background-color: $blurb-header-backgroundcolor;
+
+		a:hover {
+			color: $blurb-header-backgroundcolor;
+			background-color: $blurb-header-color;
+		}
+    }
+    &.warning h1 {
+      color: orange;
+    }
+  }
+
+  a {
+	color: $blurb-color;
+    text-decoration-color: yellowgreen;
+    text-decoration: underline;
+    @include transition(all 0.25s);
+      
+    &:hover {
+	color: $blurb-body-backgroundcolor;
+        background-color: invert($blurb-body-backgroundcolor);
+    }
+
+  }
+
+  .body {
+    color: $blurb-body-color; // /* #303030; */
+
+    background-color: $blurb-body-backgroundcolor; // #ababab;
+
+    border: 0;
+    border-top: 0.125em solid $blurb-border-color;
+    margin: 0;
+    padding: 0.5em;
+
+    p {
+		font-family: sans-serif;
+		padding: 0.125em;
+		margin: 0.125em;
+    }
+    a:hover {
+    	background-color: $blurb-body-color;
+    	color: $blurb-body-backgroundcolor;
+    }
+  }
+
+  .metadata {
+    font-size: 0.75em;
+    padding: 0.50em;
+    color: $blurb-metadata-color; // darken($blurb-color, 5%); // #909090;
+    background-color: $blurb-metadata-backgroundcolor;
+  }
+
+  .footer {
+    color: $blurb-footer-color; 
+
+    background-color: $blurb-footer-backgroundcolor;
+    border: 0;
+    border-top: 0.125em solid $blurb-border-color;
+  }
+  &.vstretch {
+  	flex: 1 0 auto;
+  }
+}

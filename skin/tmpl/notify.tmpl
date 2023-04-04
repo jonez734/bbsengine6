@@ -1,0 +1,27 @@
+{* base template for all notifies: terse, detail, and popup modes *}
+<div class="blurb notify {$mode} noborder">
+{if $mode == "popup"}<div class="closebutton"></div>{/if}
+<div class="body">{block name="message"}{/block}</div>
+<div class="footer">
+{*
+<p>
+{if $notify.data.book.rejected}Application Rejected on {$notify.data.book.rejecteddateepoch|datestamp}<br />{/if}
+{if $notify.data.book.offer}Offer made on {$notify.data.book.offerdateepoch|datestamp}<br />{/if}
+{if $notify.data.book.accepted}Offer accepted on {$notify.data.book.acceptdateepoch|datestamp}<br />{/if}
+</p>
+*}
+ <ul class="actions">
+  {if $notify.actions.makeoffer}<li><a href="/offer-{$notify.data.bookid}">Make Offer</a></li>{/if}
+  {if $notify.actions.rejectapp}<li><a href="/reject-{$notify.data.bookid}">Reject Application</a></li>{/if} 
+  {if $notify.actions.delete}<li><a href="/notify-delete-{$notify.id}">Delete Notify</a></li>{/if}
+  {if $notify.actions.detail}<li><a href="/notify-detail-{$notify.id}">Details</a></li>{/if}
+  {if $notify.actions.acceptoffer}<li><a href="/accept-offer-{$notify.data.bookid}">Accept Offer</a></li>{/if}
+  {if $notify.actions.declineoffer}<li><a href="/decline-offer-{$notify.data.bookid}">Decline Offer</a></li>{/if}
+  {if $notify.actions.makepayment}<li><a href="/make-payment-{$notify.data.bookid}">Make Payment</a></li>{/if}
+  {if not $notify.data.job.published and $notify.data.job.actions.publish}<li><a href="/publish-job-{$notify.data.jobid}">publish this job</a></li>{/if}
+ </ul>
+{* <p>notify.type={$notify.type}</p>  *}
+{*<br /><pre>{$notify.data|var_dump}</pre> *}
+<div style="float: right; width: 50%; text-align: right; font-size: 0.75em;">Sent: {$notify.datesentepoch|datestamp}<br />{$notify.type} #{$notify.id}</div>
+</div>
+</div>

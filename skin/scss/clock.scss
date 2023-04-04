@@ -1,0 +1,24 @@
+@import "vars";
+@import "mixins";
+
+#clock {
+  font-family: clockfont;
+  font-size: large; /* 1.5em; */
+
+  &.init {
+    opacity: 1;
+    color: white;
+
+    /* #25567B; */
+  }
+
+  &.running {
+    opacity: 1;
+    color: white;
+  }
+}
+
+@font-face {
+  font-family: clockfont;
+/*  src: url(//static.zoidtechnologies.com/digital-7-mono.ttf); */
+}

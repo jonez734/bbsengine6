@@ -1,0 +1,51 @@
+{if array_key_exists($element.id, $form.errors)}{$error=True}{else}{$error=False}{/if}
+{if $element.type === "fieldset"}
+	<div class="blurb noshadow">
+		{if isset($element.label)}<div class="header"><h1>{$element.label}</h1></div>{/if}
+		<div class="body">
+			<fieldset {$element.attributes}> 
+				{if count($element.elements) > 0}
+   				{foreach $element.elements as $child}
+						{include file="form-element.tmpl" element=$child}
+   				{/foreach}
+   			{/if}
+  		</fieldset> 
+  	</div> {* body *}
+	</div> {* blurb *}
+{elseif $element.type == "checkbox"} {* label goes on right instead of left *}
+	{if $element.required}<span class="requiredstar">*</span>{/if}
+	<!-- checkbox --><span class="element{if isset($element.error)} error{/if}">{$element.html}</span>
+	{if isset($element.label)}<label for="{$element.id}">{$element.label}</label>{/if}{* </span> *}
+	{if isset($element.separator)}{cycle values=$element.separator}{/if}
+{elseif isset($element.elements)}
+  <div class="row{if $error} error{/if}">
+{*  <pre>{$element.id}</pre>  *}
+{if isset($element.label)}
+  <p class="label">
+    {if $element.required}<span class="requiredstar">*</span>{/if}
+    {if isset($element.label)}<label>{$element.label}</label>{/if}
+  </p>
+{/if}
+    <div class="blurb element group{if $error} error{/if}">
+  	  {if $error}<span class="error">{$element.error}</span><br />{/if}
+		  {foreach $element.elements as $child}
+    	  {include file="form-element.tmpl" element=$child ingroup=True}
+			  {if $element.separator}{cycle values=$element.separator}{else}&nbsp;{/if}
+      {/foreach}
+    </div>
+  </div>
+{elseif $ingroup === True}
+{$element.html}
+{elseif $element.type == "date"}
+Date Element!
+{else} {* not fieldset, group or checkbox *}
+	<div class="row">
+	<p class="label">
+	{if $element.required}<span class="requiredstar">*</span>{/if}
+	{if isset($element.label)}<label {if $error}class="error" {/if}for="{$element.id}">{$element.label}</label>{/if}
+	</p>
+	<div class="element{if $error} error{/if}">
+  	{$element.html}
+  </div>
+  </div>
+{/if} {* check type of element *}

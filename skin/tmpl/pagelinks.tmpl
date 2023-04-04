@@ -1,0 +1,14 @@
+{if $pagerinfo.numPages > 1}
+  <div class="blurb pagelinks gradient-border">
+{* 	<pre>{$pageinfo.links.pages}</pre> *}
+   <ul class="inlinelist">
+    <li>totalItems: {$pagerinfo.totalItems}</li>
+    <li>{$pagerinfo.links.first}</li>
+    <li>{$pagerinfo.links.back}</li>
+    <li>{$pagerinfo.links.pages}</li>
+    <li>{$pagerinfo.links.next}</li>
+    <li>{$pagerinfo.links.last}</li>
+    <li>numPages: {$pagerinfo.numPages}</li>
+   </ul>
+  </div> {* pagelinks *}
+{/if} {* numPages > 1 *}

@@ -1,0 +1,7 @@
+{if $currentcart.itemcount > 0}
+ <div class="end">
+   <div class="inner">
+     <span class="fa fa-shopping-cart"></span>&nbsp;<a href="/cart-summary">{count($currentcart.items)}</a>
+   </div>
+ </div>
+{/if}

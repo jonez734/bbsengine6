@@ -1,0 +1,48 @@
+ul {
+  &.nobullets {
+    list-style-type: none;
+
+    li ul {
+      list-style-type: none;
+    }
+  }
+
+  /* http://stackoverflow.com/questions/6587807/comma-delimited-lists-with-css-i-want-an-oxford-comma */
+  &.commadelimited {
+    border: 0px solid red;
+    display: inline;
+    margin: 0;
+    padding: 0;
+
+    > li {
+      display: inline;
+      padding: 0.125em;
+      margin: 0;
+
+      &:after {
+        content: ", ";
+      }
+
+      &:last-child:after {
+        content: "";
+      }
+
+      &:nth-last-child(2):after {
+        content: " and ";
+      }
+
+      &:nth-last-child(3) + li:after {
+        content: ", and ";
+      }
+    }
+  }
+  &.inlinelist {
+    margin: 0;
+    padding: 0.125em;
+    
+	> li {
+      display: inline;
+    }
+  }
+
+}

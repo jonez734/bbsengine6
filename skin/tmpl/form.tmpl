@@ -1,0 +1,56 @@
+{extends file="page.tmpl"}
+{$form = $data.form}
+{block name="title"}{$data.title}{/block}
+{* <pre>{$data|var_export}</pre> *}
+{block name="head" append}
+<link rel="stylesheet" type="text/css" href="{$smarty.const.SKINURL}css/form.css" media="screen" />
+
+<script src="https://cdn.tiny.cloud/1/m9bmedo0irw2po5k2ansa5o5x0spllvmd6v68mnlz3fv7ixp/tinymce/5/tinymce.min.js" defer></script>
+<script src="{$smarty.const.ENGINEURL}js/inittinymce.js" defer></script>
+
+{if $form.javascript}
+<script language="javascript">
+<!-- 
+    {$form.javascript}
+//-->
+</script>
+{/if}
+{/block}
+{block name="content"}
+{*errors={$form.errors|var_export}<br />*}
+
+{if count($form.errors) > 0}
+  <div class="blurb errors element element--jello">
+   <div class="header"><h1>form errors:</h1></div>
+   <div class="body">
+{*   <pre>{$form.errors|var_dump}</pre> *}
+    <ul>
+	    {foreach key=name item=error from=$form.errors}
+		    <li>{$error}</li>
+	    {/foreach}
+    </ul>
+   </div> {* body *}
+  </div> {* blurb errors *}
+{/if} {* form.errors *}
+<div class="blurb vstretch element element--bounceInUp">
+<form {$form.attributes}>
+	{if $form.hidden}
+		<fieldset style="display: none;">
+		{foreach $form.hidden as $hidden}{$hidden}{/foreach}
+		</fieldset>
+	{/if}
+	{if count($form.elements) > 0}
+		{foreach $form.elements as $element}
+			{include file="form-element.tmpl" element=$element ingroup=False}
+		{/foreach}
+	{/if}
+</form>
+</div>
+{if isset($form.required_note) and not $form.frozen}
+<div class="blurb">
+<div class="body">
+	<p>{$form.required_note}</p>
+</div>
+</div>
+{/if}
+{/block} {* main *}

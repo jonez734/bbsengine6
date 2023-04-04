@@ -1,0 +1,73 @@
+@import "vars";
+@import "mixins";
+
+/* skin/scss/pagefooter.scss */
+
+footer#pagefooter {
+  @include textshadow(4px, 3px, 3px, rgba(0,0,0,0.4));
+//  margin: 0.25em;
+  padding: 0.50em;
+  text-align: center;
+//  border: 0.125em solid $blurb-border-color;
+  flex: 0 1 auto;
+//	@include css3prefix(box-shadow, none);
+
+  .copyright {
+    text-align: center;
+    font-size: 0.75em;
+  }
+
+  img {
+    border: 0px;
+  }
+
+  a:hover {
+    background: none;
+    text-decoration: none;
+  }
+
+  .mantra {
+    font-size: 0.90em;
+  }
+
+  .body { 
+    border: 0.125em solid $blurb-border-color; 
+  }
+  
+  ul {
+  	margin: 0;
+  	padding: 0;
+  }
+
+}
+
+/*
+@mixin gradient-animation( $start, $end, $transTime ){
+  background-size: 100%;
+  background-image: linear-gradient($start, $end);
+  position: relative;
+  z-index: 100;
+  &:before {
+    background-image: linear-gradient($end, $start);
+    content: '';    
+    display: block;
+    height: 100%;
+    position: absolute;
+    top: 0; left: 0;
+    opacity: 0;
+    width: 100%;
+    z-index: -100;
+    transition: opacity $transTime;
+  }
+  &:hover {
+     &:before {
+       opacity: 1; 
+     }
+  }
+}
+*/
+/*
+footer#pagefooter .poweredby {
+	@include gradient-animation(#FFF, #000, 0.50s);
+}
+*/

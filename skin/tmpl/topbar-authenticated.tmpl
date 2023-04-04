@@ -1,0 +1,16 @@
+{if $currentmember.flags.AUTHENTICATED}
+ <div class="end authenticated">
+  <div class="inner"><span class="fa fa-sign-out-alt fa-fw"></span>&nbsp;<a href="{$smarty.const.ENGINEURL}logout">logout</a></div>
+ </div>
+ {if $currentmember.flags.ADMIN === True}
+  <div class="end"> 
+   <div class="inner"><span class="fa fa-user-plus fa-fw"></span>&nbsp;<a href="{$smarty.const.ENGINEURL}join">join</a></div>
+  </div> 
+ {/if}
+{else} {* not authenticated *}
+ {if $currentaction <> "login"}
+ <div class="end authenticated">
+  <div class="inner"><span class="fa fa-sign-in-alt fa-fw"></span>&nbsp;{if $currentpage === "login"}login{else}<a href="{$smarty.const.ENGINEURL}login">login</a>{/if}</div>
+ </div>
+ {/if}
+{/if} {* authenticated *}

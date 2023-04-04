@@ -1,0 +1,7 @@
+<div class="start greetings">
+{if $currentmemberid > 0}
+ <div class="inner">greetings, {$currentmember.username} <a href="{$smarty.const.ENGINEURL}member-edit-{$currentmember.id}" title="edit current user"><span class="fa fa-user-edit"></span></a></div>
+{else}
+ <div class="inner">greetings</div>
+{/if}
+</div>

@@ -1,0 +1,21 @@
+{* <pre>{$pagerinfo|var_export}</pre> *}
+{$foo=$pagerinfo.range}
+{if $pagerinfo.numPages > 1}
+<div class="blurb pagelinks">
+  <ul class="nobullets inlinelist">
+    <li>totalItems: {$pagerinfo.totalItems}</li>
+    <li>{$pagerinfo.links.first}</li>
+    <li>{$pagerinfo.links.back}</li>
+    {foreach from=$foo item=v key=k}
+        {if $v == False}
+        <li><a href="/mantra-summary-{$k}">{$k}</a></li>
+        {else}
+        <li>[{$k}]</li>
+        {/if}
+    {/foreach}
+    <li>{$pagerinfo.links.next}</li>
+    <li>{$pagerinfo.links.last}</li>
+    <li>numPages: {$pagerinfo.numPages}</li>
+  </ul>
+</div>
+{/if}

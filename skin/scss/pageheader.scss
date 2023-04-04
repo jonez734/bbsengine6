@@ -1,0 +1,39 @@
+@import "vars";
+@import "mixins";
+
+// @see http://designshack.net/articles/css/12-fun-css-text-shadows-you-can-copy-and-paste/ */
+// @see https://css-tricks.com/adding-stroke-to-web-text/ */
+header#pageheader {
+ border: 0;
+ flex: 0 1 auto;
+ background-color: $page-backgroundcolor; // gray;
+ overflow: hidden;
+ font-family: pageheaderfont;
+ font-size: large;
+  text-align: center;
+ .body {
+	border: 0.125em solid $blurb-border-color;
+  h1 
+  { 
+    font-size: 2.5em;
+  }
+  
+  h2 
+  { 
+    font-size: 2.0em;
+	a {
+		color: green;
+		text-decoration: underline;
+		text-decoration-color: greenyellow;
+	}
+	a:hover {
+		text-decoration-color: darken(greenyellow, 10%);
+		background-color: black;
+	}
+  }
+ }
+
+ a {
+  color: white;
+ }
+}

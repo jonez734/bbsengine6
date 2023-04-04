@@ -1,0 +1,15 @@
+{*{$actions = $data.actions}*}
+{*<pre>actions={$actions|var_export}</pre>*}
+{if count($actions) > 0}
+<ul class="actions inlinelist">
+{foreach $actions as $action}
+<li>[&nbsp;{if isset($action.class) && empty($action.class) === false}<span class="{$action.class}"></span>&nbsp;{/if}
+{if strlen($action.href) > 0}
+ <a href="{$action.href}"{if !empty($action.contenturl)} class="tooltip" data-contenturl="{$action.contenturl}"{/if}>{$action.title}</a>&nbsp;]
+{else}
+ {$action.title}&nbsp;]
+{/if}
+</li>
+{/foreach}
+</ul>
+{/if}

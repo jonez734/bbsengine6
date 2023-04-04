@@ -1,0 +1,11 @@
+{if $currentmember.flags.AUTHENTICATED}
+ <div class="end loginlogout">
+  <div class="inner"><span class="fa fa-sign-out-alt fa-fw"></span>&nbsp;<a href="{$smarty.const.ENGINEURL}logout">logout</a></div>
+ </div>
+{else} {* not authenticated *}
+ {if $currentaction <> "login"}
+ <div class="end loginlogout">
+  <div class="inner"><span class="fa fa-sign-in-alt fa-fw"></span>&nbsp;{if $currentpage === "login"}login{else}<a href="{$smarty.const.ENGINEURL}login">login</a>{/if}</div>
+ </div>
+ {/if} {* currentaction is not 'login' *}
+{/if} {* flags.authenticated *}

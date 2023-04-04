@@ -1,0 +1,13 @@
+{if $currentmemberid > 0}
+  {$undisplayednotifycount = $currentmember.undisplayednotifycount}
+  <div class="notifycount end">
+    <div class="inner">
+      <span class="fa fa-envelope fa-fw"></span>
+      {if $undisplayednotifycount == 1}
+        <span>1 message</span>
+      {elseif $undisplayednotifycount > 1}
+        <span>{$undisplayednotifycount} messages</span>
+      {/if}
+    </div> {* inner *}
+  </div> {* notifycount *}
+{/if} {* currentmemberid > 0 *}

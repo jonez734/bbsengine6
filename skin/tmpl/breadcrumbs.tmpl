@@ -1,0 +1,14 @@
+{if count($breadcrumbs) > 0}
+<ul class="inlinelist nobullets breadcrumbs" itemscope itemtype="http://data-vocabulary.org/Breadcrumb">
+	{foreach $breadcrumbs as $b}
+		<li itemprop="child" itemscope itemtype="http://data-vocabulary.org/Breadcrumb">
+{*<pre>{$b|var_export}</pre>*}
+		{if $b@last == false}
+			{teos path=$b.path itemprop=true} <i class="fas fa-angle-double-right"></i>
+		{else}
+			{teos path=$b.path itemprop=true}
+		{/if}
+		</li>
+	{/foreach}
+</ul>
+{/if}

@@ -1,0 +1,42 @@
+<!-- zoidweb3.pagefooter -->
+{* {$mantra = $data.pagefooter.mantra} *}
+<footer id="pagefooter" class="blurb">
+<ul class="nobullets">
+ <li>
+{*  <ul class="inlinelist"> *}
+   <span class="poweredby">[ powered by: <span class="bolt fa fa-fw fa-bolt"></span><a href="//zoidtechnologies.com/">zoid technologies</a> ]</span>
+{*   <li>[ hosted by: <a href="http://cloudieweb.com/">cloudieweb</a> ]</li>*}
+{*  </ul> *}
+ </li>
+{*
+ <li>
+  <ul class="inlinelist">
+   <li><a title="validate xhtml" href="://validator.w3.org/check?uri=referer"><img src="{$smarty.const.STATICSKINURL}art/xhtml-logo.png" alt="validate xhtml" /></a></li>
+   <li><a title="validate html5" href="https://validator.w3.org/check?uri=referer"><span class="fab fa-html5"></span></a></li>
+   <li><a title="powered by smarty" href="http://smarty.net/"><img src="{$smarty.const.STATICSKINURL}art/smarty-80x15.png" alt="powered by smarty" /></a></li>
+   <li><a title="powered by postgresql" href="http://postgresql.org/"><img src="{$smarty.const.STATICSKINURL}art/postgresql-80x16.gif" alt="powered by postgresql" /></a></li>
+   <li><a title="powered by bbsengine4" href="http://bbsengine.org/">bbsengine4</a></li> 
+   <li><a title="powered by php5" href="http://php.net/"><img src="{$smarty.const.STATICSKINURL}art/php5-power-micro.png" alt="powered by php5" /></a></li>
+   <li><a title="powered by tinymce" href="http://tinymce.moxiecode.com?id=powered_by_tinymce_mini"><img src="{$smarty.const.STATICSKINURL}art/tinymce_button.png" width="80" height="15" alt="Powered by TinyMCE" /></a></li>
+   <li><a title="powered by pear" href="http://pear.php.net/"><img src="{$smarty.const.STATICSKINURL}art/pear-blogbutton1.png" alt="powered by pear" /></a></li>
+   <li><a title="validate css" href="http://jigsaw.w3.org/css-validator/check/referer"><img src="{$smarty.const.STATICSKINURL}art/css-logo.png" alt="validate css" /></a></li>
+  </ul>
+ </li>
+*}
+ {if isset($data.pagefooter)}
+  {$pagefooter = $data.pagefooter}
+  {if isset($pagefooter.mantra)}
+   {$mantra = $pagefooter.mantra}
+   {$description = $mantra.description}
+   {if count($description) > 0}
+   <li>
+    <div class="mantra">{$description|escape|wpprop} - {$mantra.author|escape|wpprop}
+     {include file="actions.tmpl" actions=$mantra.actions}
+    </div>
+   </li>
+   {/if}
+  {/if} {* isset pagefooter.mantra *}
+ {/if} {* isset pagefooter *}
+<li><div class="copyright">copyright &copy; 2002-2019 zoid technologies. all rights reserved.</div></li>
+</ul> {* nobullets *}
+</footer>

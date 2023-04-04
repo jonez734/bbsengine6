@@ -1,0 +1,12 @@
+{if count($nav.items) > 0}
+ <div class="blurb">
+{*  <div class="header"><h1>{$nav.label|default:"NEEDINFO"}</h1></div>*}
+  <div class="body">
+   <ul class="inlinelist">
+   {foreach $nav.items as $item}
+    <li><a href="{$item.href}">{$item.label}</a></li>
+   {/foreach}
+   </ul>
+  </div>
+ </div>
+{/if}
