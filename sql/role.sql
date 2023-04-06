@@ -1,0 +1,13 @@
+create role bbs with login nocreaterole noinherit nocreatedb nosuperuser;
+grant select on engine.member to bbs; -- finn;
+grant select,update,delete on engine.flag to bbs;
+grant select on engine.sig to bbs;
+grant usage on schema engine to bbs;
+--create role finn login role bbs;
+grant select on engine.node to bbs;
+grant update,delete on engine.__node to bbs;
+grant update,delete on engine.__sig to bbs;
+grant select,update,delete on engine.map_member_flag to bbs;
+grant select,update,delete on engine.map_memberid_inetaddr to bbs;
+grant select,update,delete on engine.map_node_sig to bbs;
+grant all on schema engine to bbs;
