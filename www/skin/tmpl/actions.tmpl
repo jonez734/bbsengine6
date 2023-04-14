@@ -1,0 +1,9 @@
+{if count($actions) > 0}
+<ul class="actions inlinelist">
+{foreach $actions as $action}
+<li> [&nbsp;{if isset($action.class) && empty($action.class) === False}<span class="{$action.class}"></span>&nbsp;{/if}
+ <a href="{$action.href}"{if !empty($action.contenturl)} class="tooltip" data-contenturl="{$action.contenturl}"{/if}>{$action.title}</a>&nbsp;]
+</li>
+{/foreach}
+</ul>
+{/if}

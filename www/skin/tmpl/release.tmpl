@@ -1,0 +1,17 @@
+<div class="blurb">
+{$release.title}<br />
+{*
+<ul class="actions">
+<li class="action">[ <a href="/detail-{$release.id}">Detail</a> ]</li>
+<li class="action">[ <a href="/notes-{$release.id}">Release Notes</a> ]</li>
+</ul>
+*}
+{if count($release.files) > 0}
+{* {$release.files|var_dump} *}
+<ul>
+{foreach from=$release.files item=file}
+<li><a href="{$smarty.const.REPOURL}download/{$file.filepath}">{$file.filepath|basename}</a></li>
+{/foreach}
+</ul>
+{/if}
+</div> {* blurb *}

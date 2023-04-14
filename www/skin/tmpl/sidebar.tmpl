@@ -1,0 +1,43 @@
+{* <pre>{$data|var_export}</pre> *}
+{if !empty($data)}
+<div class="blurb sidebar">
+<div class="header"><h1>menu</h1></div>
+<nav>
+<ul>
+{foreach from=$data item=m}
+{if ($currentsite == $m.name and $currentpage == "index") or ($currentsite == "www" and $currentpage == $m.name)}
+<li class="currentsite">{$m.title|default:"NEEDTITLE"|escape|wpprop}</li>
+{else}
+<li><a class="zoidweb" href="{$m.url}" title="{$m.desc|escape|wpprop}">{$m.title|default:"NEEDTITLE"|escape}</a></li>
+{/if}
+{/foreach}
+</ul>
+<ul>
+{if $sitedebug === True}
+<li><a href="{$smarty.const.ENGINEURL}/togglesitedebug">turn <b>off</b> sitedebug</a></li>
+{else}
+<li><a href="{$smarty.const.ENGINEURL}/togglesitedebug">turn <b>on</b> sitedebug</a></li>
+{/if}
+</ul>
+<ul>
+<li><a href="http://bbsengine.org/">bbsengine.org</a></li>
+{* <li><span class="strike">vfw memorial post #10058</span></li> *}
+</ul>
+{*
+{if $currentmemberid == 0}
+<span class="fa fa-sign-in fw"></span> <a title="sign in" href="{$smarty.const.LOGINURL}">Login</a>
+{else}
+<span class="fa fa-sign-out fw"></span>&nbsp;<a title="sign out" href="{$smarty.const.LOGOUTURL}">Logout</a>
+{/if}
+*}
+</nav>
+</div> {* blurb sidebar *}
+
+{/if} {* check for empty data *}
+{*
+<div class="blurb sidebar">
+<ul>
+<li>{include file="amazonsearch.tmpl"}</li>
+</ul>
+</div>
+*}

@@ -1,0 +1,8 @@
+{extends file="page.tmpl"}
+{block name="title"}bbsengine.org errormessage.tmpl{/block}
+{block name="content"}
+<div class="blurb errormessage">
+<h1>Error</h1>
+<p>{$data.message|escape|wpprop}</p>
+</div>
+{/block}

@@ -1,0 +1,69 @@
+{* $Id: post.tmpl 1821 2011-08-15 18:41:18Z jam $ *}
+{*  {$post|@var_dump} *} 
+
+<div class="blurb post">
+ <div class="header">
+<h1>{$post.title|escape}</h1>
+<div class="metadata">{$post.datepostedepoch|datestamp}
+{if $post.postedbyid > 0}
+ by {$post.postedbyname|escape}
+{/if}
+{if $post.membersonly == True}
+[Members Only]
+{/if}
+{*
+{if $post.sigid > 0}
+in <a href="{$smarty.const.TEOSURL}{$post.teosurl}">{$post.sigtitle|escape}</a>
+{/if}
+*}
+</div> {* metadata *}
+ </div> {* header *}
+<div class="body">
+{$post.body|escape|wpprop}
+</div> {* body *}
+
+<div class="footer">
+ <div class="options">
+  <ul>
+{if $currentaction <> "view"}
+<li><a href="/post-view-{$post.id}">view</a></li>
+{/if}
+  {if $currentmember.flags.ADMIN}
+   <li><a href="/post-edit-{$post.id}">edit</a></li>
+{*
+   {if $post.frozen == 'f'}
+     <li><a href="/post-freeze-{$post.id}">freeze</a></li>
+   {else}
+     <li><a href="/post-thaw-{$post.id}">thaw</a></li>
+   {/if} *} {* freeze/thaw *}
+   <li><a href="/post-delete-{$post.id}">delete</a></li>
+  {/if} {* admin check *}
+{*  {if $post.frozen == 'f' and $currentmember.flags.AUTHENTICATED}
+   <li><a href="/post-reply-{$post.id}">reply</a></li> 
+  {/if} *}
+  </ul>
+ </div> {* options *}
+
+<div class="replycount">
+{*
+{if $post.replycount == 0}
+no replies
+{elseif $post.replycount == 1}
+1 reply
+{else}
+{$post.replycount} replies
+{/if}
+*}
+</div> {* replycount *}
+
+</div> {* footer of post *}
+</div> {* post *}
+{*
+{if count($post.replies) > 0}
+<ul class="replylist">
+{foreach from=$post.replies item=r}
+<li>{include file="post.tmpl" post=$r}</li>
+{/foreach}
+</ul>
+{/if}
+*}

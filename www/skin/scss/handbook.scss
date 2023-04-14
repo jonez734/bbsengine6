@@ -1,0 +1,11 @@
+body {
+	display: flex;
+	flex-flow: column wrap;
+	justify-content: flex-start;
+	align-content: stretch;
+	align-items: stretch;
+}
+
+.chapter {
+	flex: 1 1 auto;
+}

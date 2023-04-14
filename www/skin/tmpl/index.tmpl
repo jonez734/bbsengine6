@@ -1,0 +1,220 @@
+{extends file="page.tmpl"}
+{block name="title"}bbsengine6 - official home page{/block}
+{block name="head" append}
+{*<link rel="stylesheet" type="text/css" href="/skin/css/index.css" media="screen" />*}
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/lists.css" media="screen" />
+{/block}
+{* http://www.blenderguru.com/the-big-issues/ *}
+{* what is it *}
+{* what can it do *}
+{* how do I get it *}
+{block name="content"}
+<div class="blurb">
+<div class="header"><h1>bbsengine - simple yet elegant open source (GPLv2) application framework</h1></div>
+<div class="body">
+
+<p><b>bbsengine.org</b> was registered on 2008-10-11 with the goal of providing a
+simple yet elegant php-based web application library for developers using, at the time, php4. bbsengine1 had some security problems
+<a href="#bbsengine1security">bbsengine1security</a>) which were fixed in bbsengine2.
+<b>bbsengine3</b> is written in <a href="//php.net/">php5.4</a>
+(requires 5.4.x or above) and uses <a
+href="//postgresql.org/">PostgreSQL</a> (9.2.x or above), <a
+href="//smarty.net/">the Smarty3 template engine</a> (3.1.30+), and several modules from <a href="//pear.php.net/">PEAR</a> including <a
+href="//pear.php.net/pager">pager</a>, <a
+href="//pear.php.net/html_quickform2">html_quickform2</a>, <a
+href="//pear.php.net/html_quickform2_captcha">html_quickform2_captcha</a>
+and <a href="//pear.php.net/mdb2">mdb2</a>.</p>
+<p>The first release of bbsengine has a datestamp of 20040118 16:47 EST</p>
+<p>In June 2011 use of <a href="//pear.php.net/html_page2">html_page2</a>
+(requires 0.6.5-beta or above) was added and an upgrade to <a
+href="//smarty.net/">Smarty3</a> from smarty2 was performed.</p>
+
+{*<p>To make effective use of bbsengine4 you will need to be a developer
+comfortable with the use of PEAR packages, Smarty3 Templates, and have
+hosting with PostgreSQL available.  bbsengine4 has not been tested on
+servers using web-based control panels for system administration.  it can be
+done.  </p>*}
+
+</div>
+</div>
+
+<div class="blurb">
+<div class="header"><h1>bbsengine6</h1></div>
+<div class="body">
+<ul>
+<li> switches PEAR::MDB2 with PDO</li>
+<li> uses php8.x</li>
+<li> namespaces</li>
+<li> groups database and session functions into their own namespace
+<code>databaseconnect(SYSTEMDSN)</code> to
+<code>\bbsengine6\database\connect(SYSTEMDSN)</code></li>
+<li>named bound paramters instead of positional</li>
+<li>calls to utility functions like getcurrenturi() become \bbsengine6\gertcurrenturi()</li>
+</div> {* body *}
+</div> {* blurb *}
+
+{if $data.latestrelease !== null}
+<div class="blurb">
+<div class="header"><h1>current release: {$data.latestrelease.title}</h1></div>
+<div class="body">
+{* {$release.datereleasedepoch|datestamp} *}
+<ul>
+{foreach item=f from=$data.latestrelease.files}
+<li><a href="{$smarty.const.REPOURL}download/{$f.filepath}">{$f.name}</a> {$f.filesize|filesize}</li>
+{/foreach}
+</ul>
+{/if}
+{* <p>Also check the <a href="/archive/">bbsengine archives</a> for previous releases.</p> *}
+</div> {* body *}
+</div> {* blurb *}
+
+{if count($data.docs) > 0}
+<div class="blurb">
+<div class="header"><h1>documentation</h1></div>
+<div class="body">
+<ul class="commadelimited">
+{foreach $data.docs as $doc}
+<li><a href="{$doc.url}">{$doc.title}</a> (updated {$doc.updatedepoch|ago} ago)</li>
+{/foreach}
+</ul>
+</div> {* body *}
+</div> {* docs *}
+{/if}
+
+<div class="blurb">
+<div class="header"><h1>bbsengine4</h1></div>
+<div class="body">
+<ul>
+<li>switched out <a href="http://pear.php.net/package/HTML_Page2/">PEAR::HTML_Page2</a> with use of "<a href="https://www.smarty.net/docs/en/advanced.features.template.inheritance.tpl">template inheritance</a>" in smarty3,
+<li>php 5.4.16 for new array syntax</li>
+</div>
+</div>
+
+<div class="blurb">
+<div class="header"><h1>bbsengine3 news: docs updated, new release made which include bbsengine.org source, new form handling (2015-nov-03)</h1>
+</div>
+<div class="body">
+<p>based on suggestions from a user, I've merged the project 'bbsenginedotorg' (this website) with 'bbsengine3' to serve as a basic example of how to get a site working using this framework.</p>
+<p>I've radically updated the <a href="/current/INSTALL">INSTALL</a> file so the version numbers of various packages are accurate, to make descriptions more concise, and to offer some useful hints as to how to configure things so they will work well.</p> <!-- it was so old, it referred to 'fc4' -->
+<p>form handling has been simplified down to three function calls which allows for <b>very</b> straight-forward use of enhanced forms:</p>
+<ul>
+<li>{apidocs name="handleform"}() {* <a href="//bbsengine.org/apidocs/bbsengine3/_bbsengine3.php.html#functionhandleform">handleform</a>($form, $callback, $pagetitle, [$options])*} - accept an html_quickform2 instance and a standard callback parameter. returns True if all went well (form validates) or PEAR::Error if things went wrong.</li>
+<li>{apidocs name="getquickform"}() - updated to add recursive rules which call trim() and striptags() instead of putting two function calls into every use of quickform.</li>
+<li>{apidocs name="displayform"} {* <a href="http://bbsengine.org/apidocs/bbsengine3/_bbsengine3.php.html#displayform">displayform</a> ($renderer, $title [, $options])*} - accepts an
+html_quickform2_renderer instance.  this function is normally called if {apidocs name="handleform"}() returns something other than True or PEAR::Error.</li>
+</ul>
+<p>The <a href="/current/handbook/">bbsengine handbook</a> now uses MarkDown for human-readable markup.</p>
+{*
+<p>There are now <a href="/CHANGELOG.txt">changelog</a> (updated {$changetimes.changelogepoch|ago}), an <a href="/INSTALL.txt">install</a> (updated {$changetimes.install|ago}), and a <a href="/README.txt">readme</a> files available.</p>
+*}
+
+<p>There is now a 'composer.json' file shipped with bbsengine3, but it has
+not been tested beyond a simple check to make sure it does not contain syntax
+errors (lint).  I am interested in tools that will take a list of package names
+(f.e.  the output of 'pear list') and set up the required records
+automagically including state ('beta', 'stable', etc).</p>
+<p>before bbsengine.org existed, I maintained a <a
+href="http://freshmeat.net/">freshmeat.net</a> entry for
+'<a href="http://freshmeat.sourceforge.net/projects/bbsengine">bbsengine</a>' and several applications.
+</div>
+</div>
+
+{*
+<div class="blurb">
+<h1>Archive fixed</h1>
+<div class="body">
+<p>Some bugs in the <a href="/archive/">release archive</a> feature of this site have been fixed.
+The other projects are available in the <a
+href="http://repo.zoidtechnologies.com/">zoid technologies repo</a>.</p>
+</div>
+</div>
+*}
+
+<div class="blurb">
+<div class="header"><h1>bbsengine3</h1></div>
+<div class="body">
+<ul>
+<li> use of schemas. one database per domain. FKs maintained.</li>
+<li> python package</li>
+<li> <a href="//pear.php.net/html_quickform2">html_quickform2</a></li>
+<li>python version</li>
+</ul>
+</div> {* body *}
+</div> {* blurb *}
+
+<div class="blurb">
+<div class="header"><h1>bbsengine2</h1></div>
+<div class="body">
+<ul>
+<li>rewrite to use PEAR::MDB2 instead of PEAR::DB</li>
+<li>rewrite database access to use bound parameters (closing one CVE)</li>
+<li>hack wpprop to circumvent 2 CVEs</li>
+<li>renamed a few of the core functions so it is clearer
+what they do (for example, "errormessage()" has been renamed to
+"{apidocs name="displayerrorpage"}()", "displayheader()" renamed to "{apidocs name="displaypageheader"}()")</li>
+
+<li>displayheader() and displayfooter() have now been replaced with use of HTML_Page2 and {apidocs name="fetchpageheader"}() and {apidocs name="fetchpagefooter"}()</li>
+
+<li>added some API functions that were not available in bbsengine1 (examples: getquickform(), getpage(), fetchpageheader() and fetchpagefooter())</li>
+
+<li>spun off applications (aolbonics, demeter, <a href="//sophia.zoidtechnologies.com/">sophia</a>, <a href="//teos.zoidtechnologies.com/">teos</a>, <a href="//vulcan.zoidtechnologies.com/">vulcan</a>) into separate projects</li>
+
+<li>changed to use the <a href="//pear.php.net/mdb2">MDB2</a> database
+abstraction layer instead of <a href="//pear.php.net/db">DB</a></li>
+
+<li>used rules in html_quickform for cleaner handling of input validation</li>
+
+<li>database queries make use of "bound parameters" to prevent sql injection attacks</li>
+{* <li><a href="http://tinymce.moxiecode.com/">tinymce</a> integration</li> *}
+<li>added {apidocs name="fetchpageheader"}() and {apidocs name="fetchpagefooter"}() and modified {apidocs name="displaypageheader"}() and {apidocs name="displaypagefooter"}() to use them. This change is part of using HTML_Page2 for generating pages</li>
+<li>made heavy use of <a href="//pear.php.net/manual/en/core.pear.pear.raiseerror.php">PEAR::raiseError</a>() to improve error handling and to display an error message to the user which the developer can easily grep for and address. All library functions use raiseError and do not output any error messages to the user.</li>
+<li>made use of foreign key constraints in the postgresql database.</li>
+
+</ul>
+</div> {* body *}
+</div> {* blurb *}
+
+
+<div class="blurb">
+<div class="header"><h1>some sites built with bbsengine4</h1></div>
+<div class="body">
+<ul>
+{*<li><b>Demeter</b> is a "feed harvester" similar to google's "feed reader". This can easily be customized to have feeds relevant to a specific interest group, for example the military community. This needs to be rewritten to use bbsengine3 and licensing issues need to be
+sorted.</li>*}
+<li><a href="//sophia.zoidtechnologies.com/">Sophia</a> is a threaded discussion system which could be configured as a "blog" (which means a select group of people can start new threads) or "forum" (which means anyone can start a new thread)</li>
+<li><a href="//teos.zoidtechnologies.com/" title="Greek Librarian">Teos</a> is a "catalog view" into the <a href="//zoidtechnologies.com/">zoidtechnologies.com</a> content, similar to <a href="//dir.yahoo.com/">dir.yahoo.com</a> or <a href="//dmoz.org">dmoz.org</a>.</li>
+<li><a href="//vulcan.zoidtechnologies.com/" title="Roman God of Blacksmithing and extensive collection of links">Vulcan</a> is a view of only the "links" part of the content database</li>
+<li><a href="//repo.zoidtechnologies.com/" title="Software Repository">Repo</a> is a software repository where you can find various open source packages that Zoid Technologies maintains</li>
+<li><a href="//projects.zoidtechnologies.com/" title="Projects site">Projects</a> is a list of released projects crosslinked into the repo site for file downloads</li>
+</ul>
+</div> {* body *}
+</div> {* blurb *}
+{*
+<div class="blurb">
+<div class="header"><h1 id="bbsengine1security">security issues in bbsengine1 (2006)</h1></a></div>
+<div class="body">
+<p>in 2006 there were <a href="//secunia.com/advisories/20760">security advisories issued for bbsengine</a>. it was a lot of work to fix all of my projects, and some of them slipped through the cracks.</p>
+<ul>
+
+<li><a href="//secunia.com/advisories/cve_reference/CVE-2006-3306/">CVE-2006-3306</a> - Improperly sanitized input.<br />
+     I fixed this by removing preparestring() from the library entirely and started using the 'escape' Smarty
+modifier.</li>
+
+<li><a href="//secunia.com/advisories/cve_reference/CVE-2006-3307/">CVE-2006-3307</a> - SQL Injection.<br />
+     I fixed this by using 'positional bound parameters' in database calls via the MDB2 library</li>
+
+<li><a href="//secunia.com/advisories/cve_reference/CVE-2006-3308/">CVE-2006-3308</a> - Problem with 'img' tag of the 'wpprop' custom Smarty modifier.<br />
+     I hacked this by adding a call to htmlentities() on all user-supplied input to the wpprop function.</li>
+</ul>
+</div>
+</div>
+*}
+{*
+<div class="blurb">
+<h1>Constructive Feedback</h1>
+<p>If you have any constructive comments, suggestions, questions, or
+concerns regarding bbsengine3, please use the <a href="//zoidtechnologies.com/feedback">feedback module</a> on
+zoidtechnologies.com until I can install something for bbsengine.org.</p>
+</div>
+*}
+{/block}

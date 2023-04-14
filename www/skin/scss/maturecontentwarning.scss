@@ -1,0 +1,19 @@
+@import "vars";
+@import "mixins";
+
+.maturecontentwarning {
+  flex: 0 1 auto;
+  .header h1 {
+    margin: 0px;
+    padding: 0.50em;
+    font-weight: bold;
+    font-size: 130%;
+    background-color: #E6B24C;
+    color: #000000;
+    @include backgroundgradient(lighten(orange, 10%), darken(orange, 10%));
+  }
+
+  p {
+    margin: 2.0em;
+  }
+}

@@ -1,0 +1,21 @@
+{extends file="page.tmpl"}
+{$year = $data.year}
+{$months = $data.months}
+{block name="content"}
+<div class="blurb">
+<h1>Release Archive - {$year}</h1>
+{if count($months) > 0}
+<ul>
+{foreach from=$months item=month}
+{if $month.count == 1}
+<li><a href="{$smarty.const.ARCHIVEURL}{$year}/{$month.month|string_format:"%02d"}/">{$month.monthname}</a> - {$month.count} release</li>
+{else}
+<li><a href="{$smarty.const.ARCHIVEURL}{$year}/{$month.month|string_format:"%02d"}/">{$month.monthname}</a> - {$month.count} releases</li>
+{/if}
+{/foreach}
+</ul>
+{else}
+<h2>No Releases</h2>
+{/if}
+</div>
+{/block}

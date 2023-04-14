@@ -1,0 +1,17 @@
+{extends file="page.tmpl"}
+{$items = $data.items}
+{$version = $data.version}
+{block name="content"}
+{if count($items) > 0}
+<div class="blurb">
+<div class="header"><h1>bbsengine {$version} documentation</h1></div>
+<div class="body">
+<ul>
+{foreach $items as $item}
+<li><a href="{$item}">{$item}</a></li>
+{/foreach}
+</ul>
+</div>
+</div>
+{/if}
+{/block}

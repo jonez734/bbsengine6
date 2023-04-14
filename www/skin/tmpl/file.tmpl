@@ -1,0 +1,16 @@
+{extends file="page.tmpl"}
+{block name="title"}bbsengine.org - file: {$data.filename}{/block}
+{block name="content"}
+<div class="blurb">
+<div class="header">
+<h1>file: {$data.filename}</h1>
+</div>
+<div class="body">
+{if $data.ext == "md"}
+{$data.content|markdown}
+{else}
+<pre>{$data.content}</pre>
+{/if}
+</div> {* body *}
+</div> {* blurb *}
+{/block}

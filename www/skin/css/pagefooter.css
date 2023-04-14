@@ -1,0 +1,25 @@
+.pagefooter img
+{
+    border: 0px;
+}
+
+.pagefooter {
+    color: #000000;
+    padding: 3px;
+    margin: 5px;
+    text-align: center;
+    clear: both;
+	position: relative;
+    font-size: 90%;
+}
+
+.pagefooter ul.badges {
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+.pagefooter ul.badges li {
+    display: inline;
+}
+

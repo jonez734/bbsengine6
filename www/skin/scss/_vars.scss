@@ -1,0 +1,72 @@
+// $backgroundcolor: gray; // #006633, #25567B, #090974, #101010
+
+//$textcolor: white;
+
+//$linkcolor: white; // darken($textcolor, 1%);
+//$linkvisitedcolor: darken($linkcolor, 10%);
+//$linkhovercolor: darken($textcolor, 5%);
+//$linkhoverbackgroundcolor: darken($backgroundcolor, 10%);
+
+//$topbarheight: 1.8em;
+//$topbarlineheight: 1.8em;
+
+//$headerbackgroundstartcolor: #006633;
+//$headerbackgroundendcolor: darken($headerbackgroundstartcolor,2%);
+//$headertextcolor: white;
+
+$page-backgroundcolor: rgb(3, 62, 107); // gray; // pink; // #33CCFF; // gray;
+$page-color: white;
+
+// $blurb-backgroundcolor: gray; // $page-backgroundcolor;
+$blurb-backgroundcolor: white; // skyblue; 
+$blurb-color: $page-color;
+
+$blurb-body-backgroundcolor: $blurb-backgroundcolor; 
+$blurb-body-color: $page-color;
+
+// $blurb-header-backgroundcolor: #006633; // $blurb-body-backgroundcolor;
+$blurb-header-backgroundcolor: silver; // $blurb-body-backgroundcolor;
+$blurb-header-color: darkblue;
+
+$blurb-footer-backgroundcolor: $blurb-body-backgroundcolor;
+$blurb-footer-color: $blurb-body-color;
+
+$blurb-metadata-color: $blurb-body-color; // #909090
+$blurb-metadata-backgroundcolor: $blurb-body-backgroundcolor;
+
+$blurb-border-color: #006633; // blue; // $blurb-body-backgroundcolor;
+// $blurb-border-gradient-start: lighten($blurb-body-backgroundcolor, 15%);
+// $blurb-border-gradient-end: darken($blurb-body-backgroundcolor, 15%);
+
+$page-anchor-color: $page-color;
+$page-anchor-backgroundcolor: $page-backgroundcolor;
+
+$page-anchor-hover-color: $page-color; // darken($page-color, 5%);
+$page-anchor-hover-backgroundcolor: $page-backgroundcolor; // darken($page-backgroundcolor, 10%);
+
+$page-anchor-visited-color: darken($page-color, 10%);
+$page-anchor-visited-backgroundcolor: white;
+
+$form-color: $blurb-body-color;
+$form-backgroundcolor: $blurb-body-backgroundcolor;
+$form-errors-color: white;
+
+$notify-backgroundcolor: $blurb-backgroundcolor;
+$notify-color: $blurb-color;
+$notify-footer-backgroundcolor: #ababab;
+
+//
+// these are deprecated.. need to be renamed!
+//
+$linkcolor: white;
+//$linkhovercolor: darken($page-color, 5%);
+//$linkhoverbackgroundcolor: darken($page-backgroundcolor, 10%);
+$linkvisitedcolor: darken($linkcolor, 10%);
+
+$headerbackgroundstartcolor: #006633;
+$headerbackgroundendcolor: darken($headerbackgroundstartcolor,2%);
+
+$topbarheight: 1.8em;
+$topbarlineheight: 1.8em;
+
+$backgroundcolor: gray; // #006633, #25567B, #090974, #101010

@@ -1,0 +1,20 @@
+{extends file="page.tmpl"}
+{$years = $data.years}
+{block name="content"}
+<div class="blurb">
+<h1>Release Archive - Years</h1>
+{if count($years) > 0}
+<ul>
+{foreach from=$years item=year}
+{if $year.count == 1}
+<li><a href="{$smarty.const.ARCHIVEURL}{$year.year}/">{$year.year}</a> - {$year.count} release</li>
+{else}
+<li><a href="{$smarty.const.ARCHIVEURL}{$year.year}/">{$year.year}</a> - {$year.count} releases</li>
+{/if}
+{/foreach}
+</ul>
+{else}
+<h2>no topics</h2>
+{/if}
+</div>
+{/block}

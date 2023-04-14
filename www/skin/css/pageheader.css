@@ -1,0 +1,21 @@
+.pageheader {
+    clear: both;
+    margin: 5px;
+    padding: 3px;
+    background-color: #FFFFFF;
+    overflow: auto;
+}
+
+.pageheader .title {
+    text-align: center;
+}
+
+.pageheader .choices {
+  text-align: right;
+	float: right;
+	width: 20%;
+}
+
+.pageheader .choices ul {
+	list-style: none;
+}

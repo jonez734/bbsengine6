@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en-us" id="html">
+<head id="head">
+{block name="head"}
+<meta charset="utf-8">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css?family=Montserrat%7COpen+Sans">
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.5.0/css/all.css" integrity="sha384-B4dIYHKNBt8Bc12p+WXckhzcICo0wtJAoU8YZTY5qE0Id1GSseTk6S+L3BlXeVIU" crossorigin="anonymous">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/animate.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/blurb.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/actions.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/pageheader.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/pagefooter.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/bbsenginedotorg.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/topbar.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/clock.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/nav.css" media="screen">
+{* <link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/zoidweb6.css" media="screen"> *}
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/breadcrumbs.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/actions.css" media="screen">
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/page.css" media="screen">
+{* <link rel="stylesheet" type="text/css" href="/skin/css/www.css" media="screen"> *}
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/lists.css" media="screen">
+{* <link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/maturecontentwarning.css" media="screen"> *}
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/poweredby.css" media="screen">
+
+<script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.js"></script>
+{*<script defer src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E=" crossorigin="anonymous"></script>*}
+<script defer src="{$smarty.const.ENGINEURL}js/jquery.smoothState.js"></script>
+<script defer src="{$smarty.const.ENGINEURL}js/initsmoothstate.js"></script>
+<script defer src="{$smarty.const.ENGINEURL}js/bbsengine6.js"></script>
+<script defer src="{$smarty.const.ENGINEURL}js/clock.js"></script>
+<script defer src="{$smarty.const.ENGINEURL}js/topbar.js"></script>
+{if $currentmemberid > 0}
+<script defer src="{$smarty.const.ENGINEURL}js/topbar-notify.js"></script>
+<script defer src="{$smarty.const.ENGINEURL}js/topbar-credits.js"></script>
+<script defer src="{$smarty.const.ENGINEURL}js/topbar-loginlogout.js"></script>
+<script defer src="{$smarty.const.ENGINEURL}js/topbar-join.js"></script>
+<script defer src="{$smarty.const.ENGINEURL}js/topbar-greetings.js"></script>
+<script defer src="{$smarty.const.ENGINEURL}js/topbar-nav.js"></script>
+{/if}
+<script defer src="{$smarty.const.ENGINEURL}js/checkcurrentmemberid.js"></script>
+
+{*<script defer src="{$smarty.const.ENGINEURL}js/snowstorm-min.js"></script>*}
+{*<script defer src="{$smarty.const.ENGINEURL}js/initsnow.js"></script>*}
+{* 
+<script src="{$smarty.const.ENGINEURL}js/tinymce/tinymce.js"></script>
+<script src="{$smarty.const.ENGINEURL}js/tinymce/jquery.tinymce.min.js"></script>
+<script src="{$smarty.const.ENGINEURL}js/inittinymce.js"></script>
+*}
+<title>{block name="title"}bbsengine{/block}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="description" content="simple and elegant open source web application framework established ~2002">
+<meta property="og:type" content="website">   
+<meta property="og:url" content="http://bbsengine.org/">
+<meta property="og:description" content="simple and elegant open source web application framework started in ~2002">
+{* <meta property="og:url" content="https://www.mailgun.com/"> *}
+{* <meta property="og:title" content="Pricing - Transactional Email API Service for Developers - Mailgun"> *}
+{/block}
+{* {block name="head"}<!-- head -->{/block}  *}
+</head>
+<body id="body" class="scene element fadeIn">
+{include file="pageheader.tmpl"}
+{include file="topbar.tmpl" data=$data.topbar|default:NULL}
+{*{include file="maturecontentwarning.tmpl"}*}
+{*{include file="nav.tmpl" sidebar=$data.sidebar|default:NULL}*}
+{block name="content"}
+<main>{block name="main"}NEEDINFO:main{/block}</main>
+{/block}
+{include file="pagefooter.tmpl"}
+</body>
+</html>

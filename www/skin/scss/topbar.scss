@@ -1,0 +1,51 @@
+@import "vars";
+@import "mixins";
+
+div#topbar {
+    box-sizing: border-box;
+    display: flex;
+    // align-items: center; // stretch;
+    // justify-content: space-between;
+    flex-direction: row;
+    // padding: 0.50em;
+    flex: 0 1 auto; // stretch h but not v
+
+    ul {
+        padding: 0;
+        margin: 0;
+    }
+    
+    p {
+        padding: 0.25em;
+        margin: 0;
+    }
+
+    .start, .end {
+        padding: 0.50em;
+    }
+
+    .start { 
+        border: 0em;
+        border-right: 0.125em solid $blurb-border-color;
+        justify-content: flex-start;
+        order: -1;
+    }
+
+    .middle { 
+        // border: 0px solid green;
+        flex: 1;
+        flex-grow: 1;
+        padding: 0.50em;
+    }
+
+    .end {
+        border: 0em;
+        border-left: 0.125em solid $blurb-border-color;
+        justify-content: flex-end;
+        order: 1;
+    }
+    
+    #clock {
+        display: inline;
+    }
+}

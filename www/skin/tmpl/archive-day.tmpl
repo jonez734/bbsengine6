@@ -1,0 +1,17 @@
+{extends file="page.tmpl"}
+{$day = $data.day}
+{$releases = $data.releases}
+{block name="content"}
+<div class="blurb">
+<h1>Release Archive for {$day}</h1>
+{if count($releases) == 0}
+<h2>No Releases</h2>
+{else}
+<ul>
+ {foreach from=$releases item=r}
+<li>{include file="release.tmpl" release=$r}</li>
+ {/foreach}
+</ul>
+{/if}
+</div> {* blurb *}
+{/block}

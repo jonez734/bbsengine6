@@ -1,0 +1,22 @@
+.actions {
+  font-size: 95%;
+  color: #808080;
+  padding: 5px;
+}
+
+.action {
+  display: inline;
+
+  a {
+    color: #808080;
+
+    &:hover {
+      background-image: url("/skin/art/gradient-5.png");
+      background-position: top left;
+      background-repeat: repeat-y;
+      background-color: #15F6BC;
+
+      /* FF0000; #2CB9FF; */
+    }
+  }
+}

@@ -1,0 +1,81 @@
+<!-- $Id: form.tmpl 1821 2011-08-15 18:41:18Z jam $ -->
+
+{if $form.javascript}
+<script language="javascript">
+<!-- 
+    {$form.javascript}
+//-->
+</script>
+{/if}
+
+{if $form.errors}
+<div id="errors">
+<h1>errors:</h1>
+<ul>
+{foreach key=name item=error from=$form.errors}
+    <li>{$error}</li>
+{/foreach}
+</ul>
+</div>
+{/if}
+
+<form {$form.attributes}>
+<fieldset>
+{$form.hidden}
+{foreach item=sec key=i from=$form.sections}
+    <h1>{$sec.header}</h1>
+    {foreach item=element from=$sec.elements}
+        {if $element.type == "submit" || $element.type == "reset"}
+            {if not $form.frozen}
+                {$element.html}
+            {/if}
+
+{*
+	    {elseif $element.type == "select"}
+		    {if $element.required}<span class="required">*</span>{/if}
+		    <b>{$element.label}</b> {html_options name=$element.name options=$element.options selected=$element.selected}
+		    <br />
+*}
+        {elseif $element.type == "checkbox"}
+            {$element.html}&nbsp;
+            {if $element.error}
+                <span class="error">{$element.label}</span>
+            {else}
+                <b>{$element.label}</b>
+            {/if}
+            {if $element.required}<span class="required">*</span>{/if}<br />
+        {else}
+            <!-- label -->
+            {if $element.error}
+                <span class="error">{$element.label}:</span>
+            {else}
+                {if $element.required}<span class="required">*</span>{/if}
+                {if $element.label}<span class="label">{$element.label}:</span>{/if}
+            {/if}
+            <br />
+            <!-- element -->
+            {if $element.type == "group"}
+                {foreach key=gkey item=gitem from=$element.elements}
+                    {if $gitem.type == "submit" || $gitem.type == "reset"}
+                	    {if not $form.frozen}
+                	        {$gitem.html}
+                	    {/if}
+                	{else}
+                        {$gitem.label}
+                        {$gitem.html}{if $gitem.required}<span class="required">*</span>{/if}
+                        {if $element.separator}{cycle values=$element.separator}{/if}
+                    {/if}
+                {/foreach}
+            {else}
+                {$element.html}
+            {/if}
+            <br />
+        {/if}
+    {/foreach}   
+{/foreach}
+</fieldset>
+{if $form.requirednote and not $form.frozen}
+<p>{$form.requirednote}</p>
+{/if}
+</form>
+

@@ -1,0 +1,36 @@
+body {
+//  font-family: Arial, Helvetica, sans-serif;
+//  background-color: rgb(3, 62, 107); 
+//  margin: 0;
+//  padding: 0;
+}
+
+main {
+  display: flex;
+  display: -webkit-flex;
+  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: auto;
+  align-content: stretch;
+}
+
+a {
+  &:link {
+    color: pink; // #C0C0C0;
+  }
+
+  &:visited {
+    color: gray; // #D0D0D0;
+  }
+
+  &:hover {
+    color: yellow;
+  }
+  color: orange;
+  background-color: yellow;
+}
+
+.blurb {
+	flex: 1 0 auto;
+}

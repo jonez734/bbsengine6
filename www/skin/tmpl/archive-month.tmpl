@@ -1,0 +1,22 @@
+{extends file="page.tmpl"}
+{$days = $data.days}
+{$cal = $data.cal}
+{block name="content"}
+<div class="blurb">
+<h1>{$cal.longmonthname} {$cal.year}</h1>
+{if count($days) == 0}
+<h2>no topics</h2>
+{else}
+<ul>
+{foreach from=$days item=day}
+{if $day.count == 0}
+<li><b>{$cal.shortmonthname} {$day.day}</b> No Releases</li>
+{elseif $day.count == 1}
+<li><b>{$cal.shortmonthname} {$day.day}</b> <a href="{$smarty.const.ARCHIVEURL}{$cal.year}/{$cal.twodigitmonth}/{$day.twodigitday}/">1 release</a></li>
+{else}
+<li><b>{$cal.shortmonthname} {$day.day}</b> <a href="{$smarty.const.ARCHIVEURL}{$cal.year}/{$cal.twodigitmonth}/{$day.twodigitday}/">{$day.count} releases</a></li>
+{/if}
+{/foreach}
+{/if}
+</div> {* blurb *}
+{/block}

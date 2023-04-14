@@ -1,0 +1,99 @@
+@import "vars";
+@import "mixins";
+
+.blurb {
+  flex: 1 1 auto;
+// /*  background: rgba(48, 48, 48, 0.8) none repeat scroll 0% 0%; */
+  background-color: $blurb-backgroundcolor;
+//  border: 1px solid rgba(0, 0, 0, 0.8);
+//  border-bottom: 0px;
+  color: $blurb-color;
+  margin: 0.25em;
+  // margin-top: 0.5em;
+  border: 1px solid transparent;
+  -webkit-text-stroke-width: 1px;
+  -webkit-text-stroke-color: black;
+  @include bordergradient(lighten($blurb-border-color, 10%), darken($blurb-border-color, 10%), top left, to bottom right);
+  @include boxshadow();
+  // @include textshadow();
+//	text-shadow: 2px 3px rgba(0,0,0, 0.4);
+
+  .header {
+    h1 {
+		font-family: 'Montserrat', serif;
+		margin: 0px;
+  		padding: 10px;
+  		font-weight: bold;
+  		font-size: 1.50em;
+  		// @include textshadow(); // 4px, 3px, 3px, rgba(0,0,0,0.4)); // darken($backgroundcolor, 2%));
+		@include backgroundgradient($blurb-header-backgroundcolor, darken($blurb-header-backgroundcolor, 2%));
+		color: $blurb-header-color;
+    }
+    h2 {
+      padding: 2px;
+    }
+
+    &.warning h1 {
+      color: orange;
+    }
+  }
+
+  a {
+	color: $blurb-color;
+    text-decoration-color: yellowgreen;
+    text-decoration: underline;
+    @include transition(all 0.25s);
+      
+    &:link {
+    	color: orange;
+    }
+
+    &:visited {
+    	background-color: red;
+    }
+
+    &:active {
+    }
+
+    &:hover {
+        background-color: lightblue;
+        color: white;
+    }
+
+
+  }
+
+  .body {
+    color: $blurb-body-color; // /* #303030; */
+//    text-shadow: 0 1px rgba(255, 255, 255, 0.3);
+    background-color: $blurb-body-backgroundcolor; // #ababab;
+//	@include backgroundgradient($blurb-body-backgroundcolor, darken($blurb-body-backgroundcolor, 2%));
+
+    border-top: 0.125em solid #151515;
+    margin: 0;
+    padding: 0.5em;
+
+    p {
+		font-family: 'Open Sans', sans-serif;
+		padding: 0.125em;
+		margin: 0.125em;
+    }
+  }
+
+  .metadata {
+    font-size: 0.75em;
+    padding: 0.50em;
+    color: $blurb-metadata-color; // darken($blurb-color, 5%); // #909090;
+    background-color: $blurb-metadata-backgroundcolor;
+  }
+
+  .footer {
+    color: $blurb-footer-color; 
+
+//    text-shadow: 0 1px rgba(255, 255, 255, 0.3);
+    background-color: $blurb-footer-backgroundcolor;
+    border: 0; // 1px solid #151515;
+    border-top: 0.125em solid #151515;
+  }
+
+}

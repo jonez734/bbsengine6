@@ -1,0 +1,21 @@
+{extends file="page.tmpl"}
+{block name="header"}
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/handbook.css" media="screen" />
+{/block}
+{block name="content"}
+{$chapters = $data.chapters}
+<div class="blurb">
+<div class="header"><h1>bbsengine {$data.version} handbook</h1></div>
+<div class="body">
+{if count($chapters) > 0}
+<ul>
+{foreach $chapters as $chapter}
+<li><a href="/current/handbook/{$chapter.file|basename}">{$chapter.file|basename:".txt"}</a> (updated: {$chapter.datemodifiedepoch|datestamp} ({$chapter.datemodifiedepoch|ago})</li>
+{/foreach}
+</ul>
+{else}
+<h2>no chapters available</h2>
+{/if}
+</div> {* body *}
+</div> {* blurb *}
+{/block}

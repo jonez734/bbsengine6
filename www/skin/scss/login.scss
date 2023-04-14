@@ -1,0 +1,68 @@
+form {
+  margin: 0px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  background-color: #FFFFFF;
+  border: 0px;
+  padding: 3px;
+
+  fieldset {
+    border: 0px outset #000000;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+#errors {
+  background-color: #FFFFFF;
+  border: 0px outset #000000;
+  margin: 0px;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  padding: 3px;
+  color: #FF0000;
+  font-weight: bold;
+
+  h1 {
+    background-color: #003366;
+    padding: 2px;
+    margin: 0px;
+    color: #FFFFFF;
+    font-size: 150%;
+    font-weight: bold;
+  }
+}
+
+div#box7 {
+  width: 100%;
+  background: #CEDCFF  repeat-x 0 -5px;
+  text-align: left;
+  margin-top: 5;
+  margin-right: auto;
+  margin-bottom: 5;
+  margin-left: auto;
+  padding-top: 1px;
+  padding-right: 1;
+  padding-bottom: 1px;
+  padding-left: 1;
+}
+
+h4 {
+  font: lighter 200% "Trebuchet MS",Arial sans-serif;
+  color: #303F6E;
+  margin: 0 20px;
+}
+
+p {
+  margin: 0 20px;
+}
+
+ol {
+  margin: 10px 40px;
+  padding: 0;
+
+  li {
+    margin: 0;
+    padding: 0;
+  }
+}
