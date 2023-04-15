@@ -1,12 +1,17 @@
 <?php
 
-//require_once("MDB2.php");
-require_once("Log.php");
+
+namespace {
+  require_once("Log.php");
+}
+
+namespace bbsengine6\database 
+{
 
 /**
  * @since 20221116
  */
-function databaseconnect($dsn)
+function connect($dsn)
 {
   static $pdocache = [];
 
@@ -66,19 +71,53 @@ function databaseconnect($dsn)
 */
 
 // def insert(dbh, table:str, dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
-function insert($dbh, $tablename, $data, $returnid=true, $primarykey="id", $mogrify=false)
+function insert($dbh, $tablename, $data, $returnid=true, $primarykey="id", $removeprimary=true, $mogrify=false)
 {
-    $keys = array_keys($data);
-    $keys = array_map("pg_escape_identifier", $keys);
-//    $keys = array_map('escape_mysql_identifier', $keys);
-    $fields = implode(",", $keys);
-//    $table = escape_mysql_identifier($table);
-    $placeholders = str_repeat('?,', count($keys) - 1) . '?';
-    $sql = "INSERT INTO ".pg_escape_identifier($tablename)."($fields) VALUES ($placeholders)";
-    if ($returnid === true)
+  if (array_key_exists($primarykey, $data) === true && $removeprimary == true)
+  {
+    unset($data[$primarykey]);
+  }
+
+  $sql = "insert into $tablename(".join(", ", array_keys($data)).")";
+  // values (:data, :foo, :bar)
+  $foo = [];
+  foreach(array_keys($data) as $k)
+  {
+    $foo[] = ":$k";
+  }
+  $sql .= " values (".join(", ", $foo).")";
+
+  \bbsengine6\logentry("database.insert.100: sql=$sql");
+
+  return $dbh->prepare($sql)->execute(array_values($data));
+}
+
+function update($dbh, $tablename, $key, $data, $primarykey="id", $removeprimary=true, $mogrify=false)
+{
+/*
+  if (array_key_exists($primarykey, $data) === true)
+  {
+    unset($data[$primarykey]);
+    \bbsengine6\logentry("bbsengine6.update.100: removed $primarykey");
+  }
+*/
+  $sql = "update $tablename set ";
+  
+  $foo = [];
+  foreach (array_keys($data) as $k)
+  {
+    if ($removeprimary === true && $k !== $primarykey)
     {
-      $sql += " returning {$tablename}.{$primarykey}";
+      $foo[] = "$k=:$k";
     }
-    $dbh->prepare($sql)->execute(array_values($data));
-}  
+  }
+  $sql .= join(", ", $foo);
+  $sql .= " where $primarykey=:$primarykey";
+  \bbsengine6\logentry("database.update.100: sql=".var_export($sql, true));
+  $stmt = $dbh->prepare($sql);
+  $data[$primarykey] = $key;
+  $stmt->execute($data);
+  return $stmt->rowcount();
+}
+}
 ?>
