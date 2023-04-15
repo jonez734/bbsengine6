@@ -1,5 +1,7 @@
 <?php
 
+namespace {
+
 /**
  * @since 20160419
  * @since 20221116
@@ -10,6 +12,9 @@ require_once("Log.php");
  * pull in smarty class
  */
 require_once("Smarty.class.php");
+}
+
+namespace bbsengine6 {
 
 /**
  * @since 20180804
@@ -47,20 +52,21 @@ function toboolean($value, $label="label", $default=false)
 /**
  * @since 20221116
  */
-function displaypage($kw=[])
+function displaypage($data=[])
 {
   logentry("displaypage called");
-  $pagetemplate = isset($kw["pagetemplate"]) ? $kw["pagetemplate"] : "page.tmpl";
-  $dsn = isset($kw["systemdsn"]) ? $kw["systemdsn"] : SYSTEMDSN;
-  $kw["pagetemplate"] = $pagetemplate;
-  $kw["pagefooter"]["fortune"] = null; // getrandomfortune();
+  $pagetemplate = isset($data["pagetemplate"]) ? $data["pagetemplate"] : "page.tmpl";
+  $dsn = isset($data["systemdsn"]) ? $data["systemdsn"] : SYSTEMDSN;
+  $data["pagetemplate"] = $pagetemplate;
+  $data["pagefooter"]["fortune"] = null; // getrandomfortune();
 
-  $choices = isset($kw["choices"]) ? $kw["choices"] : null;
-  $kw["choices"] = buildchoices($choices);
-  logentry("kw.choices=".var_export($kw["choices"], true)." pagetemplate=".var_export($pagetemplate, true), true);
+  $choices = isset($data["choices"]) ? $data["choices"] : null;
+  $data["choices"] = buildchoices($choices);
+  logentry("bbsengine6.displaypage.100: data=".var_export($data, true));
+//  logentry("kw.choices=".var_export($data["choices"], true)." pagetemplate=".var_export($pagetemplate, true), true);
 
   $tmpl = getsmarty();
-  $tmpl->assign("data", $kw);
+  $tmpl->assign("data", $data);
   $tmpl->display($pagetemplate);
   return;
 }
@@ -363,7 +369,7 @@ where f.name=?;
 SQL;
 
   $dat = [$memberid, $flag];
-  $pdo = databaseconnect($dsn);
+  $pdo = \bbsengine6\database\connect($dsn);
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
 
@@ -397,7 +403,7 @@ from engine.flag
 left outer join engine.map_member_flag on flag.name = engine.map_member_flag.name and engine.map_member_flag.memberid=?
 SQL;
   $dat = array($memberid);
-  $pdo = databaseconnect($dsn);
+  $pdo = \bbsengine6\database\connect($dsn);
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   $res = $stmt->fetchAll();
@@ -504,7 +510,7 @@ function logentry($message, $priority=PEAR_LOG_DEBUG)
     define("LOGENTRYPREFIX", "define-logentryprefix");
   }
   
-  $logger = Log::factory("syslog", "", LOGENTRYPREFIX, [], PEAR_LOG_DEBUG);
+  $logger = \Log::factory("syslog", "", LOGENTRYPREFIX, [], PEAR_LOG_DEBUG);
 //  $logger->log("bbsengine5.logentry.100: _SERVER=".var_export($_SERVER, true), $priority);
   $ip = $_SERVER["REMOTE_ADDR"];
   
@@ -522,7 +528,7 @@ function getfortune($fortuneid)
   
   $sql = "select * from engine.mantra where id=?";
   $dat = [$fortuneid];
-  $pdo = databaseconnect(SYSTEMDSN);
+  $pdo = \bbsengine6\database\connect(SYSTEMDSN);
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   $res = $stmt->fetch();
@@ -552,7 +558,7 @@ function getrandomfortune($dsn=SYSTEMDSN)
   $sql = "select id from engine.mantra order by random() limit 1";
   $dat = [];
 
-  $pdo = databaseconnect($dsn);
+  $pdo = \bbsengine6\database\connect($dsn);
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   $fortuneid = $stmt->fetch();
@@ -647,12 +653,14 @@ function accessfortune($op, $data=null, $memberid=null)
 function getsmarty($options=null)
 {
   $options = [];
-  $options["pluginsdir"] = SMARTYPLUGINSDIR; // array(SMARTYPLUGINSDIR, "/srv/www/zoidweb4/smarty/");
-  $options["templatedir"] = SMARTYTEMPLATESDIR; // array(SMARTYTEMPLATESDIR, "/srv/www/zoidweb4/skin/tmpl/");
+  $options["pluginsdir"] = SMARTYPLUGINSDIR;
+  $options["templatedir"] = SMARTYTEMPLATESDIR;
   $options["compiledir"] = SMARTYCOMPILEDTEMPLATESDIR;
   $options["compileid"] = LOGENTRYPREFIX;
 
-  $s = new Smarty();
+  logentry("getsmarty.100: options=".var_export($options, true));
+
+  $s = new \Smarty();
 
   $currentcart = [];
   $currentcart["items"] = [];
@@ -785,7 +793,7 @@ function buildbreadcrumbs($path)
 {
   logentry("buildbreadcrumbs.100: ".var_export($path, true));
 
-  $pdo = databaseconnect(SYSTEMDSN);
+  $pdo = \bbsengine6\database\connect(SYSTEMDSN);
   $sql = "select * from engine.sig where path @> ? order by path asc";
   $dat = [$path];
   $stmt = $pdo->prepare($sql);
@@ -868,12 +876,13 @@ function buildchoices($menu=[])
   {
       $menu[] = ["name" => "addflag", "title" => "add system flag", "url" => ENGINEURL."flag-add", "desc" => "add system flag to the database"];
       $menu[] = ["name" => "addmantra", "title" => "add mantra", "url" => ENGINEURL."mantra-add", "desc" => "add mantra"];
-      $menu[] = ["name" => "addsitenews", "title" => "add site news", "url" => TEOSURL."sitenews/add-post", "desc" => "add a post to the 'site news' sig to be displayed on the www site"];
+//      $menu[] = ["name" => "addsitenews", "title" => "add site news", "url" => TEOSURL."sitenews/add-post", "desc" => "add a post to the 'site news' sig to be displayed on the www site"];
 //      $menu[] = array("name" => "addlink", "title" => "add link", "url" => VULCANURL . "add");
 //      $menu[] = array("name" => "addfeed", "title" => "add feed", "url" => DEMETERURL . "add");
   }
 
   $menu[] = ["name" => "about", "title" => "about", "url" => "/about", "desc" => "about this site"];
+/*
   $menu[] = ["name" => "teos", "title" => "teos", "url" => TEOSURL, "desc" => "catalog view"];
 //  $menu[] = array("name" => "bbsengine", "title" => "BBSEngine", "url" => "http://bbsengine.org/", "desc" => "Simple But Elegant Web Application Framework");
   $menu[] = ["name" => "vulcan", "title" => "vulcan", "url" => VULCANURL, "desc" => "links database", "icon" => SKINURL . "art/new2.png"];
@@ -886,7 +895,7 @@ function buildchoices($menu=[])
   $menu[] = ["name" => "achilles", "title" => "achilles", "url" => ACHILLESURL, "desc" => ""];
   $menu[] = ["name" => "psyche", "title" => "psyche", "url" => PSYCHEURL, "desc" => ""];
   $menu[] = ["name" => "agora", "title" => "agora", "url" => AGORAURL, "desc" => "a Worthy marketplace", "class" => "fas fa-fw fa-store"];
-  $menu[] = ["name" => "jamhacks", "title" => "jamhacks", "url" => WWWURL."jamhacks", "desc" => "combination resume, biography, and portfolio"];
+//  $menu[] = ["name" => "jamhacks", "title" => "jamhacks", "url" => WWWURL."jamhacks", "desc" => "combination resume, biography, and portfolio"];
   $menu[] = ["name" => "sitenewsarchive", "title" => "site news archive", "url" => WWWURL."sitenewsarchive/", "desc" => "site news older than a month or two"];
   if (flag("AUTHENTICATED"))
   {
@@ -897,7 +906,8 @@ function buildchoices($menu=[])
     $menu[] = ["name" => "amznitem-add", "title" => "add amazon item", "url" => AGORAURL."amznitem-add"];
   }
   $menu[] = ["name" => "mantrasummary", "title" => "mantra summary", "url" => ENGINEURL."mantra-summary", "desc" => "mantra summary pages"];
-  uasort($menu, "sortchoices");
+*/
+  uasort($menu, "\\bbsengine6\\sortchoices");
 //  logentry("menu=".var_export($menu, true));
   return $menu;
 }
@@ -969,4 +979,5 @@ function decodejson($data)
  return json_decode($data, true);
 }
 
+} /* bbsengine6 namespace */
 ?>
