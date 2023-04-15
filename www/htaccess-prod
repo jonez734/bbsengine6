@@ -1,0 +1,39 @@
+#
+# $Id: htaccess-prod 1848 2011-08-16 00:20:12Z jam $
+#
+
+RewriteEngine On
+
+RewriteBase /
+
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://www.bbsengine.org/$1 [L,R=301]
+
+RewriteRule ^register[/]?$ register.php [last]
+RewriteRule ^login[/]?$ login.php [last]
+RewriteRule ^logout[/]?$ logout.php [last]
+RewriteRule ^$ index.php [last]
+
+RewriteRule ^(contact-us|about-us|credits)[/]?$ /page.php?file=$1.tmpl [last]
+
+RewriteRule ^current/(.*)$ v6/$1
+RewriteRule ^current[/]?$ v6/
+
+RewriteRule ^(v[\d]+)/handbook/([0-9a-zA-Z-]+).txt$ /handbook.php?mode=chapter&chapter=$2&version=$1 [last]
+RewriteRule ^(v[\d]+)/handbook[/]?$ /handbook.php?mode=index&version=$1 [last]
+
+RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)\.(md|txt)$ /page.php?version=$1&file=$2.$3 [last]
+# RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)$ /page.php?version=$1&name=$2 [last]
+RewriteRule ^(v[\d]+)[/]?$ /dir.php?version=$1 [last]
+
+# RewriteRule ^(v[\d])/apidocs/(.*)$ /apidocs.php?version=$1&file=$2 [last]
+
+# RewriteRule ^(download|dl)/([\w./-]+)$ /download.php?name=$2 [last]
+
+RewriteRule ^archive[/]?$ /archive.php [last]
+RewriteRule ^archive/([0-9]{4})/([0-9]{2})?[/]?([0-9]{2})?[/]?([a-z0-9-.]+)?$ /archive.php?year=$1&month=$2&day=$3&name=$4 [last]
+
+# http://stackoverflow.com/questions/19618751/mod-rewrite-check-if-php-file-exists
+# RewriteCond handbook/([a-zA-Z0-9_-]+).txt -f
+# RewriteRule ^([a-zA-Z0-9_-]+)\.txt$ [last]
+
