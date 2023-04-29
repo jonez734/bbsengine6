@@ -16,7 +16,7 @@ create view engine.mantra as
         (attributes->>'description') as description,
         (attributes->>'author') as author,
         (attributes->>'reference') as reference
-    from engine.node
+    from engine.blurb
 ;
 
 grant select on engine.mantra to apache;
