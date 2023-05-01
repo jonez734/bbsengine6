@@ -5,7 +5,7 @@ from setuptools import setup
 import time
 
 v = time.strftime("%Y%m%d%H%M")
-projectname = "bbsengine5"
+projectname = "bbsengine6"
 
 setup(
   name=projectname,
@@ -14,7 +14,7 @@ setup(
   author_email="%s@projects.zoidtechnologies.com" % (projectname),
   license="GPLv3",
   py_modules=["bbsengine5", "engine"],
-  scripts=["engine"],
+  scripts=["con"],
   requires=["ttyio5", "getdate"],
   url="http://bbsengine.org/",
   classifiers=[
@@ -26,6 +26,8 @@ setup(
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Terminals",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
-
   ],
+  provides=[projectname],
+  packages=["bbsengine6", "con"],
+
 )
