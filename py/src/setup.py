@@ -13,10 +13,10 @@ setup(
   author="zoidtechnologies.com",
   author_email="%s@projects.zoidtechnologies.com" % (projectname),
   license="GPLv3",
-  py_modules=["bbsengine5", "engine"],
-  scripts=["con"],
-  requires=["ttyio5", "getdate"],
-  url="http://bbsengine.org/",
+#  py_modules=["bbsengine6"],
+#  scripts=["con"],
+  requires=["ttyio6", "getdate"],
+  url="https://bbsengine.org/",
   classifiers=[
     "Programming Language :: Python :: 3.11",
     "Environment :: Console",
@@ -29,5 +29,4 @@ setup(
   ],
   provides=[projectname],
   packages=["bbsengine6", "con"],
-
 )
