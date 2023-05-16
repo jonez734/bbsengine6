@@ -198,3 +198,17 @@ def check(args, module, op="run", buildargs=False, **kw):
     return False
 
   return True
+
+# @since 20211101
+# @since 20230515 copied from bbsengine5
+def resultiter(cursor, arraysize=1000, filterfunc=None, **kw:dict):
+    'An iterator which accepts a psycopg2 cursor to keep memory usage down'
+    while True:
+        results = cursor.fetchmany(arraysize)
+        if not results:
+            break
+        for result in results:
+          if filterfunc is None:
+            yield result
+          elif callable(filterfunc) is True and filterfunc(result, **kw) is True:
+            yield result
