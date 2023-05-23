@@ -11,4 +11,5 @@ create table engine.map_member_flag (
   "value" boolean
 );
 
-grant all on engine.flag, engine.map_member_flag to apache;
+---grant all on engine.flag, engine.map_member_flag to apache;
+grant all on engine.flag, engine.map_member_flag to :web;

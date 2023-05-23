@@ -27,4 +27,4 @@ create or replace view engine.member as
   from engine.__member as m
 ;
 
-grant select on engine.member to apache;
+grant select on engine.member to :web;

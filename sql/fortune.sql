@@ -1,4 +1,4 @@
-\echo mantra.sql
+\echo fortune.sql
 --CREATE TABLE engine.__mantra (
 --    id serial unique not null primary key,
 --    description text,
@@ -10,7 +10,7 @@
 --    updatedbyid integer constraint fk_mantra_modifiedbyid references engine.__member(id) on update cascade on delete set null
 --);
 
-create view engine.mantra as
+create view engine.fortune as
     select 
         *,
         (attributes->>'description') as description,
@@ -19,5 +19,4 @@ create view engine.mantra as
     from engine.blurb
 ;
 
-grant select on engine.mantra to apache;
---grant insert, update, delete on engine.__mantra to apache;
+grant select on engine.fortune to :web;

@@ -1,8 +1,4 @@
 \echo buildsiguri.sql
-create extension "ltree_plpython3u" cascade;
-
---create or replace language "plpython3u";
-
 create or replace function engine.buildsiguri(sigpath ltree)
 returns text as $$
     res = []

@@ -5,6 +5,6 @@ create view siteauth as
         (attributes->>'password')::text as password,
         (attributes->>'memberid')::bigint as memberid,
         (attributes->>'site')::text as site
-    from engine.node
+    from engine.blurb
     where attributes ? 'username' and attributes ? 'password' and attributes ? 'memberid' and attributes ? 'site'
 ;

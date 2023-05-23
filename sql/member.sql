@@ -21,5 +21,5 @@ create table engine.__member (
   "attributes" jsonb
 );
 
-grant all on engine.__member to apache;
-grant all on engine.__member_id_seq to apache;
+grant all on engine.__member to :web;
+grant all on engine.__member_id_seq to :web;

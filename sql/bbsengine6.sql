@@ -1,4 +1,5 @@
-\i plpythonu.sql
+\set web apache
+
 \i extensions.sql
 \i roles.sql
 \i schema.sql
@@ -10,10 +11,11 @@
 \i flag.sql
 \i flagdata.sql
 \i tag.sql
-\i node.sql
+\i blurb.sql
 \i tagmap.sql
-\i nodeview.sql
-\i mantra.sql
+\i blurbview.sql
+\i fortune.sql
 \i memberview.sql
 \i memberinet.sql
 \i subscribe.sql
+--\i prg.sql

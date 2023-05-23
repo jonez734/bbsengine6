@@ -1,6 +1,6 @@
 create or replace view engine.log as
     select
-        n.*
-    from engine.node as n
+        b.*
+    from engine.blurb as b
     where prg='engine.log'
 ;

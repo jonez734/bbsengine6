@@ -16,8 +16,8 @@ create table engine.__notify (
   "data" jsonb
 );
 
-grant all on engine.__notify to "apache";
-grant all on engine.__notify_id_seq to "apache";
+grant all on engine.__notify to ":web";
+grant all on engine.__notify_id_seq to ":web";
 
 create or replace view engine.notify as
   select n.*,
@@ -39,7 +39,7 @@ create or replace view engine.notify as
 --  from engine.__notify as n
 --;
 
-grant select on engine.notify to apache;
+grant select on engine.notify to :web;
 
 --create or replace language plpython3u;
 
@@ -60,7 +60,7 @@ $$ LANGUAGE plpython3u;
 create trigger checknotify before update on engine.__notify for each row execute procedure checknotify();
 
 -- grant select, insert, update on engine.__notify to apache;
-grant select on engine.notify to apache;
+grant select on engine.notify to :web;
 
 --alter table engine.__notify drop column displayed;
 --alter table engine.__notify alter column data type jsonb using data::jsonb;

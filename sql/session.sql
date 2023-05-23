@@ -7,7 +7,7 @@ CREATE TABLE engine.__session (
     id text unique not null primary key,
     expiry timestamptz,
     lastactivity timestamptz,
-    data text not null,
+    data jsonb not null,
     ipaddress inet,
     useragent text,
     datecreated timestamptz,
@@ -16,7 +16,6 @@ CREATE TABLE engine.__session (
 );
 
 
-grant insert, update, delete on engine.__session to apache;
 
 --alter table engine.__session
 --add constraint "fk_session_memberid"
@@ -33,5 +32,5 @@ create view engine.session as
 
 create unique index idx_session_sessionid_unique on engine.__session(id);
 
-grant select on engine.session to apache;
-grant all on engine.__session to apache;
+grant select on engine.session to "www-data";
+grant insert, update, delete on engine.__session to "www-data";

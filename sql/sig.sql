@@ -1,10 +1,8 @@
 \echo sig
 create table engine.__sig (
---    id bigserial not null primary key,
     "path" ltree unique not null primary key,
     "uri"  text unique,
     "title" text,
-    "name" text,
     "intro" text,
     "attributes" jsonb,
     "dateupdated" timestamptz,
@@ -27,7 +25,6 @@ create view engine.sig as
 
 --create unique index idx_engine_sig_path on engine.__sig(path);
 
-grant select on engine.sig to apache;
+grant select on engine.sig to :web;
 
-grant all on table engine.__sig to apache;
---grant all on sequence engine.__sig_id_seq to apache;
+grant all on table engine.__sig to :web;

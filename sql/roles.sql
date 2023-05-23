@@ -1,1 +1,3 @@
-create role "apache";
+--create role "apache";
+--create role "www-data";
+--create role "zoidweb6";

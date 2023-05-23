@@ -3,9 +3,10 @@
 --
 
 create or replace view engine.prg as
-    select n.*,
-        "language" text,
+    select b.*,
+        "lang" text,
         "module" text
-    from engine.node
-    where attributes ? 'language' and attributes ? 'module'
+    from engine.blurb as b
+    where b.prg = 'engine.prg'
 ;
+

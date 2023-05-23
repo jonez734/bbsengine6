@@ -1,3 +1,4 @@
 \echo extensions
 create extension if not exists pgcrypto;
-create extension if not exists ltree;
+create extension if not exists plpython3u;
+create extension if not exists ltree_plpython3u cascade;

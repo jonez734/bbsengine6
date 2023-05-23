@@ -1,4 +1,3 @@
 create table engine.__tag (
-    name text unique
+    name text unique not null
 );
-
