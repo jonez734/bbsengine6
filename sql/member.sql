@@ -2,8 +2,8 @@
 
 create table engine.__member (
   "id" bigserial unique not null primary key,
-  "name" text unique not null,
-  "email" text,
+  "moniker" text unique not null,
+  "email" text not null,
   "password" text,
   "credits" numeric(10,0),
   "parentid" bigint constraint fk_member_parentid references engine.__member(id) on update cascade on delete set null,
@@ -16,7 +16,6 @@ create table engine.__member (
   "lastlogin" timestamptz,
   "lastloginfrom" inet,
   "loginid" text,
-  "shell" text,
   "ui" text,
   "attributes" jsonb
 );
