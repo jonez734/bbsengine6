@@ -14,9 +14,8 @@ def updatebottombar(buf:str) -> None:
 # @since 20230512 copied from bbsengine5
 def initbottombar(height:int=1):
   terminalheight = ttyio.getterminalheight()
-  ttyio.echo("{decsc}{decstbm:0,%d}{decrc}" % (terminalheight-1))
+  ttyio.echo("{decsc}{decstbm:0,%d}{decrc}" % (terminalheight-height))
 
-# @since 20210222 use format strings, set bottommargin to 1
 # @since 20230512 copied from bbsengine5
 def init(topmargin=0, bottommargin=1):
   ttyio.echo("{f6:3}{cursorup:3}", end="", flush=True)
@@ -27,6 +26,7 @@ def init(topmargin=0, bottommargin=1):
 
   return
 
+# @since 20230523 copied from bbsengine5
 def setarea(left, right=None, stack=False):
   global areastack
 
@@ -61,13 +61,13 @@ def setarea(left, right=None, stack=False):
   #ttyio.ljust(leftbuf, terminalwidth-len(r)), rightbuf) # leftbuf.ljust(terminalwidth-len(r), " "), rightbuf)
   updatebottombar("{var:areacolor}%s{/all}" % (buf))
   if stack is True:
-    areastack.append(buf)
+    areastack.insert(0, buf) # append(buf)
   return
 
+# @since 20230523 copied from bbsengine5
 def poparea():
   global areastack
 
-#  ttyio.echo("poparea.120: areastack=%r" % (areastack), level="debug") # interpret=False)
   if len(areastack) == 0:
     return
 
@@ -75,10 +75,11 @@ def poparea():
 
   if len(areastack) > 0:
     buf = areastack.pop()
-#    ttyio.echo("poparea.140: buf=%r" % (buf), level="debug")
-#    buf = areastack[-1]
     if buf != "":
       updatebottombar("{var:areacolor}%s{/all}" % (buf.ljust(terminalwidth-2, " ")))
-#    areastack.pop()
 
   return
+
+# @since 20230523
+def title(buf):
+  return ttyio.terminal.title(buf)

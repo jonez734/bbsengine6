@@ -1,3 +1,4 @@
+import sys
 import importlib
 
 import ttyio6 as ttyio
@@ -12,8 +13,7 @@ def check(args, module, op="run", buildargs=False, **kw):
   try:
     m = importlib.import_module(module)
   except Exception as e:
-    if args.debug is True:
-      ttyio.echo(repr(e), level="error")
+    ttyio.echo(repr(e), level="error")
     return False
 
   if args.debug is True:
@@ -25,7 +25,6 @@ def check(args, module, op="run", buildargs=False, **kw):
       ttyio.echo("no init function", level="warn")
       return False
 
-  # optional
   if hasattr(m, "access") is False:
     if args.debug is True:
       ttyio.echo("no access function, returning True anyway")
@@ -56,11 +55,11 @@ def check(args, module, op="run", buildargs=False, **kw):
   return True
 
 #@since 20230510 copied from bbsengine5
-def loadmodule(args:object, modulepath:str):
+def load(args:object, modulepath:str):
   try:
       m = importlib.import_module(modulepath)
   except ModuleNotFoundError:
-      ttyio.echo("loadmodule.180: module %s not found" % (modulepath), level="error")
+      ttyio.echo("load.180: module %s not found" % (modulepath), level="error")
       raise
   except Exception as e:
       import traceback
@@ -114,7 +113,7 @@ def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.N
         ttyio.echo("runcallback.280: not callable", level="debug")
       return None
 
-  m = loadmodule(args, modulepath)
+  m = load(args, modulepath)
   if debug is True:
     ttyio.echo("runcallback.200: m=%r funcname=%r" % (m, funcname), level="debug")
 

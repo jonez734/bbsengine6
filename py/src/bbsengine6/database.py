@@ -1,3 +1,5 @@
+import copy
+
 import psycopg2, psycopg2.extras
 from psycopg2.extras import Json
 from psycopg2.extensions import parse_dsn, make_dsn
@@ -5,8 +7,24 @@ from psycopg2.extensions import parse_dsn, make_dsn
 import ttyio6 as ttyio
 
 databasehandles = {}
-def _connect(**kw):
+def connect(args):
+  ttyio.echo(f"bbsengine6.database.connect.100: args={args!r}", level="debug")
+  kw = {}
+  if "databasename" in args:
+    kw["database"] = args.databasename
+  if "databasehost" in args:
+    kw["host"] = args.databasehost
+  if "databaseuser" in args:
+    kw["user"] = args.databaseuser
+  if "databasepassword" in args:
+    kw["password"] = args.databasepassword
+  if "databaseport" in args:
+    kw["port"] = args.databaseport
+
   dsn = make_dsn(**kw)
+
+  ttyio.echo(f"bbsengine6.database.connect.120: kw={kw!r} dsn={dsn!r}", level="debug")
+
   if dsn in databasehandles:
     dbh = databasehandles[dsn]
     if dbh.closed == 0:
@@ -18,35 +36,8 @@ def _connect(**kw):
   databasehandles[dsn] = dbh
   return dbh
 
-def connect(args):
-#  ttyio.echo(f"databaseconnect.100: args={args!r}", level="debug")
-  kw = {}
-  if type(args) == dict:
-    if "databasekey" in args:
-      kw["database"] = args["databasename"]
-    if "databasehost" in args:
-      kw["host"] = args["databasehost"]
-    if "databaseuser" in args:
-      kw["user"] = args["databaseuser"]
-    if "databasepassword" in args:
-      kw["password"] = args["databasepassword"]
-    if "databaseport" in args:
-      kw["port"] = args["databaseport"]
-  else:
-    if hasattr(args, "databasename"):
-      kw["database"] = args.databasename
-    if hasattr(args, "databasehost"):
-      kw["host"] = args.databasehost
-    if hasattr(args, "databaseuser"):
-      kw["user"] = args.databaseuser
-    if hasattr(args, "databasepassword"):
-      kw["password"] = args.databasepassword
-    if hasattr(args, "databaseport"):
-      kw["port"] = args.databaseport
-
-  return _connect(**kw)
-
-def update(dbh, table, key, items:dict, primarykey="id", mogrify=False):
+def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
+  dbh = connect(args)
   for k, v in items.items():
     if type(items[k]) == dict:
       items[k] = json.dumps(items[k])
@@ -77,7 +68,9 @@ def update(dbh, table, key, items:dict, primarykey="id", mogrify=False):
   cur.close()
   return cur.rowcount
 
-def insert(dbh, table:str, dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
+def insert(args, table:str, dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
+  dbh = connect(args)
+
   columns = dict.keys()
   sql = "insert into %s(" % (table)
   sql += ", ".join(columns)
@@ -133,7 +126,7 @@ def classexists(args, thing):
 
 # @since 20230510 copied from bbsengine5.py
 def buildargdatabasegroup(parentparser:object, defaults:dict={}, label="database options"):
-    databasename = defaults["databasename"] if "databasename" in defaults else "zoidweb6"
+    databasename = defaults["databasename"] if "databasename" in defaults else "zoid6"
     databasehost = defaults["databasehost"] if "databasehost" in defaults else "localhost"
     databaseport = defaults["databaseport"] if "databaseport" in defaults else "5432"
     databaseuser = defaults["databaseuser"] if "databaseuser" in defaults else None
@@ -212,3 +205,7 @@ def resultiter(cursor, arraysize=1000, filterfunc=None, **kw:dict):
             yield result
           elif callable(filterfunc) is True and filterfunc(result, **kw) is True:
             yield result
+
+def commit(args):
+  dbh = connect(args)
+  return dbh.commit()

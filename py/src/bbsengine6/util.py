@@ -1,12 +1,14 @@
+import syslog
+
 import ttyio6 as ttyio
 
-def hr(color="{var:engine.title.hrcolor}", chars="-=", width=None):
+def hr(color="{var:engine.title.hrcolor}", chars="-", width=None):
     if width is None:
         width = ttyio.getterminalwidth()
     style = ttyio.getoption("style", "ttyio")
     if style == "ttyio":
         return f"{{/all}}{color}{{acs:hline:{width}}}{{/all}}" # % (color, width)
-    return "-"*width
+    return chars*width
 
 # titlecolor = "{reverse}"
 # hrcolor = ""
@@ -109,3 +111,58 @@ def datestamp(t=None, format:str="%Y/%m/%d %I:%M%P %Z (%a)") -> str:
 
   stamp = strftime(format, t.timetuple())
   return stamp
+
+# @since 20230523 copied from bbsengine5
+def inputpassword(prompt:str="password: ", mask="X", **kw) -> str:
+  return ttyio.inputstring(prompt, "", mask="x", **kw)
+  buf = ""
+  done = False
+  ttyio.echo(prompt, end="", flush=True)
+  while not done:
+    ch = ttyio.getch()
+#    ttyio.echo("ch=%r" % (ch))
+    if ch == "KEY_ENTER":
+      done = True
+      break
+    if len(ch) == 1:
+      buf += ch
+      ttyio.echo(mask, end="", flush=True)
+  # ttyio.echo(buf)
+  return buf
+
+# @see https://stackoverflow.com/a/53981846
+# @since 20230523 copied from bbsengine5
+def oxfordcomma(seq, conjunction:str="and") -> str:
+    """Return a grammatically correct human readable string (with an Oxford comma)."""
+    if seq is None:
+      return None
+
+    seq = [str(s) for s in seq]
+
+#    ttyio.echo("seq=%r" % (seq))
+    if len(seq) == 0:
+      return ""
+
+    if len(seq) < 3:
+      buf = f"{{var:sepcolor}} {conjunction} {{var:valuecolor}}"
+      return f"{{var:valuecolor}}{buf.join(seq)}" # itemcolor+buf.join(seq) # " and ".join(seq)
+
+    buf = f"{{var:sepcolor}}, {{var:valuecolor}}"
+    return f"{{var:valuecolor}}{buf.join(seq[:-1])}{{var:sepcolor}}, {conjunction} {{var:valuecolor}}{seq[-1]}"
+
+def logentry(message, output=True, level=None, priority=syslog.LOG_INFO, stripcommands=False, datestamp=True):
+  if level is not None:
+    if level == "debug":
+      message = "{blue}** debug ** "+message+"{/all}"
+    elif level == "warn":
+      message = "{yellow}** warn ** "+message+"{/all}"
+    elif level == "error":
+      message = "{red}** error ** "+message+"{/all}"
+
+  message = ttyio.interpretecho(message, strip=True)
+  syslog.syslog(priority, message)
+
+  if output is True:
+    ttyio.echo(message, stripcommands=stripcommands, datestamp=datestamp, interpret=False)
+
+  return
