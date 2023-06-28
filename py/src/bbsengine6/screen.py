@@ -39,7 +39,7 @@ def setarea(left, right=None, stack=False):
   else:
     leftbuf = type(left) # "ERROR"
 
-  l = ttyio.interpretecho(leftbuf, strip=True)
+  l = ttyio.interpret(leftbuf, strip=True)
 
   if callable(right):
     rightbuf = right()
@@ -50,7 +50,10 @@ def setarea(left, right=None, stack=False):
   else:
     ttyio.echo("setarea.100: type(right)=%r" % (right), level="debug")
     rightbuf = "ERROR" # type(right)
-  r = ttyio.interpretecho(rightbuf, strip=True)
+
+  r = ""
+  for i in ttyio.interpret(rightbuf, strip=True):
+    r += i
   t = terminalwidth - len(r) - 4
   leftbuf = leftbuf[:t] + (leftbuf[t:] and '...')
 
