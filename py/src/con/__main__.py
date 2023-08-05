@@ -6,8 +6,12 @@ from . import lib
 if __name__ == "__main__":
     bbsengine.screen.init()
     bbsengine.screen.setarea("con")
+
     parser = lib.buildargs()
     args = parser.parse_args()
+
+    bbsengine.session.start(args)
+
     try:
         lib.runsubmodule(args, "main")
     except EOFError:
