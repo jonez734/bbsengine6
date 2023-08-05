@@ -27,7 +27,7 @@ def init(topmargin=0, bottommargin=1):
   return
 
 # @since 20230523 copied from bbsengine5
-def setarea(left, right=None, stack=False):
+def setarea(left, right=None, stack:bool=False):
   global areastack
 
   terminalwidth = ttyio.getterminalwidth()-2
