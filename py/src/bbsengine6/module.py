@@ -5,44 +5,43 @@ import ttyio6 as ttyio
 
 # @since 20220826
 def check(args, module, op="run", buildargs=False, **kw):
-  debug = args.debug if args is not None else False
+  debug = False # args.debug if args is not None else False
 
-  if args.debug is True:
+  if debug is True:
     ttyio.echo(f"bbsengine.module.check.120: module={module!r}", level="debug")
 
   try:
     m = importlib.import_module(module)
-  except Exception as e:
-    ttyio.echo(repr(e), level="error")
+  except ModuleNotFoundError:
     return False
 
-  if args.debug is True:
+  if debug is True:
     ttyio.echo("bbsengine6.module.check.100: m=%r" % (m), level="debug")
 
   # required
   if (hasattr(m, "init") and callable(m.init)) is False:
-    if args.debug is True:
+    if debug is True:
       ttyio.echo("no init function", level="warn")
       return False
 
   if hasattr(m, "access") is False:
-    if args.debug is True:
+    if debug is True:
       ttyio.echo("no access function, returning True anyway")
     return True
   if (hasattr(m, "access") and callable(m.access)) is False:
-    if args.debug is True:
+    if debug is True:
       ttyio.echo("no callable access function", level="debug")
     return False
 
   if m.access(args, op) is True:
-    if args.debug is True:
+    if debug is True:
       ttyio.echo("access check passed", level="debug")
   else:
     ttyio.echo("access check failed", level="error")
     return False
 
   if (hasattr(m, "buildargs") and callable(m.buildargs)) is False:
-    if args.debug is True:
+    if debug is True:
       ttyio.echo("no callable buildargs function", level="debug")
     if buildargs is True:
       return False
@@ -59,14 +58,10 @@ def load(args:object, modulepath:str):
   try:
       m = importlib.import_module(modulepath)
   except ModuleNotFoundError:
-      ttyio.echo("load.180: module %s not found" % (modulepath), level="error")
+      ttyio.echo("bbsengine6.module.load.180: module %s not found" % (modulepath), level="error")
       raise
-  except Exception as e:
-      import traceback
-      traceback.print_exc(file=sys.stdout)
   return m
   
-
 # @since 20230510 copied from bbsengine5
 def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.Namespace, callback, argparser=None, **kwargs):
   debug = args.debug if args is not None else False
@@ -175,4 +170,5 @@ def runmodule(args, module, **kwargs):
 
 # @since 20220828
 def runsubmodule(args, module, **kw):
-  return runmodule(args, module, **kw)
+  ttyio.echo("bbsengine6.module.runsubmodule.100: trace", level="debug")
+  return runmodule(args, module, buildargs=False, **kw)
