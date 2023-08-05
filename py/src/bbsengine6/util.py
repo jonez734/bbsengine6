@@ -1,13 +1,13 @@
+import random
 import syslog
 
 import ttyio6 as ttyio
 
 def hr(color="{var:engine.title.hrcolor}", chars="-", width=None):
     if width is None:
-        width = ttyio.getterminalwidth()
-    style = ttyio.getoption("style", "ttyio")
-    if style == "ttyio":
-        return f"{{/all}}{color}{{acs:hline:{width}}}{{/all}}" # % (color, width)
+        width = ttyio.getterminalwidth()-2
+    if ttyio.getoption("style", "ttyio") == "ttyio":
+        return f"{{/all}} {color}{{acs:hline:{width}}}{{/all}}" # % (color, width)
     return chars*width
 
 # titlecolor = "{reverse}"
@@ -17,7 +17,7 @@ def hr(color="{var:engine.title.hrcolor}", chars="-", width=None):
 # lrcorner="{acs:lrcorner}"
 # ulcorner="{acs:ulcorner}"
 # urcorner="{acs:urcorner}"
-def title(title:str, **kw): # hrchar:str="{acs:hline}", llcorner="{acs:llcorner}", lrcorner="{acs:lrcorner}", ulcorner="{acs:ulcorner}", urcorner="{acs:urcorner}", vline="{acs:vline}", width=None, fillchar=" ", center=True):
+def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{acs:llcorner}", lrcorner="{acs:lrcorner}", ulcorner="{acs:ulcorner}", urcorner="{acs:urcorner}", vline="{acs:vline}", width=None, fillchar=" ", center=True):
   if ttyio.getoption("style", "ttyio") == "noansi":
       width = 100
       hline="-"*width
@@ -28,8 +28,9 @@ def title(title:str, **kw): # hrchar:str="{acs:hline}", llcorner="{acs:llcorner}
       vline="|"
       boxcolor = ""
       titlecolor = ""
+      reset = ""
   else:
-      width = ttyio.getterminalwidth()-2
+      width = ttyio.getterminalwidth() - 4
       hline = f"{{acs:hline:{width}}}"
       llcorner = "{acs:llcorner}"
       lrcorner = "{acs:lrcorner}"
@@ -38,14 +39,22 @@ def title(title:str, **kw): # hrchar:str="{acs:hline}", llcorner="{acs:llcorner}
       ulcorner = "{acs:ulcorner}"
       boxcolor = "{darkgreen}" # var:engine.title.hrcolor}"
       titlecolor = "{white}{bggray}" # {var:engine.title.color}"
+      reset = "{/all}"
 
-  reset = "{/all}"
-  w = int((width-len(title)-4)/2)
-  padding = " "*(int(w))
+  w = width - len(title)
+#  print(f"w={w!r}")
+  if int(w % 2) == 0:
+    repeat = int(w/2)
+    leftpadding  = " "*int(repeat)
+    rightpadding = " "*int(repeat)
+  else:
+    repeat = int(w-1)/2
+    leftpadding  = " "*int(repeat+2)
+    rightpadding = " "*int(repeat-1)
 
-  ttyio.echo(f"{boxcolor}{ulcorner}{hline}{urcorner}", wordwrap=False)
-  ttyio.echo(f"{boxcolor}{vline}{reset} {titlecolor}{padding} {title} {padding}{reset} {boxcolor}{vline}", wordwrap=False)
-  ttyio.echo(f"{boxcolor}{llcorner}{hline}{lrcorner}{reset}", wordwrap=False)
+  ttyio.echo(f" {boxcolor}{ulcorner}{hline}{urcorner}", wordwrap=False)
+  ttyio.echo(f" {boxcolor}{vline}{titlecolor}{leftpadding}{title}{rightpadding}{reset}{boxcolor}{vline}{reset}", wordwrap=False)
+  ttyio.echo(f" {boxcolor}{llcorner}{hline}{lrcorner}{reset}", wordwrap=False)
   return
 
   style = ttyio.getoption("style", "ttyio")
@@ -166,3 +175,99 @@ def logentry(message, output=True, level=None, priority=syslog.LOG_INFO, stripco
     ttyio.echo(message, stripcommands=stripcommands, datestamp=datestamp, interpret=False)
 
   return
+
+# @since 20230612 copied from bbsengine5
+# @see https://rosettacode.org/wiki/Range_extraction#Python
+def collapserange(lst:list):
+    'Yield 2-tuple ranges or 1-tuple single elements from list of increasing ints'
+    lenlst = len(lst)
+    i = 0
+    while i < lenlst:
+        low = lst[i]
+        while i <lenlst-1 and lst[i]+1 == lst[i+1]: i +=1
+        hi = lst[i]
+        if   hi - low >= 2:
+            yield (low, hi)
+        elif hi - low == 1:
+            yield (low,)
+            yield (hi,)
+        else:
+            yield (low,)
+        i += 1
+
+# @since 20230612 copied from bbsengine5
+def expandrange(txt:str) -> list:
+  "accepts an str with a range expression, returns a list"
+  elle = []
+  for r in txt.split(','):
+    if '-' in r[1:]:
+      r0, r1 = r[1:].split('-', 1)
+      elle += range(int(r[0] + r0), int(r1) + 1)
+    else:
+      elle.append(int(r))
+  return list(set(elle))
+
+def rangestr(ranges):
+    return ','.join( (('%i-%i' % r) if len(r) == 2 else '%i' % r) for r in ranges )
+
+def printr(ranges):
+  print(rangestr(ranges))
+
+# @since 20230618 copied from bbsengine5
+def filedisplay(res, **kw) -> None: #more=True, width=None) -> None:
+  more = kw["more"] if "more" in kw else True
+  width = kw["width"] if "width" in kw else None
+  indent = kw["indent"] if "indent" in kw else 0
+  args = kw["args"] if "args" in kw else None
+
+#  ttyio.echo("filename=%r" % (filename), level="debug")
+  if width is None:
+    width = ttyio.getterminalwidth()
+
+  buf = ""
+  with res as r:
+    for elle in r:
+      buf += elle.rstrip()
+#  fp = open(filename, "r")
+#  buf = fp.read()
+#  fp.close()
+  ttyio.echo(buf, width=width, indent=indent)
+#  height = ttyio.getterminalheight()-1
+#  ttyio.echo("filedisplay.100: filename=%r type=%r" % (filename, type(filename)), level="debug")
+#  with filename as f:
+#    for line in f:
+#      ttyio.echo(line)
+
+#    pager(f, width=width, height=height, indent=indent)
+  ttyio.echo("{/all}{f6}")
+
+# @since 20230715 copied from bbsengine5
+# mode = single, average, mean, list, ....?
+def diceroll(sides:int=6, count:int=1, mode:str="single"):
+  if mode == "single":
+    return random.randint(1, sides)
+
+  result = []
+  for x in range(1, count+1):
+    result.append(random.randint(1, sides))
+
+  if mode == "list":
+    return result
+  elif mode == "average":
+    avg = 0.0
+    total = 0
+    for x in result:
+      total += x
+    return total/len(result)
+  elif mode == "median":
+    median = 0.0
+    # ttyio.echo("result=%r" % (result))
+    result.sort()
+    # ttyio.echo("result=%r" % (result))
+    middle = int(len(result)//2)
+    if len(result) % 2 == 1:
+      return result[middle]
+    else:
+      return int((result[middle-1] + result[middle]) / 2.0)
+  else:
+    return None
