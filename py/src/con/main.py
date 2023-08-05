@@ -20,10 +20,11 @@ def main(args, **kw):
   while not done:
     bbsengine.util.heading("con")
     ttyio.echo("{f6}{var:labelcolor}database: {var:valuecolor}%s {var:labelcolor}host: {var:valuecolor}%s:%s{f6}" % (args.databasename, args.databasehost, args.databaseport))
+
     ttyio.echo("{var:optioncolor}[M]{var:labelcolor}embers")
 #    ttyio.echo("[E]mail")
-    ttyio.echo("{f6}{var:optioncolor}[Q]{var:labelcolor}uit")
-    ch = ttyio.inputchoice("{var:promptcolor}engine: {var:inputcolor}", "MEQ", "Q")
+    ttyio.echo("{f6}{var:optioncolor}[Q]{var:labelcolor}uit{f6}")
+    ch = ttyio.inputchoice("{var:promptcolor}console: {var:inputcolor}", "MEQ", "Q")
     if ch == "M":
       ttyio.echo("Members")
       lib.runsubmodule(args, "member")
