@@ -1,11 +1,12 @@
 import sys
+import argparse
 import importlib
 
 import ttyio6 as ttyio
 
 # @since 20220826
 def check(args, module, op="run", buildargs=False, **kw):
-  debug = False # args.debug if args is not None else False
+  debug = args.debug if args.debug is True else False
 
   if debug is True:
     ttyio.echo(f"bbsengine.module.check.120: module={module!r}", level="debug")
@@ -13,6 +14,8 @@ def check(args, module, op="run", buildargs=False, **kw):
   try:
     m = importlib.import_module(module)
   except ModuleNotFoundError:
+    if debug is True:
+      ttyio.echo(f"module {module=} not found", level="debug")
     return False
 
   if debug is True:
@@ -26,8 +29,9 @@ def check(args, module, op="run", buildargs=False, **kw):
 
   if hasattr(m, "access") is False:
     if debug is True:
-      ttyio.echo("no access function, returning True anyway")
-    return True
+      ttyio.echo("no access function", level="error")
+    return False
+
   if (hasattr(m, "access") and callable(m.access)) is False:
     if debug is True:
       ttyio.echo("no callable access function", level="debug")
@@ -66,7 +70,7 @@ def load(args:object, modulepath:str):
 def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.Namespace, callback, argparser=None, **kwargs):
   debug = args.debug if args is not None else False
   if debug is True:
-    ttyio.echo("bbsengine5.runcallback.100: args=%r kwargs=%r" % (args, kwargs), level="debug")
+    ttyio.echo(f"bbsengine6.runcallback.100: {args=} {kwargs=}", level="debug")
 #  if argparser is not None:
 #    args = argparser.parse_args()
 
@@ -128,47 +132,55 @@ def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.N
 # @since 20220727
 # @since 20230508 added to bbsengine6
 def runmodule(args, module, **kwargs):
-  buildargs = kwargs["buildargs"] if "buildargs" in kwargs else True
-  if check(args, module, buildargs=buildargs) is False:
-    ttyio.echo("check module failed. permission denied", level="error")
+  debug = args.debug if "debug" in args else True
+  buildargs = True
+
+  if check(args, module) is False:
+    ttyio.echo(f"check of {module=} failed. permission denied", level="error")
     return False
 
-  if args.debug is True:
-    ttyio.echo("bbsengine6.runmodule.100: args=%r" % (args), level="debug")
+  if debug is True:
+    ttyio.echo(f"bbsengine6.runmodule.100: {args=}", level="debug")
 
-  res = runcallback(args, module + ".init", **kwargs)
-  if args.debug is True:
-    ttyio.echo("%s.init() result=%r" % (module, res), level="debug")
+  res = runcallback(args, f"{module}.init", **kwargs)
+  if debug is True:
+    ttyio.echo(f"{module}.init() result={res}", level="debug")
 
   if buildargs is True:
     argv = kwargs["argv"] if "argv" in kwargs else []
-    if args.debug is True:
-      ttyio.echo("bbsengine6.runmodule.120: argv=%r" % (argv), level="debug")
-    prgargparser = runcallback(args, module + ".buildargs", **kwargs)
+    if debug is True:
+      ttyio.echo(f"bbsengine6.runmodule.120: {argv=}", level="debug")
+    prgargparser = runcallback(args, f"{module}.buildargs", **kwargs)
+
+    if debug is True:
+      ttyio.echo(f"bbsengine6.runmodule.130: {prgargparser=}")
+
     if prgargparser is not None:
       try:
         argv = [a.strip() for a in argv[1:]]
         prgargs = prgargparser.parse_args(argv) # argv[1:])
+        if debug is True:
+          ttyio.echo(f"bbsengine6.module.runmodule: {prgargs=} {argv=}")
 #        prgargs = [s.strip() for s in prgargs]
       except SystemExit:
-        return
+        return False
       except argparse.ArgumentError:
         ttyio.echo("argument error", level="error")
-        return
+        return False
 
-      if args.debug is True:
-        ttyio.echo("bbsengine.runmodule.220: prgargs=%r" % (prgargs), level="debug")
+      if debug is True:
+        ttyio.echo(f"bbsengine.runmodule.220: {prgargs=}", level="debug")
 
-#      res = runcallback(prgargs, module+".main", **kwargs)
-#  else:
-#    res = runcallback(args, module+".main", **kwargs)
-  res = runcallback(args, module+".main", **kwargs)
+      return runcallback(prgargs, f"{module}.main", **kwargs)
 
-  if args.debug is True:
-    ttyio.echo("%s.main() result=%r" % (module, res), level="debug")
+  res = runcallback(args, f"{module}.main", **kwargs)
+
+  if debug is True:
+    ttyio.echo(f"{module}.main() result={res}", level="debug")
   return res
 
 # @since 20220828
 def runsubmodule(args, module, **kw):
-  ttyio.echo("bbsengine6.module.runsubmodule.100: trace", level="debug")
-  return runmodule(args, module, buildargs=False, **kw)
+  if args.debug is True:
+    ttyio.echo("bbsengine6.module.runsubmodule.100: trace", level="debug")
+  return runmodule(args, module, **kw)
