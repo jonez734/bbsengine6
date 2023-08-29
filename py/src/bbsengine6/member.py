@@ -1,5 +1,5 @@
 import os
-# import pwd
+import pwd
 
 import ttyio6 as ttyio
 
@@ -47,26 +47,35 @@ currentid = None
 def getcurrentid(args):
   global currentid
 
-  ttyio.echo(f"bbsengine6.member.getcurrentid.100: currentid={currentid!r}")
+  if args.debug is True:
+    ttyio.echo(f"bbsengine6.member.getcurrentid.100: currentid={currentid!r}", level="debug")
+
   if currentid is not None:
     return currentid
 
-  loginid = os.getlogin() # works on windows, too. @project 8158
+  loginid = os.getlogin() # works on windows, too. @project:8158
 #  loginid = pwd.getpwuid(os.geteuid())[0]
-  sql = "select id from engine.member where loginid=%s" 
+
+  if args.debug is True:
+    ttyio.echo(f"bbsengine6.member.getcurrentid.100: loginid={loginid!r}", level="debug")
+
+  sql = "select id from engine.member where loginid=%s"
   dat = (loginid,)
   dbh = database.connect(args)
   cur = dbh.cursor()
+
+  if args.debug is True:
+    ttyio.echo(f"mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+
   cur.execute(sql, dat)
-  ttyio.echo("mogrify="+cur.mogrify(sql, dat), level="debug")
   if cur.rowcount == 0:
     return None
   rec = cur.fetchone()
 
   # if args.debug is True:
   currentid = rec["id"]
-  if args.debug is False:
-    ttyio.echo(f"getcurrentid.100: currentid={currentid!r}", level="debug")
+  if args.debug is True:
+    ttyio.echo(f"getcurrentid.120: currentid={currentid!r}", level="debug")
   return currentid
 
   if res is None:
@@ -121,19 +130,19 @@ def getcredits(args, memberid:int=None) -> int:
 #  memberid = getcurrentmemberid(args)
 #  return getmembercredits(args, memberid)
 
-def getname(args, memberid:int=None) -> str:
-  if memberid is None:
-    memberid = getcurrentid(args)
-
-  dbh = database.connect(args)
-  sql = "select name from engine.member where id=%s"
-  dat = (memberid,)
-  cur = dbh.cursor()
-  cur.execute(sql, dat)
-  res = cur.fetchone()
-  if res is not None and "name" in res:
-    return res["name"]
-  return None
+#def getname(args, memberid:int=None) -> str:
+#  if memberid is None:
+#    memberid = getcurrentid(args)
+#
+#  dbh = database.connect(args)
+#  sql = "select name from engine.member where id=%s"
+#  dat = (memberid,)
+#  cur = dbh.cursor()
+#  cur.execute(sql, dat)
+#  res = cur.fetchone()
+#  if res is not None and "name" in res:
+#    return res["name"]
+#  return None
   
 #def getcurrentmembername(args:argparse.Namespace) -> str:
 #  currentmemberid = getcurrentmemberid(args)
@@ -154,8 +163,7 @@ def update(args, member, memberid=None):
 # @since 20210203
 def getcurrent(args, fields="*") -> dict:
   currentmemberid = getcurrentid(args)
-  dbh = database.connect(args)
-  return getbyid(dbh, currentid, fields)
+  return getbyid(args, currentid, fields)
 
 # @since 20190924
 # @since 20210203
@@ -188,7 +196,7 @@ def checkflag(args, flag:str, memberid:int=None):
     memberid = getcurrentid(args)
 
   dbh = database.connect(args)
-  sql = "select f.name, coalesce(mmf.value, f.defaultvalue) as value from engine.flag as f left outer join engine.map_member_flag as mmf on (f.name=mmf.name and mmf.memberid=%s) where f.name=%s"
+  sql = "select f.name, coalesce(mmf.value, f.defaultvalue) as value from engine.flag as f left outer join engine.map_member_flag as mmf on (f.name=mmf.name and mmf.memberid=%s) where f.name ilike %s"
   dat = (memberid, flag)
   cur = dbh.cursor()
   cur.execute(sql, dat)
@@ -320,3 +328,22 @@ def verifyMemberFound(name, args=None, column="loginid", **kw):
 
 def insert(args, member, table="engine.__member", mogrify=False):
   return database.insert(args, table, member, returnid=True, mogrify=mogrify)
+
+# @since 20230619
+def getcurrentmoniker(args, memberid=None, **kw):
+  mogrify = kw["mogrify"] if "mogrify" in kw else False
+
+  if memberid is None:
+    memberid = getcurrentid(args)
+
+  dbh = database.connect(args)
+  cur = dbh.cursor()
+  sql = "select moniker from engine.member where id=%s"
+  dat = (memberid,)
+  cur.execute(sql, dat)
+  if mogrify is True:
+    ttyio.echo(f"bbsengine6.member.getcurrentmoniker.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+  if cur.rowcount == 0:
+    return None
+  rec = cur.fetchone()
+  return rec["moniker"]
