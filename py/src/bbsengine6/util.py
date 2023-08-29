@@ -3,12 +3,12 @@ import syslog
 
 import ttyio6 as ttyio
 
-def hr(color="{var:engine.title.hrcolor}", chars="-", width=None):
+def hr(color="{var:engine.title.hrcolor}", chars="-", width=None, padding=" "):
     if width is None:
         width = ttyio.getterminalwidth()-2
     if ttyio.getoption("style", "ttyio") == "ttyio":
-        return f"{{/all}} {color}{{acs:hline:{width}}}{{/all}}" # % (color, width)
-    return chars*width
+        return f"{{/all}}{padding}{color}{{acs:hline:{width}}}{{/all}}" # % (color, width)
+    return f"{padding}{chars*width}"
 
 # titlecolor = "{reverse}"
 # hrcolor = ""
@@ -85,45 +85,48 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
 def pluralize(amount:int, singular:str, plural:str, quantity=True, emoji:str="") -> str:
   if amount is None or amount == 0:
     if quantity is True:
-      return "no %s%s" % (emoji, plural)
+      return f"no {emoji} {plural}"
     return plural
 
   if quantity is True:
     if amount == 1:
-      return "%s%s %s" % (emoji, amount, singular)
+      return f"{emoji} {amount} {singular}"
     buf = "{:n}".format(amount)
-    return "%s%s %s" % (emoji, buf, plural)
+    return f"{emoji} {buf} {plural}"
   if amount == 1:
-    return "%s%s" % (emoji, singular)
+    return f"{emoji} {singular}"
   else:
-    return "%s%s" % (emoji, plural)
+    return f"{emoji} {plural}"
 
 # @since 20230510 copied from bbsengine5
-def datestamp(t=None, format:str="%Y/%m/%d %I:%M%P %Z (%a)") -> str:
-  from getdate import getdate, error
+def datestamp(t=None, format:str="%Y-%m-%d %I:%M%P %Z (%a)") -> str:
+  import getdate3 as getdate
 
   from dateutil.tz import tzlocal
   from datetime import datetime
-  from time import strftime, tzset
+  from time import tzset
 
   # ttyio.echo("bbsengine.datestamp.100: type(t)=%r" % (type(t)), level="debug")
 
   tzset()
 
   if type(t) == int or type(t) == float:
-    t = datetime.fromtimestamp(t, tzlocal())
+    t = datetime.fromtimestamp(t, tzinfo=tzlocal())
   elif t is None:
     t = datetime.now(tzlocal())
   elif type(t) == str:
-    epoch = getdate(t)
-    t = datetime.fromtimestamp(epoch, tzlocal())
+    t = getdate.getdate(t)
+#    ttyio.echo(f"after getdate: {t=} {type(t)=}")
+    if type(t) is str:
+#      ttyio.echo(f"after getdate(), {type(t)=}")
+      return t
 
-  stamp = strftime(format, t.timetuple())
-  return stamp
+  return t.strftime(format)
 
 # @since 20230523 copied from bbsengine5
 def inputpassword(prompt:str="password: ", mask="X", **kw) -> str:
-  return ttyio.inputstring(prompt, "", mask="x", **kw)
+  return ttyio.inputstring(prompt, "", mask=mask, **kw)
+
   buf = ""
   done = False
   ttyio.echo(prompt, end="", flush=True)
@@ -227,11 +230,11 @@ def filedisplay(res, **kw) -> None: #more=True, width=None) -> None:
   buf = ""
   with res as r:
     for elle in r:
-      buf += elle.rstrip()
+      buf += elle # rstrip
 #  fp = open(filename, "r")
 #  buf = fp.read()
 #  fp.close()
-  ttyio.echo(buf, width=width, indent=indent)
+  ttyio.echo(buf, width=width, indent=indent, wordwrap=True)
 #  height = ttyio.getterminalheight()-1
 #  ttyio.echo("filedisplay.100: filename=%r type=%r" % (filename, type(filename)), level="debug")
 #  with filename as f:
