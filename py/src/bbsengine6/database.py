@@ -7,11 +7,14 @@ from psycopg2.extensions import parse_dsn, make_dsn
 import ttyio6 as ttyio
 
 databasehandles = {}
-def connect(args):
-  ttyio.echo(f"bbsengine6.database.connect.100: args={args!r}", level="debug")
-  kw = {}
+def connect(args, **kw):
+  if args.debug is True:
+    ttyio.echo(f"bbsengine6.database.connect.100: args={args!r}", level="debug")
+
   if "databasename" in args:
+#    ttyio.echo(f"buildkw.140: setting database to {args.databasename!r}", level="debug")
     kw["database"] = args.databasename
+#    ttyio.echo("bbsengine6.database.buildkw.100: kw=%r" % (kw), level="debug", interpret=False)
   if "databasehost" in args:
     kw["host"] = args.databasehost
   if "databaseuser" in args:
@@ -21,9 +24,13 @@ def connect(args):
   if "databaseport" in args:
     kw["port"] = args.databaseport
 
+#  res = buildkw(args)
+#  ttyio.echo(f"bbsengine6.database.connect.140: res={res!r}", level="debug")
+
   dsn = make_dsn(**kw)
 
-  ttyio.echo(f"bbsengine6.database.connect.120: kw={kw!r} dsn={dsn!r}", level="debug")
+  if args.debug is True:
+    ttyio.echo(f"bbsengine6.database.connect.120: kw={kw!r} dsn={dsn!r}", level="debug")
 
   if dsn in databasehandles:
     dbh = databasehandles[dsn]
@@ -36,11 +43,30 @@ def connect(args):
   databasehandles[dsn] = dbh
   return dbh
 
+def buildkw(args, **kwargs):
+  kw = {}
+#  ttyio.echo(f"bbsengine6.database.buildkw.120: args={args!r}", level="debug")
+  if "databasename" in args:
+#    ttyio.echo(f"buildkw.140: setting database to {args.databasename!r}", level="debug")
+    kw["database"] = args.databasename
+#    ttyio.echo("bbsengine6.database.buildkw.100: kw=%r" % (kw), level="debug", interpret=False)
+  if "databasehost" in args:
+    kw["host"] = args.databasehost
+  if "databaseuser" in args:
+    kw["user"] = args.databaseuser
+  if "databasepassword" in args:
+    kw["password"] = args.databasepassword
+  if "databaseport" in args:
+    kw["port"] = args.databaseport
+  
+  return kw
+
 def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
+  ttyio.echo(f"bbsengine6.database.update.100: items={items!r}")
   dbh = connect(args)
   for k, v in items.items():
-    if type(items[k]) == dict:
-      items[k] = json.dumps(items[k])
+    if type(items[k]) is dict:
+      items[k] = Json(items[k])
     if k == "datecreatedepoch":
       del items[k]
 
@@ -63,15 +89,26 @@ def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
   cur.execute(sql, dat)
 
   if mogrify is True:
-    ttyio.echo(cur.mogrify(sql, dat), level="debug")
+    ttyio.echo(f"{cur.mogrify(sql, dat)!r}", level="debug")
 
   cur.close()
   return cur.rowcount
 
-def insert(args, table:str, dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
+def insert(args, table:str, items, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
   dbh = connect(args)
 
-  columns = dict.keys()
+  columns = items.keys()
+  if "" in columns:
+    del items[""]
+
+  for k, v in items.items():
+    if type(items[k]) is dict:
+      items[k] = Json(items[k])
+    if k == "datecreatedepoch":
+      del items[k]
+
+  if args.debug is True:
+    ttyio.echo(f"bbsengine6.database.insert.100: columns={columns!r}", level="debug")
   sql = "insert into %s(" % (table)
   sql += ", ".join(columns)
   sql += ") values ("
@@ -82,16 +119,19 @@ def insert(args, table:str, dict, returnid:bool=True, primarykey:str="id", mogri
   sql += ")"
 
   dat = []
-  for v in dict.values():
+  for v in items.values():
+#    if type(items[k]) is dict:
+#      items[k] = Json(items[k])
+
     dat.append(v)
   if returnid is True:
     sql += " returning %s.%s" % (table, primarykey)
   # ttyio.echo("bbsengine.insert.100: sql=%s dat=%s" % (sql, dat), level="debug")
   cur = dbh.cursor()
 
-#  if mogrify is True:
-#    ttyio.echo("bbsengine5.insert.100: %r" % (cur.mogrify(sql, dat)), level="debug")
-#      ttyio.echo(cur.mogrify(sql, [tuple(v.values() for v in dat)]), level="debug")
+  if mogrify is True:
+    ttyio.echo("bbsengine5.insert.100: %r" % (repr(cur.mogrify(sql, dat))), level="debug")
+#    ttyio.echo(cur.mogrify(sql, [tuple(v.values() for v in dat)]), level="debug")
   cur.execute(sql, dat)
   if returnid is True:
     res = cur.fetchone()
@@ -102,30 +142,39 @@ def insert(args, table:str, dict, returnid:bool=True, primarykey:str="id", mogri
 
 # @see https://soft-builder.com/how-to-list-all-schemas-in-postgresql/
 # @since 20230510
-def classexists(args, thing):
-  dbh = connect(args)
-  sql = "SELECT 't' as exists FROM information_schema.schemata where schema_name=%s"
-  dat = (thing,)
-  cur = dbh.cursor()
-  cur.execute(sql, dat)
-  if cur.rowcount == 1:
-    res = cur.fetchone()
-#    ttyio.echo(f"thing.120: res={res!r}")
-    if res["exists"] is True:
-      return True
-
+def classexists(args, name, mogrify=False):
   sql = "select to_regclass(%s) as class" # does not work with schemas
   dat = (thing,)
   cur = dbh.cursor()
   cur.execute(sql, dat)
+  if mogrify is True:
+    ttyio.echo("bbsengine6.database.classexists.120: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+  if cur.rowcount == 0:
+    return False
+
   res = cur.fetchone()
-#  ttyio.echo(f"thing.100: res={res!r}")
+
+  if args.debug is True:
+    ttyio.echo(f"clasexists.100: res={res!r}")
+
   if res["class"] is None:
     return False
   return True
 
+def schemaexists(args, name, mogrify=False):
+  dbh = connect(args)
+  sql = "SELECT 't' as exists FROM information_schema.schemata where schema_name=%s"
+  dat = (name,)
+  cur = dbh.cursor()
+  cur.execute(sql, dat)
+  if mogrify is True:
+    ttyio.echo(f"bbsengine6.database.schemaexists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+  if cur.rowcount == 0:
+    return False
+  return True
+
 # @since 20230510 copied from bbsengine5.py
-def buildargdatabasegroup(parentparser:object, defaults:dict={}, label="database options"):
+def buildarggroup(parentparser:object, defaults:dict={}, label="database options"):
     databasename = defaults["databasename"] if "databasename" in defaults else "zoid6"
     databasehost = defaults["databasehost"] if "databasehost" in defaults else "localhost"
     databaseport = defaults["databaseport"] if "databaseport" in defaults else "5432"
@@ -141,56 +190,7 @@ def buildargdatabasegroup(parentparser:object, defaults:dict={}, label="database
     group.add_argument("--databasepassword", dest="databasepassword", action="store", default=databasepassword, type=str, help="database password (default: %(default)r)")
     return
 
-# @since 20230510 copied from bbsengine5
-def check(args, module, op="run", buildargs=False, **kw):
-  if args.debug is True:
-    ttyio.echo(f"bbsengine6.module.check.120: module={module!r}", level="debug")
-
-  try:
-    m = importlib.import_module(module)
-  except Exception as e:
-    if args.debug is True:
-      ttyio.echo(repr(e), level="error")
-    return False
-
-  if args.debug is True:
-    ttyio.echo("bbsengine6.module.check.100: m=%r" % (m), level="debug")
-
-  # required
-  if (hasattr(m, "init") and callable(m.init)) is False:
-    if args.debug is True:
-      ttyio.echo("no init function", level="warn")
-    return False
-
-  # optional
-  if hasattr(m, "access") is False:
-    if args.debug is True:
-      ttyio.echo("no access function, returning True anyway")
-    return True
-  if (hasattr(m, "access") and callable(m.access)) is False:
-    if args.debug is True:
-      ttyio.echo("no callable access function", level="debug")
-    return False
-
-  if m.access(args, op) is True:
-    if args.debug is True:
-      ttyio.echo("access check passed", level="debug")
-  else:
-    ttyio.echo("access check failed", level="error")
-    return False
-
-  if (hasattr(m, "buildargs") and callable(m.buildargs)) is False:
-    if args.debug is True:
-      ttyio.echo("no callable buildargs function", level="debug")
-    if buildargs is True:
-      return False
-
-  # required
-  if (hasattr(m, "main") and callable(m.main)) is False:
-    ttyio.echo("no main function", level="error")
-    return False
-
-  return True
+buildargdatabasegroup = buildarggroup
 
 # @since 20211101
 # @since 20230515 copied from bbsengine5
@@ -209,3 +209,41 @@ def resultiter(cursor, arraysize=1000, filterfunc=None, **kw:dict):
 def commit(args):
   dbh = connect(args)
   return dbh.commit()
+
+# @since 20230715 used by empyre
+def rollback(args):
+  dbh = connect(args)
+  return dbh.rollback()
+
+def rolexists(args, rolname, mogrify=False):
+  sql = "SELECT rolname FROM pg_roles where rolname=%s"
+  dat = (rolname,)
+  dbh = connect(args, database="template1")
+  cur = dbh.cursor()
+  cur.execute(sql, dat)
+  if mogrify is True:
+    ttyio.echo("bbsengine6.database.rolexists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+  if cur.rowcount == 0:
+    return False
+  return True
+   
+def exists(args, databasename, mogrify=False):
+  sql = "SELECT datname FROM pg_catalog. pg_database WHERE lower(datname) = lower(%s)"
+  dat = (databasename,)
+  dbh = connect(args, database="template1")
+  cur = dbh.cursor()
+  cur.execute(sql, dat)
+  if mogrify is True:
+    ttyio.echo(f"bbsengine6.database.exists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+  if cur.rowcount == 0:
+    return False
+  return True
+
+def close(args, **kw):
+  dsn = make_dsn(**buildkw(args, **kw))
+  if dsn in databasehandles:
+    dbh = databasehandles[dsn]
+    dbh.close()
+    del databasehandles[dsn]
+    return True
+  return False

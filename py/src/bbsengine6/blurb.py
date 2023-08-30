@@ -4,28 +4,27 @@ from . import member
 
 from psycopg2.extras import Json
 
-def insert(args, blurb:dict, prg:str="", table:str="engine.__blurb", returnid:bool=True, primarykey:str="id", mogrify:bool=False):
-    dbh = database.connect(args)
+def insert(args, blurb:dict, prg:str, table:str="engine.__blurb", returnid:bool=True, primarykey:str="id", mogrify:bool=False):
     blurb["prg"] = prg
     blurb["attributes"] = Json(blurb["attributes"])
     blurb["datecreated"] = "now()"
     blurb["createdbyid"] = member.getcurrentid(args)
     if args.debug is True:
-        ttyio.echo("bbsengine.blurb.insert.100: blurb=%r table=%r" % (blurb, table), level="debug")
-    return database.insert(dbh, table, blurb, returnid=returnid, primarykey=primarykey, mogrify=mogrify)
+      ttyio.echo(f"bbsengine.blurb.insert.100: blurb={blurb!r} table={table!r}", level="debug")
+    return database.insert(args, table, blurb, returnid=returnid, primarykey=primarykey, mogrify=mogrify)
 
 def updatesigs(args, blurbid:int, sigpaths, completerdelims=", ", mogrify:bool=False):
   if sigpaths is None or len(sigpaths) == 0:
     return None
 
-  ttyio.echo("bbsengine6.blurb.updatesigs.100: sigpaths=%r" % (sigpaths), level="debug")
+  ttyio.echo(f"bbsengine6.blurb.updatesigs.100: sigpaths={sigpaths!r}", level="debug")
   sigpaths = buildsiglist(sigpaths)
 #  if type(sigpaths) == str:
 #    sigpaths = re.split("|".join(completerdelims), sigpaths)
 #    sigpaths = [s.strip() for s in sigpaths]
 #    sigpaths = [s for s in sigpaths if s]
   
-  # dbh is first arg
+  dbh = database.connect(args)
   cur = dbh.cursor()
   sql = "delete from engine.map_blurb_sig where blurbid=%s"
   dat = (blurbid,)
@@ -36,7 +35,7 @@ def updatesigs(args, blurbid:int, sigpaths, completerdelims=", ", mogrify:bool=F
   for sigpath in sigpaths:
     ttyio.echo("bbsengine6.blurb.updatesigs.100: sigpath=%r" % (sigpath))
     sigmap = { "blurbid": blurbid, "sigpath": sigpath }
-    database.insert(dbh, "engine.map_blurb_sig", sigmap, returnid=False, mogrify=mogrify)
+    database.insert(args, "engine.map_blurb_sig", sigmap, returnid=False, mogrify=mogrify)
 #  dbh.commit()
   return None
 
@@ -62,6 +61,9 @@ def update(args, id:int, blurb:dict, reset=False, mogrify=False):
   blurb["updatedbyid"] = member.getcurrentid(args)
   attr = blurb["attributes"] if "attributes" in blurb else {}
   if len(attr) > 0:
-    updateattributes(dbh, args, id, attr, reset=reset, mogrify=mogrify)
+    updateattributes(args, id, attr, reset=reset, mogrify=mogrify)
     del blurb["attributes"]
-  return database.update(dbh, "engine.__blurb", id, blurb, mogrify=mogrify)
+  return database.update(args, "engine.__blurb", id, blurb, mogrify=mogrify)
+
+def commit(args):
+  return database.commit(args)
