@@ -1,9 +1,9 @@
-CREATE OR REPLACE FUNCTION socrates.getreplies(integer)
- RETURNS SETOF socrates.post
+CREATE OR REPLACE FUNCTION engine.getsubblurbs(bigint)
+ RETURNS SETOF engine.__blurb
  LANGUAGE sql
 AS $function$ 
         with recursive t as 
-                (select * from socrates.post where parentid=$1 union all select socrates.post.* from socrates.post join t on socrates.post.parentid=t.id) 
+                (select * from engine.__blurb where parentid=$1 union all select engine.__blurb.* from engine.__blurb join t on engine.__blurb.parentid=t.id) 
         select * from t; 
 $function$
 ;
