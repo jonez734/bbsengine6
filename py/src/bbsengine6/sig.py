@@ -5,6 +5,27 @@ import ttyio6 as ttyio
 from . import member
 from . import database
 
+def builduri(args, path, top="top"):
+  path = path.replace(top, "")
+  path = path.lstrip(".")
+  path = path.replace(".", "/")
+  if path[:-1] != "/":
+    return path + "/"
+  else:
+    return path
+
+def builddict(args, rec):
+  sig = {}
+  for col in ("path", "uri", "title", "name", "intro", "attributes"):
+    if col in rec:
+      sig[col] = rec[col]
+  return sig
+
+def buildrec(args, sig):
+  for col in ("path", "uri", "title", "name", "intro", "attributes"):
+    if col in sig:
+      rec[col] = sig[col]
+
 def insert(args, sig, mogrify=False):
   attributes = sig["attributes"] if "attributes" in sig else {}
   sig["attributes"] = database.Json(attributes)
@@ -15,9 +36,22 @@ def insert(args, sig, mogrify=False):
   sig["approvedbyid"] = member.getcurrentid(args)
   return database.insert(args, "engine.__sig", sig, returnid=True, primarykey="path", mogrify=mogrify)
 
+def get(args, path):
+  sql = "select * from engine.sig where path ~ %s"
+  dat = (path,)
+  dbh = database.connect(args)
+  cur = dbh.cursor()
+  cur.execute(sql, dat)
+  if args.debug is True:
+    ttyio.echo(f"mogrify={cur.mogrify(sql, dat)}", level="debug")
+  if cur.rowcount == 0:
+    return None
+  sig = cur.fetchone()
+  return builddict(args, sig)
+
 # @since 20210220
-def update(dbh, path, sig):
-  pass
+def update(args, path:str, sig:dict) -> bool:
+  return database.update(args, "engine.__sig", path, sig, "path", mogrify=True)
 
 class sigcompleter(object):
   def __init__(self, args):
@@ -39,7 +73,7 @@ class sigcompleter(object):
       dat = (text+"*",)
     cur = self.dbh.cursor()
     if self.debug is True:
-      print (sql, dat)
+      ttyio.echo(f"mogrify={cur.mogrify(sql,dat)!r}", level="debug")
     cur.execute(sql, dat)
     res = cur.fetchall()
     foo = []
@@ -101,6 +135,6 @@ def allexist(buf, **kw):
 
 def input(args, prompt:str="sig: ", oldvalue:str="", multiple:bool=True, verify:callable=allexist, **kw) -> str:
   if args.debug is True:
-    ttyio.echo("inputsig entered. multiple=%r verify=%r" % (multiple, verify), level="debug")
+    ttyio.echo(f"inputsig entered. {multiple=} {verify=}", level="debug")
 
   return ttyio.inputstring(prompt, oldvalue, args=args, verify=verify, multiple=multiple, completer=sigcompleter(args), returnseq=True, **kw)
