@@ -54,13 +54,14 @@ def update(args, path:str, sig:dict) -> bool:
   return database.update(args, "engine.__sig", path, sig, "path", mogrify=True)
 
 class sigcompleter(object):
-  def __init__(self, args):
+  def __init__(self, args=None):
+    self.args = args
     self.dbh = database.connect(args)
     self.matches = []
 
     self.debug = args.debug
     if self.debug is True:
-      print ("init sigcompleter object")
+      ttyio.echo("init sigcompleter object", level="debug")
 
   def getmatches(self, text):
     sql = "select distinct path from engine.sig where path ~ %s"
@@ -133,8 +134,33 @@ def allexist(buf, **kw):
 
   return True
 
-def input(args, prompt:str="sig: ", oldvalue:str="", multiple:bool=True, verify:callable=allexist, **kw) -> str:
-  if args.debug is True:
-    ttyio.echo(f"inputsig entered. {multiple=} {verify=}", level="debug")
+def getchsigcompleter(word, **kw):
+  def build(word, **kw):
+    args = kw["args"] if "args" in kw else None
 
-  return ttyio.inputstring(prompt, oldvalue, args=args, verify=verify, multiple=multiple, completer=sigcompleter(args), returnseq=True, **kw)
+    sql = "select distinct path from engine.sig where path ~ %s"
+
+    if word == "":
+      dat = ("top.*{1}",)
+    elif word[-1] == ".":
+      dat = (word+"*{1}",)
+    else:
+      dat = (word+"*",)
+
+    dbh = database.connect(args)
+    cur = dbh.cursor()
+    if args.debug is True:
+      ttyio.echo(f"mogrify={cur.mogrify(sql,dat)!r}", level="debug")
+    cur.execute(sql, dat)
+    if cur.rowcount == 0:
+      return None
+
+    for rec in database.resultiter(cur):
+      yield rec["path"]
+    return None
+
+  return [x for x in build(word, **kw) if x is not None and x.startswith(word)]
+
+def input(prompt:str="sig: ", oldvalue:str="", **kw): # multiple:bool=True, verify:callable=allexist, **kw) -> str:
+  ttyio.echo(f"bbsengine6.sig.input.120: {kw=}", level="debug")
+  return ttyio.inputstring(prompt, oldvalue, **kw) # args=args, verify=verify, multiple=multiple, completer=Completer, returnseq=True, **kw)
