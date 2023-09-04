@@ -143,7 +143,7 @@ def buildsession(args, sessionid=None, data={}):
 
 def get(args, name, memberid=None, default=None):
     session = read(args, memberid)
-    ttyio.echo(f"bbsengine6.session.get.100: session={session!r}", level="debug")
+    ttyio.echo(f"bbsengine6.session.get.100: {session=}", level="debug")
     if session is False or session is None:
         ttyio.echo("session does not exist", level="error")
         return False
@@ -184,7 +184,7 @@ def set(args, name, value, sessionid=None, memberid=None, reset=False, mogrify=T
 #        ttyio.echo("bbsengine6.session.set.100: %s" % (cur.mogrify(sql, dat)), level="debug")
     cur.execute(sql, dat)
     database.commit(args)
-    return
+    return value
 
 def garbagecollect(args):
     ttyio.echo("bbsengine6.session.garbagecollect.100: running", level="debug")
