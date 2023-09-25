@@ -1,3 +1,4 @@
+import os
 import random
 import syslog
 
@@ -274,3 +275,64 @@ def diceroll(sides:int=6, count:int=1, mode:str="single"):
       return int((result[middle-1] + result[middle]) / 2.0)
   else:
     return None
+
+def verifyDirExistsWritable(dirname:str, **kw) -> bool:
+  dirname = os.path.expanduser(dirname)
+  dirname = os.path.expandvars(dirname)
+
+  if os.path.exists(dirname) is False:
+    ttyio.echo(f"{dirname!r} does not exist", level="error")
+    return False
+
+  if os.path.isdir(dirname) is False:
+    ttyio.echo(f"{dirname!r} is not a directory", level="error")
+    return False
+
+  if os.access(dirname, os.W_OK) is False:
+    ttyio.echo(f"{dirname!r} is not writable", level="error")
+    return False
+
+  return True
+
+def verifyFileExistsReadable(filename:str, **kw) -> bool:
+  args = kw["args"] if "args" in kw else None
+
+  filename = os.path.expanduser(filename)
+  filename = os.path.expandvars(filename)
+  if args is not None and args.debug is True:
+    ttyio.echo(f"{filename=}", level="debug")
+  if os.path.exists(filename) is True and os.access(filename, os.R_OK) is True:
+    return True
+  return False
+
+def verifyFileExistsReadableWritable(filename, **kw):
+  args = kw["args"] if "args" in kw else None
+
+  filename = os.path.expanduser(filename)
+  filename = os.path.expandvars(filename)
+  if args is not None and "debug" in args and args.debug is True:
+    ttyio.echo(f"bbsengine6.util.verifyFileExistsReadableWritable.100: {args=} {filename=}")
+
+  if os.path.exists(filename) is False:
+    ttyio.echo(f"{filename!r} does not exist")
+    return False
+
+  if os.access(filename, os.W_OK) is False:
+    ttyio.echo(f"{filename!r} is not writable")
+    return False
+
+  if os.access(filename, os.R_OK) is False:
+    ttyio.echo(f"{filename!r} is not readable")
+    return False
+
+  return True
+
+
+# @since 20230923 copied from bbsengine5
+def inputfilename(prompt, default, verify=verifyFileExistsReadable, **kw):
+  path = os.path.expanduser(default)
+  path = os.path.expandvars(path)
+  dirname = os.path.dirname(path)
+  if dirname is not None and dirname != "":
+    os.chdir(dirname)
+  return ttyio.inputstring(prompt, default, verify=verify, **kw)
