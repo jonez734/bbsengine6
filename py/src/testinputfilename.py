@@ -1,0 +1,11 @@
+import argparse
+
+import ttyio6 as ttyio
+import bbsengine6 as bbsengine
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--debug", action="store_true", default=True)
+args = parser.parse_args()
+
+buf = bbsengine.util.inputfilename("prompt: ", "/var/lib/", verify=bbsengine.util.verifyDirExistsWritable, args=args)
+print(buf)
