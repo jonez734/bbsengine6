@@ -277,8 +277,10 @@ def diceroll(sides:int=6, count:int=1, mode:str="single"):
     return None
 
 def verifyDirExistsWritable(dirname:str, **kw) -> bool:
+
   dirname = os.path.expanduser(dirname)
   dirname = os.path.expandvars(dirname)
+  ttyio.echo(f"verifyDirExistsWritable.100: {dirname=}", level="debug")
 
   if os.path.exists(dirname) is False:
     ttyio.echo(f"{dirname!r} does not exist", level="error")
@@ -327,12 +329,11 @@ def verifyFileExistsReadableWritable(filename, **kw):
 
   return True
 
-
 # @since 20230923 copied from bbsengine5
-def inputfilename(prompt, default, verify=verifyFileExistsReadable, **kw):
-  path = os.path.expanduser(default)
+def inputfilename(prompt, currentvalue, verify=verifyFileExistsReadable, **kw):
+  path = os.path.expanduser(currentvalue)
   path = os.path.expandvars(path)
-  dirname = os.path.dirname(path)
-  if dirname is not None and dirname != "":
-    os.chdir(dirname)
-  return ttyio.inputstring(prompt, default, verify=verify, **kw)
+#  dirname = os.path.dirname(path)
+#  if dirname is not None and dirname != "":
+#    os.chdir(dirname)
+  return ttyio.inputstring(prompt, currentvalue, verify=verify, **kw)
