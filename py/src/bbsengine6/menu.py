@@ -109,7 +109,7 @@ class Menu(object):
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.titlecolor}}%s{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (self.title.center(w)), wordwrap=False)
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:%d}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (w), wordwrap=False)
 
-#    screen.setarea(f"{self.pos=} {len(self.items)} {self.currentmenuitem=}")
+    screen.setarea(f"{self.pos=} {len(self.items)} {self.currentmenuitem=}")
 
     options = ""
     status = ""
@@ -152,15 +152,11 @@ class Menu(object):
 #      self.currentmenuitem = self.items[self.pos]
 
       ch = ttyio.getch(noneok=False).upper()
-      if ch == "X":
-        ttyio.echo("{decrc}{var:engine.menu.inputcolor}X: eXit{/all}")
-##        ttyio.echo("{restorecursor}{var:engine.menu.inputcolor}X: eXit{/all}")
-        break
-      elif ch == "KEY_DOWN":
+      if ch == "KEY_DOWN":
         if self.pos < self.numitems-1:
           # ttyio.echo("{black}{bggray}%s{cursorleft}{cursordown}" % (chr(ord('A')+pos)), end="", flush=True)
           # ttyio.echo("{var:menu.cursorcolor}{var:menu.boxcolor}%s{cursorleft}{cursordown}" % (chr(ord('A')+pos)), end="", flush=True)
-          ttyio.echo("{var:engine.menu.cursorcolor}%s{cursorleft}{cursordown}" % (self.items[self.pos].key), end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
+          ttyio.echo(f"{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
           self.pos += 1
         else:
           ttyio.echo(f"{{cursorup:{self.pos}}}", end="", flush=True)
@@ -175,7 +171,7 @@ class Menu(object):
       elif ch == "KEY_ENTER":
         # ttyio.echo("pos=%d len=%d" % (pos, len(menu)))
         ttyio.echo("{restorecursor}", end="", flush=True)
-        return Op("enter", self.items[self.pos])
+        return Op("select", self.items[self.pos])
       elif ch == "KEY_HOME":
         if self.pos > 0:
           ttyio.echo(f"{{cursorup:{self.pos}}}", end="", flush=True)
@@ -194,13 +190,13 @@ class Menu(object):
               ttyio.echo(f"{ch=} {mi.key=}", level="debug")
             if ch == mi.key:
               ttyio.echo("{restorecursor}", end="", flush=True)
-              return Op("key", mi) # ("select", mi)
+              return Op("select", mi) # ("select", mi)
       else:
         ttyio.echo("{bell}", end="", flush=True)
 
       self.currentmenuitem = self.items[self.pos]
 
-#      screen.setarea(f"{self.pos=} {len(self.items)=} {self.currentmenuitem.label=}")
+      screen.setarea(f"{self.pos=} {len(self.items)=} {self.currentmenuitem.label=}")
 #      self.currentmi = self.items[self.pos-1]
     return None
 
@@ -215,7 +211,7 @@ class Menu(object):
     while not done:
       self.display()
 
-      res = self.handle(f"{{var:engine.menu.promptcolor}}{prompt}{{var:engine.menu.inputcolor}}{{savecursor}}")
+      res = self.handle(f"{{var:engine.menu.promptcolor}}{prompt}{{var:engine.menu.inputcolor}}") # {{savecursor}}")
 
       if res is None:
         ttyio.echo("self.handle() returned None", level="debug")
