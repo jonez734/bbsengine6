@@ -2,7 +2,7 @@ from typing import NamedTuple
 
 import ttyio6 as ttyio
 import bbsengine6 as bbsengine
-
+from . import screen
 from . import module
 
 menuitemresults = {}
@@ -50,6 +50,9 @@ class Menu(object):
     self.args = args
     self.area = area
     self.pos = 0
+    self.currentmenuitem = None
+
+    self.items.append(Item("X", "eXit menu", "exit"))
 
   # @see https://stackoverflow.com/questions/11469025/how-to-implement-a-subscriptable-class-in-python-subscriptable-class-not-subsc
   def __getitem__(self, name:str) -> dict:
@@ -106,7 +109,8 @@ class Menu(object):
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.titlecolor}}%s{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (self.title.center(w)), wordwrap=False)
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:%d}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (w), wordwrap=False)
 
-#    ch = ord("A")
+#    screen.setarea(f"{self.pos=} {len(self.items)} {self.currentmenuitem=}")
+
     options = ""
     status = ""
     for mi in self.items:
@@ -114,6 +118,9 @@ class Menu(object):
         ttyio.setvariable("engine.menu.ic", "{var:engine.menu.resultfailedcolor}")
       elif self.resolverequires(mi) is False:
         ttyio.setvariable("engine.menu.ic", "{var:engine.menu.disableditemcolor}")
+      elif mi == self.currentmenuitem:
+        print("****foo!*****")
+        ttyio.setvariable("engine.menu.ic", "{yellow}")
       else:
         ttyio.setvariable("engine.menu.ic", "{var:engine.menu.itemcolor}")
 
@@ -123,8 +130,9 @@ class Menu(object):
       options += mi.key # chr(ch)
 #      ch += 1
 
-    ttyio.echo(" {var:engine.menu.color} {var:engine.menu.boxcharcolor}{acs:vline}{var:engine.menu.itemcolor}%s {var:engine.menu.boxcharcolor}{acs:vline}{var:engine.menu.shadowcolor} {var:engine.menu.color} {/all}" % ("[Q] quit".ljust(terminalwidth-8)), wordwrap=False)
-    options += "Q"
+#    self.items.append(Item("X", "eXit", "exit"))
+#    ttyio.echo(" {var:engine.menu.color} {var:engine.menu.boxcharcolor}{acs:vline}{var:engine.menu.itemcolor}%s {var:engine.menu.boxcharcolor}{acs:vline}{var:engine.menu.shadowcolor} {var:engine.menu.color} {/all}" % ("e[X]it".ljust(terminalwidth-8)), wordwrap=False)
+#    options += "X"
 
     ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:llcorner}}{{acs:hline:{terminalwidth-7}}}{{acs:lrcorner}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
 
@@ -132,21 +140,24 @@ class Menu(object):
     ttyio.echo(f" {{var:engine.menu.color}}{' '*(terminalwidth-2)}{{/all}}", wordwrap=False)
     return
 
-  def handle(self, prompt="menu: ", default="Q"):
-    itemcount = len(self)
-    ttyio.echo(f"{{f6}} {prompt}{{decsc}}{{cha}}{{cursorright:4}}{{cursorup:{5+itemcount}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
+  def handle(self, prompt="menu: ", default="X"):
+    ttyio.echo(f"{{f6}} {prompt}{{decsc}}{{cha}}{{cursorright:4}}{{cursorup:{self.numitems+4}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
+##    ttyio.echo(f"{{f6}} {prompt}{{savecursor}}{{cha}}{{cursorright:4}}{{cursorup:{4+self.numitems}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 
     res = None
     self.pos = 0
     self.oldpos = 0
     done = False
     while not done:
+#      self.currentmenuitem = self.items[self.pos]
+
       ch = ttyio.getch(noneok=False).upper()
-      if ch == "Q":
-        ttyio.echo("{decrc}{var:engine.menu.inputcolor}Q: Quit{/all}")
+      if ch == "X":
+        ttyio.echo("{decrc}{var:engine.menu.inputcolor}X: eXit{/all}")
+##        ttyio.echo("{restorecursor}{var:engine.menu.inputcolor}X: eXit{/all}")
         break
       elif ch == "KEY_DOWN":
-        if self.pos < len(self):
+        if self.pos < self.numitems-1:
           # ttyio.echo("{black}{bggray}%s{cursorleft}{cursordown}" % (chr(ord('A')+pos)), end="", flush=True)
           # ttyio.echo("{var:menu.cursorcolor}{var:menu.boxcolor}%s{cursorleft}{cursordown}" % (chr(ord('A')+pos)), end="", flush=True)
           ttyio.echo("{var:engine.menu.cursorcolor}%s{cursorleft}{cursordown}" % (self.items[self.pos].key), end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
@@ -159,34 +170,44 @@ class Menu(object):
           ttyio.echo("{cursorup}", end="", flush=True)
           self.pos -= 1
         else:
-          ttyio.echo(f"{{cursordown:{len(self)}}}", end="", flush=True)
-          self.pos = len(self)
+          ttyio.echo(f"{{cursordown:{self.numitems-1}}}", end="", flush=True)
+          self.pos = self.numitems-1
       elif ch == "KEY_ENTER":
         # ttyio.echo("pos=%d len=%d" % (pos, len(menu)))
-        return Op("select", self.items[self.pos])
+        ttyio.echo("{restorecursor}", end="", flush=True)
+        return Op("enter", self.items[self.pos])
       elif ch == "KEY_HOME":
         if self.pos > 0:
-          ttyio.echo(f"{{cursorup:{self.pos-1}}}", end="", flush=True)
+          ttyio.echo(f"{{cursorup:{self.pos}}}", end="", flush=True)
           self.pos = 0
       elif ch == "KEY_END":
-        ttyio.echo(f"{{cursordown:{len(self)-self.pos}}}", end="", flush=True)
-        self.pos = len(self)+1
-      elif ch == "KEY_LEFT" or ch == "KEY_RIGHT":
-        ttyio.echo("{bell}", flush=True, end="")
+        ttyio.echo(f"{{cursordown:{self.numitems-self.pos-1}}}", end="", flush=True)
+        self.pos = self.numitems-1
+#      elif ch == "KEY_LEFT" or ch == "KEY_RIGHT":
+#        ttyio.echo("{bell}", flush=True, end="")
       elif ch == "?" or ch == "KEY_HELP":
-        return Op("help", mi)
+        return Op("help", self.items[self.pos-1])
+#        return Op("help", mi)
       elif len(ch) == 1:
           for mi in self.items:
-            ttyio.echo(f"{ch=} {mi.key=}")
+            if self.args.debug is True:
+              ttyio.echo(f"{ch=} {mi.key=}", level="debug")
             if ch == mi.key:
-              # self.pos = ....
+              ttyio.echo("{restorecursor}", end="", flush=True)
               return Op("key", mi) # ("select", mi)
       else:
         ttyio.echo("{bell}", end="", flush=True)
+
+      self.currentmenuitem = self.items[self.pos]
+
+#      screen.setarea(f"{self.pos=} {len(self.items)=} {self.currentmenuitem.label=}")
+#      self.currentmi = self.items[self.pos-1]
     return None
 
   def run(self, prompt="prompt: ", preprompthook=None):
-    if len(self) == 0:
+    self.numitems = len(self.items)
+
+    if self.numitems == 0:
       ttyio.echo("no menu items defined.", level="error")
       return None
 
@@ -194,7 +215,7 @@ class Menu(object):
     while not done:
       self.display()
 
-      res = self.handle(f"{{var:engine.menu.promptcolor}}{prompt}{{var:engine.menu.inputcolor}}{{decsc}}")
+      res = self.handle(f"{{var:engine.menu.promptcolor}}{prompt}{{var:engine.menu.inputcolor}}{{savecursor}}")
 
       if res is None:
         ttyio.echo("self.handle() returned None", level="debug")
@@ -205,10 +226,14 @@ class Menu(object):
       if res.kind == "refresh":
         ttyio.echo("{decrc}refresh")
         continue
-      elif res.kind == "select":
-          ttyio.echo(f"{{decrc}}{{var:optioncolor}}{res.menuitem.key}{{var:promptcolor}}: {{var:labelcolor}}{res.menuitem.label}{{/all}}")
+      elif res.kind == "enter":
+          ttyio.echo(f"{{restorecursor}}{{var:optioncolor}}{res.menuitem.key}{{var:promptcolor}}: {{var:labelcolor}}{res.menuitem.label}{{/all}}")
       elif res.kind == "help":
-        ttyio.echo("{decrc}", end="", flush=True)
+        ttyio.echo(f"{{restorecursor}}{{var:labelcolor}}{mi.label} - help{{f6}}", end="", flush=True)
+        if not hasattr(mi, "help"):
+          ttyio.echo("{bell}", end="", flush=True)
+          continue
+
         if callable(mi.help) is True:
           mi.help()
         elif type(mi.help) is str:
@@ -217,7 +242,7 @@ class Menu(object):
           ttyio.echo("{f6}no help defined for this option{f6}")
         continue
       elif res.kind == "exit":
-        ttyio.echo("exiting")
+        ttyio.echo("{decrc}exiting{f6}")
         break
 
       if self.resolverequires(res.menuitem) is False:
