@@ -1,3 +1,19 @@
+class FormItemCheckbox(FormItem):
+  def __init__(self):
+    super().__init__()
+    self.kind = "CHECKBOX"
+
+class FormItemRadioButton(FormItem):
+  def __init__(self):
+    super().__init__()
+    self.kind = "RADIO"
+    self.value = None
+
+class FormItemTextbox(FormItem):
+  def __init__(self):
+    super().__init__()
+    self.kind = "TEXT"
+
 # @since 20230617 copied from bbsengine5
 class Form(object):
   def __init__(self, title, items, args=None):
