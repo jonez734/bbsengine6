@@ -1,10 +1,5 @@
 <?php
 
-
-namespace {
-  require_once("Log.php");
-}
-
 namespace bbsengine6\database 
 {
 
@@ -113,11 +108,17 @@ function update($dbh, $tablename, $key, $data, $primarykey="id", $removeprimary=
   }
   $sql .= join(", ", $foo);
   $sql .= " where $primarykey=:$primarykey";
-  \bbsengine6\logentry("database.update.100: sql=".var_export($sql, true));
+  \bbsengine6\logentry("bbsengine6.database.update.100: sql=".var_export($sql, true));
   $stmt = $dbh->prepare($sql);
   $data[$primarykey] = $key;
   $stmt->execute($data);
   return $stmt->rowcount();
+}
+
+function disconnect($dsn)
+{
+  // $pdocache[$dsn] = null;
+  return;
 }
 }
 ?>
