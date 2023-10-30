@@ -56,7 +56,7 @@ function displaypage($data=[])
 {
   logentry("displaypage called");
   $pagetemplate = isset($data["pagetemplate"]) ? $data["pagetemplate"] : "page.tmpl";
-  $dsn = isset($data["systemdsn"]) ? $data["systemdsn"] : SYSTEMDSN;
+//  $dsn = isset($data["systemdsn"]) ? $data["systemdsn"] : SYSTEMDSN;
   $data["pagetemplate"] = $pagetemplate;
   $data["pagefooter"]["fortune"] = null; // getrandomfortune();
 
@@ -881,7 +881,8 @@ function buildchoices($menu=[])
 //      $menu[] = array("name" => "addfeed", "title" => "add feed", "url" => DEMETERURL . "add");
   }
 
-  $menu[] = ["name" => "about", "title" => "about", "url" => "/about", "desc" => "about this site"];
+//  $menu[] = ["name" => "about", "title" => "about", "url" => "/about", "desc" => "about this site"];
+//  $menu[] = ["name" => "achilles", "title" => "achilles", "url" => ACHILLESURL, "desc" => ""];
 /*
   $menu[] = ["name" => "teos", "title" => "teos", "url" => TEOSURL, "desc" => "catalog view"];
 //  $menu[] = array("name" => "bbsengine", "title" => "BBSEngine", "url" => "http://bbsengine.org/", "desc" => "Simple But Elegant Web Application Framework");
@@ -892,7 +893,6 @@ function buildchoices($menu=[])
   $menu[] = ["name" => "projects", "title" => "projects", "url" => "http://projects.zoidtechnologies.com/", "desc" => "Projects Site"];
   $menu[] = ["name" => "sophia", "title" => "sophia", "url" => SOPHIAURL, "desc" => "forum/blog"];
   
-  $menu[] = ["name" => "achilles", "title" => "achilles", "url" => ACHILLESURL, "desc" => ""];
   $menu[] = ["name" => "psyche", "title" => "psyche", "url" => PSYCHEURL, "desc" => ""];
   $menu[] = ["name" => "agora", "title" => "agora", "url" => AGORAURL, "desc" => "a Worthy marketplace", "class" => "fas fa-fw fa-store"];
 //  $menu[] = ["name" => "jamhacks", "title" => "jamhacks", "url" => WWWURL."jamhacks", "desc" => "combination resume, biography, and portfolio"];
@@ -907,7 +907,10 @@ function buildchoices($menu=[])
   }
   $menu[] = ["name" => "mantrasummary", "title" => "mantra summary", "url" => ENGINEURL."mantra-summary", "desc" => "mantra summary pages"];
 */
+ if ($menu !== null)
+ {
   uasort($menu, "\\bbsengine6\\sortchoices");
+ }
 //  logentry("menu=".var_export($menu, true));
   return $menu;
 }
@@ -977,6 +980,61 @@ function decodejson($data)
   return;
  }
  return json_decode($data, true);
+}
+
+/**
+ * builds a valid ltree label from the given buffer
+ * f.e.: m-a-s-h -> m_a_s_h
+ * @since 20230704 copied from bbsengine5
+ */
+function buildlabel($buf)
+{
+  $buf = strtolower($buf);
+  // replace anything that is not a-z0-9 with _
+  $buf = preg_replace("@[^a-z0-9_]@","_", $buf);
+
+  // replace 2 or more - with single _
+  $buf = preg_replace("@[_-]{2,}@", "_", $buf);
+
+  // trim '_' and '.' from both ends
+  $buf = trim($buf, "_");
+  $buf = trim($buf, ".");
+
+  return $buf;
+}
+
+/**
+ * @since 20230704 copied from bbsengine5
+ * @return string
+*/
+function normalizelabelpath()
+{
+ $argc = func_num_args();
+ $argv = func_get_args();
+
+ $foo = [];
+
+ foreach ($argv as $arg)
+ {
+  $labels = explode(".", $arg);
+  foreach ($labels as $label)
+  {
+   $foo[] = buildlabel($label);
+  }
+ }
+ $foo = array_filter($foo);
+// logentry("normalizelabelpath.102: foo=".var_export($foo, true));
+ if (count($foo) > 0 && $foo[0] !== "top")
+ {
+  array_unshift($foo, "top");
+ }
+ $res = implode(".", $foo);
+ if ($res === "")
+ {
+  $res = "top";
+ }
+// logentry("normalizepath.100: res=".var_export($res, true));
+ return $res;
 }
 
 } /* bbsengine6 namespace */
