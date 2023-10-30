@@ -1,12 +1,13 @@
 import sys
 import argparse
 import importlib
+import inspect
 
 import ttyio6 as ttyio
 
 # @since 20220826
-def check(args, module, op="run", buildargs=False, **kw):
-  debug = args.debug if args.debug is True else False
+def check(args, module, op="run", **kw):
+  debug = args.debug if args is not None and args.debug is True else False
 
   if debug is True:
     ttyio.echo(f"bbsengine.module.check.120: module={module!r}", level="debug")
@@ -47,13 +48,31 @@ def check(args, module, op="run", buildargs=False, **kw):
   if (hasattr(m, "buildargs") and callable(m.buildargs)) is False:
     if debug is True:
       ttyio.echo("no callable buildargs function", level="debug")
-    if buildargs is True:
-      return False
+#    if buildargs is True:
+#      return False
 
   # required
   if (hasattr(m, "main") and callable(m.main)) is False:
     ttyio.echo("no main function", level="error")
     return False
+
+  for f in ("init", "access", "buildargs", "main"):
+#    argspec = inspect.getargspec(eval("m.{f}"))
+#    ttyio.echo(f"bbsengine6.module.check.100: {argspec=}", level="debug")
+    sig = inspect.signature(eval(f"m.{f}"))
+    params = sig.parameters
+
+    if args.debug is True:
+      ttyio.echo(f"{sig=} {params=}", level="debug")
+
+    if f == "access" and "op" not in params:
+      ttyio.echo("missing 'op' in access()", level="error")
+    if "args" not in params:
+      ttyio.echo(f"missing 'args' from {f}()", level="error")
+    if "kw" not in params and "kwargs" not in params:
+      ttyio.echo(f"missing 'keyword args' in {f}()", level="error")
+#    if "args" not in sig:
+#      ttyio.echo(f"{f}() is missing 'args' parameter", level="warn")
 
   return True
 
@@ -62,7 +81,7 @@ def load(args:object, modulepath:str):
   try:
       m = importlib.import_module(modulepath)
   except ModuleNotFoundError:
-      ttyio.echo("bbsengine6.module.load.180: module %s not found" % (modulepath), level="error")
+      ttyio.echo(f"bbsengine6.module.load.180: module {modulepath} not found", level="error")
       raise
   return m
   
@@ -136,7 +155,7 @@ def runmodule(args, module, **kwargs):
   buildargs = True
 
   if check(args, module) is False:
-    ttyio.echo(f"check of {module=} failed. permission denied", level="error")
+    ttyio.echo(f"check of {module=} failed. module not run.", level="error")
     return False
 
   if debug is True:
