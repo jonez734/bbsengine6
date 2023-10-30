@@ -53,7 +53,7 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
     leftpadding  = " "*int(repeat+2)
     rightpadding = " "*int(repeat-1)
 
-  ttyio.echo(f" {boxcolor}{ulcorner}{hline}{urcorner}", wordwrap=False)
+  ttyio.echo(f"{{/all}}{{var:normalcolor}} {boxcolor}{ulcorner}{hline}{urcorner}", wordwrap=False)
   ttyio.echo(f" {boxcolor}{vline}{titlecolor}{leftpadding}{title}{rightpadding}{reset}{boxcolor}{vline}{reset}", wordwrap=False)
   ttyio.echo(f" {boxcolor}{llcorner}{hline}{lrcorner}{reset}", wordwrap=False)
   return
@@ -330,10 +330,11 @@ def verifyFileExistsReadableWritable(filename, **kw):
   return True
 
 # @since 20230923 copied from bbsengine5
-def inputfilename(prompt, currentvalue, verify=verifyFileExistsReadable, **kw):
+def inputfilename(prompt, currentvalue, **kw):
+  verify = kw["verify"] if "verify" in kw else verifyFileExistsReadable
   path = os.path.expanduser(currentvalue)
   path = os.path.expandvars(path)
 #  dirname = os.path.dirname(path)
 #  if dirname is not None and dirname != "":
 #    os.chdir(dirname)
-  return ttyio.inputstring(prompt, currentvalue, verify=verify, **kw)
+  return ttyio.inputstring(prompt, currentvalue, **kw)
