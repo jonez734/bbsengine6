@@ -1,5 +1,7 @@
 import copy
 
+import argparse
+
 import psycopg2, psycopg2.extras
 from psycopg2.extras import Json
 from psycopg2.extensions import parse_dsn, make_dsn
@@ -62,7 +64,8 @@ def buildkw(args, **kwargs):
   return kw
 
 def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
-  ttyio.echo(f"bbsengine6.database.update.100: items={items!r}")
+  if args.debug is True:
+    ttyio.echo(f"bbsengine6.database.update.100: {items=}")
   dbh = connect(args)
   for k, v in items.items():
     if type(items[k]) is dict:
@@ -89,7 +92,7 @@ def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
   cur.execute(sql, dat)
 
   if mogrify is True:
-    ttyio.echo(f"{cur.mogrify(sql, dat)!r}", level="debug")
+    ttyio.echo(f"{cur.mogrify(sql, dat)=}", level="debug")
 
   cur.close()
   return cur.rowcount
@@ -174,7 +177,7 @@ def schemaexists(args, name, mogrify=False):
   return True
 
 # @since 20230510 copied from bbsengine5.py
-def buildarggroup(parentparser:object, defaults:dict={}, label="database options"):
+def buildarggroup(parentparser:object, defaults:dict={}, label="database options", suppress=False):
     databasename = defaults["databasename"] if "databasename" in defaults else "zoid6"
     databasehost = defaults["databasehost"] if "databasehost" in defaults else "localhost"
     databaseport = defaults["databaseport"] if "databaseport" in defaults else "5432"
@@ -183,11 +186,19 @@ def buildarggroup(parentparser:object, defaults:dict={}, label="database options
     
     group = parentparser.add_argument_group(label)
 #    group = argparse.ArgumentParser("database", parents=[parentparser], add_help=False)
-    group.add_argument("--databasename", dest="databasename", action="store", default=databasename, type=str, help="database name (default: %(default)r)")
-    group.add_argument("--databasehost", dest="databasehost", action="store", default=databasehost, type=str, help="database host (default: %(default)r)")
-    group.add_argument("--databaseport", dest="databaseport", action="store", default=databaseport, type=int, help="database port (default: %(default)r)")
-    group.add_argument("--databaseuser", dest="databaseuser", action="store", default=databaseuser, type=str, help="database user (default: %(default)r)")
-    group.add_argument("--databasepassword", dest="databasepassword", action="store", default=databasepassword, type=str, help="database password (default: %(default)r)")
+    if suppress is False:
+      group.add_argument("--databasename", dest="databasename", action="store", default=databasename, type=str, help="database name (default: %(default)r)")
+      group.add_argument("--databasehost", dest="databasehost", action="store", default=databasehost, type=str, help="database host (default: %(default)r)")
+      group.add_argument("--databaseport", dest="databaseport", action="store", default=databaseport, type=int, help="database port (default: %(default)r)")
+      group.add_argument("--databaseuser", dest="databaseuser", action="store", default=databaseuser, type=str, help="database user (default: %(default)r)")
+      group.add_argument("--databasepassword", dest="databasepassword", action="store", default=databasepassword, type=str, help="database password (default: %(default)r)")
+    else:
+      group.add_argument("--databasename", dest="databasename", action="store", default=databasename, type=str, help=argparse.SUPPRESS)
+      group.add_argument("--databasehost", dest="databasehost", action="store", default=databasehost, type=str, help=argparse.SUPPRESS) # "database host (default: %(default)r)")
+      group.add_argument("--databaseport", dest="databaseport", action="store", default=databaseport, type=int, help=argparse.SUPPRESS) # "database port (default: %(default)r)")
+      group.add_argument("--databaseuser", dest="databaseuser", action="store", default=databaseuser, type=str, help=argparse.SUPPRESS) # "database user (default: %(default)r)")
+      group.add_argument("--databasepassword", dest="databasepassword", action="store", default=databasepassword, type=str, help=argparse.SUPPRESS) # "database password (default: %(default)r)")
+
     return
 
 buildargdatabasegroup = buildarggroup
