@@ -7,6 +7,7 @@ namespace bbsengine6\session;
  * @since 20230329
 */
 
+require_once("engine.php");
 require_once("database.php");
 
  /**
@@ -55,7 +56,7 @@ function end()
 
 function get($sessionid)
 {
-  $dbh = \bbsengine6\databaseconnect(SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(SYSTEMDSN);
   if (PEAR::isError($dbh))
   {
     \bbsengine6\logentry("bbsengine5.getsession.120: " . $dbh->toString());
@@ -138,7 +139,7 @@ function read($sessionid)
   $res = $stmt->fetch();
   $decoded = \bbsengine6\decodejson($res["data"]);
   $serialized = \serialize($decoded);
-  \bbsengine6\logentry("readsesion.120: decoded=".var_export($decoded, true));
+//  \bbsengine6\logentry("readsesion.120: decoded=".var_export($decoded, true));
   return $serialized;
 }
 
@@ -217,7 +218,7 @@ function _writesession($id, $data)
 function write($sessionid, $data)
 {
 //  logentry("_writesession.10: id=".var_export($id, True)." data=".var_export($data, True));
-  \bbsengine6\logentry("bbsengine6.session.write.125: session=".var_export($_SESSION, True));
+//  \bbsengine6\logentry("bbsengine6.session.write.125: session=".var_export($_SESSION, True));
 
   $dbh = \bbsengine6\database\connect(SYSTEMDSN);
 /*
@@ -227,7 +228,8 @@ function write($sessionid, $data)
   $stmt->execute($dat);
   $rowcount = $stmt->rowcount();
 */
-  \bbsengine6\logentry("bbsengine6.session.write.100: sessionid=$sessionid, rowcount=$rowcount");
+//  \bbsengine6\logentry("bbsengine6.session.write.100: sessionid=$sessionid, rowcount=$rowcount");
+  \bbsengine6\logentry("bbsengine6.session.write.100: sessionid=$sessionid");
 
   $dbh->beginTransaction();
 
@@ -241,11 +243,7 @@ function write($sessionid, $data)
   {
     \bbsengine6\logentry("bbsengine6.session.write.130: validsession is false");
     $expiry = time() + SESSIONCOOKIEEXPIRE;
-
-    if ($sessionid === null)
-    {
-      $sessionid = session_create_id();
-    }
+    $sessionid = session_create_id();
     logentry("bbsengine6.session.write.100=$sessionid");
     insert($sessionid, $_SESSION);
 
@@ -278,7 +276,7 @@ function write($sessionid, $data)
   $dbh->commit();
 
   return true;
-}
+  }
 
 /**
  * custom session handler destroy function
@@ -349,7 +347,7 @@ function insert($sessionid, $data=[])
 {
     \bbsengine6\logentry("bbsengine6.session.insert.100: sessionid=".var_export($sessionid, true));
 
-    $dbh = \bbsengine6\database\connect(SYSTEMDSN);    
+    $dbh = \bbsengine6\database\connect(SYSTEMDSN);
 
     \bbsengine6\logentry("bbsengine6.session.insert.100: sessionid=$sessionid");
     $session = [];
@@ -361,7 +359,7 @@ function insert($sessionid, $data=[])
     $session["memberid"] = \bbsengine6\getcurrentmemberid();
     $session["datecreated"] = "now()";
 
-    \bbsengine6\logentry("bbsengine6.session.insert.100: session=".var_export($session, true));
+//    \bbsengine6\logentry("bbsengine6.session.insert.100: session=".var_export($session, true));
     
     \bbsengine6\database\insert($dbh, "engine.__session", $session, false, "id", false, false);
     
