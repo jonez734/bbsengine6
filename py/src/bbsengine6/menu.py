@@ -120,13 +120,13 @@ class Menu(object):
       elif self.resolverequires(mi) is False:
         ttyio.setvariable("engine.menu.ic", "{var:engine.menu.disableditemcolor}")
       elif mi == self.currentmenuitem:
-        print("****foo!*****")
+#        print("****foo!*****")
         ttyio.setvariable("engine.menu.ic", "{yellow}")
       else:
         ttyio.setvariable("engine.menu.ic", "{var:engine.menu.itemcolor}")
 
-      x = mi.tostr()
-      ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.ic}}{x.ljust(terminalwidth-8, ' ')} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}")
+      x = mi.tostr().ljust(terminalwidth-8, " ")
+      ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.ic}}{x} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}")
 
       options += mi.key # chr(ch)
 #      ch += 1
@@ -141,7 +141,7 @@ class Menu(object):
     ttyio.echo(f" {{var:engine.menu.color}}{' '*(terminalwidth-2)}{{/all}}", wordwrap=False)
     return
 
-  def handle(self, prompt="menu: ", default="X"):
+  def handle(self, prompt="menu: "):#, default="X"):
     ttyio.echo(f"{{f6}} {prompt}{{decsc}}{{cha}}{{cursorright:4}}{{cursorup:{self.numitems+4}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 ##    ttyio.echo(f"{{f6}} {prompt}{{savecursor}}{{cha}}{{cursorright:4}}{{cursorup:{4+self.numitems}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 
