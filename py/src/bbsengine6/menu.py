@@ -52,7 +52,7 @@ class Menu(object):
     self.pos = 0
     self.currentmenuitem = None
 
-    self.items.append(Item("X", "eXit menu", "exit"))
+    self.items.append(Item("X", "eXit menu", None))
 
   # @see https://stackoverflow.com/questions/11469025/how-to-implement-a-subscriptable-class-in-python-subscriptable-class-not-subsc
   def __getitem__(self, name:str) -> dict:
@@ -101,7 +101,7 @@ class Menu(object):
 #    ttyio.echo("menuitemresults=%r" % (menuitemresults), interpret=False)
 
 #    ttyio.echo("{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}" % (" "*(terminalwidth-2)), wordwrap=False)
-    ttyio.echo(" {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}" % (" "*(terminalwidth-2)), wordwrap=False)
+    ttyio.echo("{/all}{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}" % (" "*(terminalwidth-2)), wordwrap=False)
     if self.title is None or self.title == "":
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:%d}}{{var:engine.menu.boxcharcolor}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}" % (w), wordwrap=False)
     else:
@@ -109,7 +109,8 @@ class Menu(object):
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.titlecolor}}%s{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (self.title.center(w)), wordwrap=False)
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:%d}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (w), wordwrap=False)
 
-    screen.setarea(f"{self.pos=} {len(self.items)} {self.currentmenuitem=}")
+    if self.args.debug is True:
+      screen.setarea(f"{self.pos=} {len(self.items)} {self.currentmenuitem=}")
 
     options = ""
     status = ""
@@ -196,7 +197,8 @@ class Menu(object):
 
       self.currentmenuitem = self.items[self.pos]
 
-      screen.setarea(f"{self.pos=} {len(self.items)=} {self.currentmenuitem.label=}")
+      if self.args.debug is True:
+        screen.setarea(f"{self.pos=} {len(self.items)=} {self.currentmenuitem.label=}")
 #      self.currentmi = self.items[self.pos-1]
     return None
 
