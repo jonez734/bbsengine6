@@ -17,7 +17,7 @@ def build(rec):
     for s in ("id", "expiry", "lastactivity", "data", "ipaddress", "useragent", "datecreated", "dateupdated", "memberid" ):
         session[s] = rec[s]
 
-    print(f"bbsengine6.session.build.100: session={session!r}")
+    #ttyio.echo(f"bbsengine6.session.build.100: session={session!r}", level="debug")
 
     return session
 
@@ -37,7 +37,8 @@ def start(args):
             database.commit(args)
             return True
         else:
-            print(f"bbsengine6.session.start.100: session={session!r}")
+            if args.debug is True:
+                ttyio.echo(f"bbsengine6.session.start.100: session={session!r}", level="debug")
             currentsessionid = session["id"]
     else:
         session = read(args, currentsessionid) # getmembersession(args, member.getcurrentid())
@@ -68,10 +69,11 @@ def getmembersession(args, memberid=None):
     if cur.rowcount == 0:
         return None
     elif cur.rowcount > 1:
-        ttyio.echo(f"multiple sessions for member {member.moniker!r} found")
+        ttyio.echo(f"multiple sessions for member {member.moniker!r} found", level="warn")
         return False
     rec = cur.fetchone()
-    print(f"getmembersession.100: rec={rec!r}")
+    if args.debug is True:
+        ttyio.echo(f"getmembersession.100: rec={rec!r}", level="debug")
     return build(rec)
 
 def updatelastactivity(args, sessionid):
@@ -117,7 +119,8 @@ def write(args, session, sessionid=None):
             return False
         sessionid = currentsessionid
 
-    ttyio.echo("bbsengine6.session.write.100: session={session!r}")
+    if args.debug is True:
+        ttyio.echo("bbsengine6.session.write.100: session={session!r}", level="debug")
 
     session["dateupdated"] = "now()" # datetime.ctime()
     session["lastactivity"] = "now()"
@@ -143,7 +146,9 @@ def buildsession(args, sessionid=None, data={}):
 
 def get(args, name, memberid=None, default=None):
     session = read(args, memberid)
-    ttyio.echo(f"bbsengine6.session.get.100: {session=}", level="debug")
+    if args.debug is True:
+        ttyio.echo(f"bbsengine6.session.get.100: {session=}", level="debug")
+
     if session is False or session is None:
         ttyio.echo("session does not exist", level="error")
         return False
@@ -168,7 +173,8 @@ def set(args, name, value, sessionid=None, memberid=None, reset=False, mogrify=T
     else:
         data[name] = value
 
-    print(f"bbsengine6.session.set.100: data={data!r}")
+    if args.debug is True:
+        ttyio.echo(f"bbsengine6.session.set.100: data={data!r}", level="debug")
 
     if reset is False:
         sql = "update engine.__session set data=data||%%s where id='%s'" % (str(sessionid),)
@@ -187,7 +193,8 @@ def set(args, name, value, sessionid=None, memberid=None, reset=False, mogrify=T
     return value
 
 def garbagecollect(args):
-    ttyio.echo("bbsengine6.session.garbagecollect.100: running", level="debug")
+    if args.debug is True:
+        ttyio.echo("bbsengine6.session.garbagecollect.100: running", level="debug")
     sql = "delete from engine.__session where expiry < now()"
     dat = ()
     dbh = database.connect(args)
