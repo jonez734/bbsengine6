@@ -22,9 +22,10 @@ def main(args, **kw):
     ttyio.echo("{f6}{var:labelcolor}database: {var:valuecolor}%s {var:labelcolor}host: {var:valuecolor}%s:%s{f6}" % (args.databasename, args.databasehost, args.databaseport))
 
     ttyio.echo("{var:optioncolor}[M]{var:labelcolor}embers")
+    ttyio.echo("{var:optioncolor}[S]{var:labelcolor}essions")
 #    ttyio.echo("[E]mail")
     ttyio.echo("{f6}{var:optioncolor}[Q]{var:labelcolor}uit{f6}")
-    ch = ttyio.inputchoice("{var:promptcolor}console: {var:inputcolor}", "MEQ", "Q")
+    ch = ttyio.inputchoice("{var:promptcolor}console: {var:inputcolor}", "MSEQ", "Q")
     if ch == "M":
       ttyio.echo("Members")
       lib.runsubmodule(args, "member")
@@ -33,6 +34,10 @@ def main(args, **kw):
 #      ttyio.echo("E-Mail")
 #      email(args)
 #      continue
+    elif ch == "S":
+      ttyio.echo("Sessions")
+      lib.runsubmodule(args, "session")
+      continue
     else:
       ttyio.echo("Quit")
       done = True
