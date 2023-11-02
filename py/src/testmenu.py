@@ -24,8 +24,28 @@ menuitems = []
 
 def blah(args, menuitem):
     ttyio.echo(f"{menuitem=}", level="debug")
-for x in range(0, 10):
-    menuitems.append(bbsengine.menu.Item(chr(65+x), f"item {chr(65+x)}", "module"))
 
-menu = bbsengine.menu.Menu(args, "title here", menuitems)
-ch = menu.run()
+bbsengine.screen.init()
+bbsengine.screen.setarea("testing")
+
+for x in range(0, 10):
+    menuitems.append(bbsengine.menu.Item(chr(65+x), f"item {chr(65+x)}", "blah"))
+
+try:
+    menu = bbsengine.menu.Menu(args, "title here", menuitems, pagesize=20)
+    op = menu.run()
+#    ttyio.echo(f"{Op=}")
+    if op.kind == "select":
+        ttyio.echo(f"{{var:inputcolor}}selected option {op.menuitem.key=}")
+#    elif op.kind == "exit":
+#        ttyio.echo(f"{{var:inputcolor}}exit")
+#    elif op.kind == "enter":
+#        ttyio.echo(f"enter on {op.menuitem.key=}", level="debug")
+except KeyboardInterrupt:
+    ttyio.echo("{/all}{restorecursor}*INTR*")
+except EOFError:
+    ttyio.echo("{/all}{restorecursor}*EOF*")
+finally:
+    ttyio.echo(f"{{savecursor}}{{curpos:{ttyio.getterminalheight()},0}}{{/all}}{{el}}{{restorecursor}}{{reset}}")
+
+ttyio.echo(f"{ttyio.terminal.cursorpositions=}", level="debug")
