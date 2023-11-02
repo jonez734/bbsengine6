@@ -44,13 +44,15 @@ class Item(object):
     return ttyio.tostr(buf)
 
 class Menu(object):
-  def __init__(self, args, title:str, items:list, area:str="", **kw):
+  def __init__(self, args, title:str, items:list, area:str="", pagesize=20, **kw):
     self.title = title
     self.items = items
     self.args = args
     self.area = area
     self.pos = 0
     self.currentmenuitem = None
+    self.pagesize = pagesize
+    self.currentpage = 0
 
     self.items.append(Item("X", "eXit menu", None))
 
@@ -98,9 +100,7 @@ class Menu(object):
           l = len(i.label)
           if l > maxlen:
               maxlen = l
-#    ttyio.echo("menuitemresults=%r" % (menuitemresults), interpret=False)
 
-#    ttyio.echo("{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}" % (" "*(terminalwidth-2)), wordwrap=False)
     ttyio.echo("{/all}{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}" % (" "*(terminalwidth-2)), wordwrap=False)
     if self.title is None or self.title == "":
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:%d}}{{var:engine.menu.boxcharcolor}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}" % (w), wordwrap=False)
@@ -114,21 +114,24 @@ class Menu(object):
 
     options = ""
     status = ""
+    num = 0
     for mi in self.items:
       if mi.result is False:
         ttyio.setvariable("engine.menu.ic", "{var:engine.menu.resultfailedcolor}")
       elif self.resolverequires(mi) is False:
         ttyio.setvariable("engine.menu.ic", "{var:engine.menu.disableditemcolor}")
       elif mi == self.currentmenuitem:
-#        print("****foo!*****")
         ttyio.setvariable("engine.menu.ic", "{yellow}")
       else:
         ttyio.setvariable("engine.menu.ic", "{var:engine.menu.itemcolor}")
 
+      num += 1
       x = mi.tostr().ljust(terminalwidth-8, " ")
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.ic}}{x} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}")
 
       options += mi.key # chr(ch)
+      if num >= self.pagesize:
+        break
 #      ch += 1
 
 #    self.items.append(Item("X", "eXit", "exit"))
@@ -142,6 +145,10 @@ class Menu(object):
     return
 
   def handle(self, prompt="menu: "):#, default="X"):
+    if self.pagesize < self.numitems:
+      n = self.pagesize
+    else:
+      n = self.numitems
     ttyio.echo(f"{{f6}} {prompt}{{decsc}}{{cha}}{{cursorright:4}}{{cursorup:{self.numitems+4}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 ##    ttyio.echo(f"{{f6}} {prompt}{{savecursor}}{{cha}}{{cursorright:4}}{{cursorup:{4+self.numitems}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 
