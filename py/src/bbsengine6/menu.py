@@ -57,7 +57,7 @@ class Menu(object):
     self.items.append(Item("X", "eXit menu", None))
 
   # @see https://stackoverflow.com/questions/11469025/how-to-implement-a-subscriptable-class-in-python-subscriptable-class-not-subsc
-  def __getitem__(self, name:str) -> dict:
+  def __getitem__(self, name:str) -> object:
     return self.items[name]
 
   def __len__(self) -> int:
