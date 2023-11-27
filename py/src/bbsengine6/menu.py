@@ -23,25 +23,24 @@ class Item(object):
     self.disabled = False
     self.description = None
     self.requires = kw["requires"] if "requires" in kw else None
+    self.width = ttyio.getterminalwidth()
+    if self.width > 100:
+      self.width = 100
 
-  def tostr(self):
-    buf = "[%s] %s" % (self.key, self.label) # .ljust(maxlen))
+  def display(self):
+    buf = f"[{self.key}] {self.label}"
     if type(self.description) is str and len(self.description) > 0:
       buf += " %s" % (self.description)
-
-#    ttyio.echo(f"bbsengine6.menu.Item.100: {self.requires=}", level="debug")
 
     if type(self.requires) is tuple and len(self.requires) > 0:
       buf += f" (requires: {' '.join(self.requires)})" # bbsengine.util.oxfordcomma(self.requires)})"
 
-#    ttyio.echo(f"{self.result=}", level="debug")
     if self.result is True:
       buf += " [OK]"
     elif self.result is False:
       buf += " [FAIL]"
 
-#    ttyio.echo(f"Item.tostr.100: {self.result=} {buf=}")
-    return ttyio.tostr(buf)
+    ttyio.echo(f"{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:cic}}{buf.ljust(self.width-8, ' ')} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}", end="", flush=True)
 
 class Menu(object):
   def __init__(self, args, title:str, items:list, area:str="", pagesize=20, **kw):
@@ -50,11 +49,11 @@ class Menu(object):
     self.args = args
     self.area = area
     self.pos = 0
-    self.currentmenuitem = None
+    self.currentitem = None
     self.pagesize = pagesize
     self.currentpage = 0
 
-    self.items.append(Item("X", "eXit menu", None))
+    self.items.append(Item("X", "eXit menu", None, width=ttyio.getterminalwidth()))
 
   # @see https://stackoverflow.com/questions/11469025/how-to-implement-a-subscriptable-class-in-python-subscriptable-class-not-subsc
   def __getitem__(self, name:str) -> object:
@@ -90,6 +89,8 @@ class Menu(object):
 
   def display(self):
     terminalwidth = ttyio.getterminalwidth()
+    if terminalwidth > 100:
+      terminalwidth = 100
     w = terminalwidth - 7
 
 #    setarea(self.area)
@@ -110,26 +111,29 @@ class Menu(object):
       ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:%d}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (w), wordwrap=False)
 
     if self.args.debug is True:
-      screen.setarea(f"{self.pos=} {len(self.items)} {self.currentmenuitem=}")
+      screen.setarea(f"{self.pos=} {len(self.items)} {self.currentitem=}")
 
     options = ""
     status = ""
     num = 0
-    for mi in self.items:
-      if mi.result is False:
-        ttyio.setvariable("engine.menu.ic", "{var:engine.menu.resultfailedcolor}")
-      elif self.resolverequires(mi) is False:
-        ttyio.setvariable("engine.menu.ic", "{var:engine.menu.disableditemcolor}")
-      elif mi == self.currentmenuitem:
-        ttyio.setvariable("engine.menu.ic", "{yellow}")
+    for item in self.items:
+      if item.result is False:
+        ttyio.setvariable("cic", "{var:engine.menu.resultfailedcolor}")
+      elif self.resolverequires(item) is False:
+        ttyio.setvariable("cic", "{var:engine.menu.disableditemcolor}")
+      elif self.currentitem.key == item.key:
+        ttyio.setvar("cic", "{var:currentitemcolor}")
       else:
-        ttyio.setvariable("engine.menu.ic", "{var:engine.menu.itemcolor}")
+        ttyio.setvariable("cic", "{var:itemcolor}")
 
       num += 1
-      x = mi.tostr().ljust(terminalwidth-8, " ")
-      ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.ic}}{x} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}")
+#      x = mi.tostr().ljust(terminalwidth-8, " ")
+#      ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.ic}}{x} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}")
 
-      options += mi.key # chr(ch)
+      item.display()
+      ttyio.echo()
+
+      options += item.key # chr(ch)
       if num >= self.pagesize:
         break
 #      ch += 1
@@ -155,16 +159,24 @@ class Menu(object):
     res = None
     self.pos = 0
     self.oldpos = 0
+
+    self.currentitem = self.items[self.pos]
+
     done = False
     while not done:
 #      self.currentmenuitem = self.items[self.pos]
 
       ch = ttyio.getch(noneok=False).upper()
+      ttyio.setvar("cic", "{var:itemcolor}")
+      self.currentitem.display()
+
       if ch == "KEY_DOWN":
         if self.pos < self.numitems-1:
           # ttyio.echo("{black}{bggray}%s{cursorleft}{cursordown}" % (chr(ord('A')+pos)), end="", flush=True)
           # ttyio.echo("{var:menu.cursorcolor}{var:menu.boxcolor}%s{cursorleft}{cursordown}" % (chr(ord('A')+pos)), end="", flush=True)
-          ttyio.echo(f"{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
+#          ttyio.echo(f"{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
+          ttyio.echo(f"{{var:engine.menu.cursorcolor}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
+
           self.pos += 1
         else:
           ttyio.echo(f"{{cursorup:{self.pos}}}", end="", flush=True)
@@ -201,11 +213,15 @@ class Menu(object):
               return Op("select", mi) # ("select", mi)
       else:
         ttyio.echo("{bell}", end="", flush=True)
+        continue
 
-      self.currentmenuitem = self.items[self.pos]
+      ttyio.setvar("cic", "{var:currentitemcolor}")
+      self.currentitem = self.items[self.pos]
+      self.currentitem.display()
+#      ttyio.echo()
 
       if self.args.debug is True:
-        screen.setarea(f"{self.pos=} {len(self.items)=} {self.currentmenuitem.label=}")
+        screen.setarea(f"{self.pos=} {len(self.items)=} {self.currentitem.label=}")
 #      self.currentmi = self.items[self.pos-1]
     return None
 
@@ -215,6 +231,8 @@ class Menu(object):
     if self.numitems == 0:
       ttyio.echo("no menu items defined.", level="error")
       return None
+
+    self.currentitem = self.items[self.pos]
 
     done = False
     while not done:
