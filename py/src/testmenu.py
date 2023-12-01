@@ -8,25 +8,28 @@ parser.add_argument("--debug", action="store_true")
 
 args = parser.parse_args()
 
-ttyio.setvariable("engine.menu.boxcharcolor", "{bglightgray}{darkgreen}")
-ttyio.setvariable("engine.menu.color", "{bggray}")
-ttyio.setvariable("engine.menu.shadowcolor", "{bgdarkgray}")
-ttyio.setvariable("engine.menu.cursorcolor", "{bglightgray}{blue}")
-ttyio.setvariable("engine.menu.boxcolor", "{bgblue}{green}")
-ttyio.setvariable("engine.menu.itemcolor", "{blue}{bglightgray}")
-ttyio.setvariable("engine.menu.titlecolor", "{black}{bglightgray}")
-ttyio.setvariable("engine.menu.promptcolor", "")
-ttyio.setvariable("engine.menu.inputcolor", "{white}")
-ttyio.setvariable("engine.menu.disableditemcolor", "{darkgray}")
-ttyio.setvariable("engine.menu.resultfailedcolor", "{bgred}{white}")
+ttyio.setvar("engine.menu.boxcharcolor", "{bglightgray}{darkgreen}")
+ttyio.setvar("engine.menu.color", "{bggray}")
+ttyio.setvar("engine.menu.shadowcolor", "{bgdarkgray}")
+ttyio.setvar("engine.menu.cursorcolor", "{bglightgray}{blue}")
+ttyio.setvar("engine.menu.boxcolor", "{bgblue}{green}")
+ttyio.setvar("engine.menu.itemcolor", "{blue}{bglightgray}")
+ttyio.setvar("engine.menu.titlecolor", "{black}{bglightgray}")
+ttyio.setvar("engine.menu.promptcolor", "")
+ttyio.setvar("engine.menu.inputcolor", "{white}")
+ttyio.setvar("engine.menu.disableditemcolor", "{darkgray}")
+ttyio.setvar("engine.menu.resultfailedcolor", "{bgred}{white}")
+
+ttyio.setvar("itemcolor", "{blue}{bglightgray}")
+ttyio.setvar("currentitemcolor", "{bgwhite}{black}")
 
 menuitems = []
 
 def blah(args, menuitem):
     ttyio.echo(f"{menuitem=}", level="debug")
 
-bbsengine.screen.init()
-bbsengine.screen.setarea("testing")
+#bbsengine.screen.init()
+#bbsengine.screen.setarea("testing")
 
 for x in range(0, 10):
     menuitems.append(bbsengine.menu.Item(chr(65+x), f"item {chr(65+x)}", "blah"))
