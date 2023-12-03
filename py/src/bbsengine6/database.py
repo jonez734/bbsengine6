@@ -32,7 +32,7 @@ def connect(args, **kw):
   dsn = make_dsn(**kw)
 
   if args.debug is True:
-    ttyio.echo(f"bbsengine6.database.connect.120: kw={kw!r} dsn={dsn!r}", level="debug")
+    ttyio.echo(f"bbsengine6.database.connect.120: {kw=} {dsn=}", level="debug")
 
   if dsn in databasehandles:
     dbh = databasehandles[dsn]
@@ -111,7 +111,7 @@ def insert(args, table:str, items, returnid:bool=True, primarykey:str="id", mogr
       del items[k]
 
   if args.debug is True:
-    ttyio.echo(f"bbsengine6.database.insert.100: columns={columns!r}", level="debug")
+    ttyio.echo(f"bbsengine6.database.insert.100: {columns=}", level="debug")
   sql = "insert into %s(" % (table)
   sql += ", ".join(columns)
   sql += ") values ("
@@ -151,14 +151,14 @@ def classexists(args, name, mogrify=False):
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if mogrify is True:
-    ttyio.echo("bbsengine6.database.classexists.120: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+    ttyio.echo("bbsengine6.database.classexists.120: {cur.mogrify(sql, dat)=}", level="debug")
   if cur.rowcount == 0:
     return False
 
   res = cur.fetchone()
 
   if args.debug is True:
-    ttyio.echo(f"clasexists.100: res={res!r}")
+    ttyio.echo(f"clasexists.100: {res=}")
 
   if res["class"] is None:
     return False
