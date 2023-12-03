@@ -149,11 +149,11 @@ class Menu(object):
     return
 
   def handle(self, prompt="menu: "):#, default="X"):
-    if self.pagesize < self.numitems:
-      n = self.pagesize
-    else:
-      n = self.numitems
-    ttyio.echo(f"{{f6}} {prompt}{{decsc}}{{cha}}{{cursorright:4}}{{cursorup:{self.numitems+4}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
+    n = self.pagesize if self.pagesize < self.numitems else self.numitems
+#      n = self.pagesize
+#    else:
+#      n = self.numitems
+    ttyio.echo(f"{{f6}} {prompt}{{decsc}}{{cha}}{{cursorright:4}}{{cursorup:{n-self.pos+4}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 ##    ttyio.echo(f"{{f6}} {prompt}{{savecursor}}{{cha}}{{cursorright:4}}{{cursorup:{4+self.numitems}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 
     res = None
