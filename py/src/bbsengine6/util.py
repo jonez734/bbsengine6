@@ -329,12 +329,3 @@ def verifyFileExistsReadableWritable(filename, **kw):
 
   return True
 
-# @since 20230923 copied from bbsengine5
-def inputfilename(prompt, currentvalue, **kw):
-  verify = kw["verify"] if "verify" in kw else verifyFileExistsReadable
-  path = os.path.expanduser(currentvalue)
-  path = os.path.expandvars(path)
-#  dirname = os.path.dirname(path)
-#  if dirname is not None and dirname != "":
-#    os.chdir(dirname)
-  return ttyio.inputstring(prompt, currentvalue, **kw)
