@@ -45,6 +45,15 @@ class Listbox(object):
             items.append(ListboxItem(rec, self.terminalwidth))
         return items
     
+    def displayitems(self):
+      for item in self.fetchpage(): # items:
+        if self.currentitem.pk == item.pk:
+          ttyio.setvar("cic", "{var:currentitemcolor}")
+        else:
+          ttyio.setvar("cic", "{var:itemcolor}")
+        item.display()
+        ttyio.echo()
+
     def display(self):
         self.items = self.fetchpage()
 
@@ -67,19 +76,9 @@ class Listbox(object):
         if self.args.debug is True:
           screen.setarea(f"{self.curpos=} {len(self.items)} {self.currentitem=}")
 
-        options = ""
-        status = ""
-        for item in self.fetchpage(): # items:
-#          ttyio.echo(f"{item.pk=} {self.currentitem.pk=} {item.pk == self.currentitem.pk}", level="debug")
-          if self.currentitem.pk == item.pk:
-            ttyio.setvar("cic", "{var:currentitemcolor}")
-          else:
-            ttyio.setvar("cic", "{var:itemcolor}")
-#          print(f"{ttyio.getvar('cic')}")
-          item.display()
-          ttyio.echo()
-#            x = item.label.ljust(terminalwidth-8, " ")
-#            ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.ic}}{x} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}")
+#        options = ""
+#        status = ""
+        self.displayitems()
 
         ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:llcorner}}{{acs:hline:{self.terminalwidth-7}}}{{acs:lrcorner}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
         ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}}  {{var:engine.menu.shadowcolor}}{' '*(self.terminalwidth-6)} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
@@ -135,13 +134,13 @@ class Listbox(object):
             if self.page == 0:
               ttyio.echo(f"{{bell}}", end="", flush=True)
             else:
-              ttyio.echo("page up")
+              self.page -= 1
+              # ttyio.echo("page up")
           elif ch == "X":
             ttyio.echo("{restorecursor}exit")
             done = True
             break
           else:
-#            ttyio.echo(f"{self.callback=}", level="debug")
             if callable(self.callback) is True:
               done = self.callback(self.args, ch, self.currentitem)
               if done is False:
