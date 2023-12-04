@@ -2,6 +2,8 @@ import os
 
 import ttyio6 as ttyio
 
+add_default_tz = lambda x, tzinfo: x.replace(tzinfo=x.tzinfo or tzinfo)
+
 #@since 20231203 copied from getdate3
 def getdate(buf):
     time.tzset()
@@ -15,7 +17,7 @@ def getdate(buf):
         return datetime.now(tz=localtz) + timedelta(days=+1)
     elif buf == "yesterday":
         return datetime.now(tz=localtz) + timedelta(days=-1)
-    elif buf == "+2 days" or buf == "2 days"
+    elif buf == "+2 days" or buf == "2 days":
         return datetime.now(tz=localtz) + timedelta(days=+2)
     elif buf == "-2 days":
         return datetime.now(tz=localtz) + timedelta(days=-2)
