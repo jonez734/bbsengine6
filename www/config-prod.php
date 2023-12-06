@@ -1,5 +1,16 @@
 <?php
 
+/*
+ * @since 20230409
+ */
+$includepath = get_include_path().":/srv/www/zoid6/php/:/srv/www/bbsengine6/php/:/srv/www/smarty/";
+if (set_include_path($includepath) === false)
+{
+    print("include path fail");
+}
+
+require_once("zoid6.php");
+
 define("SITETITLE", "bbsengine6 official website");
 define("SITEADMINEMAIL", "zoid zechnologies <bbsengine@projects.zoidtechnologies.com>");
 
@@ -7,19 +18,19 @@ define("STATICSKINURL", "https://bbsengine.org/skin/");
 /**
  * define the base url for the site. THIS VALUE MUST BE TERMINATED WITH A "/"
  */
-define("SITEURL", "http://bbsengine.org/");
+define("SITEURL", "https://bbsengine.org/");
 define("SITENAME", "bbsenginedotorg");
 define("SKINURL", SITEURL . "skin/");
-define("SYSTEMDSN", "pgsql:host=127.0.0.1;port=5432;dbname=zoidweb6");
+define("SYSTEMDSN", \zoid6\SYSTEMDSN); // "pgsql:host=127.0.0.1;port=5432;dbname=zoid6");
 
 define("VHOSTDIR", "/srv/www/vhosts/www.bbsengine.org/");
 define("DOCUMENTROOT", VHOSTDIR . "html/");
 
-define("ZOIDWEBDIR", "/srv/www/zoidweb6/");
+define("ZOIDWEBDIR", "/srv/www/zoid6/");
 
 define("SMARTYCOMPILEDTEMPLATESDIR", VHOSTDIR."templates_c");
 define("SMARTYPLUGINSDIR", [ 0 => VHOSTDIR."smarty/"]);
-define("SMARTYTEMPLATESDIR", [ 0 => DOCUMENTROOT."skin/tmpl/", 1 => ZOIDWEBDIR."skin/tmpl/"]);
+define("SMARTYTEMPLATESDIR", [ 0 => DOCUMENTROOT."skin/tmpl/", 1 => ZOIDWEBDIR."skin/tmpl/", 2 => "/srv/www/bbsengine6/skin/tmpl/"]);
 
 // @see http://php.net/strftime
 define("DATEFORMAT", "%Y-%b-%d %I:%M %p %Z (%A)");
@@ -69,13 +80,5 @@ define("SESSIONNAME", "bbsenginedotorgsession");
 // @since 20230409
 define("CURRENTPROJECTNAME", "bbsengine6");
 
-/*
- * @since 20230409
- */
-$includepath = get_include_path().":/srv/www/zoidweb6/php/:/srv/www/bbsengine6/php/:/srv/www/smarty/";
-if (set_include_path($includepath) === false)
-{
-    print("include path fail");
-}
 
 ?>

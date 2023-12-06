@@ -1,3 +1,11 @@
+export HOST = copper
+
+export WWWPROD = $(HOST):/srv/www/vhosts/www.bbsengine.com/
+export WWWPRODDOCROOT = $(WWWPROD)html/
+
+export WWWSTAGE = /srv/www/vhosts/www.bbsengine.com/
+export WWWSTAGEDOCROOT = $(WWWSTAGE)html/
+
 all:
 
 clean:
@@ -17,7 +25,9 @@ stage:
 	-$(RSYNC) htpasswd-prod $(WWWSTAGEDOCROOT).htpasswd
 	$(RSYNC) htaccess-prod $(WWWSTAGEDOCROOT).htaccess
 
-release:
-	$(MAKE) -C php release;
-	$(MAKE) -C smarty release;
-	$(MAKE) -C skin release;
+prod:  stage
+	$(RSYNC) $(WWWSTAGE) $(HOST):$(WWWPROD)
+#release:
+#	$(MAKE) -C php release;
+#	$(MAKE) -C smarty release;
+#	$(MAKE) -C skin release;

@@ -21,3 +21,12 @@ release:
 	$(MAKE) -C php release;
 	$(MAKE) -C smarty release;
 	$(MAKE) -C skin release;
+
+org:
+	$(MAKE) -C www stage
+	$(MAKE) -C handbook stage
+	$(RSYNC) --exclude "releases" $(WWWSTAGE) $(WWWPROD)
+	
+com:
+	$(MAKE) -C com stage
+	$(RSYNC) --exclude "releases" $(COMSTAGE) $(COMPROD)
