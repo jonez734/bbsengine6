@@ -11,3 +11,4 @@ stage:
 	$(MAKE) -C scss stage
 	$(MAKE) -C tmpl stage
 	$(MAKE) -C art stage
+	$(RSYNC) htaccess-prod $(WWWSTAGE)html/skin/.htaccess
