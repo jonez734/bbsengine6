@@ -1,61 +1,61 @@
+from math import ceil
 from typing import NamedTuple
 
-import ttyio6 as ttyio
+#import ttyio6 as ttyio
 from . import screen
+from . import io
 
 class Op(NamedTuple):
   kind: str
   listitem: object
 
-class ListboxItem(object):
-    def __init__(self, rec:dict, width:int):
-      self.status = ""
-      self.pk = rec["person_key"]
-      self.label = rec["person_key"]
-      self.itemid = None
-      self.rec = rec
-      self.width = width
-    def help(self):
-      ttyio.echo("this is a help message in a function")
-
-    def display(self):
-      ttyio.echo(f"{{/all}}{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:cic}} {self.label.ljust(self.width-9, '-')} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}", end="", flush=True)
-      return
-
 class Listbox(object):
-    def __init__(self, args, cursor, title="", callback=None):
+    def __init__(self, args, cursor, title="", keyhandler=None, totalitems=0, itemclass=None):
         self.cursor = cursor
         self.page = 0
         self.curpos = 0
-        self.pagesize = 10
+        self.pagesize = 20
         self.items = []
         self.title  = title
         self.args = args
         self.currentitem = None
-        self.callback = callback
-        self.terminalwidth = ttyio.getterminalwidth()
+        self.keyhandler = keyhandler
+        self.totalitems = totalitems
+        self.terminalwidth = io.terminal.width()
+        self.itemclass = itemclass
         if self.terminalwidth > 100:
           self.terminalwidth = 100
+        self.fetchpage()
+        self.numpages = ceil(self.totalitems / self.pagesize)
+        io.echo(f"{self.totalitems=} {self.numpages=} {self.numitems=}", level="debug")
 
     def fetchpage(self):
 #        ttyio.echo(f"{self.page=} {self.curpos=}", level="debug")
         self.cursor.scroll(self.page*self.pagesize, mode="absolute")
-        items = []
+        self.items = []
         for rec in self.cursor.fetchmany(self.pagesize):
-            items.append(ListboxItem(rec, self.terminalwidth))
-        return items
+            self.items.append(self.itemclass(rec, self.terminalwidth))
+        self.numitems = len(self.items)
+        return self.items
     
     def displayitems(self):
+      num = 0
       for item in self.fetchpage(): # items:
         if self.currentitem.pk == item.pk:
-          ttyio.setvar("cic", "{var:currentitemcolor}")
+          io.setvar("cic", "{var:currentitemcolor}")
         else:
-          ttyio.setvar("cic", "{var:itemcolor}")
+          io.setvar("cic", "{var:itemcolor}")
         item.display()
-        ttyio.echo()
+        io.echo()
+        num += 1
+      if num < self.pagesize:
+        for i in range(0, self.pagesize-num):
+          io.echo(f"{{/all}}{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}} {' '.ljust(self.terminalwidth-8, ' ')}{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}")
 
     def display(self):
-        self.items = self.fetchpage()
+        io.echo(f"{self.curpos=} {self.page=} {self.numitems=}")
+        self.fetchpage()
+        self.currentitem = self.items[self.curpos]
 
 #        width = terminalwidth - 7
 
@@ -65,97 +65,132 @@ class Listbox(object):
 #              if l > maxlen:
 #                  maxlen = l
 
-        ttyio.echo("{/all}{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}" % (" "*(self.terminalwidth-2)), wordwrap=False)
+        io.echo("{/all}{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}" % (" "*(self.terminalwidth-2)), wordwrap=False)
         if self.title is None or self.title == "":
-          ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:{self.terminalwidth-7}}}{{var:engine.menu.boxcharcolor}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}", wordwrap=False)
+          io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:{self.terminalwidth-7}}}{{var:engine.menu.boxcharcolor}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}", wordwrap=False)
         else:
-          ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:{self.terminalwidth-7}}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}", wordwrap=False)
-          ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.titlecolor}}{self.title.center(self.terminalwidth-7)}{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
-          ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:{self.terminalwidth-7}}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
+          io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:{self.terminalwidth-7}}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}", wordwrap=False)
+          io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.titlecolor}}{self.title.center(self.terminalwidth-7)}{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
+          io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:{self.terminalwidth-7}}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
 
         if self.args.debug is True:
           screen.setarea(f"{self.curpos=} {len(self.items)} {self.currentitem=}")
 
-#        options = ""
-#        status = ""
         self.displayitems()
 
-        ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:llcorner}}{{acs:hline:{self.terminalwidth-7}}}{{acs:lrcorner}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
-        ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}}  {{var:engine.menu.shadowcolor}}{' '*(self.terminalwidth-6)} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
-        ttyio.echo(f" {{var:engine.menu.color}}{' '*(self.terminalwidth-2)}{{/all}}", wordwrap=False)
+        io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:llcorner}}{{acs:hline:{self.terminalwidth-7}}}{{acs:lrcorner}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
+        io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}}  {{var:engine.menu.shadowcolor}}{' '*(self.terminalwidth-6)} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
+        io.echo(f" {{var:engine.menu.color}}{' '*(self.terminalwidth-2)}{{/all}}", wordwrap=False)
         return
 
     def handle(self, prompt="listbox: "):#, default="X"):
-        ttyio.echo(f"{{f6}} {prompt}{{decsc}}{{cha}}{{cursorright:4}}{{cursorup:{self.pagesize+4}}}{{var:engine.menu.cursorcolor}}{{cursorleft}}", end="", flush=True)
+        io.echo(f"{{f6}} {prompt}{{savecursor}}{{cha}}{{cursorright:4}}{{cursorup:4}}{{cursorup:{self.pagesize-self.curpos}}}{{var:engine.menu.cursorcolor}}{{cursorleft}}", end="", flush=True)
+#        io.echo(f"{io.terminal.cursorpositions=}")
+        self.currentitem = self.items[self.curpos]
 
         res = None
-        self.curpos = 0
-        self.oldpos = 0
+#        self.curpos = 0
         
 #        terminalwidth = ttyio.getterminalwidth()
 #        if terminalwidth > 100:
 #          terminalwidth = 100
 
-        self.currentitem = self.items[self.curpos]
+##        self.currentitem = self.items[self.curpos]
 
         done = False
         while not done:
-          ch = ttyio.getch(noneok=False).upper()
-          ttyio.setvar("cic", "{var:itemcolor}")
+          ch = io.getch(noneok=False).upper()
+          screen.setarea(f"{io.terminal.cursorpositions=}")
+          io.setvar("cic", "{var:itemcolor}")
           self.currentitem.display()
           if ch == "KEY_DOWN":
-            if self.curpos < self.pagesize-1:
-#              ttyio.echo(f"{{var:engine.menu.cursorcolor}}{self.items[self.curpos].label}{{cha}}{{cursorright:3}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
-              ttyio.echo(f"{{var:engine.menu.cursorcolor}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
+            if self.curpos+1 < self.numitems:
+              io.echo(f"{{var:engine.menu.cursorcolor}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
               self.curpos += 1
             else:
-              ttyio.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
-              self.curpos = 0
+              # io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
+              if self.page+1 == self.numpages:
+                io.echo("{bell}", end="", flush=True)
+              elif self.curpos == self.numitems and self.page == self.numpages:
+                io.echo("{bell}", end="", flush=True)
+              else:
+                screen.setarea(f"{{self.curpos=}}")
+                io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
+                self.curpos = 0
+                self.page += 1
+                self.fetchpage()
+#                io.echo(f"{self.curpos=} {self.items=}")
+                self.currentitem = self.items[self.curpos]
+                self.displayitems()
+                io.echo(f"{{cursorup:{self.pagesize}}}", end="", flush=True)
           elif ch == "KEY_UP":
             if self.curpos > 0:
-              ttyio.echo("{cursorup}", end="", flush=True)
+              io.echo("{cursorup}", end="", flush=True)
               self.curpos -= 1
             else:
-              ttyio.echo(f"{{cursordown:{self.pagesize-1}}}", end="", flush=True)
-              self.curpos = self.pagesize-1
+              io.echo(f"{{cursordown:{self.numitems-1}}}", end="", flush=True)
+              self.curpos = self.numitems-1
 #          elif ch == "KEY_ENTER":
 #            ttyio.echo("{restorecursor}", end="", flush=True)
 #            return Op("select", self.items[self.curpos])
           elif ch == "KEY_HOME":
             if self.curpos > 0:
-              ttyio.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
+              io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
               self.curpos = 0
           elif ch == "KEY_END":
-            ttyio.echo(f"{{cursordown:{self.pagesize-self.curpos-1}}}", end="", flush=True)
-            self.curpos = self.pagesize-1
+            io.echo(f"{{cursordown:{self.numitems-self.curpos-1}}}", end="", flush=True)
+            self.curpos = self.numitems-1
           elif ch == "?" or ch == "KEY_HELP":
             return Op("help", self.items[self.curpos-1])
+          elif ch == "KEY_PAGEDOWN":
+            if self.page + 1 ==  self.numpages:
+              io.echo("{bell}", end="", flush=True)
+            else:
+              io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
+              self.page += 1
+              self.curpos = 0
+              self.fetchpage()
+              self.currentitem = self.items[self.curpos]
+              self.displayitems()
+              io.echo(f"{{cursorup:{self.pagesize}}}", end="", flush=True)
           elif ch == "KEY_PAGEUP":
             if self.page == 0:
-              ttyio.echo(f"{{bell}}", end="", flush=True)
+              io.echo(f"{{bell}}", end="", flush=True)
             else:
+              io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
               self.page -= 1
+              self.curpos = 0
+              self.fetchpage()
+              self.currentitem = self.items[self.curpos]
+              self.displayitems()
+              io.echo(f"{{cursorup:{self.numitems}}}", end="", flush=True)
               # ttyio.echo("page up")
           elif ch == "X":
-            ttyio.echo("{restorecursor}exit")
+            io.echo("{restorecursor}exit")
             done = True
             break
           else:
-            if callable(self.callback) is True:
-              done = self.callback(self.args, ch, self.currentitem)
-              if done is False:
-                ttyio.echo("{bell}", end="", flush=True)
-              continue
+            if callable(self.keyhandler) is True:
+              if self.keyhandler(self.args, ch, self) is False:
+                io.echo("{bell}", end="", flush=True)
+                continue
+              else:
+                return True
+#                done = True
+#                break
             else:
-              ttyio.echo("{bell}", end="", flush=True)
+              io.echo("{bell}", end="", flush=True)
               continue
 
-          ttyio.setvar("cic", "{var:currentitemcolor}")
-          self.currentitem = self.items[self.curpos]
-          self.currentitem.display()
+          if self.curpos >= self.numitems:
+            io.echo("{bell}")
+          else:
+            io.setvar("cic", "{var:currentitemcolor}")
+            self.currentitem = self.items[self.curpos]
+            self.currentitem.display()
 
           if self.args.debug is True:
-            screen.setarea(f"{self.curpos=} {len(self.items)=} {self.currentmenuitem.label=}")
+            screen.setarea(f"{self.curpos=} {len(self.items)=} {self.currentitem.label=}")
         return None
 
     def run(self, prompt="listbox: "):
@@ -163,7 +198,7 @@ class Listbox(object):
         self.numitems = len(self.items)
 
         if self.numitems == 0:
-          ttyio.echo("no list items defined.", level="error")
+          io.echo("no list items defined.", level="error")
           return None
 
         self.currentitem = self.items[self.curpos]
@@ -172,39 +207,41 @@ class Listbox(object):
         while not done:
           self.display()
           
-          res = self.handle(f"{prompt}")
+          res = self.handle(prompt)
 
           if res is None:
-            ttyio.echo("self.handle() returned None", level="debug")
+            io.echo("self.handle() returned None", level="debug")
             return None
+          if res is True:
+            continue
 
           item = res.listitem
 
           if res.kind == "refresh":
-            ttyio.echo("{decrc}refresh")
+            io.echo("{decrc}refresh")
             continue
-          elif res.kind == "enter":
-              ttyio.echo(f"{var:currentitemcolor}", end="", flush=True)
-              item.display()
-              ttyio.echo(f"{{restorecursor}}")
-              break
+#          elif res.kind == "enter":
+#              io.echo(f"{var:currentitemcolor}", end="", flush=True)
+#              item.display()
+#              io.echo(f"{{restorecursor}}")
+#              break
           elif res.kind == "help":
-            ttyio.echo(f"{{restorecursor}}{{var:labelcolor}}{item.label} - help{{f6}}", end="", flush=True)
+            io.echo(f"{{restorecursor}}{{var:labelcolor}}{item.label} - help{{f6}}", end="", flush=True)
             if not hasattr(item, "help"):
-              ttyio.echo("{bell}", end="", flush=True)
+              io.echo("{bell}", end="", flush=True)
               continue
 
             if callable(item.help) is True:
               item.help()
             elif type(item.help) is str:
-              ttyio.echo(item.help)
+              io.echo(item.help)
             else:
-              ttyio.echo("{f6}no help defined for this option{f6}")
+              io.echo("{f6}no help defined for this option{f6}")
             continue
           elif res.kind == "exit":
-            ttyio.echo("{decrc}exiting{f6}")
+            io.echo("{restorecursor}exiting{f6}")
             break
           else:
-            ttyio.echo(f"{res=}", level="debug")
+            io.echo(f"{res=}", level="debug")
 
           return res
