@@ -12,7 +12,7 @@ setup(
   version=v,
   author="zoidtechnologies.com",
   author_email="%s@projects.zoidtechnologies.com" % (projectname),
-  license="GPLv2",
+  license="GPLv3",
 #  py_modules=["bbsengine6"],
 #  scripts=["con"],
   requires=["ttyio6", "getdate3"],
@@ -28,5 +28,5 @@ setup(
     "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
   ],
   provides=[projectname],
-  packages=["bbsengine6", "con"],
+  packages=["bbsengine6", "bbsengine6.io", "con"],
 )
