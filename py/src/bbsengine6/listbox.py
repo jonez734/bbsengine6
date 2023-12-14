@@ -9,6 +9,21 @@ class Op(NamedTuple):
   kind: str
   listitem: object
 
+class genericListboxItem(object):
+    def __init__(self, rec:dict, width:int, counter=1):
+      self.status = ""
+#      self.pk = f"{rec['person_key']}{rec['date_start']}"
+      self.label = f"item #{counter}"
+      self.itemid = None
+#      self.rec = rec
+      self.width = width
+    def help(self):
+      io.echo("this is a help message in a function")
+
+    def display(self):
+      io.echo(f"{{/all}}{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:cic}} {self.label.ljust(self.width-9, ' ')} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}", end="", flush=True)
+      return
+
 class Listbox(object):
     def __init__(self, args, cursor, title="", keyhandler=None, totalitems=0, itemclass=None):
         self.cursor = cursor
