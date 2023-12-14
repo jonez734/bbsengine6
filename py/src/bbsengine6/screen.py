@@ -1,4 +1,5 @@
-import ttyio6 as ttyio
+from . import io
+#import ttyio6 as ttyio
 
 areastack = []
 
@@ -6,19 +7,19 @@ areastack = []
 # @since 20210222
 # @since 20230512 copied from bbsengine5
 def updatebottombar(buf:str) -> None:
-  terminalheight = ttyio.getterminalheight()
+  terminalheight = io.getterminalheight()
 #  ttyio.echo("updatebottombar.100: buf=%r" % (buf), level="debug")
-  ttyio.echo(f"{{decsc}}{{/all}}{{curpos:{terminalheight},0}}{buf}{{eraseline}}{{decrc}}", wordwrap=False, end="")
+  io.echo(f"{{decsc}}{{/all}}{{curpos:{terminalheight},0}}{buf}{{eraseline}}{{decrc}}", wordwrap=False, end="")
   return
 
 # @since 20230512 copied from bbsengine5
 def initbottombar(height:int=1):
-  terminalheight = ttyio.getterminalheight()
-  ttyio.echo("{decsc}{decstbm:0,%d}{decrc}" % (terminalheight-height))
+  terminalheight = io.getterminalheight()
+  io.echo("{decsc}{decstbm:0,%d}{decrc}" % (terminalheight-height))
 
 # @since 20230512 copied from bbsengine5
 def init(topmargin=0, bottommargin=1):
-  ttyio.echo("{f6:3}{cursorup:3}", end="", flush=True)
+  io.echo("{f6:3}{cursorup:3}", end="", flush=True)
   initbottombar(height=bottommargin)
 
 #  terminalheight = ttyio.getterminalheight()
@@ -30,7 +31,7 @@ def init(topmargin=0, bottommargin=1):
 def setarea(left, right=None, stack:bool=False):
   global areastack
 
-  terminalwidth = ttyio.getterminalwidth()-2
+  terminalwidth = io.getterminalwidth()-2
 
   if callable(left):
     leftbuf = left()
@@ -39,7 +40,7 @@ def setarea(left, right=None, stack:bool=False):
   else:
     leftbuf = type(left) # "ERROR"
 
-  l = ttyio.interpret(leftbuf, strip=True)
+  l = io.interpret(leftbuf, strip=True)
 
   if callable(right):
     rightbuf = right()
@@ -48,11 +49,11 @@ def setarea(left, right=None, stack:bool=False):
   elif right is None:
     rightbuf = ""
   else:
-    ttyio.echo("setarea.100: type(right)=%r" % (right), level="debug")
+    io.echo("setarea.100: type(right)=%r" % (right), level="debug")
     rightbuf = "ERROR" # type(right)
 
   r = ""
-  for i in ttyio.interpret(rightbuf, strip=True):
+  for i in io.interpret(rightbuf, strip=True):
     r += i
   t = terminalwidth - len(r) - 4
   leftbuf = leftbuf[:t] + (leftbuf[t:] and '...')
@@ -74,7 +75,7 @@ def poparea():
   if len(areastack) == 0:
     return
 
-  terminalwidth = ttyio.getterminalwidth()
+  terminalwidth = io.getterminalwidth()
 
   if len(areastack) > 0:
     buf = areastack.pop()
@@ -85,4 +86,4 @@ def poparea():
 
 # @since 20230523
 def title(buf):
-  return ttyio.terminal.title(buf)
+  return io.terminal.title(buf)
