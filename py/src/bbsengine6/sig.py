@@ -1,9 +1,10 @@
 import re
 
-import ttyio6 as ttyio
+#import ttyio6 as ttyio
 
 from . import member
 from . import database
+from . import io
 
 def builduri(args, path, top="top"):
   path = path.replace(top, "")
@@ -43,7 +44,7 @@ def get(args, path):
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if args.debug is True:
-    ttyio.echo(f"mogrify={cur.mogrify(sql, dat)}", level="debug")
+    io.echo(f"mogrify={cur.mogrify(sql, dat)}", level="debug")
   if cur.rowcount == 0:
     return None
   sig = cur.fetchone()
@@ -61,7 +62,7 @@ class sigcompleter(object):
 
     self.debug = args.debug
     if self.debug is True:
-      ttyio.echo("init sigcompleter object", level="debug")
+      io.echo("init sigcompleter object", level="debug")
 
   def getmatches(self, text):
     sql = "select distinct path from engine.sig where path ~ %s"
@@ -74,7 +75,7 @@ class sigcompleter(object):
       dat = (text+"*",)
     cur = self.dbh.cursor()
     if self.debug is True:
-      ttyio.echo(f"mogrify={cur.mogrify(sql,dat)!r}", level="debug")
+      io.echo(f"mogrify={cur.mogrify(sql,dat)!r}", level="debug")
     cur.execute(sql, dat)
     res = cur.fetchall()
     foo = []
@@ -114,7 +115,7 @@ def noneexist(buf, **kw):
     dat = (s,)
     cur.execute(sql, dat)
     if cur.rowcount == 1:
-      ttyio.echo(f"sig {s!r} already exists")
+      io.echo(f"sig {s!r} already exists")
       return False
   return True
 
@@ -129,7 +130,7 @@ def allexist(buf, **kw):
     dat = (s,)
     cur.execute(sql, dat)
     if cur.rowcount == 0:
-      ttyio.echo(f"sig {s!r} does not exist")
+      io.echo(f"sig {s!r} does not exist")
       return False
 
   return True
@@ -150,7 +151,7 @@ def getchsigcompleter(word, **kw):
     dbh = database.connect(args)
     cur = dbh.cursor()
     if args.debug is True:
-      ttyio.echo(f"mogrify={cur.mogrify(sql,dat)!r}", level="debug")
+      io.echo(f"mogrify={cur.mogrify(sql,dat)!r}", level="debug")
     cur.execute(sql, dat)
     if cur.rowcount == 0:
       return None
@@ -162,5 +163,5 @@ def getchsigcompleter(word, **kw):
   return [x for x in build(word, **kw) if x is not None and x.startswith(word)]
 
 def input(prompt:str="sig: ", oldvalue:str="", **kw): # multiple:bool=True, verify:callable=allexist, **kw) -> str:
-  ttyio.echo(f"bbsengine6.sig.input.120: {kw=}", level="debug")
-  return ttyio.inputstring(prompt, oldvalue, **kw) # args=args, verify=verify, multiple=multiple, completer=Completer, returnseq=True, **kw)
+  io.echo(f"bbsengine6.sig.input.120: {kw=}", level="debug")
+  return io.inputstring(prompt, oldvalue, **kw) # args=args, verify=verify, multiple=multiple, completer=Completer, returnseq=True, **kw)
