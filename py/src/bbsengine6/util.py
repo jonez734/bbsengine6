@@ -2,12 +2,13 @@ import os
 import random
 import syslog
 
-import ttyio6 as ttyio
+#import ttyio6 as ttyio
+from . import io
 
 def hr(color="{var:engine.title.hrcolor}", chars="-", width=None, padding=" "):
     if width is None:
-        width = ttyio.getterminalwidth()-2
-    if ttyio.getoption("style", "ttyio") == "ttyio":
+        width = io.getterminalwidth()-2
+    if io.getoption("style", "ttyio") == "ttyio":
         return f"{{/all}}{padding}{color}{{acs:hline:{width}}}{{/all}}" # % (color, width)
     return f"{padding}{chars*width}"
 
@@ -19,7 +20,7 @@ def hr(color="{var:engine.title.hrcolor}", chars="-", width=None, padding=" "):
 # ulcorner="{acs:ulcorner}"
 # urcorner="{acs:urcorner}"
 def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{acs:llcorner}", lrcorner="{acs:lrcorner}", ulcorner="{acs:ulcorner}", urcorner="{acs:urcorner}", vline="{acs:vline}", width=None, fillchar=" ", center=True):
-  if ttyio.getoption("style", "ttyio") == "noansi":
+  if io.getoption("style", "ttyio") == "noansi":
       width = 100
       hline="-"*width
       llcorner="+"
@@ -31,7 +32,7 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
       titlecolor = ""
       reset = ""
   else:
-      width = ttyio.getterminalwidth() - 4
+      width = io.getterminalwidth() - 4
       hline = f"{{acs:hline:{width}}}"
       llcorner = "{acs:llcorner}"
       lrcorner = "{acs:lrcorner}"
@@ -53,12 +54,12 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
     leftpadding  = " "*int(repeat+2)
     rightpadding = " "*int(repeat-1)
 
-  ttyio.echo(f"{{/all}}{{var:normalcolor}} {boxcolor}{ulcorner}{hline}{urcorner}", wordwrap=False)
-  ttyio.echo(f" {boxcolor}{vline}{titlecolor}{leftpadding}{title}{rightpadding}{reset}{boxcolor}{vline}{reset}", wordwrap=False)
-  ttyio.echo(f" {boxcolor}{llcorner}{hline}{lrcorner}{reset}", wordwrap=False)
+  io.echo(f"{{/all}}{{var:normalcolor}} {boxcolor}{ulcorner}{hline}{urcorner}", wordwrap=False)
+  io.echo(f" {boxcolor}{vline}{titlecolor}{leftpadding}{title}{rightpadding}{reset}{boxcolor}{vline}{reset}", wordwrap=False)
+  io.echo(f" {boxcolor}{llcorner}{hline}{lrcorner}{reset}", wordwrap=False)
   return
 
-  style = ttyio.getoption("style", "ttyio")
+  style = io.getoption("style", "ttyio")
   if style == "noansi":
     width = 100
     hrchar = "-"
@@ -71,15 +72,15 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
     width = getterminalwidth()-2
 
   if width is None:
-    width = ttyio.getterminalwidth()-2
+    width = io.getterminalwidth()-2
 #  buf = ttyio.center(title, width)
   buf = title.center(width) # ttyio.center(title, width)
 #  b = title.center(width) # ttyio.center(title)
 
-  ttyio.echo("{/all}{var:engine.title.hrcolor}%s{acs:hline:%s}%s" % (ulcorner, width, urcorner), wordwrap=False)
-  ttyio.echo("{var:engine.title.hrcolor}{acs:vline}{/all}{var:engine.title.color}%s{/all}{var:engine.title.hrcolor}{acs:vline}{/all}" % (buf), wordwrap=False)
+  io.echo("{/all}{var:engine.title.hrcolor}%s{acs:hline:%s}%s" % (ulcorner, width, urcorner), wordwrap=False)
+  io.echo("{var:engine.title.hrcolor}{acs:vline}{/all}{var:engine.title.color}%s{/all}{var:engine.title.hrcolor}{acs:vline}{/all}" % (buf), wordwrap=False)
   # ttyio.echo("{f6}{acs:vline}{/all}%s%s{/all}%s{acs:vline}{/all}" % (titlecolor, i.center(width), hrcolor), end="")
-  ttyio.echo("{var:engine.title.hrcolor}%s{acs:hline:%s}%s{/all}" % (llcorner, width, lrcorner), wordwrap=False)
+  io.echo("{var:engine.title.hrcolor}%s{acs:hline:%s}%s{/all}" % (llcorner, width, lrcorner), wordwrap=False)
   return
 
 # @since 20230509 copied from bbsengine5.py
@@ -126,20 +127,20 @@ def datestamp(t=None, format:str="%Y-%m-%d %I:%M%P %Z (%a)") -> str:
 
 # @since 20230523 copied from bbsengine5
 def inputpassword(prompt:str="password: ", mask="X", **kw) -> str:
-  return ttyio.inputstring(prompt, "", mask=mask, **kw)
+  return io.inputstring(prompt, "", mask=mask, **kw)
 
   buf = ""
   done = False
-  ttyio.echo(prompt, end="", flush=True)
+  io.echo(prompt, end="", flush=True)
   while not done:
-    ch = ttyio.getch()
+    ch = io.getch()
 #    ttyio.echo("ch=%r" % (ch))
     if ch == "KEY_ENTER":
       done = True
       break
     if len(ch) == 1:
       buf += ch
-      ttyio.echo(mask, end="", flush=True)
+      io.echo(mask, end="", flush=True)
   # ttyio.echo(buf)
   return buf
 
@@ -172,11 +173,11 @@ def logentry(message, output=True, level=None, priority=syslog.LOG_INFO, stripco
     elif level == "error":
       message = "{red}** error ** "+message+"{/all}"
 
-  message = ttyio.interpretecho(message, strip=True)
+  message = io.interpretecho(message, strip=True)
   syslog.syslog(priority, message)
 
   if output is True:
-    ttyio.echo(message, stripcommands=stripcommands, datestamp=datestamp, interpret=False)
+    io.echo(message, stripcommands=stripcommands, datestamp=datestamp, interpret=False)
 
   return
 
@@ -226,7 +227,7 @@ def filedisplay(res, **kw) -> None: #more=True, width=None) -> None:
 
 #  ttyio.echo("filename=%r" % (filename), level="debug")
   if width is None:
-    width = ttyio.getterminalwidth()
+    width = io.getterminalwidth()
 
   buf = ""
   with res as r:
@@ -235,7 +236,7 @@ def filedisplay(res, **kw) -> None: #more=True, width=None) -> None:
 #  fp = open(filename, "r")
 #  buf = fp.read()
 #  fp.close()
-  ttyio.echo(buf, width=width, indent=indent, wordwrap=True)
+  io.echo(buf, width=width, indent=indent, wordwrap=True)
 #  height = ttyio.getterminalheight()-1
 #  ttyio.echo("filedisplay.100: filename=%r type=%r" % (filename, type(filename)), level="debug")
 #  with filename as f:
@@ -243,7 +244,7 @@ def filedisplay(res, **kw) -> None: #more=True, width=None) -> None:
 #      ttyio.echo(line)
 
 #    pager(f, width=width, height=height, indent=indent)
-  ttyio.echo("{/all}{f6}")
+  io.echo("{/all}{f6}")
 
 # @since 20230715 copied from bbsengine5
 # mode = single, average, mean, list, ....?
@@ -280,18 +281,18 @@ def verifyDirExistsWritable(dirname:str, **kw) -> bool:
 
   dirname = os.path.expanduser(dirname)
   dirname = os.path.expandvars(dirname)
-  ttyio.echo(f"verifyDirExistsWritable.100: {dirname=}", level="debug")
+  io.echo(f"verifyDirExistsWritable.100: {dirname=}", level="debug")
 
   if os.path.exists(dirname) is False:
-    ttyio.echo(f"{dirname!r} does not exist", level="error")
+    io.echo(f"{dirname!r} does not exist", level="error")
     return False
 
   if os.path.isdir(dirname) is False:
-    ttyio.echo(f"{dirname!r} is not a directory", level="error")
+    io.echo(f"{dirname!r} is not a directory", level="error")
     return False
 
   if os.access(dirname, os.W_OK) is False:
-    ttyio.echo(f"{dirname!r} is not writable", level="error")
+    io.echo(f"{dirname!r} is not writable", level="error")
     return False
 
   return True
@@ -302,7 +303,7 @@ def verifyFileExistsReadable(filename:str, **kw) -> bool:
   filename = os.path.expanduser(filename)
   filename = os.path.expandvars(filename)
   if args is not None and args.debug is True:
-    ttyio.echo(f"{filename=}", level="debug")
+    io.echo(f"{filename=}", level="debug")
   if os.path.exists(filename) is True and os.access(filename, os.R_OK) is True:
     return True
   return False
@@ -313,19 +314,18 @@ def verifyFileExistsReadableWritable(filename, **kw):
   filename = os.path.expanduser(filename)
   filename = os.path.expandvars(filename)
   if args is not None and "debug" in args and args.debug is True:
-    ttyio.echo(f"bbsengine6.util.verifyFileExistsReadableWritable.100: {args=} {filename=}")
+    io.echo(f"bbsengine6.util.verifyFileExistsReadableWritable.100: {args=} {filename=}")
 
   if os.path.exists(filename) is False:
-    ttyio.echo(f"{filename!r} does not exist")
+    io.echo(f"{filename!r} does not exist")
     return False
 
   if os.access(filename, os.W_OK) is False:
-    ttyio.echo(f"{filename!r} is not writable")
+    io.echo(f"{filename!r} is not writable")
     return False
 
   if os.access(filename, os.R_OK) is False:
-    ttyio.echo(f"{filename!r} is not readable")
+    io.echo(f"{filename!r} is not readable")
     return False
 
   return True
-
