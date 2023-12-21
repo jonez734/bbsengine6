@@ -114,8 +114,8 @@ class Listbox(object):
 
         done = False
         while not done:
+          screen.setarea(f"{self.page+1=} {self.numpages=}")
           ch = io.getch(noneok=False).upper()
-          screen.setarea(f"{io.terminal.cursorpositions=}")
           io.setvar("cic", "{var:itemcolor}")
           self.currentitem.display()
           if ch == "KEY_DOWN":
@@ -124,9 +124,9 @@ class Listbox(object):
               self.curpos += 1
             else:
               # io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
-              if self.page+1 == self.numpages:
+              if self.page == self.numpages:
                 io.echo("{bell}", end="", flush=True)
-              elif self.curpos == self.numitems and self.page == self.numpages:
+              elif self.curpos+1 == self.numitems and self.page+1 == self.numpages:
                 io.echo("{bell}", end="", flush=True)
               else:
                 screen.setarea(f"{{self.curpos=}}")
@@ -143,8 +143,17 @@ class Listbox(object):
               io.echo("{cursorup}", end="", flush=True)
               self.curpos -= 1
             else:
-              io.echo(f"{{cursordown:{self.numitems-1}}}", end="", flush=True)
-              self.curpos = self.numitems-1
+#              io.echo(f"{{cursordown:{self.numitems-1}}}", end="", flush=True)
+              if self.curpos == 0 and self.page == 0:
+                io.echo("{bell}", end="", flush=True)
+              else:
+                io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
+                self.page -= 1
+                self.fetchpage()
+                self.displayitems()
+                self.curpos = self.numitems-1
+                self.currentitem = self.items[self.curpos]
+                io.echo(f"{{cursorup}}", end="", flush=True)
 #          elif ch == "KEY_ENTER":
 #            ttyio.echo("{restorecursor}", end="", flush=True)
 #            return Op("select", self.items[self.curpos])
@@ -158,7 +167,7 @@ class Listbox(object):
           elif ch == "?" or ch == "KEY_HELP":
             return Op("help", self.items[self.curpos-1])
           elif ch == "KEY_PAGEDOWN":
-            if self.page + 1 ==  self.numpages:
+            if self.page+1 == self.numpages:
               io.echo("{bell}", end="", flush=True)
             else:
               io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
