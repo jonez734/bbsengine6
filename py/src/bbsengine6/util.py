@@ -4,6 +4,7 @@ import syslog
 
 #import ttyio6 as ttyio
 from . import io
+from . import input
 
 def hr(color="{var:engine.title.hrcolor}", chars="-", width=None, padding=" "):
     if width is None:
@@ -102,7 +103,7 @@ def pluralize(amount:int, singular:str, plural:str, quantity=True, emoji:str="")
 
 # @since 20230510 copied from bbsengine5
 def datestamp(t=None, format:str="%Y-%m-%d %I:%M%P %Z (%a)") -> str:
-  import getdate3 as getdate
+#  import getdate3 as getdate
 
   from dateutil.tz import tzlocal
   from datetime import datetime
@@ -117,7 +118,7 @@ def datestamp(t=None, format:str="%Y-%m-%d %I:%M%P %Z (%a)") -> str:
   elif t is None:
     t = datetime.now(tzlocal())
   elif type(t) == str:
-    t = getdate.getdate(t)
+    t = input.getdate(t)
 #    ttyio.echo(f"after getdate: {t=} {type(t)=}")
     if type(t) is str:
 #      ttyio.echo(f"after getdate(), {type(t)=}")
