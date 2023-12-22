@@ -4,7 +4,7 @@ import ttyio6 as ttyio
 
 add_default_tz = lambda x, tzinfo: x.replace(tzinfo=x.tzinfo or tzinfo)
 
-#@since 20231203 copied from getdate3
+#@since 20231203 merged from getdate3
 def getdate(buf):
     time.tzset()
 #    tz = datetime.tzinfo("US/Pacific") # .tzname # ("US/Pacific")
