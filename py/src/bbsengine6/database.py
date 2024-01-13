@@ -6,12 +6,14 @@ import psycopg2, psycopg2.extras
 from psycopg2.extras import Json
 from psycopg2.extensions import parse_dsn, make_dsn
 
-import ttyio6 as ttyio
+from . import io
+
+#import ttyio6 as ttyio
 
 databasehandles = {}
 def connect(args, **kw):
   if args.debug is True:
-    ttyio.echo(f"bbsengine6.database.connect.100: args={args!r}", level="debug")
+    io.echo(f"bbsengine6.database.connect.100: args={args!r}", level="debug")
 
   if "databasename" in args:
 #    ttyio.echo(f"buildkw.140: setting database to {args.databasename!r}", level="debug")
@@ -32,7 +34,7 @@ def connect(args, **kw):
   dsn = make_dsn(**kw)
 
   if args.debug is True:
-    ttyio.echo(f"bbsengine6.database.connect.120: {kw=} {dsn=}", level="debug")
+    io.echo(f"bbsengine6.database.connect.120: {kw=} {dsn=}", level="debug")
 
   if dsn in databasehandles:
     dbh = databasehandles[dsn]
@@ -65,7 +67,7 @@ def buildkw(args, **kwargs):
 
 def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
   if args.debug is True:
-    ttyio.echo(f"bbsengine6.database.update.100: {items=}")
+    io.echo(f"bbsengine6.database.update.100: {items=}")
   dbh = connect(args)
   for k, v in items.items():
     if type(items[k]) is dict:
@@ -92,7 +94,7 @@ def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
   cur.execute(sql, dat)
 
   if mogrify is True:
-    ttyio.echo(f"{cur.mogrify(sql, dat)=}", level="debug")
+    io.echo(f"{cur.mogrify(sql, dat)=}", level="debug")
 
   cur.close()
   return cur.rowcount
@@ -111,7 +113,7 @@ def insert(args, table:str, items, returnid:bool=True, primarykey:str="id", mogr
       del items[k]
 
   if args.debug is True:
-    ttyio.echo(f"bbsengine6.database.insert.100: {columns=}", level="debug")
+    io.echo(f"bbsengine6.database.insert.100: {columns=}", level="debug")
   sql = "insert into %s(" % (table)
   sql += ", ".join(columns)
   sql += ") values ("
@@ -133,7 +135,7 @@ def insert(args, table:str, items, returnid:bool=True, primarykey:str="id", mogr
   cur = dbh.cursor()
 
   if mogrify is True:
-    ttyio.echo("bbsengine5.insert.100: %r" % (repr(cur.mogrify(sql, dat))), level="debug")
+    io.echo("bbsengine5.insert.100: %r" % (repr(cur.mogrify(sql, dat))), level="debug")
 #    ttyio.echo(cur.mogrify(sql, [tuple(v.values() for v in dat)]), level="debug")
   cur.execute(sql, dat)
   if returnid is True:
@@ -151,14 +153,14 @@ def classexists(args, name, mogrify=False):
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if mogrify is True:
-    ttyio.echo("bbsengine6.database.classexists.120: {cur.mogrify(sql, dat)=}", level="debug")
+    io.echo("bbsengine6.database.classexists.120: {cur.mogrify(sql, dat)=}", level="debug")
   if cur.rowcount == 0:
     return False
 
   res = cur.fetchone()
 
   if args.debug is True:
-    ttyio.echo(f"clasexists.100: {res=}")
+    io.echo(f"clasexists.100: {res=}")
 
   if res["class"] is None:
     return False
@@ -171,7 +173,7 @@ def schemaexists(args, name, mogrify=False):
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if mogrify is True:
-    ttyio.echo(f"bbsengine6.database.schemaexists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+    io.echo(f"bbsengine6.database.schemaexists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
   if cur.rowcount == 0:
     return False
   return True
@@ -233,7 +235,7 @@ def rolexists(args, rolname, mogrify=False):
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if mogrify is True:
-    ttyio.echo("bbsengine6.database.rolexists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+    io.echo("bbsengine6.database.rolexists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
   if cur.rowcount == 0:
     return False
   return True
@@ -245,7 +247,7 @@ def exists(args, databasename, mogrify=False):
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if mogrify is True:
-    ttyio.echo(f"bbsengine6.database.exists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+    io.echo(f"bbsengine6.database.exists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
   if cur.rowcount == 0:
     return False
   return True
