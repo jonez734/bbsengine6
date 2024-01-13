@@ -87,3 +87,17 @@ def poparea():
 # @since 20230523
 def title(buf):
   return io.terminal.title(buf)
+
+# @since 20210301
+# @see https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
+# @since 20240102 copied to bbsengine6
+def updateprogress(iteration, total, fill="#"):
+  terminalwidth = ttyio.getterminalwidth()
+  decimals = 0
+  length = terminalwidth-20
+  percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
+  filledLength = length * iteration // total
+  bar = fill * filledLength + '.' * (length - filledLength)
+  buf = "{lightgreen}Progress [% 3s%%]: [%s]{/fgcolor}" % (percent, bar)
+  updatebottombar(buf)
+  return
