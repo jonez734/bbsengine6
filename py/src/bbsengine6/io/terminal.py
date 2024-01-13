@@ -1,4 +1,3 @@
-import os
 import re
 import sys
 import fcntl
@@ -6,13 +5,18 @@ import termios
 
 from .const import *
 
-# @since 20200917
-def detectansi(streamout=sys.stdout, streamin=sys.stdin):
-  if streamout.isatty() is False:
-    return False
+_streamout = sys.stdout
+_streamin = sys.stdin
 
-  streaminfd = streamin.fileno()
-  streamoutfd = streamout.fileno()
+# @since 20200917
+def detectansi(): #streamout=_streamout, streamin=_streamout):
+  global _streamin, _streamout
+
+  streaminfd = _streamin.fileno()
+  streamoutfd = _streamout.fileno()
+
+  if _streamout.isatty() is False:
+    return False
 
   oldtermios = termios.tcgetattr(streaminfd)
   oldflags = fcntl.fcntl(streaminfd, fcntl.F_GETFL)
@@ -28,7 +32,7 @@ def detectansi(streamout=sys.stdout, streamin=sys.stdin):
   buf = ""
   try:
     for x in range(0, 4):
-      ch = streamin.read(1)
+      ch = _streamin.read(1)
       buf += ch
       if ch == "n":
         break
@@ -41,7 +45,8 @@ def detectansi(streamout=sys.stdout, streamin=sys.stdin):
     print(f"ttyio6.terminal.detectansi.100: {buf=}", level="debug")
     return None
 
-def getcursorposition(fd=sys.stdin.fileno()):
+def getcursorposition():
+  fd = _streamin.fileno()
   oldtermios = termios.tcgetattr(fd)
   oldflags = fcntl.fcntl(fd, fcntl.F_GETFL)
 
@@ -53,7 +58,7 @@ def getcursorposition(fd=sys.stdin.fileno()):
   buf = ""
   try:
     for x in range(0,10):
-      ch = sys.stdin.read(1)
+      ch = _streamin.read(1)
       buf += ch
       if ch == "R":
         break
@@ -74,42 +79,19 @@ def size():
 # https://www.programcreek.com/python/example/1922/termios.TIOCGWINSZ
 def width():
   return size().columns
-  #try:
-  #  res = os.get_terminal_size()
-  #except:
-  #  return 80
-  #else:
-  #  return res.columns
-#  import subprocess
-#
-#  command = ['tput', 'cols']
-#
-#  if sys.stdout.isatty() is False:
-#    return False
 
-#  try:
-#    width = int(subprocess.check_output(command))
-#  except OSError as e:
-#    print("Invalid Command '{0}': exit status ({1})".format(command[0], e.errno))
-#    return False
-#  except subprocess.CalledProcessError as e:
-#    print("Command '{0}' returned non-zero exit status: ({1})".format(command, e.returncode))
-#    return False
-#  else:
-#    return width
 def height():
-# def getterminalheight():
   return size().lines
-#  if sys.stdout.isatty() is False:
-#    return False
-#
-#  res = os.get_terminal_size()
-#  return res.lines
 
+def lines():
+  return size().lines
+
+def columns():
+  return size().columns
 
 # @see https://tldp.org/HOWTO/Xterm-Title-3.html
 def title(name):
-  if sys.stdout.isatty() is False:
+  if _streamout.isatty() is False:
     return False
 
   style = getoption("style", "ttyio")
@@ -124,17 +106,11 @@ cursorpositions = []
 def savecursor():
   global cursorpositions
   row, col = getcursorposition()
-#  print(f"*** savecursor: {cursorpositions=} {row=},{col=}")
   cursorpositions.append((row, col),)
-#  print(f"*** savecursor: {cursorpositions=} {row=},{col=}")
   return
 
 def restorecursor():
   global cursorpositions
 
-#  print(f"*** restore: {cursorpositions=}")
   (row, col) = cursorpositions.pop()
-#  print(f"*** restore: {row=},{col=}")
-#  yield Token("CURSOR", f"{CSI}{y};{x}H") # f"{CSI}{y};{x}H" # result += CSI+"%d;%dH" % (y, x)
-#  ttyio.echo(f"{CURPOS:{{row}},{{col}}}", end="", flush=True)
   return f"{CSI}{row};{col}H"
