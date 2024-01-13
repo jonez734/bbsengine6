@@ -190,6 +190,8 @@ emoji = {
   "cityscape":              "\U0001F3D9", # @since 20230827 for empyre
   "maint":                  "\U0001F6E0", # @since 20230827 for empyre, mm
   "axe":                    "\U0001FA93", # @since 20230827 for mm
+
+  "desert":                 "\U0001F3DC", # @since 20240107 for empyre
 }
 
 # c64 color palette, requires xterm-256
