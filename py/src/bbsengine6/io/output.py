@@ -4,7 +4,7 @@ import time
 
 from typing import NamedTuple
 from argparse import Namespace
-
+from .terminal import _streamout, _streamin
 #from tzlocal import tzlocal
 
 from . import vars
@@ -352,7 +352,7 @@ def echo(buf:str="", **kw):
 #    now = datetime.now(tzlocal())
 #    stamp = strftime("%Y-%b-%d %I:%M:%S%P %Z (%a)", now.timetuple())
 #    buf = "%s %s" % (stamp, buf)
-  file = kw["file"] if "file" in kw else sys.stdout
+  file = kw["file"] if "file" in kw else terminal._streamout # sys.stdout
   
   prefix = ""
   if level is not None:
