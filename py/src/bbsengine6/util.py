@@ -85,7 +85,7 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
   return
 
 # @since 20230509 copied from bbsengine5.py
-def pluralize(amount:int, singular:str, plural:str, quantity=True, emoji:str="") -> str:
+def pluralize(amount:int, singular:str, plural:str, quantity:bool=True, emoji:str="", determiner:str="a") -> str:
   if amount is None or amount == 0:
     if quantity is True:
       return f"no {emoji} {plural}"
@@ -93,7 +93,10 @@ def pluralize(amount:int, singular:str, plural:str, quantity=True, emoji:str="")
 
   if quantity is True:
     if amount == 1:
-      return f"{emoji} {amount} {singular}"
+      if determiner != "":
+        return f"{emoji} {determiner} {singular}"
+      else:
+        return f"{emoji} {amount} {singular}"
     buf = "{:n}".format(amount)
     return f"{emoji} {buf} {plural}"
   if amount == 1:
@@ -330,3 +333,29 @@ def verifyFileExistsReadableWritable(filename, **kw):
     return False
 
   return True
+
+# @since 20240105
+def timedelta(delta):
+  buf = ""
+
+  seconds = delta.total_seconds()
+  minutes = seconds // 60
+  seconds -= minutes * 60
+  hours = minutes // 60
+  minutes -= hours * 60
+  days = hours // 24
+  hours -= days*24
+
+#  if weeks != 0:
+#    buf += f"{weeks}w"
+#  if days != 0:
+#    buf += f"{days}d"
+  if days != 0:
+    buf += f"{days:02.0f}d"
+  if hours != 0:
+    buf += f"{hours:02.0f}h"
+  if minutes != 0:
+    buf += f"{minutes:02.0f}m"
+  if seconds != 0:
+    buf += f"{seconds:02.0f}s"
+  return buf
