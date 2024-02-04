@@ -13,7 +13,7 @@ from . import io
 databasehandles = {}
 def connect(args, **kw):
   if args.debug is True:
-    io.echo(f"bbsengine6.database.connect.100: args={args!r}", level="debug")
+    io.echo(f"bbsengine6.database.connect.100: {args=}", level="debug")
 
   if "databasename" in args:
 #    ttyio.echo(f"buildkw.140: setting database to {args.databasename!r}", level="debug")
@@ -149,7 +149,8 @@ def insert(args, table:str, items, returnid:bool=True, primarykey:str="id", mogr
 # @since 20230510
 def classexists(args, name, mogrify=False):
   sql = "select to_regclass(%s) as class" # does not work with schemas
-  dat = (thing,)
+  dat = (name,)
+  dbh = connect(args)
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if mogrify is True:
@@ -173,7 +174,7 @@ def schemaexists(args, name, mogrify=False):
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if mogrify is True:
-    io.echo(f"bbsengine6.database.schemaexists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+    io.echo(f"bbsengine6.database.schemaexists.100: mogrify={cur.mogrify(sql, dat)=}", level="debug")
   if cur.rowcount == 0:
     return False
   return True
@@ -235,19 +236,19 @@ def rolexists(args, rolname, mogrify=False):
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if mogrify is True:
-    io.echo("bbsengine6.database.rolexists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+    io.echo("bbsengine6.database.rolexists.100: mogrify={cur.mogrify(sql, dat)=}", level="debug")
   if cur.rowcount == 0:
     return False
   return True
    
 def exists(args, databasename, mogrify=False):
-  sql = "SELECT datname FROM pg_catalog. pg_database WHERE lower(datname) = lower(%s)"
+  sql = "SELECT datname FROM pg_catalog.pg_database WHERE lower(datname) = lower(%s)"
   dat = (databasename,)
   dbh = connect(args, database="template1")
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if mogrify is True:
-    io.echo(f"bbsengine6.database.exists.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+    io.echo(f"bbsengine6.database.exists.100: mogrify={cur.mogrify(sql, dat)=}", level="debug")
   if cur.rowcount == 0:
     return False
   return True
