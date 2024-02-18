@@ -1,10 +1,8 @@
 import os
 import pwd
+import time
 
-import ttyio6 as ttyio
-
-from . import database
-from . import util
+from . import database, io, util
 
 # @since 20221113
 def buildrec(member):
@@ -29,7 +27,7 @@ def buildrec(member):
 # @since 20230527
 def build(rec={}):
   member = {}
-  for k in ("loginid", "moniker", "credits", "attributes", "email", "password", "datecreated", "createdbyid", "dateupdated", "updatedbyid", "approvedbyid", "dateapproved", "lastlogin", "lastloginfrom", "ui"):
+  for k in ("loginid", "moniker", "credits", "attributes", "email", "password", "datecreated", "createdbyid", "dateupdated", "updatedbyid", "approvedbyid", "dateapproved", "lastlogin", "lastloginfrom", "ui", "tz"):
     if k in rec:
       if k == "credits":
         member[k] = int(rec[k])
@@ -48,7 +46,7 @@ def getcurrentid(args):
   global currentid
 
   if args.debug is True:
-    ttyio.echo(f"bbsengine6.member.getcurrentid.100: currentid={currentid!r}", level="debug")
+    io.echo(f"bbsengine6.member.getcurrentid.100: {currentid=}", level="debug")
 
   if currentid is not None:
     return currentid
@@ -57,7 +55,7 @@ def getcurrentid(args):
 #  loginid = pwd.getpwuid(os.geteuid())[0]
 
   if args.debug is True:
-    ttyio.echo(f"bbsengine6.member.getcurrentid.100: loginid={loginid!r}", level="debug")
+    io.echo(f"bbsengine6.member.getcurrentid.100: {loginid=}", level="debug")
 
   sql = "select id from engine.member where loginid=%s"
   dat = (loginid,)
@@ -65,7 +63,7 @@ def getcurrentid(args):
   cur = dbh.cursor()
 
   if args.debug is True:
-    ttyio.echo(f"mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+    io.echo(f"mogrify={cur.mogrify(sql, dat)=}", level="debug")
 
   cur.execute(sql, dat)
   if cur.rowcount == 0:
@@ -75,7 +73,7 @@ def getcurrentid(args):
   # if args.debug is True:
   currentid = rec["id"]
   if args.debug is True:
-    ttyio.echo(f"getcurrentid.120: currentid={currentid!r}", level="debug")
+    io.echo(f"getcurrentid.120: {currentid=}", level="debug")
   return currentid
 
   if res is None:
@@ -156,19 +154,19 @@ def update(args, member, memberid=None):
 
   rec = buildrec(member)
   dbh = database.connect(args)
-  update(dbh, "engine.__member", memberid, rec, mogrify=True)
+  database.update(dbh, "engine.__member", memberid, rec, mogrify=True)
   # setmemberflags(args, member["flags"], memberid)
   return
 
 # @since 20210203
 def getcurrent(args, fields="*") -> dict:
-  currentmemberid = getcurrentid(args)
+  currentid = getcurrentid(args)
   return getbyid(args, currentid, fields)
 
 # @since 20190924
 # @since 20210203
 def getbymoniker(args, moniker:str, fields="*") -> dict:
-  sql = f"select {fields} from engine.member where moniker=%s"
+  sql = f"select {fields}, timezone(tz, lastlogin) from engine.member where moniker=%s"
   dat = (name,)
   dbh = database.connect(args)
   cur = dbh.cursor()
@@ -180,12 +178,16 @@ def getbymoniker(args, moniker:str, fields="*") -> dict:
   return build(rec)
 
 # @since 20200731
-def getbyid(args, memberid:int, fields="*") -> dict:
+def getbyid(args, memberid:int, fields:str="*") -> dict:
   dbh = database.connect(args)
   sql = f"select {fields} from engine.member where id=%s"
   dat = (memberid,)
   cur = dbh.cursor()
   cur.execute(sql, dat)
+  io.echo(f"{cur.mogrify(sql, dat)=}")
+  if cur.rowcount == 0:
+    io.echo("bbsengine6.member.getbyid: no rows returned")
+    return None
   res = cur.fetchone()
   cur.close()
   return build(res)
@@ -205,17 +207,13 @@ def checkflag(args, flag:str, memberid:int=None):
   rec = cur.fetchone()
   return rec["value"]
 
-def help(*args, **kw):
-  ttyio.echo("help here")
-  return True
-
 # @since 20230523 copied from bbsengine5
 def setflag(args, flag, value, memberid=None, mogrify=False):
   if memberid is None:
     memberid = getcurrentid(args)
   util.logentry(f"setflag({flag}, {value}, {memberid})")
-  if flag == "AUTHENTICATED":
-    return
+#  if flag == "AUTHENTICATED":
+#    return
 
   sql = "delete from engine.map_member_flag where memberid=%s and name=%s"
   dat = (memberid, flag)
@@ -223,7 +221,7 @@ def setflag(args, flag, value, memberid=None, mogrify=False):
   cur = dbh.cursor()
 
   if mogrify is True:
-    ttyio.echo(cur.mogrify(sql, dat), level="debug")
+    io.echo(cur.mogrify(sql, dat), level="debug")
 
   cur.execute(sql, dat)
   cur.close()
@@ -236,6 +234,9 @@ def setflag(args, flag, value, memberid=None, mogrify=False):
   return database.insert(args, "engine.map_member_flag", mmf, returnid=False)
 
 def getflag(args, name, memberid=None):
+  if memberid is None:
+    memberid = getcurrentid(args)
+
   dbh = database.connect(args)
   sql = """
 select flag.name as name, coalesce(mmf.value, flag.defaultvalue) as value
@@ -247,7 +248,7 @@ where flag.name=%s
     sql +="  and mmf.memberid=%s"
     dat.append(memberid)
 
-  sql += "limit 1"
+#  sql += "limit 1"
   
   cur = dbh.cursor()
   cur.execute(sql, dat)
@@ -305,7 +306,7 @@ def setattributes(args, memberid, attributes, reset=False):
   return cur.execute(sql, dat)
 
 def verifyMemberNotFound(name, args=None, column="loginid", **kw):
-    ttyio.echo(f"args={args!r}", level="debug")
+    io.echo(f"{args=}", level="debug")
     dbh = database.connect(args)
     cur = dbh.cursor()
     sql = f"select 1 from engine.member where {column}=%s"
@@ -316,7 +317,7 @@ def verifyMemberNotFound(name, args=None, column="loginid", **kw):
     return False
 
 def verifyMemberFound(name, args=None, column="loginid", **kw):
-    ttyio.echo("args=%r" % (args), level="debug")
+    io.echo(f"{args=}", level="debug")
     dbh = database.connect(args)
     cur = dbh.cursor()
     sql = f"select 1 from engine.member where {column}=%s"
@@ -342,8 +343,14 @@ def getcurrentmoniker(args, memberid=None, **kw):
   dat = (memberid,)
   cur.execute(sql, dat)
   if mogrify is True:
-    ttyio.echo(f"bbsengine6.member.getcurrentmoniker.100: mogrify={cur.mogrify(sql, dat)!r}", level="debug")
+    io.echo(f"bbsengine6.member.getcurrentmoniker.100: {cur.mogrify(sql, dat)=}", level="debug")
   if cur.rowcount == 0:
     return None
   rec = cur.fetchone()
   return rec["moniker"]
+
+# @since 20240217
+# temporary! <heh>
+def checksysop(args, memberid=None):
+  io.echo("bbsengine6.member.checksysop({memberid=}) called", level="warning")
+  return checkflag(args, "sysop", memberid)
