@@ -85,10 +85,10 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
   return
 
 # @since 20230509 copied from bbsengine5.py
-def pluralize(amount:int, singular:str, plural:str, quantity:bool=True, emoji:str="", determiner:str="a") -> str:
+def pluralize(amount:int, singular:str, plural:str, quantity:bool=True, emoji:str="", determiner:str="a", **kw) -> str:
   if amount is None or amount == 0:
     if quantity is True:
-      return f"no {emoji} {plural}"
+      return f"no {emoji}{plural}"
     return plural
 
   if quantity is True:
@@ -96,13 +96,13 @@ def pluralize(amount:int, singular:str, plural:str, quantity:bool=True, emoji:st
       if determiner != "":
         return f"{emoji} {determiner} {singular}"
       else:
-        return f"{emoji} {amount} {singular}"
-    buf = "{:n}".format(amount)
-    return f"{emoji} {buf} {plural}"
+        return f"{emoji}{amount} {singular}"
+    return f"{emoji}{amount:n} {plural}"
+
   if amount == 1:
-    return f"{emoji} {singular}"
+    return f"{emoji}{singular}"
   else:
-    return f"{emoji} {plural}"
+    return f"{emoji}{plural}"
 
 # @since 20230510 copied from bbsengine5
 def datestamp(t=None, format:str="%Y-%m-%d %I:%M%P %Z (%a)") -> str:
@@ -359,3 +359,18 @@ def timedelta(delta):
   if seconds != 0:
     buf += f"{seconds:02.0f}s"
   return buf
+
+# @since 20240113
+# copied from bbsengine5
+def getencryptedpassword(args, plaintextpassword:str) -> str:
+  io.echo(f"getencryptedpassword.100: {plaintextpassword=}", level="debug")
+  sql = "select crypt(%s, gen_salt('md5'))" # previously 'bf' which does not work with dovecot
+  dat = (plaintextpassword,)
+  dbh = databaseconnect(args)
+  cur = dbh.cursor()
+  cur.execute(sql, dat)
+  if cur.rowcount == 0:
+    return None
+
+  res = cur.fetchone()
+  return res["crypt"]
