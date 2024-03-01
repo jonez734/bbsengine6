@@ -3,59 +3,68 @@ import argparse
 import importlib
 import inspect
 
-import ttyio6 as ttyio
+#import ttyio6 as ttyio
+from . import io
 
 # @since 20220826
-def check(args, module, op="run", **kw):
+def check(args, modulename, op="run", **kw):
   debug = args.debug if args is not None and args.debug is True else False
 
+  if modulename in sys.modules:
+    io.echo(f"{modulename!r} is in sys.modules. reloading.", level="debug")
+    importlib.reload(sys.modules[modulename])
+
   if debug is True:
-    ttyio.echo(f"bbsengine.module.check.120: module={module!r}", level="debug")
+    io.echo(f"bbsengine.module.check.120: {modulename=}", level="debug")
 
   try:
-    m = importlib.import_module(module)
+    m = importlib.import_module(modulename)
   except ModuleNotFoundError:
     if debug is True:
-      ttyio.echo(f"module {module=} not found", level="debug")
+      io.echo(f"module {modulename=} not found", level="debug")
     return False
 
   if debug is True:
-    ttyio.echo("bbsengine6.module.check.100: m=%r" % (m), level="debug")
+    io.echo(f"bbsengine6.module.check.100: {type(m)=} {m=}", level="debug")
 
-  # required
   if (hasattr(m, "init") and callable(m.init)) is False:
     if debug is True:
-      ttyio.echo("no init function", level="warn")
-      return False
+      io.echo("no init function", level="warn")
+    return False
 
   if hasattr(m, "access") is False:
     if debug is True:
-      ttyio.echo("no access function", level="error")
+      io.echo("no access function", level="error")
     return False
 
   if (hasattr(m, "access") and callable(m.access)) is False:
-    if debug is True:
-      ttyio.echo("no callable access function", level="debug")
+    io.echo("no callable access function", level="error")
     return False
 
   if m.access(args, op) is True:
     if debug is True:
-      ttyio.echo("access check passed", level="debug")
+      io.echo("access check passed", level="debug")
   else:
-    ttyio.echo("access check failed", level="error")
+    io.echo("access check failed", level="error")
     return False
 
   if (hasattr(m, "buildargs") and callable(m.buildargs)) is False:
     if debug is True:
-      ttyio.echo("no callable buildargs function", level="debug")
+      io.echo("no callable buildargs function", level="debug")
 #    if buildargs is True:
 #      return False
 
+  if hasattr(m, "main"):
+    io.echo(f"module has main attribute {type(m)=} {type(m.main)=}", level="debug")
+  if callable(m.main):
+    io.echo("main attribute is callable", level="debug")
+
   # required
   if (hasattr(m, "main") and callable(m.main)) is False:
-    ttyio.echo("no main function", level="error")
+    io.echo("no working main function", level="error")
     return False
 
+  io.echo("checking signatures", level="debug")
   for f in ("init", "access", "buildargs", "main"):
 #    argspec = inspect.getargspec(eval("m.{f}"))
 #    ttyio.echo(f"bbsengine6.module.check.100: {argspec=}", level="debug")
@@ -63,14 +72,16 @@ def check(args, module, op="run", **kw):
     params = sig.parameters
 
     if args.debug is True:
-      ttyio.echo(f"{sig=} {params=}", level="debug")
+      io.echo(f"{sig=} {params=}", level="debug")
 
     if f == "access" and "op" not in params:
-      ttyio.echo("missing 'op' in access()", level="error")
+      io.echo("missing 'op' in access()", level="error")
+    # check to be sure 'op' is an str @ty ryan
+
     if "args" not in params:
-      ttyio.echo(f"missing 'args' from {f}()", level="error")
+      io.echo(f"missing 'args' from {f}()", level="error")
     if "kw" not in params and "kwargs" not in params:
-      ttyio.echo(f"missing 'keyword args' in {f}()", level="error")
+      io.echo(f"missing 'keyword args' in {f}()", level="error")
 #    if "args" not in sig:
 #      ttyio.echo(f"{f}() is missing 'args' parameter", level="warn")
 
@@ -81,26 +92,26 @@ def load(args:object, modulepath:str):
   try:
       m = importlib.import_module(modulepath)
   except ModuleNotFoundError:
-      ttyio.echo(f"bbsengine6.module.load.180: module {modulepath} not found", level="error")
+      io.echo(f"bbsengine6.module.load.180: module {modulepath} not found", level="error")
       raise
   return m
   
 # @since 20230510 copied from bbsengine5
 def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.Namespace, callback, argparser=None, **kwargs):
-  debug = args.debug if args is not None else False
+  debug = args.debug if args is not None else True
   if debug is True:
-    ttyio.echo(f"bbsengine6.runcallback.100: {args=} {kwargs=}", level="debug")
+    io.echo(f"bbsengine6.runcallback.100: {args=} {kwargs=}", level="debug")
 #  if argparser is not None:
 #    args = argparser.parse_args()
 
   if callback is None:
     if debug is True:
-      ttyio.echo("runcallback.140: callback is None", level="debug")
+      io.echo("runcallback.140: callback is None", level="debug")
     return None
 
   if callable(callback) is True:
     if debug is True:
-      ttyio.echo("runcallback.160: callback is callable", level="debug")
+      io.echo("runcallback.160: callback is callable", level="debug")
     return callback(args, **kwargs)
 
   s = callback.split(".")
@@ -112,28 +123,28 @@ def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.N
     funcname = "main" # s[0]
 
   if debug is True:
-    ttyio.echo("runcallback.160: modulepath=%r funcname=%r" % (modulepath, funcname), level="debug")
+    io.echo("runcallback.160: modulepath=%r funcname=%r" % (modulepath, funcname), level="debug")
 
   if modulepath is None:
     try:
       func = eval(funcname)
-      ttyio.echo("runcallback.320: func=%r" % (func))
+      io.echo("runcallback.320: func=%r" % (func))
     except NameError:
-      ttyio.echo("runcallback.340: %r not found." % (funcname), level="error")
+      io.echo("runcallback.340: %r not found." % (funcname), level="error")
       return None
 
     if callable(func) is True:
       if debug is True:
-        ttyio.echo("runcallback.260: callable", level="debug")
+        io.echo("runcallback.260: callable", level="debug")
       return func(args, **kwargs)
     else:
       if debug is True:
-        ttyio.echo("runcallback.280: not callable", level="debug")
+        io.echo("runcallback.280: not callable", level="debug")
       return None
 
   m = load(args, modulepath)
   if debug is True:
-    ttyio.echo("runcallback.200: m=%r funcname=%r" % (m, funcname), level="debug")
+    io.echo(f"runcallback.200: {m=} {funcname=}", level="debug")
 
   try:
     func = getattr(m, funcname)
@@ -142,7 +153,7 @@ def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.N
     return None
   else:
     if debug is True:
-      ttyio.echo("runcallback.220: func=%r" % (func), level="debug")
+      io.echo("runcallback.220: func=%r" % (func), level="debug")
     if callable(func) is True:
       return func(args, **kwargs)
 
@@ -155,51 +166,51 @@ def runmodule(args, module, **kwargs):
   buildargs = True
 
   if check(args, module) is False:
-    ttyio.echo(f"check of {module=} failed. module not run.", level="error")
+    io.echo(f"check of {module=} failed. module not run.", level="error")
     return False
 
   if debug is True:
-    ttyio.echo(f"bbsengine6.runmodule.100: {args=}", level="debug")
+    io.echo(f"bbsengine6.runmodule.100: {args=}", level="debug")
 
   res = runcallback(args, f"{module}.init", **kwargs)
   if debug is True:
-    ttyio.echo(f"{module}.init() result={res}", level="debug")
+    io.echo(f"{module}.init() result={res}", level="debug")
 
   if buildargs is True:
     argv = kwargs["argv"] if "argv" in kwargs else []
     if debug is True:
-      ttyio.echo(f"bbsengine6.runmodule.120: {argv=}", level="debug")
+      io.echo(f"bbsengine6.runmodule.120: {argv=}", level="debug")
     prgargparser = runcallback(args, f"{module}.buildargs", **kwargs)
 
     if debug is True:
-      ttyio.echo(f"bbsengine6.runmodule.130: {prgargparser=}")
+      io.echo(f"bbsengine6.runmodule.130: {prgargparser=}")
 
     if prgargparser is not None:
       try:
         argv = [a.strip() for a in argv[1:]]
         prgargs = prgargparser.parse_args(argv) # argv[1:])
         if debug is True:
-          ttyio.echo(f"bbsengine6.module.runmodule: {prgargs=} {argv=}")
+          io.echo(f"bbsengine6.module.runmodule: {prgargs=} {argv=}")
 #        prgargs = [s.strip() for s in prgargs]
       except SystemExit:
         return False
       except argparse.ArgumentError:
-        ttyio.echo("argument error", level="error")
+        io.echo("argument error", level="error")
         return False
 
       if debug is True:
-        ttyio.echo(f"bbsengine.runmodule.220: {prgargs=}", level="debug")
+        io.echo(f"bbsengine.runmodule.220: {prgargs=}", level="debug")
 
       return runcallback(prgargs, f"{module}.main", **kwargs)
 
   res = runcallback(args, f"{module}.main", **kwargs)
 
   if debug is True:
-    ttyio.echo(f"{module}.main() result={res}", level="debug")
+    io.echo(f"{module}.main() result={res}", level="debug")
   return res
 
 # @since 20220828
-def runsubmodule(args, module, **kw):
-  if args.debug is True:
-    ttyio.echo("bbsengine6.module.runsubmodule.100: trace", level="debug")
-  return runmodule(args, module, **kw)
+#def runsubmodule(args, module, **kw):
+#  if args.debug is True:
+#    io.echo("bbsengine6.module.runsubmodule.100: trace", level="debug")
+#  return runmodule(args, module, **kw)
