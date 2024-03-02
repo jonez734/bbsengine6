@@ -2,8 +2,7 @@ from math import ceil
 from typing import NamedTuple
 
 #import ttyio6 as ttyio
-from . import screen
-from . import io
+from . import io, screen
 
 class Op(NamedTuple):
   kind: str
@@ -18,18 +17,18 @@ class genericListboxItem(object):
 #      self.rec = rec
       self.width = width
     def help(self):
-      io.echo("this is a help message in a function")
+      io.echo("this is a help message in a callable")
 
     def display(self):
       io.echo(f"{{/all}}{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:cic}} {self.label.ljust(self.width-9, ' ')} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}", end="", flush=True)
       return
 
 class Listbox(object):
-    def __init__(self, args, cursor, title="", keyhandler=None, totalitems=0, itemclass=None):
-        self.cursor = cursor
+    def __init__(self, args, title="", pagesize=20, keyhandler=None, totalitems=0, itemclass=None, cur=None, **kw):
+        self.cur = cur
         self.page = 0
         self.curpos = 0
-        self.pagesize = 20
+        self.pagesize = pagesize
         self.items = []
         self.title  = title
         self.args = args
@@ -38,17 +37,16 @@ class Listbox(object):
         self.totalitems = totalitems
         self.terminalwidth = io.terminal.width()
         self.itemclass = itemclass
-        if self.terminalwidth > 100:
-          self.terminalwidth = 100
         self.fetchpage()
         self.numpages = ceil(self.totalitems / self.pagesize)
+        self.numitems = 0
         io.echo(f"{self.totalitems=} {self.numpages=} {self.numitems=}", level="debug")
 
     def fetchpage(self):
 #        ttyio.echo(f"{self.page=} {self.curpos=}", level="debug")
-        self.cursor.scroll(self.page*self.pagesize, mode="absolute")
+        self.cur.scroll(self.page*self.pagesize, mode="absolute")
         self.items = []
-        for rec in self.cursor.fetchmany(self.pagesize):
+        for rec in self.cur.fetchmany(self.pagesize):
             self.items.append(self.itemclass(rec, self.terminalwidth))
         self.numitems = len(self.items)
         return self.items
@@ -114,7 +112,7 @@ class Listbox(object):
 
         done = False
         while not done:
-          screen.setarea(f"{self.page+1=} {self.numpages=}")
+#          screen.setarea(f"{self.page+1=} {self.numpages=}")
           ch = io.getch(noneok=False).upper()
           io.setvar("cic", "{var:itemcolor}")
           self.currentitem.display()
@@ -129,7 +127,7 @@ class Listbox(object):
               elif self.curpos+1 == self.numitems and self.page+1 == self.numpages:
                 io.echo("{bell}", end="", flush=True)
               else:
-                screen.setarea(f"{{self.curpos=}}")
+                screen.setarea(f"{self.curpos=}")
                 io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
                 self.curpos = 0
                 self.page += 1
@@ -191,8 +189,10 @@ class Listbox(object):
               # ttyio.echo("page up")
           elif ch == "X":
             io.echo("{restorecursor}exit")
-            done = True
-            break
+            return Op("exit", self.currentitem)
+          elif ch == "KEY_ENTER":
+            io.echo("{restorecursor}", end="")
+            return Op("select", self.currentitem)
           else:
             if callable(self.keyhandler) is True:
               if self.keyhandler(self.args, ch, self) is False:
@@ -214,8 +214,8 @@ class Listbox(object):
             self.currentitem.display()
 
           if self.args.debug is True:
-            screen.setarea(f"{self.curpos=} {len(self.items)=} {self.currentitem.label=}")
-        return None
+            screen.setarea(f"{self.curpos=} {len(self.items)=} {self.currentitem.pk=}")
+        return Op("unknown", self.currentitem)
 
     def run(self, prompt="listbox: "):
         self.items = self.fetchpage()
@@ -223,7 +223,7 @@ class Listbox(object):
 
         if self.numitems == 0:
           io.echo("no list items defined.", level="error")
-          return None
+          return Op("noitems", None)
 
         self.currentitem = self.items[self.curpos]
 
@@ -236,7 +236,7 @@ class Listbox(object):
           if res is None:
             io.echo("self.handle() returned None", level="debug")
             return None
-          if res is True:
+          elif res is True:
             continue
 
           item = res.listitem
@@ -244,11 +244,8 @@ class Listbox(object):
           if res.kind == "refresh":
             io.echo("{decrc}refresh")
             continue
-#          elif res.kind == "enter":
-#              io.echo(f"{var:currentitemcolor}", end="", flush=True)
-#              item.display()
-#              io.echo(f"{{restorecursor}}")
-#              break
+          elif res.kind == "select":
+              return Op("select", item)
           elif res.kind == "help":
             io.echo(f"{{restorecursor}}{{var:labelcolor}}{item.label} - help{{f6}}", end="", flush=True)
             if not hasattr(item, "help"):
@@ -263,9 +260,9 @@ class Listbox(object):
               io.echo("{f6}no help defined for this option{f6}")
             continue
           elif res.kind == "exit":
-            io.echo("{restorecursor}exiting{f6}")
-            break
+#            io.echo("{restorecursor}exiting{f6}")
+            return Op("exit", item)
           else:
-            io.echo(f"{res=}", level="debug")
+            io.echo(f"unhandled: {res=}", level="debug")
 
-          return res
+        return Op("unknown", item)
