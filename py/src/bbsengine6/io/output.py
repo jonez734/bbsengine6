@@ -37,8 +37,8 @@ def tokenize(buf:str, args:object=Namespace()):
           pass
         elif kind == "F6":
           value = mo.group("F6repeat") or 1 # group 11
-        elif kind == "MISMATCH":
-            pass
+#        elif kind == "MISMATCH":
+#            pass
             # raise RuntimeError(f'{value!r} unexpected on line {line_num}')
         elif kind == "OPENBRACE":
           value = "{"
@@ -148,6 +148,7 @@ def tokenize(buf:str, args:object=Namespace()):
         elif kind == "AT":
           value = "@"
 
+#        print(f"{kind=} {value=}")
         yield Token(kind, value)
 
 def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Namespace(), indent:str="---") -> str:
@@ -183,6 +184,7 @@ def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Nam
   if width is None:
     width = terminal.width()
 
+  firstword = True
   result = ""
   pos = 0
   for token in tokenize(buf):
@@ -196,7 +198,8 @@ def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Nam
       elif token.kind == "BELL":
         for b in range(0,int(token.value)):
           yield f"{BELL}"
-#        yield "\007"*int(token.value) # result += "\007"*int(token.value)
+      elif token.kind == "INDENT":
+        indent = token.value
       elif token.kind == "COMMAND":
         if strip is False:
           res = False
@@ -279,9 +282,12 @@ def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Nam
         if name in emoji:
           yield Token("EMOJI", emoji[name])
       elif token.kind == "WORD":
+        if firstword is True:
+          yield " "*indent
+          firstword = False
         if wordwrap is True:
           if pos+len(token.value) >= width-1:
-            yield "\n" # result += "\n"
+            yield "\n"
             if indent > 0:
               yield " "*indent
             pos = len(token.value) # len(indent)+len(token.value)
@@ -415,6 +421,8 @@ def echo(buf:str="", **kw):
             print(f"--> test: {kind} {param}")
           elif tok.kind in tokensallowed:
             print(f"{tok.value!s}", end="", flush=True)
+          elif tok.kind == "MISMATCH":
+            print(tok.value, end="", flush=True)
           else:
             print(f"--> Token({tok.kind!r}, {tok.value!r})", flush=True)
         else:
