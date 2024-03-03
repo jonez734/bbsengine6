@@ -1,15 +1,14 @@
-import ttyio6 as ttyio
-import bbsengine6 as bbsengine
+from bbsengine6 import util
 
-def init(args, **kw):
+def init(args, **kw:dict) -> bool:
     return True
 
-def access(args, op, **kw):
+def access(args, op:str, **kw:dict) -> bool:
     return True
 
-def buildargs(args=None, **kw):
+def buildargs(args, **kw:dict) -> bool:
     return None
 
 def main(args, **kw):
-    bbsengine.util.heading("HEADER")
+    util.heading("HEADER")
     return True

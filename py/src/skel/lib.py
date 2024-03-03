@@ -1,6 +1,6 @@
 PACKAGENAME = "PACKAGENAME"
 
-import bbsengine6 as bbsengine
+from bbsengine6 import module
 
-def runsubmodule(args, submodule, **kw):
-    return bbsengine.module.runsubmodule(args, f"{PACKAGENAME}.{submodule}", **kw)
+def runmodule(args, modulename, **kw):
+    return module.runmodule(args, f"{PACKAGENAME}.{modulename}", **kw)
