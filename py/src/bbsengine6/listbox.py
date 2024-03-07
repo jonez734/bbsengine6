@@ -8,14 +8,16 @@ class Op(NamedTuple):
   kind: str
   listitem: object
 
-class genericListboxItem(object):
-    def __init__(self, rec:dict, width:int, counter=1):
+class ListboxItem(object):
+    def __init__(self, rec, width:int, height:int=1, counter:int=1):
       self.status = ""
 #      self.pk = f"{rec['person_key']}{rec['date_start']}"
       self.label = f"item #{counter}"
       self.itemid = None
-#      self.rec = rec
+      self.rec = rec
       self.width = width
+      self.height = height
+
     def help(self):
       io.echo("this is a help message in a callable")
 
@@ -24,8 +26,9 @@ class genericListboxItem(object):
       return
 
 class Listbox(object):
-    def __init__(self, args, title="", pagesize=20, keyhandler=None, totalitems=0, itemclass=None, cur=None, **kw):
-        self.cur = cur
+    def __init__(self, args, title="", pagesize=20, keyhandler=None, totalitems=0, itemclass=None, **kw):
+        self.cur = kw["cur"] if "cur" in kw else None
+#        io.echo(f"{kw=}")
         self.page = 0
         self.curpos = 0
         self.pagesize = pagesize
@@ -40,7 +43,7 @@ class Listbox(object):
         self.fetchpage()
         self.numpages = ceil(self.totalitems / self.pagesize)
         self.numitems = 0
-        io.echo(f"{self.totalitems=} {self.numpages=} {self.numitems=}", level="debug")
+#        io.echo(f"{self.totalitems=} {self.numpages=} {self.numitems=}", level="debug")
 
     def fetchpage(self):
 #        ttyio.echo(f"{self.page=} {self.curpos=}", level="debug")
@@ -118,7 +121,7 @@ class Listbox(object):
           self.currentitem.display()
           if ch == "KEY_DOWN":
             if self.curpos+1 < self.numitems:
-              io.echo(f"{{var:engine.menu.cursorcolor}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
+              io.echo(f"{{var:engine.menu.cursorcolor}}{{cursordown:{self.currentitem.height}}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
               self.curpos += 1
             else:
               # io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
@@ -138,7 +141,7 @@ class Listbox(object):
                 io.echo(f"{{cursorup:{self.pagesize}}}", end="", flush=True)
           elif ch == "KEY_UP":
             if self.curpos > 0:
-              io.echo("{cursorup}", end="", flush=True)
+              io.echo(f"{{cursorup:{self.currentitem.height}}}", end="", flush=True)
               self.curpos -= 1
             else:
 #              io.echo(f"{{cursordown:{self.numitems-1}}}", end="", flush=True)
