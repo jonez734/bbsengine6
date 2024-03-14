@@ -49,3 +49,11 @@ def clear():
   global variables
   variables = {}
   return
+
+def save():
+  import copy
+  savedvariables.append(copy.deepcopy(variables))
+  return True
+
+def restore():
+  savedvariables.pop()
