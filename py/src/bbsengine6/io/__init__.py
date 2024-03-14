@@ -19,3 +19,6 @@ clearvariables = clearvar = vars.clear
 
 #_streamin = sys.stdin
 #_streamout = sys.stdout
+
+def init(args=None, **kw):
+    return True
