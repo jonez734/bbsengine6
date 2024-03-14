@@ -192,6 +192,8 @@ emoji = {
   "axe":                    "\U0001FA93", # @since 20230827 for mm
 
   "desert":                 "\U0001F3DC", # @since 20240107 for empyre
+
+  "shopping":               "\U0001F6CD", # @since 20240128
 }
 
 # c64 color palette, requires xterm-256
