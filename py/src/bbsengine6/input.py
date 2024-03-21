@@ -1,6 +1,13 @@
 import os
 
-import ttyio6 as ttyio
+# import ttyio6 as ttyio
+from . import io
+import time
+from datetime import datetime, timedelta
+from dateutil.parser import parse
+
+#import datetime
+import dateutil.tz
 
 add_default_tz = lambda x, tzinfo: x.replace(tzinfo=x.tzinfo or tzinfo)
 
@@ -21,21 +28,30 @@ def getdate(buf):
         return datetime.now(tz=localtz) + timedelta(days=+2)
     elif buf == "-2 days":
         return datetime.now(tz=localtz) + timedelta(days=-2)
+    elif buf == "today":
+      res = datetime.now(tz=localtz)
+      io.echo(f"{res=}", level="debug")
+      return datetime.now(tz=localtz)
     else:
+      try:
         res = add_default_tz(parse(buf), localtz)
+      except dateutil.parser._parser.ParserError:
+        return None
+      else:
         return res
-    return buf
 
-def verifyValidDateExpression(args, **kw):
+def verifyValidDateExpression(buf, **kw):
     if getdate(buf) is not None:
         return True
     return False
 
 def date(args, prompt, value, **kw):
-    buf = ttyio.inputstring(args, prompt, value, verify=verifyValidDateExpression)
-    return buf
-#    if getdate.getdate(buf) is None:
-#        ttyio.echo("invalid date expression")
+    buf = io.inputstring(prompt, value, verify=verifyValidDateExpression)
+#    return buf
+    res = getdate(buf)
+    if res is None:
+        ttyio.echo("invalid date expression")
+    return res
 
 # @since 20230923 copied from bbsengine5
 def filename(prompt, currentvalue, **kw):
@@ -45,4 +61,4 @@ def filename(prompt, currentvalue, **kw):
 #  dirname = os.path.dirname(path)
 #  if dirname is not None and dirname != "":
 #    os.chdir(dirname)
-  return ttyio.inputstring(prompt, currentvalue, **kw)
+  return io.inputstring(prompt, currentvalue, **kw)
