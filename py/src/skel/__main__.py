@@ -1,28 +1,26 @@
 import time
 import locale
 
-import ttyio6 as ttyio
-import bbsengine6 as bbsengine
-
-from . import module
+from bbsengine6 import io, screen, session
+from . import lib
 
 parser = module.buildargs()
 args = parser.parse_args() if parser is not None else None
 
-bbsengine.session.start(args)
+session.start(args)
 
-bbsengine.screen.init()
+screen.init()
 
 locale.setlocale(locale.LC_ALL, "")
 time.tzset()
 
-module.init(args)
+# module.init(args)
 
 try:
-    module.main(args)
+    lib.runmodule(args, "main")
 except KeyboardInterrupt:
-    ttyio.echo("{/all}{bold}INTR{bold}")
+    io.echo("{/all}{bold}INTR{bold}")
 except EOFError:
-    ttyio.echo("{/all}{bold}EOF{/bold}")
+    io.echo("{/all}{bold}EOF{/bold}")
 finally:
-    ttyio.echo("{decsc}{curpos:%d,0}{el}{decrc}{reset}{/all}" % (ttyio.getterminalheight()))
+    io.echo("{decsc}{curpos:%d,0}{el}{decrc}{reset}{/all}" % (io.getterminalheight()))
