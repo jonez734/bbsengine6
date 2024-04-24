@@ -4,20 +4,19 @@ create table if not exists engine.__blurb (
     "id" bigserial unique not null primary key,
     "parentid" bigint constraint fk_engine_blurb_parentid references engine.__blurb(id) on update cascade on delete set null,
     "prg" text,
---    "tags" array(select tag from map_blurb_tag where m.
---    "sigs"
+--    "flags" jsonb,
     "attributes" jsonb,
     "datecreated" timestamptz,
-    "createdbyid" bigint constraint fk_engine_blurb_createdbyid references engine.__member(id) on update cascade on delete set null,
+    "createdbymoniker" bigint constraint fk_engine_blurb_createdbyid references engine.__member(moniker) on update cascade on delete set null,
     "dateupdated" timestamptz,
-    "updatedbyid" bigint constraint fk_engine_blurb_updatedbyid references engine.__member(id) on update cascade on delete set null,
+    "updatedbymoniker" bigint constraint fk_engine_blurb_updatedbyid references engine.__member(moniker) on update cascade on delete set null,
     "dateapproved" timestamptz,
-    "approvedbyid" bigint constraint fk_engine_blurb_approvedbyid references engine.__member(id) on update cascade on delete set null
+    "approvedbymoniker" bigint constraint fk_engine_blurb_approvedbyid references engine.__member(moniker) on update cascade on delete set null
 );
 
 -- create index idx_node_tags on engine.__node using gist(tags);
 
-grant insert, update, delete on engine.__blurb to :web;
+grant insert, update, delete on engine.__blurb to :web, :bbs;
 
 create index idx_blurb_attributes ON engine.__blurb USING GIN (attributes);
 
