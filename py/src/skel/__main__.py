@@ -4,7 +4,7 @@ import locale
 from bbsengine6 import io, screen, session
 from . import lib
 
-parser = module.buildargs()
+parser = lib.buildargs()
 args = parser.parse_args() if parser is not None else None
 
 session.start(args)
