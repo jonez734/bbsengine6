@@ -10,6 +10,4 @@ def buildargs(args, **kw:dict) -> bool:
     return None
 
 def main(args, **kw):
-    util.heading("HEADER")
-    lib.runmodule("main", **kw)
-    return True
+    return lib.runmodule("main", **kw)
