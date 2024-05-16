@@ -9,9 +9,10 @@ from . import io
 # @since 20220826
 def check(args, modulename, op="run", **kw):
   debug = args.debug if args is not None and args.debug is True else False
-
+  silent = kw["silent"] if "silent" in kw else False
   if modulename in sys.modules:
-    io.echo(f"{modulename!r} is in sys.modules. reloading.", level="debug")
+    if debug is True:
+      io.echo(f"{modulename=} is in sys.modules. reloading.", level="debug")
     importlib.reload(sys.modules[modulename])
 
   if debug is True:
@@ -20,8 +21,12 @@ def check(args, modulename, op="run", **kw):
   try:
     m = importlib.import_module(modulename)
   except ModuleNotFoundError:
-    if debug is True:
-      io.echo(f"module {modulename=} not found", level="debug")
+    if silent is False:
+      io.echo(f"module {modulename=} not found", level="error")
+    return False
+  except Exception as e:
+    import traceback
+    traceback.print_exc(file=sys.stdout)
     return False
 
   if debug is True:
@@ -54,17 +59,20 @@ def check(args, modulename, op="run", **kw):
 #    if buildargs is True:
 #      return False
 
-  if hasattr(m, "main"):
-    io.echo(f"module has main attribute {type(m)=} {type(m.main)=}", level="debug")
-  if callable(m.main):
-    io.echo("main attribute is callable", level="debug")
+  if debug is True:
+    if hasattr(m, "main"):
+      io.echo(f"module has main attribute {type(m)=} {type(m.main)=}", level="debug")
+    if callable(m.main):
+      io.echo("main attribute is callable", level="debug")
 
   # required
   if (hasattr(m, "main") and callable(m.main)) is False:
     io.echo("no working main function", level="error")
     return False
 
-  io.echo("checking signatures", level="debug")
+  if debug is True:
+    io.echo("checking signatures", level="debug")
+
   for f in ("init", "access", "buildargs", "main"):
 #    argspec = inspect.getargspec(eval("m.{f}"))
 #    ttyio.echo(f"bbsengine6.module.check.100: {argspec=}", level="debug")
@@ -162,7 +170,7 @@ def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.N
 # @since 20220727
 # @since 20230508 added to bbsengine6
 def runmodule(args, module, **kwargs):
-  debug = args.debug if "debug" in args else True
+  debug = args.debug if "debug" in args else False
   buildargs = True
 
   if check(args, module) is False:
@@ -174,7 +182,7 @@ def runmodule(args, module, **kwargs):
 
   res = runcallback(args, f"{module}.init", **kwargs)
   if debug is True:
-    io.echo(f"{module}.init() result={res}", level="debug")
+    io.echo(f"{module}.init() {res=}", level="debug")
 
   if buildargs is True:
     argv = kwargs["argv"] if "argv" in kwargs else []
@@ -183,14 +191,14 @@ def runmodule(args, module, **kwargs):
     prgargparser = runcallback(args, f"{module}.buildargs", **kwargs)
 
     if debug is True:
-      io.echo(f"bbsengine6.runmodule.130: {prgargparser=}")
+      io.echo(f"bbsengine6.runmodule.130: {prgargparser=}", level="debug")
 
     if prgargparser is not None:
       try:
         argv = [a.strip() for a in argv[1:]]
         prgargs = prgargparser.parse_args(argv) # argv[1:])
         if debug is True:
-          io.echo(f"bbsengine6.module.runmodule: {prgargs=} {argv=}")
+          io.echo(f"bbsengine6.module.runmodule: {prgargs=} {argv=}", level="debug")
 #        prgargs = [s.strip() for s in prgargs]
       except SystemExit:
         return False
