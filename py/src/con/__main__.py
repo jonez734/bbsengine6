@@ -1,22 +1,21 @@
-import ttyio5 as ttyio
-import bbsengine6 as bbsengine
+from bbsengine6 import io, screen, session
 
 from . import lib
 
 if __name__ == "__main__":
-    bbsengine.screen.init()
-    bbsengine.screen.setarea("con")
-
     parser = lib.buildargs()
     args = parser.parse_args()
 
-    bbsengine.session.start(args)
+    screen.init()
+    screen.setarea("con")
+
+    session.start(args)
 
     try:
-        lib.runsubmodule(args, "main")
+        lib.runmodule(args, "main")
     except EOFError:
         print("EOF")
     except KeyboardInterrupt:
         print("INTR")
     finally:
-        ttyio.echo("{decsc}{curpos:%d,0}{el}{decrc}{reset}{/all}" % (ttyio.getterminalheight()))
+        io.echo("{decsc}{curpos:%d,0}{el}{decrc}{reset}{/all}" % (io.getterminalheight()))
