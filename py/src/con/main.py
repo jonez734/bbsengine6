@@ -1,5 +1,5 @@
-import ttyio6 as ttyio
-import bbsengine6 as bbsengine
+from bbsengine6 import session, util, io
+#import bbsengine6 as bbsengine
 
 from . import lib
 
@@ -18,27 +18,32 @@ def main(args, **kw):
 
   done = False
   while not done:
-    bbsengine.util.heading("con")
-    ttyio.echo("{f6}{var:labelcolor}database: {var:valuecolor}%s {var:labelcolor}host: {var:valuecolor}%s:%s{f6}" % (args.databasename, args.databasehost, args.databaseport))
+    session.updatelastactivity(args, session.currentsessionid)
 
-    ttyio.echo("{var:optioncolor}[M]{var:labelcolor}embers")
-    ttyio.echo("{var:optioncolor}[S]{var:labelcolor}essions")
+    util.heading("con")
+    io.echo("{f6}{var:labelcolor}database: {var:valuecolor}%s {var:labelcolor}host: {var:valuecolor}%s:%s{f6}" % (args.databasename, args.databasehost, args.databaseport))
+
+    io.echo("{var:optioncolor}[M]{var:labelcolor} Members")
+    io.echo("{var:optioncolor}[S]{var:labelcolor} Sessions")
 #    ttyio.echo("[E]mail")
-    ttyio.echo("{f6}{var:optioncolor}[Q]{var:labelcolor}uit{f6}")
-    ch = ttyio.inputchoice("{var:promptcolor}console: {var:inputcolor}", "MSEQ", "Q")
+    io.echo("{f6}{var:optioncolor}[X]{var:labelcolor} Quit{f6}")
+    ch = io.inputchoice("{var:promptcolor}console: {var:inputcolor}", "MSEXQ", "X")
     if ch == "M":
-      ttyio.echo("Members")
-      lib.runsubmodule(args, "member")
+      io.echo("Members")
+      lib.runmodule(args, "member")
       continue
 #    elif ch == "E":
 #      ttyio.echo("E-Mail")
 #      email(args)
 #      continue
     elif ch == "S":
-      ttyio.echo("Sessions")
-      lib.runsubmodule(args, "session")
+      io.echo("Sessions")
+      lib.runmodule(args, "session")
       continue
+    elif ch == "Q" or ch == "X":
+      io.echo("Exit")
+      break
     else:
-      ttyio.echo("Quit")
+      io.echo("{bell}", end="", flush=True)
       done = True
       break
