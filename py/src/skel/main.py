@@ -8,7 +8,7 @@ def init(args, **kw:dict) -> bool:
 def access(args, op:str, **kw:dict) -> bool:
     return True
 
-def buildargs(args, **kw:dict) -> bool:
+def buildargs(args, **kw:dict):
 #    return lib.buildargs(args, **kw)
     return None
 
