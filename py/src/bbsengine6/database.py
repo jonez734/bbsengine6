@@ -65,7 +65,7 @@ def buildkw(args, **kwargs):
   
   return kw
 
-def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
+def update(args, table:str, pk:str, items:dict, primarykey="id", mogrify:bool=False, updatepk:bool=False) -> int:
   if args.debug is True:
     io.echo(f"bbsengine6.database.update.100: {items=}")
   dbh = connect(args)
@@ -75,20 +75,20 @@ def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
     if k == "datecreatedepoch":
       del items[k]
 
-  i = copy.deepcopy(items)
-  if primarykey in i:
-    del i[primarykey]
+  _items = copy.deepcopy(items)
+  if primarykey in _items and updatepk is False:
+    del _items[primarykey]
 
   sql = "update %s set " % (table)
   params = []
   dat = []
-  for k, v in i.items():
+  for k, v in _items.items():
     params.append("%s=%%s" % (k),)
     dat.append(v)
 
   sql += ", ".join(params)
   sql += " where %s=%%s" % (primarykey)
-  dat.append(key)
+  dat.append(pk)
 
   cur = dbh.cursor()
   cur.execute(sql, dat)
@@ -99,12 +99,12 @@ def update(args, table, key, items:dict, primarykey="id", mogrify=False) -> int:
   cur.close()
   return cur.rowcount
 
-def insert(args, table:str, items, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
+def insert(args, table:str, items:dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
   dbh = connect(args)
 
   columns = items.keys()
-  if "" in columns:
-    del items[""]
+#  if "" in columns:
+#    del items[""]
 
   for k, v in items.items():
     if type(items[k]) is dict:
@@ -130,7 +130,7 @@ def insert(args, table:str, items, returnid:bool=True, primarykey:str="id", mogr
 
     dat.append(v)
   if returnid is True:
-    sql += " returning %s.%s" % (table, primarykey)
+    sql += f" returning {table}.{primarykey}"
   # ttyio.echo("bbsengine.insert.100: sql=%s dat=%s" % (sql, dat), level="debug")
   cur = dbh.cursor()
 
@@ -161,7 +161,7 @@ def classexists(args, name, mogrify=False):
   res = cur.fetchone()
 
   if args.debug is True:
-    io.echo(f"clasexists.100: {res=}")
+    io.echo(f"clasexists.100: {res=}", level="debug")
 
   if res["class"] is None:
     return False
@@ -180,12 +180,13 @@ def schemaexists(args, name, mogrify=False):
   return True
 
 # @since 20230510 copied from bbsengine5.py
-def buildarggroup(parentparser:object, defaults:dict={}, label="database options", suppress=False):
+def buildargs(parentparser:object, defaults:dict={}, label="database options", suppress=False):
     databasename = defaults["databasename"] if "databasename" in defaults else "zoid6"
     databasehost = defaults["databasehost"] if "databasehost" in defaults else "localhost"
     databaseport = defaults["databaseport"] if "databaseport" in defaults else "5432"
     databaseuser = defaults["databaseuser"] if "databaseuser" in defaults else None
     databasepassword = defaults["databasepassword"] if "databasepassword" in defaults else None
+    databaseschema = defaults["databaseschema"] if "databaseschema" in defaults else None
     
     group = parentparser.add_argument_group(label)
 #    group = argparse.ArgumentParser("database", parents=[parentparser], add_help=False)
@@ -195,6 +196,8 @@ def buildarggroup(parentparser:object, defaults:dict={}, label="database options
       group.add_argument("--databaseport", dest="databaseport", action="store", default=databaseport, type=int, help="database port (default: %(default)r)")
       group.add_argument("--databaseuser", dest="databaseuser", action="store", default=databaseuser, type=str, help="database user (default: %(default)r)")
       group.add_argument("--databasepassword", dest="databasepassword", action="store", default=databasepassword, type=str, help="database password (default: %(default)r)")
+
+      group.add_argument("--databaseschema", dest="databaseschema", action="store", default=databaseschema, type=str, help="schema to use")
     else:
       group.add_argument("--databasename", dest="databasename", action="store", default=databasename, type=str, help=argparse.SUPPRESS)
       group.add_argument("--databasehost", dest="databasehost", action="store", default=databasehost, type=str, help=argparse.SUPPRESS) # "database host (default: %(default)r)")
@@ -204,7 +207,8 @@ def buildarggroup(parentparser:object, defaults:dict={}, label="database options
 
     return
 
-buildargdatabasegroup = buildarggroup
+buildargdatabasegroup = buildargs
+buildarggroup = buildargs
 
 # @since 20211101
 # @since 20230515 copied from bbsengine5
@@ -261,3 +265,35 @@ def close(args, **kw):
     del databasehandles[dsn]
     return True
   return False
+
+# @since 20240328 copied from bbsengine5 for votingbooth
+def postgres_to_python_list(arr:str) -> list:
+  arr = arr.strip("}")
+  arr = arr.strip("{")
+  arr = arr.split(",")
+  lst = [a.strip() for a in arr]
+  return lst
+
+def create(args, name):
+  sql = f"create database {name}"
+  # dat = (name,)
+  dbh = connect(args)
+  cur = dbh.cursor()
+  cur.execute(sql)
+  return True
+
+def createrol(args, name):
+  sql = f"create role {name}"
+  # dat = (name,)
+  dbh = connect(args)
+  cur = dbh.cursor()
+  cur.execute(sql)
+  return True
+
+def createschema(args, name):
+  sql = f"create schema {name}"
+  # dat = (name,)
+  dbh = connect(args)
+  cur = dbh.cursor()
+  cur.execute(sql)
+  return True
