@@ -1,4 +1,4 @@
-PACKAGENAME = "PACKAGENAME"
+PACKAGENAME = "setupimagebbs"
 
 from bbsengine6 import module, database
 
@@ -6,11 +6,11 @@ def runmodule(args, modulename, **kw):
     return module.runmodule(args, f"{PACKAGENAME}.{modulename}", **kw)
 
 def buildargs(args=None, **kw):
-    parser = argparse.ArgumentParser("skel")
+    parser = argparse.ArgumentParser(PACKAGENAME)
     parser.add_argument("--verbose", action="store_true", dest="verbose")
     parser.add_argument("--debug", action="store_true", dest="debug")
 
-    defaults = {"databasename": "zoid6", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None}
-    database.buildargdatabasegroup(parser, defaults)
+#    defaults = {"databasename": "zoid6", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None}
+#    database.buildargs(parser, defaults)
 
     return parser
