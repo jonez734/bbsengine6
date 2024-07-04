@@ -1,5 +1,8 @@
 variables = {}
-variables["theanswer"] = 42
+variables["boxcolor"]= "{darkgreen}"
+variables["titlecolor"] = "{white}{bggray}"
+
+variables["theanswer"] = 73
 variables["engine.title.color"] = "{bggray}{white}"
 variables["engine.title.hrcolor"] = "{darkgreen}"
 variables["optioncolor"] = "{white}{bggray}"
