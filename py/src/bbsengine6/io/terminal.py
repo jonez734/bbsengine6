@@ -8,7 +8,7 @@ from .const import *
 _streamout = sys.stdout
 _streamin = sys.stdin
 
-MAXWIDTH = 100
+MAXWIDTH = None # 100
 
 # @since 20200917
 def detectansi(): #streamout=_streamout, streamin=_streamout):
@@ -80,20 +80,20 @@ def size():
 # http://www.brandonrubin.me/2014/03/18/python-snippet-get-terminal-width/
 # https://www.programcreek.com/python/example/1922/termios.TIOCGWINSZ
 def width():
+  if MAXWIDTH is None:
+    return size().columns
+
   w = size().columns
   return MAXWIDTH if w > MAXWIDTH else w
 #  return size().columns
+
+columns = width
 
 def height():
   return size().lines
 
 def lines():
   return size().lines
-
-def columns():
-  w = size().columns
-  return MAXWIDTH if w > MAXWIDTH else w
-#  return size().columns
 
 # @see https://tldp.org/HOWTO/Xterm-Title-3.html
 def title(name):
