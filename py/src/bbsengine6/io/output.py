@@ -7,23 +7,29 @@ from argparse import Namespace
 from .terminal import _streamout, _streamin
 #from tzlocal import tzlocal
 
-from . import vars
-from . import terminal
+from . import vars, terminal
 
 #from .vars import *
 #from .terminal import getterminalwidth, savecursor, restorecursor
 from .const import *
 from .lib import *
 
+width = terminal.width()
+wordwrap = True
+end = "\n"
+indent = 0
+exclude = ()
+speed = 0
+pos = 0
+# strip = False -- unused
+
 class Token(NamedTuple):
     kind: str
-    value: str
+    value: str = None
 #    uncooked: str
 
-
-def tokenize(buf:str, args:object=Namespace()):
-    global tok_regex_c
-
+def tokenize(buf:str, exclude=()): # -> generator:
+    # print(f"{buf=}")
     if type(buf) is not str:
       return buf
 
@@ -32,221 +38,197 @@ def tokenize(buf:str, args:object=Namespace()):
     for mo in re.finditer(tok_regex, buf, re.IGNORECASE):
         kind = mo.lastgroup
         value = mo.group()
+        if kind in exclude:
+#          print(f"tokenize.100: excluded {kind=}")
+          continue
 
-        if kind == "NL":
-          pass
-        elif kind == "F6":
-          value = mo.group("F6repeat") or 1 # group 11
-#        elif kind == "MISMATCH":
-#            pass
-            # raise RuntimeError(f'{value!r} unexpected on line {line_num}')
+        if kind == "F6":
+            value = mo.group("F6repeat") or 1 # group 11
+#        elif kind == "WHITESPACE":
+#            yield Token(kind, value) # yield token # result += token.value
+        elif kind == "NL":
+            value = " "
         elif kind == "OPENBRACE":
-          value = "{"
+            value = "{"
         elif kind == "CLOSEBRACE":
-          value = "}"
+            value = "}"
+        elif kind == "EMPTYBRACES":
+            value = "{}"
         elif kind == "BELL":
-          value = mo.group("BELLrepeat") or 1 # 33) or 1
+            value = mo.group("BELLrepeat") or 1 # 33) or 1
         elif kind == "DECSTBM":
-          top = mo.group("topmarginnum") or 0 # 28
-          bot = mo.group("botmarginnum") or 0 # 30
-          value = (int(top), int(bot))
+            top = mo.group("topmarginnum") or 0 # 28
+            bot = mo.group("botmarginnum") or 0 # 30
+            value = (int(top), int(bot))
         elif kind == "DECSLRM":
-          left = mo.group("leftmarginnum") or 1 # 28
-          right = mo.group("rightmarginnum") or 0 # 30
-          yield Token("CURSOR", f"{CSI}{left};{right}s")
-#          value = (int(top), int(bot))
+            left = mo.group("leftmarginnum") or 1 # 28
+            right = mo.group("rightmarginnum") or 0 # 30
+            yield Token("CURSOR", f"{CSI}{left};{right}s")
         elif kind == "CURPOS":
           y = mo.group("curposy") # 13
           x = mo.group("curposx") or 0 # 15
           value = (int(y), int(x))
-        elif kind == "DECSC":
-          pass
-        elif kind == "DECRC":
-          pass
         elif kind == "CHA":
           value = mo.group("chanum") or 1
 #          yield Token("CURSOR", f"{CSI}{value}G")
         elif kind == "ERASELINE":
           value = mo.group("elmode") or 0 # mo.group(3)
         elif kind == "ACS":
-          # print(mo.groups())
-          # @FIX: why the huge offset?
-#          command = mo.group(2)
-#          repeat = mo.group(4) or 1
           name = mo.group("acsname")
           repeat = mo.group("acsrepeat") or 1
           value = (name, repeat)
-          # print("value.command=%r, value.repeat=%r" % (command, repeat))
         elif kind == "VAR":
-#          print("var! mo.groups=%r" % (repr(mo.groups())))
-          try:
-            var = mo.group("varname") # 35
-            value = vars.get(var)
-          except RecursionError:
-            print("** too much recursion **")
-            continue
-#          print("var=%r value=%r" % (var, value))
-          for t in tokenize(str(value)):
-            # print("{var} yielding token %r" % (t,))
+          var = mo.group("varname") # 35
+          value = vars.get(var)
+          for t in tokenize(value, exclude=exclude):
+            # print(f"tokenize.120: {t=}")
             yield t
-          # print("__tokenizemci.100: var=%r value=%r" % (var, value))
+          continue
         elif kind == "CURSORUP":
-          value = mo.group("cuunum") or 1 # \x1b[<repeat>A 38
+            value = mo.group("cuunum") or 1 # \x1b[<repeat>A 38
         elif kind == "CURSORRIGHT":
-          value = mo.group("cufnum") or 1 # 41
+            value = mo.group("cufnum") or 1 # 41
         elif kind == "CURSORLEFT":
-          value = mo.group("cubnum") or 1 # 44
+            value = mo.group("cubnum") or 1 # 44
         elif kind == "CURSORDOWN":
-          value = mo.group("cudnum") or 1 # 47
+            value = mo.group("cudnum") or 1 # 47
         elif kind == "WAIT":
-          value = int(mo.group("waitduration")) or 1 # 49) or 1)
+            value = int(mo.group("waitduration")) or 1 # 49) or 1)
         elif kind == "UNICODE":
-          name = mo.group("unicodename") # 52
-          repeat = mo.group("unicoderepeat") or 1 # 54
-#          print("unicode.100: name=%s repeat=%r" % (name, repeat))
-          value = (name, int(repeat))
+            name = mo.group("unicodename") # 52
+            repeat = mo.group("unicoderepeat") or 1 # 54
+            value = (name, int(repeat))
         elif kind == "EMOJI":
-          value = mo.group("emoji")
-#        elif kind == "HIDECURSOR":
-#          pass
-#        elif kind == "SHOWCURSOR":
-#          pass
+            value = mo.group("emoji")
         elif kind == "ERASEDISPLAY":
-          value = mo.group("edmode") # 64
-          if value == "tobottom":
-            value = 1
-          elif value == "totop":
-            value = 2
-          else:
-            value = 0
+            value = mo.group("edmode") # 64
+            if value == "tobottom":
+                value = 1
+            elif value == "totop":
+                value = 2
+            else:
+                value = 0
         elif kind == "CURSORHPOS":
-          value = int(mo.group("hpos")) or 1 # group 68
-          yield Token("CURSOR", value) # this is wrong. check 'cha' instead
+            value = int(mo.group("hpos")) or 1 # group 68
+            yield Token("CURSOR", value) # this is wrong. check 'cha' instead
         elif kind == "RGB":
-          g = mo.group("rgbval") # 70
-          if g is not None:
-            value = tuple(bytes.fromhex(g))
-          else:
-            value = g
+            rgbval = mo.group("rgbval") # 70
+            if rgbval is not None:
+                value = tuple(bytes.fromhex(rgbval))
+            else:
+                value = rgbval
         elif kind == "SPEED":
-          value = int(mo.group("speednum")) or 0
+            value = int(mo.group("speednum")) or 0
         elif kind == "INDENT":
-          value = int(mo.group("indentnum")) or 0 # 74
+            value = int(mo.group("indentnum")) or 0 # 74
         elif kind == "TAG":
-          value = (mo.group("tagkind"), mo.group("tagparam"))
+            value = (mo.group("tagkind"), mo.group("tagparam"))
         elif kind == "BOLD":
-          yield Token("ATTRIBUTE", f"*{CSI}1m{mo.group('bold')}{CSI}22m*")
+            kind = "ATTRIBUTE"
+            value = f"*{CSI}1m{mo.group('bold')}{CSI}22m*"
         elif kind == "ITALIC":
-          yield Token("ATTRIBUTE", f"/{CSI}3m{mo.group('italic')}{CSI}23m/")
+            kind = "ATTRIBUTE"
+            value = f"/{CSI}3m{mo.group('italic')}{CSI}23m/"
         elif kind == "STRIKE":
-          yield Token("ATTRIBUTE", f"~{CSI}9m{mo.group('strike')}{CSI}29m~")
+            kind = "ATTRIBUTE"
+            value = f"~{CSI}9m{mo.group('strike')}{CSI}29m~"
         elif kind == "UNDERLINE":
-          yield Token("ATTRIBUTE", f"_{CSI}4m{mo.group('underline')}{CSI}24m_")
+            kind = "ATTRIBUTE"
+            value = f"_{CSI}4m{mo.group('underline')}{CSI}24m_"
         elif kind == "DCH":
-          dchnum = mo.group("dchnum") or 1
-          yield Token("CURSOR",    f"{CSI}{dchnum}P")
+            dchnum = mo.group("dchnum") or 1
+            yield Token("CURSOR",    f"{CSI}{dchnum}P")
         elif kind == "AT":
-          value = "@"
-
-#        print(f"{kind=} {value=}")
+            value = "@"
+        elif kind == "COMMAND":
+          if value in attributes:
+              kind = "ATTRIBUTE"
+          elif value in colors:
+              kind = "COLOR"
+          elif value in acs:
+              kind = "ACS" # yield Token("ACS", token.value) # f"{CSI}{acs[token.value]}")
+          elif value in emoji:
+              kind = "EMOJI"
+          else:
+            v = value.replace("{", "").replace("}", "")
+            if v in vars.variables:
+              for t in tokenize(vars.variables[v]):
+                # print(f"VAR: {t=}")
+                yield t
+              continue
+              # yield Token("EMOJI", f"{emoji[token.value]}")
+        # print(f"--> {kind=} {value=}")
         yield Token(kind, value)
 
-def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Namespace(), indent:str="---") -> str:
-  width = kw["width"] if "width" in kw else None
-  strip = kw["strip"] if "strip" in kw else False
-  wordwrap = kw["wordwrap"] if "wordwrap" in kw else True
-  end = kw["end"] if "end" in kw else "\n"
-  args = kw["args"] if "args" in kw else Namespace()
-#  indent = kw["indent"] if "indent" in kw else ""
-  indent = kw["indent"] if "indent" in kw else 0
-  
-  style = getoption("style", "ttyio")
+def interpret(tokens, **kw:dict):
+#def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Namespace(), indent:str="---") -> str:
+    global width, strip, wordwrap, end, indent, exclude, speed, pos
 
-  def handlecommand(kind, table, value):
-#    print(f"handlecommand.100: style={style!r}")
-    for item in table:
-      if value == item["command"]:
-        if style == "noansi":
-          return ""
-        return Token(kind.upper(), f"{CSI}{item['ansi']}") # "\033[%s" % (item["ansi"])
-    return False
+    width = kw["width"] if "width" in kw else width
+    # strip = kw["strip"] if "strip" in kw else False
+    wordwrap = kw["wordwrap"] if "wordwrap" in kw else wordwrap
+    end = kw["end"] if "end" in kw else end
+    args = kw["args"] if "args" in kw else Namespace()
+    indent = kw["indent"] if "indent" in kw else indent
+    exclude = kw["exclude"] if "exclude" in kw else exclude
 
-  if buf is None or buf == "":
-    return ""
+    style = getoption("style", "ttyio")
 
-  if strip is True:
+    if tokens is None:
+      yield None
+
+    #if buf is None or buf == "":
+    #    return ""
+
     result = ""
-    for token in tokenize(buf):
-      if token.kind in ("WORD", "WHITESPACE", "NL", "F6"):
-        yield token.value # result += token.value
-    return result
+    # firstword = True -- unused
+    # pos = 0
+    for token in tokens:
+      # print(f"{token=}")
+      if type(token) is str:
+        yield Token("WORD", token)
+        continue
 
-  if width is None:
-    width = terminal.width()
-
-  firstword = True
-  result = ""
-  pos = 0
-  for token in tokenize(buf):
-      if token.kind == "F6":
-#          v = token.value if token.value is not None else 1
-          pos = 0
-          yield token # result += "\n"*int(v)# +indent
-      elif token.kind == "WHITESPACE":
-          pos += len(token.value)
-          yield token # result += token.value
-      elif token.kind == "BELL":
-        for b in range(0,int(token.value)):
-          yield f"{BELL}"
-      elif token.kind == "INDENT":
-        indent = token.value
-      elif token.kind == "COMMAND":
-        if strip is False:
-          res = False
-          commands = {"command":echocommands, "attribute":attributes, "color":colors, "bgcolor":bgcolors}
-          value = token.value.lower()
-          for kind, table in commands.items():
-            res = handlecommand(kind, table, value)
-            if res is not False:
-              if type(res) is Token:
-                yield Token(kind.upper(), res.value)
-              else:
-                yield Token(kind.upper(), res)
-              break
-      elif token.kind == "DECSTBM":
-        top, bot = token.value
-        if bot == 0:
-          yield f"{CSI}{top}r" # result += CSI+"%dr" % (top)
-        else:
-          yield f"{CSI}{top};{bot}r" # result += CSI+"%d;%dr" % (top, bot)
+      if token in exclude:
+        print("interpret.100: {token=}")
+        continue
+##  for token in tokenize(buf):
+      if token.kind == "DECSTBM":
+        yield token
+        # top, bot = token.value
+        # if bot == 0:
+        # 	yield f"{CSI}{top}r" # result += CSI+"%dr" % (top)
+        # else:
+        # 	yield f"{CSI}{top};{bot}r" # result += CSI+"%d;%dr" % (top, bot)
       elif token.kind == "SLASHALL":
-          yield Token("COLOR", f"{CSI}0;39;49m") # yield f"{CSI}0;39;49m" # result += CSI+"0;39;49m"
-          yield Token("SPEED", 0)
+        yield Token("COLOR", f"{CSI}0;39;49m") # yield f"{CSI}0;39;49m" # result += CSI+"0;39;49m"
+        yield Token("SPEED", 0)
       elif token.kind == "RESET":
-          yield Token("RESET", f"{CSI}0;39;49m{ESC}[s{ESC}[0;0r{ESC}[u")
+        yield Token("DECSC")
+        # ESC [ 0 ; 0 r)  is used to reset the cursor position to the top left corner of the terminal (row 0, column 0) and  clear all formatting applied to the cursor.
+        # yield Token("RESET", f"{ESC}[0;0r")
+        yield Token("DECSTBM", (0,0))
+        yield Token("SLASHALL")
+        yield Token("SPEED", 0)
+        yield Token("INDENT", 0)
+        yield Token("DECRC") # restore cursor position
       elif token.kind == "ERASELINE": # Erases part of the line. If token.value is 0 (or missing), clear from cursor to the end of the line. If n is 1, clear from cursor to beginning of the line. If n is 2, clear entire line. Cursor position does not change.
         yield f"{CSI}{token.value}K" # result += CSI+"%dK" % (token.value)
       elif token.kind == "ACS": # use alternate character set
-        # print("acs. value=%s" % (str(token.value)))
         command, repeat = token.value
-        # print("command=%r, repeat=%r" % (command, repeat))
         if command is not None and command.upper() in acs:
           char = acs[command.upper()]
-          pos += len(char*int(repeat))
+          # pos += len(char*int(repeat))
           yield Token("ACS", f"{ESC}(0{char*int(repeat)}{ESC}(B") # result += "\033(0%s\033(B" % (char*int(repeat))
       elif token.kind == "DECSC":
-#        print("** DECSC")
-        terminal.savecursor()
-#        yield f"{CSI}s" # result += CSI+"s"
+          yield token
       elif token.kind == "DECRC":
-#        print("** DECRC")
-        yield terminal.restorecursor()
-#        yield f"{CSI}u" # result += CSI+"u"
+          yield token
       elif token.kind == "CURPOS":
         y, x = token.value
         yield Token("CURSOR", f"{CSI}{y};{x}H") # f"{CSI}{y};{x}H" # result += CSI+"%d;%dH" % (y, x)
       elif token.kind == "CHA": # Moves the cursor to column n (default 1)
-          yield Token("CURSOR", f"{ESC}[{token.value}G")
+        yield Token("CURSOR", f"{ESC}[{token.value}G")
       elif token.kind == "CURSORUP": # {cursorup:10}
         repeat = int(token.value)
         if repeat > 0:
@@ -260,9 +242,8 @@ def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Nam
         if repeat > 0:
           yield Token("CURSOR", f"{ESC}[{repeat}C") # result += CSI+"%dC" % (repeat)
       elif token.kind == "CURSORLEFT":
-        repeat = int(token.value)
-        if repeat > 0:
-          yield Token("CURSOR", f"{ESC}[{repeat}D")
+          repeat = int(token.value)
+          yield Token("CURSORLEFT", repeat)
       elif token.kind == "WAIT":
         yield token
       elif token.kind == "HIDECURSOR":
@@ -271,35 +252,20 @@ def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Nam
         yield Token("CURSOR", f"{CSI}?25h")
       elif token.kind == "CURSORHPOS":
         yield Token("CURSOR", f"{CSI}{token.value}G")
-
       elif token.kind == "UNICODE":
         (name, repeat) = token.value
         name = name.upper()
         if name in unicode:
           yield Token("UNICODE", unicode[name]*repeat)
-      elif token.kind == "EMOJI":
-        name = token.value # :smile:
-        if name in emoji:
-          yield Token("EMOJI", emoji[name])
       elif token.kind == "WORD":
-        if firstword is True:
-          yield " "*indent
-          firstword = False
-        if wordwrap is True:
-          if pos+len(token.value) >= width-1:
-            yield "\n"
-            if indent > 0:
-              yield " "*indent
-            pos = len(token.value) # len(indent)+len(token.value)
-            yield Token("WORD", token.value)# token.value # result += token.value # indent+token.value
-          else:
-            pos += len(token.value)
-            yield Token("WORD", token.value) # token.value # result += token.value
-        else:
-          yield token.value # result += token.value
+          yield Token("WORD", token.value)
       elif token.kind == "OPENBRACE" or token.kind == "CLOSEBRACE":
-        yield token.value # result += token.value
-        pos += 1
+          yield token # result += token.value
+      elif token.kind == "EMPTYBRACES":
+          yield token
+          # pos += 1
+      elif token.kind == "COLOR":
+          yield f"{ESC}[{colors[token.value]}"
 
       # @see https://en.wikipedia.org/wiki/ANSI_escape_code
       # 0 = entire display (default) all
@@ -307,17 +273,13 @@ def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Nam
       # 2 = cursor to top of display totop
       elif token.kind == "ERASEDISPLAY":
         yield f"{CSI}{token.value}" # result += f"{CSI}{token.value}J" # CSI+"%dJ" % (token.value)
-      elif token.kind == "RGB":
+      elif token.kind == "RGBCOLOR":
         yield Token("RGBCOLOR", f"{CSI}{rgb(38, token.value)}") # result += CSI+rgb(38, token.value) # (255, 255, 255))}, # )"38;2;255;255;255m", "rgb": (255,255,255) }, # 37m
       elif token.kind == "SPEED":
         yield token
-      elif token.kind == "INDENT":
-        yield token
-#      elif token.kind == "ATPROJECT":
-#        (projectid, projectnote) = (token.value)
-#        yield f"@project:{projectid} {projectnote}"
       elif token.kind == "AT":
         yield "@"
+        # pos += 1
       elif token.kind == "TAG":
         handler = getoption("taghandler", None)
         if handler is None:
@@ -325,139 +287,177 @@ def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Nam
         else:
           if callable(handler) is True:
             yield handler(args, token)
-#          else:
-#        (kind, param) = token.value
-#        yield "test -> {kind} {param}"
-      elif token.kind == "NL":
-        if wordwrap is True:
-          yield " "
-        else:
-          yield "\n"
-      elif token.kind == "ATTRIBUTE":
-        yield token.value
-      elif token.kind == "CURSOR":
-        yield token.value
-
-#        yield token
-#        print(f"atproject.120: value={token.value!r}")
-#        print(f"atproject.100: {mo.group('ATPROJECT')!r}")
+      elif token.kind == "VAR":
+          for t in tokenize(token.value):
+            yield t
+          # v = token.value.replace("{", "").replace("}", "")
+          # if v in vars.variables:
+          #    for t in interpret(tokenize(vars.variables[v], exclude=exclude)):
+          #        print(f"interpret.120: {t=}")
+          #        yield t
+          #else:
+          #    yield token.value
+      elif token.kind == "COMMAND":
+          # print(f"interpret COMMAND {token.value=} ")
+          yield token.value
+          #if token.value in attributes:
+          #    yield Token("ATTRIBUTE", f"{CSI}{attributes[token.value]}")
+          #elif token.value in colors:
+          #    yield Token("COLOR", f"{CSI}{colors[token.value]}")
+          #elif token.value in acs:
+          #    yield Token("ACS", f"{CSI}{acs[token.value]}")
+          #elif token.value in emoji:
+          #    yield Token("EMOJI", f"{emoji[token.value]}")
+          #else:
+          #  yield token.value
+            # print(f"unknown command: {token.value=}")
+            #  v = token.value.replace("{", "").replace("}", "")
+            #  if v in vars.variables:
+            #    for t in tokenize(vars.variables[v]):
+            #      # print(f"{t=} ")
+            #      for i in interpret(t):
+            #        # print(f"{i=} ")
+            #        yield i
+            #  else:
+            #    yield token.value
+      #elif token.kind == "COLOR":
+      #  # print(f"yielding {token.value=}")
+      #  yield Token("COLOR", f"{CSI}{colors[token.value]}")
+      else:
+        yield token
 
 def echo(buf:str="", **kw):
-  width = kw["width"] if "width" in kw else terminal.width() # getterminalwidth()
-  level = kw["level"] if "level" in kw else None
-  strip = kw["strip"] if "strip" in kw else False
-  wordwrap = kw["wordwrap"] if "wordwrap" in kw else True
-  flush = kw["flush"] if "flush" in kw else True
-  end = kw["end"] if "end" in kw else "\n"
-  indent = kw["indent"] if "indent" in kw else 0
-  args = kw["args"] if "args" in kw else Namespace()
-  interp = kw["interpret"] if "interpret" in kw else True
-#  datestamp = kw["datestamp"] if "datestamp" in kw else False
-#  if datestamp is True:
-#    from datetime import datetime
-#    now = datetime.now(tzlocal())
-#    stamp = strftime("%Y-%b-%d %I:%M:%S%P %Z (%a)", now.timetuple())
-#    buf = "%s %s" % (stamp, buf)
-  file = kw["file"] if "file" in kw else terminal._streamout # sys.stdout
+    global pos, indent, end, wordwrap, strip, width, speed
+    # width = kw["width"] if "width" in kw else terminal.width() # getterminalwidth()
+    level = kw["level"] if "level" in kw else None
+    # strip = kw["strip"] if "strip" in kw else strip
+    wordwrap = kw["wordwrap"] if "wordwrap" in kw else wordwrap
+    flush = kw["flush"] if "flush" in kw else True
+    end = kw["end"] if "end" in kw else "\n"
+    indent = kw["indent"] if "indent" in kw else indent
+    args = kw["args"] if "args" in kw else Namespace()
+    interp = kw["interpret"] if "interpret" in kw else True
+    file = kw["file"] if "file" in kw else terminal._streamout # sys.stdout
+    exclude = kw["exclude"] if "exclude" in kw else ()
+    # pos = 0 # needed?
   
-  prefix = ""
-  if level is not None:
-    if level == "debug":
-      prefix = "{var:level.debug}" # {bglightblue}{blue}"
-    elif level == "warn" or level == "warning":
-      prefix = "{var:level.warning}" # {bgyellow}{black}"
-    elif level == "error":
-      prefix = "{var:level.error}" # {bgred}{black}"
-    elif level == "success" or level == "ok":
-      prefix = "{var:level.ok}" # {bggreen}{black}"
-    elif level == "info":
-      prefix = "{var:level.info}" # {bgwhite}{blue}"
+    if level is not None:
+        prefix = ""
+        if level == "debug":
+            prefix = "{var:level.debug}" # {bglightblue}{blue}"
+        elif level == "warn" or level == "warning":
+            prefix = "{var:level.warning}" # {bgyellow}{black}"
+        elif level == "error":
+            prefix = "{var:level.error}" # {bgred}{black}"
+        elif level == "success" or level == "ok":
+            prefix = "{var:level.ok}" # {bggreen}{black}"
+        elif level == "info":
+            prefix = "{var:level.info}" # {bgwhite}{blue}"
+        print(tostr(f"{prefix} ")+tostr(buf, interpret=False)+tostr(" {var:normalcolor}"), flush=True)
+        return
 
-#    echo(prefix, end="", flush=True)
-#    echo(f"[{level}] {buf}", interpret=False, flush=True)
-#    echo("{/all}")
+    if interp is True:
+        # speed = 0
+        mode = getoption("mode", "ttyio")
 
-#    buf = f"{prefix} [{level}] {buf} {{var:normalcolor}}"
-#    buf = f"{prefix} {buf} {{var:normalcolor}}"
-    print(tostr(f"{prefix} ")+tostr(buf, interpret=False)+tostr(" {var:normalcolor}"), flush=True)
-#    print(f"[{level}] {buf}") # interpret(prefix)}{buf}{interpret('{{/all}}')}") # buf = "%s %s %s" % (interpret(prefix), buf, interpret("{/all}"))
+        if mode == "ttyio":
+            tokensallowed = ("ACS", "CURSOR", "EMOJI", "COLOR", "BGCOLOR", "RGBCOLOR", "RESET", "UNICODE", "ATTRIBUTE", "COMMAND", "WORD", "WHITESPACE", "CONTROL")
+        elif mode == "noansi":
+            tokensallowed = ("UNICODE", "WORD", "WHITESPACE", "F6")
+        else:
+            tokensallowed = ("WORD", "WHITESPACE", "F6")
+
+        for token in interpret(tokenize(buf, exclude=exclude)):
+        # for token in interpret(buf, **kw):
+          if type(token) == Token:
+              if token.kind == "WHITESPACE":
+                  pos += len(token.value)
+                  print(token.value, end="", flush=True)
+              elif token.kind == "CURSOR":
+                  print(token.value, end="", flush=True)
+              elif token.kind == "WAIT":
+                  time.sleep(WAIT*int(token.value))
+              elif token.kind == "F6":
+                  print(f"\n"*int(token.value), flush=True, end="")
+                  pos = 0
+                  # firstword = True
+              elif token.kind == "SPEED":
+                  speed = token.value
+              elif token.kind == "INDENT":
+                  indent = token.value
+              elif token.kind == "TAG":
+                  kind, param = token.value
+                  print(f"--> test: {kind} {param}")
+              elif token.kind == "WORD":
+                  if pos+len(token.value) >= width-1 and wordwrap is True:
+                      pos = 0
+                      print(f"\n", end="")
+                  print(token.value, end="", flush=True)
+                  pos += len(token.value)
+                  time.sleep(SPEED*speed)
+              elif token.kind == "COLOR":
+                  print(token.value, end="", flush=True) # token.value, end="", flush=True)
+              elif token.kind == "EMOJI":
+                  print(emoji[token.value], end="", flush=True)
+              elif token.kind == "ATTRIBUTE":
+                  print(token.value, end="", flush=True)
+              elif token.kind == "NL":
+                  print(token.value, end="", flush=True)
+              elif token.kind == "ACS":
+                  print(token.value, end="", flush=True)
+              elif token.kind == "VAR":
+                  pass
+              elif token.kind == "SLASHALL":
+                  print(token.value, end="", flush=True)
+              elif token.kind == "RESET":
+                  print(token.value, end="", flush=True)
+              elif token.kind == "DECSC":
+                  terminal.savecursor()
+              elif token.kind == "DECRC":
+                  print(f"{terminal.restorecursor()}", end="", flush=True)
+              elif token.kind == "CURSORLEFT":
+                  if token.value > 0:
+                      pos -= token.value
+                      print(f"{ESC}[{token.value}D", end="")
+              elif token.kind == "BELL":
+                  print("\007"*int(token.value), end="", flush=True)
+              elif token.kind == "DECSTBM":
+                  top, bot = token.value
+                  # print(f"{token.value=}")
+                  if bot == 0:
+                    print(f"{CSI}{top}r", end="", flush=True) # result += CSI+"%dr" % (top)
+                  else:
+                    print(f"{CSI}{top};{bot}r", end="", flush=True) # result += CSI+"%d;%dr" % (top, bot)
+              elif token.kind == "OPENBRACE" or token.kind == "CLOSEBRACE":
+                  print(token.value, end="", flush=True)
+              elif token.kind == "EMPTYBRACES":
+                  print(token.value, end="", flush=True)
+              else:
+                  print(f"--> Token({token.kind!r}, {token.value!r})", flush=True)
+          else:
+              print(f"{token}", end="", flush=True)
+    else:
+        print(f"{buf}", end=end, flush=flush)
+    # print(f"{end=}", end=end, flush=flush)
+    print(end=end, flush=flush)
     return
 
-  if interp is True:
-    speed = 0
-    try:
-      if indent > 0:
-        print(" "*int(indent), end="", flush=True)
+def tostr(buf:str, **kw:dict):
+    # strip = kw["strip"] if "strip" in kw else False
+    interp:bool = kw["interpret"] if "interpret" in kw else True
+    exclude:tuple = kw["exclude"] if "exclude" in kw else ()
 
-      mode = getoption("mode", "ttyio")
+    if interp is False:
+        return buf
 
-      if mode == "ttyio":
-        tokensallowed = ("ACS", "CURSOR", "EMOJI", "COLOR", "BGCOLOR", "RGBCOLOR", "RESET", "UNICODE", "ATTRIBUTE", "COMMAND", "WORD", "WHITESPACE", "CONTROL")
-      elif mode == "noansi":
-        tokensallowed = ("UNICODE", "WORD", "WHITESPACE", "F6")
-      else:
-        tokensallowed = ("WORD", "WHITESPACE", "F6")
+    res = ""
 
-      for tok in interpret(buf, **kw):
-        if type(tok) == Token:
-          if tok.kind == "WAIT":
-            time.sleep(WAIT*int(tok.value))
-          elif tok.kind == "F6":
-            print(f"\n"*int(tok.value), flush=True, end="")
-          elif tok.kind == "NL":
-            pass
-          elif tok.kind == "SPEED":
-            speed = tok.value
-          elif tok.kind == "INDENT":
-#            print(f"** indent token={tok!r}")
-            indent = tok.value
-#          elif tok.kind == "ATPROJECT":
-#            projectid, projectnote = tok.value
-#            print(f"@project:{projectid} {projectnote}")
-#          elif tok.kind == "ATSEE":
-#            print(f"@see:{tok.value!r}")
-          elif tok.kind == "TAG":
-            kind, param = tok.value
-            print(f"--> test: {kind} {param}")
-          elif tok.kind in tokensallowed:
-            print(f"{tok.value!s}", end="", flush=True)
-          elif tok.kind == "MISMATCH":
-            print(tok.value, end="", flush=True)
-          else:
-            print(f"--> Token({tok.kind!r}, {tok.value!r})", flush=True)
-        else:
-          print(tok, end="", flush=True)
-
-        if type(tok) == Token and tok.kind == "WORD":
-          time.sleep(SPEED*speed)
-    except RecursionError:
-      print("recursion error!")
-    print(end=end)
-  else:
-    print(buf, end=end, flush=flush)
-
-  return
-
-def tostr(buf, **kw):
-  strip = kw["strip"] if "strip" in kw else False
-  interp = kw["interpret"] if "interpret" in kw else True
-  if interp is False:
-    return buf
-
-  res = ""
-
-  if strip is True:
-    allowedtokens = ["WORD", "WHITESPACE", "F6", "NL"]
-  else:
-    allowedtokens = ["WORD", "WHITESPACE", "F6", "EMOJI", "COLOR", "BGCOLOR", "RGBCOLOR", "RESET", "COMMAND", "ACS", "CONTROL", "CURSOR"]
-
-  for tok in interpret(buf):
-    if type(tok) is str:
-      res += tok
-    elif type(tok) is Token:
-      if tok.kind == "F6":
-          res += "\n"*int(tok.value)
-      elif tok.kind in allowedtokens:
-        res += tok.value
-
-  return res
+    for tok in interpret(tokenize(buf, exclude=exclude), exclude=exclude):
+#        print(f"{tok=}")
+        if type(tok) is str:
+          res += tok
+        elif tok.kind in exclude or tok.kind in ("SPEED", "WAIT", "SLASHALL"): #  or tok.kind not in ("WORD", "WHITESPACE"):
+          continue
+        elif type(tok) is Token:
+          res += tok.value
+    return res
