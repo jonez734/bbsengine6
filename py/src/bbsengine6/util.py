@@ -3,8 +3,7 @@ import random
 import syslog
 
 #import ttyio6 as ttyio
-from . import io
-from . import input
+from . import io, input, database
 
 def hr(color="{var:engine.title.hrcolor}", chars="-", width=None, padding=" "):
     if width is None:
@@ -29,9 +28,9 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
       ulcorner="+"
       urcorner="+"
       vline="|"
-      boxcolor = ""
-      titlecolor = ""
-      reset = ""
+      #boxcolor = ""
+      #titlecolor = ""
+      #reset = ""
   else:
       width = io.getterminalwidth() - 4
       hline = f"{{acs:hline:{width}}}"
@@ -40,9 +39,9 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
       vline = "{acs:vline}"
       urcorner = "{acs:urcorner}"
       ulcorner = "{acs:ulcorner}"
-      boxcolor = "{darkgreen}" # var:engine.title.hrcolor}"
-      titlecolor = "{white}{bggray}" # {var:engine.title.color}"
-      reset = "{/all}"
+      #boxcolor = "{darkgreen}" # var:engine.title.hrcolor}"
+      #titlecolor = "{white}{bggray}" # {var:engine.title.color}"
+      # reset = "{/all}"
 
   w = width - len(title)
 #  print(f"w={w!r}")
@@ -55,9 +54,9 @@ def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{ac
     leftpadding  = " "*int(repeat+2)
     rightpadding = " "*int(repeat-1)
 
-  io.echo(f"{{/all}}{{var:normalcolor}} {boxcolor}{ulcorner}{hline}{urcorner}", wordwrap=False)
-  io.echo(f" {boxcolor}{vline}{titlecolor}{leftpadding}{title}{rightpadding}{reset}{boxcolor}{vline}{reset}", wordwrap=False)
-  io.echo(f" {boxcolor}{llcorner}{hline}{lrcorner}{reset}", wordwrap=False)
+  io.echo(f"{{/all}}{{normalcolor}} {{boxcolor}}{ulcorner}{hline}{urcorner}", wordwrap=False)
+  io.echo(f" {{boxcolor}}{vline}{{titlecolor}}{leftpadding}{title}{rightpadding}{{/all}}{{boxcolor}}{vline}{{/all}}", wordwrap=False)
+  io.echo(f" {{boxcolor}}{llcorner}{hline}{lrcorner}{{/all}}", wordwrap=False)
   return
 
   style = io.getoption("style", "ttyio")
@@ -168,21 +167,19 @@ def oxfordcomma(seq, conjunction:str="and") -> str:
     buf = f"{{var:sepcolor}}, {{var:valuecolor}}"
     return f"{{var:valuecolor}}{buf.join(seq[:-1])}{{var:sepcolor}}, {conjunction} {{var:valuecolor}}{seq[-1]}"
 
-def logentry(message, output=True, level=None, priority=syslog.LOG_INFO, stripcommands=False, datestamp=True):
+def logentry(message, output=True, level=None, priority=syslog.LOG_INFO, strip=False, datestamp=True, prg=None):
   if level is not None:
     if level == "debug":
-      message = "{blue}** debug ** "+message+"{/all}"
+      message = "{var:level.debug}** debug ** "+message+"{/all}"
     elif level == "warn":
-      message = "{yellow}** warn ** "+message+"{/all}"
+      message = "{var:level.warn}** warn ** "+message+"{/all}"
     elif level == "error":
-      message = "{red}** error ** "+message+"{/all}"
+      message = "{var:level.error}** error ** "+message+"{/all}"
 
-  message = io.interpretecho(message, strip=True)
-  syslog.syslog(priority, message)
+  syslog.syslog(priority, io.tostr(message, strip=True))
 
   if output is True:
-    io.echo(message, stripcommands=stripcommands, datestamp=datestamp, interpret=False)
-
+    io.echo(message, strip=strip, datestamp=datestamp, interpret=False)
   return
 
 # @since 20230612 copied from bbsengine5
@@ -366,7 +363,7 @@ def getencryptedpassword(args, plaintextpassword:str) -> str:
   io.echo(f"getencryptedpassword.100: {plaintextpassword=}", level="debug")
   sql = "select crypt(%s, gen_salt('md5'))" # previously 'bf' which does not work with dovecot
   dat = (plaintextpassword,)
-  dbh = databaseconnect(args)
+  dbh = database.connect(args)
   cur = dbh.cursor()
   cur.execute(sql, dat)
   if cur.rowcount == 0:
@@ -374,3 +371,35 @@ def getencryptedpassword(args, plaintextpassword:str) -> str:
 
   res = cur.fetchone()
   return res["crypt"]
+
+def init(args=None, **kw):
+  import time, locale
+
+  locale.setlocale(locale.LC_ALL, "")
+  time.tzset()
+
+#
+# @since 20140831 bbsengine5.php
+# @since 20221107 bbsengine5.py
+# @since 20240509 copied from bbsengine5.py
+#
+def checkpassword(args, plaintext, memberid=None):
+  if memberid is None:
+    memberid = getcurrentmemberid(args)
+
+  logentry(f"checkpassword.200: memberid={memberid!r}")
+  dbh = database.connect(args)
+  sql = "select 't' as correct from engine.member where id=%s and crypt(%s, password) = password"
+  dat = (memberid, plaintext)
+  cur = dbh.cursor()
+  cur.execute(sql, dat)
+  ttyio.echo(f"checkpassword.180: {cur.mogrify(sql, dat)}", level="debug")
+  if cur.rowcount == 0:
+    ttyio.echo("checkpassword.140: no rows returned", level="debug")
+    return False
+
+  res = cur.fetchone()
+  ttyio.echo(f"checkpassword.160: res={res!r}", level="debug")
+  if res["correct"] == "t":
+    return True
+  return False
