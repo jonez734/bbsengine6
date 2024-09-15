@@ -1,0 +1,17 @@
+{if $currentmemberid > 0}
+{$unread = $currentmember.notifycount - $currentmember.sentreadcount}
+{* {if $unread > 0} *}
+<div class="notifycount end">
+ <div class="inner">
+ <span class="fa fa-bell fa-fw"></span>
+ {if $unread == 1}
+ <span>1 alert</span>
+ {elseif $unread > 1}
+ <span>{$unread} alerts</span>
+ {else}
+ <span>no alerts</span>
+ {/if}
+ </div> {* inner *}
+</div> {* notifycount *}
+{* {/if} *} {* undisplayednotifycount > 0 *}
+{/if} {* currentmemberid > 0 *}
