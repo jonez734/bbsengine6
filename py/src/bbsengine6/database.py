@@ -102,9 +102,11 @@ def update(args, table:str, pk:str, items:dict, primarykey="id", mogrify:bool=Fa
 def insert(args, table:str, items:dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
   dbh = connect(args)
 
+  if items is None:
+    io.echo("bbsengine6.database.insert.120: no columns specified", level="error")
+    return None
+
   columns = items.keys()
-#  if "" in columns:
-#    del items[""]
 
   for k, v in items.items():
     if type(items[k]) is dict:
@@ -267,12 +269,12 @@ def close(args, **kw):
   return False
 
 # @since 20240328 copied from bbsengine5 for votingbooth
-def postgres_to_python_list(arr:str) -> list:
-  arr = arr.strip("}")
-  arr = arr.strip("{")
-  arr = arr.split(",")
-  lst = [a.strip() for a in arr]
-  return lst
+#def postgres_to_python_list(arr:str) -> list:
+#  arr = arr.strip("}")
+#  arr = arr.strip("{")
+#  arr = arr.split(",")
+#  lst = [a.strip() for a in arr]
+#  return lst
 
 def create(args, name):
   sql = f"create database {name}"
@@ -282,8 +284,8 @@ def create(args, name):
   cur.execute(sql)
   return True
 
-def createrol(args, name):
-  sql = f"create role {name}"
+def createrol(args, name, roles, options=""):
+  sql = f"create role {name} {options}"
   # dat = (name,)
   dbh = connect(args)
   cur = dbh.cursor()
@@ -297,3 +299,37 @@ def createschema(args, name):
   cur = dbh.cursor()
   cur.execute(sql)
   return True
+
+def get_role_privs(args, rolname:str):
+  sql = "SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls FROM pg_roles WHERE rolname=%s"
+  try:
+    with connect(args) as conn:
+      with conn.cursor() as cur:
+        dat = (rolname,)
+        cur.execute(sql, dat)
+        return cur.fetchone()
+  except psycopg2.Error as e:
+    io.echo(f"bbsengine6.database.get_role_privs.100: database error {e}", level="error")
+    raise
+
+def manage_role_privs(args, role_name, action, priv):
+  try:
+    with connect(args) as conn:
+      with conn.cursor() as cur:
+        sql = "select engine.manage_role_privs(%s, %s, %s)"
+        dat = (role_name, action, priv)
+        return cur.execute(sql, dat)
+  except psycopg2.Error as e:
+    io.echo(f"bbsengine6.database.manage_role_privs.100: database error {e}", level="error")
+    raise
+
+def manage_secondary_role(args, role_name, action, secondary):
+  try:
+    with connect(args) as conn:
+      with conn.cursor() as cur:
+        sql = "select engine.manage_secondary_role(%s, %s, %s)"
+        dat = (role_name, action, secondary)
+        return cur.execute(sql, dat)
+  except psycopg2.Error as e:
+    io.echo(f"bbsengine6.database.manage_secondary_role.100: database error {e}", level="error")
+    raise
