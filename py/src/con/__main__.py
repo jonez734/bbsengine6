@@ -9,7 +9,6 @@ if __name__ == "__main__":
     screen.init()
     screen.setarea("con")
 
-    session.start(args)
 
     try:
         lib.runmodule(args, "main")
