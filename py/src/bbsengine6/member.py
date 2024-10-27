@@ -74,7 +74,7 @@ def getcurrentmoniker(args):
   dat = (loginid,)
   try:
     with database.connect(args) as conn:
-      with database.transaction(conn, readonly=True) as txn:
+      with database.transaction(conn, readonly=True):
         with database.cursor(conn) as cur:
           cur.execute(sql, dat)
           if cur.rowcount == 0:
@@ -103,7 +103,7 @@ def getcurrentid(args):
 
   try:
     with database.connect(args) as conn:
-      with database.transaction(conn, readonly=True) as txn:
+      with database.transaction(conn, readonly=True):
         with database.cursor(conn) as cur:
           sql = "select id from engine.member where loginid=%s"
           dat = (loginid,)
@@ -169,7 +169,7 @@ def setcredits(args, amount: int, moniker: str = None):
 
     try:
         with database.connect(args) as conn:
-          with database.transaction(conn, readonly=False) as txn:
+          with database.transaction(conn, readonly=False):
             with database.cursor(conn) as cur:
               sql = "update engine.__member set credits=%s where moniker=%s"
               dat = (int(amount), moniker)
@@ -198,7 +198,7 @@ def getcredits(args, membermoniker:str=None) -> int:
 
   try:
     with database.connect(args) as conn:
-      with database.transaction(conn, readonly=True) as txn:
+      with database.transaction(conn, readonly=True):
         with database.cursor(conn) as cur:
           sql = "select credits from engine.member where moniker=%s"
           dat = (membermoniker,)
@@ -265,7 +265,7 @@ def getbymoniker(args, moniker:str, fields="*") -> dict:
   sql = f"select {fields}, timezone(tz, lastlogin) from engine.member where moniker=%s"
   dat = (moniker,)
   with database.connect(args) as conn:
-    with database.transaction(conn, readonly=True) as txn:
+    with database.transaction(conn, readonly=True):
       with database.cursor(conn) as cur:
         cur.execute(sql, dat)
         if cur.rowcount == 0:
@@ -278,7 +278,7 @@ def getbyid(args, memberid:int, fields:str="*") -> dict:
   sql = f"select {fields} from engine.member where id=%s"
   dat = (memberid,)
   with database.connect(args) as conn:
-    with database.transaction(conn, readonly=True) as txn:
+    with database.transaction(conn, readonly=True):
       with database.cursor(conn) as cur:
         cur.execute(sql, dat)
         if cur.rowcount == 0:
@@ -298,7 +298,7 @@ def checkflag(args, flag:str, membermoniker:str=None, mogrify:bool=False, **kw):
 
   try:
     with database.connect(args) as conn:
-      with database.transaction(conn, readonly=True) as txn:
+      with database.transaction(conn, readonly=True):
         with database.cursor(conn) as cur:
           sql = "select f.name, coalesce(mmf.value, f.defaultvalue) as value from engine.flag as f left outer join engine.map_member_flag as mmf on (f.name=mmf.name and mmf.moniker=%s) where f.name=%s"
           dat = (membermoniker, flag)
