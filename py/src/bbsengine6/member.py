@@ -73,13 +73,14 @@ def getcurrentmoniker(args):
   sql = "select moniker from engine.member where loginid=%s"
   dat = (loginid,)
   try:
-    with database.connect(args, readonly=True) as conn:
-      with database.cursor(conn) as cur:
-        cur.execute(sql, dat)
-        if cur.rowcount == 0:
-          return None
-        row = cur.fetchone()
-        return row["moniker"]
+    with database.connect(args) as conn:
+      with database.transaction(conn, readonly=True) as txn:
+        with database.cursor(conn) as cur:
+          cur.execute(sql, dat)
+          if cur.rowcount == 0:
+            return None
+          row = cur.fetchone()
+          return row["moniker"]
   except psycopg.DatabaseError as e:
     io.echo(f"bbsengine6.member.getcurrentmoniker.100: database error: {e}", level="error")
     raise
@@ -101,25 +102,26 @@ def getcurrentid(args):
     io.echo(f"bbsengine6.member.getcurrentid.100: {loginid=}", level="debug")
 
   try:
-    with database.connect(args, readonly=True) as conn:
-      with database.cursor(conn) as cur:
-        sql = "select id from engine.member where loginid=%s"
-        dat = (loginid,)
+    with database.connect(args) as conn:
+      with database.transaction(conn, readonly=True) as txn:
+        with database.cursor(conn) as cur:
+          sql = "select id from engine.member where loginid=%s"
+          dat = (loginid,)
 
-#        if args.debug is True:
-#          io.echo(f"bbsengine6.member.getcurrentid.120: {cur.mogrify(sql, dat)=}", level="debug")
+  #        if args.debug is True:
+  #          io.echo(f"bbsengine6.member.getcurrentid.120: {cur.mogrify(sql, dat)=}", level="debug")
 
-        cur.execute(sql, dat)
+          cur.execute(sql, dat)
 
-        if cur.rowcount == 0:
-          return None
-        rec = cur.fetchone()
+          if cur.rowcount == 0:
+            return None
+          rec = cur.fetchone()
 
-        # if args.debug is True:
-        currentid = rec["id"]
-        if args.debug is True:
-          io.echo(f"getcurrentid.120: {currentid=}", level="debug")
-        return currentid
+          # if args.debug is True:
+          currentid = rec["id"]
+          if args.debug is True:
+            io.echo(f"getcurrentid.120: {currentid=}", level="debug")
+          return currentid
   except psycopg.DatabaseError as e:
     io.echo(f"bbsengine6.member.getcurrentid.100: database error: {e}", level="error")
     raise
@@ -139,7 +141,7 @@ def getcurrentid(args):
 #  return loginid
 
 # @since 20230517 copied from bbsengine5
-def setcredits(args, amount: int, membermoniker: str = None):
+def setcredits(args, amount: int, moniker: str = None):
     """Sets the credits for a member.
 
     Args:
@@ -151,25 +153,27 @@ def setcredits(args, amount: int, membermoniker: str = None):
     Returns:
         The number of rows affected by the update.
 
-    Source:
+    History:
       gemini, 2024-10-12
+      jam, 2024-10-12 added a database.transaction() call
     """
 
     if amount is None or int(amount) < 0:
         return None
 
-    if membermoniker is None:
-        membermoniker = getcurrentmoniker(args)
-        if membermoniker is None:
+    if moniker is None:
+        moniker = getcurrentmoniker(args)
+        if moniker is None:
             io.echo("You do not exist! Go Away!", level="error")
             return None
 
     try:
-        with database.connect(args, readonly=False) as conn:
+        with database.connect(args) as conn:
+          with database.transaction(conn, readonly=False) as txn:
             with database.cursor(conn) as cur:
-                sql = "update engine.__member set credits=%s where moniker=%s"
-                dat = (int(amount), membermoniker)
-                return cur.execute(sql, dat)
+              sql = "update engine.__member set credits=%s where moniker=%s"
+              dat = (int(amount), moniker)
+              return cur.execute(sql, dat)
     except psycopg.DatabaseError as e:
         io.echo(f"Database error: {e}", level="error")
         raise
@@ -193,15 +197,16 @@ def getcredits(args, membermoniker:str=None) -> int:
       return None
 
   try:
-    with database.connect(args, readonly=True) as conn:
-      with database.cursor(conn) as cur:
-        sql = "select credits from engine.member where moniker=%s"
-        dat = (membermoniker,)
-        cur.execute(sql, dat)
-        if cur.rowcount == 0:
-          return None
-        row = cur.fetchone()
-        return row["credits"] if "credits" in res else None
+    with database.connect(args) as conn:
+      with database.transaction(conn, readonly=True) as txn:
+        with database.cursor(conn) as cur:
+          sql = "select credits from engine.member where moniker=%s"
+          dat = (membermoniker,)
+          cur.execute(sql, dat)
+          if cur.rowcount == 0:
+            return None
+          row = cur.fetchone()
+          return row["credits"] if "credits" in res else None
   except psycopg.DatabaseError as e:
     io.echo(f"Database error: {e}", level="error")
     raise
@@ -259,26 +264,28 @@ def getcurrent(args, fields="*") -> dict:
 def getbymoniker(args, moniker:str, fields="*") -> dict:
   sql = f"select {fields}, timezone(tz, lastlogin) from engine.member where moniker=%s"
   dat = (moniker,)
-  with database.connect(args, readonly=True) as conn:
-    with database.cursor(conn) as cur:
-      cur.execute(sql, dat)
-      if cur.rowcount == 0:
-        return None
-      rec = cur.fetchone()
-      return build(args, rec)
+  with database.connect(args) as conn:
+    with database.transaction(conn, readonly=True) as txn:
+      with database.cursor(conn) as cur:
+        cur.execute(sql, dat)
+        if cur.rowcount == 0:
+          return None
+        rec = cur.fetchone()
+        return build(args, rec)
 
 # @since 20200731
 def getbyid(args, memberid:int, fields:str="*") -> dict:
   sql = f"select {fields} from engine.member where id=%s"
   dat = (memberid,)
-  with database.connect(args, readonly=True) as conn:
-    with database.cursor(conn) as cur:
-      cur.execute(sql, dat)
-      if cur.rowcount == 0:
-        io.echo("bbsengine6.member.getbyid: no rows returned")
-        return None
-      res = cur.fetchone()
-      return build(args, res)
+  with database.connect(args) as conn:
+    with database.transaction(conn, readonly=True) as txn:
+      with database.cursor(conn) as cur:
+        cur.execute(sql, dat)
+        if cur.rowcount == 0:
+          io.echo("bbsengine6.member.getbyid: no rows returned")
+          return None
+        res = cur.fetchone()
+        return build(args, res)
 
 # @since 20230521 copied from bbsengine5
 def checkflag(args, flag:str, membermoniker:str=None, mogrify:bool=False, **kw):
@@ -290,23 +297,16 @@ def checkflag(args, flag:str, membermoniker:str=None, mogrify:bool=False, **kw):
       return None
 
   try:
-    with database.connect(args, readonly=True) as conn:
-      with database.cursor(conn) as cur:
-        sql = "select f.name, coalesce(mmf.value, f.defaultvalue) as value from engine.flag as f left outer join engine.map_member_flag as mmf on (f.name=mmf.name and mmf.moniker=%s) where f.name=%s"
-        dat = (membermoniker, flag)
-        cur.execute(sql, dat)
-#        if mogrify is True:
-#          io.echo(f"{cur.mogrify(sql, dat)=}", level="debug")
-        if cur.rowcount == 0:
-          return None
-        rec = cur.fetchone()
-        value = rec["value"]
-        if value == "true" or value == "t" or value == "1":
-          return True
-        elif value == "false" or value == "f" or value == "0":
-          return False
-        else:
-          return value
+    with database.connect(args) as conn:
+      with database.transaction(conn, readonly=True) as txn:
+        with database.cursor(conn) as cur:
+          sql = "select f.name, coalesce(mmf.value, f.defaultvalue) as value from engine.flag as f left outer join engine.map_member_flag as mmf on (f.name=mmf.name and mmf.moniker=%s) where f.name=%s"
+          dat = (membermoniker, flag)
+          cur.execute(sql, dat)
+          if cur.rowcount == 0:
+            return None
+          rec = cur.fetchone()
+          return util.tobool(rec["value"])
   except psycopg.DatabaseError as e:
     io.echo("bbsengine6.member.checkflag.100: database error {e}", level="error")
     raise
@@ -338,9 +338,9 @@ def setflag(args, name, value, **kwargs): # moniker=None, mogrify=False,):
       return None
 
 def getflag(args, name, moniker=None):
-  if membermoniker is None:
-    membermoniker = getcurrentmoniker(args)
-    if membermoniker is None:
+  if moniker is None:
+    moniker = getcurrentmoniker(args)
+    if moniker is None:
       io.echo("You do not exist! Go away!", level="error")
       return None
   
@@ -350,13 +350,14 @@ def getflag(args, name, moniker=None):
   dat.append(moniker)
 
   try:
-    with database.connect(args, readonly=True) as conn:
-      with database.cursor(conn) as cur:
-        cur.execute(sql, dat)
-        if cur.rowcount == 0:
-          return None
-        rec = cur.fetchone()
-        return rec["value"]
+    with database.connect(args) as conn:
+      with database.transaction(conn, readonly=True):
+        with database.cursor(conn) as cur:
+          cur.execute(sql, dat)
+          if cur.rowcount == 0:
+            return None
+          rec = cur.fetchone()
+          return rec["value"]
   except psycopg.DatabaseError as e:
     io.echo(f"bbsengine6.member.getflag.100: database error: {e}", level="error")
     raise
@@ -398,7 +399,8 @@ def getflags(args, membermoniker=None):
     """
 
     try:
-        with database.connect(args, readonly=True) as conn:
+        with database.connect(args) as conn:
+          with database.transaction(conn, readonly=True):
             with database.cursor(conn) as cur:
                 if membermoniker is None:
                     # Use None as the parameter when membermoniker is None
@@ -451,14 +453,15 @@ def checkpassword(args, plaintextpassword:str, membermoniker:str=None) -> bool:
         return False
 
     io.echo(f"{plaintextpassword=} {membermoniker=}", level="debug")
-    with database.connect(args, readonly=True) as conn:
-      with database.cursor(conn) as cur:
-        sql = "select 1 from engine.member where password=crypt(%s, password) and moniker=%s"
-        dat = (plaintextpassword, membermoniker)
-        cur.execute(sql, dat)
-        io.echo(f"{cur.rowcount=}", level="debug")
-        if cur.rowcount > 0:
-          return True
+    with database.connect(args) as conn:
+      with database.transaction(conn, readonly=True):
+        with database.cursor(conn) as cur:
+          sql = "select 1 from engine.member where password=crypt(%s, password) and moniker=%s"
+          dat = (plaintextpassword, membermoniker)
+          cur.execute(sql, dat)
+          io.echo(f"{cur.rowcount=}", level="debug")
+          if cur.rowcount > 0:
+            return True
     return False
 
 # @since 20230523 copied from bbsengine5
@@ -487,13 +490,14 @@ def verifyMemberNotFound(args, name, column="loginid", **kw):
     io.echo(f"{args=}", level="debug")
     try:
       with database.connect(args, readonly=True) as conn:
-        with database.cursor(conn) as cur:
-          sql = f"select 1 from engine.member where {column}=%s"
-          dat = (name,)
-          cur.execute(sql, dat)
-          if cur.rowcount == 0:
-            return True
-          return False
+        with database.transaction(conn, readonly=True):
+          with database.cursor(conn) as cur:
+            sql = f"select 1 from engine.member where {column}=%s"
+            dat = (name,)
+            cur.execute(sql, dat)
+            if cur.rowcount == 0:
+              return True
+            return False
     except Exception as e:
       io.echo(f"bbsengine6.member.verifyMemberNotFound.100: {e}", level="error")
       raise
@@ -502,11 +506,12 @@ def verifyMemberFound(args, name, column="loginid", **kw):
     io.echo(f"{args=}", level="debug")
     try:
       with database.connect(args, readonly=True) as conn:
-        with database.cursor(conn) as cur:
-          sql = f"select 1 from engine.member where {column}=%s"
-          dat = (name,)
-          cur.execute(sql, dat)
-          return cur.fetchone() is not None
+        with database.transaction(conn, readonly=True):
+          with database.cursor(conn) as cur:
+            sql = f"select 1 from engine.member where {column}=%s"
+            dat = (name,)
+            cur.execute(sql, dat)
+            return cur.fetchone() is not None
     except psycopg.DatabaseError as e:
       io.echo(f"bbsengine6.member.verifyMemberFound.100: database error {e}", level="error")
 
@@ -534,8 +539,8 @@ def insert(conn, member, **kwargs):
   return database.insert(conn, table, cols, **kwargs) # table, member, returnid=returnid, primarykey=primarykey, mogrify=mogrify)
 
 # @since 20230619
-def getcurrentmoniker(args, memberid=None, **kw):
-  mogrify = kw["mogrify"] if "mogrify" in kw else False
+def getcurrentmoniker(args, memberid=None, **kwargs):
+  mogrify = kwargs.get("mogrify", False)
 
   if memberid is None:
     memberid = getcurrentid(args)
@@ -544,17 +549,16 @@ def getcurrentmoniker(args, memberid=None, **kw):
       return None
 
   try:
-    with database.connect(args, readonly=True) as conn:
-      with database.cursor(conn) as cur:
-        sql = "select moniker from engine.member where id=%s"
-        dat = (memberid,)
-        cur.execute(sql, dat)
-#        if mogrify is True:
-#          io.echo(f"bbsengine6.member.getcurrentmoniker.100: {cur.mogrify(sql, dat)=}", level="debug")
-        if cur.rowcount == 0:
-          return None
-        rec = cur.fetchone()
-        return rec["moniker"]
+    with database.connect(args) as conn:
+      with database.transaction(conn, readonly=True):
+        with database.cursor(conn) as cur:
+          sql = "select moniker from engine.member where id=%s"
+          dat = (memberid,)
+          cur.execute(sql, dat)
+          if cur.rowcount == 0:
+            return None
+          rec = cur.fetchone()
+          return rec["moniker"]
   except psycopg.DatabaseError as e:
     io.echo(f"bbsengine6.member.getcurrentmoniker.120: {e}", level="error")
     raise
