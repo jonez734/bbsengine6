@@ -2,184 +2,237 @@ import copy
 
 import argparse
 
-import psycopg2, psycopg2.extras
-from psycopg2.extras import Json
-from psycopg2.extensions import parse_dsn, make_dsn
+#import psycopg2, psycopg2.extras
+#from psycopg2.extras import Json
+#from psycopg2.extensions import parse_dsn, make_dsn
+from psycopg.types.json import Jsonb
+from psycopg.rows import dict_row
+
+import psycopg
+
+from psycopg import sql
+
+from psycopg_pool import ConnectionPool
 
 from . import io
 
-#import ttyio6 as ttyio
+def mogrifysql(cur, query, params):
+    # Create a SQL object using sql.SQL and format it with sql.Placeholder()
+    formatted_query = sql.SQL(query).format(*[sql.Placeholder()] * len(params))
 
-databasehandles = {}
-def connect(args, **kw):
+    # Manually interpolate the params into the query for logging/debugging
+    formatted_query_str = formatted_query.as_string(cur.connection)
+
+    # Replace placeholders with actual parameter values (escaping them correctly)
+    formatted_query_with_values = formatted_query_str % params
+
+    return formatted_query_with_values
+
+def parse_dsn(dsn):
+    params = {}
+    for part in dsn.split():
+        key, value = part.split('=', 1)
+        params[key] = value
+    return params
+
+def make_dsn(**kw): # dbname=None, user=None, password=None, host=None, port=None):
+    components = []
+
+    for key, value in kw.items():
+        if value is not None:  # Only add components where the value is provided
+            components.append(f"{key}={value}")
+
+    return ' '.join(components)
+
+    if dbname:
+        components.append(f"dbname={dbname}")
+    if user:
+        components.append(f"user={user}")
+    if password:
+        components.append(f"password={password}")
+    if host:
+        components.append(f"host={host}")
+    if port:
+        components.append(f"port={port}")
+
+    return ' '.join(components)
+
+pool = None
+def getpool(args, **kwargs):
+  global pool
+
+  kwargs = buildkwargs(args, **kwargs)
+  dsn = make_dsn(**kwargs)
+  if args.debug is True:
+    io.echo(f"{dsn=}", level="debug")
+
+  if pool is None:
+    pool = ConnectionPool(dsn, min_size=10, max_size=100, timeout=5, open=True)
+  if args.debug is True:
+    io.echo(f"{pool=}", level="debug")
+  return pool
+
+def transaction(conn, **kwargs):
+  return conn.transaction(**kwargs)
+
+#databasehandles = {}
+def connect(args, **kwargs):
   if args.debug is True:
     io.echo(f"bbsengine6.database.connect.100: {args=}", level="debug")
 
-  if "databasename" in args:
-#    ttyio.echo(f"buildkw.140: setting database to {args.databasename!r}", level="debug")
-    kw["database"] = args.databasename
-#    ttyio.echo("bbsengine6.database.buildkw.100: kw=%r" % (kw), level="debug", interpret=False)
-  if "databasehost" in args:
-    kw["host"] = args.databasehost
-  if "databaseuser" in args:
-    kw["user"] = args.databaseuser
-  if "databasepassword" in args:
-    kw["password"] = args.databasepassword
-  if "databaseport" in args:
-    kw["port"] = args.databaseport
+#  kwargs = buildkwargs(args)
+#  dsn = make_dsn(**kwargs)
+#  io.echo(f"{dsn=}", level="debug")
 
-#  res = buildkw(args)
-#  ttyio.echo(f"bbsengine6.database.connect.140: res={res!r}", level="debug")
+#  if args.debug is True:
+#    io.echo(f"bbsengine6.database.connect.120: {kw=} {dsn=}", level="debug")
 
-  dsn = make_dsn(**kw)
-
+  if "readonly" in kwargs:
+    del kwargs["readonly"]
+  pool = getpool(args, **kwargs)
   if args.debug is True:
-    io.echo(f"bbsengine6.database.connect.120: {kw=} {dsn=}", level="debug")
+    io.echo(f"{pool=}", level="debug")
 
-  if dsn in databasehandles:
-    dbh = databasehandles[dsn]
-    if dbh.closed == 0:
-      return databasehandles[dsn]
-#    else:
-#      ttyio.echo("dbh handle closed")
+  conn = pool.connection()
 
-  dbh = psycopg2.connect(connection_factory=psycopg2.extras.DictConnection, cursor_factory=psycopg2.extras.RealDictCursor, **kw)
-  databasehandles[dsn] = dbh
-  return dbh
+  conn.autocommit = False
 
-def buildkw(args, **kwargs):
-  kw = {}
-#  ttyio.echo(f"bbsengine6.database.buildkw.120: args={args!r}", level="debug")
-  if "databasename" in args:
-#    ttyio.echo(f"buildkw.140: setting database to {args.databasename!r}", level="debug")
-    kw["database"] = args.databasename
-#    ttyio.echo("bbsengine6.database.buildkw.100: kw=%r" % (kw), level="debug", interpret=False)
-  if "databasehost" in args:
-    kw["host"] = args.databasehost
-  if "databaseuser" in args:
-    kw["user"] = args.databaseuser
-  if "databasepassword" in args:
-    kw["password"] = args.databasepassword
-  if "databaseport" in args:
-    kw["port"] = args.databaseport
-  
-  return kw
+#  readonly = kwargs.get("readonly", False)
+#  if readonly is True:
+#    conn.set_isolation_level(psycopg.ISOLATION_LEVEL_READ_ONLY)
+
+#  conn.row_factory = psycopg.rows.dict_row
+
+  return conn
+
+def buildkwargs(args, **kwargs):
+    # Set default values from args if not already present in kwargs
+    if "dbname" not in kwargs and "databasename" in args:
+        kwargs["dbname"] = args.databasename
+    if "host" not in kwargs and "databasehost" in args:
+        kwargs["host"] = args.databasehost
+    if "user" not in kwargs and "databaseuser" in args:
+        kwargs["user"] = args.databaseuser
+    if "password" not in kwargs and "databasepassword" in args:
+        kwargs["password"] = args.databasepassword
+    if "port" not in kwargs and "databaseport" in args:
+        kwargs["port"] = args.databaseport
+
+    return kwargs
 
 def update(args, table:str, pk:str, items:dict, primarykey="id", mogrify:bool=False, updatepk:bool=False) -> int:
   if args.debug is True:
     io.echo(f"bbsengine6.database.update.100: {items=}")
-  dbh = connect(args)
-  for k, v in items.items():
-    if type(items[k]) is dict:
-      items[k] = Json(items[k])
-    if k == "datecreatedepoch":
-      del items[k]
+  with connect(args, readonly=False) as conn:
+    with cursor(conn) as cur:
+      for k, v in items.items():
+        if k == "datecreatedepoch":
+          continue
+#          del items[k]
 
-  _items = copy.deepcopy(items)
-  if primarykey in _items and updatepk is False:
-    del _items[primarykey]
+      _items = copy.deepcopy(items)
+      if primarykey in _items and updatepk is False:
+        del _items[primarykey]
 
-  sql = "update %s set " % (table)
-  params = []
-  dat = []
-  for k, v in _items.items():
-    params.append("%s=%%s" % (k),)
-    dat.append(v)
+      sql = "update %s set " % (table)
+      params = []
+      dat = []
+      for k, v in _items.items():
+        params.append("%s=%%s" % (k),)
+        dat.append(v)
 
-  sql += ", ".join(params)
-  sql += " where %s=%%s" % (primarykey)
-  dat.append(pk)
+      sql += ", ".join(params)
+      sql += " where %s=%%s" % (primarykey)
+      dat.append(pk)
 
-  cur = dbh.cursor()
-  cur.execute(sql, dat)
+      cur.execute(sql, dat)
 
-  if mogrify is True:
-    io.echo(f"{cur.mogrify(sql, dat)=}", level="debug")
+#      if mogrify is True:
+#        io.echo(f"{mogrifysql(cur, sql, dat)=}", level="debug")
+      return cur.rowcount
 
-  cur.close()
-  return cur.rowcount
+def insert(args, table:str, items:dict, **kwargs): # returnid:bool=True, primarykey:str="id", mogrify:bool=True):
+  primarykey = kwargs.get("primarykey", "id")
+  returnid = kwargs.get("returnid", True)
+  mogrify = kwargs.get("mogrify", True)
 
-def insert(args, table:str, items:dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
-  dbh = connect(args)
+  io.echo(f"bbsengine6.database.insert.100: {items=}", level="debug")
 
-  if items is None:
-    io.echo("bbsengine6.database.insert.120: no columns specified", level="error")
-    return None
+  try:
+    with connect(args) as conn:
+      with cursor(conn) as cur:
+        if items is None:
+          io.echo("bbsengine6.database.insert.120: no columns specified", level="error")
+          return None
 
-  columns = items.keys()
+        columns = items.keys()
+        if args.debug is True:
+          io.echo(f"bbsengine6.database.insert.140: {columns=}", level="debug")
 
-  for k, v in items.items():
-    if type(items[k]) is dict:
-      items[k] = Json(items[k])
-    if k == "datecreatedepoch":
-      del items[k]
+        for k, v in items.items():
+          if k == "datecreatedepoch":
+            del items[k]
 
-  if args.debug is True:
-    io.echo(f"bbsengine6.database.insert.100: {columns=}", level="debug")
-  sql = "insert into %s(" % (table)
-  sql += ", ".join(columns)
-  sql += ") values ("
-  params = []
-  for x in range(len(columns)):
-    params.append("%s")
-  sql += ", ".join(params)
-  sql += ")"
+        sql = "insert into %s(" % (table)
+        sql += ", ".join(columns)
+        sql += ") values ("
 
-  dat = []
-  for v in items.values():
-#    if type(items[k]) is dict:
-#      items[k] = Json(items[k])
+        params = []
+        for x in range(len(columns)):
+          params.append("%s")
+        sql += ", ".join(params)
+        sql += ")"
 
-    dat.append(v)
-  if returnid is True:
-    sql += f" returning {table}.{primarykey}"
-  # ttyio.echo("bbsengine.insert.100: sql=%s dat=%s" % (sql, dat), level="debug")
-  cur = dbh.cursor()
-
-  if mogrify is True:
-    io.echo("bbsengine5.insert.100: %r" % (repr(cur.mogrify(sql, dat))), level="debug")
-#    ttyio.echo(cur.mogrify(sql, [tuple(v.values() for v in dat)]), level="debug")
-  cur.execute(sql, dat)
-  if returnid is True:
-    res = cur.fetchone()
-    if primarykey in res:
-      return res[primarykey]
-  cur.close()
-  return None
+        dat = []
+        for v in items.values():
+          dat.append(v)
+        if returnid is True:
+          sql += f" returning {table}.{primarykey}"
+#        if mogrify is True:
+#          io.echo(f"bbsengine5.insert.160: {mogrify(cur, sql, dat)=}", level="debug")
+        cur.execute(sql, dat)
+        if returnid is True:
+          res = cur.fetchone()
+          if primarykey in res:
+            return res[primarykey]
+          else:
+            return None
+  except Exception as e:
+      io.echo(f"bbsengine6.database.insert.180: database error: {e}", level="error")
+      raise
 
 # @see https://soft-builder.com/how-to-list-all-schemas-in-postgresql/
 # @since 20230510
-def classexists(args, name, mogrify=False):
+def classexists(conn, name, mogrify=False):
   sql = "select to_regclass(%s) as class" # does not work with schemas
   dat = (name,)
-  dbh = connect(args)
-  cur = dbh.cursor()
-  cur.execute(sql, dat)
-  if mogrify is True:
-    io.echo("bbsengine6.database.classexists.120: {cur.mogrify(sql, dat)=}", level="debug")
-  if cur.rowcount == 0:
-    return False
+  with conn:
+#  with connect(args) as conn:
+    with cursor(conn) as cur:
+      cur.execute(sql, dat)
+      if mogrify is True:
+        io.echo("bbsengine6.database.classexists.120: {mogrifysql(cur, sql, dat)=}", level="debug")
+      if cur.rowcount == 0:
+        return False
 
-  res = cur.fetchone()
+      res = cur.fetchone()
 
-  if args.debug is True:
-    io.echo(f"clasexists.100: {res=}", level="debug")
+      if args.debug is True:
+        io.echo(f"clasexists.100: {res=}", level="debug")
 
-  if res["class"] is None:
-    return False
-  return True
+      return res["class"] is not None
 
 def schemaexists(args, name, mogrify=False):
-  dbh = connect(args)
   sql = "SELECT 't' as exists FROM information_schema.schemata where schema_name=%s"
   dat = (name,)
-  cur = dbh.cursor()
-  cur.execute(sql, dat)
-  if mogrify is True:
-    io.echo(f"bbsengine6.database.schemaexists.100: mogrify={cur.mogrify(sql, dat)=}", level="debug")
-  if cur.rowcount == 0:
-    return False
-  return True
+
+  with connect(args) as conn:
+    with cursor(conn) as cur:
+      if mogrify is True:
+        io.echo(f"bbsengine6.database.schemaexists.100: mogrify={mogrifysql(cur, sql, dat)=}", level="debug")
+      cur.execute(sql, dat)
+      res = cur.fetchone()
+      return res["exists"] is not None
 
 # @since 20230510 copied from bbsengine5.py
 def buildargs(parentparser:object, defaults:dict={}, label="database options", suppress=False):
@@ -227,109 +280,134 @@ def resultiter(cursor, arraysize=1000, filterfunc=None, **kw:dict):
             yield result
 
 def commit(args):
-  dbh = connect(args)
-  return dbh.commit()
+  io.echo("bbsengine6.database.commit.100: stub", level="warn")
+  return False
+
+  with connect(args) as conn:
+    conn.commit()
 
 # @since 20230715 used by empyre
 def rollback(args):
-  dbh = connect(args)
-  return dbh.rollback()
+  with connect(args) as conn:
+    return conn.rollback()
 
 def rolexists(args, rolname, mogrify=False):
   sql = "SELECT rolname FROM pg_roles where rolname=%s"
   dat = (rolname,)
-  dbh = connect(args, database="template1")
-  cur = dbh.cursor()
-  cur.execute(sql, dat)
-  if mogrify is True:
-    io.echo("bbsengine6.database.rolexists.100: mogrify={cur.mogrify(sql, dat)=}", level="debug")
-  if cur.rowcount == 0:
-    return False
-  return True
+  try:
+    with connect(args, dbname="template1") as conn:
+      with cursor(conn) as cur:
+        cur.execute(sql, dat)
+        if mogrify is True:
+          io.echo("bbsengine6.database.rolexists.100: {mogrifysql(cur, sql, dat)=}", level="debug")
+        result = cur.fetchone()
+        return result is not None
+  except psycopg.DatabaseError as e:
+    io.echo(f"bbsengine6.database.rolexists.120: database error {e}", level="error")
+    raise
    
 def exists(args, databasename, mogrify=False):
   sql = "SELECT datname FROM pg_catalog.pg_database WHERE lower(datname) = lower(%s)"
   dat = (databasename,)
-  dbh = connect(args, database="template1")
-  cur = dbh.cursor()
-  cur.execute(sql, dat)
-  if mogrify is True:
-    io.echo(f"bbsengine6.database.exists.100: mogrify={cur.mogrify(sql, dat)=}", level="debug")
-  if cur.rowcount == 0:
-    return False
-  return True
-
-def close(args, **kw):
-  dsn = make_dsn(**buildkw(args, **kw))
-  if dsn in databasehandles:
-    dbh = databasehandles[dsn]
-    dbh.close()
-    del databasehandles[dsn]
-    return True
-  return False
-
-# @since 20240328 copied from bbsengine5 for votingbooth
-#def postgres_to_python_list(arr:str) -> list:
-#  arr = arr.strip("}")
-#  arr = arr.strip("{")
-#  arr = arr.split(",")
-#  lst = [a.strip() for a in arr]
-#  return lst
+  try:
+    with connect(args, database="template1") as conn:
+      with cursor(conn) as cur:
+        cur.execute(sql, dat)
+        if mogrify is True:
+          io.echo(f"bbsengine6.database.exists.100: {mogrifysql(cur, sql, dat)=}", level="debug")
+        return cur.fetchone() is not None
+  except psycopg.DatabaseError as e:
+    io.echo(f"bbsengine6.database.exists.120: database error {e}", level="error")
+    raise
 
 def create(args, name):
-  sql = f"create database {name}"
-  # dat = (name,)
-  dbh = connect(args)
-  cur = dbh.cursor()
-  cur.execute(sql)
-  return True
-
-def createrol(args, name, roles, options=""):
-  sql = f"create role {name} {options}"
-  # dat = (name,)
-  dbh = connect(args)
-  cur = dbh.cursor()
-  cur.execute(sql)
-  return True
-
-def createschema(args, name):
-  sql = f"create schema {name}"
-  # dat = (name,)
-  dbh = connect(args)
-  cur = dbh.cursor()
-  cur.execute(sql)
-  return True
-
-def get_role_privs(args, rolname:str):
-  sql = "SELECT rolname, rolsuper, rolcreaterole, rolcreatedb, rolcanlogin, rolreplication, rolbypassrls FROM pg_roles WHERE rolname=%s"
+  sql = f"create database %s"
+  dat = (name,)
   try:
     with connect(args) as conn:
-      with conn.cursor() as cur:
-        dat = (rolname,)
-        cur.execute(sql, dat)
-        return cur.fetchone()
-  except psycopg2.Error as e:
-    io.echo(f"bbsengine6.database.get_role_privs.100: database error {e}", level="error")
+      with cursor(conn) as cur:
+        cur.execute(sql)
+        return True
+  except psycopg.DatabaseError as e:
+    io.echo(f"bbsengine6.database.create.100: database error {e}", level="error")
+    raise
+
+# generated by chatgpt.com 2024-10-14
+def createrol(args, role_name):
+    try:
+        # Use 'with' to ensure the connection is properly closed
+        with connect(args) as conn:
+            # Use 'with' to ensure the cursor is properly closed
+            with cursor(conn) as cur:
+                # Call the PL/pgSQL function to create the role
+                cur.execute("SELECT engine.createrol(%s) as result", (role_name,))
+
+                # Fetch the result (True/False) from the function
+                result = cur.fetchone()["result"]
+
+                # Commit the transaction
+                conn.commit() # database.commit(args)
+                return result is not None
+
+    except psycopg.DatabaseError as e:
+        io.echo(f"bbsengine6.createrol.100: Error creating role: {e}", level="error")
+        raise
+
+def createschema(args, name):
+    # Connect to the database using args
+    try:
+      with connect(args) as conn:
+        with cursor(conn) as cur:
+          # Call the stored procedure
+          cur.execute("SELECT createschema(%s)", (name,))
+    except psycopg.DatabaseError as e:
+      io.echo(f"bbsengine6.database.createschema.100: database error: {e}")
+      raise
+
+    return True
+
+def get_role_privs(args, rolname: str) -> dict:
+  sql = "SELECT get_role_privs(%s);"
+  try:
+    with connect(args) as conn:
+      with cursor(conn) as cur:
+        cur.execute(sql, (rolname,))
+        result = cur.fetchone()
+
+        # Extract the JSONB result from the tuple
+        if result and result[0]:
+          return result[0]  # Return the JSON object as a dictionary
+        else:
+          return {}  # Return empty dict if no result
+  except psycopg.DatabaseError as e:
+    io.echo(f"Error retrieving role privileges: {e}", level="error")
     raise
 
 def manage_role_privs(args, role_name, action, priv):
   try:
     with connect(args) as conn:
-      with conn.cursor() as cur:
+      with cursor(conn) as cur:
         sql = "select engine.manage_role_privs(%s, %s, %s)"
         dat = (role_name, action, priv)
         return cur.execute(sql, dat)
-  except psycopg2.Error as e:
+  except psycopg.DatabaseError as e:
     io.echo(f"bbsengine6.database.manage_role_privs.100: database error {e}", level="error")
     raise
 
 def manage_secondary_role(args, role_name, action, secondary):
   try:
     with connect(args) as conn:
-      with conn.cursor() as cur:
+      with cursor(conn) as cur:
         sql = "select engine.manage_secondary_role(%s, %s, %s)"
         dat = (role_name, action, secondary)
         return cur.execute(sql, dat)
-  except psycopg2.Error as e:
+  except psycopg.DatabaseError as e:
     io.echo(f"bbsengine6.database.manage_secondary_role.100: database error {e}", level="error")
     raise
+
+def cursor(conn, row_factory=dict_row, **kwargs):
+    """
+    Creates a cursor using the provided connection and applies the desired row factory.
+    Source: generated by chatgpt.com 2024-10-16
+    """
+    return conn.cursor(row_factory=row_factory, **kwargs)
