@@ -4,16 +4,13 @@ CREATE OR REPLACE FUNCTION engine.checkflag(flag_name TEXT, moniker TEXT DEFAULT
 RETURNS BOOLEAN AS $$
 DECLARE
     map_value BOOLEAN;
-    default_value BOOLEAN;
 BEGIN
-    flag_name := UPPER(flag_name);
+    flag_name := lower(flag_name);
     IF moniker IS NOT NULL THEN
-        moniker := LOWER(moniker);
+        moniker := lower(moniker);
     END IF;
---    moniker := UPPER(moniker);
-
     -- Check if flag_name exists in the flag table
-    PERFORM 1 FROM engine.flag WHERE name = flag_name;
+    PERFORM 1 FROM engine.flag WHERE lower(name) = flag_name;
     
     -- If flag_name does not exist, return NULL
     IF NOT FOUND THEN
@@ -23,26 +20,30 @@ BEGIN
 
     -- Check if a moniker was provided and look for a matching entry in the member table
     IF moniker IS NOT NULL THEN
-        PERFORM 1 FROM engine.member WHERE LOWER(engine.member.moniker) = checkflag.moniker;
+        PERFORM 1 FROM engine.member WHERE lower(engine.member.moniker) = lower(checkflag.moniker);
         
         -- If moniker does not exist in the member table, return NULL
         IF NOT FOUND THEN
             RAISE NOTICE 'moniker not found in member table: %', moniker;
             RETURN NULL;
         END IF;
-
+--        raise notice 'm.value= % f.defaultvalue= %', m.value, f.defaultvalue;
         -- Look for a matching entry in the map table
-        SELECT COALESCE(m.value, (SELECT f.defaultvalue FROM engine.flag f WHERE f.name = flag_name))
-        INTO map_value
-        FROM engine.map_member_flag m
-        WHERE LOWER(m.moniker) = checkflag.moniker AND m.name = flag_name;
-
+        select COALESCE(m.value,f.defaultvalue)
+        into map_value
+        FROM engine.flag f
+        LEFT JOIN engine.map_member_flag m ON LOWER(m.moniker) = LOWER(checkflag.moniker) AND LOWER(m.name) = LOWER(f.name)
+        WHERE LOWER(f.name) = LOWER(flag_name);
         -- If a value is found in the map, return it
         IF map_value is not null THEN
             RETURN map_value;  -- Return the BOOLEAN directly from the map
+        else
+            return null;
         END IF;
     END IF;
 
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
+
+grant EXECUTE on function engine.checkflag to web, term, sysop;
