@@ -14,6 +14,9 @@ def main(args, **kw):
     util.heading("member approval")
     sql = "select id, moniker from engine.member where approvedbyid is null"
     dat = ()
+    
+    currentmoniker = member.getcurrentmoniker(args)
+
     with database.connect(args) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, dat)
@@ -25,17 +28,31 @@ def main(args, **kw):
             for rec in res:
                 memberid = rec["id"]
                 m = member.getbymoniker(args, rec["moniker"])
+                if m is None:
+                    io.echo("You do not exist! Go away!", level="error")
+                    return False
+
+                moniker = m["moniker"]
 
                 io.echo(f"{m=}")
-                io.echo(f"{{labelcolor}}Moniker: {{valuecolor}}{m['moniker']} {{labelcolor}}({{valuecolor}}{m['loginid']}{{labelcolor}})")
+                io.echo(f"{{labelcolor}}Moniker: {{valuecolor}}{moniker} {{labelcolor}}({{valuecolor}}{m['loginid']}{{labelcolor}})")
                 io.echo(f"{{labelcolor}}E-Mail:  {{valuecolor}}{m['email']} {{labelcolor}}", end="")
-                if m["emailverified"] is True:
+                if member.checkflag("EMAILVERIFIED", moniker=moniker) is True:
                     io.echo(" (verified by {{valuecolor}}{m['verifiedbyid']}{{labelcolor}} on {{valuecolor}}{util.datestamp(m['dateverified'])})")
                 else:
                     io.echo(" (not verified)")
                 util.hr()
+                if io.inputboolean("{var:promptcolor}is this email address verified? {var:optioncolor}[Yn]{var:promptcolor}: {var:inputcolor}", "Y") is True:
+                    member.setflag(args, "EMAILVERIFIED", True, moniker=moniker)
+                else:
+                    member.setflag(args, "EMAILVERIFIED", False, moniker=moniker)
+                    m["dateemailverified"] = "now()"
+                    m["emailverifiedbymoniker"] = currrentmoniker
                 if io.inputboolean("{var:promptcolor}approve this member? {var:optioncolor}[Yn]{var:promptcolor}: {var:inputcolor}", "Y") is True:
-                    m["approvedbyid"] = member.getcurrentmoniker(args)
+                    member.setflag(args, "APPROVED", True, moniker=moniker)
+                    m["approvedbymoniker"] = currentmoniker
                     m["dateapproved"] = "now()"
                     member.update(args, m, memberid)
+                else:
+                    member.setflag(args, "APPROVED", False, moniker=moniker)
     return True
