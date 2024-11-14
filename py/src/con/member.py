@@ -262,7 +262,7 @@ def edit(args, **kw):
 
       io.echo(f"bbsengine6.con.member.edit.120: {rec=} {m=}", level="debug")
 
-      _edit(args, "edit", m)
+      _m = _edit(args, "edit", m)
 
       loginid = m["loginid"]
       moniker = m["moniker"]
@@ -278,8 +278,14 @@ def edit(args, **kw):
         io.echo("Yes")
         setui(args, loginid, ui)
 
+        if _m["email"] != m["email"]:
+          libmember.setflag(args, "EMAILVERIFIED", False, moniker=m["moniker"], mogrify=True)
+          m["emailverifiedbymoniker"] = None
+          m["dateemailverified"] = None
+
         libmember.update(args, m, memberid)
         libmember.setpassword(args, moniker, password)
+
         conn.commit() # database.commmit(args)
       else:
         io.echo("changes not saved.")
