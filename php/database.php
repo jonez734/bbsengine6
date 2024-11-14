@@ -66,7 +66,7 @@ function databaseconnect($dsn)
 */
 
 // def insert(dbh, table:str, dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
-function insert($dbh, $tablename, $data, $returnid=true, $primarykey="id", $removeprimary=true, $mogrify=false)
+function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $removeprimary=true, $mogrify=false)
 {
   if (array_key_exists($primarykey, $data) === true && $removeprimary == true)
   {
@@ -81,13 +81,23 @@ function insert($dbh, $tablename, $data, $returnid=true, $primarykey="id", $remo
     $foo[] = ":$k";
   }
   $sql .= " values (".join(", ", $foo).")";
+  if ($returnid === true)
+  {
+    $sql .=" returning $primarykey";
+  }
 
-  \bbsengine6\logentry("database.insert.100: sql=$sql");
+  \bbsengine6\util\logentry("database.insert.100: sql=$sql");
 
-  return $dbh->prepare($sql)->execute(array_values($data));
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute(array_values($data));
+  if ($returnid === true)
+  {
+    return $pdo->lastInsertId();
+  }
+  return;
 }
 
-function update($dbh, $tablename, $key, $data, $primarykey="id", $removeprimary=true, $mogrify=false)
+function update($pdo, $tablename, $key, $data, $primarykey="id", $removeprimary=true, $mogrify=false)
 {
 /*
   if (array_key_exists($primarykey, $data) === true)
@@ -108,8 +118,8 @@ function update($dbh, $tablename, $key, $data, $primarykey="id", $removeprimary=
   }
   $sql .= join(", ", $foo);
   $sql .= " where $primarykey=:$primarykey";
-  \bbsengine6\logentry("bbsengine6.database.update.100: sql=".var_export($sql, true));
-  $stmt = $dbh->prepare($sql);
+  \bbsengine6\util\logentry("bbsengine6.database.update.100: sql=".var_export($sql, true));
+  $stmt = $pdo->prepare($sql);
   $data[$primarykey] = $key;
   $stmt->execute($data);
   return $stmt->rowcount();
@@ -120,5 +130,5 @@ function disconnect($dsn)
   // $pdocache[$dsn] = null;
   return;
 }
-}
+} /* namespace \bbsengine6\database */
 ?>
