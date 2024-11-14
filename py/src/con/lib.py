@@ -28,7 +28,7 @@ def setarea(args, left, **kw):
     return
 
 def checkroles(args):
-  roles = ("bbs", "web", "sysop", "term")
+  roles = ("web", "sysop", "term", "www-data")
   for r in roles:
     io.echo(f"checking for {r}: ", end="")
     if database.rolexists(args, r) is False:
