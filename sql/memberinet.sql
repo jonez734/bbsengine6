@@ -1,6 +1,9 @@
-create table if not exists engine.map_memberid_inetaddr (
+create table if not exists engine.map_membermoniker_inetaddr (
     address inet,
     hostname text,
-    memberid bigint constraint fk_engine_memberid_inetaddr references engine.__member(id) on update cascade on delete set null,
+    membermoniker text constraint fk_engine_membermoniker_inetaddr references engine.__member(moniker) on update cascade on delete set null,
     datestamp timestamptz
 );
+
+grant all on engine.map_membermoniker_inetaddr to sysop;
+grant select on engine.map_membermoniker_inetaddr to term;
