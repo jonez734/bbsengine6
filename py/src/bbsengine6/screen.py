@@ -1,7 +1,7 @@
 from . import io
 #import ttyio6 as ttyio
 
-areastack = []
+bottombarstack = []
 
 # updatebottombar() - imported from bbsengine
 # @since 20210222
@@ -28,8 +28,8 @@ def init(topmargin=0, bottommargin=1):
   return
 
 # @since 20230523 copied from bbsengine5
-def setarea(left, right=None, stack:bool=False, width:int=None):
-    global areastack
+def setbottombar(left, right=None, stack:bool=False, width:int=None):
+    global bottombarstack
 
     terminalwidth = width if width is not None else io.getterminalwidth()-2
 #    io.echo(f"{terminalwidth=} {width=}")
@@ -53,33 +53,38 @@ def setarea(left, right=None, stack:bool=False, width:int=None):
         io.echo("setarea.100: type(right)=%r" % (right), level="debug")
         rightbuf = "ERROR" # type(right)
 
-    r = io.tostr(rightbuf, strip=True, wordwrap=False)
-#    io.echo(f"{r=}")
+    r = io.tostr(rightbuf, wordwrap=False, exclude=("COMMAND", "COLOR"))
     t = terminalwidth - len(r) - 4
     leftbuf = leftbuf[:t] + (leftbuf[t:] and '...')
 
-    buf = " %s%s " % (leftbuf.ljust(terminalwidth-len(r)-1), rightbuf)
+    buf = f" {leftbuf.ljust(terminalwidth-len(r)-1)}{rightbuf} "
 #    io.echo(f"{buf=} {len(buf)=}")
     updatebottombar(f"{{areacolor}}{buf}{{/all}}")
     if stack is True:
-        areastack.insert(0, buf) # append(buf)
+        bottombarstack.insert(0, buf) # append(buf)
     return
 
-# @since 20230523 copied from bbsengine5
-def poparea():
-  global areastack
+# @since 20240708
+setarea = setbottombar
 
-  if len(areastack) == 0:
+# @since 20230523 copied from bbsengine5
+def popbottombar():
+  global bottombarstack
+
+  if len(bottombarstack) == 0:
     return
 
   terminalwidth = io.getterminalwidth()
 
-  if len(areastack) > 0:
-    buf = areastack.pop()
+  if len(bottombarstack) > 0:
+    buf = bottombarstack.pop()
     if buf != "":
-      updatebottombar("{var:areacolor}%s{/all}" % (buf.ljust(terminalwidth-2, " ")))
+      updatebottombar(f"{{var:areacolor}}{buf.ljust(terminalwidth-2, '')}{{/all}}")
 
   return
+
+# @since 20240708
+poparea = popbottombar
 
 # @since 20230523
 def title(buf):
