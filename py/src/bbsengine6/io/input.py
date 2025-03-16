@@ -8,30 +8,6 @@ import argparse
 from .output import *
 from .const import *
 
-keys = {
-  "[A":   "KEY_UP",
-  "[B":   "KEY_DOWN",
-  "[C":   "KEY_RIGHT",
-  "[D":   "KEY_LEFT",
-  "[H":   "KEY_HOME",
-  "[F":   "KEY_END",
-  "[5~":  "KEY_PAGEUP",
-  "[6~":  "KEY_PAGEDOWN",
-  "[2~":  "KEY_INS",
-  "[3~":  "KEY_DEL",
-  "OP":   "KEY_HELP",
-  "OQ":   "KEY_F2",
-  "OR":   "KEY_F3",
-  "OS":   "KEY_F4",
-  "[15~": "KEY_F5",
-  "[17~": "KEY_F6",
-  "[18~": "KEY_F7",
-  "[19~": "KEY_F8",
-  # "[20~": "KEY_F9",
-  # "[21~": "KEY_F10",
-  ">":    "KEY_DECPNM", # @see https://vt100.net/docs/vt220-rm/chapter4.html#S4.6.18 numeric or application keypad mode
-  "=":    "KEY_DECPAM",
-}
 
 # @see https://stackoverflow.com/questions/9043551/regex-that-matches-integers-only
 def inputinteger(prompt, oldvalue=None, **kw) -> int:
@@ -174,21 +150,21 @@ def gnuinputstring(prompt:str, oldvalue=None, **kw) -> str:
 
   return foo
 
-def getchinputstring(prompt, originalvalue=None, **kw):
-    args = kw["args"] if "args" in kw else Namespace()
+def getchinputstring(prompt, originalvalue=None, **kwargs):
+    args = kwargs.get("args", Namespace())
     debug = args.debug if "debug" in args else False
-    mask = kw["mask"] if "mask" in kw else None
-    maxlen = kw["maxlen"] if "maxlen" in kw else None
-    filter = kw["filter"] if "filter" in kw else None
-    preinputhook = kw["preinputhook"] if "preinputhook" in kw else None
-    help = kw["help"] if "help" in kw else None
-    noneok = kw["noneok"] if "noneok" in kw else False
-    verify = kw["verify"] if "verify" in kw else None
-    multiple = kw["multiple"] if "multiple" in kw else False
+    mask = kwargs.get("mask", None)
+    maxlen = kwargs.get("maxlen", None)
+    filter = kwargs.get("filter", None)
+    preinputhook = kwargs.get("preinputhook", None)
+    help = kwargs.get("help", None)
+    noneok = kwargs.get("noneok", False)
+    verify = kwargs.get("verify", None)
+    multiple = kwargs.get("multiple", False)
 
-    completer = kw["completer"] if "completer" in kw else None
+    completer = kwargs.get("completer", None)
     if debug is True:
-        echo(f"ttyio6.input.getchinputstring.100: {kw=}", level="debug")
+        echo(f"ttyio6.input.getchinputstring.100: {kwargs=}", level="debug")
 
     if originalvalue is None:
         buf = ""
@@ -235,8 +211,11 @@ def getchinputstring(prompt, originalvalue=None, **kw):
         display()
 
         ch = getch()
+#        print(f"{ch=}")
 
-        if ch == "KEY_ENTER":
+        if ch is None:
+          continue
+        elif ch == "KEY_ENTER":
             echo()
             if noneok is True and buf == "":
                 return None
@@ -305,27 +284,27 @@ def getchinputstring(prompt, originalvalue=None, **kw):
                 if debug is True:
                     echo(f"completer is callable: {args=} {kw=}", level="debug")
                 res = completer(currentword(), state=state, **kw)
-                echo(f"--> res={res!r}", level="debug")
+                # echo(f"--> {res=}", level="debug")
                 if len(res) == 0:
                     echo("{bell}", end="", flush=True)
                 elif len(res) == 1:
                     p = abs(len(res[0])-len(currentword()))
-                    pos += p+1
-                    buf = buf.replace(currentword(), res[0]+" ", 1)
+                    pos += p # +1
+                    buf = buf.replace(currentword(), res[0], 1) # res[0]+" "
                     echo(f"{{cursorright:{p}}}", end="", flush=True)
 #                    echo(f"{{f6:2}}len(currentword)={len(currentword())} len(res[0])={len(res[0])} right p={p}{{f6:2}}", end="", flush=True)
                 else:
                     echo(" ".join(res))
                     if debug is True:
-                        echo(f"--> len(res)={len(res)}")
-                        echo(f"tab: {res!r}")
+                        echo(f"--> {len(res)=}")
+                        echo(f"tab: {res=}")
                 state += 1
                 continue
         elif (ch == "KEY_HELP" or ch == "?") and help is not None:
             if type(help) is str:
                 echo(help)
             elif callable(help):
-                echo(help(**kw))
+                echo(help(**kwargs))
                 continue
         elif ch == "KEY_DEL":
             if len(buf) == 0 or pos+1 > len(buf):
@@ -351,23 +330,23 @@ def getchinputstring(prompt, originalvalue=None, **kw):
         buf = buf[:pos] + ch + buf[pos:]
         pos += 1
 
-def inputstring(*argv, style="ttyio", **kw):
+def inputstring(*argv, style="ttyio", **kwargs):
   if style == "gnu":
-    return gnuinputstring(*argv, **kw)
-  return getchinputstring(*argv, **kw)
+    return gnuinputstring(*argv, **kwargs)
+  return getchinputstring(*argv, **kwargs)
 
 # @since 20230105 backported from ttyio6 (bugfix)
 # @see https://ballingt.com/nonblocking-stdin-in-python-3/
 # @since 20230512 renamed from 'inputchar' in ttyio5 @BCBREAK
-def inputchoice(prompt:str, options:str, default:str="", **kw) -> str: #default:str="", args:object=Namespace(), noneok:bool=False, helpcallback=None) -> str:
-  args = kw["args"] if "args" in kw else None # Namespace()
-  noneok = kw["noneok"] if "noneok" in kw else False
-  help = kw["help"] if "help" in kw else None
+def inputchoice(prompt:str, options:str, default:str="", **kwargs) -> str:
+  args = kwargs.get("args", None)
+  noneok = kwargs.get("noneok", False)
+  help = kwargs.get("help", None)
 
   default = default.upper() if default is not None else ""
 
   options = options.upper()
-  options = "".join(sorted(options))
+#  options = "".join(sorted(options))
 
   echo(prompt, end="", flush=True)
 
@@ -388,7 +367,7 @@ def inputchoice(prompt:str, options:str, default:str="", **kw) -> str: #default:
     elif (ch == "?" or ch == "KEY_HELP"): #  and callable(helpcallback) is True:
       echo("help")
       if callable(help):
-        help(**kw)
+        help(**kwargs)
       elif type(help) is str:
         echo(help)
       echo(prompt, end="", flush=True)
@@ -404,149 +383,136 @@ def inputchoice(prompt:str, options:str, default:str="", **kw) -> str: #default:
 inputchar = inputchoice
 
 # @since 20210203
-def inputboolean(prompt:str, default:str=None, options="YN", **kw) -> bool:
-  ch = inputchoice(prompt, options, default, **kw)
-  if ch is not None:
-    ch = ch.upper()
-  if ch == "Y":
-          echo("Yes")
-          return True
-  elif ch == "T":
-          echo("True")
-          return True
-  elif ch == "N":
-          echo("No")
-          return False
-  elif ch == "F":
-          echo("False")
-          return False
-  return
+def inputboolean(prompt:str, default:str=None, options="YN", **kwargs) -> bool:
+#    echo(f"inputboolean.100: {prompt=} {default=} {options=}", level="debug")
+    ch = inputchoice(prompt, options, default, **kwargs)
+    if ch is not None:
+        ch = ch.upper()
+        if ch == "Y":
+            echo("Yes")
+            return True
+        elif ch == "T":
+            echo("True")
+            return True
+        elif ch == "N":
+            echo("No")
+            return False
+        elif ch == "F":
+            echo("False")
+            return False
+    return None
 
 
 terinallock = None
 
-# @since 20231017
-# @inspiredby https://ballingt.com/nonblocking-stdin-in-python-3/
-def getch(*args, **kwargs):
-#    noneok = kwargs["noneok"] if "noneok" in kwargs else False
-    file = kwargs["file"] if "file" in kwargs else sys.stdin
-    keytimeout = kwargs["keytimeout"] if "keytimeout" in kwargs else None
-#    echo(f"{keytimeout=}", level="debug")
+KEYS = {
+  "[A":   "KEY_UP",
+  "[B":   "KEY_DOWN",
+  "[C":   "KEY_RIGHT",
+  "[D":   "KEY_LEFT",
+  "[H":   "KEY_HOME",
+  "[F":   "KEY_END",
+  "[5~":  "KEY_PAGEUP", # ncurses:KEY_PPAGE
+  "[6~":  "KEY_PAGEDOWN", # ncurses:KEY_NPAGE
+  "[2~":  "KEY_INS",
+  "[3~":  "KEY_DEL",
+  "OP":   "KEY_HELP",
+  "OQ":   "KEY_F2",
+  "OR":   "KEY_F3",
+  "OS":   "KEY_F4",
+  "[15~": "KEY_F5",
+  "[17~": "KEY_F6",
+  "[18~": "KEY_F7",
+  "[19~": "KEY_F8",
+  # "[20~": "KEY_F9",
+  # "[21~": "KEY_F10",
+  ">":    "KEY_DECPNM", # @see https://vt100.net/docs/vt220-rm/chapter4.html#S4.6.18 numeric or application keypad mode
+  "=":    "KEY_DECPAM",
+}
 
-    esc = False
-    buf = ""
+def getch(keytimeout=1.0, **kwargs):
+    """Reads a single character from standard input non-blocking, handling escape sequences with a timeout."""
+    import time, platform, tty, fcntl, termios, sys
 
-    class raw(object):
-        def __init__(self, stream):
-            self.stream = stream
-            self.fd = self.stream.fileno()
-        def __enter__(self):
-            self.original_stty = termios.tcgetattr(self.stream)
+    stream = kwargs.get("stream", sys.stdin)
 
-            newattr = termios.tcgetattr(self.fd)
+    fd = stream.fileno()
+    old_settings = termios.tcgetattr(fd)
+    old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    
+    SLEEP_TIME = 0.001
 
-            self.new_stty = termios.tcgetattr(self.stream)
-            tty.setcbreak(self.stream)
+    CTRLKEYSEQ = {
+        "\x01": "KEY_HOME",
+        "\x05": "KEY_END",
+        "\x15": "KEY_CUTTOBOL",
+        "\x7F": "KEY_BACKSPACE",
+        "\t":   "KEY_TAB",
+#        "\n":   "KEY_ENTER",
+        "\r":   "KEY_ENTER",
+        "\x0C": "KEY_FF"
+    }
 
-        def __exit__(self, type, value, traceback):
-            termios.tcsetattr(self.stream, termios.TCSANOW, self.original_stty)
+#    ESCAPE_SEQUENCES = {
+#        "\x1b[A": "UP",
+#        "\x1b[B": "DOWN",
+#        "\x1b[C": "RIGHT",
+#        "\x1b[D": "LEFT"
+#    }
+    
+    try:
+        tty.setraw(fd)  # Set terminal to raw mode
+        if platform.system() != "Darwin":  # BSD (including macOS) does not support O_NONBLOCK the same way
+            fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)  # Set non-blocking mode
+        start_time = time.time()
+        sleep_time = SLEEP_TIME
 
-    class nonblocking(object):
-        def __init__(self, stream):
-            self.stream = stream
-            self.fd = self.stream.fileno()
-        def __enter__(self):
-            self.orig_fl = fcntl.fcntl(self.fd, fcntl.F_GETFL)
-            fcntl.fcntl(self.fd, fcntl.F_SETFL, self.orig_fl | os.O_NONBLOCK)
-        def __exit__(self, *args):
-            fcntl.fcntl(self.fd, fcntl.F_SETFL, self.orig_fl)
+        while time.time() - start_time < keytimeout:
+            try:
+                ch = stream.read(1) if stream.readable() else ''  # Read first character if available
+            except (IOError, OSError):  # Handle BSD non-blocking read failure gracefully
+                ch = ''
+            except KeyboardInterrupt:
+              raise
 
-    thetick = 0
-    done = False
-    sleeptime = 0.0042
-    kt = 0 # keytimeout ticks
-    with raw(file):
-        with nonblocking(file):
-            while not done:
-                try:
-                    ch = file.read(1) # sys.stdin.read(1)
-                    if keytimeout is not None:
-                        kt += 1
-                        if kt >= keytimeout:
-                            kt = 0
-                            break
-
-#                    echo(f"ttyio6.input.getch.120: ch={ch!r} type(ch)={type(ch)!r}", level="debug")
-                    if ch == ESC:
-                        esc = True
-                        buf = ""
-                        # print("ESC")
-                        continue
-
-                    if ch == "\x01":
-                        ch = "KEY_HOME"
-                        break
-                    elif ch == "\x04":
-                        raise EOFError
-                    elif ch == "\x05":
-                        ch = "KEY_END"
-                        break
-                    elif ch == "\x15": # ^U
-                        ch = "KEY_CUTTOBOL"
-                        break
-#                    elif ch == "\x08":
-#                        ch = "KEY_BACKSPACE"
-#                        break
-                    elif ch == "\x7F": # or ch == \x08
-                        ch = "KEY_BACKSPACE"
-                        break
-                    elif ch == "\t":
-                        ch = "KEY_TAB"
-                        break
-                    elif ch == "\n":
-                        ch = "KEY_ENTER"
-                        break
-                    elif ch == "\x0C":
-                        ch = "KEY_FF"
-                        break
-                    elif ch != "" and ord(ch) >= 1 and ord(ch) < 27:
-                        ch = "KEY_CTRL_"+chr(ord(ch)+ord("A")-1)
-                        break
-                    if esc is True:
-                        thetick += 1
-                        buf += ch # bytes(ch, "utf-8")
-                        # print(repr(buf))
-                        if buf in keys:
-                          # print("found")
-                          ch = keys[buf]
-                          done = True
-                          esc = False
-                          buf = ""
+#            print(f"bbsengine.io.input.getch.200: {ch=}")
+            if ch:
+              start_time = time.time()
+              sleep_time = SLEEP_TIME
+              if ch in CTRLKEYSEQ:
+                  return CTRLKEYSEQ[ch]
+              elif ch == "\x03":
+                  raise KeyboardInterrupt
+              elif ch == "\x04":
+                  raise EOFError
+              elif ch == "\x1b":  # Escape sequence
+                  seq = ""
+                  for _ in range(5):  # Read up to 5 additional characters
+                      try:
+                          next_ch = stream.read(1) if stream.readable() else ''
+                      except (IOError, OSError):
+                          next_ch = ''
+                      if not next_ch:
                           break
-                        if thetick > 3:
-                          if len(buf) == 0:
-                            ch = "KEY_ESC"
-                            break
-                          ch = buf
-                          esc = False
-                          buf = ""
-                          thetick = 0
-                          break
-                    else:
-                        if len(ch) > 0:
-                            break
-                    
-                except IOError:
-                    echo("*IDLE*", level="info")
-                finally:
-#                    echo(f"ttyio6.input.getch.100: {ch=}", level="debug")
-                    if ch is not None and len(ch) > 1:
-                        break
-
-                    time.sleep(sleeptime)
-#    echo(f"{ch=}", level="debug")
-
-    return ch
+                      seq += next_ch
+                      if seq in KEYS:
+                          return KEYS[seq]
+                  return "\x1b"+seq  # Return raw sequence if unknown
+              return ch  # Return single character if not an escape sequence
+            
+            time.sleep(sleep_time)  # Prevent busy-waiting
+            sleep_time = min(sleep_time * 2, 0.05)  # Increase sleep time gradually, max 0.05 sec
+        
+        return None  # Timeout expired
+    
+    except Exception as e:
+#        echo(f"bbsengine6.io.getch.100: {e}")
+        raise
+        #return None
+    
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # Restore terminal settings
+        fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)  # Restore original flags
 
 def accept(prompt:str, options:str, default:str="", debug:bool=False) -> str:
 #  if debug is True:
