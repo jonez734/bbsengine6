@@ -22,7 +22,7 @@ def check(args, modulename, op="run", **kw):
     m = importlib.import_module(modulename)
   except ModuleNotFoundError:
     if silent is False:
-      io.echo(f"module {modulename=} not found", level="error")
+      io.echo(f"module {modulename=} not importable", level="error")
     return False
   except Exception as e:
     import traceback
@@ -42,16 +42,26 @@ def check(args, modulename, op="run", **kw):
       io.echo("no access function", level="error")
     return False
 
-  if (hasattr(m, "access") and callable(m.access)) is False:
+  if (callable(m.access)) is False:
     io.echo("no callable access function", level="error")
     return False
 
-  if m.access(args, op) is True:
+  try:
+    if m.access(args, op) is True:
+      if debug is True:
+        io.echo("access check passed", level="debug")
+    else:
+      if silent is False:
+        io.echo("access check failed", level="error")
+      return False
+  except Exception as e:
     if debug is True:
-      io.echo("access check passed", level="debug")
-  else:
-    io.echo("access check failed", level="error")
-    return False
+      import traceback
+      traceback.print_exc(file=sys.stdout)
+      return False
+    else:
+      io.echo("call to access function failed", level="error")
+      return False
 
   if (hasattr(m, "buildargs") and callable(m.buildargs)) is False:
     if debug is True:
@@ -105,7 +115,7 @@ def load(args:object, modulepath:str):
   return m
   
 # @since 20230510 copied from bbsengine5
-def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.Namespace, callback, argparser=None, **kwargs):
+def runcallback(args:object, callback:callable, optional:bool=False, **kwargs): # s:argparse.Namespace, callback, argparser=None, **kwargs):
   debug = args.debug if args is not None else True
   if debug is True:
     io.echo(f"bbsengine6.runcallback.100: {args=} {kwargs=}", level="debug")
@@ -169,36 +179,36 @@ def runcallback(args:object, callback, optional=False, **kwargs): # s:argparse.N
 
 # @since 20220727
 # @since 20230508 added to bbsengine6
-def runmodule(args, module, **kwargs):
+def run(args, modulename, **kwargs):
   debug = args.debug if "debug" in args else False
   buildargs = True
 
-  if check(args, module) is False:
-    io.echo(f"check of {module=} failed. module not run.", level="error")
+  if check(args, modulename) is False:
+    io.echo(f"check of {modulename=} failed. module not run.", level="error")
     return False
 
   if debug is True:
-    io.echo(f"bbsengine6.runmodule.100: {args=}", level="debug")
+    io.echo(f"bbsengine6.module.run.100: {args=}", level="debug")
 
-  res = runcallback(args, f"{module}.init", **kwargs)
+  res = runcallback(args, f"{modulename}.init", **kwargs)
   if debug is True:
-    io.echo(f"{module}.init() {res=}", level="debug")
+    io.echo(f"{modulename}.init() {res=}", level="debug")
 
   if buildargs is True:
     argv = kwargs["argv"] if "argv" in kwargs else []
     if debug is True:
-      io.echo(f"bbsengine6.runmodule.120: {argv=}", level="debug")
-    prgargparser = runcallback(args, f"{module}.buildargs", **kwargs)
+      io.echo(f"bbsengine6.module.run.120: {argv=}", level="debug")
+    prgargparser = runcallback(args, f"{modulename}.buildargs", **kwargs)
 
     if debug is True:
-      io.echo(f"bbsengine6.runmodule.130: {prgargparser=}", level="debug")
+      io.echo(f"bbsengine6.module.run.130: {prgargparser=}", level="debug")
 
     if prgargparser is not None:
       try:
         argv = [a.strip() for a in argv[1:]]
         prgargs = prgargparser.parse_args(argv) # argv[1:])
         if debug is True:
-          io.echo(f"bbsengine6.module.runmodule: {prgargs=} {argv=}", level="debug")
+          io.echo(f"bbsengine6.module.run.140: {prgargs=} {argv=}", level="debug")
 #        prgargs = [s.strip() for s in prgargs]
       except SystemExit:
         return False
@@ -207,15 +217,19 @@ def runmodule(args, module, **kwargs):
         return False
 
       if debug is True:
-        io.echo(f"bbsengine.runmodule.220: {prgargs=}", level="debug")
+        io.echo(f"bbsengine6.module.run.220: {prgargs=}", level="debug")
 
-      return runcallback(prgargs, f"{module}.main", **kwargs)
+      # return runcallback(prgargs, f"{modulename}.main", **kwargs)
 
-  res = runcallback(args, f"{module}.main", **kwargs)
+  res = runcallback(args, f"{modulename}.main", **kwargs)
 
   if debug is True:
-    io.echo(f"{module}.main() result={res}", level="debug")
+    io.echo(f"{modulename}.main() {res=}", level="debug")
   return res
+
+# @since 20240709
+# @project:9332
+runmodule = run
 
 # @since 20220828
 #def runsubmodule(args, module, **kw):
