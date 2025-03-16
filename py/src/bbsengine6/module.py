@@ -2,8 +2,8 @@ import sys
 import argparse
 import importlib
 import inspect
+from typing import get_type_hints, Callable
 
-#import ttyio6 as ttyio
 from . import io
 
 # @since 20220826
@@ -236,3 +236,54 @@ runmodule = run
 #  if args.debug is True:
 #    io.echo("bbsengine6.module.runsubmodule.100: trace", level="debug")
 #  return runmodule(args, module, **kw)
+
+
+# @since 20250316
+def validate_function(module_name: str, func_name: str, required_signature: Callable):
+    module = importlib.import_module(module_name)
+
+    # Check if function exists
+    if not hasattr(module, func_name):
+        raise ValueError(f"Function '{func_name}' not found in module '{module_name}'")
+
+    func = getattr(module, func_name)
+
+    if not callable(func):
+        raise ValueError(f"'{func_name}' in module '{module_name}' is not callable")
+
+    # Inspect signature
+    sig = inspect.signature(func)
+    required_sig = inspect.signature(required_signature)
+
+    # Compare parameters
+    if sig.parameters.keys() != required_sig.parameters.keys():
+        raise ValueError(f"'{func_name}' has wrong parameters: {sig.parameters.keys()}")
+
+    # Compare types
+    func_hints = get_type_hints(func)
+    required_hints = get_type_hints(required_signature)
+
+    for param, required_type in required_hints.items():
+        if param == 'return':
+            continue
+        if param not in func_hints:
+            raise ValueError(f"Missing type annotation for '{param}' in '{func_name}'")
+        if func_hints[param] != required_type:
+            raise ValueError(f"Wrong type for '{param}': expected {required_type}, got {func_hints[param]}")
+
+    # Compare return type
+    if func_hints.get('return', None) != required_hints.get('return', None):
+        raise ValueError(f"Wrong return type for '{func_name}': expected {required_hints.get('return')}, got {func_hints.get('return')}")
+
+    io.echo(f"'{func_name}' in '{module_name}' is valid!", level="debug")
+    return True
+
+
+# Example usage:
+def required_init(config: dict, verbose: bool) -> None:
+    pass
+
+#validate_function('my_module', 'init', required_init)
+
+def init(args: argparse.Namespace, **kwargs) -> boolean: pass
+
