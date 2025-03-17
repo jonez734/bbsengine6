@@ -7,7 +7,7 @@ from argparse import Namespace
 from .terminal import _streamout, _streamin
 #from tzlocal import tzlocal
 
-from . import vars, terminal
+from . import echovars, terminal
 
 #from .vars import *
 #from .terminal import getterminalwidth, savecursor, restorecursor
@@ -79,7 +79,7 @@ def tokenize(buf:str, exclude=()): # -> generator:
           value = (name, repeat)
         elif kind == "VAR":
           var = mo.group("varname") # 35
-          value = vars.get(var)
+          value = echovars.get(var)
           for t in tokenize(value, exclude=exclude):
             # print(f"tokenize.120: {t=}")
             yield t
@@ -151,8 +151,8 @@ def tokenize(buf:str, exclude=()): # -> generator:
               kind = "EMOJI"
           else:
             v = value.replace("{", "").replace("}", "")
-            if v in vars.variables:
-              for t in tokenize(vars.variables[v]):
+            if v in echovars.variables:
+              for t in tokenize(echovars.variables[v]):
                 # print(f"VAR: {t=}")
                 yield t
               continue
@@ -218,7 +218,7 @@ def interpret(tokens, **kw:dict):
         command, repeat = token.value
         if command is not None and command.upper() in acs:
           char = acs[command.upper()]
-          # pos += len(char*int(repeat))
+          pos += len(char*int(repeat))
           yield Token("ACS", f"{ESC}(0{char*int(repeat)}{ESC}(B") # result += "\033(0%s\033(B" % (char*int(repeat))
       elif token.kind == "DECSC":
           yield token
@@ -344,16 +344,16 @@ def echo(buf:str="", **kw):
     if level is not None:
         prefix = ""
         if level == "debug":
-            prefix = "{var:level.debug}" # {bglightblue}{blue}"
+            prefix = "{level.debug}" # {bglightblue}{blue}"
         elif level == "warn" or level == "warning":
-            prefix = "{var:level.warning}" # {bgyellow}{black}"
+            prefix = "{level.warning}" # {bgyellow}{black}"
         elif level == "error":
-            prefix = "{var:level.error}" # {bgred}{black}"
+            prefix = "{level.error}" # {bgred}{black}"
         elif level == "success" or level == "ok":
-            prefix = "{var:level.ok}" # {bggreen}{black}"
+            prefix = "{level.ok}" # {bggreen}{black}"
         elif level == "info":
-            prefix = "{var:level.info}" # {bgwhite}{blue}"
-        print(tostr(f"{prefix} ")+tostr(buf, interpret=False)+tostr(" {var:normalcolor}"), flush=True)
+            prefix = "{level.info}" # {bgwhite}{blue}"
+        print(tostr(f"{prefix} ")+tostr(buf, interpret=False)+tostr(" {normalcolor}"), flush=True)
         return
 
     if interp is True:
@@ -439,6 +439,7 @@ def echo(buf:str="", **kw):
     else:
         print(f"{buf}", end=end, flush=flush)
     # print(f"{end=}", end=end, flush=flush)
+    #if end == "\n":
     print(end=end, flush=flush)
     return
 
@@ -461,3 +462,14 @@ def tostr(buf:str, **kw:dict):
         elif type(tok) is Token:
           res += tok.value
     return res
+
+def set_terminal_background_color(r, g, b):
+  """Sets the terminal background color using ANSI escape codes."""
+  print(f"\033]11;rgb:{r:02x}/{g:02x}/{b:02x}\a", end="", flush=True)
+
+# Example: Set the background color to light blue
+#set_terminal_color(173, 216, 230)
+
+def reset_terminal_background_color():
+  """Resets the terminal background color to default."""
+  print(f"\033]11;\a", end="", flush=True)
