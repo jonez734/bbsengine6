@@ -443,12 +443,12 @@ def getch(keytimeout=1.0, **kwargs):
     SLEEP_TIME = 0.001
 
     CTRLKEYSEQ = {
-        "\x01": "KEY_HOME",
-        "\x05": "KEY_END",
+        "\x01": "KEY_HOME", # ^a
+        "\x05": "KEY_END", # ^e
         "\x15": "KEY_CUTTOBOL",
         "\x7F": "KEY_BACKSPACE",
         "\t":   "KEY_TAB",
-#        "\n":   "KEY_ENTER",
+        "\n":   "KEY_ENTER",
         "\r":   "KEY_ENTER",
         "\x0C": "KEY_FF"
     }
