@@ -8,34 +8,30 @@ WAIT  = 0.125
 
 # https://www.c64-wiki.com/wiki/Color
 # https://en.wikipedia.org/wiki/ANSI_escape_code
-echocommands = (
-{ "command": "{clear}",      "ansi": "2J" },
-{ "command": "{home}",       "ansi": "0;0H" },
-# { "command": "{clreol}",     "ansi": "K" },
-# { "command": "{/all}",       "ansi": "0;39;49m" },
-{ "command": "{/fgcolor}",   "ansi": "39m" },
-{ "command": "{/bgcolor}",   "ansi": "49m" },
+echocommands = {
+"{clear}": "2J" ,
+"{home}": "0;0H" ,
 
-)
+}
 
-attributes = (
-{ "command": "{bold}",       "ansi": "1m" },
-{ "command": "{/bold}",      "ansi": "22m" },
-{ "command": "{faint}",      "ansi": "2m" },
-{ "command": "{italic}",     "ansi": "3m" },
-{ "command": "{/italic}",    "ansi": "23m" },
-{ "command": "{underline}",  "ansi": "4m" },
-{ "command": "{/underline}", "ansi": "24m" },
-{ "command": "{blink}",      "ansi": "5m" },
-{ "command": "{/blink}",     "ansi": "25m" },
+attributes = {
+"{bold}":       "1m" ,
+"{/bold}":       "22m" ,
+"{faint}":       "2m" ,
+"{italic}":      "3m" ,
+"{/italic}":     "23m" ,
+"{underline}":   "4m" ,
+"{/underline}":  "24m" ,
+"{blink}":       "5m" ,
+"{/blink}":      "25m" ,
 
-{ "command": "{strike}",     "ansi": "9m" },
-{ "command": "{/strike}",    "ansi": "29m" },
+"{strike}":      "9m" ,
+"{/strike}":     "29m" ,
 
-{ "command": "{reverse}",    "ansi": "7m" },
-{ "command": "{/reverse}",   "ansi": "27m" },
+"{reverse}":     "7m" ,
+"{/reverse}":    "27m" ,
 
-)
+}
 
 acs = {
   "ULCORNER":"l",
@@ -194,54 +190,69 @@ emoji = {
   "desert":                 "\U0001F3DC", # @since 20240107 for empyre
 
   "shopping":               "\U0001F6CD", # @since 20240128
+
+  "farmer":                 "\U0001F9D1", # @since 20240415 for empyre
+
+  "zap":                    "\U000026A1", # @since 20240422 for weather
+
+  "palmtree":               "\U0001F334",
+  "evergreentree":          "\U0001F332",
+
+  "tophat":                 "\U0001F3A9",
+  "magicwand":              "\U0001FA84",
+
+  "mercenary":				u"\U0001F977",
+
+  "checkmark":              u"\U00002705",
+  "crossmark":              u"\U0000274E",
 }
 
 # c64 color palette, requires xterm-256
-colors = (
-{ "command": "{white}",      "ansi": rgb(38, (255, 255, 255))}, # )"38;2;255;255;255m", "rgb": (255,255,255) }, # 37m
-{ "command": "{red}",        "ansi": rgb(38, (136, 0, 0))}, # "38;2;136;0;0m"},
-{ "command": "{cyan}",       "ansi": rgb(38, (170, 255, 238))}, # "38;2;170;255;238m"},
-{ "command": "{purple}",     "ansi": rgb(38, (204, 68, 204))}, #"38;2;204;68;204m"},
-{ "command": "{green}",      "ansi": rgb(38, (0, 204, 85))},#"38;2;0;204;85m"},
-{ "command": "{blue}",       "ansi": rgb(38, (0, 0, 170))},#"38;2;0;0;170m"},
-{ "command": "{yellow}",     "ansi": rgb(38, (238, 238, 119))},#"38;2;238;238;119m"},
-{ "command": "{orange}",     "ansi": rgb(38, (221, 136, 85))},#"38;2;221;136;85m"},
-{ "command": "{brown}",      "ansi": rgb(38, (102, 68, 0))},#"38;2;102;68;0m"},
-{ "command": "{lightred}",   "ansi": rgb(38, (255, 119, 119))},#"38;2;255;119;119m"},
-{ "command": "{darkgray}",   "ansi": rgb(38, (51, 51, 51))},#"38;2;51;51;51m"},
-{ "command": "{gray}",       "ansi": rgb(38, (119, 119,119))}, # "38;2;119;119;119m"},
-{ "command": "{lightgreen}", "ansi": rgb(38, (170, 255, 102))},#"38;2;170;255;102m"},
-{ "command": "{lightblue}",  "ansi": rgb(38, (0, 136, 255))},#"38;2;0;136;255m"},
-{ "command": "{lightgray}",  "ansi": rgb(38, (187, 187, 187))},#"38;2;187;187;187m"},
-{ "command": "{black}",      "ansi": rgb(38, (0,0,0))}, # "38;2;0;0;0m"},
-{ "command": "{darkgreen}",  "ansi": darken(38, (0, 204, 85), 0.20)},#  "rgb": (0,183,76) } # darken("green", 0.10)
-{ "command": "{magenta}",    "ansi": "35m" },
-)
-
-bgcolors = (
-    { "command": "{bgwhite}",      "ansi": rgb(48, (255, 255, 255))},#"48;2;255;255;255m", "rgb": (255,255,255) }, # 37m
-    { "command": "{bgred}",        "ansi": rgb(48, (136, 0, 0))},#"48;2;136;0;0m",     "rgb": (136,0,0) }, # 31m
-    { "command": "{bgcyan}",       "ansi": rgb(48, (170, 255, 238))},#"48;2;170;255;238m", "rgb": (170,255,238) }, # 36m
-    { "command": "{bgpurple}",     "ansi": rgb(48, (204, 68, 204))},#"48;2;204;68;204m",  "rgb": (204, 68, 204) }, # 35m
-    { "command": "{bggreen}",      "ansi": rgb(48, (0, 204, 85))},#"48;2;0;204;85m",    "rgb": (0,204,85) }, # 32m
-    { "command": "{bgblue}",       "ansi": rgb(48, (0, 0, 170))},#"48;2;0;0;170m",     "rgb": (0,0,170) }, # 34m
-    { "command": "{bgyellow}",     "ansi": rgb(48, (238, 238, 119))},#"48;2;238;238;119m", "rgb": (238,238,119) }, # 33m
-    { "command": "{bgorange}",     "ansi": rgb(48, (221, 136, 85))},#"48;2;221;136;85m",  "rgb": (221,136,85) },
-    { "command": "{bgbrown}",      "ansi": rgb(48, (102, 68, 0))},#"48;2;102;68;0m",    "rgb": (102,68,0) },
-    { "command": "{bglightred}",   "ansi": rgb(48, (255, 119, 119))},#"48;2;255;119;119m", "rgb": (255, 119, 119) },
-    { "command": "{bgdarkgray}",   "ansi": rgb(48, (51, 51, 51))},#"48;2;51;51;51m",    "rgb": (51, 51, 51) },
-    { "command": "{bggray}",       "ansi": rgb(48, (119, 119, 119))},#"48;2;119;119;119m", "rgb": (119, 119, 119) },
-    { "command": "{bglightgreen}", "ansi": rgb(48, (170, 255, 102))},#"48;2;170;255;102m", "rgb": (170, 255, 102) },
-    { "command": "{bglightblue}",  "ansi": rgb(48, (0, 136, 255))},#"48;2;0;136;255m",   "rgb": (0, 136, 255) },
-    { "command": "{bglightgray}",  "ansi": rgb(48, (187, 187, 187))},#"48;2;187;187;187m", "rgb": (187, 187, 187) },
-    { "command": "{bgblack}",      "ansi": rgb(48, (0,0,0)) }, # "48;2;0;0;0m",       "rgb": (0,0,0) }, # 30m
-    { "command": "{bgdarkgreen}",  "ansi": darken(48, (0, 204, 85), 0.20) }, # "48;2;0;183;76m",  "rgb": (0,183,76) } # darken("green", 0.10)
-)
+colors = {
+"{/fgcolor}":    "39m" ,
+"{/bgcolor}":    "49m" ,
+"{white}":       rgb(38, (255, 255, 255)), # )"38;2;255;255;255m": "rgb": (255,255,255) }, # 37m
+"{red}":         rgb(38, (136, 0, 0)), # "38;2;136;0;0m"},
+"{cyan}":        rgb(38, (170, 255, 238)), # "38;2;170;255;238m"},
+"{purple}":      rgb(38, (204, 68, 204)), #"38;2;204;68;204m"},
+"{green}":       rgb(38, (0, 204, 85)),#"38;2;0;204;85m"},
+"{blue}":        rgb(38, (0, 0, 170)),#"38;2;0;0;170m"},
+"{yellow}":      rgb(38, (238, 238, 119)),#"38;2;238;238;119m"},
+"{orange}":      rgb(38, (221, 136, 85)),#"38;2;221;136;85m"},
+"{brown}":       rgb(38, (102, 68, 0)),#"38;2;102;68;0m"},
+"{lightred}":    rgb(38, (255, 119, 119)),#"38;2;255;119;119m"},
+"{darkgray}":    rgb(38, (51, 51, 51)),#"38;2;51;51;51m"},
+"{gray}":        rgb(38, (119, 119,119)), # "38;2;119;119;119m"},
+"{lightgreen}":  rgb(38, (170, 255, 102)),#"38;2;170;255;102m"},
+"{lightblue}":   rgb(38, (0, 136, 255)),#"38;2;0;136;255m"},
+"{lightgray}":   rgb(38, (187, 187, 187)),#"38;2;187;187;187m"},
+"{black}":       rgb(38, (0,0,0)), # "38;2;0;0;0m"},
+"{darkgreen}":   darken(38, (0, 204, 85), 0.20),#  "rgb": (0,183,76) } # darken("green": 0.10)
+"{magenta}":     "35m" ,
+"{bgwhite}":     rgb(48, (255, 255, 255)),#"48;2;255;255;255m", "rgb": (255,255,255) }, # 37m
+"{bgred}":       rgb(48, (136, 0, 0)),#"48;2;136;0;0m",     "rgb": (136,0,0) }, # 31m
+"{bgcyan}":      rgb(48, (170, 255, 238)),#"48;2;170;255;238m", "rgb": (170,255,238) }, # 36m
+"{bgpurple}":    rgb(48, (204, 68, 204)),#"48;2;204;68;204m",  "rgb": (204, 68, 204) }, # 35m
+"{bggreen}":     rgb(48, (0, 204, 85)),#"48;2;0;204;85m",    "rgb": (0,204,85) }, # 32m
+"{bgblue}":      rgb(48, (0, 0, 170)),#"48;2;0;0;170m",     "rgb": (0,0,170) }, # 34m
+"{bgyellow}":    rgb(48, (238, 238, 119)),#"48;2;238;238;119m", "rgb": (238,238,119) }, # 33m
+"{bgorange}":    rgb(48, (221, 136, 85)),#"48;2;221;136;85m",  "rgb": (221,136,85) },
+"{bgbrown}":     rgb(48, (102, 68, 0)),#"48;2;102;68;0m",    "rgb": (102,68,0) },
+"{bglightred}":  rgb(48, (255, 119, 119)),#"48;2;255;119;119m", "rgb": (255, 119, 119) },
+"{bgdarkgray}":  rgb(48, (51, 51, 51)),#"48;2;51;51;51m",    "rgb": (51, 51, 51) },
+"{bggray}":      rgb(48, (119, 119, 119)),#"48;2;119;119;119m", "rgb": (119, 119, 119) },
+"{bglightgreen}":rgb(48, (170, 255, 102)),#"48;2;170;255;102m", "rgb": (170, 255, 102) },
+"{bglightblue}": rgb(48, (0, 136, 255)),#"48;2;0;136;255m",   "rgb": (0, 136, 255) },
+"{bglightgray}": rgb(48, (187, 187, 187)),#"48;2;187;187;187m", "rgb": (187, 187, 187) },
+"{bgblack}":     rgb(48, (0,0,0)) , # "48;2;0;0;0m",       "rgb": (0,0,0) }, # 30m
+"{bgdarkgreen}": darken(48, (0, 204, 85), 0.20), # "48;2;0;183;76m",  "rgb": (0,183,76) } # darken("green", 0.10)
+}
 
 token_specification = [
     ("ACS",        r'\{ACS:(?P<acsname>[a-z\d]+)(:(?P<acsrepeat>[\d]{,3}))?\}'),
     ("OPENBRACE",  r'\{\{'),
     ("CLOSEBRACE", r'\}\}'),
+    ("EMPTYBRACES",r'\{\}'),
     ("SLASHALL",   r'\{/ALL\}'),
     ("RESET",      r'\{RESET\}'), # reset color+margins
     ("F6",         r'\{F6(:(?P<F6repeat>\d{,2}))?\}'), # force a carriage return
@@ -265,7 +276,7 @@ token_specification = [
     ("SHOWCURSOR", r'\{(VISCURSOR|SHOWCURSOR)\}'), # see above
     ("ERASEDISPLAY", r'\{(?:ERASEDISPLAY|ED|CLS)(:(?P<edmode>tobottom|totop|all))?\}' ), # 0 (default) - clear all of display; 1 = cursor to beginning of screen; 2 = cursor to end of screen
     ("CURSORHPOS",   r'\{(CURSORHPOS)(:(?P<hpos>\d{,3}))\}'),
-    ("RGB",          r'\{rgb:#?(?P<rgbval>(?:[\da-fA-F]{2}){3})\}'),
+    ("RGBCOLOR",          r'\{rgb:#?(?P<rgbval>(?:[\da-fA-F]{2}){3})\}'),
     ("SPEED",        r'\{speed:(?P<speednum>\d{,1})\}'),#(:(\d{,3}))?\}'),
     ("INDENT",     r'\{INDENT:(?P<indentnum>\d{,2})\}'),
     ("TAG",         r'@(?P<tagkind>\w+)(?:[: ]+(?P<tagparam>[^@\s]+)?)?'),
