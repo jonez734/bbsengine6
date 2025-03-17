@@ -13,9 +13,17 @@ def access(args, op, **kwargs):
 
 def main(args, **kwargs):
     util.heading("checking for database superuser")
-    currentloginid = util.getcurrentloginid(args)
-    privs = database.get_role_privs(args, currentloginid)
+#    io.echo(f"con.checksuperuser.100: {kwargs=}", level="debug")
+    currentloginid = util.getcurrentloginid(args) # "jam"
+#    conn = kwargs.get("conn", None)
+    if database.rolexists(args, currentloginid, mogrify=True, **kwargs) is False:
+        io.echo(f"{{var:labelcolor}}role {{var:valuecolor}}{currentloginid}{{var:labelcolor}} does not exist")
+        return False
+    privs = database.get_role_privs(args, currentloginid, **kwargs)
     io.echo(f"{privs=}", level="debug")
+    if privs == {}:
+        io.echo(f"{{var:valuecolor}}{currentloginid}{{var:labelcolor}} does not have privs")
+        return False
     if privs["rolsuper"] is True:
         io.echo(f"{{var:valuecolor}}{currentloginid}{{var:labelcolor}} has correct privs (superuser)")
         return True

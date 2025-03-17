@@ -1,0 +1,63 @@
+import psycopg
+from bbsengine6 import io, database
+
+from . import lib
+
+def init(args, **kwargs) -> bool:
+    return True
+
+def buildargs(args, **kwargs):
+    return lib.buildargs(args, **kwargs)
+
+def access(args, op, **kwargs) -> bool:
+    return True
+
+def main(args, **kwargs):
+    failcount = 0
+    conn = kwargs.pop("conn", None)
+    io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}engine.flag: ", end="")
+    if database.classexists(args, "engine.flag", conn=conn, **kwargs) is False:
+        io.echo("import ", end="")
+        if database.importsql(args, lib.SQLDIR, "flag.sql", conn=conn, **kwargs) is False:
+            failcount += 1
+            conn.rollback()
+            io.echo(" fail ", level="error")
+            return False
+        else:
+            io.echo(" ok ", level="ok")
+            conn.commit()
+    else:
+        io.echo(" ok ", level="ok")
+
+    io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}engine.map_member_flag: ", end="")
+    if database.classexists(args, "engine.map_member_flag", conn=conn) is False:
+        io.echo("import ", end="")
+        if database.importsql(args, lib.SQLDIR, "map_member_flag.sql", conn=conn) is False:
+            io.echo(" fail ", level="error")
+            failcount += 1
+        else:
+            io.echo(" ok ", level="ok")
+    else:
+        io.echo(" ok ", level="ok")
+
+    io.echo(f"{{var:labelcolor}}flagdata: ", end="")
+    sql = "select count(name) from engine.flag"
+    with database.cursor(conn) as cur:
+        cur.execute(sql)
+        io.echo(f"con.checkflag.100: {cur.rowcount=}", level="debug")
+        if cur.rowcount == 0:
+            io.echo("fail")
+            failcount += 1
+        elif cur.rowcount == 1:
+            count = cur.fetchone()["count"]
+            if count == 0:
+                io.echo("import ", end="")
+                if database.importsql(args, lib.SQLDIR, "flagdata.sql", conn=conn) is False:
+                    failcount += 1
+                    io.echo("fail", level="error")
+                else:
+                    io.echo(" ok ", level="ok")
+            else:
+                io.echo(" ok ", level="ok")
+
+    return True if failcount == 0 else False
