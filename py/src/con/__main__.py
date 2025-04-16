@@ -1,4 +1,5 @@
-from bbsengine6 import io, screen, session
+from bbsengine6 import io, screen, session, database
+import sys
 
 from . import lib
 
@@ -7,14 +8,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     screen.init()
-    screen.setarea("con")
-
+    lib.setbottombar(args, "con")
 
     try:
-        lib.runmodule(args, "main")
+        if lib.runmodule(args, "main") is False:
+            io.echo(f"error running module main", level="error")
+            sys.exit(-1)
     except EOFError:
-        print("EOF")
+        io.echo("**EOF**")
     except KeyboardInterrupt:
-        print("INTR")
+        io.echo("**INTR**")
     finally:
         io.echo("{decsc}{curpos:%d,0}{el}{decrc}{reset}{/all}" % (io.getterminalheight()))
