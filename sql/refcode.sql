@@ -1,6 +1,6 @@
 create table engine.__refcode (
-    code text unique not null primary key,
-    createdbymoniker text constraint fk_refcode_createdby references engine.__member(moniker) on update cascade on delete set null,
+    code citext unique not null primary key,
+    createdbymoniker citext constraint fk_refcode_createdby references engine.__member(moniker) on update cascade on delete set null,
     datecreated timestamptz,
     status text,
     dateactivated timestamptz
@@ -22,8 +22,8 @@ grant select on engine.refcode to web, term;
 grant all on engine.refcode to :sysop;
 
 create table engine.map_refcode_use (
-    code text not null constraint fk_map_refcode_use references engine.__refcode(code) on update cascade on delete set null,
-    usedbymoniker text not null constraint fk_refcode_usedbymoniker references engine.__member(moniker) on update cascade on delete set null,
+    code citext not null constraint fk_map_refcode_use references engine.__refcode(code) on update cascade on delete set null,
+    usedbymoniker citext not null constraint fk_refcode_usedbymoniker references engine.__member(moniker) on update cascade on delete set null,
     dateused timestamptz
 --    timezone(currentmember.tz, dateused) as dateusedlocal
 )
@@ -31,5 +31,5 @@ create table engine.map_refcode_use (
 ;
 
 
-grant all on engine.map_refcode_use to :sysop;
-grant select,update on engine.map_refcode_use to web, term;
+grant all on engine.map_refcode_use to sysop;
+grant select,update,insert on engine.map_refcode_use to web, term;
