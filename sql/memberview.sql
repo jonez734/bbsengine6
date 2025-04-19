@@ -1,4 +1,4 @@
-\echo memberview.sql
+--\echo memberview.sql
 --create view engine.member as 
 --  select m.*, 
 --    extract(epoch from lastlogin) as lastloginepoch,
@@ -15,16 +15,23 @@
 
 create or replace view engine.member as
   select m.*,
-  (select count(notify1.id) from engine.notify as notify1 where notify1.memberid = m.id) as notifycount,
-  (select count(notify2.id) from engine.notify as notify2 where notify2.memberid = m.id and notify2.status='sent') as sentnotifycount,
+  (select count(alert1.id) from engine.alert as alert1 where alert1.membermoniker = m.moniker) as alertcount,
+  (select count(alert2.id) from engine.alert as alert2 where alert2.membermoniker = m.moniker and alert2.status='sent') as sentalertcount,
+  (select count(alert3.id) from engine.alert as alert3 where alert3.membermoniker = m.moniker and alert3.status='delivered') as sentdeliveredcount,
+  (select count(alert4.id) from engine.alert as alert4 where alert4.membermoniker = m.moniker and alert4.status='read') as sentreadcount,
+
 --  loginid,
 --  shell,
 --  (attributes->>'loginid')::text as loginid,
   extract(epoch from m.datecreated) as datecreatedepoch,
   extract(epoch from m.lastlogin) as lastloginepoch,
-  extract(epoch from m.dateapproved) as dateapprovedepoch,
-  extract(epoch from m.dateupdated) as dateupdatedepoch
+--  extract(epoch from m.dateapproved) as dateapprovedepoch,
+  extract(epoch from m.dateupdated) as dateupdatedepoch,
+  timezone(m.tz, datecreated) as datecreatedlocal,
+  timezone(m.tz, lastlogin) as lastloginlocal,
+--  timezone(m.tz, dateapproved) as dateapprovedlocal,
+  timezone(m.tz, dateupdated) as dateupdatedlocal
   from engine.__member as m
 ;
 
-grant select on engine.member to :web;
+grant select on engine.member to web, bbs;
