@@ -1,4 +1,4 @@
-\echo flagdata.sql
+--\echo flagdata.sql
 insert into engine.flag(name, defaultvalue, description) values ('SYSOP',  'f', 'SysOp Access');
 insert into engine.flag(name, defaultvalue, description) values ('MAGIC',  'f', 'Magician');
 insert into engine.flag(name, defaultvalue, description) values ('EROS',   'f', 'Adult Content');
