@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION engine.manage_role_privs(role_name TEXT, action TEXT, priv TEXT)
+CREATE OR REPLACE FUNCTION public.manage_role_privs(role_name TEXT, action TEXT, priv TEXT)
 RETURNS VOID AS $$
 BEGIN
     -- Check if action is 'grant' or 'revoke'
@@ -14,4 +14,4 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-grant execute on function engine.manage_role_privs to sysop;
+grant execute on function public.manage_role_privs to sysop;
