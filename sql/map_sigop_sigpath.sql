@@ -8,4 +8,4 @@ create table if not exists engine.map_sigop_sigpath (
     "dateapproved" timestamptz
 );
 
-create unique index if not exists idx_map_sigop_sigpath on engine.map_sigop_sigpath(memberid, sigpathpattern);
+create unique index if not exists idx_map_sigop_sigpath on engine.map_sigop_sigpath(membermoniker, sigpathpattern);
