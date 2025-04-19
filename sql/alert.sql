@@ -1,7 +1,7 @@
-\echo alert
+--\echo alert
 create table engine.__alert (
   "id" bigserial unique not null primary key,
-  "membermoniker" text not null constraint fk_alert_membermoniker references engine.__member(moniker) on update cascade on delete cascade,
+  "membermoniker" citext not null constraint fk_alert_membermoniker references engine.__member(moniker) on update cascade on delete cascade,
   "sessionid" text constraint fk_alert_sessionid references engine.__session(id) on update cascade on delete set null,
   "type" text not null,
   "status" text not null,
@@ -9,12 +9,14 @@ create table engine.__alert (
   "template" text not null,
   "urgent" boolean default 'f',
   "datecreated" timestamptz,
-  "createdbymoniker" text constraint fk_alert_createdbyid references engine.__member(moniker) on update cascade on delete set null,
+  "createdbymoniker" citext constraint fk_alert_createdbyid references engine.__member(moniker) on update cascade on delete set null,
   "dateupdated" timestamptz,
-  "updatedbymoniker" text constraint fk_alert_updatedbyid references engine.__member(moniker) on update cascade on delete set null,
+  "updatedbymoniker" citext constraint fk_alert_updatedbyid references engine.__member(moniker) on update cascade on delete set null,
   "datedisplayed" timestamptz,
   "data" jsonb
 );
+
+CREATE INDEX idx_engine_alert ON engine.__alert USING gin (data);
 
 grant all on engine.__alert to web, term;
 grant all on engine.__alert_id_seq to web;
@@ -73,7 +75,7 @@ $$;
 
 grant execute on function engine.checkalert_func to term, web;
 
-create trigger checkalert before update of membermoniker, sessionid on engine.__alert for each row execute procedure checkalert_func();
+create trigger checkalert before update of membermoniker, sessionid on engine.__alert for each row execute procedure engine.checkalert_func();
 
 -- grant select, insert, update on engine.__notify to apache;
 grant select on engine.alert to web;
