@@ -1,7 +1,7 @@
 create table if not exists engine.map_membermoniker_inetaddr (
     address inet,
     hostname text,
-    membermoniker text constraint fk_engine_membermoniker_inetaddr references engine.__member(moniker) on update cascade on delete set null,
+    membermoniker citext constraint fk_engine_membermoniker_inetaddr references engine.__member(moniker) on update cascade on delete set null,
     datestamp timestamptz
 );
 
