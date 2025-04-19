@@ -7,16 +7,16 @@ create table if not exists engine.__blurb (
 --    "flags" jsonb,
     "attributes" jsonb,
     "datecreated" timestamptz,
-    "createdbymoniker" bigint constraint fk_engine_blurb_createdbyid references engine.__member(moniker) on update cascade on delete set null,
+    "createdbymoniker" citext constraint fk_engine_blurb_createdbyid references engine.__member(moniker) on update cascade on delete set null,
     "dateupdated" timestamptz,
-    "updatedbymoniker" bigint constraint fk_engine_blurb_updatedbyid references engine.__member(moniker) on update cascade on delete set null,
+    "updatedbymoniker" citext constraint fk_engine_blurb_updatedbyid references engine.__member(moniker) on update cascade on delete set null,
     "dateapproved" timestamptz,
-    "approvedbymoniker" bigint constraint fk_engine_blurb_approvedbyid references engine.__member(moniker) on update cascade on delete set null
+    "approvedbymoniker" citext constraint fk_engine_blurb_approvedbyid references engine.__member(moniker) on update cascade on delete set null
 );
 
 -- create index idx_node_tags on engine.__node using gist(tags);
 
-grant insert, update, delete on engine.__blurb to :web, :bbs;
+grant insert, update, delete on engine.__blurb to web, bbs;
 
 create index idx_blurb_attributes ON engine.__blurb USING GIN (attributes);
 
@@ -27,10 +27,10 @@ create table if not exists engine.map_blurb_sig (
 
 create unique index if not exists idx_map_blurb_sig on engine.map_blurb_sig (blurbid, sigpath);
 
-grant insert, update, delete, select on engine.map_blurb_sig to :web;
+grant insert, update, delete, select on engine.map_blurb_sig to web;
 
 \echo grant engine.__blurb_id_seq
-grant select, update on engine.__blurb_id_seq to :web;
+grant select, update on engine.__blurb_id_seq to web;
 
 -- alter table engine.__node add column parentid bigint;
 -- alter table engine.__node add constraint fk_engine_node_parentid foreign key (parentid) references engine.__node(id) on update cascade on delete set null;
