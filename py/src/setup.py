@@ -13,7 +13,7 @@ setup(
   author="zoidtechnologies.com",
   author_email="%s@projects.zoidtechnologies.com" % (projectname),
   license="GPLv3",
-  py_modules=["bbsengine6.menu", "bbsengine6.session"],
+#  py_modules=["bbsengine6.menu", "bbsengine6.session"],
 #  scripts=["con"],
   requires=[],
   url="https://bbsengine.org/",
