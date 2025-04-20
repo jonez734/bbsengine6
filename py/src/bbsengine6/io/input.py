@@ -430,6 +430,12 @@ KEYS = {
   "=":    "KEY_DECPAM",
 }
 
+def ctrl_key_name(ch):
+        value = ord(ch)
+        if 1 <= value <= 26 and value not in ('\x04', '\x03', '\x1A'):
+            return f"KEY_CTRL_{chr(value + 64)}"
+        return None
+
 def getch(keytimeout=1.0, **kwargs):
     """Reads a single character from standard input non-blocking, handling escape sequences with a timeout."""
     import time, platform, tty, fcntl, termios, sys
@@ -441,11 +447,11 @@ def getch(keytimeout=1.0, **kwargs):
     old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     
     SLEEP_TIME = 0.001
+    MAXSLEEP = 0.5
+    BASESLEEP = 0.01
 
     CTRLKEYSEQ = {
-        "\x01": "KEY_HOME", # ^a
-        "\x05": "KEY_END", # ^e
-        "\x15": "KEY_CUTTOBOL",
+#    "\x15": "KEY_CUTTOBOL",
         "\x7F": "KEY_BACKSPACE",
         "\t":   "KEY_TAB",
         "\n":   "KEY_ENTER",
@@ -453,19 +459,16 @@ def getch(keytimeout=1.0, **kwargs):
         "\x0C": "KEY_FF"
     }
 
-#    ESCAPE_SEQUENCES = {
-#        "\x1b[A": "UP",
-#        "\x1b[B": "DOWN",
-#        "\x1b[C": "RIGHT",
-#        "\x1b[D": "LEFT"
-#    }
-    
     try:
         tty.setraw(fd)  # Set terminal to raw mode
         if platform.system() != "Darwin":  # BSD (including macOS) does not support O_NONBLOCK the same way
             fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)  # Set non-blocking mode
+
         start_time = time.time()
-        sleep_time = SLEEP_TIME
+        # next_check = start_time
+        #base_sleep = 0.01
+        # max_sleep = 0.05
+        current_sleep = BASESLEEP
 
         while time.time() - start_time < keytimeout:
             try:
@@ -473,43 +476,45 @@ def getch(keytimeout=1.0, **kwargs):
             except (IOError, OSError):  # Handle BSD non-blocking read failure gracefully
                 ch = ''
             except KeyboardInterrupt:
-              raise
+                raise
 
-#            print(f"bbsengine.io.input.getch.200: {ch=}")
             if ch:
-              start_time = time.time()
-              sleep_time = SLEEP_TIME
-              if ch in CTRLKEYSEQ:
-                  return CTRLKEYSEQ[ch]
-              elif ch == "\x03":
-                  raise KeyboardInterrupt
-              elif ch == "\x04":
-                  raise EOFError
-              elif ch == "\x1b":  # Escape sequence
-                  seq = ""
-                  for _ in range(5):  # Read up to 5 additional characters
-                      try:
-                          next_ch = stream.read(1) if stream.readable() else ''
-                      except (IOError, OSError):
-                          next_ch = ''
-                      if not next_ch:
-                          break
-                      seq += next_ch
-                      if seq in KEYS:
-                          return KEYS[seq]
-                  return "\x1b"+seq  # Return raw sequence if unknown
-              return ch  # Return single character if not an escape sequence
-            
-            time.sleep(sleep_time)  # Prevent busy-waiting
-            sleep_time = min(sleep_time * 2, 0.05)  # Increase sleep time gradually, max 0.05 sec
-        
+                start_time = time.time()
+                current_sleep = BASESLEEP
+
+                if ch in CTRLKEYSEQ:
+                    return CTRLKEYSEQ[ch]
+                elif ch == "\x03":
+                    raise KeyboardInterrupt
+                elif ch == "\x04":
+                    raise EOFError
+                elif ch == "\x1B":  # Escape sequence
+                    seq = ""
+                    sub_start = time.time()
+                    while time.time() - sub_start < 0.1:  # Short timeout for escape sequences
+                        try:
+                            next_ch = stream.read(1) if stream.readable() else ''
+                        except (IOError, OSError):
+                            next_ch = ''
+                        if not next_ch:
+                            break
+                        seq += next_ch
+                        if seq in KEYS:
+                            return KEYS[seq]
+                    if not seq:
+                        return "KEY_ESC" # "\x1b"  # Single ESC press detected
+                    return "\x1b"+seq  # Return raw sequence if unknown
+
+                ctrl_name = ctrl_key_name(ch)
+                if ctrl_name:
+                    return ctrl_name
+
+                return ch  # Return single character if not an escape sequence
+
+            current_sleep = min(current_sleep * 1.02, MAXSLEEP)  # Increase sleep time gradually, max 0.05 sec
+            time.sleep(current_sleep)  # Prevent busy-waiting
+
         return None  # Timeout expired
-    
-    except Exception as e:
-#        echo(f"bbsengine6.io.getch.100: {e}")
-        raise
-        #return None
-    
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # Restore terminal settings
         fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)  # Restore original flags
