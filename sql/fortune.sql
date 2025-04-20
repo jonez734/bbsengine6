@@ -16,7 +16,7 @@ create view engine.fortune as
         (attributes->>'description') as description,
         (attributes->>'author') as author,
         (attributes->>'reference') as reference
-    from engine.blurb
+    from engine.__blurb
 ;
 
-grant select on engine.fortune to :web;
+grant select on engine.fortune to web;
