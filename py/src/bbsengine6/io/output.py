@@ -344,15 +344,15 @@ def echo(buf:str="", **kw):
     if level is not None:
         prefix = ""
         if level == "debug":
-            prefix = "{level.debug}" # {bglightblue}{blue}"
+            prefix = "{level.debug}D: " # {bglightblue}{blue}"
         elif level == "warn" or level == "warning":
-            prefix = "{level.warning}" # {bgyellow}{black}"
+            prefix = "{level.warning}W: " # {bgyellow}{black}"
         elif level == "error":
-            prefix = "{level.error}" # {bgred}{black}"
+            prefix = "{level.error}E: " # {bgred}{black}"
         elif level == "success" or level == "ok":
             prefix = "{level.ok}" # {bggreen}{black}"
         elif level == "info":
-            prefix = "{level.info}" # {bgwhite}{blue}"
+            prefix = "{level.info}I: " # {bgwhite}{blue}"
         print(tostr(f"{prefix} ")+tostr(buf, interpret=False)+tostr(" {normalcolor}"), flush=True)
         return
 
