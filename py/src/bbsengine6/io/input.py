@@ -348,6 +348,7 @@ def inputchoice(prompt:str, options:str, default:str="", **kwargs) -> str:
   default = default.upper() if default is not None else ""
 
   options = options.upper()
+  # echo(f"bbsengine.io.input.100: {options=} {rewriteprompt=}", level="debug")
   if rewriteprompt is True:
     prompt = f"{{var:promptcolor}}{prompt} [{{var:optioncolor}}{options.replace(default, f'({default})')}{{var:promptcolor}}]: {{var:inputcolor}}"
 #  options = "".join(sorted(options))
