@@ -10,10 +10,10 @@ from .const import *
 
 
 # @see https://stackoverflow.com/questions/9043551/regex-that-matches-integers-only
-def inputinteger(prompt, oldvalue=None, **kw) -> int:
+def inputinteger(prompt, oldvalue=None, **kwargs) -> int:
   oldvalue = int(oldvalue) if oldvalue is not None else ""
-  filter = kw["filter"] if "filter" in kw else r"^([+-]?[1-9]\d*|0)[ ,]?$"
-  buf = inputstring(prompt, oldvalue, filter=filter, **kw)
+  filter = kwargs.get("filter", r"^([+-]?[1-9]\d*|0)[ ,]?$")
+  buf = inputstring(prompt, oldvalue, filter=filter, **kwargs)
 
   if buf is None or buf == "":
     return None
@@ -42,7 +42,7 @@ def inputinteger(prompt, oldvalue=None, **kw) -> int:
 # @since 20200626
 # @since 20200729
 # @since 20200901
-def gnuinputstring(prompt:str, oldvalue=None, **kw) -> str:
+def gnuinputstring(prompt:str, oldvalue=None, **kwargs) -> str:
   import readline
   args = kw["args"] if "args" in kw else Namespace()
   debug = args.debug if "debug" in args else False
@@ -138,7 +138,7 @@ def gnuinputstring(prompt:str, oldvalue=None, **kw) -> str:
     else:
       foo = str(buf)
     
-    if callable(verify) is True and verify(foo, **kw) is False:
+    if callable(verify) is True and verify(foo, **kwargs) is False:
       echo("verify is callable, verify() returned false", level="debug")
       done = False
       continue
@@ -227,7 +227,7 @@ def getchinputstring(prompt, originalvalue=None, **kwargs):
             else:
               foo = str(buf)
 
-            if callable(verify) is True and verify(foo, **kw) is False:
+            if callable(verify) is True and verify(foo, **kwargs) is False:
                 if debug is True:
                     echo("verify is callable, verify() returned false", level="debug")
                 done = False
@@ -282,8 +282,8 @@ def getchinputstring(prompt, originalvalue=None, **kwargs):
 #            c = completerclass(args)
             if callable(completer) is True:
                 if debug is True:
-                    echo(f"completer is callable: {args=} {kw=}", level="debug")
-                res = completer(currentword(), state=state, **kw)
+                    echo(f"completer is callable: {args=} {kwargs=}", level="debug")
+                res = completer(currentword(), state=state, **kwargs)
                 # echo(f"--> {res=}", level="debug")
                 if len(res) == 0:
                     echo("{bell}", end="", flush=True)
@@ -343,9 +343,13 @@ def inputchoice(prompt:str, options:str, default:str="", **kwargs) -> str:
   noneok = kwargs.get("noneok", False)
   help = kwargs.get("help", None)
 
+  rewriteprompt = kwargs.get("rewriteprompt", False)
+
   default = default.upper() if default is not None else ""
 
   options = options.upper()
+  if rewriteprompt is True:
+    prompt = f"{{var:promptcolor}}{prompt} [{{var:optioncolor}}{options.replace(default, f'({default})')}{{var:promptcolor}}]: {{var:inputcolor}}"
 #  options = "".join(sorted(options))
 
   echo(prompt, end="", flush=True)
@@ -432,8 +436,8 @@ KEYS = {
 
 def ctrl_key_name(ch):
         value = ord(ch)
-        if 1 <= value <= 26 and value not in ('\x04', '\x03', '\x1A'):
-            return f"KEY_CTRL_{chr(value + 64)}"
+        if 1 <= value <= 26 and value not in ('\x15', '\x04', '\x03', '\x1A'):
+          return f"KEY_CTRL_{chr(value + 64)}"
         return None
 
 def getch(keytimeout=1.0, **kwargs):
@@ -456,7 +460,8 @@ def getch(keytimeout=1.0, **kwargs):
         "\t":   "KEY_TAB",
         "\n":   "KEY_ENTER",
         "\r":   "KEY_ENTER",
-        "\x0C": "KEY_FF"
+        "\x0C": "KEY_FF",
+        "\x15": "KEY_CUTTOBOL"
     }
 
     try:
