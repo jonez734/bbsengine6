@@ -9,7 +9,7 @@ from . import io
 # @since 20220826
 def check(args, modulename, op="run", **kw):
   debug = args.debug if args is not None and args.debug is True else False
-  silent = kw["silent"] if "silent" in kw else False
+  silent = kw.get("silent", True)
   if modulename in sys.modules:
     if debug is True:
       io.echo(f"{modulename=} is in sys.modules. reloading.", level="debug")
@@ -47,7 +47,7 @@ def check(args, modulename, op="run", **kw):
     return False
 
   try:
-    if m.access(args, op) is True:
+    if m.access(args, op, **kw) is True:
       if debug is True:
         io.echo("access check passed", level="debug")
     else:
@@ -280,10 +280,10 @@ def validate_function(module_name: str, func_name: str, required_signature: Call
 
 
 # Example usage:
-def required_init(config: dict, verbose: bool) -> None:
-    pass
+#def required_init(config: dict, verbose: bool) -> None:
+#    pass
 
 #validate_function('my_module', 'init', required_init)
 
-def init(args: argparse.Namespace, **kwargs) -> boolean: pass
+#def init(args: argparse.Namespace, **kwargs) -> bool: pass
 
