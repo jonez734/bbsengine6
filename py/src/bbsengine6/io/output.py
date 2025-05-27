@@ -445,7 +445,7 @@ def echo(buf:str="", **kw):
         print(f"{buf}", end=end, flush=flush)
     # print(f"{end=}", end=end, flush=flush)
     #if end == "\n":
-    #print(end=end, flush=flush)
+    print(end=end, flush=flush)
     return
 
 def tostr(buf:str, **kw:dict):
@@ -478,3 +478,11 @@ def set_terminal_background_color(r, g, b):
 def reset_terminal_background_color():
   """Resets the terminal background color to default."""
   print(f"\033]11;\a", end="", flush=True)
+
+def strip_commands(s: str) -> str:
+  import re
+  # Remove {...} formatting commands
+  s = re.sub(r'\{[^}]+\}', '', s)
+  # Remove :emoji: style placeholders
+  s = re.sub(r':[a-zA-Z0-9_+\-]+:', '', s)
+  return s
