@@ -161,6 +161,8 @@ def tokenize(buf:str, exclude=()): # -> generator:
         yield Token(kind, value)
 
 def interpret(tokens, **kw:dict):
+    # from wcwidth import wcswidth
+    wcswidth = len
 #def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Namespace(), indent:str="---") -> str:
     global width, strip, wordwrap, end, indent, exclude, speed, pos
 
@@ -218,7 +220,7 @@ def interpret(tokens, **kw:dict):
         command, repeat = token.value
         if command is not None and command.upper() in acs:
           char = acs[command.upper()]
-          pos += len(char*int(repeat))
+          pos += wcswidth(char*int(repeat))
           yield Token("ACS", f"{ESC}(0{char*int(repeat)}{ESC}(B") # result += "\033(0%s\033(B" % (char*int(repeat))
       elif token.kind == "DECSC":
           yield token
@@ -327,6 +329,9 @@ def interpret(tokens, **kw:dict):
         yield token
 
 def echo(buf:str="", **kw):
+    wcswidth = len
+    # from wcwidth import wcswidth
+
     global pos, indent, end, wordwrap, strip, width, speed
     # width = kw["width"] if "width" in kw else terminal.width() # getterminalwidth()
     level = kw["level"] if "level" in kw else None
@@ -371,7 +376,7 @@ def echo(buf:str="", **kw):
         # for token in interpret(buf, **kw):
           if type(token) == Token:
               if token.kind == "WHITESPACE":
-                  pos += len(token.value)
+                  pos += wcswidth(token.value)
                   print(token.value, end="", flush=True)
               elif token.kind == "CURSOR":
                   print(token.value, end="", flush=True)
@@ -389,11 +394,11 @@ def echo(buf:str="", **kw):
                   kind, param = token.value
                   print(f"--> test: {kind} {param}")
               elif token.kind == "WORD":
-                  if pos+len(token.value) >= width-1 and wordwrap is True:
+                  if pos+wcswidth(token.value) >= width-1 and wordwrap is True:
                       pos = 0
                       print(f"\n", end="")
                   print(token.value, end="", flush=True)
-                  pos += len(token.value)
+                  pos += wcswidth(token.value)
                   time.sleep(SPEED*speed)
               elif token.kind == "COLOR":
                   print(token.value, end="", flush=True) # token.value, end="", flush=True)
@@ -440,7 +445,7 @@ def echo(buf:str="", **kw):
         print(f"{buf}", end=end, flush=flush)
     # print(f"{end=}", end=end, flush=flush)
     #if end == "\n":
-    print(end=end, flush=flush)
+    #print(end=end, flush=flush)
     return
 
 def tostr(buf:str, **kw:dict):
