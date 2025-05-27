@@ -186,12 +186,17 @@ def getchinputstring(prompt, originalvalue=None, **kwargs):
     def currentwordindex(): # buf, pos):
         return buf.index(currentword()) # words[wordindex])
 
+    olddisplay = ""
     def display():
+        nonlocal olddisplay
         if mask is not None:
             b = mask*len(buf)
         else:
             b = buf
-        echo(f"{{cursorhpos:1}}{{eraseline}}{prompt}{b}{{cursorleft:{len(buf)-pos}}}", flush=True, end="")
+        curdisplay  = f"{{cursorhpos:1}}{{eraseline}}{prompt}{b}{{cursorleft:{len(buf)-pos}}}"
+        if curdisplay != olddisplay:
+          echo(curdisplay, flush=True, end="") # f"{{cursorhpos:1}}{{eraseline}}{prompt}{b}{{cursorleft:{len(buf)-pos}}}", flush=True, end="")
+          olddisplay = curdisplay
 ##        echo(f"{{cursorhpos:1}}{{eraseline}}{prompt}{b}#        echo(f"{{cursorhpos:1}}{{eraseline}}{prompt}*{b}", flush=True, end="")
 #        bbsengine.screen.setarea(f"pos: {pos} len(buf): {len(buf)} len(prompt): {len(prompt)}")
 #        echo(f"pos: {pos} len(buf): {len(buf)} len(prompt): {len(prompt)}")
@@ -441,7 +446,7 @@ def ctrl_key_name(ch):
           return f"KEY_CTRL_{chr(value + 64)}"
         return None
 
-def getch(keytimeout=1.0, **kwargs):
+def getch(keytimeout=0.125, **kwargs):
     """Reads a single character from standard input non-blocking, handling escape sequences with a timeout."""
     import time, platform, tty, fcntl, termios, sys
 
@@ -451,9 +456,9 @@ def getch(keytimeout=1.0, **kwargs):
     old_settings = termios.tcgetattr(fd)
     old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
     
-    SLEEP_TIME = 0.001
-    MAXSLEEP = 0.5
-    BASESLEEP = 0.01
+    # SLEEP_TIME = 0.010
+    MAXSLEEP = 0.050
+    BASESLEEP = 0.010
 
     CTRLKEYSEQ = {
 #    "\x15": "KEY_CUTTOBOL",
