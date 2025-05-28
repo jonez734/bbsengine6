@@ -48,20 +48,16 @@ def check(args, modulename, op="run", **kw):
 
   try:
     if m.access(args, op, **kw) is True:
-      if debug is True:
-        io.echo("access check passed", level="debug")
+      io.echo("access check passed", level="debug")
     else:
       if silent is False:
         io.echo("access check failed", level="error")
       return False
   except Exception as e:
-    if debug is True:
-      import traceback
-      traceback.print_exc(file=sys.stdout)
-      return False
-    else:
-      io.echo("call to access function failed", level="error")
-      return False
+    import traceback
+    traceback.print_exc(file=sys.stdout)
+    io.echo("call to access function failed", level="error")
+    return False
 
   if (hasattr(m, "buildargs") and callable(m.buildargs)) is False:
     if debug is True:
@@ -183,7 +179,7 @@ def run(args, modulename, **kwargs):
   debug = args.debug if "debug" in args else False
   buildargs = True
 
-  if check(args, modulename) is False:
+  if check(args, modulename, **kwargs) is False:
     io.echo(f"check of {modulename=} failed. module not run.", level="error")
     return False
 
