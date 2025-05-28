@@ -1,4 +1,5 @@
 import os
+import re
 import random
 import syslog
 
@@ -129,8 +130,8 @@ def datestamp(t=None, format:str="%Y-%m-%d %I:%M%P %Z (%a)") -> str:
   return t.strftime(format)
 
 # @since 20230523 copied from bbsengine5
-def inputpassword(prompt:str="password: ", mask="X", **kw) -> str:
-  return io.inputstring(prompt, "", mask=mask, **kw)
+def inputpassword(prompt:str="password: ", mask:str="X", **kwargs) -> str:
+  return io.inputstring(prompt, "", mask=mask, **kwargs)
 
   buf = ""
   done = False
@@ -438,3 +439,94 @@ def getremoteaddr():
   if "SSH_CONNECTION" in os.environ:
     return os.environ.get("SSH_CONNECTION", None).split()[0]
   return None
+
+def getcurrentloginid(args):
+  import os
+  # loginid = os.getlogin()
+  # io.echo(f"bbsengine.util.getcurrentloginid.100: {loginid=}", level="debug")
+  return os.getlogin()
+
+# @since 20241212
+def get_safe_path(args, *components, **kwargs):
+    """
+    Constructs a safe path by joining multiple path components.
+    Expands environment variables and user home director and normalizes
+    """
+    if not components:
+        raise ValueError("At least one path component must be provided.")
+
+    # Expand environment variables and `~` in all components
+    components = [os.path.expandvars(os.path.expanduser(component)) for component in components]
+
+    # Join all components
+    joined_path = os.path.join(*components)
+
+    # Normalize the resulting path
+    safe_path = os.path.normpath(joined_path)
+
+    # Ensure the resulting path is absolute
+    base_dir = os.path.abspath(components[0])
+    if not safe_path.startswith(base_dir):
+        raise ValueError("Invalid path: directory traversal detected.")
+
+#    # Ensure the file exists
+#    if not os.path.isfile(safe_path):
+#        raise FileNotFoundError(f"File not found: {safe_path}")
+
+    return safe_path
+
+def load_sql(args, resource_name: str, *, package: str = None) -> str:
+    """
+    Loads an SQL resource file and returns its contents as a string.
+    """
+
+    try:
+      from importlib.resources import files
+    except ImportError:
+      try:
+          from importlib_resources import files  # backport
+      except ImportError:
+          files = None  # will error later if used
+
+#    import importlib.resources as resources
+    import pathlib
+    from typing import Optional
+
+    def _resolve_package(package: Optional[str]) -> str:
+        if package is not None:
+            return package
+        if __package__:
+            return __package__ + ".sql"
+
+        # Walk up the directory tree to find the root package (by detecting the first `__init__.py`)
+        base_path = pathlib.Path(__file__).resolve()
+        while base_path.parent != base_path:
+            # Check if the current directory has an __init__.py (indicating it's a package)
+            if (base_path / "__init__.py").exists():
+                return base_path.name + ".sql"
+            base_path = base_path.parent
+
+        # If we reached here, we couldn't determine the package — raise an error
+        raise ValueError("Unable to determine the package for resource loading")
+
+    resolved_package = _resolve_package(package)
+    return files(resolved_package).joinpath(resource_name).read_text(encoding='utf-8')
+
+from datetime import datetime
+
+def serialize_datetimes(data):
+    result = {}
+    for key, subdict in data.items():
+        val = subdict.get("value")
+        if isinstance(val, datetime):
+            # Use ISO format or str(val) if you prefer
+            result[key] = {"value": val.isoformat()}
+        else:
+            result[key] = subdict
+    return result
+
+ANSI_ESCAPE_RE = re.compile(r'\x1b\[[0-9;]*m')
+
+def strip_ansi(s: str) -> str:
+    """Remove ANSI escape sequences from a string for display width measurement."""
+    return ANSI_ESCAPE_RE.sub('', s)
