@@ -27,7 +27,7 @@ def main(args, **kwargs) -> bool:
             io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}{c}{{var:labelcolor}}: ", end="")
             if database.classexists(args, c, conn=conn) is False:
                 io.echo("import ", end="")
-                if database.importsql(args, lib.SQLDIR, sql, conn=conn) is False:
+                if database.importsql(args, sql, conn=conn) is False:
                     io.echo(" fail ", level="error")
                     conn.rollback()
                     failcount += 1
