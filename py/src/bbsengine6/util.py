@@ -440,7 +440,7 @@ def getremoteaddr():
     return os.environ.get("SSH_CONNECTION", None).split()[0]
   return None
 
-def getcurrentloginid(args):
+def getcurrentloginid(args, **kwargs):
   import os
   # loginid = os.getlogin()
   # io.echo(f"bbsengine.util.getcurrentloginid.100: {loginid=}", level="debug")
