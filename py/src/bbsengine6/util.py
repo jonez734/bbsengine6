@@ -6,6 +6,8 @@ import syslog
 #import ttyio6 as ttyio
 from . import io, input, database
 
+LOGGER_NAME = "bbsengine6"
+
 def hr(color="{var:engine.title.hrcolor}", chars="-", width=None, padding=" "):
     if width is None:
         width = io.getterminalwidth()-2
@@ -168,31 +170,83 @@ def oxfordcomma(seq, conjunction:str="and") -> str:
     buf = f"{{var:sepcolor}}, {{var:valuecolor}}"
     return f"{{var:valuecolor}}{buf.join(seq[:-1])}{{var:sepcolor}}, {conjunction} {{var:valuecolor}}{seq[-1]}"
 
-def logentry(message, output=True, level=None, priority=syslog.LOG_INFO, strip=False, datestamp=True, prg=None):
-  import logging
+# ---------
+# logging
+# ---------
+import logging
+import logging.handlers
 
-  if level is not None:
-    if level == "debug":
-      logging.debug(message)
-      message = f"{{var:level.debug}}** debug ** {message}{{/all}}"
-    elif level == "info":
-      logging.info(message)
-      message = f"{{var:level.info}}** info ** {message}{{/all}}"
-    elif level == "warn" or level == "warning":
-      logging.warning(message)
-      message = f"{{var:level.warn}}** warn ** {message}{{/all}}"
-    elif level == "error":
-      logging.error(message)
-      message = f"{{var:level.error}}** error ** {message}{{/all}}"
-    elif level == "critical" or level == "crit":
-      logging.critical(message)
-      message = f"{{var:level.crit}}** critical ** {message}{{/all}}"
+# default syslog handler
+default_handler = logging.handlers.SysLogHandler(address="/dev/log")
+default_formatter = logging.Formatter('%(name)s[%(process)d]: %(levelname)s %(message)s')
+default_handler.setFormatter(default_formatter)
 
-  syslog.syslog(priority, io.tostr(message, strip=True))
+# @since 20251006 copied from asimov
+def logentry(message, *, level=logging.INFO, handler=None, formatter=None, logger_name=LOGGER_NAME):
+    """
+    Write a log entry to syslog (by default), with optional handler/formatter overrides.
 
-  if output is True:
-    io.echo(message, strip=strip, datestamp=datestamp)
-  return
+    Args:
+        message (str): The log message.
+        level (int): Logging level (default=logging.INFO).
+        handler (logging.Handler, optional): Custom logging handler.
+        formatter (logging.Formatter, optional): Custom formatter.
+        logger_name (str): Name for the logger (default="myapp").
+    """
+
+    h = handler or default_handler
+    f = formatter or default_formatter
+
+    # Ensure formatter is applied
+    h.setFormatter(f)
+
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.DEBUG)   # capture all levels
+    if not any(isinstance(x, type(h)) for x in logger.handlers):
+        logger.addHandler(h)
+
+    levels = {
+        "debug":    logging.DEBUG,
+        "info":     logging.INFO,
+        "warn":     logging.WARNING,
+        "warning":  logging.WARNING,
+        "error":    logging.ERROR,
+        "critical": logging.CRITICAL,
+#        "exception":logging.EXCEPTION,
+    }
+
+    level = level.lower()
+    if level in levels:
+        level = levels[level]
+
+    logger.log(level, message)
+    return
+
+#def logentry(message, output=True, level=None, priority=syslog.LOG_INFO, strip=False, datestamp=True, prg=None):
+#  import logging
+#
+#  if level is not None:
+#    if level == "debug":
+#      logging.debug(message)
+#      message = f"{{var:level.debug}}** debug ** {message}{{/all}}"
+#    elif level == "info":
+#      logging.info(message)
+#      message = f"{{var:level.info}}** info ** {message}{{/all}}"
+#    elif level == "warn" or level == "warning":
+#      logging.warning(message)
+#      message = f"{{var:level.warn}}** warn ** {message}{{/all}}"
+#    elif level == "error":
+#      logging.error(message)
+#      message = f"{{var:level.error}}** error ** {message}{{/all}}"
+#    elif level == "critical" or level == "crit":
+#      logging.critical(message)
+#      message = f"{{var:level.crit}}** critical ** {message}{{/all}}"
+#
+#  syslog.syslog(priority, io.tostr(message, strip=True))
+#
+#  if output is True:
+#    io.echo(message, strip=strip, datestamp=datestamp)
+#  return
 
 # @since 20230612 copied from bbsengine5
 # @see https://rosettacode.org/wiki/Range_extraction#Python
