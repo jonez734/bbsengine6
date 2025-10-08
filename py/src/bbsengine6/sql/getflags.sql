@@ -27,5 +27,4 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
 grant EXECUTE on function engine.getflags to web, term, sysop;

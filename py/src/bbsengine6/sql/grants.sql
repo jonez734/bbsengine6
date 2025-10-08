@@ -1,4 +1,4 @@
-grant select on engine.member to bbs;
+grant select on engine.member to web, term;
 grant select,update,delete on engine.flag to web, term;
 grant insert on engine.flag to :sysop;
 grant select on engine.sig to web, term;

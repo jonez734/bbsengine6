@@ -34,4 +34,4 @@ create or replace view engine.member as
   from engine.__member as m
 ;
 
-grant select on engine.member to web, bbs;
+grant select on engine.member to web, term, sysop;

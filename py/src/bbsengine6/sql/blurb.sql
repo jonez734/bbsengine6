@@ -16,7 +16,7 @@ create table if not exists engine.__blurb (
 
 -- create index idx_node_tags on engine.__node using gist(tags);
 
-grant insert, update, delete on engine.__blurb to web, bbs;
+grant insert, update, delete on engine.__blurb to web, term;
 
 create index idx_blurb_attributes ON engine.__blurb USING GIN (attributes);
 

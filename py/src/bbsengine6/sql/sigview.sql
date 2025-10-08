@@ -12,4 +12,4 @@ create view engine.sig as
 
 --create unique index idx_engine_sig_path on engine.__sig(path);
 
-grant select on engine.sig to web, bbs;
+grant select on engine.sig to web, term, sysop;

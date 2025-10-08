@@ -1,5 +1,8 @@
 CREATE OR REPLACE FUNCTION public.manage_role_privs(role_name TEXT, action TEXT, priv TEXT)
-RETURNS VOID AS $$
+RETURNS VOID
+security definer
+language plpgsql
+AS $$
 BEGIN
     -- Check if action is 'grant' or 'revoke'
     IF action = 'grant' THEN
@@ -12,6 +15,6 @@ BEGIN
         RAISE EXCEPTION 'Invalid action. Use ''grant'' or ''revoke''.';
     END IF;
 END;
-$$ LANGUAGE plpgsql;
+$$;
 
 grant execute on function public.manage_role_privs to sysop;
