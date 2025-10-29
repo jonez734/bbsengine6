@@ -4,21 +4,12 @@ bbsengine6
 dependencies
 ------------
 
-common
--------
 - postgresql
 - bbsengine6
-
-web
----
+- python3
 - php8.1
 - apache2
-- PEAR packages: html_quickform2
-
-terminal
---------
-- python3.11
-- ttyio6
+- PEAR package: html_quickform2
 
 changes
 -------
