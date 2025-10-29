@@ -9,4 +9,5 @@ dependencies
 
 website
 -------
-see (https://bbsengine.org/)[bbsengine.org]
+see [https://bbsengine.org/](bbsengine.org)
+
