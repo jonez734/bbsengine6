@@ -1,15 +1,14 @@
 from math import ceil
 from typing import NamedTuple
 
-#import ttyio6 as ttyio
-from . import io, screen
+from . import io, screen, database
 
 class Op(NamedTuple):
   kind: str
   listitem: object
 
 class ListboxItem(object):
-    def __init__(self, rec, width:int, height:int=1, counter:int=1):
+    def __init__(self, rec, width:int, height:int=1, counter:int=1, **kwargs):
       self.status = ""
 #      self.pk = f"{rec['person_key']}{rec['date_start']}"
       self.label = f"item #{counter}"
@@ -26,15 +25,21 @@ class ListboxItem(object):
       return
 
 class Listbox(object):
-    def __init__(self, args, title="", pagesize=20, keyhandler=None, totalitems=0, itemclass=None, **kw):
-        self.cur = kw["cur"] if "cur" in kw else None
-#        io.echo(f"{kw=}")
+    def __init__(self, args, title:str="", pagesize:int=20, keyhandler:callable=None, totalitems:int=0, itemclass=None, **kwargs):
+#        io.echo(f"bbsengine.listbox.Listbox.260: {kwargs=}", level="debug")
+        self.cur = kwargs.get("cur", None)
+#        io.echo(f"bbsengine.listbox.Listbox.220: {self.cur=}", level="debug")
+
+        self.args = args
+        self.kwargs = kwargs
+
+        io.echo(f"bbsengine.listbox.Listbox.280: {self.args=} {self.kwargs=}", level="debug")
+
         self.page = 0
         self.curpos = 0
         self.pagesize = pagesize
         self.items = []
         self.title  = title
-        self.args = args
         self.currentitem = None
         self.keyhandler = keyhandler
         self.totalitems = totalitems
@@ -43,17 +48,19 @@ class Listbox(object):
         self.fetchpage()
         self.numpages = ceil(self.totalitems / self.pagesize)
         self.numitems = 0
-#        io.echo(f"{self.totalitems=} {self.numpages=} {self.numitems=}", level="debug")
 
     def fetchpage(self):
 #        ttyio.echo(f"{self.page=} {self.curpos=}", level="debug")
+        if self.cur is None:
+          io.echo(f"bbsengine.listbox.Listbox.fetchpage.200: {cur=}", level="error")
+          return None
         self.cur.scroll(self.page*self.pagesize, mode="absolute")
         self.items = []
         for rec in self.cur.fetchmany(self.pagesize):
-            self.items.append(self.itemclass(rec, self.terminalwidth))
+            self.items.append(self.itemclass(rec, self.terminalwidth, **self.kwargs))
         self.numitems = len(self.items)
         return self.items
-    
+
     def displayitems(self):
       num = 0
       for item in self.fetchpage(): # items:
@@ -69,7 +76,7 @@ class Listbox(object):
           io.echo(f"{{/all}}{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}} {' '.ljust(self.terminalwidth-8, ' ')}{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}")
 
     def display(self):
-        io.echo(f"{self.curpos=} {self.page=} {self.numitems=}")
+        io.echo(f"{self.curpos=} {self.page=} {self.numitems=}", level="debug")
         self.fetchpage()
         self.currentitem = self.items[self.curpos]
 
@@ -90,7 +97,7 @@ class Listbox(object):
           io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:{self.terminalwidth-7}}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
 
         if self.args.debug is True:
-          screen.setarea(f"{self.curpos=} {len(self.items)} {self.currentitem=}")
+          screen.setbottombar(f"{self.curpos=} {len(self.items)=} {self.currentitem=}")
 
         self.displayitems()
 
@@ -99,7 +106,7 @@ class Listbox(object):
         io.echo(f" {{var:engine.menu.color}}{' '*(self.terminalwidth-2)}{{/all}}", wordwrap=False)
         return
 
-    def handle(self, prompt="listbox: "):#, default="X"):
+    def handle(self, prompt:str="listbox: "):#, default="X"):
         io.echo(f"{{f6}} {prompt}{{savecursor}}{{cha}}{{cursorright:4}}{{cursorup:4}}{{cursorup:{self.pagesize-self.curpos}}}{{var:engine.menu.cursorcolor}}{{cursorleft}}", end="", flush=True)
 #        io.echo(f"{io.terminal.cursorpositions=}")
         self.currentitem = self.items[self.curpos]
@@ -116,7 +123,10 @@ class Listbox(object):
         done = False
         while not done:
 #          screen.setarea(f"{self.page+1=} {self.numpages=}")
-          ch = io.getch(noneok=False).upper()
+          ch = io.getch(noneok=False)
+          if ch is None:
+            continue
+##          ch = ch.upper()
           io.setvar("cic", "{var:itemcolor}")
           self.currentitem.display()
           if ch == "KEY_DOWN":
