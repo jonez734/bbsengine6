@@ -1,6 +1,3 @@
-bbsengine6
-==========
-
 dependencies
 ------------
 
