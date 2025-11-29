@@ -6,10 +6,28 @@ from typing import get_type_hints, Callable
 
 from . import io
 
+# @since 20251128
+def _check_params(func_name: str, params: dict, required: list, optional_kwargs: bool = False):
+    """
+    Helper to check for required parameters by name.
+    Returns True on success, False on failure.
+    """
+    for p in required:
+        if p not in params:
+            io.echo(f"missing '{p}' from {func_name}()", level="error")
+            return False
+
+    if not optional_kwargs and "kw" not in params and "kwargs" not in params:
+        io.echo(f"missing 'keyword args' in {func_name}()", level="error")
+        return False
+    return True
+
 # @since 20220826
 def check(args, modulename, op="run", **kw):
   debug = args.debug if args is not None and args.debug is True else False
   silent = kw.get("silent", True)
+
+  # --- Module Import and Reload ---
   if modulename in sys.modules:
     if debug is True:
       io.echo(f"{modulename=} is in sys.modules. reloading.", level="debug")
@@ -32,16 +50,20 @@ def check(args, modulename, op="run", **kw):
   if debug is True:
     io.echo(f"bbsengine6.module.check.100: {type(m)=} {m=}", level="debug")
 
-  if (hasattr(m, "init") and callable(m.init)) is False:
+  # --- Check init() (Required) ---
+  if hasattr(m, "init") is False:
     if debug is True:
       io.echo("no init function", level="warn")
     return False
+  if callable(m.init) is False:
+    io.echo("init function is not callable", level="error")
+    return False
 
+  # --- Check access() (Required) ---
   if hasattr(m, "access") is False:
     if debug is True:
       io.echo("no access function", level="error")
     return False
-
   if (callable(m.access)) is False:
     io.echo("no callable access function", level="error")
     return False
@@ -59,11 +81,14 @@ def check(args, modulename, op="run", **kw):
     io.echo("call to access function failed", level="error")
     return False
 
-  if (hasattr(m, "buildargs") and callable(m.buildargs)) is False:
+  # --- Check buildargs() (Optional) ---
+  if hasattr(m, "buildargs") is False:
     if debug is True:
       io.echo("no callable buildargs function", level="debug")
-#    if buildargs is True:
-#      return False
+    # Do not return False, buildargs is optional
+  elif callable(m.buildargs) is False:
+    io.echo("buildargs function is not callable", level="error")
+    return False
 
   if debug is True:
     if hasattr(m, "main"):
@@ -71,33 +96,50 @@ def check(args, modulename, op="run", **kw):
     if callable(m.main):
       io.echo("main attribute is callable", level="debug")
 
-  # required
-  if (hasattr(m, "main") and callable(m.main)) is False:
+  # --- Check main() (Required) ---
+  if hasattr(m, "main") is False:
+    io.echo("no working main function", level="error")
+    return False
+  if callable(m.main) is False:
     io.echo("no working main function", level="error")
     return False
 
   if debug is True:
     io.echo("checking signatures", level="debug")
 
-  for f in ("init", "access", "buildargs", "main"):
-#    argspec = inspect.getargspec(eval("m.{f}"))
-#    ttyio.echo(f"bbsengine6.module.check.100: {argspec=}", level="debug")
+  # --- Setup Functions for Signature Check ---
+  functions_to_check = ["init", "access", "buildargs", "main"]
+
+  # Check for optional version()
+  if hasattr(m, "version"):
+    if callable(m.version) is False:
+      io.echo("version function is not callable", level="error")
+      return False
+    functions_to_check.append("version")
+
+  # --- Parameter Signature Check ---
+  for f in functions_to_check:
+    # Skip buildargs if it wasn't found (since it's optional)
+    if f == "buildargs" and not hasattr(m, "buildargs"):
+        continue
+
+    # Skip version if it wasn't found (since it's optional)
+    if f == "version" and not hasattr(m, "version"):
+        continue
+
     sig = inspect.signature(eval(f"m.{f}"))
     params = sig.parameters
 
     if args.debug is True:
       io.echo(f"{sig=} {params=}", level="debug")
 
-    if f == "access" and "op" not in params:
-      io.echo("missing 'op' in access()", level="error")
-    # check to be sure 'op' is an str @ty ryan
+    required_params = ["args"]
+    if f == "access":
+      required_params.append("op")
 
-    if "args" not in params:
-      io.echo(f"missing 'args' from {f}()", level="error")
-    if "kw" not in params and "kwargs" not in params:
-      io.echo(f"missing 'keyword args' in {f}()", level="error")
-#    if "args" not in sig:
-#      ttyio.echo(f"{f}() is missing 'args' parameter", level="warn")
+    # All checked functions must have 'args' and **kwargs
+    if not _check_params(f, params, required_params):
+      return False
 
   return True
 
