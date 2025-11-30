@@ -9,6 +9,7 @@ def darken(prefix, rgb, percentage):
   b *= 1-percentage
   return "%s;2;%d;%d;%d;%dm" % (prefix, r, g, b, a)
 
+# @see https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797#rgb-colors
 def rgb(prefix, rgb):
   if len(rgb) == 3:
     (r, g, b) = rgb
