@@ -1,9 +1,11 @@
 #import sys
 
-from .output import *
+###from .output import *
 from .input import *
-from . import echovars
+###from . import echovars
 from . import terminal # from .terminal import *
+
+from .echo import echo, echo_file, echo_iter
 
 from .lib import *
 
