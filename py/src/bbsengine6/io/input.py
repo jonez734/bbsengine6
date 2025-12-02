@@ -3,9 +3,10 @@ import tty
 import time
 import fcntl
 import termios
-import argparse
+from argparse import Namespace
 
-from .output import *
+###from .output import *
+from .echo import echo
 from .const import *
 
 # @see https://stackoverflow.com/questions/9043551/regex-that-matches-integers-only
@@ -192,7 +193,7 @@ def getchinputstring(prompt, originalvalue=None, **kwargs):
             b = mask*len(buf)
         else:
             b = buf
-        curdisplay  = f"{{cursorhpos:1}}{{eraseline}}{prompt}{b}{{cursorleft:{len(buf)-pos}}}"
+        curdisplay  = f"{{cha:1}}{{eraseline}}{prompt}{b}{{cursorleft:{len(buf)-pos}}}"
         if curdisplay != olddisplay:
           echo(curdisplay, flush=True, end="") # f"{{cursorhpos:1}}{{eraseline}}{prompt}{b}{{cursorleft:{len(buf)-pos}}}", flush=True, end="")
           olddisplay = curdisplay
@@ -597,4 +598,3 @@ def accept(prompt:str, options:str, default:str="", debug:bool=False) -> str:
         return ch
     elif ch in options:
       return ch
-
