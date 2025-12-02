@@ -32,7 +32,7 @@ _skin = {
 
 "optioncolor": "{white}{bggray}",
 "currentoptioncolor": "{bgwhite}{gray}",
-"bottombarcolor": "{bggray}{white}",
+"bottombarcolor": "{bgwhite}{black}",
 "promptcolor": "{/bgcolor}{white}", # {lightgray}",
 "inputcolor": "{/bgcolor}{green}",
 "normalcolor": "{/bgcolor}{lightgray}",
@@ -489,7 +489,7 @@ def _handle_home(token):
 # erasedisplay
 # tobottom = 1, totop = 2, default = 0 = full
 def _handle_ed(token):
-    print(f"**** _handle_ed.100: {token=}")
+##    print(f"**** _handle_ed.100: {token=}")
     mode = int(token.args[0]) if len(token.args) == 1 else 2
     token.text = f"{CSI}{mode}J"
     yield token
@@ -499,7 +499,7 @@ def _handle_ed(token):
 # 2 = clear whole line
 # EL0 – Erase in Line (cursor to end of line)
 def _handle_elo(token):
-    print(f"**** _handle_ed.100: {token=}")
+##    print(f"**** _handle_ed.100: {token=}")
     mode = int(token.args[0]) if len(token.args) == 1 else 0
     token.text = f"{CSI}{mode}K"
     yield token
@@ -524,7 +524,7 @@ def _handle_cuf(token):
 
 def _handle_cub(token):
     repeat = int(token.args[0]) or 1
-    print(f"_handle_cub.100: {token=}")
+##    print(f"_handle_cub.100: {token=}")
     token.repeat = 1
     token.text = f"{CSI}{repeat}D"
     yield token
