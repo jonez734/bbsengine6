@@ -72,6 +72,7 @@ def start(args, **kwargs):
 
     conn = kwargs.get("conn", None)
     if conn is None:
+        pool = kwargs.get("pool", None)
         if pool is None:
             return False
         with database.connect(args, **kwargs) as conn:
