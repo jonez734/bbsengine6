@@ -9,34 +9,6 @@ from argparse import Namespace
 from .echo import echo
 from .const import *
 
-# @see https://stackoverflow.com/questions/9043551/regex-that-matches-integers-only
-def inputinteger(prompt, oldvalue=None, **kwargs) -> int:
-  oldvalue = int(oldvalue) if oldvalue is not None else ""
-  filter = kwargs.get("filter", r"^([+-]?[1-9]\d*|0)[ ,]?$")
-  buf = inputstring(prompt, oldvalue, filter=filter, **kwargs)
-
-  if buf is None or buf == "":
-    return None
-  
-#  print(f"type(buf)={type(buf)!r}")
-  if type(buf) is list:
-    res = []
-    for b in buf:
-      try:
-        res.append(int(b))
-      except:
-        return
-#    echo(f"res={res!r}", level="debug")
-    return res
-  else:
-#    echo("inputinteger.100: plain int, not a list", level="debug")
-    try:
-      res = int(buf)
-    except:
-      return
-    else:
-      return res
-
 # @since 20110323
 # @since 20190913
 # @since 20200626
@@ -340,78 +312,8 @@ def inputstring(*argv, style="ttyio", **kwargs):
     return gnuinputstring(*argv, **kwargs)
   return getchinputstring(*argv, **kwargs)
 
-# @since 20230105 backported from ttyio6 (bugfix)
-# @see https://ballingt.com/nonblocking-stdin-in-python-3/
-# @since 20230512 renamed from 'inputchar' in ttyio5 @BCBREAK
-def inputchoice(prompt:str, options:str, default:str="", **kwargs) -> str:
-  args = kwargs.get("args", None)
-  noneok = kwargs.get("noneok", False)
-  help = kwargs.get("help", None)
-
-  rewriteprompt = kwargs.get("rewriteprompt", False)
-
-  default = default.upper() if default is not None else ""
-
-  options = options.upper()
-  # echo(f"bbsengine.io.input.100: {options=} {rewriteprompt=}", level="debug")
-  if rewriteprompt is True:
-    prompt = f"{{var:promptcolor}}{prompt} [{{var:optioncolor}}{options.replace(default, f'({default})')}{{var:promptcolor}}]: {{var:inputcolor}}"
-#  options = "".join(sorted(options))
-
-  echo(prompt, end="", flush=True)
-
-  done = False
-  while not done:
-    ch = getch() # .decode("UTF-8")
-    if ch is not None:
-      ch = ch.upper()
-
-    if ch == "KEY_ENTER":
-      if noneok is True:
-        return None
-      elif default is not None and default != "":
-        return default
-      else:
-        echo("{bell}", end="", flush=True)
-        continue
-    elif (ch == "?" or ch == "KEY_HELP"): #  and callable(helpcallback) is True:
-      echo("help")
-      if callable(help):
-        help(**kwargs)
-      elif type(help) is str:
-        echo(help)
-      echo(prompt, end="", flush=True)
-    elif ch is not None:
-        if ch[:4] == "KEY_" or ch in options:
-            break
-        echo("{bell}", end="", flush=True)
-        continue
-     
-  return ch
-
 # @since 20230621
-inputchar = inputchoice
-
-# @since 20210203
-def inputboolean(prompt:str, default:str=None, options="YN", **kwargs) -> bool:
-#    echo(f"inputboolean.100: {prompt=} {default=} {options=}", level="debug")
-    ch = inputchoice(prompt, options, default, **kwargs)
-    if ch is not None:
-        ch = ch.upper()
-        if ch == "Y":
-            echo("Yes")
-            return True
-        elif ch == "T":
-            echo("True")
-            return True
-        elif ch == "N":
-            echo("No")
-            return False
-        elif ch == "F":
-            echo("False")
-            return False
-    return None
-
+##inputchar = inputchoice
 
 terinallock = None
 
