@@ -125,7 +125,9 @@ def logentry(message, level=logging.INFO, *, handler=None, formatter=None, logge
     }
 
     if level in levels:
-        level = levels[level]
+      level = levels[level]
+    else:
+      level = logging.NOTSET
 
     logger.log(level, message)
     return
