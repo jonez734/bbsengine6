@@ -1,13 +1,13 @@
 import sys
-from . import terminal # New import to fix terminal.columns() access
-from asimov.io.echo import echo
-from asimov.io.getch import getch_str as getch
-from asimov.io.common import get_cursor_position, _current_stream_lock, _cursor_row, _cursor_col
-from asimov.io.util import setbottombar, screen_init, terminal_lines
+from . import terminal
+from .echo import echo
+from .getch import getch_str as getch
+from .common import get_cursor_position, _current_stream_lock, _cursor_row, _cursor_col
+from .util import setbottombar, screen_init, terminal_lines
 from ..common import logentry
-import re # Added for word boundary finding in handle_cutpreviousword
+import re
 
-# --- 0. MANDATORY MISSING DEFINITIONS & GLOBALS ---
+# --- 0. DEFINITIONS & GLOBALS ---
 
 # Global variable for clipboard content, stored as a list of strings (lines).
 yank_buffer = []
@@ -175,6 +175,36 @@ def handle_help(buffer, curpos, scroll_offset, max_width):
     logentry("handle_help.100: trace")
     return buffer, curpos, scroll_offset
 
+def handle_key_enter(buffer, curpos, scroll_offset, max_width,
+                     *, verify, prompt, mask,
+                     start_row, start_col, input_col_start):
+    """
+    Standard signature, with extra args via partial().
+    Returns (buffer, curpos, scroll_offset, accepted, force_redraw)
+    """
+
+    echo("{f6}", end="", flush=True)
+
+    # No verification → accept
+    if not callable(verify):
+        return buffer, curpos, scroll_offset, True, True
+
+    # Run verify
+    try:
+        ok = verify(buffer)
+    except Exception:
+        ok = False
+
+    if ok:
+        return buffer, curpos, scroll_offset, True, True
+
+    # --- Verification failed: redraw via helper ---
+    refresh_input_view(prompt, buffer, mask,
+                       start_row, start_col, input_col_start,
+                       curpos, scroll_offset, max_width)
+
+    return buffer, curpos, scroll_offset, False, True
+
 # --- 3. Tab Completion Logic (Separated for clarity) ---
 
 def handle_tab_manager(buffer, curpos, scroll_offset, max_width, completer, last_matches, tab_count, prompt, max_len, start_row, start_col):
@@ -270,6 +300,45 @@ def print_matches(matches: list[str]):
     if len(matches) % per_line != 0:
         echo("{f6}", end="")
 
+def refresh_input_view(prompt, buffer, mask,
+                       start_row, start_col, input_col_start,
+                       curpos, scroll_offset, max_width):
+    """
+    Unified redraw helper used by:
+        - main input loop
+        - KEY_ENTER verify failure
+        - any future handler needing to reprint prompt/buffer
+
+    Redraws:
+        prompt
+        visible buffer window (masked or unmasked)
+        cursor position
+    """
+
+    # Print prompt
+    echo(f"{{curpos:{start_row},{start_col}}}{prompt}", end="", flush=True)
+
+    # Visible portion
+    display_str = buffer[scroll_offset : scroll_offset + max_width]
+
+    # Clear line
+    echo(f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}",
+         end="", flush=True)
+
+    # Mask or normal buffer
+    if mask is not None:
+        echo(f"{{curpos:{start_row},{input_col_start}}}"
+             f"{mask * len(display_str)}",
+             end="", flush=True)
+    else:
+        echo(f"{{curpos:{start_row},{input_col_start}}}{display_str}",
+             end="", flush=True, raw=True)
+
+    # Cursor position
+    cursor_display_col = input_col_start + (curpos - scroll_offset)
+    echo(f"{{curpos:{start_row},{cursor_display_col}}}",
+         end="", flush=True)
+
 # --- 5. Initial Mapping Setup ---
 add_key_mapping("KEY_LEFT",      handle_left)
 add_key_mapping("KEY_RIGHT",     handle_right)
@@ -290,9 +359,17 @@ add_key_mapping("KEY_CTRL_W",    handle_cutpreviousword)
 add_key_mapping("KEY_YANK",      handle_yank)
 add_key_mapping("KEY_F1",        handle_help)
 
+##add_key_mapping("KEY_ENTER",     handle_enter)
+
 # --- 6. Main Input Function (Fixed) ---
 
-def inputstring(prompt="> ", max_len:int=255, max_width=80, mask:str=None, completer=None):
+def inputstring(prompt="> ", **kwargs):
+    max_len:int = kwargs.get("max_len", 255)
+    max_width:int = kwargs.get("max_width", 80)
+    mask:str = kwargs.get("mask", None)
+    completer = kwargs.get("completer", None)
+    verify = kwargs.get("verify", None)
+
     buffer = ""
     curpos = 0
     scroll_offset = 0
@@ -307,6 +384,20 @@ def inputstring(prompt="> ", max_len:int=255, max_width=80, mask:str=None, compl
     echo(f"{{curpos:{start_row},{start_col}}}{prompt}", end="", flush=True)
 
     input_col_start = start_col + prompt_len
+
+    from functools import partial
+
+    enter_handler = partial(
+        handle_key_enter,
+        verify=verify,
+        prompt=prompt,
+        mask=mask,
+        start_row=start_row,
+        start_col=start_col,
+        input_col_start=input_col_start
+    )
+
+    KEY_ACTIONS["KEY_ENTER"] = enter_handler
 
     # State variable to track the *visible* part of the line.
     _current_display_str = None
@@ -340,11 +431,11 @@ def inputstring(prompt="> ", max_len:int=255, max_width=80, mask:str=None, compl
         
         # 2. get input
         ch = getch(timeout=0.015)
-        if ch == "KEY_ENTER":
-            echo("{f6}", end="", flush=True) # Reset terminal state/colors on Enter
-            return buffer
-        elif ch is None:
+        if ch is None:
             continue
+##        if ch == "KEY_ENTER":
+##            echo("{f6}", end="", flush=True) # Reset terminal state/colors on Enter
+##            return buffer
 
         # 3. Handle Tab Completion
         if ch == "KEY_TAB" and callable(completer):
@@ -359,14 +450,27 @@ def inputstring(prompt="> ", max_len:int=255, max_width=80, mask:str=None, compl
 
         # 4. Execute Mapped Action (Special Keys)
         elif ch in KEY_ACTIONS:
-            buffer, curpos, scroll_offset = KEY_ACTIONS[ch](
-                buffer, curpos, scroll_offset, max_width
-            )
-            # Reset tab completion state on any non-tab key action
+            result = KEY_ACTIONS[ch](buffer, curpos, scroll_offset, max_width)
+
+            # Special: KEY_ENTER returns 5 values
+            if ch == "KEY_ENTER":
+                buffer, curpos, scroll_offset, accepted, need_redraw = result
+
+                if accepted:
+                    return buffer
+
+                if need_redraw:
+                    _current_display_str = None
+
+                continue
+
+            # All other mapped keys return the normal triple
+            buffer, curpos, scroll_offset = result
             last_matches = []
             tab_count = 0
 
         elif len(ch) == 1:
+###            logentry(f"{buffer=} {max_len=}", level="debug")
             if len(buffer) < max_len:
                 # Insert the character
                 buffer = buffer[:curpos] + ch + buffer[curpos:]

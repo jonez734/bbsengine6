@@ -78,7 +78,7 @@ _runtime_vars = {}
 
 _runtime_vars.update({"cls": "{erasedisplay}{home}"})
 _runtime_vars.update({"home": "{curpos:1,1}"})
-_runtime_vars.update({"/all": "{reset}"})
+###_runtime_vars.update({"/all": "{reset}"})
 
 _runtime_vars.update(_skin)
 
@@ -134,6 +134,8 @@ _command_handlers = {
 
     # cursor horizontal absolute @since 20251025
     "cha": r'cha',
+
+    "slashall": r'/all',
 }
 
 _compiled_command_handlers = [(kind, re.compile(pattern, re.IGNORECASE)) for kind, pattern in _command_handlers.items()]
@@ -399,7 +401,7 @@ def _acs_on():
 
   if not _acs:
     _acs = True
-##    yield Token(kind="ACS", repeat=1, text=f"{ESC}(0")
+    yield Token(kind="ACS", repeat=1, text=f"{ESC}(0")
 ##    print("ACSON")
   return iter(())
 
@@ -412,7 +414,7 @@ def _acs_off():
   return
 
 def _handle_acs(token):
-    global _raw, _cursor_col
+    global _cursor_col
 
     if token.value == "acs":
         name = token.args[0]
@@ -534,33 +536,38 @@ def _handle_decstbm(token):
     if len(token.args) == 0:
         token.text = f"{CSI}r"
         yield token
+        logentry(f"_handle_decstbm.100: resetting", level="debug")
         return
 
     t = token.args[0]
-    b = token.args[1] if len(token.args) == 2 else "1"
-#    if t == "1" and b == "1":
-#        token.text = f"{CSI}r"
-#    else:
+    b = token.args[1]
+
     token.text = f"{CSI}{t};{b}r"
     yield token
     logentry(f"asimov.io.echo._handle_decstbm.100: {t=} {b=} {token.text=}", level="debug")
-    return
+##    return
+
+def _handle_slashall(token):
+  token.kind = "COLOR"
+  token.repeat = 1
+  token.text = f"{ESC}[0m"
+  yield token
 
 def _handle_reset(token):
-  global _raw
+  if len(token.args) > 0:
+    return iter()
 
-  mode = "color" if len(token.args) == 0 else token.args[0]
-  if mode == "color":
-    token.repeat = 1
-    token.text = f"{ESC}[0m" # reset fg and bg color
-    yield token
-  
   if not _raw:
     yield from _acs_off()
   
-  if mode == "all":
-    token.args = ()
-    yield from _handle_decstbm(token)
+  yield from _handle_slashall(token)
+  yield from _handle_decstbm(token)
+  return
+
+##  if mode == "all":
+##    logentry(f"echo._handle_reset.100: {mode=}", level="debug")
+##    token.args = ()
+##    yield from _handle_decstbm(token)
 
   return
 
@@ -1037,11 +1044,11 @@ def echo(text="", *, palette:dict=None, width:int=None, wordwrap:bool=True, raw:
         if end == "\n":
           _cursor_col = 0
 
-def echo_file(filepath, page_size=20, raw=False):
+def echo_file(filepath, page_size=20, raw=False, wordwrap=True):
     with open(filepath, 'r') as f:
         line_count = 0
         for line in f:
-            echo(line, end='', raw=raw)  # don't add extra newline
+            echo(line, end='', raw=raw, wordwrap=wordwrap)  # don't add extra newline
             line_count += 1
             if line_count % page_size == 0:
                 input("More?")  # wait every page

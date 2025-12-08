@@ -1,21 +1,17 @@
 from .echo import echo
 from .common import terminal_lines, terminal_columns
 from .const import MAX_TERMINAL_WIDTH
+from ..common import logentry
 
 # ------------------------
 # screen related functions
 # ------------------------
 
-def screen_init(topmargin=0, bottommargin=1):
+def screen_init(topmargin=1, bottommargin=1):
   echo("{f6:3}{cursorup:3}", end="", flush=True)
-  initbottombar(height=bottommargin)
-
-# -----------
-# bottom bar
-# -----------
-def initbottombar(height:int=1):
-  h = terminal_lines() - height
-  echo(f"{{savecursor}}{{decstbm:0,{h}}}{{restorecursor}}", flush=True)
+  h = terminal_lines() - bottommargin
+  logentry(f"asimov.io.util.screen_init.100: {topmargin=} {h=}", level="debug")
+  echo(f"{{savecursor}}{{decstbm:{topmargin},{h}}}{{restorecursor}}", flush=True, end="")
 
 #  terminalheight = ttyio.getterminalheight()
 #  ttyio.echo(f"{{decsc}}{{decstbm:{topmargin},{terminalheight-bottommargin}}}{{decrc}}") #  % (topmargin, terminalheight-bottommargin)) #  % (topmargin, terminalheight-bottommargin))
@@ -36,7 +32,7 @@ def setbottombar(left, right=None, stack: bool = False, width: int = None, **kwa
     wcswidth = len
     wcwidth = len
 
-    terminalwidth = width or kwargs.get("width") or terminal_columns()
+    terminalwidth = (width or kwargs.get("width") or terminal_columns()) - 1
 
     def wc_rjust(text, length, padding=' '):
       # from wcwidth import wcswidth
@@ -78,7 +74,7 @@ def setbottombar(left, right=None, stack: bool = False, width: int = None, **kwa
     right_raw = resolve_content(right, "here", "right")
 
     # Final strings (with formatting)
-    left_str = f"{left_raw}"
+    left_str = left_raw
     right_str = str(right_raw)
 
     # Strip ANSI for width calculations
@@ -98,7 +94,7 @@ def setbottombar(left, right=None, stack: bool = False, width: int = None, **kwa
       truncated_visible_left = truncate_to_display_width(visible_left, space_for_left)
       visible_truncated_left_width = wcswidth(truncated_visible_left)
       left_padding = " " * (space_for_left - visible_truncated_left_width)
-      buf = f"{truncated_visible_left}{left_padding} {right_str} "
+      buf = f" {truncated_visible_left}{left_padding} {right_str} "
 
 #    right_width = wcswidth(visible_right)
 #    space_for_left = terminalwidth - right_width - 2
@@ -110,11 +106,7 @@ def setbottombar(left, right=None, stack: bool = False, width: int = None, **kwa
 #        padding = " " * (space_for_left - wcswidth(truncated_visible_left))
 #        buf = f" {truncated_visible_left}{padding}{right_str} "
 
-    updatebottombar(f"{{bottombarcolor}}{buf}{{reset}}")
+    updatebottombar(f"{{bottombarcolor}}{buf}{{/all}}")
 
     if stack:
         bottombarstack.insert(0, buf)
-
-# ----------------------------
-# Utilities
-# ----------------------------
