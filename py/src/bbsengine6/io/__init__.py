@@ -1,5 +1,5 @@
 ###from .output import *
-from .input import *
+##from .input import *
 ###from . import echovars
 from . import terminal # from .terminal import *
 from . import util
@@ -9,6 +9,7 @@ from .inputstring import inputstring
 from .inputinteger import inputinteger
 from .inputchoice import inputchoice
 from .inputboolean import inputboolean
+from .getch import getch_str as getch
 
 from .lib import *
 
