@@ -1,3 +1,6 @@
+from .echo import echo
+from .getch import getch_str as getch
+
 # @since 20230105 backported from ttyio6 (bugfix)
 # @see https://ballingt.com/nonblocking-stdin-in-python-3/
 # @since 20230512 renamed from 'inputchar' in ttyio5 @BCBREAK
