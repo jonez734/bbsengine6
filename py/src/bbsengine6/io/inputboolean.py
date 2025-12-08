@@ -1,4 +1,5 @@
 from .inputchoice import inputchoice
+from .echo import echo
 
 # @since 20210203
 def inputboolean(prompt:str, default:str=None, options="YN", **kwargs) -> bool:
