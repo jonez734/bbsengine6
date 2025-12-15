@@ -12,23 +12,6 @@ from .const import MAX_TERMINAL_WIDTH, BEL, ESC
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 
-# @since 20250927
-def terminal_size():
-  import shutil
-  return shutil.get_terminal_size()
-
-# http://www.brandonrubin.me/2014/03/18/python-snippet-get-terminal-width/
-# https://www.programcreek.com/python/example/1922/termios.TIOCGWINSZ
-def terminal_columns():
-  if MAX_TERMINAL_WIDTH is None:
-    return terminal_size().columns
-
-  w = terminal_size().columns
-  return MAX_TERMINAL_WIDTH if MAX_TERMINAL_WIDTH is not None and w > MAX_TERMINAL_WIDTH else w
-
-def terminal_lines():
-  return terminal_size().lines
-
 @dataclass
 class Token:
     kind: str                  # e.g., WORD, WHITESPACE, F6, RGB
