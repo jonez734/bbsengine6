@@ -1,30 +1,36 @@
-###from .output import *
-##from .input import *
-###from . import echovars
-from . import terminal # from .terminal import *
-from . import util
+"""
+package 'io' – enhanced terminal output with commands, colors, word wrap, runtime variables, ACS chars, select emojis, and file paging.
 
-from .echo import echo, echo_file, echo_iter, getvar, setvar
+Features:
+- echo() and echo_file() with wordwrap, raw mode, and recursive command evaluation
+- ANSI and C64 palettes (foreground/background)
+- RGB color support with #RRGGBB or 255,255,255
+- Cursor control: CURPOS, CUP, CUD, CUF, CUB, HOME
+- Clear/erase: CLS (clear+home), ERASELINE, ERASEDISPLAY
+- Scroll region: DECSTBM / STBM
+- ACS characters with optional repeat
+- Runtime variables: {var:<name>} or {<name>}
+- Markdown-style attributes (**text**)
+- Hard newline {f6}
+- Recursive command expansion and aliases
+"""
+
+from .screen import setbottombar
+from . import terminal
+
+from .const import ESC
+
+from .echo import echo, echo_file, setvar, getvar, rendered_length
+## from .inputstr import inputstr
+from .getch import getch_str as getch
 from .inputstring import inputstring
 from .inputinteger import inputinteger
-from .inputchoice import inputchoice
 from .inputboolean import inputboolean
-from .getch import getch_str as getch
+from .inputchoice import inputchoice
+from .palette import set_palette
 
-from .lib import *
+__all__ = ["echo", "inputstring", "getch", "set_palette", "setvar", "getvar", "inputboolean", "inputchoice", "rendered_length"]
 
-getterminalwidth = terminal.columns
-getterminalheight = terminal.lines
-
-###savecursor = terminal.savecursor
-###restorecursor = terminal.restorecursor
-
-###getvariable = echo.getvar
-###setvariable = echo.setvar
-###clearvariables = clearvar = echovars.clear
-
-#_streamin = sys.stdin
-#_streamout = sys.stdout
-
-def init(args=None, **kwargs):
-    return True
+# ----------------------------
+# End of io/__init__.py
+# ----------------------------
