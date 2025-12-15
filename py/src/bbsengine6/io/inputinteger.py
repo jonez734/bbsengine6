@@ -4,7 +4,7 @@ from .inputstring import inputstring
 def inputinteger(prompt, oldvalue=None, **kwargs) -> int:
   oldvalue = int(oldvalue) if oldvalue is not None else ""
   filter = kwargs.get("filter", r"^([+-]?[1-9]\d*|0)[ ,]?$")
-  buf = inputstring(prompt, oldvalue, filter=filter, **kwargs)
+  buf = inputstring(prompt, str(oldvalue), filter=filter, **kwargs)
 
   if buf is None or buf == "":
     return None
