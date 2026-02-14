@@ -2,17 +2,19 @@ from .echo import echo, rendered_length
 from . import terminal
 #terminal import lines as terminal_lines, columns as terminal_columns
 from .const import MAX_TERMINAL_WIDTH
-from ..common import logentry
+from .util import logentry
 
 # ------------------------
 # screen related functions
 # ------------------------
 
-def init(topmargin=1, bottommargin=1):
+def init(args=None, topmargin=1, bottommargin=1):
   echo("{f6:3}{cursorup:3}", end="", flush=True)
   h = terminal.lines() - bottommargin
   logentry(f"asimov.io.util.screen_init.100: {topmargin=} {h=}", level="debug")
-  echo(f"{{savecursor}}{{decstbm:{topmargin},{h}}}{{restorecursor}}", flush=True, end="")
+  echo(f"{{savecursor}}", end="")
+  echo(f"{{decstbm:{topmargin},{h}}}", end="")
+  echo(f"{{restorecursor}}", flush=True, end="")
 
 #  terminalheight = ttyio.getterminalheight()
 #  ttyio.echo(f"{{decsc}}{{decstbm:{topmargin},{terminalheight-bottommargin}}}{{decrc}}") #  % (topmargin, terminalheight-bottommargin)) #  % (topmargin, terminalheight-bottommargin))
