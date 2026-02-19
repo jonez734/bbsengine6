@@ -1,17 +1,17 @@
+import re
+
 from . import terminal, screen
 
-from .echo import echo, rendered_length
+from .echo import echo, rendered_length, echo_traceback
 from .getch import getch_str as getch
-from .common import get_cursor_position, _current_stream_lock, _cursor_row, _cursor_col
-from ..common import logentry
-import re
+from .common import get_cursor_position, _current_stream_lock, _terminal_state, _input_dirty
+from .util import logentry
 
 # --- 0. MANDATORY DEFINITIONS & GLOBALS ---
 
 yank_buffer = []  # Clipboard
 
 def move_cursor(row, col):
-    """Placeholder for actual cursor movement utility."""
     echo(f"{{curpos:{row},{col}}}", end="", flush=True)
 
 def get_current_word(buffer, curpos):
@@ -101,10 +101,15 @@ def handle_help(buffer, curpos, scroll_offset, max_width):
 
 def handle_key_enter(buffer, curpos, scroll_offset, max_width,
                      *, verify, args, prompt, mask,
-                     start_row, start_col, input_col_start):
+                     start_row, start_col, input_col_start, noneok, **kwargs):
     """
     Returns (buffer, curpos, scroll_offset, accepted, need_redraw)
     """
+
+#    if (buffer is None or buffer == ""):
+#        if noneok is False:
+#            echo("{BEL}", end="", flush=True)
+#            return None, curpos, scroll_offset, True, False
 
     echo("{f6}", end="", flush=True)
 
@@ -112,15 +117,18 @@ def handle_key_enter(buffer, curpos, scroll_offset, max_width,
     if not callable(verify):
         return buffer, curpos, scroll_offset, True, True
 
-    # Run verify as: verify(buffer, *, args=args)
+    # Run verify as: verify(args, buffer, **kwargs)
     try:
-        ok = verify(buffer, args=args)
-    except TypeError as e:
-        echo(f"\n[verify ERROR: {e}]{bel}", end="", flush=True, level="error")
+        ok = verify(args, buffer, **kwargs)
+    except Exception as e:
+        echo_traceback(f"io.inputstring.handle_key_enter.100: {e}]")
         ok = False
 
     if ok:
         return buffer, curpos, scroll_offset, True, True
+    else:
+        echo("{BEL}", end="", flush=True)
+
 
     # Verification failed — redraw
     refresh_input_view(
@@ -249,6 +257,8 @@ add_key_mapping("KEY_F1",        handle_help)
 # --- 6. MAIN INPUT FUNCTION ---
 
 def inputstring(prompt="> ", oldvalue="", **kwargs):
+    global _input_dirty
+
     max_len:int = kwargs.get("max_len", 255)
     max_width:int = kwargs.get("max_width", 80)
     mask:str = kwargs.get("mask", None)
@@ -256,6 +266,8 @@ def inputstring(prompt="> ", oldvalue="", **kwargs):
 
     verify = kwargs.pop("verify", None)
     args = kwargs.pop("args", None)  # argparse.Namespace()
+
+    noneok = kwargs.pop("noneok", False)
 
     buffer = oldvalue if oldvalue is not None else ""
     curpos = len(buffer)
@@ -271,8 +283,6 @@ def inputstring(prompt="> ", oldvalue="", **kwargs):
     prompt_len = rendered_length(prompt)
     input_col_start = start_col + prompt_len
 
-    # --- CLEAN INLINE ENTER HANDLER (no partial, no class) ---
-
     def enter_handler(buffer, curpos, scroll_offset, max_width):
         return handle_key_enter(
             buffer, curpos, scroll_offset, max_width,
@@ -283,6 +293,8 @@ def inputstring(prompt="> ", oldvalue="", **kwargs):
             start_row=start_row,
             start_col=start_col,
             input_col_start=input_col_start,
+            noneok=noneok,
+            **kwargs,
         )
 
     KEY_ACTIONS["KEY_ENTER"] = enter_handler
@@ -291,6 +303,22 @@ def inputstring(prompt="> ", oldvalue="", **kwargs):
     done = False
 
     while not done:
+        with _current_stream_lock:
+            if _input_dirty:
+                refresh_input_view(
+                    prompt=prompt,
+                    buffer=buffer,
+                    mask=mask,
+                    start_row=start_row,
+                    start_col=start_col,
+                    input_col_start=input_col_start,
+                    curpos=curpos,
+                    scroll_offset=scroll_offset,
+                    max_width=max_width,
+                )
+                _input_dirty = False
+                _current_display_str = None
+
         display_str = buffer[scroll_offset:scroll_offset+max_width]
 
         if _current_display_str != display_str:
@@ -308,8 +336,9 @@ def inputstring(prompt="> ", oldvalue="", **kwargs):
         cursor_display_col = input_col_start + (curpos - scroll_offset)
         echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
 
-        _cursor_row = start_row
-        _cursor_col = cursor_display_col
+        with _current_stream_lock:
+            _terminal_state.cursor_row = start_row
+            _terminal_state.cursor_col = cursor_display_col
 
         ch = getch(timeout=0.015)
         if ch is None:

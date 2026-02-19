@@ -8,7 +8,7 @@ from collections import deque
 
 
 from .common import _current_input_stream, _current_stream_lock, _input_queue, _read_current_input_stream
-from ..common import logentry #!
+from .util import logentry
 from .keymap import KEY_MAP
 from .const import ESC, ETX, EOF
 

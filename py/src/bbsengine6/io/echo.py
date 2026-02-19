@@ -16,8 +16,8 @@ from typing import List, Dict, Optional
 
 from .const import CSI, BEL, ESC, ECHO_END, OSC
 
-from .common import Token, write_current_output_stream, get_cursor_position, _cursor_row, _cursor_col ###, terminal_columns
-from ..common import logentry
+from .common import Token, write_current_output_stream, get_cursor_position, _terminal_state, _terminal_state_stack, _current_stream_lock, TerminalState
+from .util import logentry
 from .palette import c64_palette, get_current_palette, get_palette_entry, rgb
 
 from . import terminal
@@ -44,7 +44,7 @@ _skin = {
 
 "level.debug": "{bglightblue}{blue}",
 "level.warning": "{bgyellow}{black}",
-"level.error": "{bgred}{black}",
+"level.error": "{bgred}{white}",
 "level.ok": "{bggreen}{black}",
 "level.info": "{bgwhite}{blue}",
 "level.crit": "{bgblue}{white]",
@@ -165,6 +165,10 @@ command_aliases = {}
 # ----------------------------
 def tokenize(text, **kwargs):
     """Yields Token(kind, value, args, kwargs, raw)"""
+    
+    if text is None:
+        return
+
     pos = 0
     while pos < len(text):
         # Whitespace
@@ -246,32 +250,50 @@ def to_fullwidth(s: str) -> str:
 # token handlers
 # ----------------------------
 def _handle_word(token, **kwargs):
-    global _acs, _raw, _decdhl, _wordwrap, _cursor_col
+    global _terminal_state
 
     width = kwargs.get("width", terminal.columns())
 
+    # --- normalize token ---
     token.text = token.value
     token.raw = token.value
     token.repeat = 1
-    
+
+    # ACS is a rendering concern → emit before word if needed
     if not _raw:
-      yield from _acs_off()
+        yield from _acs_off()
 
-##    print(f"_handle_word.100: {_decdhl=}")
-    if _decdhl: # and not _wordwrap:
-      token.text = to_fullwidth(token.value)
-      yield token
-      return
+    emit_f6 = False
+    emit_token = False
+    token_text = token.text
 
-    word_len = len(token.text)
+    with _current_stream_lock:
+        # DEC double-height line → fullwidth rendering
+        if _terminal_state.decdwl:
+            token_text = to_fullwidth(token.value)
+            _terminal_state.cursor_col += len(token_text)
+            emit_token = True
+        else:
+            word_len = len(token_text)
 
-    if _wordwrap and _cursor_col + word_len > width - 1:
-        # insert hard newline before this word/space
-        yield Token("F6", raw="{f6}", text="\n")
-        _cursor_col = 0
+            if (
+                _terminal_state.wordwrap
+                and _terminal_state.cursor_col + word_len > width - 1
+            ):
+                emit_f6 = True
+                _terminal_state.cursor_col = 0
 
-    _cursor_col += word_len
-    yield token
+            _terminal_state.cursor_col += word_len
+            emit_token = True
+
+    # --- emit AFTER lock release ---
+
+    if emit_f6:
+        yield from _handle_f6(token)
+
+    if emit_token:
+        token.text = token_text
+        yield token
 
 def _handle_whitespace(token):
     """
@@ -299,57 +321,53 @@ def _handle_whitespace(token):
         )
         i += repeat
 
-# save/restore cursor attributes
-@dataclass
-class TerminalState():
-    cursor_row = 1
-    cursor_col = 1
-    wordwrap  = True
-    has_color = True
-    hidden = False
-    def __repr__(self):
-        return f"TerminalState({self.cursor_row=} {self.cursor_col=})"
+###_wordwrap = True
+###_color = True
+###_acs = False
+###_raw = False
+###_decdhl = False
+###_term_width = None
 
-_terminal_state = None
-
-_wordwrap = True
-_color = True
-_acs = False
-_raw = False
-_decdhl = False
-_term_width = None
-
+# DECSC / DECRC operate on software-defined TerminalState.
+# All operations occur under _current_stream_lock to keep
+# terminal output and state synchronized.
 def _handle_decsc(token):
-    global _terminal_state, _cursor_row, _cursor_col
-
-    (row, col) = get_cursor_position()
-
-    _cursor_row = row
-    _cursor_col = col
-
-    state = TerminalState()
-    state.cursor_row = row
-    state.cursor_col = col
-    state.wordwrap = _wordwrap
-    state.color = _color
-    _terminal_state = state
-
-##    print(f"_handle_decsc.120: {state=} {_terminal_states=}")
-    return iter(())
+    global _terminal_state_stack, _terminal_state
+    cursor_row, cursor_col = get_cursor_position()
+    with _current_stream_lock:
+        _terminal_state_stack.append(
+            TerminalState(
+                cursor_row=cursor_row,
+                cursor_col=cursor_col,
+                wordwrap=_terminal_state.wordwrap,
+                has_color=_terminal_state.has_color,
+                hidden=_terminal_state.hidden,
+            )
+        )
 
 def _handle_decrc(token):
-    global _color, _cursor_col, _cursor_row, _wordwrap
-    
-##    logentry(f"_handle_decrc.100: {_terminal_state=}")
+    global _terminal_state, _terminal_state_stack
 
-    token.args = (_terminal_state.cursor_row, _terminal_state.cursor_col)
-    yield from _handle_curpos(token)
-###    yield Token("CURPOS", args=(_terminal_state.cursor_row, _terminal_state.cursor_col), text=f"{CSI}{state.cursor_row};{state.cursor_col}H")
-###    yield Token("WORDWRAP", raw=token.raw, text=f"") # [WORDWRAP: {_wordwrap}]")
-    _color = _terminal_state.color
-    _cursor_row = _terminal_state.cursor_row
-    _cursor_col = _terminal_state.cursor_col
-    _wordwrap = _terminal_state.wordwrap
+    curpos_token = None
+
+    with _current_stream_lock:
+        if not _terminal_state_stack:
+            return  # VT spec: restore is a no-op if nothing saved
+
+        state = _terminal_state_stack.pop()
+
+        # restore software state
+        _terminal_state.cursor_row = state.cursor_row
+        _terminal_state.cursor_col = state.cursor_col
+        _terminal_state.wordwrap   = state.wordwrap
+        _terminal_state.has_color  = state.has_color
+        _terminal_state.hidden     = state.hidden
+
+        curpos_token = Token("CURPOS", args=(_terminal_state.cursor_row, _terminal_state.cursor_col))
+
+    if curpos_token is not None:
+        # restore hardware cursor
+        yield from _handle_curpos(curpos_token)
 
 # ----------------------------
 # ACS characters
@@ -401,24 +419,33 @@ _acs_map = {
 }
 
 def _acs_on():
-  global _acs
+    global _current_stream_lock, _terminal_state
 
-  if not _acs:
-    _acs = True
-    yield Token(kind="ACS", repeat=1, text=f"{ESC}(0")
-##    print("ACSON")
-  return iter(())
+    token = None
+
+    with _current_stream_lock:
+        if not _terminal_state.acs:
+            _terminal_state.acs = True
+            token = Token(kind="ACS", repeat=1, text=f"{ESC}(0")
+
+    if token is not None:
+        yield token
 
 def _acs_off():
-  global _acs
+    global _current_stream_lock, _terminal_state
 
-  if _acs:
-    _acs = False
-    yield Token(kind="ACS", repeat=1, text=f"{ESC}(B")
-  return
+    token = None
+
+    with _current_stream_lock:
+        if _terminal_state.acs:
+            _terminal_state.acs = False
+            token = Token(kind="ACS", repeat=1, text=f"{ESC}(B")
+
+    if token is not None:
+        yield token
 
 def _handle_acs(token):
-    global _cursor_col
+    global _terminal_state ### _cursor_col
 
     if token.value == "acs":
         name = token.args[0]
@@ -427,10 +454,11 @@ def _handle_acs(token):
         name = token.value
         repeat = int(token.args[0]) if len(token.args) == 1 else 1
 
-    _cursor_col += repeat
+    with _current_stream_lock:
+        _terminal_state.cursor_col += repeat
 
     if not _raw:
-      yield from _acs_on()
+        yield from _acs_on()
 
     token.kind = "ACS"
     token.text = _acs_map.get(name, "?")
@@ -463,17 +491,27 @@ def _handle_rgb(token):
     return
 
 def _handle_curpos(token):
-    global _cursor_col, _cursor_row, _terminal_state
+    global _terminal_state
 
-##    print(f"_handle_curpos.100: foo")
-    y = int(token.args[0]) if token.args else 1
-    x = int(token.args[1]) if len(token.args) > 1 else 1
+    # parse args outside the lock (no shared state yet)
+    try:
+        y = int(token.args[0]) if token.args else 1
+        x = int(token.args[1]) if len(token.args) > 1 else 1
+    except (ValueError, TypeError):
+        y, x = 1, 1
+
+    # normalize (VT is 1-based, nonzero)
+    y = max(1, y)
+    x = max(1, x)
+
+    # update terminal state FIRST, under lock
+    with _current_stream_lock:
+        _terminal_state.cursor_row = y
+        _terminal_state.cursor_col = x
+
+    # emit escape AFTER lock is released
     token.text = f"{CSI}{y};{x}H"
     yield token
-    _cursor_col = x
-    _cursor_row = y
-##    _terminal_state.cursor_col = x
-##    _terminal_state.cursor_row = y
     
 def _handle_f6(token):
     global _cursor_col, _cursor_row
@@ -485,7 +523,8 @@ def _handle_f6(token):
 
     yield token
 
-    _cursor_col = 0
+    with _current_stream_lock:
+        _terminal_state.cursor_col = 0 ### _cursor_col = 0
 ###    _cursor_row += 1
 
     return
@@ -559,7 +598,10 @@ def _handle_decstbm(token):
     if len(token.args) == 0:
         token.text = f"{CSI}r"
         yield token
-##        logentry(f"_handle_decstbm.100: resetting", level="debug")
+        return
+
+    if len(token.args) != 2:
+        raise ValueError(f"{token.args=}")
         return
 
     t = token.args[0]
@@ -1051,9 +1093,10 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
 ##            _cursor_col += word_len
 ##            yield token
         elif token.kind == "WHITESPACE":
-            if _previous_token.kind == "F6" and token.text == " ":
-                continue
-            _cursor_col += len(token.text)
+##            if _previous_token.kind == "F6" and token.text == " ":
+##                continue
+            with _current_stream_lock:
+                _terminal_state.cursor_col += len(token.text)
             yield token
         elif token.kind == "F6":
             yield from _handle_f6(token)
@@ -1076,7 +1119,7 @@ def echo(text="", *, flush:bool=True, end=ECHO_END, **kwargs):
     _raw = kwargs.get("raw", False)
 
     palette:dict = kwargs.get("palette", None)
-    width:int = kwargs.get("width", None)
+    width:int = kwargs.get("width", terminal.width())
     wordwrap:bool = kwargs.get("wordwrap", True)
 
     level = kwargs.get("level", None)
@@ -1087,7 +1130,7 @@ def echo(text="", *, flush:bool=True, end=ECHO_END, **kwargs):
       elif level == "warn" or level == "warning":
         prefix = "{level.warning}W: " # {bgyellow}{black}"
       elif level == "error":
-        prefix = "{level.error}E: " # {bgred}{black}"
+        prefix = "{level.error}E: " # {bgred}{white}"
       elif level == "success" or level == "ok":
         prefix = "{level.ok}" # {bggreen}{black}"
       elif level == "info":
@@ -1102,17 +1145,18 @@ def echo(text="", *, flush:bool=True, end=ECHO_END, **kwargs):
     if end:
         write_current_output_stream(end, flush=flush)
         if end == "\n":
-          _cursor_col = 0
-          _cursor_row += 1
+            with _current_stream_lock:
+              _terminal_state.cursor_col = 0
+              _terminal_state.cursor_row += 1
 
     if level is not None:
       return logentry(text, level=level)
 
-def echo_file(filepath, page_size=20, raw=False, wordwrap=True):
+def echo_file(filepath, page_size=20, raw=False, wordwrap=True, end=""):
     with open(filepath, 'r') as f:
         line_count = 0
         for line in f:
-            echo(line, end='', raw=raw, wordwrap=wordwrap)  # don't add extra newline
+            echo(line, end=end, raw=raw, wordwrap=wordwrap)  # don't add extra newline
             line_count += 1
             if line_count % page_size == 0:
                 input("More?")  # wait every page
@@ -1165,3 +1209,24 @@ def rendered_length(text, **kwargs):
         # as they typically represent non-printing control sequences or metadata.
 
     return length
+
+def echo_traceback(message: str = "Traceback (most recent call last):", level: str = "error"):
+    """
+    Captures the current exception and outputs the entire stack
+    via a single echo() call, using {f6} as the newline separator.
+    """
+    import traceback as tb
+    # Get the formatted traceback string from Python
+    raw_traceback = tb.format_exc()
+
+    # Split into lines to filter/process
+    lines = raw_traceback.strip().split('\n')
+
+    # Filter out the redundant first line if we provided a custom header
+    filtered_lines = [line for line in lines if not line.startswith("Traceback (most recent call last):")]
+
+    # Join everything with your engine's newline code {f6}
+    traceback_string = f"{{level.error}}{message}{{/all}}{{f6}}" + "{f6}".join(filtered_lines)
+
+    # Single call to echo
+    echo(traceback_string, level=None)

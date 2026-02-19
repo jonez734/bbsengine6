@@ -7,10 +7,12 @@ import termios
 import threading
 import collections
 
-from .const import MAX_TERMINAL_WIDTH, BEL, ESC
-
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
+
+from .const import MAX_TERMINAL_WIDTH, BEL, ESC
+
+from . import terminal
 
 @dataclass
 class Token:
@@ -38,8 +40,8 @@ class Token:
         return f"Token({', '.join(parts)})"
 
 
-_cursor_row = 1
-_cursor_col = 1
+#_cursor_row = 1
+#_cursor_col = 1
 
 _current_input_stream = sys.stdin
 
@@ -251,3 +253,24 @@ def drain_stream_to_queue(stream, queue):
     finally:
         # Restore original flags
         fcntl.fcntl(fd, fcntl.F_SETFL, fl)
+
+# save/restore cursor attributes
+@dataclass
+class TerminalState():
+    cursor_row: int = 1
+    cursor_col: int = 1
+    wordwrap:bool  = True
+    has_color:bool = True
+    hidden:bool = False
+    width:int = 100
+    acs:bool = False
+    raw:bool = False
+    decdhl:bool = False # double height
+    decdwl:bool = False
+    def __repr__(self):
+        return f"TerminalState({self.cursor_row=}, {self.cursor_col=}, {self.wordwrap=}, {self.has_color=}, {self.hidden=}, {self.acs=}, {self.raw=})"
+
+_terminal_state = TerminalState(cursor_row=terminal.lines(), cursor_col=terminal.columns())
+_terminal_state_stack = []
+
+_input_dirty = False

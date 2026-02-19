@@ -1,5 +1,5 @@
---\echo sig
-create table engine.__sig (
+--\echo folder
+create table engine.__folder (
     "path" ltree unique not null primary key,
     "uri"  text unique,
     "title" text,
@@ -7,14 +7,14 @@ create table engine.__sig (
     "attrs" jsonb,
     "access" jsonb,
     "dateupdated" timestamptz,
-    "updatedbymoniker" citext constraint fk_engine_sig_updatedbymoniker references engine.__member(moniker) on update cascade on delete set null,
+    "updatedbymoniker" citext constraint fk_engine_folder_updatedbymoniker references engine.__member(moniker) on update cascade on delete set null,
     "dateapproved" timestamptz,
-    "approvedbymoniker" citext constraint fk_engine_sig_approvedbymoniker references engine.__member(moniker) on update cascade on delete set null,
+    "approvedbymoniker" citext constraint fk_engine_folder_approvedbymoniker references engine.__member(moniker) on update cascade on delete set null,
     "datecreated" timestamptz,
-    "createdbymoniker" citext constraint fk_engine_sig_createdbymoniker references engine.__member(moniker) on update cascade on delete set null
+    "createdbymoniker" citext constraint fk_engine_folder_createdbymoniker references engine.__member(moniker) on update cascade on delete set null
 );
 
-CREATE INDEX idx_sig_attrs ON engine.__sig USING gin (attrs);
+CREATE INDEX idx_folder_attrs ON engine.__folder USING gin (attrs);
 
-grant select on table engine.__sig to web;
-grant all on table engine.__sig to sysop, term;
+grant select on table engine.__folder to web;
+grant all on table engine.__folder to sysop, term;
