@@ -17,7 +17,7 @@ from .const import ESC, ETX, EOF
 #        return _input_queue.popleft()
 #    return _current_input_stream.read(1)
 
-def _proc_char(char:str) -> str:
+def _proc_char(char:str, debug:bool=False) -> str | None:
     # 3. Handle Control Characters
     if char == "\x01":
         return "KEY_CTRL_A"
@@ -33,6 +33,8 @@ def _proc_char(char:str) -> str:
         return "KEY_ENTER"
     if char == '\x15': # ctrl-u
         return "KEY_CUTTOBOL"
+    if char == '\t':
+        return "KEY_TAB"
 
     # 4. Handle Escape Sequences and Plain ESC
     if char == ESC: # ESCAPE
@@ -60,18 +62,26 @@ def _proc_char(char:str) -> str:
                 return name
 
         # C. Unknown escape sequence
-        return f"UNKNOWN:{repr(sequence)}"
+        if debug:
+            logentry(f"unknown escape sequence: {sequence!r}")
+            return None
+        return sequence
 
     # 5. Return a regular character
     return char
 
-def getch_str(timeout=1.0, **kwargs):
-    """Reads a single keypress without blocking and handles control/extended keys."""
+def getch_str(timeout=1.0, debug=False, **kwargs) -> str | None:
+    """Reads a single keypress without blocking and handles control/extended keys.
+    
+    Args:
+        timeout: Seconds to wait for input (default 1.0)
+        debug: If True, log unknown escape sequences and return None
+    """
     
     with _current_stream_lock:
         if _input_queue:
             char = _input_queue.popleft()
-            return _proc_char(char)
+            return _proc_char(char, debug=debug)
         else:
             fd = _current_input_stream.fileno()
             old_settings = termios.tcgetattr(fd)

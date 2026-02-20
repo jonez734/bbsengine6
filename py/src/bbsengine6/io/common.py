@@ -107,7 +107,7 @@ def _read_terminal_response(terminator: str, timeout: float = 1.0) -> str | None
 # Regex for DSR reply: ESC [ <row> ; <col> R
 DSR_CURPOS_RE = re.compile(r'\x1b\[(\d+);(\d+)R')
 
-def get_dsr(mode="curpos", timeout: float = 1.0) -> str:
+def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
     """
     Query the terminal for cursor position (DSR) and return the response string.
     

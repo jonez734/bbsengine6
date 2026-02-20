@@ -4,14 +4,12 @@
 import logging
 import logging.handlers
 
-from .. import conf
-
 # default syslog handler
 default_handler = logging.handlers.SysLogHandler(address="/dev/log")
 default_formatter = logging.Formatter('%(name)s[%(process)d]: %(levelname)s %(message)s')
 default_handler.setFormatter(default_formatter)
 
-def logentry(message, level=logging.INFO, *, handler=None, formatter=None, logger_name=conf.LOGGER_NAME):
+def logentry(message, level=logging.INFO, *, handler=None, formatter=None, logger_name="asimov"):
     """
     Write a log entry to syslog (by default), with optional handler/formatter overrides.
 

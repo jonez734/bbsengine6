@@ -47,7 +47,7 @@ _skin = {
 "level.error": "{bgred}{white}",
 "level.ok": "{bggreen}{black}",
 "level.info": "{bgwhite}{blue}",
-"level.crit": "{bgblue}{white]",
+"level.crit": "{bgblue}{white}",
 
 "boxcolor": "{darkgreen}",
 "titlecolor": "{white}{bggray}",
@@ -60,16 +60,6 @@ _skin = {
 #"engine.menu.titlecolor": "{black}{bglightgray}",
 #"engine.menu.disableditemcolor": "{darkgray}",
 #"engine.menu.resultfailedcolor": "{bgred}{white}",
-}
-
-_box = {
-  "ulcorner": "{acs:ulcorner}",
-  "hline"   : "{{acs:hline:{width}}}",
-  "llcorner": "{acs:llcorner}",
-  "lrcorner": "{acs:lrcorner}",
-  "vline"   : "{acs:vline}",
-  "urcorner": "{acs:urcorner}",
-  "ulcorner": "{acs:ulcorner}",
 }
 
 # Runtime variables dictionary
@@ -165,7 +155,7 @@ command_aliases = {}
 # ----------------------------
 def tokenize(text, **kwargs):
     """Yields Token(kind, value, args, kwargs, raw)"""
-    
+
     if text is None:
         return
 
@@ -325,7 +315,6 @@ def _handle_whitespace(token):
 ###_color = True
 ###_acs = False
 ###_raw = False
-###_decdhl = False
 ###_term_width = None
 
 # DECSC / DECRC operate on software-defined TerminalState.
@@ -537,7 +526,7 @@ def _handle_home(token):
 # erasedisplay
 # tobottom = 1, totop = 2, default = 0 = full
 def _handle_ed(token):
-    print(f"**** _handle_ed.100: {token=}")
+    ## print(f"**** _handle_ed.100: {token=}")
     mode = int(token.args[0]) if len(token.args) == 1 else 2
     token.text = f"{CSI}{mode}J"
     yield token
@@ -668,7 +657,7 @@ def _handle_cha(token):
   yield token
 
 def _handle_literalopen(token):
-  print("literalopen", flush=True)
+  ## print("literalopen", flush=True)
   token.kind = "WORD"
   token.repeat = 1
   token.text = "{"
@@ -690,57 +679,6 @@ def getoption(opt:str, default=None):
   global options
 
   return options[opt] if opt in options else default
-
-def _handle_box(token):
-    """
-    Handle box drawing tokens like:
-      {hline:10} → repeat ACS hline 10 times
-      {ulcorner} → ACS upper-left corner
-    """
-    # determine repeat count (default 1)
-    repeat = int(token.args[0]) if len(token.args) == 1 else 1
-##    print(f"_handle_box.100: {repeat=}", flush=True)
-
-    # map ACS and fallback ASCII chars
-#    box_acs = {
-#        "ulcorner": "l",
-#        "urcorner": "k",
-#        "llcorner": "m",
-#        "lrcorner": "j",
-#        "hline":    "q",    # ─
-#        "vline":    "x",    # │
-#
-#        "ttee":  "w",    # ┬
-#        "btee":  "v",    # ┴
-#        "ltee":  "u",    # ┤
-#        "rtee":  "t",    # ├
-#        "plus":  "n",    # ┼
-#
-#    }
-
-#    box_ascii = {
-#        "ulcorner": "+",
-#        "urcorner": "+",
-#        "llcorner": "+",
-#        "lrcorner": "+",
-#        "hline": "-",
-#        "vline": "|",
-#    }
-
-    name = token.value
-    acs_char = _acs_map.get(name, "?")
-#    ascii_char = box_ascii.get(name, "?")
-
-
-    # enter ACS mode if needed
-    if not _raw:
-      yield from _acs_on()
-
-    token.kind = "ACS"
-    token.repeat = repeat
-    token.text = acs_char
-    yield token
-    return
 
 PARAM_SPLIT_RE = re.compile(r"[:,]")
 def parse_command_params(name, params):
@@ -848,10 +786,6 @@ def _handle_command(token, **kwargs): # palette=None, vars=None):
     if cmd.lstrip('/') in ANSI_ATTRS:
         yield from _handle_attr(token)
         return
-
-##    if cmd in _box:
-##        yield from _handle_box(token)
-##        return
 
     if cmd in _acs_map:
         yield from _handle_acs(token)
@@ -1034,13 +968,13 @@ def _handle_attr(token: Token):
     return
 
 def _handle_decdhl(token):
-    global _decdhl
-
     if token.value.startswith("/"):
-      _decdhl = False
+      _terminal_state.decdhl = False
+      token.text = f"{ESC}[5m"  # DECSWL - single-width single-height
     else:
-      _decdhl = True
-    return iter(())
+      _terminal_state.decdhl = True
+      token.text = f"{ESC}[6m"  # DECDWL - double-width
+    yield token
 
 def _write_token(token: Token, flush: bool=True, stream=None):
     """

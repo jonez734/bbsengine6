@@ -1,6 +1,6 @@
 import re
 
-from . import terminal, screen
+from . import terminal
 
 from .echo import echo, rendered_length, echo_traceback
 from .getch import getch_str as getch
@@ -9,18 +9,136 @@ from .util import logentry
 
 # --- 0. MANDATORY DEFINITIONS & GLOBALS ---
 
+class Completer:
+    """Callable class for tab completion.
+    
+    Usage:
+        def get_matches_fn(prefix, **kwargs):
+            return ["match1", "match2"]
+            
+        completer = Completer(get_matches_fn)
+        inputstring("Prompt: ", completer=completer)
+        
+    Or with a class method:
+        class PlayerCompleter(Completer):
+            def get_matches(self, prefix, **kwargs):  # noqa: PLE
+                return db.query("SELECT name FROM players WHERE name LIKE ?", prefix + "%", **kwargs)
+        
+        inputstring("Select player: ", completer=PlayerCompleter(conn=db_conn))
+        
+    Or with database parameters:
+        completer = Completer(get_matches_fn, conn=db_conn, pool=thread_pool)
+        inputstring("Prompt: ", completer=completer)
+    """
+    
+    def __init__(self, get_matches=None, **kwargs):
+        """Initialize with optional get_matches function and kwargs.
+        
+        Args:
+            get_matches: Function that takes prefix and returns list of matches.
+            **kwargs: Arbitrary parameters (e.g., conn, pool) passed to get_matches.
+        """
+        # Only set if explicitly passed - don't override subclass methods
+        if get_matches is not None:
+            self._get_matches_func = get_matches
+        # Store kwargs for use by get_matches in subclass
+        self.kwargs = kwargs
+    
+    def get_matches(self, prefix, **kwargs):
+        """Override this in subclass or pass function to constructor.
+        
+        Args:
+            prefix: The text prefix to match against.
+            **kwargs: Additional parameters (e.g., conn, pool) passed from inputstring.
+            
+        Returns:
+            List of matching strings.
+        """
+        # Merge stored kwargs with call-time kwargs (call-time takes precedence)
+        merged_kwargs = {**self.kwargs, **kwargs}
+        
+        # Check for stored function first
+        if hasattr(self, '_get_matches_func') and self._get_matches_func is not None:
+            # Check if the function accepts kwargs, if not, filter them out
+            import inspect
+            sig = inspect.signature(self._get_matches_func)
+            
+            # If function has **kwargs, pass everything
+            if any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
+                return self._get_matches_func(prefix, **merged_kwargs)
+            
+            # Otherwise, only pass arguments that are in the signature
+            filtered_kwargs = {
+                k: v for k, v in merged_kwargs.items() 
+                if k in sig.parameters
+            }
+            return self._get_matches_func(prefix, **filtered_kwargs)
+        return None
+    
+    def __call__(self, buffer, **kwargs):
+        """Called by inputstring to get completions.
+        
+        Args:
+            buffer: Current input buffer
+            **kwargs: Additional parameters passed to get_matches (including curpos)
+            
+        Returns:
+            List of matching strings
+        """
+        curpos = kwargs.get('curpos', len(buffer))
+        prefix, word_start, word_end = get_current_word(buffer, curpos)
+        # Get the actual word to match (not the prefix before it)
+        word = buffer[word_start:word_end]
+        result = self.get_matches(word, **kwargs)
+        return result if result is not None else []
+
 yank_buffer = []  # Clipboard
 
 def move_cursor(row, col):
     echo(f"{{curpos:{row},{col}}}", end="", flush=True)
 
 def get_current_word(buffer, curpos):
-    """Stub: Returns (prefix, word_start_index, word_end_index)."""
-    return buffer, 0, len(buffer)
+    """Returns (prefix, word_start_index, word_end_index).
+    
+    Finds the word at the current cursor position and returns:
+    - prefix: text before the word
+    - word_start: starting index of the word
+    - word_end: ending index of the word
+    """
+    if curpos > len(buffer):
+        curpos = len(buffer)
+    
+    # Find word boundaries (words are \w+ sequences)
+    word_end = curpos
+    while word_end < len(buffer) and buffer[word_end].isalnum():
+        word_end += 1
+    
+    word_start = curpos
+    while word_start > 0 and buffer[word_start - 1].isalnum():
+        word_start -= 1
+    
+    prefix = buffer[:word_start]
+    return prefix, word_start, word_end
 
 def common_prefix(matches):
-    if not matches: return ""
-    return matches[0]
+    if not matches:
+        return ""
+    if len(matches) == 1:
+        return matches[0]
+    
+    # Find minimum length
+    min_len = min(len(m) for m in matches)
+    if min_len == 0:
+        return ""
+    
+    # Find common prefix
+    for i in range(min_len):
+        c = matches[0][i]
+        for m in matches[1:]:
+            if m[i] != c:
+                return matches[0][:i]
+    
+    return matches[0][:min_len]
 
 # --- 1. Global Key Actions Dictionary ---
 KEY_ACTIONS = {}
@@ -38,14 +156,14 @@ def handle_left(buffer, curpos, scroll_offset, max_width):
     if curpos > 0:
         curpos -= 1
     else:
-        echo(f"{{bell}}", end="", flush=True)
+        echo("{bell}", end="", flush=True)
     return buffer, curpos, scroll_offset
 
 def handle_right(buffer, curpos, scroll_offset, max_width):
     if curpos < len(buffer):
         curpos += 1
     else:
-        echo(f"{{bell}}", end="", flush=True)
+        echo("{bell}", end="", flush=True)
     return buffer, curpos, scroll_offset
 
 def handle_home(buffer, curpos, scroll_offset, max_width):
@@ -131,10 +249,9 @@ def handle_key_enter(buffer, curpos, scroll_offset, max_width,
 
 
     # Verification failed — redraw
-    refresh_input_view(
-        prompt, buffer, mask,
-        start_row, start_col, input_col_start,
-        curpos, scroll_offset, max_width
+    redraw_line(
+        prompt, buffer, max_width, start_row, start_col,
+        curpos, scroll_offset, max_width, mask
     )
 
     return buffer, curpos, scroll_offset, False, True
@@ -143,13 +260,50 @@ def handle_key_enter(buffer, curpos, scroll_offset, max_width,
 
 def handle_tab_manager(buffer, curpos, scroll_offset, max_width,
                        completer, last_matches, tab_count,
-                       prompt, max_len, start_row, start_col):
+                       prompt, max_len, start_row, start_col,
+                       **kwargs):
 
-    matches = completer(buffer, curpos)
-    if not matches:
-        return buffer, curpos, scroll_offset, last_matches, tab_count
-
+    # Get the word first to determine if we need all matches
     prefix, word_start, word_end = get_current_word(buffer, curpos)
+    word = buffer[word_start:word_end]
+    
+    # If empty word, try to get all matches by passing empty string
+    # Completers should return all matches when called with empty string
+    if not word:
+        matches = completer("", curpos=curpos, **kwargs)
+    else:
+        matches = completer(buffer, curpos=curpos, **kwargs)
+    
+    if not matches:
+        echo("{bell}", end="", flush=True)
+        return buffer, curpos, scroll_offset, last_matches, tab_count, start_row
+
+    # If empty word (user pressed tab with nothing typed), show all matches
+    if not word:
+        if matches == last_matches and tab_count >= 1:
+            # Second tab with empty word - ring bell
+            echo("{bell}", end="", flush=True)
+            return buffer, curpos, scroll_offset, last_matches, tab_count, start_row
+        
+        # First tab with empty word - show all matches in columns
+        echo("\n")
+        lines_printed = print_matches(matches)
+        
+        # Adjust start_row if we scrolled
+        rows = terminal.lines()
+        if start_row + lines_printed > rows:
+            start_row -= (start_row + lines_printed - rows)
+        if start_row < 1:
+            start_row = 1
+            
+        redraw_line(prompt, buffer, max_len, start_row, start_col,
+                    curpos, scroll_offset, max_width)
+        return buffer, curpos, scroll_offset, matches, 1, start_row
+
+    # If single match and user presses tab again, ring bell (no other options)
+    if matches == last_matches and len(last_matches) == 1 and tab_count >= 1:
+        echo("{bell}", end="", flush=True)
+        return buffer, curpos, scroll_offset, last_matches, tab_count, start_row
 
     if len(matches) == 1:
         word = matches[0]
@@ -165,17 +319,28 @@ def handle_tab_manager(buffer, curpos, scroll_offset, max_width,
 
         redraw_line(prompt, buffer, max_len, start_row, start_col,
                     curpos, scroll_offset, max_width)
-        return buffer, curpos, scroll_offset, [], 0
+        return buffer, curpos, scroll_offset, matches, 1, start_row
 
     if matches == last_matches and tab_count == 1:
         echo("\n")
-        print_matches(matches)
+        lines_printed = print_matches(matches)
+        echo("\n")
+        
+        # Adjust start_row if we scrolled
+        rows = terminal.lines()
+        # +1 for the extra newline
+        total_lines = lines_printed + 1
+        if start_row + total_lines > rows:
+            start_row -= (start_row + total_lines - rows)
+        if start_row < 1:
+            start_row = 1
+            
         redraw_line(prompt, buffer, max_len, start_row, start_col,
                     curpos, scroll_offset, max_width)
-        return buffer, curpos, scroll_offset, [], 0
+        return buffer, curpos, scroll_offset, [], 0, start_row
 
     lcp = common_prefix(matches)
-    if lcp and lcp != prefix:
+    if lcp and lcp != word:
         buffer = buffer[:word_start] + lcp + buffer[word_end:]
         curpos = word_start + len(lcp)
 
@@ -189,23 +354,28 @@ def handle_tab_manager(buffer, curpos, scroll_offset, max_width,
         redraw_line(prompt, buffer, max_len, start_row, start_col,
                     curpos, scroll_offset, max_width)
 
-    return buffer, curpos, scroll_offset, matches, 1
+    return buffer, curpos, scroll_offset, matches, 1, start_row
+
 
 # --- 4. Display Functions ---
 
 def redraw_line(prompt, buffer, max_len, start_row, start_col,
-                curpos, scroll_offset, max_width):
+                curpos, scroll_offset, max_width, mask=None):
 
-    input_col_start = start_col + rl
+    input_col_start = start_col + rendered_length(prompt)
 
-    echo(f"{cha}{prompt}{' ' * max_width}", end="", flush=True)
+    echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
+    echo(prompt, end="", flush=True)
+    echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
 
     display_str = buffer[scroll_offset : scroll_offset + max_width]
 
-    echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
-    echo(display_str, end="", flush=True, raw=True)
+    if mask is not None:
+        echo(f"{mask * len(display_str)}", end="", flush=True)
+    else:
+        echo(display_str, end="", flush=True, raw=True)
 
-    move_cursor(start_row, input_col_start + (curpos - scroll_offset))
+    echo(f"{{curpos:{start_row},{input_col_start + (curpos - scroll_offset)}}}", end="", flush=True)
 
 def print_matches(matches):
     cols = terminal.columns()
@@ -213,32 +383,13 @@ def print_matches(matches):
     per_line = max(1, cols // longest)
 
     for i, m in enumerate(matches, 1):
-        echo(m.ljust(longest))
+        echo(m.ljust(longest), end="")
         if i % per_line == 0:
             echo("{f6}", end="")
     if len(matches) % per_line != 0:
         echo("{f6}", end="")
-
-def refresh_input_view(prompt, buffer, mask,
-                       start_row, start_col, input_col_start,
-                       curpos, scroll_offset, max_width):
-
-    echo(f"{{curpos:{start_row},{start_col}}}{prompt}", end="", flush=True)
-    display_str = buffer[scroll_offset:scroll_offset+max_width]
-
-    echo(f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}",
-         end="", flush=True)
-
-    if mask is not None:
-        echo(f"{{curpos:{start_row},{input_col_start}}}"
-             f"{mask * len(display_str)}",
-             end="", flush=True)
-    else:
-        echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True, raw=False)
-        echo(f"{display_str}", end="", flush=True, raw=True)
-
-    echo(f"{{curpos:{start_row},{input_col_start + (curpos - scroll_offset)}}}",
-         end="", flush=True)
+        
+    return (len(matches) + per_line - 1) // per_line
 
 # --- 5. Initial Key Mappings ---
 
@@ -256,20 +407,20 @@ add_key_mapping("KEY_F1",        handle_help)
 
 # --- 6. MAIN INPUT FUNCTION ---
 
-def inputstring(prompt="> ", oldvalue="", **kwargs):
+def inputstring(prompt="> ", oldString="", **kwargs):
     global _input_dirty
 
-    max_len:int = kwargs.get("max_len", 255)
-    max_width:int = kwargs.get("max_width", 80)
-    mask:str = kwargs.get("mask", None)
-    completer = kwargs.get("completer", None)
+    max_len:int = kwargs.pop("max_len", 255)
+    max_width:int = kwargs.pop("max_width", 80)
+    mask:str = kwargs.pop("mask", None)
+    completer = kwargs.pop("completer", None)
 
     verify = kwargs.pop("verify", None)
     args = kwargs.pop("args", None)  # argparse.Namespace()
 
     noneok = kwargs.pop("noneok", False)
 
-    buffer = oldvalue if oldvalue is not None else ""
+    buffer = oldString if oldString is not None else ""
     curpos = len(buffer)
 
     scroll_offset = 0
@@ -278,7 +429,8 @@ def inputstring(prompt="> ", oldvalue="", **kwargs):
 
     (start_row, start_col) = get_cursor_position()
 
-    echo(f"{{curpos:{start_row},{start_col}}}{prompt}", end="", flush=True)
+    echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
+    echo(prompt, end="", flush=True)
 
     prompt_len = rendered_length(prompt)
     input_col_start = start_col + prompt_len
@@ -305,16 +457,16 @@ def inputstring(prompt="> ", oldvalue="", **kwargs):
     while not done:
         with _current_stream_lock:
             if _input_dirty:
-                refresh_input_view(
+                redraw_line(
                     prompt=prompt,
                     buffer=buffer,
-                    mask=mask,
+                    max_len=max_width,
                     start_row=start_row,
                     start_col=start_col,
-                    input_col_start=input_col_start,
                     curpos=curpos,
                     scroll_offset=scroll_offset,
                     max_width=max_width,
+                    mask=mask,
                 )
                 _input_dirty = False
                 _current_display_str = None
@@ -345,10 +497,11 @@ def inputstring(prompt="> ", oldvalue="", **kwargs):
             continue
 
         if ch == "KEY_TAB" and callable(completer):
-            buffer, curpos, scroll_offset, last_matches, tab_count = \
+            buffer, curpos, scroll_offset, last_matches, tab_count, start_row = \
                 handle_tab_manager(buffer, curpos, scroll_offset, max_width,
                                    completer, last_matches, tab_count,
-                                   prompt, max_len, start_row, start_col)
+                                   prompt, max_len, start_row, start_col,
+                                   **kwargs)
             _current_display_str = None
 
         elif ch in KEY_ACTIONS:

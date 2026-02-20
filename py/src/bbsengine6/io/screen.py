@@ -8,6 +8,8 @@ from .util import logentry
 # screen related functions
 # ------------------------
 
+bottombarstack = []
+
 def init(args=None, topmargin=1, bottommargin=1):
   echo("{f6:3}{cursorup:3}", end="", flush=True)
   h = terminal.lines() - bottommargin
@@ -63,13 +65,10 @@ def popbottombar():
   if len(bottombarstack) == 0:
     return
 
-  terminalwidth = io.getterminalwidth()
-
   if len(bottombarstack) > 0:
     buf = bottombarstack.pop()
     if buf != "":
       updatebottombar(f"{{var:areacolor}}{buf}{{/all}}")
-      # updatebottombar(f"{{var:areacolor}}{buf.ljust(terminalwidth-2, '')}{{/all}}")
 
   return
 
@@ -84,7 +83,7 @@ poparea = popbottombar
 # @see https://stackoverflow.com/questions/3173320/text-progress-bar-in-the-console
 # @since 20240102 copied to bbsengine6
 def updateprogress(iteration, total, fill="#"):
-  terminalwidth = io.terminal.width()
+  terminalwidth = terminal.width()
   decimals = 0
   length = terminalwidth-20
   percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
