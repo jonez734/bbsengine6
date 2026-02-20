@@ -1,7 +1,7 @@
 from .inputstring import inputstring
 
 # @see https://stackoverflow.com/questions/9043551/regex-that-matches-integers-only
-def inputinteger(prompt, oldvalue=None, **kwargs) -> int:
+def inputinteger(prompt:str, oldvalue:int|str|None=None, **kwargs) -> int | list[int] | None:
   oldvalue = int(oldvalue) if oldvalue is not None else ""
   filter = kwargs.get("filter", r"^([+-]?[1-9]\d*|0)[ ,]?$")
   buf = inputstring(prompt, str(oldvalue), filter=filter, **kwargs)

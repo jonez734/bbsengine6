@@ -407,7 +407,7 @@ add_key_mapping("KEY_F1",        handle_help)
 
 # --- 6. MAIN INPUT FUNCTION ---
 
-def inputstring(prompt="> ", oldString="", **kwargs):
+def inputstring(prompt:str="> ", oldvalue:str="", /, **kwargs) -> str:
     global _input_dirty
 
     max_len:int = kwargs.pop("max_len", 255)
@@ -420,7 +420,7 @@ def inputstring(prompt="> ", oldString="", **kwargs):
 
     noneok = kwargs.pop("noneok", False)
 
-    buffer = oldString if oldString is not None else ""
+    buffer = oldvalue if oldvalue is not None else ""
     curpos = len(buffer)
 
     scroll_offset = 0
