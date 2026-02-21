@@ -78,6 +78,14 @@ def setvar(name, value):
 def getvar(name, default=None):
     return _runtime_vars.get(name, default)
 
+def register_emoji(name, value):
+    """Register a custom emoji for use with :name: syntax."""
+    _emoji[name] = value
+
+def register_emojis(emojis: dict):
+    """Register multiple custom emojis at once."""
+    _emoji.update(emojis)
+
 # ----------------------------
 # Command patterns
 # ----------------------------
@@ -857,9 +865,9 @@ _emoji = {
   "building":               "\U0001F3DB", # @see https://emojipedia.org/classical-building/
   "envelope":               "\U00002709", # @see https://emojipedia.org/envelope/
   "dolphin":                "\U0001F42C", # @see https://emojipedia.org/dolphin/
-  "bellhop-bell":           "\U0001F6CE", # @see https://emojipedia.org/bellhop-bell/
-  "hotel":                  "\U0001F3E8", # @see https://emojipedia.org/hotel/
-  "mousetrap":              "\U0001FAA4", # @see https://emojipedia.org/mouse-trap/
+  "bellhop-bell":           "\U0001F6CE", # 🛎 @since 20260221 for murdermotel
+  "hotel":                  "\U0001F3E8", # 🏨 @since 20260221 for murdermotel
+  "mousetrap":              "\U0001FAA4", # 🪤 @since 20260221 for murdermotel
 
   "waninggibbousmoon":      "\U0001F316",
   "waxinggibbousmoon":      "\U0001F314",
@@ -896,21 +904,12 @@ _emoji = {
   "warning":                "\U000026A0",
   "stopsign":               "\U0001F6D1",
 
-  "dragon":                 "\U0001F409", # @since 20230716 for empyre
-  "tree":                   "\U0001F333", # @since 20230824 for empyre
-  "wood":                   "\U0001FAB5", # @since 20230824 for empyre
+  "shopping":               "\U0001F6CD", # 🛍 @since 20240128
 
-  "cityscape":              "\U0001F3D9", # @since 20230827 for empyre
-  "maint":                  "\U0001F6E0", # @since 20230827 for empyre, mm
-  "axe":                    "\U0001FA93", # @since 20230827 for mm
+  "maint":                  "\U0001F6E0", # 🛠 @since 20230827 for empyre, murdermotel
+  "axe":                    "\U0001FA93", # 🪓 @since 20230827 for murdermotel
 
-  "desert":                 "\U0001F3DC", # @since 20240107 for empyre
-
-  "shopping":               "\U0001F6CD", # @since 20240128
-
-  "farmer":                 "\U0001F9D1", # @since 20240415 for empyre
-
-  "zap":                    "\U000026A1", # @since 20240422 for weather
+  "zap":                    "\U000026A1", # ⚡ @since 20240422 for weather
 
   "palmtree":               "\U0001F334",
   "evergreentree":          "\U0001F332",

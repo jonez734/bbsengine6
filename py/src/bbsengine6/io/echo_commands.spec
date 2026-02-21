@@ -7,8 +7,9 @@ The `echo()` function supports various formatting commands enclosed in curly bra
 ## Basic Usage
 
 ```python
-from asimov.io import echo
-echo("{red}Hello {bold}World{/bold}!{/red}")
+from bbsengine6.io import register_emojis
+register_emojis({"horse": "\\U0001F40E", "grain": "\\U0001F33E"})
+echo(":horse: :grain:")
 ```
 
 ---

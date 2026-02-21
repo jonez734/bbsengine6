@@ -20,7 +20,7 @@ from . import terminal
 
 from .const import ESC
 
-from .echo import echo, echo_file, setvar, getvar, rendered_length, echo_traceback
+from .echo import echo, echo_file, setvar, getvar, rendered_length, echo_traceback, register_emoji, register_emojis
 ## from .inputstr import inputstr
 from .getch import getch_str as getch
 from .inputstring import inputstring
@@ -30,7 +30,7 @@ from .inputchoice import inputchoice
 from .inputchoice import inputchoice as inputchar
 from .palette import set_palette
 
-__all__ = ["echo", "inputstring", "getch", "set_palette", "setvar", "getvar", "inputboolean", "inputchoice", "rendered_length", "echo_traceback"]
+__all__ = ["echo", "inputstring", "getch", "set_palette", "setvar", "getvar", "inputboolean", "inputchoice", "rendered_length", "echo_traceback", "register_emoji", "register_emojis"]
 
 # ----------------------------
 # End of io.py
