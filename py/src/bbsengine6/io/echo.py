@@ -828,81 +828,81 @@ def _handle_command(token, **kwargs): # palette=None, vars=None):
         return
 
 _emoji = {
-  "grin":                   "\U0001f600",
-  "smile":                  "\U0001f642",
-  "rofl":                   "\U0001f923",
-  "wink":                   "\U0001f609",
-  "thinking":               "\U0001f914",
-  "sunglasses":             "\U0001f60e",
-  "100":                    "\U0001f4af",
-  "thumbup":                "\U0001f44d",
-  "thumbdown":              "\U0001f44e",
-  "vulcan":                 "\U0001f596",
-  "spiral":                 "\U0001f4ab",
-  "fire":                   "\U0001f525",
-  "bank":                   "\U0001f3e6",
-  "house":                  "\U0001f3e0",
-  "military-helmet":        "\U0001fa96",
-  "door":                   "\U0001f6aa",
-  "receipt":                "\U0001f9fe",
-  "newspaper":              "\U0001f4f0",
-  "prince":                 "\U0001f934",
-  "princess":               "\U0001f478",
-  "thread":                 "\U0001f9f5",
-  "ice":                    "\U0001f9ca",
-  "moneybag":               "\U0001f4b0",
-  "person":                 "\U0001f9d1",
-  "sun":                    "\U00002600", # @see https://emojipedia.org/sun/
-  "thunder-cloud-and-rain": "\U000026C8", # @see https://emojipedia.org/cloud-with-lightning-and-rain/
-  "crop":                   "\U0001F33E", # @see https://emojipedia.org/sheaf-of-rice/
-  "horse":                  "\U0001F40E", # @see https://emojipedia.org/horse/
-  "cactus":                 "\U0001F335", # @see https://emojipedia.org/cactus/
-  "ship":                   "\U0001F6A2", # @see https://emojipedia.org/ship/
-  "wood":                   "\U0001FAB5", # @see https://emojipedia.org/wood/
-  "link":                   "\U0001F517", # @see https://emojipedia.org/link/
-  "anchor":                 "\U00002693", # @see https://emojipedia.org/anchor/
-  "ballot-box":             "\U0001F5F3", # @see https://emojipedia.org/ballot-box-with-ballot/ @blacklist breaks monospace font
-  "building":               "\U0001F3DB", # @see https://emojipedia.org/classical-building/
-  "envelope":               "\U00002709", # @see https://emojipedia.org/envelope/
-  "dolphin":                "\U0001F42C", # @see https://emojipedia.org/dolphin/
+  "grin":                   "\U0001f600", # 😀 @since 20260221
+  "smile":                  "\U0001f642", # 🙂 @since 20260221
+  "rofl":                   "\U0001f923", # 🤪 @since 20260221
+  "wink":                   "\U0001f609", # 😉 @since 20260221
+  "thinking":               "\U0001f914", # 🤔 @since 20260221
+  "sunglasses":             "\U0001f60e", # 😎 @since 20260221
+  "100":                    "\U0001f4af", # 💯 @since 20260221
+  "thumbup":                "\U0001f44d", # 👍 @since 20260221
+  "thumbdown":              "\U0001f44e", # 👎 @since 20260221
+  "vulcan":                 "\U0001f596", # 🖖 @since 20260221
+  "spiral":                 "\U0001f4ab", # 💫 @since 20260221
+  "fire":                   "\U0001f525", # 🔥 @since 20260221
+  "bank":                   "\U0001f3e6", # 🏦 @since 20260221
+  "house":                  "\U0001f3e0", # 🏠 @since 20260221
+  "military-helmet":        "\U0001fa96", # 🪖 @since 20260221
+  "door":                   "\U0001f6aa", # 🚪 @since 20260221
+  "receipt":                "\U0001f9fe", # 🧾 @since 20260221
+  "newspaper":              "\U0001f4f0", # 📰 @since 20260221
+  "prince":                 "\U0001f934", # 🤴 @since 20260221
+  "princess":               "\U0001f478", # 👸 @since 20260221
+  "thread":                 "\U0001f9f5", # 🧵 @since 20260221
+  "ice":                    "\U0001f9ca", # 🧊 @since 20260221
+  "moneybag":               "\U0001f4b0", # 💰 @since 20260221
+  "person":                 "\U0001f9d1", # 👤 @since 20260221
+  "sun":                    "\U00002600", # ☀ @since 20260221
+  "thunder-cloud-and-rain": "\U000026C8", # ⛈ @since 20260221
+  "crop":                   "\U0001F33E", # 🌾 @since 20260221
+  "horse":                  "\U0001F40E", # 🐎 @since 20260221
+  "cactus":                 "\U0001F335", # 🪴 @since 20260221
+  "ship":                   "\U0001F6A2", # 🚢 @since 20260221
+  "wood":                   "\U0001FAB5", # 🪵 @since 20260221
+  "link":                   "\U0001F517", # 🔗 @since 20260221
+  "anchor":                 "\U00002693", # ⚓ @since 20260221
+  "ballot-box":             "\U0001F5F3", # 🗳 @since 20260221
+  "building":               "\U0001F3DB", # 🏛 @since 20260221
+  "envelope":               "\U00002709", # ✉ @since 20260221
+  "dolphin":                "\U0001F42C", # 🐬 @since 20260221
   "bellhop-bell":           "\U0001F6CE", # 🛎 @since 20260221 for murdermotel
   "hotel":                  "\U0001F3E8", # 🏨 @since 20260221 for murdermotel
   "mousetrap":              "\U0001FAA4", # 🪤 @since 20260221 for murdermotel
 
-  "waninggibbousmoon":      "\U0001F316",
-  "waxinggibbousmoon":      "\U0001F314",
-  "waningcrescentmoon":     "\U0001F318",
-  "waxingcrescentmoon":     "\U0001F312",
-  "lastquartermoon":        "\U0001F317",
-  "firstquartermoon":       "\U0001F313",
-  "newmoon":                "\U0001F311",
-  "fullmoon":               "\U0001F315",
+  "waninggibbousmoon":      "\U0001F316", # 🌖 @since 20260221
+  "waxinggibbousmoon":      "\U0001F314", # 🌔 @since 20260221
+  "waningcrescentmoon":     "\U0001F318", # 🌘 @since 20260221
+  "waxingcrescentmoon":     "\U0001F312", # 🌒 @since 20260221
+  "lastquartermoon":        "\U0001F317", # 🌗 @since 20260221
+  "firstquartermoon":       "\U0001F313", # 🌓 @since 20260221
+  "newmoon":                "\U0001F311", # 🌑 @since 20260221
+  "fullmoon":               "\U0001F315", # 🌕 @since 20260221
 
-  "sco":                    "\U0000264F", # @see https://emojipedia.org/search/?q=zodiac
-  "sag":                    "\U00002650",
-  "cap":                    "\U00002651",
-  "aqu":                    "\U00002652",
-  "pic":                    "\U00002653",
-  "ari":                    "\U00002648",
-  "tau":                    "\U00002649",
-  "gem":                    "\U0000264A",
-  "can":                    "\U0000264B",
-  "leo":                    "\U0000264C",
-  "vir":                    "\U0000264D",
-  "lib":                    "\U0000264E",
+  "sco":                    "\U0000264F", # ⛏ @since 20260221
+  "sag":                    "\U00002650", # ⛐ @since 20260221
+  "cap":                    "\U00002651", # ⛑ @since 20260221
+  "aqu":                    "\U00002652", # ⛒ @since 20260221
+  "pic":                    "\U00002653", # ⛓ @since 20260221
+  "ari":                    "\U00002648", # ♈ @since 20260221
+  "tau":                    "\U00002649", # ♉ @since 20260221
+  "gem":                    "\U0000264A", # ♊ @since 20260221
+  "can":                    "\U0000264B", # ♋ @since 20260221
+  "leo":                    "\U0000264C", # ♌ @since 20260221
+  "vir":                    "\U0000264D", # ♍ @since 20260221
+  "lib":                    "\U0000264E", # ♎ @since 20260221
 
-  "package":                "\U0001F4E6", # @since 20220907 @see https://emojipedia.org/package/
-  "compass":                "\U0001F9ED", # @since 20220907
-  "worldmap":               "\U0001F5FA", # @since 20220916
+  "package":                "\U0001F4E6", # 📦 @since 20220907
+  "compass":                "\U0001F9ED", # 🧭 @since 20220907
+  "worldmap":               "\U0001F5FA", # 🗺 @since 20220916
 
-  "wolf":                   "\U0001F43A", # @since 20221002
-  "person":                 "\U0001F9D1",
+  "wolf":                   "\U0001F43A", # 🐺 @since 20221002
+  "person":                 "\U0001F9D1", # 👤 @since 20260221
 
-  "supervillian":           "\U0001F9B9", # @since 20221016
-  "joker":                  "\U0001F0CF", # @since 20221127
+  "supervillian":           "\U0001F9B9", # 🦹 @since 20221016
+  "joker":                  "\U0001F0CF", # 🃏 @since 20221127
 
-  "warning":                "\U000026A0",
-  "stopsign":               "\U0001F6D1",
+  "warning":                "\U000026A0", # ⚠ @since 20260221
+  "stopsign":               "\U0001F6D1", # 🛑 @since 20260221
 
   "shopping":               "\U0001F6CD", # 🛍 @since 20240128
 
@@ -911,16 +911,16 @@ _emoji = {
 
   "zap":                    "\U000026A1", # ⚡ @since 20240422 for weather
 
-  "palmtree":               "\U0001F334",
-  "evergreentree":          "\U0001F332",
+  "palmtree":               "\U0001F334", # 🌴 @since 20260221
+  "evergreentree":          "\U0001F332", # 🌲 @since 20260221
 
-  "tophat":                 "\U0001F3A9",
-  "magicwand":              "\U0001FA84",
+  "tophat":                 "\U0001F3A9", # 🎩 @since 20260221
+  "magicwand":              "\U0001FA84", # 🪄 @since 20260221
 
-  "mercenary":				u"\U0001F977",
+  "mercenary":              "\U0001F977", # 🦷 @since 20260221
 
-  "checkmark":              u"\U00002714", #u"\U00002705",
-  "crossmark":              u"\U00002718", #u"\U0000274E",
+  "checkmark":              "\U00002714", # ✅ @since 20260221
+  "crossmark":              "\U00002718", # ❌ @since 20260221
 }
 
 def _handle_emoji(token):
