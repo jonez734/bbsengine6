@@ -158,6 +158,8 @@ Closing syntax: `{/bold}`, `{/italic}`, etc.
 
 ## Emoji
 
+> **Note:** This table shows a sample of available emojis. The full list is defined in `echo.py`. Use tab-completion in your editor to discover all available emojis.
+
 | Command | Emoji | Description |
 |---------|-------|-------------|
 | `{grin}` | 😀 | Grinning face |
