@@ -136,6 +136,7 @@ _compiled_command_handlers = [(kind, re.compile(pattern, re.IGNORECASE)) for kin
 
 _whitespace_re = re.compile(r'(\s+)')
 _word_re = re.compile(r'[^\s{}]+')
+_literal_braces_re = re.compile(r'(\{\{|\}\})')
 
 _command_re = re.compile(r"\{(?P<name>/?[a-zA-Z_][a-zA-Z0-9_.]*)(?::?(?P<params>[^}]*))\}", re.IGNORECASE)
 _emoji_re = re.compile(r":(?P<name>[\w _-]+):", re.IGNORECASE)
@@ -174,6 +175,16 @@ def tokenize(text, **kwargs):
 ##            print(f"tokenize.100: {tok=}")
             yield from _handle_whitespace(token)
             pos = m.end()
+            continue
+
+        # literal braces {{ and }}
+        m = re.match(_literal_braces_re, text[pos:])
+        if m:
+            raw = m.group(0)
+            name = "literalopen" if raw == "{{" else "literalclose"
+            tok = Token(kind="COMMAND", value=name, args=(), kwargs={}, raw=raw)
+            yield from _handle_command(tok)
+            pos += m.end()
             continue
 
         # commands
