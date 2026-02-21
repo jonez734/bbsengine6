@@ -161,23 +161,31 @@ Closing syntax: `{/bold}`, `{/italic}`, etc.
 
 > **Note:** This table shows a sample of available emojis. The full list is defined in `echo.py`. Use tab-completion in your editor to discover all available emojis.
 
+You can also register custom emojis at runtime:
+
+```python
+from bbsengine6.io import register_emojis
+register_emojis({"horse": "\\U0001F40E", "grain": "\\U0001F33E"})
+echo(":horse: :grain:")
+```
+
 | Command | Emoji | Description |
 |---------|-------|-------------|
-| `{grin}` | 😀 | Grinning face |
-| `{smile}` | 🙂 | Smiling face |
-| `{rofl}` | 🤪 | Rolling on floor laughing |
-| `{wink}` | 😉 | Winking face |
-| `{thinking}` | 🤔 | Thinking face |
-| `{sunglasses}` | 😎 | Sunglasses face |
-| `{thumbup}` | 👍 | Thumbs up |
-| `{thumbdown}` | 👎 | Thumbs down |
-| `{fire}` | 🔥 | Fire |
-| `{sun}` | ☀ | Sun |
-| `{moon}` | 🌙 | Moon |
-| `{star}` | ⭐ | Star |
-| `{heart}` | ❤️ | Red heart |
-| `{check}` | ✅ | Check mark |
-| `{x}` | ❌ | X mark |
+| `{grin}` | 😀 | Grinning face | `\U0001f600` |
+| `{smile}` | 🙂 | Smiling face | `\U0001f642` |
+| `{rofl}` | 🤪 | Rolling on floor laughing | `\U0001f923` |
+| `{wink}` | 😉 | Winking face | `\U0001f609` |
+| `{thinking}` | 🤔 | Thinking face | `\U0001f914` |
+| `{sunglasses}` | 😎 | Sunglasses face | `\U0001f60e` |
+| `{thumbup}` | 👍 | Thumbs up | `\U0001f44d` |
+| `{thumbdown}` | 👎 | Thumbs down | `\U0001f44e` |
+| `{fire}` | 🔥 | Fire | `\U0001f525` |
+| `{sun}` | ☀ | Sun | `\U00026000` |
+| `{moon}` | 🌙 | Moon | `\U0001f319` |
+| `{star}` | ⭐ | Star | `\U0001f31f` |
+| `{heart}` | ❤️ | Red heart | `\U00002764` |
+| `{check}` | ✅ | Check mark | `\U00002705` |
+| `{x}` | ❌ | X mark | `\U0000274e` |
 
 ---
 
