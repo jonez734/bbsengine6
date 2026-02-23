@@ -1,10 +1,10 @@
 $(document).ready(function() {
   let be = bbsengine();
 
-  if (be !== undefined)
+  if (be !== null)
   {
     be.addinterval(5000, "update credit count", function () {
-      be.updatetopbaritem("topbar.credits", ".credits"); // $("div#topbar .credits"), "/engine/bed?req=topbar.credits&callback=?");
+      be.updatetopbaritem("credits", $("div#topbar .credits"), "/engine/bed?req=topbar.credits&callback=?");
     });
   }
   return;

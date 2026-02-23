@@ -1,6 +1,4 @@
 $(document).ready(function() {
-  interval = await bbsengine().gettopbarupdateinterval();
-  bbsengine().addinterval(interval, "topbar.greetings");
   if (be !== null)
   {
     be.addinterval(5000, "update topbar.greetings", function() {

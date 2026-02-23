@@ -1,0 +1,22 @@
+database
+==
+
+- create()
+- exists()
+- update()
+- delete()
+- getpool()
+- classexists()
+- schemaexists()
+- createrol()
+- rolexists()
+- createschema()
+- get_role_privs()
+- manage_role_privs()
+- manage_secondary_role()
+- cursor()
+- extensionavailable()
+- extensioninstalled()
+- createextension()
+- importsql()
+- functionexists()
