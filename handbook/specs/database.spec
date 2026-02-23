@@ -57,9 +57,9 @@ Context manager for transactions.
 ---
 
 ```python
-commit(args: Any, **kwargs: Any) -> bool
+commit(args: Any, conn: Any = None, **kwargs: Any) -> bool
 ```
-Stub function (currently returns False).
+Commit transaction on connection. Returns `True` on success, `False` if no connection.
 
 ---
 
@@ -260,5 +260,4 @@ Add database arguments to argparse parser. Note: `defaults` uses `None` default 
 
 ## Known Issues / TODOs
 
-1. `commit()` function is a stub returning False - not implemented
-2. `mogrify` kwargs in several functions are reserved for future debug logging use
+1. `mogrify` kwargs in several functions are reserved for future debug logging use
