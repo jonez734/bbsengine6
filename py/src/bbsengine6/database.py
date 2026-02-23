@@ -170,21 +170,29 @@ def update(args: Any, table:str, pk:str, items:dict, **kwargs) -> int | bool:
   if conn is None:
     io.echo(f"bbsengine.database.update.120: {conn=}", level="error")
     return False
-  with cursor(conn) as cur:
-    _work(cur)
-    if commit is True:
-      conn.commit()
+  try:
+    with cursor(conn) as cur:
+      _work(cur)
+      if commit is True:
+        conn.commit()
+  except Exception as e:
+    io.echo(f"bbsengine.database.update.130: {e}", level="error")
+    raise
+  return True
 
-def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | None:
+def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
   def _work(conn):
     with cursor(conn) as cur:
-      cur.execute(sql, dat)
+      cur.execute(query, dat)
       if returnid is True:
         res = cur.fetchone()
+        if res is None:
+          return False
         if primarykey in res:
           return res[primarykey]
         else:
-          return None
+          return False
+    return True
 
   primarykey = kwargs.get("primarykey", "id")
   returnid = kwargs.get("returnid", True)
@@ -228,7 +236,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | None:
       pool = kwargs.get("pool", None)
       if pool is None:
         io.echo(f"bbsengine.database.insert.200: {pool=}", level="error")
-        return None
+        return False
       with connect(args, pool=pool) as conn:
         return _work(conn)
     return _work(conn)
@@ -239,7 +247,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | None:
 # @see https://soft-builder.com/how-to-list-all-schemas-in-postgresql/
 # @since 20230510
 # tables, views, etc. NOT functions
-def classexists(args: Any, name: str, **kwargs: Any) -> bool | None:
+def classexists(args: Any, name: str, **kwargs: Any) -> bool:
   def _work(conn):
     mogrify = kwargs.get("mogrify", False)
     with cursor(conn) as cur:
@@ -261,7 +269,7 @@ def classexists(args: Any, name: str, **kwargs: Any) -> bool | None:
       pool = kwargs.get("pool", None)
       if pool is None:
         io.echo(f"bbsengine6.classexists.200: {pool=}", level="error")
-        return None
+        return False
       with connect(args, pool=pool) as conn:
         return _work(conn)
     return _work(conn)
@@ -269,7 +277,7 @@ def classexists(args: Any, name: str, **kwargs: Any) -> bool | None:
     io.echo(f"bbsengine6.database.classexists.140: {e}", level="error")
     raise
 
-def schemaexists(args: Any, name: str, **kwargs: Any) -> bool | None:
+def schemaexists(args: Any, name: str, **kwargs: Any) -> bool:
   mogrify = kwargs.get("mogrify", False)
 
   def _work(conn):
@@ -286,7 +294,7 @@ def schemaexists(args: Any, name: str, **kwargs: Any) -> bool | None:
     if conn is None:
       pool = kwargs.get("pool", None)
       if pool is None:
-        return None
+        return False
       with connect(args, pool=pool) as conn:
         return _work(conn)
     return _work(conn)
@@ -490,7 +498,7 @@ def createschema(args: Any, name: str, **kwargs: Any) -> bool:
       io.echo(f"bbsengine6.database.createschema.100: database error: {e}")
       raise
 
-def get_role_privs(args: Any, rolname: str, cur: Any = None, **kwargs: Any) -> dict:
+def get_role_privs(args: Any, rolname: str, cur: Any = None, **kwargs: Any) -> dict | bool:
   def _work(cur):
     sql = "SELECT get_role_privs(%s);"
     cur.execute(sql, (rolname,))
