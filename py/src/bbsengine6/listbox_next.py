@@ -2,7 +2,7 @@ from math import ceil
 from typing import Any, Callable, List, NamedTuple, Optional
 
 from . import io
-
+from .common import logentry
 
 class ListboxItem:
     content: str
@@ -132,7 +132,7 @@ class Listbox:
             io.setvar("cic", self.itemcolors["normal"])
 
         padded = item.content.ljust(self.contentwidth - 4)
-        io.echo(f" {{vline}} {{cic}}{padded}{{/all}} {{vline}}", end=end, flush=True)
+        io.echo(f"{{cha}} {{vline}} {{cic}}{padded}{{/all}} {{vline}}", end=end, flush=True)
 
     def _display_blank_line(self) -> None:
         io.echo(f" {{vline}} {' ' * (self.contentwidth - 4)} {{vline}}")
@@ -169,6 +169,17 @@ class Listbox:
 
         self._display_bottom_border()
 
+    def _redraw_content_area(self) -> None:
+        io.echo(f"{{cursorup:{self.itemsperpage + 1}}}", end="", flush=True)
+        page_items = self.fetchitems()
+        for i in range(self.itemsperpage):
+            if i < len(page_items):
+                highlighted = (i == self._currentindex)
+                self._display_item(page_items[i], highlighted=highlighted)
+            else:
+                self._display_blank_line()
+            io.echo()
+
     def onkey(self, ch: Optional[str]) -> Optional[ListboxResult]:
         if ch is None:
             if self.idle is not None and callable(self.idle):
@@ -190,9 +201,11 @@ class Listbox:
         if ch == "KEY_UP":
             prev_idx = self._get_prev_enabled_index(page_items, self._currentindex)
             if prev_idx != -1:
+                io.echo(f"{{cursorup:{self._currentindex}}}", end="", flush=True)
                 self._display_item(page_items[self._currentindex], highlighted=False)
                 self._currentindex = prev_idx
-                self._display_item(page_items[self._currentindex], highlighted=True, end="")
+                self._display_item(page_items[self._currentindex], highlighted=True)
+                io.echo("{restorecursor}", end="", flush=True)
                 return None
             elif self._curpage > 0:
                 self._curpage -= 1
@@ -200,7 +213,7 @@ class Listbox:
                 last_idx = self._get_last_enabled_index(page_items)
                 if last_idx != -1:
                     self._currentindex = last_idx
-                self._display()
+                self._redraw_content_area()
                 return None
             else:
                 io.echo("{BEL}", end="", flush=True)
@@ -209,9 +222,12 @@ class Listbox:
         if ch == "KEY_DOWN":
             next_idx = self._get_next_enabled_index(page_items, self._currentindex)
             if next_idx != -1:
+                cursor_up = self._cursor_moves_to_item(self._currentindex)
+                io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
                 self._display_item(page_items[self._currentindex], highlighted=False)
                 self._currentindex = next_idx
-                self._display_item(page_items[self._currentindex], highlighted=True, end="")
+                self._display_item(page_items[self._currentindex], highlighted=True)
+                io.echo("{{restorecursor}}", end="", flush=True)
                 return None
             elif self._curpage < self.numpages - 1:
                 self._curpage += 1
@@ -219,7 +235,7 @@ class Listbox:
                 first_idx = self._get_first_enabled_index(page_items)
                 if first_idx != -1:
                     self._currentindex = first_idx
-                self._display()
+                self._redraw_content_area()
                 return None
             else:
                 io.echo("{BEL}", end="", flush=True)
@@ -232,7 +248,7 @@ class Listbox:
                 first_idx = self._get_first_enabled_index(page_items)
                 if first_idx != -1:
                     self._currentindex = first_idx
-                self._display()
+                self._redraw_content_area()
                 return None
             else:
                 io.echo("{BEL}", end="", flush=True)
@@ -245,7 +261,7 @@ class Listbox:
                 first_idx = self._get_first_enabled_index(page_items)
                 if first_idx != -1:
                     self._currentindex = first_idx
-                self._display()
+                self._redraw_content_area()
                 return None
             else:
                 io.echo("{BEL}", end="", flush=True)
@@ -267,7 +283,7 @@ class Listbox:
                 self._display_item(page_items[self._currentindex], highlighted=True, end="")
             return None
 
-        if self.currentitem is not None and self.currentitem.onkey is not None:
+        if self.currentitem is not None and callable(self.currentitem.onkey):
             if self.currentitem.onkey(self.currentitem, ch):
                 return None
             else:
@@ -277,21 +293,25 @@ class Listbox:
         io.echo("{BEL}", end="", flush=True)
         return None
 
+    def _cursor_moves_to_item(self, item: int) -> int:
+        return self.itemsperpage - item + 1
+
     def run(self, prompt: str = "listbox_next: ") -> ListboxResult:
         if not self.items:
             return ListboxResult("noitems")
 
         self._display()
-        io.echo("{savecursor}")
+        io.echo(f"{prompt}{{savecursor}}", end="", flush=True)
 
-        cursor_up = self.itemsperpage + 2 - self._currentindex
-        io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+        cursor_up = self._cursor_moves_to_item(self._currentindex)
+        logentry(f"{cursor_up=}", level="debug")
+        io.echo(f"{{cha}}{{cursorup:{cursor_up}}}", end="", flush=True)
 
         page_items = self.fetchitems()
         if self._currentindex < len(page_items):
             self._display_item(page_items[self._currentindex], highlighted=True)
 
-        io.echo(f"{{restorecursor}}{prompt}", end="", flush=True)
+        io.echo("{restorecursor}", end="", flush=True)
 
         while True:
             result = self.onkey(io.getch(self.GETCH_TIMEOUT))

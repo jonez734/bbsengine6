@@ -272,5 +272,6 @@ class TerminalState():
 
 _terminal_state = TerminalState(cursor_row=terminal.lines(), cursor_col=terminal.columns())
 _terminal_state_stack = []
+_terminal_state_stack_enabled = False
 
 _input_dirty = False

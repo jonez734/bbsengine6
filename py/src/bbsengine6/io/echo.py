@@ -16,7 +16,7 @@ from typing import List, Dict, Optional
 
 from .const import CSI, BEL, ESC, ECHO_END, OSC
 
-from .common import Token, write_current_output_stream, get_cursor_position, _terminal_state, _terminal_state_stack, _current_stream_lock, TerminalState
+from .common import Token, write_current_output_stream, get_cursor_position, _terminal_state, _terminal_state_stack, _terminal_state_stack_enabled, _current_stream_lock, TerminalState
 from .util import logentry
 from .palette import c64_palette, get_current_palette, get_palette_entry, rgb
 
@@ -343,6 +343,8 @@ def _handle_decsc(token):
     global _terminal_state_stack, _terminal_state
     cursor_row, cursor_col = get_cursor_position()
     with _current_stream_lock:
+        if not _terminal_state_stack_enabled and len(_terminal_state_stack) >= 1:
+            _terminal_state_stack.pop()
         _terminal_state_stack.append(
             TerminalState(
                 cursor_row=cursor_row,
@@ -356,26 +358,23 @@ def _handle_decsc(token):
 def _handle_decrc(token):
     global _terminal_state, _terminal_state_stack
 
-    curpos_token = None
+    if not _terminal_state_stack:
+        return  # VT spec: restore is a no-op if nothing saved
 
-    with _current_stream_lock:
-        if not _terminal_state_stack:
-            return  # VT spec: restore is a no-op if nothing saved
+    if _terminal_state_stack_enabled:
+        state = _terminal_state_stack.pop()  # pop from stack
+    else:
+        state = _terminal_state_stack[-1]  # peek, don't pop
 
-        state = _terminal_state_stack.pop()
+    # restore software state
+    _terminal_state.cursor_row = state.cursor_row
+    _terminal_state.cursor_col = state.cursor_col
+    _terminal_state.wordwrap   = state.wordwrap
+    _terminal_state.has_color  = state.has_color
+    _terminal_state.hidden     = state.hidden
 
-        # restore software state
-        _terminal_state.cursor_row = state.cursor_row
-        _terminal_state.cursor_col = state.cursor_col
-        _terminal_state.wordwrap   = state.wordwrap
-        _terminal_state.has_color  = state.has_color
-        _terminal_state.hidden     = state.hidden
-
-        curpos_token = Token("CURPOS", args=(_terminal_state.cursor_row, _terminal_state.cursor_col))
-
-    if curpos_token is not None:
-        # restore hardware cursor
-        yield from _handle_curpos(curpos_token)
+    # restore hardware cursor
+    yield from _handle_curpos(Token("CURPOS", args=(_terminal_state.cursor_row, _terminal_state.cursor_col)))
 
 # ----------------------------
 # ACS characters

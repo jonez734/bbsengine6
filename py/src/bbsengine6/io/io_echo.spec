@@ -182,6 +182,7 @@ getoption(opt, default=None)
 
 - `_terminal_state`: Current cursor position, wordwrap, color state, ACS mode
 - `_terminal_state_stack`: Stack for save/restore cursor
+- `_terminal_state_stack_enabled`: If False (default), save/restore uses VT sequences (ESC 7/8) and behaves as single slot (peek, don't pop). If True, uses Python stack (pop on restore).
 - `_runtime_vars`: User-defined variables
 - `_current_palette`: Active color palette
 
