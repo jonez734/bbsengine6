@@ -142,7 +142,6 @@ class Listbox:
         io.echo(f" {{vline}}{' ' * (self.contentwidth - 2)}{{vline}}")
         io.echo(f" {{vline}}{self.title.center(self.contentwidth - 2)}{{vline}}")
         io.echo(f" {{vline}}{' ' * (self.contentwidth - 2)}{{vline}}")
-        io.echo(f" {{llcorner}}{self.hline}{{lrcorner}}")
 
     def _display_middle_border(self) -> None:
         io.echo(f" {{rtee}}{self.hline}{{ltee}}")
