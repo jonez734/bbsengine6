@@ -282,6 +282,14 @@ class Listbox:
             return ListboxResult("noitems")
 
         self._display()
+
+        cursor_up = self.itemsperpage - self._currentindex
+        io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+
+        page_items = self.fetchitems()
+        if self._currentindex < len(page_items):
+            self._display_item(page_items[self._currentindex], highlighted=True)
+
         io.echo(prompt)
         io.echo("{savecursor}")
 
