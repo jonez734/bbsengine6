@@ -148,7 +148,7 @@ class Listbox:
         hline = f"{{hline:{self.contentwidth + 4}}}"
         io.echo(f"{{ltee}}{hline}{{rtee}} ")
 
-    def _display_content_bottom(self) -> None:
+    def _display_bottom_border(self) -> None:
         hline = f"{{hline:{self.contentwidth + 4}}}"
         io.echo(f"{{llcorner}}{hline}{{lrcorner}} ")
 
@@ -168,7 +168,7 @@ class Listbox:
                 self._display_blank_line()
             io.echo()
 
-        self._display_content_bottom()
+        self._display_bottom_border()
 
     def onkey(self, ch: Optional[str]) -> Optional[ListboxResult]:
         if ch is None:
