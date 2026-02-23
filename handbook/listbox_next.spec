@@ -187,8 +187,8 @@ class Listbox:
         - Move to first non-disabled item on current page
         - Draw the new item as highlighted
     - `KEY_END`:
-      - If not already on the last non-disabled item:
+      - If not already on the last enabled item:
         - Redraw current item as non-highlighted
-        - Move to last non-disabled item on current page
+        - Move to last enabled item on current page
         - Draw the new item as highlighted
 ```
