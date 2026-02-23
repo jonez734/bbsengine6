@@ -55,26 +55,25 @@ def mogrifysql(cur: Any, query: str, params: tuple) -> str:
 def parse_dsn(dsn: str) -> dict[str, str]:
     params = {}
     for part in dsn.split():
+        if '=' not in part:
+            continue
         key, value = part.split('=', 1)
         params[key] = value
     return params
 
 def make_dsn(args: Any, **kwargs: Any) -> str:
     components = []
-#    for key, value in kwargs.items():
-#        if value is not None:  # Only add components where the value is provided
-#            components.append(f"{key}={value}")
-#
-#    return ' '.join(components)
 
-    defaults = {"dbname":args.databasename, "user":args.databaseuser, "password":args.databasepassword, "host":args.databasehost, "port":args.databaseport, "autocommit":False}
-    for k in ("dbname", "user", "password", "host", "port"): # , "autocommit"):
-      v = kwargs.get(k, defaults[k])
-#      io.echo(f"make_dsn.100: {k=} {v=}", level="debug")
+    try:
+        defaults = {"dbname":args.databasename, "user":args.databaseuser, "password":args.databasepassword, "host":args.databasehost, "port":args.databaseport, "autocommit":False}
+    except AttributeError:
+        defaults = {"dbname":None, "user":None, "password":None, "host":None, "port":5432, "autocommit":False}
+    
+    for k in ("dbname", "user", "password", "host", "port"):
+      v = kwargs.get(k, defaults.get(k))
       if v is not None:
         components.append(f"{k}={v}")
 
-    # io.echo(f"bbsengine.database.make_dsn.100: {kwargs=} {components=}", level="debug")
     return ' '.join(components)
 
 def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
@@ -138,7 +137,7 @@ def connect(args: Any, **kwargs: Any) -> Any:
 #
 #    return kwargs
 
-def update(args: Any, table:str, pk:str, items:dict, **kwargs) -> int | bool:
+def update(args: Any, table:str, pk:str, items:dict, **kwargs) -> bool:
   primarykey = kwargs.get("primarykey", "id")
   _mogrify = kwargs.get("mogrify", False)
   updatepk = kwargs.get("updatepk", False)
@@ -303,7 +302,9 @@ def schemaexists(args: Any, name: str, **kwargs: Any) -> bool:
     raise
 
 # @since 20230510 copied from bbsengine5.py
-def buildargs(parentparser: Any, defaults: dict = {}, label: str = "database options", suppress: bool = False) -> None:
+def buildargs(parentparser: Any, defaults: dict | None = None, label: str = "database options", suppress: bool = False) -> None:
+    if defaults is None:
+        defaults = {}
     databasename = defaults.get("databasename", "zoid6")
     databasehost = defaults.get("databasehost", "")
     databaseport = defaults.get("databaseport", 5432)
@@ -350,9 +351,6 @@ def resultiter(cur: Any, arraysize: int = 1000, filterfunc: callable = None, **k
 def commit(args: Any, **kwargs: Any) -> bool:
   io.echo("bbsengine6.database.commit.100: stub", level="warn")
   return False
-
-  with connect(args) as conn:
-    conn.commit()
 
 # @since 20230715 used by empyre
 def rollback(args: Any, conn: Any = None, **kwargs: Any) -> None:
@@ -553,7 +551,7 @@ def manage_secondary_role(args: Any, role_name: str, action: str, secondary: str
     io.echo(f"bbsengine6.database.manage_secondary_role.100: database error {e}", level="error")
     raise
 
-def cursor(conn, row_factory=dict_row, **kwargs):
+def cursor(conn: Any, row_factory: Any = dict_row, **kwargs: Any) -> Any:
     """
     Creates a cursor using the provided connection and applies the desired row factory.
     @since 20241016
