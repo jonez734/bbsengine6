@@ -53,9 +53,9 @@ cic = {
 ```
 
 When displaying each item:
-- If item is disabled: use `cic["disabled"]`
-- If item is highlighted (current): use `cic["highlighted"]`
-- Otherwise: use `cic["normal"]`
+- If item is disabled: use `cic["disabled"]` and call `io.setvar("cic", cic["disabled"])`
+- If item is highlighted (current): use `cic["highlighted"]` and call `io.setvar("cic", cic["highlighted"])`
+- Otherwise: use `cic["normal"]` and call `io.setvar("cic", cic["normal"])`
 
 ## Width Calculation
 
