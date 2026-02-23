@@ -60,8 +60,10 @@ When displaying each item:
 
 ## Width Calculation
 
+- `terminalwidth` = `terminal.width()`
 - `contentwidth` = `terminal.width() - 3*2` (does not include borders)
 - `totalwidth` = `contentwidth + 6` (content + left border + right border)
+- `hline` = `f"{{hline:{contentwidth + 4}}}"` (computed in constructor)
 - Left border: `" {vline} "` (3 chars)
 - Right border: `" {vline} "` (3 chars)
 
@@ -70,21 +72,21 @@ The border consists of a space, vertical line, space (3 chars on each side).
 ## Height Calculation
 
 - **Title box** (if title is given): 5 lines
-  - Line 1: top border (`f"{{ulcorner}}{{hline:{contentwidth+4}}}{{urcorner}} "`)
-  - Line 2: blank (`f"{{vline}}{' '*(contentwidth-1)}{{vline}} "`)
-  - Line 3: title with left/right borders (`f"{{vline}}{title.center(contentwidth-1)}{{vline}} "`)
-  - Line 4: blank (`f"{{vline}}{' '*(contentwidth-1)}{{vline}} "`)
-  - Line 5: bottom border (`f"{{rtee}}{{hline:{contentwidth+4}}}{{ltee}} "`)
+  - Line 1: top border (`f"{{ulcorner}}{hline}{{urcorner}} "`)
+  - Line 2: blank (`f"{{vline}}{' '*(contentwidth-3)}{{vline}} "`)
+  - Line 3: title with left/right borders (`f"{{vline}}{title.center(contentwidth-3)}{{vline}} "`)
+  - Line 4: blank (`f"{{vline}}{' '*(contentwidth-3)}{{vline}} "`)
+  - Line 5: bottom border (`f"{{rtee}}{hline}{{ltee}} "`)
 
 - **Middle border** (between title box and content area): `_display_middle_border()`
-  - Uses `{ltee}` and `{rtee}`: `f"{{ltee}}{{hline:{contentwidth+4}}}{{rtee}} "`
+  - Uses `{ltee}` and `{rtee}`: `f"{{ltee}}{hline}{{rtee}} "`
 
 - **Top border** (if no title, displays instead of middle border): `_display_top_border()`
-  - Uses `{ulcorner}` and `{urcorner}`: `f"{{ulcorner}}{{hline:{contentwidth+4}}}{{urcorner}} "`
+  - Uses `{ulcorner}` and `{urcorner}`: `f"{{ulcorner}}{hline}{{urcorner}} "`
 
 - **Content area** (below middle border or top border):
   - Lines 1-n: items (`itemsperpage` lines, each item has `itemheight` rows)
-  - If fewer items than `itemsperpage`, pad with blank lines using `f"{{vline}}{' '*(contentwidth-1)}{{vline}} "`
+  - If fewer items than `itemsperpage`, pad with blank lines using `f"{{vline}}{' '*(contentwidth-3)}{{vline}} "`
 
 - **Bottom border**: `_display_bottom_border()`
   - Uses `{llcorner}` and `{lrcorner}`: `f"{{llcorner}}{{hline:{contentwidth+4}}}{{lrcorner}} "`
