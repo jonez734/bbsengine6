@@ -40,6 +40,16 @@
 | title | str | "" | Title displayed at top of widget |
 | GETCH_TIMEOUT | float | 0.25 | Key input timeout in seconds |
 
+## Current Item Color (cic)
+
+The `cic` echovar controls the color used when rendering items:
+
+| State | Color |
+|-------|-------|
+| Disabled item | `{bggray}` |
+| Highlighted (current) | `{bgwhite}{black}` |
+| Normal (not highlighted) | `{normalcolor}` |
+
 ## Width Calculation
 
 - `contentwidth` = `terminal.width() - 3*2` (does not include borders)
