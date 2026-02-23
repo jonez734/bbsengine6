@@ -131,11 +131,11 @@ class Listbox:
         else:
             io.setvar("cic", self.itemcolors["normal"])
 
-        padded = item.content.ljust(self.contentwidth - 3)
-        io.echo(f" {{vline}}{padded} {{vline}}")
+        padded = item.content.ljust(self.contentwidth - 4)
+        io.echo(f" {{vline}} {{cic}}{padded}{{/all}} {{vline}}")
 
     def _display_blank_line(self) -> None:
-        io.echo(f" {{vline}}{' ' * (self.contentwidth - 3)}{{vline}}")
+        io.echo(f" {{vline}} {' ' * (self.contentwidth - 4)} {{vline}}")
 
     def _display_title_box(self) -> None:
         io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")
@@ -181,7 +181,6 @@ class Listbox:
 
         if ch == "KEY_ENTER":
             if self.currentitem is not None and not self.currentitem.disabled:
-                io.echo("{restorecursor}", end="", flush=True)
                 return ListboxResult("selected", self.currentitem)
             else:
                 io.echo("{BEL}", end="", flush=True)
@@ -191,6 +190,7 @@ class Listbox:
             prev_idx = self._get_prev_enabled_index(page_items, self._currentindex)
             if prev_idx != -1:
                 self._display_item(page_items[self._currentindex], highlighted=False)
+                io.echo(f"{{cursorup:{self.itemheight}}}", end="", flush=True)
                 self._currentindex = prev_idx
                 self._display_item(page_items[self._currentindex], highlighted=True)
                 return None
@@ -210,6 +210,7 @@ class Listbox:
             next_idx = self._get_next_enabled_index(page_items, self._currentindex)
             if next_idx != -1:
                 self._display_item(page_items[self._currentindex], highlighted=False)
+                io.echo(f"{{cursordown:{self.itemheight}}}", end="", flush=True)
                 self._currentindex = next_idx
                 self._display_item(page_items[self._currentindex], highlighted=True)
                 return None
@@ -282,6 +283,7 @@ class Listbox:
             return ListboxResult("noitems")
 
         self._display()
+        io.echo("{savecursor}")
 
         cursor_up = self.itemsperpage - self._currentindex
         io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
@@ -290,8 +292,7 @@ class Listbox:
         if self._currentindex < len(page_items):
             self._display_item(page_items[self._currentindex], highlighted=True)
 
-        io.echo(prompt)
-        io.echo("{savecursor}")
+        io.echo(f"{{restorecursor}}{prompt}", end="", flush=True)
 
         while True:
             result = self.onkey(io.getch(self.GETCH_TIMEOUT))
