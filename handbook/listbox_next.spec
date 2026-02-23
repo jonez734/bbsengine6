@@ -171,20 +171,20 @@ class Listbox:
       - If there is a previous page:
         - Redraw current item as non-highlighted
         - Display previous page
-        - Set highlighted item to first non-disabled item on new page
+        - Set highlighted item to first enabled item on new page
       - Else:
         - Output `{BEL}` to signal error, keep current item highlighted
     - `KEY_PAGEDOWN`:
       - If there is a next page:
         - Redraw current item as non-highlighted
         - Display next page
-        - Set highlighted item to first non-disabled item on new page
+        - Set highlighted item to first enabled item on new page
       - Else:
         - Output `{BEL}` to signal error, keep current item highlighted
     - `KEY_HOME`:
-      - If not already on the first non-disabled item:
+      - If not already on the first enabled item:
         - Redraw current item as non-highlighted
-        - Move to first non-disabled item on current page
+        - Move to first enabled item on current page
         - Draw the new item as highlighted
     - `KEY_END`:
       - If not already on the last enabled item:
