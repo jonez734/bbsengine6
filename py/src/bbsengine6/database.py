@@ -16,6 +16,16 @@ from . import io, util
 DEFAULTDATABASE = "postgres"
 
 def getoid(args: Any, typ: str, cur: Any = None) -> int | None:
+  """Get the OID for a PostgreSQL type.
+  
+  Args:
+    args: Application args (used to get connection if cur is None)
+    typ: PostgreSQL type name (e.g., 'jsonb', 'varchar')
+    cur: Optional cursor to use
+    
+  Returns:
+    OID as int, or None if type not found
+  """
   def _work(cur):
     sql = "SELECT oid FROM pg_type WHERE typname = %s"
     dat = (typ,)
@@ -41,6 +51,16 @@ def getoid(args: Any, typ: str, cur: Any = None) -> int | None:
 #JSON_OID = getoid("json") # 114
 
 def mogrifysql(cur: Any, query: str, params: tuple) -> str:
+    """Format a query with params for debugging/logging.
+    
+    Args:
+      cur: Database cursor
+      query: SQL query with %s placeholders
+      params: Tuple of parameter values
+      
+    Returns:
+      Formatted string with params interpolated
+    """
     # Create a SQL object using sql.SQL and format it with sql.Placeholder()
     formatted_query = sql.SQL(query).format(*[sql.Placeholder()] * len(params))
 
@@ -53,6 +73,14 @@ def mogrifysql(cur: Any, query: str, params: tuple) -> str:
     return formatted_query_with_values
 
 def parse_dsn(dsn: str) -> dict[str, str]:
+    """Parse a PostgreSQL DSN string into a dict.
+    
+    Args:
+      dsn: DSN string like 'host=localhost dbname=test'
+      
+    Returns:
+      Dict with keys like 'host', 'dbname', etc.
+    """
     params = {}
     for part in dsn.split():
         if '=' not in part:
@@ -62,6 +90,15 @@ def parse_dsn(dsn: str) -> dict[str, str]:
     return params
 
 def make_dsn(args: Any, **kwargs: Any) -> str:
+    """Build a PostgreSQL DSN string from args or kwargs.
+    
+    Args:
+      args: Application args with database* attributes
+      **kwargs: Optional overrides for dbname, user, password, host, port
+    
+    Returns:
+      DSN string like 'dbname=test user=admin'
+    """
     components = []
 
     try:
@@ -77,21 +114,43 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
     return ' '.join(components)
 
 def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
-##  io.echo(f"bbsengine.getpool.120: {args=}", level="debug")
+  """Create a connection pool to PostgreSQL.
+  
+  Args:
+    args: Application args for DSN construction
+    **kwargs: Optional DSN overrides
+  
+  Returns:
+    ConnectionPool instance (min=10, max=100 connections)
+  """
   dsn = make_dsn(args, **kwargs)
 
   pool = ConnectionPool(dsn, min_size=10, max_size=100, timeout=5, open=True)
-  # io.echo(f"bbsengine.getpool.100: {pool=}", level="debug")
   return pool
 
 def transaction(conn: Any, **kwargs: Any) -> Any:
+  """Create a transaction context manager.
+  
+  Args:
+    conn: Database connection
+    **kwargs: Optional arguments
+  
+  Returns:
+    Transaction context manager
+  """
   io.echo(f"database.transaction.100: {kwargs=}", level="debug")
   return conn.transaction()
 
-#databasehandles = {}
 def connect(args: Any, **kwargs: Any) -> Any:
-  # io.echo(f"bbsengine.database.connect.220: {kwargs=}", level="debug")
-
+  """Get a connection from the pool.
+  
+  Args:
+    args: Application args (used for logging)
+    pool: ConnectionPool instance (required)
+  
+  Returns:
+    Connection from pool, or None if pool is None
+  """
   pool = kwargs.pop("pool", None)
   if pool is None:
     io.echo(f"bbsengine6.database.connect.100: {pool=}", level="error")
@@ -138,6 +197,18 @@ def connect(args: Any, **kwargs: Any) -> Any:
 #    return kwargs
 
 def update(args: Any, table:str, pk:str, items:dict, **kwargs) -> bool:
+  """Update rows in a table.
+  
+  Args:
+    args: Application args (for debug logging)
+    table: Table name
+    pk: Primary key value to match
+    items: Dict of column:value pairs to update
+    **kwargs: Optional - primarykey, mogrify, updatepk, commit
+  
+  Returns:
+    True on success, False on connection error, raises on database error
+  """
   primarykey = kwargs.get("primarykey", "id")
   _mogrify = kwargs.get("mogrify", False)
   updatepk = kwargs.get("updatepk", False)
@@ -180,6 +251,17 @@ def update(args: Any, table:str, pk:str, items:dict, **kwargs) -> bool:
   return True
 
 def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
+  """Insert a row into a table.
+  
+  Args:
+    args: Application args (for debug logging)
+    table: Table name
+    items: Dict of column:value pairs to insert
+    **kwargs: Optional - primarykey, returnid, mogrify, conn, pool
+  
+  Returns:
+    Inserted ID if returnid=True, True on success, False on error
+  """
   def _work(conn):
     with cursor(conn) as cur:
       cur.execute(query, dat)
@@ -349,14 +431,30 @@ def resultiter(cur: Any, arraysize: int = 1000, filterfunc: callable = None, **k
             yield result
 
 def commit(args: Any, conn: Any = None, **kwargs: Any) -> bool:
+  """Commit the current transaction.
+  
+  Args:
+    args: Application args (for logging)
+    conn: Database connection
+    **kwargs: Additional arguments
+  
+  Returns:
+    True on success, False if no connection
+  """
   if conn is not None:
     conn.commit()
     return True
   io.echo("bbsengine6.database.commit.100: no connection", level="error")
   return False
 
-# @since 20230715 used by empyre
 def rollback(args: Any, conn: Any = None, **kwargs: Any) -> None:
+  """Roll back the current transaction.
+  
+  Args:
+    args: Application args (for logging)
+    conn: Database connection
+    **kwargs: Additional arguments
+  """
   if conn is not None:
     return conn.rollback()
 
@@ -555,11 +653,17 @@ def manage_secondary_role(args: Any, role_name: str, action: str, secondary: str
     raise
 
 def cursor(conn: Any, row_factory: Any = dict_row, **kwargs: Any) -> Any:
-    """
-    Creates a cursor using the provided connection and applies the desired row factory.
-    @since 20241016
-    """
-    return conn.cursor(row_factory=row_factory)
+  """Create a cursor with the specified row factory.
+  
+  Args:
+    conn: Database connection
+    row_factory: Row factory (default: dict_row for dict results)
+    **kwargs: Additional arguments
+  
+  Returns:
+    Cursor instance
+  """
+  return conn.cursor(row_factory=row_factory)
 
 def extensionavailable(args: Any, ext: str, **kwargs: Any) -> bool:
     def _work(cur):
