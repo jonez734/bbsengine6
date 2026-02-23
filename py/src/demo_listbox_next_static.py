@@ -9,6 +9,23 @@ def buildargs():
     return parser
 
 
+def handle_e(listbox):
+    io.echo(f"{{restorecursor}}", end="", flush=True)
+    io.echo(f"{{yellow}}hello world!{{/all}}\n")
+    io.echo(f"Press any key to continue...")
+    io.getch(30)
+    listbox._display()
+    io.echo(f"listbox_next: ", end="", flush=True)
+    io.echo(f"{{savecursor}}", end="", flush=True)
+    cursor_up = listbox._cursor_moves_to_item(listbox.currentindex)
+    io.echo(f"{{cha}}{{cursorup:{cursor_up}}}", end="", flush=True)
+    page_items = listbox.fetchitems()
+    if listbox.currentindex < len(page_items):
+        listbox._display_item(page_items[listbox.currentindex], highlighted=True)
+    io.echo(f"{{restorecursor}}", end="", flush=True)
+    return True
+
+
 def main(args):
     io.setvar("engine.menu.boxcharcolor", "{bglightgray}{darkgreen}")
     io.setvar("engine.menu.color", "{bggray}")
@@ -30,12 +47,16 @@ def main(args):
     for i in range(30):
         items.append(ListboxItem(content=f"demo item #{i}", pk=i, data=None))
 
+    def custom_e():
+        return handle_e(lb)
+
     lb = Listbox(
         args,
         title="Demo Listbox Next",
         itemsperpage=10,
         itemheight=1,
         items=items,
+        custom_keys={"e": custom_e},
     )
 
     result = lb.run()
