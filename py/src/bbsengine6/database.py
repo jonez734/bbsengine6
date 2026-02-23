@@ -1,14 +1,11 @@
 import copy
-import json
+from typing import Any, Iterator
 
 import argparse
 
-#import psycopg2, psycopg2.extras
-#from psycopg2.extras import Json
-#from psycopg2.extensions import parse_dsn, make_dsn
-from psycopg.types.json import Jsonb
 from psycopg.rows import dict_row
-import psycopg, psycopg.sql
+import psycopg
+import psycopg.sql
 
 from psycopg import sql
 
@@ -18,7 +15,7 @@ from . import io, util
 
 DEFAULTDATABASE = "postgres"
 
-def getoid(args, typ, cur=None):
+def getoid(args: Any, typ: str, cur: Any = None) -> int | None:
   def _work(cur):
     sql = "SELECT oid FROM pg_type WHERE typname = %s"
     dat = (typ,)
@@ -43,7 +40,7 @@ def getoid(args, typ, cur=None):
 #JSONB_OID = getoid("jsonb") # 3802
 #JSON_OID = getoid("json") # 114
 
-def mogrifysql(cur, query, params):
+def mogrifysql(cur: Any, query: str, params: tuple) -> str:
     # Create a SQL object using sql.SQL and format it with sql.Placeholder()
     formatted_query = sql.SQL(query).format(*[sql.Placeholder()] * len(params))
 
@@ -55,14 +52,14 @@ def mogrifysql(cur, query, params):
 
     return formatted_query_with_values
 
-def parse_dsn(dsn):
+def parse_dsn(dsn: str) -> dict[str, str]:
     params = {}
     for part in dsn.split():
         key, value = part.split('=', 1)
         params[key] = value
     return params
 
-def make_dsn(args, **kwargs): # dbname=None, user=None, password=None, host=None, port=None):
+def make_dsn(args: Any, **kwargs: Any) -> str:
     components = []
 #    for key, value in kwargs.items():
 #        if value is not None:  # Only add components where the value is provided
@@ -80,22 +77,20 @@ def make_dsn(args, **kwargs): # dbname=None, user=None, password=None, host=None
     # io.echo(f"bbsengine.database.make_dsn.100: {kwargs=} {components=}", level="debug")
     return ' '.join(components)
 
-def getpool(args, **kwargs):
+def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
+##  io.echo(f"bbsengine.getpool.120: {args=}", level="debug")
   dsn = make_dsn(args, **kwargs)
-  # io.echo(f"bbsengine.getpool.120: {dsn=}", level="debug")
 
   pool = ConnectionPool(dsn, min_size=10, max_size=100, timeout=5, open=True)
   # io.echo(f"bbsengine.getpool.100: {pool=}", level="debug")
   return pool
 
-def transaction(conn, **kwargs):
+def transaction(conn: Any, **kwargs: Any) -> Any:
   io.echo(f"database.transaction.100: {kwargs=}", level="debug")
-  readonly = kwargs.get("readonly", None)
-#  conn.read_only = readonly
   return conn.transaction()
 
 #databasehandles = {}
-def connect(args, **kwargs):
+def connect(args: Any, **kwargs: Any) -> Any:
   # io.echo(f"bbsengine.database.connect.220: {kwargs=}", level="debug")
 
   pool = kwargs.pop("pool", None)
@@ -143,9 +138,9 @@ def connect(args, **kwargs):
 #
 #    return kwargs
 
-def update(args, table:str, pk:str, items:dict, **kwargs) -> int: # primarykey="id", mogrify:bool=False, updatepk:bool=False, **kwargs) -> int:
+def update(args, table:str, pk:str, items:dict, **kwargs) -> int:
   primarykey = kwargs.get("primarykey", "id")
-  mogrify = kwargs.get("mogrify", False)
+  _mogrify = kwargs.get("mogrify", False)
   updatepk = kwargs.get("updatepk", False)
   commit = kwargs.get("commit", False)
 
@@ -183,7 +178,7 @@ def update(args, table:str, pk:str, items:dict, **kwargs) -> int: # primarykey="
     if commit is True:
       conn.commit()
 
-def insert(args, table:str, items:dict, **kwargs): # returnid:bool=True, primarykey:str="id", mogrify:bool=True):
+def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | None:
   def _work(conn):
     with cursor(conn) as cur:
       cur.execute(sql, dat)
@@ -196,7 +191,7 @@ def insert(args, table:str, items:dict, **kwargs): # returnid:bool=True, primary
 
   primarykey = kwargs.get("primarykey", "id")
   returnid = kwargs.get("returnid", True)
-  mogrify = kwargs.get("mogrify", True)
+  _mogrify = kwargs.get("mogrify", True)
 
 #  cur = kwargs.get("cur", None)
 
@@ -247,7 +242,7 @@ def insert(args, table:str, items:dict, **kwargs): # returnid:bool=True, primary
 # @see https://soft-builder.com/how-to-list-all-schemas-in-postgresql/
 # @since 20230510
 # tables, views, etc. NOT functions
-def classexists(args, name, **kwargs):
+def classexists(args: Any, name: str, **kwargs: Any) -> bool | None:
   def _work(conn):
     mogrify = kwargs.get("mogrify", False)
     with cursor(conn) as cur:
@@ -277,15 +272,15 @@ def classexists(args, name, **kwargs):
     io.echo(f"bbsengine6.database.classexists.140: {e}", level="error")
     raise
 
-def schemaexists(args, name, **kwargs):
+def schemaexists(args: Any, name: str, **kwargs: Any) -> bool | None:
   mogrify = kwargs.get("mogrify", False)
 
   def _work(conn):
     sql = "SELECT 't' as exists FROM information_schema.schemata where schema_name=%s"
     dat = (name,)
-    if mogrify is True:
-      io.echo(f"bbsengine6.database.schemaexists.100: {mogrifysql(cur, sql, dat)=}", level="debug")
     with cursor(conn) as cur:
+      if mogrify is True:
+        io.echo(f"bbsengine6.database.schemaexists.100: {mogrifysql(cur, sql, dat)=}", level="debug")
       cur.execute(sql, dat)
       return False if cur.rowcount == 0 else True
 
@@ -303,9 +298,9 @@ def schemaexists(args, name, **kwargs):
     raise
 
 # @since 20230510 copied from bbsengine5.py
-def buildargs(parentparser:object, defaults:dict={}, label="database options", suppress=False):
+def buildargs(parentparser: Any, defaults: dict = {}, label: str = "database options", suppress: bool = False) -> None:
     databasename = defaults.get("databasename", "zoid6")
-    databasehost = defaults.get("databasehost", "localhost")
+    databasehost = defaults.get("databasehost", "")
     databaseport = defaults.get("databaseport", 5432)
     databaseuser = defaults.get("databaseuser", None)
     databasepassword = defaults.get("databasepassword", None)
@@ -335,7 +330,7 @@ buildarggroup = buildargs
 
 # @since 20211101
 # @since 20230515 copied from bbsengine5
-def resultiter(cur, arraysize:int=1000, filterfunc:callable=None, **kwargs:dict):
+def resultiter(cur: Any, arraysize: int = 1000, filterfunc: callable = None, **kwargs: dict) -> Iterator:
     "An iterator which accepts a psycopg3 cursor to keep memory usage down"
     while True:
         results = cur.fetchmany(arraysize)
@@ -347,7 +342,7 @@ def resultiter(cur, arraysize:int=1000, filterfunc:callable=None, **kwargs:dict)
           elif callable(filterfunc) is True and filterfunc(result, **kwargs) is True:
             yield result
 
-def commit(args, **kwargs):
+def commit(args: Any, **kwargs: Any) -> bool:
   io.echo("bbsengine6.database.commit.100: stub", level="warn")
   return False
 
@@ -355,11 +350,11 @@ def commit(args, **kwargs):
     conn.commit()
 
 # @since 20230715 used by empyre
-def rollback(args, conn=None, **kwargs):
+def rollback(args: Any, conn: Any = None, **kwargs: Any) -> None:
   if conn is not None:
     return conn.rollback()
 
-def createrol(args, name, **kwargs):
+def createrol(args: Any, name: str, **kwargs: Any) -> bool:
   # Map privilege keys to their SQL counterparts
   privilege_map = {
     "login": ("login", "nologin", False),
@@ -401,7 +396,9 @@ def createrol(args, name, **kwargs):
     io.echo(f"bbsengine6.createrol.100: Error creating role: {e}", level="error")
     raise
 
-def rolexists(args, rolname, **kwargs):
+def rolexists(args: Any, rolname: str, **kwargs: Any) -> bool:
+  _mogrify = kwargs.get("mogrify", False)
+
   def _work(cur):
     sql = "SELECT rolname FROM pg_roles where rolname=%s"
     dat = (rolname,)
@@ -410,7 +407,6 @@ def rolexists(args, rolname, **kwargs):
       io.echo(f"bbsengine6.database.rolexists.100: {mogrifysql(cur, sql, dat)=}", level="debug")
     return False if cur.rowcount == 0 else True
 
-  mogrify = kwargs.get("mogrify", False)
   conn = kwargs.get("conn", None)
   if conn is None:
     io.echo(f"bbsengine.database.rolexists.100: {conn=}", level="error")
@@ -423,8 +419,8 @@ def rolexists(args, rolname, **kwargs):
     io.echo(f"bbsengine6.database.rolexists.120: database error {e}", level="error")
     raise
 
-def exists(args, databasename, **kwargs):
-  mogrify = kwargs.get("mogrify", True)
+def exists(args: Any, databasename: str, **kwargs: Any) -> bool:
+  _mogrify = kwargs.get("mogrify", True)
   pool = kwargs.get("pool", None)
   if pool is None:
     io.echo("database.exists.200: no pool", level="error")
@@ -441,7 +437,7 @@ def exists(args, databasename, **kwargs):
     io.echo(f"bbsengine6.database.exists.120: database error {e}", level="error")
     raise
 
-def create(args, name, **kwargs):
+def create(args: Any, name: str, **kwargs: Any) -> bool:
   from psycopg.sql import SQL, Identifier
 
   def _work(cur):
@@ -463,7 +459,7 @@ def create(args, name, **kwargs):
     
     return _work(cur)
 
-def createschema(args, name, **kwargs):
+def createschema(args: Any, name: str, **kwargs: Any) -> bool:
     io.echo(f"bbsengine.database.createschema.120: {name=}", level="debug")
     # Connect to the database using args
     def _work(conn):
@@ -487,7 +483,7 @@ def createschema(args, name, **kwargs):
       io.echo(f"bbsengine6.database.createschema.100: database error: {e}")
       raise
 
-def get_role_privs(args, rolname: str, cur=None, **kwargs) -> dict:
+def get_role_privs(args: Any, rolname: str, cur: Any = None, **kwargs: Any) -> dict:
   def _work(cur):
     sql = "SELECT get_role_privs(%s);"
     cur.execute(sql, (rolname,))
@@ -507,7 +503,7 @@ def get_role_privs(args, rolname: str, cur=None, **kwargs) -> dict:
     with cursor(conn) as cur:
       return _work(cur)
 
-def manage_role_privs(args, role_name, action, priv, **kwargs):
+def manage_role_privs(args: Any, role_name: str, action: str, priv: str, **kwargs: Any) -> Any:
   def _work(conn):
     sql = "select manage_role_privs(%s, %s, %s)"
     dat = (role_name, action, priv)
@@ -524,7 +520,7 @@ def manage_role_privs(args, role_name, action, priv, **kwargs):
       return _work(conn)
   return _work(conn)
 
-def manage_secondary_role(args, role_name, action, secondary, **kwargs):
+def manage_secondary_role(args: Any, role_name: str, action: str, secondary: str, **kwargs: Any) -> Any:
   conn = kwargs.get("conn", None)
   if conn is None:
     io.echo(f"bbsengine.database.manage_secondary_role.100: {conn=}", level="error")
@@ -549,7 +545,7 @@ def cursor(conn, row_factory=dict_row, **kwargs):
     """
     return conn.cursor(row_factory=row_factory)
 
-def extensionavailable(args, ext, **kwargs):
+def extensionavailable(args: Any, ext: str, **kwargs: Any) -> bool:
     def _work(cur):
         sql = "select * from pg_available_extensions where name=%s"
         dat = (ext,)
@@ -567,7 +563,7 @@ def extensionavailable(args, ext, **kwargs):
     else:
         return _work(cur)
 
-def extensioninstalled(args, ext, **kwargs):
+def extensioninstalled(args: Any, ext: str, **kwargs: Any) -> bool:
     def _work(cur):
         try:
             sql = "select * from pg_extension where extname=%s"
@@ -588,7 +584,7 @@ def extensioninstalled(args, ext, **kwargs):
     else:
         return _work(cur)
 
-def creatextension(args, ext, **kwargs):
+def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
     def _work(cur):
         try:
             sql = psycopg.sql.SQL("CREATE EXTENSION IF NOT EXISTS {}").format(psycopg.sql.Identifier(ext))
@@ -610,13 +606,13 @@ def creatextension(args, ext, **kwargs):
     if cur is None:
       pool = kwargs.get("pool", None)
       with connect(args, pool=pool) as conn:
-        with database.cursor(conn) as cur:
+        with cursor(conn) as cur:
           return _work(cur)
     else:
         return _work(cur)
 
 # @since 20241212
-def importsql(args, filename, **kwargs) -> bool:
+def importsql(args: Any, filename: str, **kwargs: Any) -> bool:
   def _work(conn):
 #    io.echo(f"bbsengine.database.importsql.140: {conn=}", level="debug")
 #    fullpath = util.get_safe_path(args, *components, **kwargs)
@@ -649,8 +645,7 @@ def importsql(args, filename, **kwargs) -> bool:
       return _work(conn)
   return _work(conn)
 
-def functionexists(args, name, **kwargs):
-  mogrify = kwargs.get("mogrify", True)
+def functionexists(args: Any, name: str, **kwargs: Any) -> bool:
 
   def _work(conn):
     if "." in name:
@@ -676,7 +671,7 @@ def functionexists(args, name, **kwargs):
     raise
 
 # @since 20250511
-def manage_database_priv(args, action, priv, database_name, target_role, **kwargs):
+def manage_database_priv(args: Any, action: str, priv: str, database_name: str, target_role: str, **kwargs: Any) -> bool:
   def _work(conn):
     sql = "select manage_database_priv(%s, %s, %s, %s)"
     dat = (action, priv, database_name, target_role)
@@ -695,7 +690,7 @@ def manage_database_priv(args, action, priv, database_name, target_role, **kwarg
   return _work(conn)
 
 # @since 20250511
-def manage_schema_priv(args, action, priv, database_name, target_role, **kwargs):
+def manage_schema_priv(args: Any, action: str, priv: str, database_name: str, target_role: str, **kwargs: Any) -> bool:
   def _work(conn):
     sql = "select manage_schema_priv(%s, %s, %s, %s)"
     dat = (action, priv, database_name, target_role)
