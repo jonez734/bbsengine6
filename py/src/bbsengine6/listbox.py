@@ -1,397 +1,393 @@
 from math import ceil
-from typing import Any, Callable, NamedTuple, Optional
+from typing import Any, Callable, List, NamedTuple, Optional
 
-from . import io, screen
-
-
-class Op(NamedTuple):
-    kind: str
-    listitem: Optional[Any]
-
+from . import io
+from .common import logentry
 
 class ListboxItem:
-    WIDTH_OVERHEAD = 9
-
-    status: str
-    label: str
-    itemid: Optional[Any]
+    content: str
     pk: Any
-    rec: dict[str, Any]
-    width: int
-    height: int
-
-    @classmethod
-    def compose(cls, rec: dict[str, Any], counter: int) -> dict[str, Any]:
-        return {"label": f"item #{counter}", "height": 1}
+    data: Any
+    disabled: bool
+    onkey: Optional[Callable[["ListboxItem", str], bool]] = None
 
     def __init__(
         self,
-        rec: dict[str, Any],
-        width: int,
-        height: int = 1,
-        counter: int = 0,
+        content: str = "",
         pk: Any = None,
+        data: Any = None,
+        disabled: bool = False,
+        onkey: Optional[Callable[["ListboxItem", str], bool]] = None,
         **kwargs: Any,
     ) -> None:
-        composed = self.compose(rec, counter)
-        self.status = ""
-        self.label = composed["label"]
-        self.height = max(1, composed["height"])
-        self.itemid = None
-        self.pk = pk if pk is not None else counter
-        self.rec = rec
-        self.width = width
+        self.content = content
+        self.pk = pk
+        self.data = data
+        self.disabled = disabled
+        self.onkey = onkey
 
-    def help(self) -> None:
-        io.echo("this is a help message in a callable")
+    def handle_key(self, key: str) -> bool:
+        return False
 
-    def display(self) -> None:
-        lines = self.label.split("\n")
-        for line in lines:
-            padded = line.ljust(self.width - self.WIDTH_OVERHEAD, " ")
-            io.echo(
-                f"{{/all}}{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:cic}} {padded} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}",
-                end="",
-                flush=True,
-            )
+
+class ListboxResult(NamedTuple):
+    status: str
+    item: Optional[ListboxItem] = None
+    data: Optional[dict] = None
 
 
 class Listbox:
-    args: Any
-    kwargs: dict[str, Any]
-    page: int
-    curpos: int
-    pagesize: int
-    items: list[ListboxItem]
-    title: str
-    currentitem: Optional[ListboxItem]
-    keyhandler: Optional[Callable[[Any, str, "Listbox"], Any]]
-    totalitems: int
-    terminalwidth: int
-    itemclass: Optional[type[ListboxItem]]
-    numpages: int
-    numitems: int
-    data: Optional[list[Any]]
+    GETCH_TIMEOUT = 0.25
+    BOTTOM_BORDER_HEIGHT = 1
+
+    itemcolors = {
+        "disabled": "{bggray}",
+        "highlighted": "{bgwhite}{black}",
+        "normal": "{normalcolor}",
+    }
 
     def __init__(
         self,
         args: Any,
         title: str = "",
-        pagesize: int = 20,
-        keyhandler: Optional[Callable[[Any, str, "Listbox"], Any]] = None,
-        totalitems: int = 0,
-        itemclass: Optional[type[ListboxItem]] = None,
-        data: Optional[list[Any]] = None,
+        itemsperpage: int = 20,
+        itemheight: int = 1,
+        items: Optional[List[ListboxItem]] = None,
+        idle: Optional[Callable[[], None]] = None,
+        custom_keys: Optional[dict[str, Callable[[], Optional[ListboxResult]]]] = None,
         **kwargs: Any,
     ) -> None:
         self.args = args
-        self.kwargs = kwargs
-        self.page = 0
-        self.curpos = 0
-        self.pagesize = pagesize
-        self.items = []
         self.title = title
-        self.currentitem = None
-        self.keyhandler = keyhandler
-        self.totalitems = totalitems
+        self.itemsperpage = itemsperpage
+        self.itemheight = itemheight
+        self.items = items if items is not None else []
+        self.idle = idle
+        self.custom_keys = custom_keys if custom_keys else {}
+        self.kwargs = kwargs
+
+        self._curpage = 0
+        self._currentindex = 0
+
         self.terminalwidth = io.terminal.width()
-        self.itemclass = itemclass
-        self.data = data
-        self.fetchpage()
-        if self.totalitems == 0 and self.data is not None:
-            self.totalitems = len(self.data)
-        self.numpages = max(1, int(ceil(self.totalitems / self.pagesize)))
-        self.numitems = 0
+        self.contentwidth = self.terminalwidth - 3 * 2
+        self.totalwidth = self.contentwidth + 6
+        self.hline = f"{{hline:{self.contentwidth - 2}}}"
 
-    def getpage(self, page: int, pagesize: int) -> list[ListboxItem]:
-        if self.itemclass is None:
-            io.echo(
-                "bbsengine.listbox.Listbox.getpage: itemclass is None", level="error"
-            )
-            return []
+        self.numpages = max(1, int(ceil(len(self.items) / self.itemsperpage)))
 
-        if self.data is None:
-            io.echo("bbsengine.listbox.Listbox.getpage: data is None", level="error")
-            return []
+        self.key_handlers: dict[str, Callable[[], Optional[ListboxResult]]] = {
+            "KEY_ESC": self._handle_key_esc,
+            "KEY_ENTER": self._handle_key_enter,
+            "KEY_UP": self._handle_key_up,
+            "KEY_DOWN": self._handle_key_down,
+            "KEY_PAGEUP": self._handle_key_pageup,
+            "KEY_PAGEDOWN": self._handle_key_pagedown,
+            "KEY_HOME": self._handle_key_home,
+            "KEY_END": self._handle_key_end,
+        }
+        if self.custom_keys:
+            self.key_handlers.update(self.custom_keys)
 
-        start = page * pagesize
-        end = start + pagesize
-        page_data = self.data[start:end]
+    @property
+    def currentitem(self) -> Optional[ListboxItem]:
+        page_items = self.fetchitems()
+        if page_items and self._currentindex < len(page_items):
+            return page_items[self._currentindex]
+        return None
 
-        items: list[ListboxItem] = []
-        counter = start
-        for rec in page_data:
-            pk = rec.get("pk") if isinstance(rec, dict) else None
-            items.append(
-                self.itemclass(
-                    rec,
-                    self.terminalwidth,
-                    counter=counter,
-                    pk=pk,
-                    **self.kwargs,
-                )
-            )
-            counter += 1
-        return items
+    @property
+    def currentindex(self) -> int:
+        return self._currentindex
 
-    def fetchpage(self) -> list[ListboxItem]:
-        self.items = self.getpage(self.page, self.pagesize)
-        self.numitems = len(self.items)
+    @property
+    def curpage(self) -> int:
+        return self._curpage
+
+    @property
+    def pos(self) -> int:
+        return self._curpage * self.itemsperpage + self._currentindex
+
+    def fetchitems(self) -> List[ListboxItem]:
+        start = self._curpage * self.itemsperpage
+        end = start + self.itemsperpage
+        return self.items[start:end]
+
+    def _get_all_items(self) -> List[ListboxItem]:
         return self.items
 
-    def displayitems(self) -> None:
-        num = 0
-        for item in self.items:
-            if (
-                self.currentitem is not None
-                and hasattr(self.currentitem, "pk")
-                and hasattr(item, "pk")
-                and self.currentitem.pk == item.pk
-            ):
-                io.setvar("cic", "{var:currentitemcolor}")
-            else:
-                io.setvar("cic", "{var:itemcolor}")
-            item.display()
-            io.echo()
-            num += 1
-        if num < self.pagesize:
-            for i in range(0, self.pagesize - num):
-                io.echo(
-                    f"{{/all}}{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}} {' '.ljust(self.terminalwidth - 8, ' ')}{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}"
-                )
+    def _get_first_enabled_index(self, items: List[ListboxItem], start: int = 0) -> int:
+        for i in range(start, len(items)):
+            if not items[i].disabled:
+                return i
+        return -1
 
-    def display(self) -> None:
-        io.echo(f"{self.curpos=} {self.page=} {self.numitems=}", level="debug")
-        self.fetchpage()
-        if self.items and self.curpos < len(self.items):
-            self.currentitem = self.items[self.curpos]
+    def _get_last_enabled_index(self, items: List[ListboxItem]) -> int:
+        for i in range(len(items) - 1, -1, -1):
+            if not items[i].disabled:
+                return i
+        return -1
 
-        io.echo(
-            "{/all}{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}"
-            % (" " * (self.terminalwidth - 2)),
-            wordwrap=False,
-        )
-        if self.title is None or self.title == "":
-            io.echo(
-                f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:{self.terminalwidth - 7}}}{{var:engine.menu.boxcharcolor}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}",
-                wordwrap=False,
-            )
+    def _get_next_enabled_index(self, items: List[ListboxItem], current: int) -> int:
+        for i in range(current + 1, len(items)):
+            if not items[i].disabled:
+                return i
+        return -1
+
+    def _get_prev_enabled_index(self, items: List[ListboxItem], current: int) -> int:
+        for i in range(current - 1, -1, -1):
+            if not items[i].disabled:
+                return i
+        return -1
+
+    def _display_item(self, item: ListboxItem, highlighted: bool = False, end: str = "") -> None:
+        if item.disabled:
+            io.setvar("cic", self.itemcolors["disabled"])
+        elif highlighted:
+            io.setvar("cic", self.itemcolors["highlighted"])
         else:
-            io.echo(
-                f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:{self.terminalwidth - 7}}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}",
-                wordwrap=False,
-            )
-            io.echo(
-                f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.titlecolor}}{self.title.center(self.terminalwidth - 7)}{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}",
-                wordwrap=False,
-            )
-            io.echo(
-                f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:{self.terminalwidth - 7}}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}",
-                wordwrap=False,
-            )
+            io.setvar("cic", self.itemcolors["normal"])
 
-        if self.args.debug is True:
-            screen.setbottombar(
-                f"{self.curpos=} {len(self.items)=} {self.currentitem=}"
-            )
+        padded = item.content.ljust(self.contentwidth - 4)
+        io.echo(f"{{cha}} {{vline}} {{cic}}{padded}{{/all}} {{vline}}", end=end, flush=True)
 
-        self.displayitems()
+    def _display_blank_line(self) -> None:
+        io.echo(f" {{vline}} {' ' * (self.contentwidth - 4)} {{vline}}")
 
-        io.echo(
-            f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:llcorner}}{{acs:hline:{self.terminalwidth - 7}}}{{acs:lrcorner}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}",
-            wordwrap=False,
-        )
-        io.echo(
-            f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}}  {{var:engine.menu.shadowcolor}}{' ' * (self.terminalwidth - 6)} {{var:engine.menu.color}} {{/all}}",
-            wordwrap=False,
-        )
-        io.echo(
-            f" {{var:engine.menu.color}}{' ' * (self.terminalwidth - 2)}{{/all}}",
-            wordwrap=False,
-        )
+    def _display_title_box(self) -> None:
+        io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")
+        io.echo(f" {{vline}}{' ' * (self.contentwidth - 2)}{{vline}}")
+        io.echo(f" {{vline}}{self.title.center(self.contentwidth - 2)}{{vline}}")
+        io.echo(f" {{vline}}{' ' * (self.contentwidth - 2)}{{vline}}")
 
-    def handle(self, prompt: str = "listbox: ") -> Op | bool | None:
-        io.echo(
-            f"{{f6}} {prompt}{{savecursor}}{{cha}}{{cursorright:4}}{{cursorup:4}}{{cursorup:{self.pagesize - self.curpos}}}{{var:engine.menu.cursorcolor}}{{cursorleft}}",
-            end="",
-            flush=True,
-        )
-        if self.items and self.curpos < len(self.items):
-            self.currentitem = self.items[self.curpos]
+    def _display_middle_border(self) -> None:
+        io.echo(f" {{rtee}}{self.hline}{{ltee}}")
 
-        done = False
-        while not done:
-            if not self.items:
-                return Op("noitems", None)
-            ch = io.getch(noneok=False)
-            if ch is None:
-                continue
-            io.setvar("cic", "{var:itemcolor}")
-            if self.currentitem is not None:
-                self.currentitem.display()
-            if ch == "KEY_DOWN":
-                if self.curpos + 1 < self.numitems:
-                    io.echo(
-                        f"{{var:engine.menu.cursorcolor}}{{cursordown:{self.currentitem.height if self.currentitem else 1}}}",
-                        end="",
-                        flush=True,
-                    )
-                    self.curpos += 1
-                else:
-                    if self.page >= self.numpages - 1:
-                        io.echo("{bell}", end="", flush=True)
-                    elif (
-                        self.curpos + 1 == self.numitems
-                        and self.page + 1 >= self.numpages
-                    ):
-                        io.echo("{bell}", end="", flush=True)
-                    else:
-                        screen.setarea(f"{self.curpos=}")
-                        io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
-                        self.curpos = 0
-                        self.page += 1
-                        self.fetchpage()
-                        if self.items:
-                            self.currentitem = self.items[self.curpos]
-                        self.displayitems()
-                        io.echo(f"{{cursorup:{self.pagesize}}}", end="", flush=True)
-            elif ch == "KEY_UP":
-                if self.curpos > 0:
-                    io.echo(
-                        f"{{cursorup:{self.currentitem.height if self.currentitem else 1}}}",
-                        end="",
-                        flush=True,
-                    )
-                    self.curpos -= 1
-                else:
-                    if self.curpos == 0 and self.page == 0:
-                        io.echo("{bell}", end="", flush=True)
-                    else:
-                        io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
-                        self.page -= 1
-                        self.fetchpage()
-                        self.displayitems()
-                        self.curpos = self.numitems - 1
-                        if self.items:
-                            self.currentitem = self.items[self.curpos]
-                        io.echo("{cursorup}", end="", flush=True)
-            elif ch == "KEY_HOME":
-                if self.curpos > 0:
-                    io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
-                    self.curpos = 0
-            elif ch == "KEY_END":
-                io.echo(
-                    f"{{cursordown:{self.numitems - self.curpos - 1}}}",
-                    end="",
-                    flush=True,
-                )
-                self.curpos = self.numitems - 1
-            elif ch == "?" or ch == "KEY_HELP":
-                return Op("help", self.items[self.curpos - 1] if self.items else None)
-            elif ch == "KEY_PAGEDOWN":
-                if self.page + 1 >= self.numpages:
-                    io.echo("{bell}", end="", flush=True)
-                else:
-                    io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
-                    self.page += 1
-                    self.curpos = 0
-                    self.fetchpage()
-                    if self.items:
-                        self.currentitem = self.items[self.curpos]
-                    self.displayitems()
-                    io.echo(f"{{cursorup:{self.pagesize}}}", end="", flush=True)
-            elif ch == "KEY_PAGEUP":
-                if self.page == 0:
-                    io.echo("{bell}", end="", flush=True)
-                else:
-                    io.echo(f"{{cursorup:{self.curpos}}}", end="", flush=True)
-                    self.page -= 1
-                    self.curpos = 0
-                    self.fetchpage()
-                    if self.items:
-                        self.currentitem = self.items[self.curpos]
-                    self.displayitems()
-                    io.echo(f"{{cursorup:{self.numitems}}}", end="", flush=True)
-            elif ch == "X":
-                io.echo("{restorecursor}exit")
-                return Op("exit", self.currentitem)
-            elif ch == "KEY_ENTER":
-                io.echo("{restorecursor}", end="")
-                return Op("select", self.currentitem)
+    def _display_top_border(self) -> None:
+        io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")
+
+    def _display_bottom_border(self) -> None:
+        io.echo(f" {{llcorner}}{self.hline}{{lrcorner}}")
+
+    def _display(self) -> None:
+        if self.title:
+            self._display_title_box()
+            self._display_middle_border()
+        else:
+            self._display_top_border()
+
+        page_items = self.fetchitems()
+        for i in range(self.itemsperpage):
+            if i < len(page_items):
+                self._display_item(page_items[i], highlighted=False)
             else:
-                if callable(self.keyhandler):
-                    if self.keyhandler(self.args, ch, self) is False:
-                        io.echo("{bell}", end="", flush=True)
-                        continue
-                    else:
-                        return True
-                else:
-                    io.echo("{bell}", end="", flush=True)
-                    continue
+                self._display_blank_line()
+            io.echo()
 
-            if self.curpos >= self.numitems:
-                io.echo("{bell}")
+        self._display_bottom_border()
+
+    def _redraw_content_area(self) -> None:
+        io.echo(f"{{cursorup:{self.itemsperpage + 1}}}", end="", flush=True)
+        page_items = self.fetchitems()
+        for i in range(self.itemsperpage):
+            if i < len(page_items):
+                highlighted = (i == self._currentindex)
+                self._display_item(page_items[i], highlighted=highlighted)
             else:
-                io.setvar("cic", "{var:currentitemcolor}")
-                if self.items:
-                    self.currentitem = self.items[self.curpos]
-                    self.currentitem.display()
+                self._display_blank_line()
+            io.echo()
 
-            if self.args.debug is True:
-                screen.setarea(
-                    f"{self.curpos=} {len(self.items)=} {self.currentitem.pk if self.currentitem and hasattr(self.currentitem, 'pk') else 'N/A'}"
-                )
-        return Op("unknown", self.currentitem)
+    def _handle_key_esc(self) -> Optional[ListboxResult]:
+        """Handle KEY_ESC - cancel selection and return cancelled result."""
+        return ListboxResult("cancelled")
 
-    def run(self, prompt: str = "listbox: ") -> Optional[Op]:
-        self.items = self.fetchpage()
-        self.numitems = len(self.items)
+    def _handle_key_enter(self) -> Optional[ListboxResult]:
+        """Handle KEY_ENTER - select current item and return selected result."""
+        if self.currentitem is not None and not self.currentitem.disabled:
+            return ListboxResult("selected", self.currentitem)
+        return False
 
-        if self.numitems == 0:
-            io.echo("no list items defined.", level="error")
-            return Op("noitems", None)
+    def _handle_key_up(self) -> Optional[ListboxResult]:
+        """Handle KEY_UP - move to previous enabled item.
 
-        self.currentitem = self.items[self.curpos]
+        If there is an item above, move cursor up and highlight it.
+        If on first item of page, wrap to previous page.
+        If already on first item of first page, ring bell and return None.
+        """
+        page_items = self.fetchitems()
+        prev_idx = self._get_prev_enabled_index(page_items, self._currentindex)
+        if prev_idx != -1:
+            cursor_up = self._cursor_moves_to_item(self._currentindex)
+            io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+            self._display_item(page_items[self._currentindex], highlighted=False)
+            io.echo(f"{{cursorup}}", end="", flush=True)
+            self._currentindex = prev_idx
+            self._display_item(page_items[self._currentindex], highlighted=True)
+            return True
+        elif self._curpage > 0:
+            self._curpage -= 1
+            page_items = self.fetchitems()
+            last_idx = self._get_last_enabled_index(page_items)
+            if last_idx != -1:
+                self._currentindex = last_idx
+            self._redraw_content_area()
+            return True
+        else:
+            io.echo(f"{{BEL}}", end="", flush=True)
+            return None
 
-        done = False
-        while not done:
-            self.display()
+    def _handle_key_down(self) -> Optional[ListboxResult]:
+        """Handle KEY_DOWN - move to next enabled item.
 
-            res = self.handle(prompt)
+        If there is an item below, move cursor down and highlight it.
+        If on last item of page, wrap to next page.
+        If already on last item of last page, ring bell and return None.
+        """
+        page_items = self.fetchitems()
+        next_idx = self._get_next_enabled_index(page_items, self._currentindex)
+        if next_idx != -1:
+            cursor_up = self._cursor_moves_to_item(self._currentindex)
+            io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+            self._display_item(page_items[self._currentindex], highlighted=False)
+            io.echo(f"{{cud}}", end="", flush=True)
+            self._currentindex = next_idx
+            self._display_item(page_items[self._currentindex], highlighted=True)
+            return True
+        elif self._curpage < self.numpages - 1:
+            self._curpage += 1
+            page_items = self.fetchitems()
+            first_idx = self._get_first_enabled_index(page_items)
+            if first_idx != -1:
+                self._currentindex = first_idx
+            self._redraw_content_area()
+            return True
+        else:
+            io.echo(f"{{BEL}}", end="", flush=True)
+            return None
 
-            if res is None:
-                io.echo("self.handle() returned None", level="debug")
-                return None
-            elif res is True:
-                continue
+    def _handle_key_pageup(self) -> Optional[ListboxResult]:
+        """Handle KEY_PAGEUP - move to previous page.
 
-            item = res.listitem
+        If not on first page, decrement page and highlight first enabled item.
+        If already on first page, ring bell and return None.
+        """
+        if self._curpage > 0:
+            self._curpage -= 1
+            page_items = self.fetchitems()
+            first_idx = self._get_first_enabled_index(page_items)
+            if first_idx != -1:
+                self._currentindex = first_idx
+            self._redraw_content_area()
+            return True
+        else:
+            io.echo(f"{{BEL}}", end="", flush=True)
+            return None
 
-            if res.kind == "refresh":
-                io.echo("{decrc}refresh")
-                continue
-            elif res.kind == "select":
-                return Op("select", item)
-            elif res.kind == "help":
-                io.echo(
-                    f"{{restorecursor}}{{var:labelcolor}}{item.label if item and hasattr(item, 'label') else 'Unknown'} - help{{f6}}",
-                    end="",
-                    flush=True,
-                )
-                if item is None or not hasattr(item, "help"):
-                    io.echo("{bell}", end="", flush=True)
-                    continue
+    def _handle_key_pagedown(self) -> Optional[ListboxResult]:
+        """Handle KEY_PAGEDOWN - move to next page.
 
-                if callable(item.help):
-                    item.help()
-                elif type(item.help) is str:
-                    io.echo(item.help)
-                else:
-                    io.echo("{f6}no help defined for this option{f6}")
-                continue
-            elif res.kind == "exit":
-                return Op("exit", item)
+        If not on last page, increment page and highlight first enabled item.
+        If already on last page, ring bell and return None.
+        """
+        if self._curpage < self.numpages - 1:
+            self._curpage += 1
+            page_items = self.fetchitems()
+            first_idx = self._get_first_enabled_index(page_items)
+            if first_idx != -1:
+                self._currentindex = first_idx
+            self._redraw_content_area()
+            return True
+        else:
+            io.echo(f"{{BEL}}", end="", flush=True)
+            return None
+
+    def _handle_key_home(self) -> Optional[ListboxResult]:
+        """Handle KEY_HOME - jump to first enabled item on current page.
+
+        Moves highlight to the first enabled item on the current page.
+        If already on first enabled item, does nothing but still returns True.
+        """
+        page_items = self.fetchitems()
+        first_idx = self._get_first_enabled_index(page_items)
+        if first_idx != -1 and self._currentindex != first_idx:
+            old_idx = self._currentindex
+            cursor_up = self._cursor_moves_to_item(old_idx)
+            io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+            self._display_item(page_items[old_idx], highlighted=False)
+            diff = old_idx - first_idx
+            io.echo(f"{{cursorup:{diff}}}", end="", flush=True)
+            self._currentindex = first_idx
+            self._display_item(page_items[first_idx], highlighted=True)
+        return True
+
+    def _handle_key_end(self) -> Optional[ListboxResult]:
+        """Handle KEY_END - jump to last enabled item on current page.
+
+        Moves highlight to the last enabled item on the current page.
+        If already on last enabled item, does nothing but still returns True.
+        """
+        page_items = self.fetchitems()
+        last_idx = self._get_last_enabled_index(page_items)
+        if last_idx != -1 and self._currentindex != last_idx:
+            old_idx = self._currentindex
+            cursor_up = self._cursor_moves_to_item(old_idx)
+            io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+            self._display_item(page_items[old_idx], highlighted=False)
+            diff = last_idx - old_idx
+            io.echo(f"{{cud:{diff}}}", end="", flush=True)
+            self._currentindex = last_idx
+            self._display_item(page_items[last_idx], highlighted=True)
+        return True
+
+    def onkey(self, ch: Optional[str]) -> Optional[ListboxResult] | bool:
+        if ch is None:
+            if self.idle is not None and callable(self.idle):
+                result = self.idle()
+                if isinstance(result, ListboxResult):
+                    return result
+                if result is False:
+                    return False
+            return True
+
+        if ch in self.key_handlers:
+            result = self.key_handlers[ch]()
+            if result is not None:
+                return result
+            return True
+
+        if self.currentitem is not None and callable(self.currentitem.onkey):
+            if self.currentitem.onkey(self.currentitem, ch):
+                return True
             else:
-                io.echo(f"unhandled: {res=}", level="debug")
+                return False
 
-        return Op("unknown", item)
+        return False
+
+    def _cursor_moves_to_item(self, item: int) -> int:
+        return self.itemsperpage - item + 1
+
+    def run(self, prompt: str = "listbox_next: ") -> ListboxResult:
+        if not self.items:
+            return ListboxResult("noitems")
+
+        self._display()
+        io.echo(f"{prompt}{{savecursor}}", end="", flush=True)
+
+        cursor_up = self._cursor_moves_to_item(self._currentindex)
+        logentry(f"{cursor_up=}", level="debug")
+        io.echo(f"{{cha}}{{cursorup:{cursor_up}}}", end="", flush=True)
+
+        page_items = self.fetchitems()
+        if self._currentindex < len(page_items):
+            self._display_item(page_items[self._currentindex], highlighted=True)
+
+        io.echo(f"{{restorecursor}}", end="", flush=True)
+
+        while True:
+            result = self.onkey(io.getch(self.GETCH_TIMEOUT))
+            if isinstance(result, ListboxResult):
+                return result
+            if result is True:
+                io.echo(f"{{restorecursor}}", end="", flush=True)
+            elif result is False:
+                io.echo(f"{{BEL}}", end="", flush=True)

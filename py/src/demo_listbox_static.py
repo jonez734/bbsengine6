@@ -1,34 +1,32 @@
 import argparse
-from bbsengine6 import io, listbox
-
-
-class DemoListboxItem(listbox.ListboxItem):
-    @classmethod
-    def compose(cls, rec: dict, counter: int) -> dict:
-        name = rec.get("name", f"Item {counter}")
-        height = rec.get("height", 1)
-        return {"label": name, "height": height}
-
-    def __init__(
-        self,
-        rec: dict,
-        width: int,
-        height: int = 1,
-        counter: int = 0,
-        pk=None,
-        **kwargs,
-    ):
-        super().__init__(rec, width, height, counter, pk, **kwargs)
-        self.pk = rec.get("id", pk)
-
-    def help(self) -> None:
-        io.echo(f"Help for {self.label}: This is item #{self.pk}")
+from bbsengine6 import io, screen
+from bbsengine6.listbox import Listbox, ListboxItem
 
 
 def buildargs():
-    parser = argparse.ArgumentParser("testlistboxstatic")
+    parser = argparse.ArgumentParser("demo_listbox_static")
     parser.add_argument("--debug", action="store_true", dest="debug")
     return parser
+
+
+def handle_e(listbox):
+    item = listbox.currentitem
+    io.echo(f"{{restorecursor}}", end="", flush=True)
+    io.echo(f"{{labelcolor}}Item: {{valuecolor}}{item.content}{{/all}}\n")
+    io.echo(f"{{labelcolor}}pk: {{valuecolor}}{item.pk}{{/all}}\n")
+    io.echo(f"{{labelcolor}}data: {{valuecolor}}{item.data}{{/all}}\n")
+    io.echo(f"Press any key to continue...")
+    io.getch(30)
+    listbox._display()
+    io.echo(f"listbox_next: ", end="", flush=True)
+    io.echo(f"{{savecursor}}", end="", flush=True)
+    cursor_up = listbox._cursor_moves_to_item(listbox.currentindex)
+    io.echo(f"{{cha}}{{cursorup:{cursor_up}}}", end="", flush=True)
+    page_items = listbox.fetchitems()
+    if listbox.currentindex < len(page_items):
+        listbox._display_item(page_items[listbox.currentindex], highlighted=True)
+    io.echo(f"{{restorecursor}}", end="", flush=True)
+    return True
 
 
 def main(args):
@@ -43,29 +41,39 @@ def main(args):
 
     io.setvar("itemcolor", "{blue}{bglightgray}")
     io.setvar("currentitemcolor", "{bgwhite}{black}")
+    io.setvar("normalcolor", "{blue}{bglightgray}")
+    io.setvar("cic", "{blue}{bglightgray}")
+    io.setvar("labelcolor", "{yellow}")
+    io.setvar("valuecolor", "{cyan}")
 
-    data = []
-    for i in range(1, 21):
-        data.append({"id": i, "name": f"Item {i:02d}"})
+    screen.init()
 
-    lb = listbox.Listbox(
+    items = []
+    for i in range(30):
+        items.append(ListboxItem(content=f"demo item #{i}", pk=i, data=None))
+
+    def custom_e():
+        return handle_e(lb)
+
+    lb = Listbox(
         args,
-        title="Static List Demo",
-        pagesize=6,
-        itemclass=DemoListboxItem,
-        data=data,
+        title="Demo Listbox Next",
+        itemsperpage=10,
+        itemheight=1,
+        items=items,
+        custom_keys={"e": custom_e},
     )
 
-    op = lb.run()
+    result = lb.run()
 
-    if op is None:
-        io.echo("listbox.run() returned None", level="debug")
-    elif op.kind == "exit":
-        io.echo("{inputcolor}exit")
-    elif op.kind == "select":
-        io.echo(f"selected: {op.listitem.label} (pk={op.listitem.pk})")
-    elif op.kind == "noitems":
-        io.echo("no items")
+    if result is None:
+        io.echo("{restorecursor}listbox_next.run() returned None")
+    elif result.status == "noitems":
+        io.echo("{restorecursor}no items")
+    elif result.status == "cancelled":
+        io.echo("{restorecursor}cancelled")
+    elif result.status == "selected":
+        io.echo(f"{{restorecursor}}selected: {result.item.content} (pk={result.item.pk})")
 
 
 if __name__ == "__main__":
@@ -80,5 +88,5 @@ if __name__ == "__main__":
         io.echo("{/all}{restorecursor}*EOF*")
     finally:
         io.echo(
-            f"{{savecursor}}{{curpos:{io.terminal.height()},0}}{{/all}}{{eraseline}}{{restorecursor}}{{reset}}"
+            f"{{savecursor}}{{curpos:{io.terminal.height()},0}}{{eraseline}}{{reset}}{{restorecursor}}"
         )
