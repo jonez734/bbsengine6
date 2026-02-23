@@ -39,7 +39,7 @@
 | BORDER_WIDTH | int | 4 | Horizontal border padding |
 | title | str | "" | Title displayed at top of widget |
 | GETCH_TIMEOUT | float | 0.25 | Key input timeout in seconds |
-| idle | Optional[Callable[[], None]] | None | Optional callback called when the key loop times out (getch returns None) |
+| idle | Optional[Callable[[], Optional[ListboxResult] | bool]] | None | Optional callback called when the key loop times out (getch returns None). Can return ListboxResult to exit, False to ring bell, or None/True to continue |
 
 ## Current Item Color (cic)
 
@@ -159,7 +159,7 @@ class Listbox:
     
     def fetchitems(self) -> List[ListboxItem]: ...
     
-    def onkey(self, ch: Optional[str]) -> Optional[ListboxResult]: ...
+    def onkey(self, ch: Optional[str]) -> Optional[ListboxResult] | bool: ...
     
     def run(self, prompt: str = "listbox_next: ") -> ListboxResult: ...
 
@@ -174,87 +174,105 @@ class Listbox:
    ```
    while True:
        result = self.onkey(io.getch(GETCH_TIMEOUT))
-       if result is not None:
+       if isinstance(result, ListboxResult):
            return result
+       if result is True:
+           io.echo("{restorecursor}", end="", flush=True)
+       elif result is False:
+           io.echo("{BEL}", end="", flush=True)
    ```
 
 ## onkey() Method
 
-Handles key input and returns an optional `ListboxResult`:
+Handles key input and returns `Optional[ListboxResult] | bool`:
 
-- If `ch` is `None` and `idle` is a callable, call `idle()` and return `None` to continue
+- Returns `True` when a key was handled (cursor moved, etc.)
+- Returns `False` when a key was not handled (caller will ring bell)
+- Returns `ListboxResult` when selection is made or cancelled
+- Returns `None` only for idle (continues loop)
+
+- If `ch` is `None` and `idle` is a callable:
+  - Call `idle()` and return its result if it's a `ListboxResult`
+  - If `idle()` returns `False`, return `False` (rings bell)
+  - Otherwise return `True` to continue
 - `KEY_ESC`: Return `ListboxResult("cancelled")`
 - `KEY_ENTER`:
   - If current item is not disabled:
-    - Echo `{restorecursor}` to restore cursor position
     - Return `ListboxResult("selected", currentitem)`
   - Else (disabled):
-    - Output `{BEL}` to signal error, keep current item highlighted
-    - Return `None`
+    - Return `False`
 - `KEY_UP`: 
   - If there is an item above the current highlight:
+    - Cursor up to the current item line
     - Redraw the current item as non-highlighted
+    - Cursor down 1 line (`{cud:1}`)
     - Move up one item (skip any disabled items)
     - Draw the new item as highlighted
+    - Return `True`
   - Else if there is a previous page:
     - Redraw current item as non-highlighted
     - Display previous page
     - Set highlighted item to last item on new page (skipping disabled)
+    - Return `True`
   - Else (no previous items or previous pages):
-    - Output `{BEL}` to signal error, keep current item highlighted
-  - Return `None`
+    - Return `False`
 - `KEY_DOWN`:
   - If there is an item below the current highlight:
+    - Cursor up to the current item line
     - Redraw the current item as non-highlighted
+    - Cursor down 1 line (`{cud:1}`)
     - Move down one item (skip any disabled items)
     - Draw the new item as highlighted
+    - Return `True`
   - Else if there is a next page:
     - Redraw current item as non-highlighted
     - Display next page
     - Set highlighted item to first item on new page (skipping disabled)
+    - Return `True`
   - Else (no next items or next pages):
-    - Output `{BEL}` to signal error, keep current item highlighted
-  - Return `None`
+    - Return `False`
 - `KEY_PAGEUP`:
   - If there is a previous page:
     - Redraw current item as non-highlighted
     - Display previous page
     - Set highlighted item to first enabled item on new page
+    - Return `True`
   - Else:
-    - Output `{BEL}` to signal error, keep current item highlighted
-  - Return `None`
+    - Return `False`
 - `KEY_PAGEDOWN`:
   - If there is a next page:
     - Redraw current item as non-highlighted
     - Display next page
     - Set highlighted item to first enabled item on new page
+    - Return `True`
   - Else:
-    - Output `{BEL}` to signal error, keep current item highlighted
-  - Return `None`
+    - Return `False`
 - `KEY_HOME`:
   - If not already on the first enabled item:
     - Redraw current item as non-highlighted
     - Move to first enabled item on current page
     - Draw the new item as highlighted
-  - Return `None`
+  - Return `True`
 - `KEY_END`:
   - If not already on the last enabled item:
     - Redraw current item as non-highlighted
     - Move to last enabled item on current page
     - Draw the new item as highlighted
-  - Return `None`
+  - Return `True`
 - Any other key:
   - If `currentitem.onkey` is provided:
     - Call `currentitem.onkey(currentitem, key)` with the pressed key
-    - If it returns True: return `None`
-    - If it returns False: ring the bell (`{BEL}`)
+    - If it returns True: return `True`
+    - If it returns False: return `False`
   - If `currentitem.onkey` is not provided:
-    - Output `{BEL}` to ring the bell
-  - Return `None`
+    - Return `False`
 
 ### Idle Callback
 
-See `onkey()` method - `idle` is called when `ch` is `None`.
+See `onkey()` method - `idle` is called when `ch` is `None`. The `idle` callback can return:
+- `None`/nothing → continues (returns `True`)
+- `ListboxResult` → exits loop
+- `False` → rings bell (returns `False`)
 
 ### OnKey Callback
 
