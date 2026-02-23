@@ -249,13 +249,17 @@ Handles key input and returns `Optional[ListboxResult] | bool`:
     - Return `False`
 - `KEY_HOME`:
   - If not already on the first enabled item:
-    - Redraw current item as non-highlighted
+    - Cursor up to the current item line using `_cursor_moves_to_item()`
+    - Redraw the current item as non-highlighted
+    - Cursor up `currentindex - first_idx` lines
     - Move to first enabled item on current page
     - Draw the new item as highlighted
   - Return `True`
 - `KEY_END`:
   - If not already on the last enabled item:
-    - Redraw current item as non-highlighted
+    - Cursor up to the current item line using `_cursor_moves_to_item()`
+    - Redraw the current item as non-highlighted
+    - Cursor down `last_idx - current_idx` lines
     - Move to last enabled item on current page
     - Draw the new item as highlighted
   - Return `True`

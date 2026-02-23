@@ -37,6 +37,7 @@ class ListboxResult(NamedTuple):
 
 class Listbox:
     GETCH_TIMEOUT = 0.25
+    BOTTOM_BORDER_HEIGHT = 1
 
     itemcolors = {
         "disabled": "{bggray}",
@@ -220,7 +221,7 @@ class Listbox:
                 self._redraw_content_area()
                 return True
             else:
-                io.echo("{BEL}", end="", flush=True)
+                io.echo(f"{{BEL}}", end="", flush=True)
                 return None
 
         if ch == "KEY_DOWN":
@@ -242,7 +243,7 @@ class Listbox:
                 self._redraw_content_area()
                 return True
             else:
-                io.echo("{BEL}", end="", flush=True)
+                io.echo(f"{{BEL}}", end="", flush=True)
                 return None
 
         if ch == "KEY_PAGEUP":
@@ -255,7 +256,7 @@ class Listbox:
                 self._redraw_content_area()
                 return True
             else:
-                io.echo("{BEL}", end="", flush=True)
+                io.echo(f"{{BEL}}", end="", flush=True)
                 return None
 
         if ch == "KEY_PAGEDOWN":
@@ -268,23 +269,33 @@ class Listbox:
                 self._redraw_content_area()
                 return True
             else:
-                io.echo("{BEL}", end="", flush=True)
+                io.echo(f"{{BEL}}", end="", flush=True)
                 return None
 
         if ch == "KEY_HOME":
             first_idx = self._get_first_enabled_index(page_items)
             if first_idx != -1 and self._currentindex != first_idx:
-                self._display_item(page_items[self._currentindex], highlighted=False)
+                old_idx = self._currentindex
+                cursor_up = self._cursor_moves_to_item(old_idx)
+                io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+                self._display_item(page_items[old_idx], highlighted=False)
+                diff = old_idx - first_idx
+                io.echo(f"{{cursorup:{diff}}}", end="", flush=True)
                 self._currentindex = first_idx
-                self._display_item(page_items[self._currentindex], highlighted=True, end="")
+                self._display_item(page_items[first_idx], highlighted=True)
             return True
 
         if ch == "KEY_END":
             last_idx = self._get_last_enabled_index(page_items)
             if last_idx != -1 and self._currentindex != last_idx:
-                self._display_item(page_items[self._currentindex], highlighted=False)
+                old_idx = self._currentindex
+                cursor_up = self._cursor_moves_to_item(old_idx)
+                io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+                self._display_item(page_items[old_idx], highlighted=False)
+                diff = last_idx - old_idx
+                io.echo(f"{{cud:{diff}}}", end="", flush=True)
                 self._currentindex = last_idx
-                self._display_item(page_items[self._currentindex], highlighted=True, end="")
+                self._display_item(page_items[last_idx], highlighted=True)
             return True
 
         if self.currentitem is not None and callable(self.currentitem.onkey):
@@ -313,13 +324,13 @@ class Listbox:
         if self._currentindex < len(page_items):
             self._display_item(page_items[self._currentindex], highlighted=True)
 
-        io.echo("{restorecursor}", end="", flush=True)
+        io.echo(f"{{restorecursor}}", end="", flush=True)
 
         while True:
             result = self.onkey(io.getch(self.GETCH_TIMEOUT))
             if isinstance(result, ListboxResult):
                 return result
             if result is True:
-                io.echo("{restorecursor}", end="", flush=True)
+                io.echo(f"{{restorecursor}}", end="", flush=True)
             elif result is False:
-                io.echo("{BEL}", end="", flush=True)
+                io.echo(f"{{BEL}}", end="", flush=True)
