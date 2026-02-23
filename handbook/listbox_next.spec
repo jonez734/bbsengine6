@@ -85,6 +85,8 @@ The border consists of a space, vertical line, space (3 chars on each side).
 
 - **Content area** (below middle border or top border):
   - Lines 1-n: items (`itemsperpage` lines, each item has `itemheight` rows)
+  - Item display uses `{cic}` for color, `{/all}` before right border
+  - When highlighted, item is drawn with `end=""` to keep cursor on same line
   - If fewer items than `itemsperpage`, pad with blank lines using `f" {{vline}} {' '*(contentwidth-4)} {{vline}}"`
 
 - **Bottom border**: `_display_bottom_border()`
@@ -99,9 +101,9 @@ Content height (not including borders) = itemsperpage × itemheight
 | Key | Action |
 |-----|--------|
 | Enter | Select current item, return it (if not disabled) |
-| Escape / q | Cancel selection, return None |
-| Up | Move cursor up one item (skip disabled) |
-| Down | Move cursor down one item (skip disabled, wrap to next page) |
+| Escape | Cancel selection, return None |
+| Up | Move to previous item (skip disabled) |
+| Down | Move to next item (skip disabled, wrap to next page) |
 | Page Up | Move to previous page |
 | Page Down | Move to next page |
 | Home | Jump to first selectable item |
