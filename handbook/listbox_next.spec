@@ -42,10 +42,10 @@
 
 ## Current Item Color (cic)
 
-The `cic` echovar is determined by a color table based on item state, used when rendering items:
+The `itemcolors` dict determines the color used when rendering items:
 
 ```python
-cic = {
+itemcolors = {
     "disabled": "{bggray}",
     "highlighted": "{bgwhite}{black}",
     "normal": "{normalcolor}",
@@ -53,9 +53,9 @@ cic = {
 ```
 
 When displaying each item:
-- If item is disabled: use `cic["disabled"]` and call `io.setvar("cic", cic["disabled"])`
-- If item is highlighted (current): use `cic["highlighted"]` and call `io.setvar("cic", cic["highlighted"])`
-- Otherwise: use `cic["normal"]` and call `io.setvar("cic", cic["normal"])`
+- If item is disabled: use `itemcolors["disabled"]` and call `io.setvar("cic", itemcolors["disabled"])`
+- If item is highlighted (current): use `itemcolors["highlighted"]` and call `io.setvar("cic", itemcolors["highlighted"])`
+- Otherwise: use `itemcolors["normal"]` and call `io.setvar("cic", itemcolors["normal"])`
 
 ## Width Calculation
 
