@@ -39,6 +39,7 @@
 | BORDER_WIDTH | int | 4 | Horizontal border padding |
 | title | str | "" | Title displayed at top of widget |
 | GETCH_TIMEOUT | float | 0.25 | Key input timeout in seconds |
+| idle | Optional[Callable[[], None]] | None | Optional callback called when the key loop times out (getch returns None) |
 
 ## Current Item Color (cic)
 
@@ -113,13 +114,14 @@ A `ListboxItem` may have `disabled=True`. Disabled items:
 ## Public API
 
 ```python
-from typing import Any, List, NamedTuple, Optional
+from typing import Any, Callable, List, NamedTuple, Optional
 
 class ListboxItem:
     content: str
     pk: Any
     data: Any
     disabled: bool
+    onkey: Optional[Callable[["ListboxItem", str], bool]] = None
     
     def handle_key(self, key: str) -> bool: ...
 
@@ -135,6 +137,7 @@ class Listbox:
         itemsperpage: int = 20,
         itemheight: int = 1,
         items: Optional[List[ListboxItem]] = None,
+        idle: Optional[Callable[[], None]] = None,
         **kwargs,
     ) -> None: ...
     
@@ -147,6 +150,8 @@ class Listbox:
     
     def fetchitems(self) -> List[ListboxItem]: ...
     
+    def onkey(self, ch: Optional[str]) -> Optional[ListboxResult]: ...
+    
     def run(self, prompt: str = "listbox_next: ") -> ListboxResult: ...
 
 ## run() Behavior
@@ -157,58 +162,98 @@ class Listbox:
 2. Move cursor down one line using `{f6}`
 3. Show the prompt
 4. Echo `{savecursor}` to save cursor position
-5. Enter a loop that waits for key presses using `io.getch()` with `GETCH_TIMEOUT` (0.25s) timeout and processes them:
-   - `KEY_ESC`: Exit the loop, return `ListboxResult("cancelled")`
-   - `KEY_ENTER`:
-     - If current item is not disabled:
-       - Echo `{restorecursor}` to restore cursor position
-       - Return `ListboxResult("selected", currentitem)`
-     - Else (disabled):
-       - Output `{BEL}` to signal error, keep current item highlighted
-    - `KEY_UP`: 
-      - If there is an item above the current highlight:
-        - Redraw the current item as non-highlighted
-        - Move up one item (skip any disabled items)
-        - Draw the new item as highlighted
-      - Else if there is a previous page:
-        - Redraw current item as non-highlighted
-        - Display previous page
-        - Set highlighted item to last item on new page (skipping disabled)
-      - Else (no previous items or previous pages):
-        - Output `{BEL}` to signal error, keep current item highlighted
-    - `KEY_DOWN`:
-      - If there is an item below the current highlight:
-        - Redraw the current item as non-highlighted
-        - Move down one item (skip any disabled items)
-        - Draw the new item as highlighted
-      - Else if there is a next page:
-        - Redraw current item as non-highlighted
-        - Display next page
-        - Set highlighted item to first item on new page (skipping disabled)
-      - Else (no next items or next pages):
-        - Output `{BEL}` to signal error, keep current item highlighted
-    - `KEY_PAGEUP`:
-      - If there is a previous page:
-        - Redraw current item as non-highlighted
-        - Display previous page
-        - Set highlighted item to first enabled item on new page
-      - Else:
-        - Output `{BEL}` to signal error, keep current item highlighted
-    - `KEY_PAGEDOWN`:
-      - If there is a next page:
-        - Redraw current item as non-highlighted
-        - Display next page
-        - Set highlighted item to first enabled item on new page
-      - Else:
-        - Output `{BEL}` to signal error, keep current item highlighted
-    - `KEY_HOME`:
-      - If not already on the first enabled item:
-        - Redraw current item as non-highlighted
-        - Move to first enabled item on current page
-        - Draw the new item as highlighted
-    - `KEY_END`:
-      - If not already on the last enabled item:
-        - Redraw current item as non-highlighted
-        - Move to last enabled item on current page
-        - Draw the new item as highlighted
+5. Enter a loop:
+   ```
+   while True:
+       result = self.onkey(io.getch(GETCH_TIMEOUT))
+       if result is not None:
+           return result
+   ```
+
+## onkey() Method
+
+Handles key input and returns an optional `ListboxResult`:
+
+- If `ch` is `None` and `idle` is a callable, call `idle()` and return `None` to continue
+- `KEY_ESC`: Return `ListboxResult("cancelled")`
+- `KEY_ENTER`:
+  - If current item is not disabled:
+    - Echo `{restorecursor}` to restore cursor position
+    - Return `ListboxResult("selected", currentitem)`
+  - Else (disabled):
+    - Output `{BEL}` to signal error, keep current item highlighted
+    - Return `None`
+- `KEY_UP`: 
+  - If there is an item above the current highlight:
+    - Redraw the current item as non-highlighted
+    - Move up one item (skip any disabled items)
+    - Draw the new item as highlighted
+  - Else if there is a previous page:
+    - Redraw current item as non-highlighted
+    - Display previous page
+    - Set highlighted item to last item on new page (skipping disabled)
+  - Else (no previous items or previous pages):
+    - Output `{BEL}` to signal error, keep current item highlighted
+  - Return `None`
+- `KEY_DOWN`:
+  - If there is an item below the current highlight:
+    - Redraw the current item as non-highlighted
+    - Move down one item (skip any disabled items)
+    - Draw the new item as highlighted
+  - Else if there is a next page:
+    - Redraw current item as non-highlighted
+    - Display next page
+    - Set highlighted item to first item on new page (skipping disabled)
+  - Else (no next items or next pages):
+    - Output `{BEL}` to signal error, keep current item highlighted
+  - Return `None`
+- `KEY_PAGEUP`:
+  - If there is a previous page:
+    - Redraw current item as non-highlighted
+    - Display previous page
+    - Set highlighted item to first enabled item on new page
+  - Else:
+    - Output `{BEL}` to signal error, keep current item highlighted
+  - Return `None`
+- `KEY_PAGEDOWN`:
+  - If there is a next page:
+    - Redraw current item as non-highlighted
+    - Display next page
+    - Set highlighted item to first enabled item on new page
+  - Else:
+    - Output `{BEL}` to signal error, keep current item highlighted
+  - Return `None`
+- `KEY_HOME`:
+  - If not already on the first enabled item:
+    - Redraw current item as non-highlighted
+    - Move to first enabled item on current page
+    - Draw the new item as highlighted
+  - Return `None`
+- `KEY_END`:
+  - If not already on the last enabled item:
+    - Redraw current item as non-highlighted
+    - Move to last enabled item on current page
+    - Draw the new item as highlighted
+  - Return `None`
+- Any other key:
+  - If `currentitem.onkey` is provided:
+    - Call `currentitem.onkey(currentitem, key)` with the pressed key
+    - If it returns True: return `None`
+    - If it returns False: ring the bell (`{BEL}`)
+  - If `currentitem.onkey` is not provided:
+    - Output `{BEL}` to ring the bell
+  - Return `None`
+
+### Idle Callback
+
+See `onkey()` method - `idle` is called when `ch` is `None`.
+
+### OnKey Callback
+
+The `onkey` attribute on `ListboxItem` is a callable taking `item: ListboxItem` and `key: str`, returning `bool`:
+- Called when a key is pressed that is not one of the standard navigation keys (Enter, Escape, Up, Down, Page Up, Page Down, Home, End)
+- The callback receives the currently selected item and the key that was pressed
+- Return `True` if the key was handled (no bell rings)
+- Return `False` if the key was not handled (bell rings)
+- Example uses: 'e' to edit an item, 'd' to delete, 'r' to refresh
 ```
