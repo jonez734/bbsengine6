@@ -200,6 +200,8 @@ Each standard key has a corresponding private handler method:
 | `_handle_key_home` | KEY_HOME | Jump to first enabled item on current page |
 | `_handle_key_end` | KEY_END | Jump to last enabled item on current page |
 
+> **Note**: All key handler methods MUST have docstrings describing their behavior. Update this spec when adding or modifying key handlers.
+
 ## run() Behavior
 
 1. If there are no items to display:
