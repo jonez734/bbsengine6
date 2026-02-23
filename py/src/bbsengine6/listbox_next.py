@@ -165,7 +165,6 @@ class Listbox:
                 self._display_item(page_items[i], highlighted=(i == self._currentindex))
             else:
                 self._display_blank_line()
-            io.echo()
 
         self._display_bottom_border()
 
