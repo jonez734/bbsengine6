@@ -73,9 +73,9 @@ The border consists of a space, vertical line, space (3 chars on each side).
 
 - **Title box** (if title is given): 5 lines
   - Line 1: top border (`f" {{ulcorner}}{hline}{{urcorner}}"`)
-  - Line 2: blank (`f" {{vline}}{' '*(contentwidth-3)}{{vline}}"`)
-  - Line 3: title with left/right borders (`f" {{vline}}{title.center(contentwidth-3)}{{vline}}"`)
-  - Line 4: blank (`f" {{vline}}{' '*(contentwidth-3)}{{vline}}"`)
+  - Line 2: blank (`f" {{vline}}{' '*(contentwidth-2)}{{vline}}"`)
+  - Line 3: title with left/right borders (`f" {{vline}}{title.center(contentwidth-2)}{{vline}}"`)
+  - Line 4: blank (`f" {{vline}}{' '*(contentwidth-2)}{{vline}}"`)
   - Line 5: bottom border (`f" {{rtee}}{hline}{{ltee}}"`)
 
 - **Middle border** (between title box and content area): `_display_middle_border()`
@@ -86,7 +86,7 @@ The border consists of a space, vertical line, space (3 chars on each side).
 
 - **Content area** (below middle border or top border):
   - Lines 1-n: items (`itemsperpage` lines, each item has `itemheight` rows)
-  - If fewer items than `itemsperpage`, pad with blank lines using `f" {{vline}}{' '*(contentwidth-3)}{{vline}}"`
+  - If fewer items than `itemsperpage`, pad with blank lines using `f" {{vline}}{' '*(contentwidth-2)}{{vline}}"`
 
 - **Bottom border**: `_display_bottom_border()`
   - Uses `{llcorner}` and `{lrcorner}`: `f" {{llcorner}}{hline}{{lrcorner}}"`
