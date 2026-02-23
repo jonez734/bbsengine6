@@ -10,8 +10,11 @@ def buildargs():
 
 
 def handle_e(listbox):
+    item = listbox.currentitem
     io.echo(f"{{restorecursor}}", end="", flush=True)
-    io.echo(f"{{yellow}}hello world!{{/all}}\n")
+    io.echo(f"{{labelcolor}}Item: {{valuecolor}}{item.content}{{/all}}\n")
+    io.echo(f"{{labelcolor}}pk: {{valuecolor}}{item.pk}{{/all}}\n")
+    io.echo(f"{{labelcolor}}data: {{valuecolor}}{item.data}{{/all}}\n")
     io.echo(f"Press any key to continue...")
     io.getch(30)
     listbox._display()
@@ -40,6 +43,8 @@ def main(args):
     io.setvar("currentitemcolor", "{bgwhite}{black}")
     io.setvar("normalcolor", "{blue}{bglightgray}")
     io.setvar("cic", "{blue}{bglightgray}")
+    io.setvar("labelcolor", "{yellow}")
+    io.setvar("valuecolor", "{cyan}")
 
     screen.init()
 

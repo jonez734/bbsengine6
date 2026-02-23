@@ -40,7 +40,24 @@
 | title | str | "" | Title displayed at top of widget |
 | GETCH_TIMEOUT | float | 0.25 | Key input timeout in seconds |
 | idle | Optional[Callable[[], Optional[ListboxResult] | bool]] | None | Optional callback called when the key loop times out (getch returns None). Can return ListboxResult to exit, False to ring bell, or None/True to continue |
-| custom_keys | Optional[dict[str, Callable[[], Optional[ListboxResult]]]] | None | Dict mapping key names (e.g., "KEY_INSERT", "KEY_DELETE") to callbacks. Callback returns None to continue, or a ListboxResult to exit |
+| custom_keys | Optional[dict[str, Callable[[], Optional[ListboxResult]]]] | None | Dict mapping key names (e.g., "KEY_INSERT", "KEY_DELETE") to callbacks. These are merged into `key_handlers` dict. Callback returns None to continue, or a ListboxResult to exit. Can also override standard keys (e.g., "KEY_UP", "KEY_DOWN") |
+
+## key_handlers
+
+The `key_handlers` dict maps key names to handler functions. Standard handlers are:
+
+| Key | Handler Method |
+|-----|----------------|
+| KEY_ESC | `_handle_key_esc` |
+| KEY_ENTER | `_handle_key_enter` |
+| KEY_UP | `_handle_key_up` |
+| KEY_DOWN | `_handle_key_down` |
+| KEY_PAGEUP | `_handle_key_pageup` |
+| KEY_PAGEDOWN | `_handle_key_pagedown` |
+| KEY_HOME | `_handle_key_home` |
+| KEY_END | `_handle_key_end` |
+
+In the constructor, standard handlers are first populated, then `custom_keys` are merged via `key_handlers.update(custom_keys)`, allowing users to override standard key behavior.
 
 ## Current Item Color (cic)
 
@@ -161,10 +178,27 @@ class Listbox:
     def curpage(self) -> int: ...
     
     def fetchitems(self) -> List[ListboxItem]: ...
-    
+
     def onkey(self, ch: Optional[str]) -> Optional[ListboxResult] | bool: ...
-    
+
     def run(self, prompt: str = "listbox_next: ") -> ListboxResult: ...
+
+    key_handlers: dict[str, Callable[[], Optional[ListboxResult]]]
+
+## Key Handler Methods
+
+Each standard key has a corresponding private handler method:
+
+| Method | Key | Description |
+|--------|-----|-------------|
+| `_handle_key_esc` | KEY_ESC | Returns `ListboxResult("cancelled")` |
+| `_handle_key_enter` | KEY_ENTER | Returns `ListboxResult("selected", currentitem)` if item not disabled, else `False` |
+| `_handle_key_up` | KEY_UP | Move to previous enabled item (skip disabled, wrap to prev page) |
+| `_handle_key_down` | KEY_DOWN | Move to next enabled item (skip disabled, wrap to next page) |
+| `_handle_key_pageup` | KEY_PAGEUP | Move to previous page |
+| `_handle_key_pagedown` | KEY_PAGEDOWN | Move to next page |
+| `_handle_key_home` | KEY_HOME | Jump to first enabled item on current page |
+| `_handle_key_end` | KEY_END | Jump to last enabled item on current page |
 
 ## run() Behavior
 
@@ -290,3 +324,5 @@ The `onkey` attribute on `ListboxItem` is a callable taking `item: ListboxItem` 
 - Return `False` if the key was not handled (bell rings)
 - Example uses: 'e' to edit an item, 'd' to delete, 'r' to refresh
 ```
+
+See [BESTPRACTICE.spec](BESTPRACTICE.spec) for additional best practices.

@@ -76,6 +76,19 @@ class Listbox:
 
         self.numpages = max(1, int(ceil(len(self.items) / self.itemsperpage)))
 
+        self.key_handlers: dict[str, Callable[[], Optional[ListboxResult]]] = {
+            "KEY_ESC": self._handle_key_esc,
+            "KEY_ENTER": self._handle_key_enter,
+            "KEY_UP": self._handle_key_up,
+            "KEY_DOWN": self._handle_key_down,
+            "KEY_PAGEUP": self._handle_key_pageup,
+            "KEY_PAGEDOWN": self._handle_key_pagedown,
+            "KEY_HOME": self._handle_key_home,
+            "KEY_END": self._handle_key_end,
+        }
+        if self.custom_keys:
+            self.key_handlers.update(self.custom_keys)
+
     @property
     def currentitem(self) -> Optional[ListboxItem]:
         page_items = self.fetchitems()
@@ -184,6 +197,114 @@ class Listbox:
                 self._display_blank_line()
             io.echo()
 
+    def _handle_key_esc(self) -> Optional[ListboxResult]:
+        return ListboxResult("cancelled")
+
+    def _handle_key_enter(self) -> Optional[ListboxResult]:
+        if self.currentitem is not None and not self.currentitem.disabled:
+            return ListboxResult("selected", self.currentitem)
+        return False
+
+    def _handle_key_up(self) -> Optional[ListboxResult]:
+        page_items = self.fetchitems()
+        prev_idx = self._get_prev_enabled_index(page_items, self._currentindex)
+        if prev_idx != -1:
+            cursor_up = self._cursor_moves_to_item(self._currentindex)
+            io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+            self._display_item(page_items[self._currentindex], highlighted=False)
+            io.echo(f"{{cursorup}}", end="", flush=True)
+            self._currentindex = prev_idx
+            self._display_item(page_items[self._currentindex], highlighted=True)
+            return True
+        elif self._curpage > 0:
+            self._curpage -= 1
+            page_items = self.fetchitems()
+            last_idx = self._get_last_enabled_index(page_items)
+            if last_idx != -1:
+                self._currentindex = last_idx
+            self._redraw_content_area()
+            return True
+        else:
+            io.echo(f"{{BEL}}", end="", flush=True)
+            return None
+
+    def _handle_key_down(self) -> Optional[ListboxResult]:
+        page_items = self.fetchitems()
+        next_idx = self._get_next_enabled_index(page_items, self._currentindex)
+        if next_idx != -1:
+            cursor_up = self._cursor_moves_to_item(self._currentindex)
+            io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+            self._display_item(page_items[self._currentindex], highlighted=False)
+            io.echo(f"{{cud}}", end="", flush=True)
+            self._currentindex = next_idx
+            self._display_item(page_items[self._currentindex], highlighted=True)
+            return True
+        elif self._curpage < self.numpages - 1:
+            self._curpage += 1
+            page_items = self.fetchitems()
+            first_idx = self._get_first_enabled_index(page_items)
+            if first_idx != -1:
+                self._currentindex = first_idx
+            self._redraw_content_area()
+            return True
+        else:
+            io.echo(f"{{BEL}}", end="", flush=True)
+            return None
+
+    def _handle_key_pageup(self) -> Optional[ListboxResult]:
+        if self._curpage > 0:
+            self._curpage -= 1
+            page_items = self.fetchitems()
+            first_idx = self._get_first_enabled_index(page_items)
+            if first_idx != -1:
+                self._currentindex = first_idx
+            self._redraw_content_area()
+            return True
+        else:
+            io.echo(f"{{BEL}}", end="", flush=True)
+            return None
+
+    def _handle_key_pagedown(self) -> Optional[ListboxResult]:
+        if self._curpage < self.numpages - 1:
+            self._curpage += 1
+            page_items = self.fetchitems()
+            first_idx = self._get_first_enabled_index(page_items)
+            if first_idx != -1:
+                self._currentindex = first_idx
+            self._redraw_content_area()
+            return True
+        else:
+            io.echo(f"{{BEL}}", end="", flush=True)
+            return None
+
+    def _handle_key_home(self) -> Optional[ListboxResult]:
+        page_items = self.fetchitems()
+        first_idx = self._get_first_enabled_index(page_items)
+        if first_idx != -1 and self._currentindex != first_idx:
+            old_idx = self._currentindex
+            cursor_up = self._cursor_moves_to_item(old_idx)
+            io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+            self._display_item(page_items[old_idx], highlighted=False)
+            diff = old_idx - first_idx
+            io.echo(f"{{cursorup:{diff}}}", end="", flush=True)
+            self._currentindex = first_idx
+            self._display_item(page_items[first_idx], highlighted=True)
+        return True
+
+    def _handle_key_end(self) -> Optional[ListboxResult]:
+        page_items = self.fetchitems()
+        last_idx = self._get_last_enabled_index(page_items)
+        if last_idx != -1 and self._currentindex != last_idx:
+            old_idx = self._currentindex
+            cursor_up = self._cursor_moves_to_item(old_idx)
+            io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+            self._display_item(page_items[old_idx], highlighted=False)
+            diff = last_idx - old_idx
+            io.echo(f"{{cud:{diff}}}", end="", flush=True)
+            self._currentindex = last_idx
+            self._display_item(page_items[last_idx], highlighted=True)
+        return True
+
     def onkey(self, ch: Optional[str]) -> Optional[ListboxResult] | bool:
         if ch is None:
             if self.idle is not None and callable(self.idle):
@@ -194,115 +315,8 @@ class Listbox:
                     return False
             return True
 
-        page_items = self.fetchitems()
-
-        if ch == "KEY_ESC":
-            return ListboxResult("cancelled")
-
-        if ch == "KEY_ENTER":
-            if self.currentitem is not None and not self.currentitem.disabled:
-                return ListboxResult("selected", self.currentitem)
-            else:
-                return False
-
-        if ch == "KEY_UP":
-            prev_idx = self._get_prev_enabled_index(page_items, self._currentindex)
-            if prev_idx != -1:
-                cursor_up = self._cursor_moves_to_item(self._currentindex)
-                io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
-                self._display_item(page_items[self._currentindex], highlighted=False)
-                io.echo(f"{{cursorup}}", end="", flush=True)
-                self._currentindex = prev_idx
-                self._display_item(page_items[self._currentindex], highlighted=True)
-                return True
-            elif self._curpage > 0:
-                self._curpage -= 1
-                page_items = self.fetchitems()
-                last_idx = self._get_last_enabled_index(page_items)
-                if last_idx != -1:
-                    self._currentindex = last_idx
-                self._redraw_content_area()
-                return True
-            else:
-                io.echo(f"{{BEL}}", end="", flush=True)
-                return None
-
-        if ch == "KEY_DOWN":
-            next_idx = self._get_next_enabled_index(page_items, self._currentindex)
-            if next_idx != -1:
-                cursor_up = self._cursor_moves_to_item(self._currentindex)
-                io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
-                self._display_item(page_items[self._currentindex], highlighted=False)
-                io.echo(f"{{cud}}", end="", flush=True)
-                self._currentindex = next_idx
-                self._display_item(page_items[self._currentindex], highlighted=True)
-                return True
-            elif self._curpage < self.numpages - 1:
-                self._curpage += 1
-                page_items = self.fetchitems()
-                first_idx = self._get_first_enabled_index(page_items)
-                if first_idx != -1:
-                    self._currentindex = first_idx
-                self._redraw_content_area()
-                return True
-            else:
-                io.echo(f"{{BEL}}", end="", flush=True)
-                return None
-
-        if ch == "KEY_PAGEUP":
-            if self._curpage > 0:
-                self._curpage -= 1
-                page_items = self.fetchitems()
-                first_idx = self._get_first_enabled_index(page_items)
-                if first_idx != -1:
-                    self._currentindex = first_idx
-                self._redraw_content_area()
-                return True
-            else:
-                io.echo(f"{{BEL}}", end="", flush=True)
-                return None
-
-        if ch == "KEY_PAGEDOWN":
-            if self._curpage < self.numpages - 1:
-                self._curpage += 1
-                page_items = self.fetchitems()
-                first_idx = self._get_first_enabled_index(page_items)
-                if first_idx != -1:
-                    self._currentindex = first_idx
-                self._redraw_content_area()
-                return True
-            else:
-                io.echo(f"{{BEL}}", end="", flush=True)
-                return None
-
-        if ch == "KEY_HOME":
-            first_idx = self._get_first_enabled_index(page_items)
-            if first_idx != -1 and self._currentindex != first_idx:
-                old_idx = self._currentindex
-                cursor_up = self._cursor_moves_to_item(old_idx)
-                io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
-                self._display_item(page_items[old_idx], highlighted=False)
-                diff = old_idx - first_idx
-                io.echo(f"{{cursorup:{diff}}}", end="", flush=True)
-                self._currentindex = first_idx
-                self._display_item(page_items[first_idx], highlighted=True)
-            return True
-
-        if ch == "KEY_END":
-            last_idx = self._get_last_enabled_index(page_items)
-            if last_idx != -1 and self._currentindex != last_idx:
-                old_idx = self._currentindex
-                cursor_up = self._cursor_moves_to_item(old_idx)
-                io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
-                self._display_item(page_items[old_idx], highlighted=False)
-                diff = last_idx - old_idx
-                io.echo(f"{{cud:{diff}}}", end="", flush=True)
-                self._currentindex = last_idx
-                self._display_item(page_items[last_idx], highlighted=True)
-            return True
-
-        if ch in self.custom_keys:
-            result = self.custom_keys[ch]()
+        if ch in self.key_handlers:
+            result = self.key_handlers[ch]()
             if result is not None:
                 return result
             return True
