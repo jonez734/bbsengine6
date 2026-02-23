@@ -40,6 +40,7 @@
 | title | str | "" | Title displayed at top of widget |
 | GETCH_TIMEOUT | float | 0.25 | Key input timeout in seconds |
 | idle | Optional[Callable[[], Optional[ListboxResult] | bool]] | None | Optional callback called when the key loop times out (getch returns None). Can return ListboxResult to exit, False to ring bell, or None/True to continue |
+| custom_keys | Optional[dict[str, Callable[[], Optional[ListboxResult]]]] | None | Dict mapping key names (e.g., "KEY_INSERT", "KEY_DELETE") to callbacks. Callback returns None to continue, or a ListboxResult to exit |
 
 ## Current Item Color (cic)
 
@@ -135,8 +136,9 @@ class ListboxItem:
     def handle_key(self, key: str) -> bool: ...
 
 class ListboxResult(NamedTuple):
-    status: str  # "selected" | "cancelled" | "noitems"
+    status: str  # "selected" | "cancelled" | "noitems" | "custom"
     item: Optional[ListboxItem] = None
+    data: Optional[dict] = None
 
 class Listbox:
     def __init__(
@@ -147,6 +149,7 @@ class Listbox:
         itemheight: int = 1,
         items: Optional[List[ListboxItem]] = None,
         idle: Optional[Callable[[], None]] = None,
+        custom_keys: Optional[dict[str, Callable[[], Optional[ListboxResult]]]] = None,
         **kwargs,
     ) -> None: ...
     

@@ -33,6 +33,7 @@ class ListboxItem:
 class ListboxResult(NamedTuple):
     status: str
     item: Optional[ListboxItem] = None
+    data: Optional[dict] = None
 
 
 class Listbox:
@@ -53,6 +54,7 @@ class Listbox:
         itemheight: int = 1,
         items: Optional[List[ListboxItem]] = None,
         idle: Optional[Callable[[], None]] = None,
+        custom_keys: Optional[dict[str, Callable[[], Optional[ListboxResult]]]] = None,
         **kwargs: Any,
     ) -> None:
         self.args = args
@@ -61,6 +63,7 @@ class Listbox:
         self.itemheight = itemheight
         self.items = items if items is not None else []
         self.idle = idle
+        self.custom_keys = custom_keys if custom_keys else {}
         self.kwargs = kwargs
 
         self._curpage = 0
@@ -296,6 +299,12 @@ class Listbox:
                 io.echo(f"{{cud:{diff}}}", end="", flush=True)
                 self._currentindex = last_idx
                 self._display_item(page_items[last_idx], highlighted=True)
+            return True
+
+        if ch in self.custom_keys:
+            result = self.custom_keys[ch]()
+            if result is not None:
+                return result
             return True
 
         if self.currentitem is not None and callable(self.currentitem.onkey):
