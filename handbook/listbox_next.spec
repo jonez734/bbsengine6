@@ -63,7 +63,7 @@ When displaying each item:
 - `terminalwidth` = `terminal.width()`
 - `contentwidth` = `terminal.width() - 3*2` (does not include borders)
 - `totalwidth` = `contentwidth + 6` (content + left border + right border)
-- `hline` = `f"{{hline:{contentwidth + 4}}}"` (computed in constructor)
+- `hline` = `f"{{hline:{contentwidth - 2}}}"` (computed in constructor)
 - Left border: `" {vline} "` (3 chars)
 - Right border: `" {vline} "` (3 chars)
 

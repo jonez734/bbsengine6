@@ -68,7 +68,7 @@ class Listbox:
         self.terminalwidth = io.terminal.width()
         self.contentwidth = self.terminalwidth - 3 * 2
         self.totalwidth = self.contentwidth + 6
-        self.hline = f"{{hline:{self.contentwidth + 4}}}"
+        self.hline = f"{{hline:{self.contentwidth - 2}}}"
 
         self.numpages = max(1, int(ceil(len(self.items) / self.itemsperpage)))
 
