@@ -132,26 +132,26 @@ class Listbox:
             io.setvar("cic", self.itemcolors["normal"])
 
         padded = item.content.ljust(self.contentwidth - 3)
-        io.echo(f"{{vline}} {padded} {{vline}} ")
+        io.echo(f" {{vline}} {padded} {{vline}}")
 
     def _display_blank_line(self) -> None:
-        io.echo(f"{{vline}}{' ' * (self.contentwidth - 3)}{{vline}} ")
+        io.echo(f" {{vline}}{' ' * (self.contentwidth - 3)}{{vline}}")
 
     def _display_title_box(self) -> None:
-        io.echo(f"{{ulcorner}}{self.hline}{{urcorner}} ")
-        io.echo(f"{{vline}}{' ' * (self.contentwidth - 3)}{{vline}} ")
-        io.echo(f"{{vline}}{self.title.center(self.contentwidth - 3)}{{vline}} ")
-        io.echo(f"{{vline}}{' ' * (self.contentwidth - 3)}{{vline}} ")
-        io.echo(f"{{rtee}}{self.hline}{{ltee}} ")
+        io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")
+        io.echo(f" {{vline}}{' ' * (self.contentwidth - 3)}{{vline}}")
+        io.echo(f" {{vline}}{self.title.center(self.contentwidth - 3)}{{vline}}")
+        io.echo(f" {{vline}}{' ' * (self.contentwidth - 3)}{{vline}}")
+        io.echo(f" {{rtee}}{self.hline}{{ltee}}")
 
     def _display_middle_border(self) -> None:
-        io.echo(f"{{ltee}}{self.hline}{{rtee}} ")
+        io.echo(f" {{ltee}}{self.hline}{{rtee}}")
 
     def _display_top_border(self) -> None:
-        io.echo(f"{{ulcorner}}{self.hline}{{urcorner}} ")
+        io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")
 
     def _display_bottom_border(self) -> None:
-        io.echo(f"{{llcorner}}{self.hline}{{lrcorner}} ")
+        io.echo(f" {{llcorner}}{self.hline}{{lrcorner}}")
 
     def _display(self) -> None:
         if self.title:
