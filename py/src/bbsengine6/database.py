@@ -348,8 +348,11 @@ def resultiter(cur: Any, arraysize: int = 1000, filterfunc: callable = None, **k
           elif callable(filterfunc) is True and filterfunc(result, **kwargs) is True:
             yield result
 
-def commit(args: Any, **kwargs: Any) -> bool:
-  io.echo("bbsengine6.database.commit.100: stub", level="warn")
+def commit(args: Any, conn: Any = None, **kwargs: Any) -> bool:
+  if conn is not None:
+    conn.commit()
+    return True
+  io.echo("bbsengine6.database.commit.100: no connection", level="error")
   return False
 
 # @since 20230715 used by empyre
