@@ -203,9 +203,9 @@ Handles key input and returns `Optional[ListboxResult] | bool`:
     - Return `False`
 - `KEY_UP`: 
   - If there is an item above the current highlight:
-    - Cursor up to the current item line
+    - Cursor up to the current item line using `_cursor_moves_to_item()`
     - Redraw the current item as non-highlighted
-    - Cursor down 1 line (`{cud:1}`)
+    - Cursor up 1 line (`{cursorup}`)
     - Move up one item (skip any disabled items)
     - Draw the new item as highlighted
     - Return `True`
@@ -220,7 +220,7 @@ Handles key input and returns `Optional[ListboxResult] | bool`:
   - If there is an item below the current highlight:
     - Cursor up to the current item line
     - Redraw the current item as non-highlighted
-    - Cursor down 1 line (`{cud:1}`)
+    - Cursor down 1 line (`{cud}`)
     - Move down one item (skip any disabled items)
     - Draw the new item as highlighted
     - Return `True`

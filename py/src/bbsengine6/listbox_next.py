@@ -204,9 +204,10 @@ class Listbox:
         if ch == "KEY_UP":
             prev_idx = self._get_prev_enabled_index(page_items, self._currentindex)
             if prev_idx != -1:
-                io.echo(f"{{cursorup:{self._currentindex}}}", end="", flush=True)
+                cursor_up = self._cursor_moves_to_item(self._currentindex)
+                io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
                 self._display_item(page_items[self._currentindex], highlighted=False)
-                io.echo(f"{{cud:1}}", end="", flush=True)
+                io.echo(f"{{cursorup}}", end="", flush=True)
                 self._currentindex = prev_idx
                 self._display_item(page_items[self._currentindex], highlighted=True)
                 return True
@@ -228,7 +229,7 @@ class Listbox:
                 cursor_up = self._cursor_moves_to_item(self._currentindex)
                 io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
                 self._display_item(page_items[self._currentindex], highlighted=False)
-                io.echo(f"{{cud:1}}", end="", flush=True)
+                io.echo(f"{{cud}}", end="", flush=True)
                 self._currentindex = next_idx
                 self._display_item(page_items[self._currentindex], highlighted=True)
                 return True
