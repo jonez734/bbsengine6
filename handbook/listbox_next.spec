@@ -70,18 +70,20 @@ The border consists of a space, vertical line, space (3 chars on each side).
 ## Height Calculation
 
 - **Title box** (if title is given): 5 lines
-  - Line 1: top border (`f" {{ulcorner}}{{hline:{contentwidth+4}}}{{urcorner}} "`)
-  - Line 2: blank (`f" {{vline}}{' '*(contentwidth-1)}{{vline}} "`)
-  - Line 3: title with left/right borders (`f" {{vline}}{title}{{vline}} "`)
-  - Line 4: blank (`f" {{vline}}{' '*(contentwidth-1)}{{vline}} "`)
-  - Line 5: bottom border (`f" {{rtee}}{{hline:{contentwidth+4}}}{{ltee}} "`)
+  - Line 1: top border (`f"{{ulcorner}}{{hline:{contentwidth+4}}}{{urcorner}} "`)
+  - Line 2: blank (`f"{{vline}}{' '*(contentwidth-1)}{{vline}} "`)
+  - Line 3: title with left/right borders (`f"{{vline}}{title.center(contentwidth-1)}{{vline}} "`)
+  - Line 4: blank (`f"{{vline}}{' '*(contentwidth-1)}{{vline}} "`)
+  - Line 5: bottom border (`f"{{rtee}}{{hline:{contentwidth+4}}}{{ltee}} "`)
 
 - **Content area** (below title, or entire box if no title):
-  - If title given: top border (`f" {{ltee}}{{hline:{contentwidth+4}}}{{rtee}} "`), connects to title box above
-  - If no title: top border (`f" {{ulcorner}}{{hline:{contentwidth+4}}}{{urcorner}} "`), same as title box
+  - If title given: top border (`f"{{ltee}}{{hline:{contentwidth+4}}}{{rtee}} "`), connects to title box above
+  - If no title: top border (`f"{{ulcorner}}{{hline:{contentwidth+4}}}{{urcorner}} "`), same as title box
   - Lines 2-(n+1): items (`itemsperpage` lines, each item has `itemheight` rows)
-  - If fewer items than `itemsperpage`, pad with blank lines using `f" {{vline}}{' '*(contentwidth-1)}{{vline}} "`
-  - Last line: bottom border (`f" {{llcorner}}{{hline:{contentwidth+4}}}{{lrcorner}} "`)
+  - If fewer items than `itemsperpage`, pad with blank lines using `f"{{vline}}{' '*(contentwidth-1)}{{vline}} "`
+  - Last line: bottom border (`f"{{llcorner}}{{hline:{contentwidth+4}}}{{lrcorner}} "`)
+
+> **Note**: Border strings use f-strings for the `hline` length calculation.
 
 Content height (not including borders) = itemsperpage × itemheight
 
