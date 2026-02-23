@@ -1,8 +1,0 @@
-$(document).ready(function() {
-  if (be !== null)
-  {
-    be.addinterval(5000, "update topbar.greetings", function() {
-      be.updatetopbaritem("topbar.greetings", $("div#topbar .greetings"), "/engine/bed?req=topbar.greetings&callback=?");
-    });
-  }
-}); /* end document.ready() */
