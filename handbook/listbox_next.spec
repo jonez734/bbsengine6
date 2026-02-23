@@ -124,8 +124,8 @@ class ListboxItem:
     def handle_key(self, key: str) -> bool: ...
 
 class ListboxResult(NamedTuple):
-    item: Optional[ListboxItem]
     status: str  # "selected" | "cancelled" | "noitems"
+    item: Optional[ListboxItem] = None
 
 class Listbox:
     def __init__(
@@ -152,17 +152,17 @@ class Listbox:
 ## run() Behavior
 
 1. If there are no items to display:
-   - Return `ListboxResult(None, "noitems")`
+   - Return `ListboxResult("noitems")`
 2. Display the listbox (title box + content area)
 2. Move cursor down one line using `{f6}`
 3. Show the prompt
 4. Echo `{savecursor}` to save cursor position
 5. Enter a loop that waits for key presses using `io.getch()` with `GETCH_TIMEOUT` (0.25s) timeout and processes them:
-   - `KEY_ESC`: Exit the loop, return `ListboxResult(None, "cancelled")`
+   - `KEY_ESC`: Exit the loop, return `ListboxResult("cancelled")`
    - `KEY_ENTER`:
      - If current item is not disabled:
        - Echo `{restorecursor}` to restore cursor position
-       - Return `ListboxResult(currentitem, "selected")`
+       - Return `ListboxResult("selected", currentitem)`
      - Else (disabled):
        - Output `{BEL}` to signal error, keep current item highlighted
     - `KEY_UP`: 
