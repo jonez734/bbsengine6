@@ -76,7 +76,7 @@ The border consists of a space, vertical line, space (3 chars on each side).
   - Line 2: blank (`f" {{vline}}{' '*(contentwidth-2)}{{vline}}"`)
   - Line 3: title with left/right borders (`f" {{vline}}{title.center(contentwidth-2)}{{vline}}"`)
   - Line 4: blank (`f" {{vline}}{' '*(contentwidth-2)}{{vline}}"`)
-  - Line 5: bottom border (`f" {{rtee}}{hline}{{ltee}}"`)
+  - Line 5: bottom border (`f" {{llcorner}}{hline}{{lrcorner}}"`)
 
 - **Middle border** (between title box and content area): `_display_middle_border()`
   - Uses `{rtee}` and `{ltee}`: `f" {{rtee}}{hline}{{ltee}}"`
