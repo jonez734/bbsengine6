@@ -150,8 +150,15 @@ class Listbox:
 1. Display the listbox (title box + content area)
 2. Move cursor down one line using `{f6}`
 3. Show the prompt
-4. Enter a loop that waits for key presses using `io.getch()` with `GETCH_TIMEOUT` (0.25s) timeout and processes them:
+4. Call `io.savecursor()` to save cursor position
+5. Enter a loop that waits for key presses using `io.getch()` with `GETCH_TIMEOUT` (0.25s) timeout and processes them:
    - `KEY_ESC`: Exit the loop (returns `None`)
+   - `KEY_ENTER`:
+     - If current item is not disabled:
+       - Call `io.restorecursor()` to restore cursor position
+       - Return the current item
+   - If current item is disabled:
+     - Output `{BEL}` to signal error, keep current item highlighted
     - `KEY_UP`: 
       - If there is an item above the current highlight:
         - Redraw the current item as non-highlighted
