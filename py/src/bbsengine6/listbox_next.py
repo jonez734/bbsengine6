@@ -145,7 +145,7 @@ class Listbox:
         io.echo(f" {{rtee}}{self.hline}{{ltee}}")
 
     def _display_middle_border(self) -> None:
-        io.echo(f" {{ltee}}{self.hline}{{rtee}}")
+        io.echo(f" {{rtee}}{self.hline}{{ltee}}")
 
     def _display_top_border(self) -> None:
         io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")

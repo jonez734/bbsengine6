@@ -79,7 +79,7 @@ The border consists of a space, vertical line, space (3 chars on each side).
   - Line 5: bottom border (`f" {{rtee}}{hline}{{ltee}}"`)
 
 - **Middle border** (between title box and content area): `_display_middle_border()`
-  - Uses `{ltee}` and `{rtee}`: `f" {{ltee}}{hline}{{rtee}}"`
+  - Uses `{rtee}` and `{ltee}`: `f" {{rtee}}{hline}{{ltee}}"`
 
 - **Top border** (if no title, displays instead of middle border): `_display_top_border()`
   - Uses `{ulcorner}` and `{urcorner}`: `f" {{ulcorner}}{hline}{{urcorner}}"`
