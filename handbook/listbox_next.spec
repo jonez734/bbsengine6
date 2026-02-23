@@ -76,14 +76,18 @@ The border consists of a space, vertical line, space (3 chars on each side).
   - Line 4: blank (`f"{{vline}}{' '*(contentwidth-1)}{{vline}} "`)
   - Line 5: bottom border (`f"{{rtee}}{{hline:{contentwidth+4}}}{{ltee}} "`)
 
-- **Content area** (below title, or entire box if no title):
-  - If title given: top border (`f"{{ltee}}{{hline:{contentwidth+4}}}{{rtee}} "`), connects to title box above
-  - If no title: top border (`f"{{ulcorner}}{{hline:{contentwidth+4}}}{{urcorner}} "`), same as title box
-  - Lines 2-(n+1): items (`itemsperpage` lines, each item has `itemheight` rows)
-  - If fewer items than `itemsperpage`, pad with blank lines using `f"{{vline}}{' '*(contentwidth-1)}{{vline}} "`
-  - Last line: bottom border (`f"{{llcorner}}{{hline:{contentwidth+4}}}{{lrcorner}} "`)
+- **Middle border** (between title box and content area): `_display_middle_border()`
+  - Uses `{ltee}` and `{rtee}`: `f"{{ltee}}{{hline:{contentwidth+4}}}{{rtee}} "`
 
-> **Note**: Border strings use f-strings for the `hline` length calculation.
+- **Top border** (if no title, displays instead of middle border): `_display_top_border()`
+  - Uses `{ulcorner}` and `{urcorner}`: `f"{{ulcorner}}{{hline:{contentwidth+4}}}{{urcorner}} "`
+
+- **Content area** (below middle border or top border):
+  - Lines 1-n: items (`itemsperpage` lines, each item has `itemheight` rows)
+  - If fewer items than `itemsperpage`, pad with blank lines using `f"{{vline}}{' '*(contentwidth-1)}{{vline}} "`
+
+- **Bottom border**: `_display_bottom_border()`
+  - Uses `{llcorner}` and `{lrcorner}`: `f"{{llcorner}}{{hline:{contentwidth+4}}}{{lrcorner}} "`
 
 Content height (not including borders) = itemsperpage × itemheight
 

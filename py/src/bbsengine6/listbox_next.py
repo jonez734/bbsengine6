@@ -148,6 +148,10 @@ class Listbox:
         hline = f"{{hline:{self.contentwidth + 4}}}"
         io.echo(f"{{ltee}}{hline}{{rtee}} ")
 
+    def _display_top_border(self) -> None:
+        hline = f"{{hline:{self.contentwidth + 4}}}"
+        io.echo(f"{{ulcorner}}{hline}{{urcorner}} ")
+
     def _display_bottom_border(self) -> None:
         hline = f"{{hline:{self.contentwidth + 4}}}"
         io.echo(f"{{llcorner}}{hline}{{lrcorner}} ")
@@ -157,8 +161,7 @@ class Listbox:
             self._display_title_box()
             self._display_middle_border()
         else:
-            hline = f"{{hline:{self.contentwidth + 4}}}"
-            io.echo(f"{{ulcorner}}{hline}{{urcorner}} ")
+            self._display_top_border()
 
         page_items = self.fetchitems()
         for i in range(self.itemsperpage):
