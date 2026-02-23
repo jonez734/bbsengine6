@@ -138,33 +138,30 @@ def connect(args: Any, **kwargs: Any) -> Any:
 #
 #    return kwargs
 
-def update(args, table:str, pk:str, items:dict, **kwargs) -> int:
+def update(args: Any, table:str, pk:str, items:dict, **kwargs) -> int | bool:
   primarykey = kwargs.get("primarykey", "id")
   _mogrify = kwargs.get("mogrify", False)
   updatepk = kwargs.get("updatepk", False)
   commit = kwargs.get("commit", False)
 
   def _work(cur):
-    for k, v in items.items():
-      if k == "datecreatedepoch":
-        continue
-
     _items = copy.deepcopy(items)
     if primarykey in _items and updatepk is False:
       del _items[primarykey]
 
-    sql = "update %s set " % (table)
+    query = sql.SQL("update {} set ").format(sql.Identifier(table))
     params = []
     dat = []
     for k, v in _items.items():
-      params.append("%s=%%s" % (k),)
+      params.append(sql.SQL("{} = %s").format(sql.Identifier(k)))
       dat.append(v)
 
-    sql += ", ".join(params)
-    sql += " where %s=%%s" % (primarykey)
+    query = sql.SQL("{}").format(query)
+    query += sql.SQL(", ").join(params)
+    query = sql.SQL("{} where {} = %s").format(query, sql.Identifier(primarykey))
     dat.append(pk)
 
-    cur.execute(sql, dat)
+    cur.execute(query, dat)
     return cur.rowcount
 
   if args.debug is True:
@@ -209,21 +206,21 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | None:
     if k == "datecreatedepoch":
       del items[k]
 
-  sql = "insert into %s(" % (table)
-  sql += ", ".join(columns)
-  sql += ") values ("
+  query = sql.SQL("insert into {}(").format(sql.Identifier(table))
+  query = query + sql.SQL(", ").join([sql.Identifier(c) for c in columns])
+  query = query + sql.SQL(") values (")
 
   params = []
   for x in range(len(columns)):
     params.append("%s")
-  sql += ", ".join(params)
-  sql += ")"
+  query = query + sql.SQL(", ").join([sql.SQL(p) for p in params])
+  query = query + sql.SQL(")")
 
   dat = []
   for v in items.values():
     dat.append(v)
   if returnid is True:
-    sql += f" returning {table}.{primarykey}"
+    query = sql.SQL("{} returning {}.{}").format(query, sql.Identifier(table), sql.Identifier(primarykey))
 
   try:
     conn = kwargs.get("conn", None)
@@ -372,17 +369,27 @@ def createrol(args: Any, name: str, **kwargs: Any) -> bool:
         value = kwargs.get(priv, default)
         options.append(enabled if value else disabled)
 
-    # Handle password if provided
     if "password" in kwargs:
-      options.append(f"password '{kwargs['password']}'")
-
-    # Handle expiration if provided
-    if "expiration" in kwargs:
-      options.append(f"valid until '{kwargs['expiration']}'")
-
-    sql = f"create role \"{name}\" with {' '.join(options)}"
-    io.echo(f"bbsengine.database.createrol.100: {sql=}", level="debug")
-    cur.execute(sql)
+      query = sql.SQL("create role {} with {} password %s").format(
+        sql.Identifier(name),
+        sql.SQL(" ").join([sql.SQL(o) for o in options])
+      )
+      io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
+      cur.execute(query, (kwargs['password'],))
+    elif "expiration" in kwargs:
+      query = sql.SQL("create role {} with {} valid until %s").format(
+        sql.Identifier(name),
+        sql.SQL(" ").join([sql.SQL(o) for o in options])
+      )
+      io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
+      cur.execute(query, (kwargs['expiration'],))
+    else:
+      query = sql.SQL("create role {} with {}").format(
+        sql.Identifier(name),
+        sql.SQL(" ").join([sql.SQL(o) for o in options])
+      )
+      io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
+      cur.execute(query)
     return False if cur.rowcount == 0 else True
 
   try:
