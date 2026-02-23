@@ -42,13 +42,20 @@
 
 ## Current Item Color (cic)
 
-The `cic` echovar controls the color used when rendering items:
+The `cic` echovar is determined by a color table based on item state, used when rendering items:
 
-| State | Color |
-|-------|-------|
-| Disabled item | `{bggray}` |
-| Highlighted (current) | `{bgwhite}{black}` |
-| Normal (not highlighted) | `{normalcolor}` |
+```python
+cic = {
+    "disabled": "{bggray}",
+    "highlighted": "{bgwhite}{black}",
+    "normal": "{normalcolor}",
+}
+```
+
+When displaying each item:
+- If item is disabled: use `cic["disabled"]`
+- If item is highlighted (current): use `cic["highlighted"]`
+- Otherwise: use `cic["normal"]`
 
 ## Width Calculation
 
