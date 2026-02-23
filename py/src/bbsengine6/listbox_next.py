@@ -198,14 +198,22 @@ class Listbox:
             io.echo()
 
     def _handle_key_esc(self) -> Optional[ListboxResult]:
+        """Handle KEY_ESC - cancel selection and return cancelled result."""
         return ListboxResult("cancelled")
 
     def _handle_key_enter(self) -> Optional[ListboxResult]:
+        """Handle KEY_ENTER - select current item and return selected result."""
         if self.currentitem is not None and not self.currentitem.disabled:
             return ListboxResult("selected", self.currentitem)
         return False
 
     def _handle_key_up(self) -> Optional[ListboxResult]:
+        """Handle KEY_UP - move to previous enabled item.
+
+        If there is an item above, move cursor up and highlight it.
+        If on first item of page, wrap to previous page.
+        If already on first item of first page, ring bell and return None.
+        """
         page_items = self.fetchitems()
         prev_idx = self._get_prev_enabled_index(page_items, self._currentindex)
         if prev_idx != -1:
@@ -229,6 +237,12 @@ class Listbox:
             return None
 
     def _handle_key_down(self) -> Optional[ListboxResult]:
+        """Handle KEY_DOWN - move to next enabled item.
+
+        If there is an item below, move cursor down and highlight it.
+        If on last item of page, wrap to next page.
+        If already on last item of last page, ring bell and return None.
+        """
         page_items = self.fetchitems()
         next_idx = self._get_next_enabled_index(page_items, self._currentindex)
         if next_idx != -1:
@@ -252,6 +266,11 @@ class Listbox:
             return None
 
     def _handle_key_pageup(self) -> Optional[ListboxResult]:
+        """Handle KEY_PAGEUP - move to previous page.
+
+        If not on first page, decrement page and highlight first enabled item.
+        If already on first page, ring bell and return None.
+        """
         if self._curpage > 0:
             self._curpage -= 1
             page_items = self.fetchitems()
@@ -265,6 +284,11 @@ class Listbox:
             return None
 
     def _handle_key_pagedown(self) -> Optional[ListboxResult]:
+        """Handle KEY_PAGEDOWN - move to next page.
+
+        If not on last page, increment page and highlight first enabled item.
+        If already on last page, ring bell and return None.
+        """
         if self._curpage < self.numpages - 1:
             self._curpage += 1
             page_items = self.fetchitems()
@@ -278,6 +302,11 @@ class Listbox:
             return None
 
     def _handle_key_home(self) -> Optional[ListboxResult]:
+        """Handle KEY_HOME - jump to first enabled item on current page.
+
+        Moves highlight to the first enabled item on the current page.
+        If already on first enabled item, does nothing but still returns True.
+        """
         page_items = self.fetchitems()
         first_idx = self._get_first_enabled_index(page_items)
         if first_idx != -1 and self._currentindex != first_idx:
@@ -292,6 +321,11 @@ class Listbox:
         return True
 
     def _handle_key_end(self) -> Optional[ListboxResult]:
+        """Handle KEY_END - jump to last enabled item on current page.
+
+        Moves highlight to the last enabled item on the current page.
+        If already on last enabled item, does nothing but still returns True.
+        """
         page_items = self.fetchitems()
         last_idx = self._get_last_enabled_index(page_items)
         if last_idx != -1 and self._currentindex != last_idx:
