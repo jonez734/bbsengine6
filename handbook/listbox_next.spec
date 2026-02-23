@@ -6,7 +6,7 @@
 
 ## Architecture
 
-- **ListboxItem**: Represents a single selectable item in the list
+- **ListboxItem**: Represents a single item in the list; may be disabled (not selectable)
 - **Listbox**: Main widget class managing the item list, cursor position, pagination, and user interaction
 - **fetchitems()**: Returns items for current page (sliced from items passed to `__init__`); override in subclass for custom data sources
 
@@ -85,7 +85,7 @@ The border consists of a space, vertical line, space (3 chars on each side).
 
 Content height (not including borders) = itemsperpage × itemheight
 
-> **Note**: `listbox_next` is a UI widget component, not an Asimov module. It is exempt from the standard lifecycle functions (`detect`, `draw`, `init`, `buildargs`, `access`, `main`).
+> **Note**: `listbox_next` is a UI widget component, not a bbsengine6 module. It is exempt from the standard lifecycle functions (`detect`, `draw`, `init`, `buildargs`, `access`, `main`).
 
 ## Key Bindings
 
@@ -159,7 +159,6 @@ class Listbox:
 1. If there are no items to display:
    - Return `ListboxResult("noitems")`
 2. Display the listbox (title box + content area)
-2. Move cursor down one line using `{f6}`
 3. Show the prompt
 4. Echo `{savecursor}` to save cursor position
 5. Enter a loop:

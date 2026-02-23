@@ -131,27 +131,26 @@ class Listbox:
             io.setvar("cic", self.itemcolors["normal"])
 
         padded = item.content.ljust(self.contentwidth - 1)
-        io.echo(f"{{vline}} {padded} {{vline}} ", end="", flush=True)
+        io.echo(f"{{vline}} {padded} {{vline}} ")
 
     def _display_blank_line(self) -> None:
-        io.echo(f"{{vline}}{' ' * (self.contentwidth - 1)}{{vline}} ", end="", flush=True)
+        io.echo(f"{{vline}}{' ' * (self.contentwidth - 1)}{{vline}} ")
 
     def _display_title_box(self) -> None:
         hline = f"{{hline:{self.contentwidth + 4}}}"
-        io.echo(f"{{ulcorner}}{hline}{{urcorner}} ", end="", flush=True)
-        self._display_blank_line()
-        io.echo(f"{{vline}}{self.title.center(self.contentwidth - 1)}{{vline}} ", end="", flush=True)
-        self._display_blank_line()
-        hline = f"{{hline:{self.contentwidth + 4}}}"
-        io.echo(f"{{rtee}}{hline}{{ltee}} ", end="", flush=True)
+        io.echo(f"{{ulcorner}}{hline}{{urcorner}} ")
+        io.echo(f"{{vline}}{' ' * (self.contentwidth - 1)}{{vline}} ")
+        io.echo(f"{{vline}}{self.title.center(self.contentwidth - 1)}{{vline}} ")
+        io.echo(f"{{vline}}{' ' * (self.contentwidth - 1)}{{vline}} ")
+        io.echo(f"{{rtee}}{hline}{{ltee}} ")
 
     def _display_content_top(self) -> None:
         hline = f"{{hline:{self.contentwidth + 4}}}"
-        io.echo(f"{{ltee}}{hline}{{rtee}} ", end="", flush=True)
+        io.echo(f"{{ltee}}{hline}{{rtee}} ")
 
     def _display_content_bottom(self) -> None:
         hline = f"{{hline:{self.contentwidth + 4}}}"
-        io.echo(f"{{llcorner}}{hline}{{lrcorner}} ", end="", flush=True)
+        io.echo(f"{{llcorner}}{hline}{{lrcorner}} ")
 
     def _display(self) -> None:
         if self.title:
@@ -159,7 +158,7 @@ class Listbox:
             self._display_content_top()
         else:
             hline = f"{{hline:{self.contentwidth + 4}}}"
-            io.echo(f"{{ulcorner}}{hline}{{urcorner}} ", end="", flush=True)
+            io.echo(f"{{ulcorner}}{hline}{{urcorner}} ")
 
         page_items = self.fetchitems()
         for i in range(self.itemsperpage):
@@ -285,9 +284,8 @@ class Listbox:
             return ListboxResult("noitems")
 
         self._display()
-        io.echo("{f6}", end="", flush=True)
-        io.echo(prompt, end="", flush=True)
-        io.echo("{savecursor}", end="", flush=True)
+        io.echo(prompt)
+        io.echo("{savecursor}")
 
         while True:
             result = self.onkey(io.getch(self.GETCH_TIMEOUT))
