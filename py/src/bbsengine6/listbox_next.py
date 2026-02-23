@@ -144,7 +144,7 @@ class Listbox:
         io.echo(f"{{vline}}{' ' * (self.contentwidth - 1)}{{vline}} ")
         io.echo(f"{{rtee}}{hline}{{ltee}} ")
 
-    def _display_content_top(self) -> None:
+    def _display_middle_border(self) -> None:
         hline = f"{{hline:{self.contentwidth + 4}}}"
         io.echo(f"{{ltee}}{hline}{{rtee}} ")
 
@@ -155,7 +155,7 @@ class Listbox:
     def _display(self) -> None:
         if self.title:
             self._display_title_box()
-            self._display_content_top()
+            self._display_middle_border()
         else:
             hline = f"{{hline:{self.contentwidth + 4}}}"
             io.echo(f"{{ulcorner}}{hline}{{urcorner}} ")
