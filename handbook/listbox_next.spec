@@ -113,7 +113,7 @@ A `ListboxItem` may have `disabled=True`. Disabled items:
 ## Public API
 
 ```python
-from typing import Any, List, Optional
+from typing import Any, List, NamedTuple, Optional
 
 class ListboxItem:
     content: str
@@ -122,6 +122,10 @@ class ListboxItem:
     disabled: bool
     
     def handle_key(self, key: str) -> bool: ...
+
+class ListboxResult(NamedTuple):
+    item: Optional[ListboxItem]
+    status: str  # "selected" | "cancelled" | "noitems"
 
 class Listbox:
     def __init__(
@@ -143,22 +147,24 @@ class Listbox:
     
     def fetchitems(self) -> List[ListboxItem]: ...
     
-    def run(self, prompt: str = "listbox_next: ") -> Optional[ListboxItem]: ...
+    def run(self, prompt: str = "listbox_next: ") -> ListboxResult: ...
 
 ## run() Behavior
 
-1. Display the listbox (title box + content area)
+1. If there are no items to display:
+   - Return `ListboxResult(None, "noitems")`
+2. Display the listbox (title box + content area)
 2. Move cursor down one line using `{f6}`
 3. Show the prompt
 4. Echo `{savecursor}` to save cursor position
 5. Enter a loop that waits for key presses using `io.getch()` with `GETCH_TIMEOUT` (0.25s) timeout and processes them:
-   - `KEY_ESC`: Exit the loop (returns `None`)
+   - `KEY_ESC`: Exit the loop, return `ListboxResult(None, "cancelled")`
    - `KEY_ENTER`:
      - If current item is not disabled:
        - Echo `{restorecursor}` to restore cursor position
-       - Return the current item
-   - If current item is disabled:
-     - Output `{BEL}` to signal error, keep current item highlighted
+       - Return `ListboxResult(currentitem, "selected")`
+     - Else (disabled):
+       - Output `{BEL}` to signal error, keep current item highlighted
     - `KEY_UP`: 
       - If there is an item above the current highlight:
         - Redraw the current item as non-highlighted
