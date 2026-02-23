@@ -131,11 +131,11 @@ class Listbox:
         else:
             io.setvar("cic", self.itemcolors["normal"])
 
-        padded = item.content.ljust(self.contentwidth - 1)
+        padded = item.content.ljust(self.contentwidth - 3)
         io.echo(f" {{vline}}{padded} {{vline}}")
 
     def _display_blank_line(self) -> None:
-        io.echo(f" {{vline}}{' ' * (self.contentwidth - 1)}{{vline}}")
+        io.echo(f" {{vline}}{' ' * (self.contentwidth - 3)}{{vline}}")
 
     def _display_title_box(self) -> None:
         io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")

@@ -85,7 +85,7 @@ The border consists of a space, vertical line, space (3 chars on each side).
 
 - **Content area** (below middle border or top border):
   - Lines 1-n: items (`itemsperpage` lines, each item has `itemheight` rows)
-  - If fewer items than `itemsperpage`, pad with blank lines using `f" {{vline}}{' '*(contentwidth-1)}{{vline}}"`
+  - If fewer items than `itemsperpage`, pad with blank lines using `f" {{vline}}{' '*(contentwidth-3)}{{vline}}"`
 
 - **Bottom border**: `_display_bottom_border()`
   - Uses `{llcorner}` and `{lrcorner}`: `f" {{llcorner}}{hline}{{lrcorner}}"`
