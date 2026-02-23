@@ -21,6 +21,8 @@ def main(args):
 
     io.setvar("itemcolor", "{blue}{bglightgray}")
     io.setvar("currentitemcolor", "{bgwhite}{black}")
+    io.setvar("normalcolor", "{blue}{bglightgray}")
+    io.setvar("cic", "{blue}{bglightgray}")
 
     screen.init()
 
