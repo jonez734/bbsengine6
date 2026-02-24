@@ -186,7 +186,7 @@ class Listbox:
 
     def onkey(self, ch: Optional[str]) -> Optional[ListboxResult] | bool: ...
 
-    def run(self, prompt: str = "listbox_next: ") -> ListboxResult: ...
+    def run(self, prompt: str) -> ListboxResult: ...
 
     key_handlers: dict[str, Callable[[], Optional[ListboxResult]]]
 
@@ -210,9 +210,9 @@ Each standard key has a corresponding private handler method:
 ## run() Behavior
 
 1. If there are no items to display:
-   - Return `ListboxResult("noitems")`
+    - Return `ListboxResult("noitems")`
 2. Display the listbox (title box + content area)
-3. Show the prompt
+3. Show the prompt (REQUIRED - must be passed as positional argument)
 4. Echo `{savecursor}` to save cursor position
 5. Enter a loop:
    ```

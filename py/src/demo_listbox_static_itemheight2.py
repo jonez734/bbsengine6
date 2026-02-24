@@ -11,21 +11,21 @@ def buildargs():
 
 def handle_e(listbox):
     item = listbox.currentitem
-    io.echo("{restorecursor}", end="", flush=True)
+    io.echo(f"{{restorecursor}}", end="", flush=True)
     io.echo(f"{{labelcolor}}Item: {{valuecolor}}{item.content}{{/all}}\n")
     io.echo(f"{{labelcolor}}pk: {{valuecolor}}{item.pk}{{/all}}\n")
     io.echo(f"{{labelcolor}}data: {{valuecolor}}{item.data}{{/all}}\n")
-    io.echo("Press any key to continue...")
+    io.echo(f"Press any key to continue...")
     io.getch(30)
     listbox._display()
-    io.echo("listbox_next: ", end="", flush=True)
-    io.echo("{savecursor}", end="", flush=True)
+    io.echo(f"listbox_next: ", end="", flush=True)
+    io.echo(f"{{savecursor}}", end="", flush=True)
     cursor_up = listbox._cursor_moves_to_item(listbox.currentindex)
     io.echo(f"{{cha}}{{cursorup:{cursor_up}}}", end="", flush=True)
     page_items = listbox.fetchitems()
     if listbox.currentindex < len(page_items):
         listbox._display_item(page_items[listbox.currentindex], highlighted=True)
-    io.echo("{restorecursor}", end="", flush=True)
+    io.echo(f"{{restorecursor}}", end="", flush=True)
     return True
 
 
@@ -46,6 +46,8 @@ def main(args):
     io.setvar("labelcolor", "{yellow}")
     io.setvar("valuecolor", "{cyan}")
 
+    prompt = "projmon: "
+
     screen.init()
 
     nato = ["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india", "juliet", "kilo", "lima", "mike", "november", "oscar", "papa", "quebec", "romeo", "sierra", "tango", "uniform", "victor", "whiskey", "xray", "yankee", "zulu"]
@@ -62,21 +64,21 @@ def main(args):
         args,
         title="Demo Listbox Itemheight=3",
         itemsperpage=5,
-        itemheight=3,
+        itemheight=2,
         items=items,
         custom_keys={"e": custom_e},
     )
 
-    result = lb.run()
+    result = lb.run(prompt)
 
     if result is None:
-        io.echo("{restorecursor}listbox_next.run() returned None")
+        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}listbox_next.run() returned None")
     elif result.status == "noitems":
-        io.echo("{restorecursor}no items")
+        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}no items")
     elif result.status == "cancelled":
-        io.echo("{restorecursor}cancelled")
-    elif result.status == "selected":
-        io.echo(f"{{restorecursor}}selected: {result.item.content} (pk={result.item.pk})")
+        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled")
+    elif result.status == "selected" and result.item is not None:
+        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}{result.item.content} (pk={result.item.pk})")
 
 
 if __name__ == "__main__":

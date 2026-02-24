@@ -212,7 +212,7 @@ class Listbox:
     def _position_from_prompt(self, item_index: int) -> None:
         """Position cursor from prompt line to item at item_index on page."""
         lines_up = 1 + (self.itemsperpage - item_index) * self.itemheight
-        io.echo(f"{{cursorup:{lines_up}}}{{cha}}", end="", flush=True)
+        io.echo(f"{{cha}}{{cursorup:{lines_up}}}", end="", flush=True)
 
     def _handle_key_esc(self) -> Optional[ListboxResult]:
         """Handle KEY_ESC - cancel selection and return cancelled result."""
@@ -419,12 +419,12 @@ class Listbox:
     def _cursor_moves_to_item(self, item: int) -> int:
         return (self.itemsperpage - item) * self.itemheight + 1
 
-    def run(self, prompt: str = "listbox_next: ") -> ListboxResult:
+    def run(self, prompt: str) -> ListboxResult:
         if not self.items:
             return ListboxResult("noitems")
 
         self._display()
-        io.echo(f"{{savecursor}}{prompt}{{cha}}", end="", flush=True)
+        io.echo(f"{prompt}{{savecursor}}", end="", flush=True)
 
         cursor_up = self._cursor_moves_to_item(self._currentindex)
         logentry(f"{cursor_up=}", level="debug")

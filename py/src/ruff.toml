@@ -1,0 +1,6 @@
+# Ruff configuration for bbsengine6
+
+[lint]
+# F541: f-string without any placeholders - we use f-strings for io.echo() calls
+# to support echo commands like {restorecursor}, {savecursor}, etc.
+ignore = ["F541"]

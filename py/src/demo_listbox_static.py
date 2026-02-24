@@ -46,6 +46,8 @@ def main(args):
     io.setvar("labelcolor", "{yellow}")
     io.setvar("valuecolor", "{cyan}")
 
+    prompt = "projmon: "
+
     screen.init()
 
     items = []
@@ -64,16 +66,16 @@ def main(args):
         custom_keys={"e": custom_e},
     )
 
-    result = lb.run()
+    result = lb.run(prompt)
 
     if result is None:
-        io.echo("{restorecursor}listbox_next.run() returned None")
+        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}listbox_next.run() returned None")
     elif result.status == "noitems":
-        io.echo("{restorecursor}no items")
+        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}no items")
     elif result.status == "cancelled":
-        io.echo("{restorecursor}cancelled")
-    elif result.status == "selected":
-        io.echo(f"{{restorecursor}}selected: {result.item.content} (pk={result.item.pk})")
+        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled")
+    elif result.status == "selected" and result.item is not None:
+        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}{result.item.content} (pk={result.item.pk})")
 
 
 if __name__ == "__main__":
