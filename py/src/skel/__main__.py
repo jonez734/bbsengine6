@@ -1,11 +1,20 @@
 import time
 import locale
+import sys
 
 from bbsengine6 import io, screen, session
 from . import lib
 
 parser = lib.buildargs()
-args = parser.parse_args() if parser is not None else None
+
+# Handle --help/--h without exiting (return to menu)
+if "--help" in sys.argv or "-h" in sys.argv:
+    if parser is not None:
+        parser.print_help()
+    # Don't call sys.exit() - let flow continue to menu
+    args = None
+else:
+    args = parser.parse_args() if parser is not None else None
 
 session.start(args)
 

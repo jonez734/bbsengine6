@@ -1,3 +1,10 @@
+"""
+Approve pending member applications.
+
+Allows sysops to review and approve member applications that are pending approval.
+Requires SYSOP flag to access this module.
+"""
+
 from bbsengine6 import util, member, database, io
 
 def init(args, **kw:dict) -> bool:

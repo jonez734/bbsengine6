@@ -1,3 +1,10 @@
+"""
+Check and initialize database roles for BBS engine.
+
+Verifies that all required PostgreSQL roles exist (web, sysop, term)
+and creates them if necessary with appropriate permissions for system operation.
+"""
+
 from bbsengine6 import database, io
 
 def init(args, **kwargs):

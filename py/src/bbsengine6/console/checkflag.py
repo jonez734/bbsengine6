@@ -1,3 +1,10 @@
+"""
+Verify and initialize system flags.
+
+Validates that all required system flags and configuration flags exist
+in the database with correct default values.
+"""
+
 import psycopg
 from bbsengine6 import io, database
 
@@ -18,7 +25,7 @@ def main(args, **kwargs):
     io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}engine.flag: ", end="")
     if database.classexists(args, "engine.flag", conn=conn, **kwargs) is False:
         io.echo("import ", end="")
-        if database.importsql(args, lib.SQLDIR, "flag.sql", conn=conn, **kwargs) is False:
+        if database.importsql(args, "flag.sql", conn=conn, **kwargs) is False:
             failcount += 1
             conn.rollback()
             io.echo(" fail ", level="error")
@@ -32,7 +39,7 @@ def main(args, **kwargs):
     io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}engine.map_member_flag: ", end="")
     if database.classexists(args, "engine.map_member_flag", conn=conn) is False:
         io.echo("import ", end="")
-        if database.importsql(args, lib.SQLDIR, "map_member_flag.sql", conn=conn) is False:
+        if database.importsql(args, "map_member_flag.sql", conn=conn) is False:
             io.echo(" fail ", level="error")
             failcount += 1
         else:
@@ -52,7 +59,7 @@ def main(args, **kwargs):
             count = cur.fetchone()["count"]
             if count == 0:
                 io.echo("import ", end="")
-                if database.importsql(args, lib.SQLDIR, "flagdata.sql", conn=conn) is False:
+                if database.importsql(args, "flagdata.sql", conn=conn) is False:
                     failcount += 1
                     io.echo("fail", level="error")
                 else:

@@ -1,3 +1,10 @@
+"""
+Verify and install required PostgreSQL extensions.
+
+Checks for and installs required PostgreSQL extensions (uuid-ossp, etc.)
+needed for the BBS engine to function properly.
+"""
+
 import psycopg
 from bbsengine6 import io, database, util
 

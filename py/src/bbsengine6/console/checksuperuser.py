@@ -1,3 +1,10 @@
+"""
+Verify database superuser permissions and role existence.
+
+Checks that the current user (based on login ID) exists as a database role
+with appropriate superuser permissions for BBS engine initialization.
+"""
+
 from bbsengine6 import io, database, util
 
 from . import lib

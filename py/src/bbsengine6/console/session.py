@@ -1,3 +1,10 @@
+"""
+Display and manage active system sessions.
+
+Shows information about currently active user sessions, including
+login times, idle times, and IP addresses.
+"""
+
 import time
 import dateutil.tz
 

@@ -1,3 +1,10 @@
+"""
+Verify and initialize database functions (stored procedures).
+
+Creates and validates all required PostgreSQL stored procedures and functions
+that implement the business logic for the BBS engine.
+"""
+
 import psycopg
 from bbsengine6 import io, database, util
 
@@ -18,9 +25,9 @@ def main(args, **kwargs):
   conn = kwargs.get("conn", None)
   def _work(conn):
     if stage == 0:
-      funcs = ("public.get_role_privs", "public.manage_secondary_role", "public.manage_role_privs")
+      funcs = ("public.get_role_privs", "public.manage_secondary_role", "public.manage_role_privs", "public.manage_database_priv", "public.manage_schema_priv")
     else:
-      funcs = ("engine.getflags",)
+      funcs = ("engine.getflags", "engine.checkflag")
     io.echo(f"{stage=} {funcs=}", level="debug")
     for f in funcs:
       io.echo(f"{{var:labelcolor}}function {{var:valuecolor}}{f}{{var:labelcolor}}: {{var:valuecolor}}", end="")
@@ -30,14 +37,14 @@ def main(args, **kwargs):
         f = f.replace("public.", "")
         if not f.endswith(".sql"):
           f += ".sql"
-        if database.importsql(args, lib.SQLDIR, f, **kwargs) is False:
+        if database.importsql(args, f, **kwargs) is False:
           io.echo("fail", level="error")
           conn.rollback()
         else:
           io.echo("ok", level="ok")
           conn.commit()
       else:
-        io.echo("ok", level="ok")
+        io.echo("exists", level="ok")
     return True
   
   return _work(conn)

@@ -6,10 +6,27 @@ from typing import get_type_hints, Callable
 
 from . import io
 
+# @since 20260223 - Help handling support
+def _is_help_request(argv: list) -> bool:
+    """Check if argv contains --help or -h"""
+    return "--help" in argv or "-h" in argv
+
+def _create_help_from_docstring(module) -> object:
+    """Create argparse parser from module docstring for help display"""
+    if not hasattr(module, '__doc__') or not module.__doc__:
+        return None
+    
+    parser = argparse.ArgumentParser(
+        description=module.__doc__.strip(),
+        add_help=True
+    )
+    return parser
+
 # @since 20251128
 def _check_params(func_name: str, params: dict, required: list, optional_kwargs: bool = False):
     """
-    Helper to check for required parameters by name.
+    Helper to check for required parameters by name (e.g., 'args', 'op')
+    and the presence of a keyword argument catcher ('kw' or 'kwargs').
     Returns True on success, False on failure.
     """
     for p in required:
@@ -17,21 +34,22 @@ def _check_params(func_name: str, params: dict, required: list, optional_kwargs:
             io.echo(f"missing '{p}' from {func_name}()", level="error")
             return False
 
+    # Check for keyword arguments catcher ('kw' or 'kwargs') unless optional_kwargs is True
     if not optional_kwargs and "kw" not in params and "kwargs" not in params:
         io.echo(f"missing 'keyword args' in {func_name}()", level="error")
         return False
     return True
 
 # @since 20220826
-def check(args, modulename, op="run", **kw):
+def check(args, modulename, op="run", **kwargs):
   debug = args.debug if args is not None and args.debug is True else False
-  silent = kw.get("silent", True)
+  silent = kwargs.get("silent", True)
 
-  # --- Module Import and Reload ---
+  # --- Module Import and Reload (Reloading is now conditional on debug) ---
   if modulename in sys.modules:
     if debug is True:
       io.echo(f"{modulename=} is in sys.modules. reloading.", level="debug")
-    importlib.reload(sys.modules[modulename])
+      importlib.reload(sys.modules[modulename])
 
   if debug is True:
     io.echo(f"bbsengine.module.check.120: {modulename=}", level="debug")
@@ -50,7 +68,11 @@ def check(args, modulename, op="run", **kw):
   if debug is True:
     io.echo(f"bbsengine6.module.check.100: {type(m)=} {m=}", level="debug")
 
-  # --- Check init() (Required) ---
+  # -----------------------------------------------
+  # --- 1. Check Existence and Callability (REQUIRED FUNCTIONS) ---
+  # -----------------------------------------------
+
+  # --- Check init() ---
   if hasattr(m, "init") is False:
     if debug is True:
       io.echo("no init function", level="warn")
@@ -59,7 +81,7 @@ def check(args, modulename, op="run", **kw):
     io.echo("init function is not callable", level="error")
     return False
 
-  # --- Check access() (Required) ---
+  # --- Check access() ---
   if hasattr(m, "access") is False:
     if debug is True:
       io.echo("no access function", level="error")
@@ -69,34 +91,27 @@ def check(args, modulename, op="run", **kw):
     return False
 
   try:
-    if m.access(args, op, **kw) is True:
-      io.echo("access check passed", level="debug")
+    # Use **kwargs here instead of **kw
+    if m.access(args, op, **kwargs) is True:
+      if silent is False:
+        io.echo("access check passed", level="debug")
     else:
       if silent is False:
         io.echo("access check failed", level="error")
       return False
   except Exception as e:
-    import traceback
-    traceback.print_exc(file=sys.stdout)
-    io.echo("call to access function failed", level="error")
-    return False
+    io.echo_traceback(f"module.check error: {e}")
+    return None
 
-  # --- Check buildargs() (Optional) ---
+  # --- Check buildargs() (REQUIRED) ---
   if hasattr(m, "buildargs") is False:
-    if debug is True:
-      io.echo("no callable buildargs function", level="debug")
-    # Do not return False, buildargs is optional
-  elif callable(m.buildargs) is False:
+    io.echo("no buildargs function found (required)", level="error")
+    return False
+  if callable(m.buildargs) is False:
     io.echo("buildargs function is not callable", level="error")
     return False
 
-  if debug is True:
-    if hasattr(m, "main"):
-      io.echo(f"module has main attribute {type(m)=} {type(m.main)=}", level="debug")
-    if callable(m.main):
-      io.echo("main attribute is callable", level="debug")
-
-  # --- Check main() (Required) ---
+  # --- Check main() ---
   if hasattr(m, "main") is False:
     io.echo("no working main function", level="error")
     return False
@@ -107,7 +122,11 @@ def check(args, modulename, op="run", **kw):
   if debug is True:
     io.echo("checking signatures", level="debug")
 
-  # --- Setup Functions for Signature Check ---
+  # -----------------------------------------------
+  # --- 2. Setup and Check Signatures ---
+  # -----------------------------------------------
+
+  # All core functions are required and verified as callable.
   functions_to_check = ["init", "access", "buildargs", "main"]
 
   # Check for optional version()
@@ -117,22 +136,15 @@ def check(args, modulename, op="run", **kw):
       return False
     functions_to_check.append("version")
 
-  # --- Parameter Signature Check ---
+  # --- Parameter Signature Check Loop ---
   for f in functions_to_check:
-    # Skip buildargs if it wasn't found (since it's optional)
-    if f == "buildargs" and not hasattr(m, "buildargs"):
-        continue
-
-    # Skip version if it wasn't found (since it's optional)
-    if f == "version" and not hasattr(m, "version"):
-        continue
-
     sig = inspect.signature(eval(f"m.{f}"))
     params = sig.parameters
 
     if args.debug is True:
       io.echo(f"{sig=} {params=}", level="debug")
 
+    # Define required parameters for the helper
     required_params = ["args"]
     if f == "access":
       required_params.append("op")
@@ -236,6 +248,24 @@ def run(args, modulename, **kwargs):
     argv = kwargs["argv"] if "argv" in kwargs else []
     if debug is True:
       io.echo(f"bbsengine6.module.run.120: {argv=}", level="debug")
+    
+    # Check for help request BEFORE calling buildargs
+    if _is_help_request(argv):
+      prgargparser = runcallback(args, f"{modulename}.buildargs", **kwargs)
+      
+      if prgargparser is not None:
+        prgargparser.print_help()
+      else:
+        # Auto-generate help from module docstring
+        m = load(args, modulename)
+        fallback_parser = _create_help_from_docstring(m)
+        if fallback_parser:
+          fallback_parser.print_help()
+        else:
+          io.echo(f"Help for {modulename}: No documentation available", level="info")
+      
+      return True  # Help is success, not error
+    
     prgargparser = runcallback(args, f"{modulename}.buildargs", **kwargs)
 
     if debug is True:
@@ -248,8 +278,9 @@ def run(args, modulename, **kwargs):
         if debug is True:
           io.echo(f"bbsengine6.module.run.140: {prgargs=} {argv=}", level="debug")
 #        prgargs = [s.strip() for s in prgargs]
-      except SystemExit:
-        return False
+      except SystemExit as e:
+        # Exit code 0 = help or success, non-zero = error
+        return e.code == 0 if hasattr(e, 'code') else False
       except argparse.ArgumentError:
         io.echo("argument error", level="error")
         return False
@@ -274,7 +305,6 @@ runmodule = run
 #  if args.debug is True:
 #    io.echo("bbsengine6.module.runsubmodule.100: trace", level="debug")
 #  return runmodule(args, module, **kw)
-
 
 # @since 20250316
 def validate_function(module_name: str, func_name: str, required_signature: Callable):

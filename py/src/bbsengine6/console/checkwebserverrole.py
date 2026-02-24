@@ -1,3 +1,10 @@
+"""
+Verify web server database role exists.
+
+Checks that the www-data database role exists (used by PHP/web interface)
+and creates it if necessary with appropriate permissions.
+"""
+
 from bbsengine6 import database, io
 
 def init(args, **kwargs):

@@ -18,7 +18,7 @@ def buildargs(args=None, **kwargs):
 # @since 20230523
 def runmodule(args, submodule, **kwargs):
 #  io.echo(f"con.lib.runmodule.100: {kwargs=}", level="debug")
-  return module.runmodule(args, f"con.{submodule}", **kwargs)
+  return module.runmodule(args, f"bbsengine6.console.{submodule}", **kwargs)
 
 # @since 20230523 copied from teos
 def setbottombar(args, left, **kwargs):
@@ -56,3 +56,75 @@ def checkschema(args, **kwargs):
 
 def checkflag(args, **kwargs):
   return runmodule(args, "checkflag", **kwargs)
+
+def checkwebserverrole(args, **kwargs):
+   return runmodule(args, "checkwebserverrole", **kwargs)
+
+# @since 20260223 - Argparse subcommand support
+def build_subcommand_parser(parser=None, **kwargs):
+    """
+    Create or extend parser with subcommands for console modules.
+    Uses argparse subparsers to add member, session, etc. as subcommands.
+    
+    Args:
+        parser: Optional existing parser to extend
+        
+    Returns:
+        tuple: (parser, subparsers)
+    """
+    if parser is None:
+        parser = argparse.ArgumentParser(
+            prog="zoidoffice",
+            description="BBS Engine 6 Console - Manage your BBS system",
+            add_help=True
+        )
+        parser.add_argument("--verbose", action="store_true", dest="verbose")
+        parser.add_argument("--debug", action="store_true", dest="debug")
+        
+        defaults = {
+            "databasename": "zoid6",
+            "databasehost": "localhost",
+            "databaseuser": None,
+            "databaseport": 5432,
+            "databasepassword": None
+        }
+        database.buildargs(parser, defaults)
+    
+    # Create subparsers for module commands
+    subparsers = parser.add_subparsers(
+        dest='subcommand',
+        help='Available modules'
+    )
+    
+    # Define subcommands explicitly
+    subcommands = {
+        'member': 'Manage BBS members',
+        'session': 'Manage active sessions',
+        'memberapproval': 'Approve new member applications'
+    }
+    
+    for cmd_name, cmd_help in subcommands.items():
+        subparsers.add_parser(cmd_name, help=cmd_help, add_help=True)
+    
+    return parser, subparsers
+
+def handle_subcommand(args, subcommand, **kwargs):
+    """
+    Route to appropriate module based on subcommand.
+    
+    Args:
+        args: Parsed arguments namespace
+        subcommand: Name of subcommand (module) to run
+        
+    Returns:
+        bool: True if successful, False on error
+    """
+    if subcommand == 'member':
+        return runmodule(args, 'member', **kwargs)
+    elif subcommand == 'session':
+        return runmodule(args, 'session', **kwargs)
+    elif subcommand == 'memberapproval':
+        return runmodule(args, 'memberapproval', **kwargs)
+    else:
+        io.echo(f"Unknown subcommand: {subcommand}", level="error")
+        return False

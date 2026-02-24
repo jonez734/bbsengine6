@@ -1,3 +1,9 @@
+"""
+Verify and initialize database schema.
+
+Creates and validates the database schema including all necessary tables,
+indexes, and constraints required for BBS engine operations.
+"""
 
 from bbsengine6 import io, database
 
@@ -17,7 +23,7 @@ def main(args, **kwargs):
     conn = kwargs.get("conn", None)
     if database.schemaexists(args, "engine", conn=conn) is False:
       io.echo("import ", end="")
-      res = database.importsql(args, lib.SQLDIR, "schema.sql", conn=conn)
+      res = database.importsql(args, "schema.sql", conn=conn)
       if res is False:
           io.echo("fail", level="error")
           return False
@@ -26,4 +32,19 @@ def main(args, **kwargs):
         return True
     else:
       io.echo(" ok ", level="ok")
-    return None
+
+    failcount = 0
+    io.echo(f"{{var:labelcolor}}schema {{var:valuecolor}}engine {{var:labelcolor}}privs: ", end="")
+    for r in ("web", "term", "sysop"):
+      if database.manage_schema_priv(args, "grant", "usage", "engine", r, **kwargs) is False:
+        io.echo(f"fail", level="error")
+        failcount += 1
+      else:
+        io.echo(f" ok ", level="ok")
+
+    if failcount == 0:
+      conn.commit()
+      return True
+    else:
+      conn.rollback()
+      return False
