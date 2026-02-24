@@ -1035,6 +1035,9 @@ def cursorback(count: int = 1)
 def home() 
   -> None
   "Move cursor to top-left (HOME)"
+
+**Echo Inline Commands:**
+- `{cha}` or `{cha:N}` - Cursor horizontal absolute (move to column N, default 1)
 ```
 
 **Screen Control:**
