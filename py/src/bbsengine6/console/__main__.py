@@ -8,8 +8,9 @@ if __name__ == "__main__":
     # Build parser with subcommands
     parser, subparsers = lib.build_subcommand_parser()
     
-    # Parse arguments
-    args = parser.parse_args()
+    # Parse arguments - use parse_known_args to separate subcommand from its args
+    # This allows modules to receive their own arguments after the subcommand name
+    args, remaining_argv = parser.parse_known_args()
     
     screen.init()
     lib.setbottombar(args, "con")
@@ -17,8 +18,8 @@ if __name__ == "__main__":
     try:
         # Route based on subcommand
         if args.subcommand:
-            # Subcommand specified: run that module
-            if lib.handle_subcommand(args, args.subcommand) is False:
+            # Subcommand specified: run that module with remaining args
+            if lib.handle_subcommand(args, args.subcommand, argv=remaining_argv) is False:
                 io.echo(f"error running module {args.subcommand}", level="error")
                 # Return to menu instead of exit
         else:

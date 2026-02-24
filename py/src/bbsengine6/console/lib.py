@@ -108,6 +108,52 @@ def build_subcommand_parser(parser=None, **kwargs):
     
     return parser, subparsers
 
+# ============================================================================
+# Module-Specific Arguments Pattern
+# ============================================================================
+"""
+To add custom arguments to a module, define buildargs() that returns
+an ArgumentParser with your custom arguments.
+
+Example module (bbsengine6/console/mytest.py):
+
+    import argparse
+    
+    def init(args, **kwargs):
+        return True
+    
+    def buildargs(args, **kwargs):
+        '''My test module - does something useful'''
+        parser = argparse.ArgumentParser(description=__doc__)
+        
+        # Add module-specific arguments
+        parser.add_argument('--filter', choices=['all', 'active', 'sysop'],
+                          help='Filter results by type')
+        parser.add_argument('--verbose', action='store_true',
+                          help='Show detailed output')
+        
+        return parser
+    
+    def access(args, op, **kwargs):
+        return True
+    
+    def main(args, **kwargs):
+        # Access custom arguments via args.filter, args.verbose
+        filter_type = getattr(args, 'filter', 'all')
+        verbose = getattr(args, 'verbose', False)
+        
+        if verbose:
+            print(f"Running with filter: {filter_type}")
+        
+        # ... module logic
+    
+    # Usage:
+    # zoidoffice mytest --filter sysop --verbose
+    # zoidoffice mytest --help  # Shows custom --filter and --verbose args
+
+Modules that don't define custom arguments will work as before.
+"""
+
 def handle_subcommand(args, subcommand, **kwargs):
     """
     Route to appropriate module based on subcommand.
@@ -115,6 +161,10 @@ def handle_subcommand(args, subcommand, **kwargs):
     Args:
         args: Parsed arguments namespace
         subcommand: Name of subcommand (module) to run
+        argv: Optional list of arguments to pass to the module's buildargs()
+              These are the arguments that come AFTER the subcommand name.
+              Example: "zoidoffice member --filter sysop" 
+              → subcommand="member", argv=["--filter", "sysop"]
         
     Returns:
         bool: True if successful, False on error

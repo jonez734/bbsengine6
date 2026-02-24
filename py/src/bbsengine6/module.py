@@ -273,8 +273,10 @@ def run(args, modulename, **kwargs):
 
     if prgargparser is not None:
       try:
-        argv = [a.strip() for a in argv[1:]]
-        prgargs = prgargparser.parse_args(argv) # argv[1:])
+        # argv already doesn't include subcommand name (extracted by console/__main__.py)
+        # Just clean up whitespace
+        argv = [a.strip() for a in argv] if argv else []
+        prgargs = prgargparser.parse_args(argv)
         if debug is True:
           io.echo(f"bbsengine6.module.run.140: {prgargs=} {argv=}", level="debug")
 #        prgargs = [s.strip() for s in prgargs]
