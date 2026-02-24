@@ -36,7 +36,7 @@
 |-------|------|---------|-------------|
 | itemsperpage | int | 20 | Number of items (disabled or otherwise) visible per page |
 | itemheight | int | 1 | Uniform height of each item in rows |
-| BORDER_WIDTH | int | 4 | Horizontal border padding |
+| CONTENT_PADDING | int | 4 | Horizontal padding for item content (accounts for left/right borders) |
 | title | str | "" | Title displayed at top of widget |
 | GETCH_TIMEOUT | float | 0.25 | Key input timeout in seconds |
 | idle | Optional[Callable[[], Optional[ListboxResult] | bool]] | None | Optional callback called when the key loop times out (getch returns None). Can return ListboxResult to exit, False to ring bell, or None/True to continue |
@@ -102,10 +102,10 @@ The border consists of a space, vertical line, space (3 chars on each side).
   - Uses `{ulcorner}` and `{urcorner}`: `f" {{ulcorner}}{hline}{{urcorner}}"`
 
 - **Content area** (below middle border or top border):
-  - Lines 1-n: items (`itemsperpage` lines, each item has `itemheight` rows)
-  - Item display uses `{cic}` for color, `{/all}` before right border
-  - When highlighted, item is drawn with `end=""` to keep cursor on same line
-  - If fewer items than `itemsperpage`, pad with blank lines using `f" {{vline}} {' '*(contentwidth-4)} {{vline}}"`
+   - Lines 1-n: items (`itemsperpage` lines, each item has `itemheight` rows)
+   - Item display uses `{cic}` for color, `{/all}` before right border
+   - When highlighted, item is drawn with `end=""` to keep cursor on same line
+   - If fewer items than `itemsperpage`, pad with blank lines using `f" {{vline}} {' '*(contentwidth-CONTENT_PADDING)} {{vline}}"`
 
 - **Bottom border**: `_display_bottom_border()`
   - Uses `{llcorner}` and `{lrcorner}`: `f" {{llcorner}}{hline}{{lrcorner}}"`
