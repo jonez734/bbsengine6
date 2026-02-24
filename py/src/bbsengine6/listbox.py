@@ -294,7 +294,7 @@ class Listbox:
         """Handle KEY_PAGEUP - move to previous page.
 
         If not on first page, decrement page and highlight first enabled item.
-        If already on first page, ring bell and return None.
+        If already on first page, jump to first item on page.
         """
         if self._curpage > 0:
             self._curpage -= 1
@@ -309,14 +309,22 @@ class Listbox:
             self._display_item(page_items[self._currentindex], highlighted=True)
             return True
         else:
-            io.echo("{BEL}", end="", flush=True)
-            return None
+            page_items = self.fetchitems()
+            first_idx = self._get_first_enabled_index(page_items)
+            if first_idx != -1 and self._currentindex != first_idx:
+                self._currentindex = first_idx
+                io.echo("{restorecursor}", end="", flush=True)
+                self._redraw_content_area()
+                io.echo("{restorecursor}", end="", flush=True)
+                self._position_from_prompt(self._currentindex)
+                self._display_item(page_items[self._currentindex], highlighted=True)
+            return True
 
     def _handle_key_pagedown(self) -> Optional[ListboxResult]:
         """Handle KEY_PAGEDOWN - move to next page.
 
         If not on last page, increment page and highlight first enabled item.
-        If already on last page, ring bell and return None.
+        If already on last page, jump to last item on page.
         """
         if self._curpage < self.numpages - 1:
             self._curpage += 1
@@ -331,8 +339,18 @@ class Listbox:
             self._display_item(page_items[self._currentindex], highlighted=True)
             return True
         else:
-            io.echo("{BEL}", end="", flush=True)
-            return None
+            page_items = self.fetchitems()
+            last_idx = self._get_last_enabled_index(page_items)
+            if last_idx != -1 and self._currentindex != last_idx:
+                self._currentindex = last_idx
+                io.echo("{restorecursor}", end="", flush=True)
+                self._redraw_content_area()
+                io.echo("{restorecursor}", end="", flush=True)
+                self._position_from_prompt(self._currentindex)
+                self._display_item(page_items[self._currentindex], highlighted=True)
+            else:
+                io.echo("{BEL}", end="", flush=True)
+            return True
 
     def _handle_key_home(self) -> Optional[ListboxResult]:
         """Handle KEY_HOME - jump to first enabled item on current page.
