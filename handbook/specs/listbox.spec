@@ -36,9 +36,13 @@
 |-------|------|---------|-------------|
 | itemsperpage | int | 20 | Number of items (disabled or otherwise) visible per page |
 | itemheight | int | 1 | Uniform height of each item in rows |
-| CONTENT_PADDING | int | 4 | Horizontal padding for item content (accounts for left/right borders) |
-| title | str | "" | Title displayed at top of widget |
 | GETCH_TIMEOUT | float | 0.25 | Key input timeout in seconds |
+| BOTTOM_BORDER_HEIGHT | int | 1 | Height of bottom border line |
+| CONTENT_PADDING | int | 4 | Horizontal padding for item content (accounts for left/right borders) |
+| BORDER_WIDTH_LEFT | int | 3 | Width of left border padding |
+| BORDER_WIDTH_RIGHT | int | 3 | Width of right border padding |
+| BORDER_LINE_WIDTH | int | 2 | Width reduction for border lines (space + vline on each side) |
+| title | str | "" | Title displayed at top of widget |
 | idle | Optional[Callable[[], Optional[ListboxResult] | bool]] | None | Optional callback called when the key loop times out (getch returns None). Can return ListboxResult to exit, False to ring bell, or None/True to continue |
 | custom_keys | Optional[dict[str, Callable[[], Optional[ListboxResult]]]] | None | Dict mapping key names (e.g., "KEY_INSERT", "KEY_DELETE") to callbacks. These are merged into `key_handlers` dict. Callback returns None to continue, or a ListboxResult to exit. Can also override standard keys (e.g., "KEY_UP", "KEY_DOWN") |
 
@@ -79,21 +83,22 @@ When displaying each item:
 ## Width Calculation
 
 - `terminalwidth` = `terminal.width()`
-- `contentwidth` = `terminal.width() - 3*2` (does not include borders)
-- `totalwidth` = `contentwidth + 6` (content + left border + right border)
-- `hline` = `f"{{hline:{contentwidth - 2}}}"` (computed in constructor)
-- Left border: `" {vline} "` (3 chars)
-- Right border: `" {vline} "` (3 chars)
+- `contentwidth` = `terminal.width() - BORDER_WIDTH_LEFT - BORDER_WIDTH_RIGHT` (does not include borders)
+- `totalwidth` = `contentwidth + BORDER_WIDTH_LEFT + BORDER_WIDTH_RIGHT` (content + left border + right border)
+- `hline` = `f"{{hline:{contentwidth - BORDER_LINE_WIDTH}}}"` (computed in constructor)
+- Left border: `" {vline} "` (BORDER_WIDTH_LEFT chars)
+- Right border: `" {vline} "` (BORDER_WIDTH_RIGHT chars)
 
-The border consists of a space, vertical line, space (3 chars on each side).
+The border consists of a space, vertical line, and spacing (totaling BORDER_WIDTH_LEFT on left, BORDER_WIDTH_RIGHT on right).
+This allows for asymmetric borders if needed (e.g., different widths on left vs right).
 
 ## Height Calculation
 
 - **Title box** (if title is given): 4 lines
   - Line 1: top border (`f" {{ulcorner}}{hline}{{urcorner}}"`)
-  - Line 2: blank (`f" {{vline}}{' '*(contentwidth-2)}{{vline}}"`)
-  - Line 3: title with left/right borders (`f" {{vline}}{title.center(contentwidth-2)}{{vline}}"`)
-  - Line 4: blank (`f" {{vline}}{' '*(contentwidth-2)}{{vline}}"`)
+  - Line 2: blank (`f" {{vline}}{' '*(contentwidth-BORDER_LINE_WIDTH)}{{vline}}"`)
+  - Line 3: title with left/right borders (`f" {{vline}}{title.center(contentwidth-BORDER_LINE_WIDTH)}{{vline}}"`)
+  - Line 4: blank (`f" {{vline}}{' '*(contentwidth-BORDER_LINE_WIDTH)}{{vline}}"`)
 
 - **Middle border** (between title box and content area): `_display_middle_border()`
   - Uses `{rtee}` and `{ltee}`: `f" {{rtee}}{hline}{{ltee}}"`
