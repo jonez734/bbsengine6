@@ -318,6 +318,8 @@ class Listbox:
                 io.echo("{restorecursor}", end="", flush=True)
                 self._position_from_prompt(self._currentindex)
                 self._display_item(page_items[self._currentindex], highlighted=True)
+            else:
+                io.echo("{BEL}", end="", flush=True)
             return True
 
     def _handle_key_pagedown(self) -> Optional[ListboxResult]:
