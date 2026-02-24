@@ -2,11 +2,22 @@ from bbsengine6 import io, screen, session, database
 import sys
 import argparse
 
+# Import argcomplete for shell completion (optional - continues if not installed)
+try:
+    import argcomplete
+    ARGCOMPLETE_AVAILABLE = True
+except ImportError:
+    ARGCOMPLETE_AVAILABLE = False
+
 from . import lib
 
 if __name__ == "__main__":
     # Build parser with subcommands
     parser, subparsers = lib.build_subcommand_parser()
+    
+    # Enable argcomplete for shell completion (if available)
+    if ARGCOMPLETE_AVAILABLE:
+        argcomplete.autocomplete(parser)
     
     # Parse arguments - use parse_known_args to separate subcommand from its args
     # This allows modules to receive their own arguments after the subcommand name
