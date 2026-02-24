@@ -42,7 +42,7 @@ class Listbox:
     CONTENT_PADDING = 4
     BORDER_WIDTH_LEFT = 3
     BORDER_WIDTH_RIGHT = 3
-    BORDER_LINE_WIDTH = 2
+    BORDER_HLINE_WIDTH = 2
 
     itemcolors = {
         "disabled": "{bggray}",
@@ -76,7 +76,7 @@ class Listbox:
         self.terminalwidth = io.terminal.width()
         self.contentwidth = self.terminalwidth - self.BORDER_WIDTH_LEFT - self.BORDER_WIDTH_RIGHT
         self.totalwidth = self.contentwidth + self.BORDER_WIDTH_LEFT + self.BORDER_WIDTH_RIGHT
-        self.hline = f"{{hline:{self.contentwidth - self.BORDER_LINE_WIDTH}}}"
+        self.hline = f"{{hline:{self.contentwidth - self.BORDER_HLINE_WIDTH}}}"
 
         self.numpages = max(1, int(ceil(len(self.items) / self.itemsperpage)))
 
@@ -160,9 +160,9 @@ class Listbox:
 
     def _display_title_box(self) -> None:
         io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")
-        io.echo(f" {{vline}}{' ' * (self.contentwidth - self.BORDER_LINE_WIDTH)}{{vline}}")
-        io.echo(f" {{vline}}{self.title.center(self.contentwidth - self.BORDER_LINE_WIDTH)}{{vline}}")
-        io.echo(f" {{vline}}{' ' * (self.contentwidth - self.BORDER_LINE_WIDTH)}{{vline}}")
+        io.echo(f" {{vline}}{' ' * (self.contentwidth - self.BORDER_HLINE_WIDTH)}{{vline}}")
+        io.echo(f" {{vline}}{self.title.center(self.contentwidth - self.BORDER_HLINE_WIDTH)}{{vline}}")
+        io.echo(f" {{vline}}{' ' * (self.contentwidth - self.BORDER_HLINE_WIDTH)}{{vline}}")
 
     def _display_middle_border(self) -> None:
         io.echo(f" {{rtee}}{self.hline}{{ltee}}")
