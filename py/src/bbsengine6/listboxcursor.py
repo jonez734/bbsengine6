@@ -1,5 +1,5 @@
 from math import ceil
-from typing import Any, Callable, List, NamedTuple, Optional
+from typing import Any, Callable, List, Optional
 
 from .listbox import Listbox, ListboxItem, ListboxResult
 
@@ -24,8 +24,8 @@ class ListboxCursor(Listbox):
             itemsperpage,
             itemheight,
             items=[],
-            idle,
-            custom_keys,
+            idle=idle,
+            custom_keys=custom_keys,
             **kwargs,
         )
         self.cur = cur
