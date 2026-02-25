@@ -219,6 +219,6 @@ if __name__ == "__main__":
     except EOFError:
       io.echo("{/all}{restorecursor}*EOF*")
     finally:
-      io.echo(f"{{savecursor}}{{curpos:{io.terminal.height()},0}}{{/all}}{{eraseline}}{{restorecursor}}{{reset}}")
+      io.echo(f"{{savecursor}}{{curpos:{io.terminal.height()},0}}{{/all}}{{eraseline}}{{reset}}{{restorecursor}}")
 
 #    io.echo(f"{io.terminal.cursorpositions=}", level="debug")
