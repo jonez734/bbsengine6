@@ -142,7 +142,7 @@ def get_available_categories(conn, person_key: str) -> list[str]:
                 with database.cursor(conn) as cur:
                     cur.execute(sql, (person_key,))
                     if cur.rowcount > 0:
-                        available.append(atbl)
+                        available.append("attractions")
                         break
         else:
             keycol = get_table_key_column( tbl)
@@ -190,19 +190,43 @@ def display_edu_detail(conn, person_key: str):
             io.echo(f"no education records")
             return
 
-        util.heading("education")
+        columns = [desc[0] for desc in cur.description]
+        edu_items = []
         for rec in cur.fetchall():
-            date_start = rec["date_start"] if rec["date_start"] else ""
-            date_end = rec["date_end"] if rec["date_end"] else ""
             institution = rec["institution"] if rec["institution"] else ""
-            degree = rec["degree"] if rec["degree"] else ""
-            study_field = rec["study_field"] if rec["study_field"] else ""
-            io.echo(f"{{valuecolor}}{date_start} - {date_end} {{labelcolor}}{institution} {{valuecolor}}{degree} {{labelcolor}}{study_field}")
+            content = institution
+            item = ListboxItem(content=content, pk=rec)
+            edu_items.append(item)
+
+    if len(edu_items) == 1:
+        rec = edu_items[0].pk
+        util.heading("education")
+        for col in columns:
+            val = rec[col] if rec[col] is not None else ""
+            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+    else:
+        lb_edu = Listbox(
+            args,
+            "education",
+            itemsperpage=10,
+            itemheight=1,
+            items=edu_items,
+        )
+
+        io.echo(f"{{promptcolor}}select an education: ", flush=True, end="")
+        edu_op = lb_edu.run("education: ")
+
+        if edu_op.status == "selected" and edu_op.item:
+            util.heading("education")
+            rec = edu_op.item.pk
+            for col in columns:
+                val = rec[col] if rec[col] is not None else ""
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
 def display_attractions_detail(conn, person_key: str):
-    keycol = get_table_key_column( "attractions")
-    sql = f"select * from article2.attractions where {keycol}=%s order by year"
+    keycol = get_table_key_column("attractions")
+    sql = f"select * from article2.attractions where {keycol}=%s"
     dat = (person_key,)
     with database.cursor(conn) as cur:
         cur.execute(sql, dat)
@@ -210,19 +234,45 @@ def display_attractions_detail(conn, person_key: str):
             io.echo(f"no attractions records")
             return
 
-        util.heading("attractions")
+        columns = [desc[0] for desc in cur.description]
+        attraction_items = []
         for rec in cur.fetchall():
-            year = rec["year"] if rec["year"] else ""
             attraction = rec["attraction"] if rec["attraction"] else ""
-            location = rec["location"] if rec["location"] else ""
-            io.echo(f"{{valuecolor}}{year} {{labelcolor}}{attraction} {{valuecolor}}{location}")
+            content = attraction
+            item = ListboxItem(content=content, pk=rec)
+            attraction_items.append(item)
+
+    if len(attraction_items) == 1:
+        rec = attraction_items[0].pk
+        util.heading("attraction")
+        for col in columns:
+            val = rec[col] if rec[col] is not None else ""
+            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+    else:
+        lb_attractions = Listbox(
+            args,
+            "attractions",
+            itemsperpage=10,
+            itemheight=1,
+            items=attraction_items,
+        )
+
+        io.echo(f"{{promptcolor}}select an attraction: ", flush=True, end="")
+        attr_op = lb_attractions.run("attraction: ")
+
+        if attr_op.status == "selected" and attr_op.item:
+            util.heading("attraction")
+            rec = attr_op.item.pk
+            for col in columns:
+                val = rec[col] if rec[col] is not None else ""
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
 def display_attraction_table_detail(conn, person_key: str, table_name: str, key_col: str | None = None):
     if key_col is None:
         key_col = get_table_key_column(table_name)
 
-    sql = f"select * from article2.{table_name} where {key_col}=%s order by year"
+    sql = f"select * from article2.{table_name} where {key_col}=%s"
     dat = (person_key,)
     with database.cursor(conn) as cur:
         cur.execute(sql, dat)
@@ -230,19 +280,43 @@ def display_attraction_table_detail(conn, person_key: str, table_name: str, key_
             io.echo(f"no records in {table_name}")
             return
 
-        util.heading(table_name)
         columns = [desc[0] for desc in cur.description]
+        table_items = []
         for rec in cur.fetchall():
-            row_parts = []
+            first_col = rec[columns[0]] if rec[columns[0]] else ""
+            content = str(first_col)
+            item = ListboxItem(content=content, pk=rec)
+            table_items.append(item)
+
+    if len(table_items) == 1:
+        rec = table_items[0].pk
+        util.heading(table_name)
+        for col in columns:
+            val = rec[col] if rec[col] is not None else ""
+            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+    else:
+        lb_table = Listbox(
+            args,
+            table_name,
+            itemsperpage=10,
+            itemheight=1,
+            items=table_items,
+        )
+
+        io.echo(f"{{promptcolor}}select a record: ", flush=True, end="")
+        table_op = lb_table.run(f"{table_name}: ")
+
+        if table_op.status == "selected" and table_op.item:
+            util.heading(table_name)
+            rec = table_op.item.pk
             for col in columns:
                 val = rec[col] if rec[col] is not None else ""
-                row_parts.append(str(val))
-            io.echo(f"{{valuecolor}}{' | '.join(row_parts)}")
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
 def display_elector_detail(conn, person_key: str):
     keycol = get_table_key_column("elector")
-    sql = f"select * from article2.elector where {keycol}=%s order by election_year"
+    sql = f"select * from article2.elector where {keycol}=%s order by date"
     dat = (person_key,)
     with database.cursor(conn) as cur:
         cur.execute(sql, dat)
@@ -250,12 +324,38 @@ def display_elector_detail(conn, person_key: str):
             io.echo(f"no elector records")
             return
 
-        util.heading("elector")
+        columns = [desc[0] for desc in cur.description]
+        elector_items = []
         for rec in cur.fetchall():
-            election_year = rec["election_year"] if rec["election_year"] else ""
-            electors = rec["electors"] if rec["electors"] else ""
-            popular_vote = rec["popular_vote"] if rec["popular_vote"] else ""
-            io.echo(f"{{valuecolor}}{election_year} {{labelcolor}}Electors: {{valuecolor}}{electors} {{labelcolor}}Popular: {{valuecolor}}{popular_vote}")
+            election_date = rec["date"] if rec["date"] else ""
+            content = election_date
+            item = ListboxItem(content=content, pk=rec)
+            elector_items.append(item)
+
+    if len(elector_items) == 1:
+        rec = elector_items[0].pk
+        util.heading("elector")
+        for col in columns:
+            val = rec[col] if rec[col] is not None else ""
+            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+    else:
+        lb_electors = Listbox(
+            args,
+            "electors",
+            itemsperpage=10,
+            itemheight=1,
+            items=elector_items,
+        )
+
+        io.echo(f"{{promptcolor}}select an elector: ", flush=True, end="")
+        elector_op = lb_electors.run("elector: ")
+
+        if elector_op.status == "selected" and elector_op.item:
+            util.heading("elector")
+            rec = elector_op.item.pk
+            for col in columns:
+                val = rec[col] if rec[col] is not None else ""
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
 def get_attraction_join_keys(conn) -> list[str]:
@@ -272,22 +372,81 @@ def get_attraction_join_keys(conn) -> list[str]:
 
 
 def display_attraction_join_detail(conn, person_key: str):
-    sql = "select * from article2.attraction_join where person_key=%s"
-    dat = (person_key,)
-    with database.cursor(conn) as cur:
-        cur.execute(sql, dat)
-        if cur.rowcount == 0:
-            io.echo(f"no records in attraction_join")
-            return
+    attraction_items = []
 
-        util.heading("attraction_join")
-        columns = [desc[0] for desc in cur.description]
+    place_sql = "select place_key from article2.attraction_join where person_key=%s"
+    with database.cursor(conn) as cur:
+        cur.execute(place_sql, (person_key,))
+        place_keys = [row["place_key"] for row in cur.fetchall()]
+
+    if place_keys:
+        if len(place_keys) == 1:
+            sql = "select * from article2.attraction_place where place_key = %s"
+            dat = (place_keys[0],)
+        else:
+            placeholders = ",".join(["%s"] * len(place_keys))
+            sql = f"select * from article2.attraction_place where place_key IN ({placeholders})"
+            dat = tuple(place_keys)
+
+        with database.cursor(conn) as cur:
+            cur.execute(sql, dat)
+            for rec in cur.fetchall():
+                title = rec["title"] if rec["title"] else ""
+                item = ListboxItem(content=f"place: {title}", pk={"table": "attraction_place", "rec": rec})
+                attraction_items.append(item)
+
+    hours_sql = "select * from article2.attraction_hour where place_key IN (select place_key from article2.attraction_join where person_key=%s)"
+    with database.cursor(conn) as cur:
+        cur.execute(hours_sql, (person_key,))
+        columns_hours = [desc[0] for desc in cur.description] if cur.description else []
         for rec in cur.fetchall():
-            row_parts = []
+            day = rec.get("day", "")
+            item = ListboxItem(content=f"hour: {day}", pk={"table": "attraction_hour", "rec": rec, "columns": columns_hours})
+            attraction_items.append(item)
+
+    social_sql = "select * from article2.attraction_social_media where place_key IN (select place_key from article2.attraction_join where person_key=%s)"
+    with database.cursor(conn) as cur:
+        cur.execute(social_sql, (person_key,))
+        columns_social = [desc[0] for desc in cur.description] if cur.description else []
+        for rec in cur.fetchall():
+            platform = rec.get("platform", "")
+            item = ListboxItem(content=f"social: {platform}", pk={"table": "attraction_social_media", "rec": rec, "columns": columns_social})
+            attraction_items.append(item)
+
+    if not attraction_items:
+        io.echo(f"no attraction records")
+        return
+
+    if len(attraction_items) == 1:
+        item_data = attraction_items[0].pk
+        table = item_data["table"]
+        rec = item_data["rec"]
+        columns = item_data.get("columns", list(rec.keys()))
+        util.heading(table)
+        for col in columns:
+            val = rec[col] if rec[col] is not None else ""
+            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+    else:
+        lb_attractions = Listbox(
+            args,
+            "attractions",
+            itemsperpage=10,
+            itemheight=1,
+            items=attraction_items,
+        )
+
+        io.echo(f"{{promptcolor}}select an attraction: ", flush=True, end="")
+        attr_op = lb_attractions.run("attraction: ")
+
+        if attr_op.status == "selected" and attr_op.item:
+            item_data = attr_op.item.pk
+            table = item_data["table"]
+            rec = item_data["rec"]
+            columns = item_data.get("columns", list(rec.keys()))
+            util.heading(table)
             for col in columns:
                 val = rec[col] if rec[col] is not None else ""
-                row_parts.append(str(val))
-            io.echo(f"{{valuecolor}}{' | '.join(row_parts)}")
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
 def display_category_detail(conn, person_key: str, category: str):
@@ -297,7 +456,7 @@ def display_category_detail(conn, person_key: str, category: str):
         display_edu_detail(conn, person_key)
     elif category == "elector":
         display_elector_detail(conn, person_key)
-    elif category == "attraction_join":
+    elif category == "attractions":
         display_attraction_join_detail(conn, person_key)
     elif category.startswith("attraction_"):
         display_attraction_table_detail(conn, person_key, category)
@@ -418,6 +577,7 @@ def main(args, **kw):
 
                                 io.echo(f"{{promptcolor}}press any key to continue: {{/all}}", flush=True, end="")
                                 io.getch()
+                                io.echo()
 
     except psycopg.DatabaseError as e:
         io.echo(f"demo_listbox_masterdetail.main.100: database error: {e}", level="error")
