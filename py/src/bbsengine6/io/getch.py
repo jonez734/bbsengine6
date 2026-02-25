@@ -1,10 +1,8 @@
 import os
-import sys
 import tty
 import select
 import fcntl
 import termios
-from collections import deque
 
 
 from .common import _current_input_stream, _current_stream_lock, _input_queue, _read_current_input_stream
@@ -70,11 +68,11 @@ def _proc_char(char:str, debug:bool=False) -> str | None:
     # 5. Return a regular character
     return char
 
-def getch_str(timeout:float=1.0, debug:bool=False, **kwargs) -> str | None:
+def getch_str(timeout: float | None = None, debug: bool = False, **kwargs) -> str | None:
     """Reads a single keypress without blocking and handles control/extended keys.
     
     Args:
-        timeout: Seconds to wait for input (default 1.0)
+        timeout: Seconds to wait for input (default: None, blocks indefinitely)
         debug: If True, log unknown escape sequences and return None
     """
     
@@ -94,10 +92,9 @@ def getch_str(timeout:float=1.0, debug:bool=False, **kwargs) -> str | None:
                 # --- INITIAL READ SETUP ---
                 # Use select to wait for the first byte with the specified timeout
                 # select() will block until data is available or the timeout is reached.
-                if timeout > 0:
-                    ready, _, _ = select.select([_current_input_stream], [], [], timeout)
+                ready, _, _ = select.select([_current_input_stream], [], [], timeout)
 
-                    if not ready:
+                if timeout is not None and not ready:
                         # Timeout occurred before the first character was available
                         return None
 

@@ -7,13 +7,15 @@ from bbsengine6 import io, util, database, screen
 from bbsengine6.listboxcursor import ListboxCursor
 from bbsengine6.listbox import ListboxItem, ListboxResult
 
-YUMMYHEIGHT = 166 # cm
+NAME = "jam"
+HEIGHT = 193.04  # yummy = 166 cm
+
 class Height(NamedTuple):
-  cm: int
+  cm: float
   feet: float
   inches: float
 
-def cmtofeet(cm:int) -> NamedTuple:
+def cmtofeet(cm:float) -> Height:
   inches = cm / 2.54
   feet = inches // 12
   inches -= feet*12
@@ -30,7 +32,7 @@ class Article2PresidentListboxItem(ListboxItem):
         self.disabled = False
 
     def help(self):
-        io.echo("this is a help message in a function")
+        io.echo(f"this is a help message in a function")
 
     def display(self):
         io.echo(f"{{/all}}{{cha}} {{engine.menu.cursorcolor}}{{engine.menu.color}} {{engine.menu.boxcharcolor}}{{acs:vline}}{{cic}} {self.content} {{/all}}{{engine.menu.boxcharcolor}}{{acs:vline}}{{engine.menu.shadowcolor}} {{engine.menu.color}} {{/all}}{{cha}}", end="", flush=True)
@@ -41,7 +43,7 @@ def buildargs(args=None, **kw):
     parser.add_argument("--verbose", action="store_true", dest="verbose")
     parser.add_argument("--debug", action="store_true", dest="debug")
 
-    defaults = {"databasename": "yummyjam", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None}
+    defaults = {"databasename": "yummyjam", "databasehost":"127.0.0.1", "databaseuser": None, "databaseport":5432, "databasepassword":None}
     database.buildargs(parser, defaults)
     return parser
     
@@ -70,34 +72,50 @@ def main(args, **kw):
       if not database.exists(args, args.databasename, pool=pool):
         io.echo(f"database '{args.databasename}' does not exist", level="error")
         return False
+      if args.debug:
+        io.echo(f"postgres database exists", level="debug")
 
-    # Check if schema exists (using target database pool)
+    # Check if schema exists and get totalitems (using target database pool)
     with database.getpool(args, dbname=args.databasename) as pool:
       if not database.schemaexists(args, "article2", pool=pool):
-        io.echo("schema 'article2' does not exist", level="error")
+        io.echo(f"schema 'article2' does not exist", level="error")
         return False
+      if args.debug:
+        io.echo(f"schema article2 exists", level="debug")
+
+      screen.init(args)
 
       with database.connect(args, pool=pool) as conn:
+        if args.debug:
+          io.echo(f"connection started", level="debug")
         with database.cursor(conn) as cur:
+          if args.debug:
+            io.echo(f"cursor started", level="debug")
           cur.execute("select count(distinct person_key) as totalitems from article2.president")
           res = cur.fetchone()
           totalitems = res["totalitems"]
-          print(f"{totalitems=}")
+          if args.debug:
+            io.echo(f"{totalitems=}", level="debug")
+            io.echo(f"About to create scrollable cursor", level="debug")
 
         sql = "select distinct person_key, name_given, name_sur, name_common from article2.president"
         with database.cursor(conn, scrollable=True, name="presidentlistbox") as cur:
+          if args.debug:
+            io.echo(f"Executing query", level="debug")
           cur.execute(sql)
+          if args.debug:
+            io.echo(f"Query executed", level="debug")
           if cur.rowcount == 0:
-            io.echo("no presidents")
+            io.echo(f"no presidents")
             return None
-          screen.init(args)
 
           custom_keys = {
-            "KEY_INS": lambda: (io.echo("insert new record!"), True)[1],
-            "E": lambda: (io.echo(f"edit record: {lb.currentitem.pk}"), True)[1],
+            "KEY_INS": lambda: (io.echo(f"insert new record!"), True)[1],
+            "E": lambda: (io.echo(f"edit record: {lb.currentitem.pk if lb.currentitem else 'none'}"), True)[1],
             "KEY_ENTER": lambda: ListboxResult("selected", lb.currentitem) if lb.currentitem else False,
           }
-
+          if args.debug:
+            io.echo(f"calling ListboxCursor", level="debug")
           lb = ListboxCursor(
               args,
               "presidents",
@@ -108,24 +126,35 @@ def main(args, **kw):
               itemclass=Article2PresidentListboxItem,
               custom_keys=custom_keys,
           )
+          if args.debug:
+            io.echo(f"ListboxCursor created", level="debug")
           done = False
           while not done:
+            if args.debug:
+              io.echo(f"about to call lb.run", level="debug")
             op = lb.run(prompt)
+            if args.debug:
+              io.echo(f"lb.run returned: {op}", level="debug")
             #    io.echo(f"{op=}", level="debug")
-            if op.status == "cancelled":
+            if op.status == "noitems":
+              io.echo(f"no items")
+              done = True
+            elif op.status == "cancelled":
               io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled")
               done = True
             elif op.status == "exit":
               io.echo(f"{{inputcolor}}exit")
               return True
             elif op.status == "selected":
+              if not op.item:
+                return False
               io.echo(f"selected item {op.item.pk}{{f6:3}}")
               sql = f"select * from article2.person where person_key=%s"
               dat = (op.item.pk,)
               with database.cursor(conn) as cur:
                 cur.execute(sql, dat)
                 if cur.rowcount == 0:
-                  io.echo("there are no presidents in the database")
+                  io.echo(f"there are no presidents in the database")
                   return False
 
                 person = cur.fetchone()
@@ -163,7 +192,7 @@ def main(args, **kw):
                   trait = cur.fetchone()
                   cm = trait["height"]
                   height = cmtofeet(cm)
-                  yummyheight = cmtofeet(YUMMYHEIGHT)
+                  yummyheight = cmtofeet(HEIGHT)
                   if cm == shortest:
                     io.echo(f"{{labelcolor}}Height: {{valuecolor}}{height.cm}cm ({height.feet:2.0f}ft {height.inches:3.2f}in) {{reverse}}shortest{{/reverse}}")
                   elif cm == tallest:
@@ -171,18 +200,24 @@ def main(args, **kw):
                   else:
                     io.echo(f"{{labelcolor}}Height: {{valuecolor}}{cm}cm ({height.feet:2.0f}ft {height.inches:3.2f}in)")
                 
-                  if cm == YUMMYHEIGHT:
-                    io.echo("{{valuecolor}}Same{{labelcolor}} height as Yummy")
-                  elif cm < YUMMYHEIGHT:
-                    io.echo("{{valuecolor}}Shorter{{labelcolor}} than Yummy")
-                  elif cm > YUMMYHEIGHT:
+                  if cm == HEIGHT:
+                    io.echo(f"{{valuecolor}}Same{{labelcolor}} height as {NAME}")
+                  elif cm < HEIGHT:
+                    d1 = yummyheight.cm - height.cm
+                    d2 = cmtofeet(d1)
+                    
+                    io.echo(f"{{valuecolor}}Shorter{{labelcolor}} than {NAME} by {{valuecolor}}{d1:3.2f}cm {{labelcolor}}({{valuecolor}}", end="")
+                    if d2.feet > 0:
+                      io.echo(f"{d2.feet:2.1f} -- ", end="")
+                    io.echo(f"{d2.inches:3.2f}in{{labelcolor}})")
+                  elif cm > HEIGHT:
                     d1 = height.cm - yummyheight.cm
                     d2 = cmtofeet(d1)
                     
-                    io.echo(f"{{valuecolor}}Taller{{labelcolor}} than Yummy by {{valuecolor}}{d1}cm {{labelcolor}}({{valuecolor}}", end="")
+                    io.echo(f"{{valuecolor}}Taller{{labelcolor}} than {NAME} by {{valuecolor}}{d1:3.2f}cm {{labelcolor}}({{valuecolor}}", end="")
                     if d2.feet > 0:
-                      io.echo(f"{d2.feet}ft", end="")
-                    io.echo(f"{d2.inches:2.3f}in{{labelcolor}})")
+                      io.echo(f"{d2.feet:2.1f} -- ", end="")
+                    io.echo(f"{d2.inches:3.2f}in{{labelcolor}})")
 
                 util.heading("inauguration")
                 sql = "select date_start, party from article2.president where person_key = %s"
@@ -190,7 +225,7 @@ def main(args, **kw):
                 cur = database.cursor(conn)
                 cur.execute(sql, dat)
                 if cur.rowcount < 1:
-                  io.echo("** error **")
+                  io.echo(f"** error **")
                 res = cur.fetchall()
                 for rec in res:
                   io.echo(f"{{valuecolor}}{rec['date_start']}", end="")
@@ -199,10 +234,11 @@ def main(args, **kw):
                   else:
                     io.echo()
 
-                io.echo("{{promptcolor}}press any key to continue: {{inputcolor}}", end="", flush=True)
+                io.echo(f"{{promptcolor}}press any key to continue: {{/all}}", flush=True, end="")
                 io.getch()
 
-                io.echo(f"enter on {op.item.pk=}", level="debug")
+                if args.debug:
+                  io.echo(f"enter on {op.item.pk=}", level="debug")
   except psycopg.DatabaseError as e:
     io.echo(f"demo_listbox_cursor.main.100: database error: {e}", level="error")
     return False
@@ -215,9 +251,9 @@ if __name__ == "__main__":
     try:
       main(args)
     except KeyboardInterrupt:
-      io.echo("{/all}{restorecursor}*INTR*")
+      io.echo(f"{{/all}}{{restorecursor}}*INTR*")
     except EOFError:
-      io.echo("{/all}{restorecursor}*EOF*")
+      io.echo(f"{{/all}}{{restorecursor}}*EOF*")
     finally:
       io.echo(f"{{savecursor}}{{curpos:{io.terminal.height()},0}}{{/all}}{{eraseline}}{{reset}}{{restorecursor}}")
 
