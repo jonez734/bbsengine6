@@ -2,6 +2,7 @@ import argparse
 
 from typing import NamedTuple
 
+import psycopg
 from bbsengine6 import io, util, database, screen
 from bbsengine6.listboxcursor import ListboxCursor
 from bbsengine6.listbox import ListboxItem, ListboxResult
@@ -64,133 +65,140 @@ parser = buildargs()
 def main(args, **kw):
   prompt = "demo_listbox_cursor: "
   pool = database.getpool(args, dbname=args.databasename)
-  with database.connect(args, pool=pool) as dbh:
-    with database.cursor(dbh) as cur:
-      cur.execute("select count(distinct person_key) as totalitems from article2.president")
-      res = cur.fetchone()
-      totalitems = res["totalitems"]
-      print(f"{totalitems=}")
+  if pool is None:
+    io.echo(f"could not connect to database '{args.databasename}'", level="error")
+    return False
 
-    sql = "select distinct person_key, name_given, name_sur, name_common from article2.president"
-    with database.cursor(dbh, scrollable=True, name="presidentlistbox") as cur:
-      cur.execute(sql)
-      if cur.rowcount == 0:
-        io.echo("no presidents")
-        return None
-      screen.init(args)
+  try:
+    with database.connect(args, pool=pool) as dbh:
+      with database.cursor(dbh) as cur:
+        cur.execute("select count(distinct person_key) as totalitems from article2.president")
+        res = cur.fetchone()
+        totalitems = res["totalitems"]
+        print(f"{totalitems=}")
 
-      custom_keys = {
-        "KEY_INS": lambda: (io.echo("insert new record!"), True)[1],
-        "E": lambda: (io.echo(f"edit record: {lb.currentitem.pk}"), True)[1],
-        "KEY_ENTER": lambda: ListboxResult("selected", lb.currentitem) if lb.currentitem else False,
-      }
+      sql = "select distinct person_key, name_given, name_sur, name_common from article2.president"
+      with database.cursor(dbh, scrollable=True, name="presidentlistbox") as cur:
+        cur.execute(sql)
+        if cur.rowcount == 0:
+          io.echo("no presidents")
+          return None
+        screen.init(args)
 
-      lb = ListboxCursor(
-          args,
-          "presidents",
-          itemsperpage=20,
-          itemheight=1,
-          cur=cur,
-          totalitems=totalitems,
-          itemclass=Article2PresidentListboxItem,
-          custom_keys=custom_keys,
-      )
-      done = False
-      while not done:
-        op = lb.run(prompt)
-        #    io.echo(f"{op=}", level="debug")
-        if op.status == "cancelled":
-          io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled")
-          done = True
-        elif op.status == "exit":
-          io.echo(f"{{inputcolor}}exit")
-          return True
-        elif op.status == "selected":
-          io.echo(f"selected item {op.item.pk}{{f6:3}}")
-          sql = f"select * from article2.person where person_key=%s"
-          dat = (op.item.pk,)
-          with database.cursor(dbh) as cur:
-            cur.execute(sql, dat)
-            if cur.rowcount == 0:
-              io.echo("there are no presidents in the database")
-              return False
+        custom_keys = {
+          "KEY_INS": lambda: (io.echo("insert new record!"), True)[1],
+          "E": lambda: (io.echo(f"edit record: {lb.currentitem.pk}"), True)[1],
+          "KEY_ENTER": lambda: ListboxResult("selected", lb.currentitem) if lb.currentitem else False,
+        }
 
-            person = cur.fetchone()
-
-            util.heading("person")
-            io.echo(f"{{labelcolor}}Name: {{valuecolor}}{person['name_common']} {person['name_sur']}")
-            date_born = person["date_born"]
-            place_born = person["place_born"] if person["place_born"] is not None else ""
-            state_born = person["state_born"] if person["state_born"] is not None else ""
-
-            date_die = person["date_die"] if person["date_die"] != "9999-99-99" else "--"
-            state_die = person["state_die"] if person["state_die"] != "9999-99-99" else ""
-            place_die = person["place_die"] if person["place_die"] is not None else ""
-
-            io.echo(f"{{labelcolor}}Born: {{valuecolor}}{date_born} {place_born} {state_born}")
-            io.echo(f"{{labelcolor}}Died: {{valuecolor}}{date_die} {place_die} {state_die}")
-            #        io.echo(f"{{var:labelcolor}}Party: {{var:valuecolor}}{rec['party']}")
-            
-            sql = "select max(height) as tallest, min(height) as shortest from article2.trait, article2.president where article2.trait.person_key = article2.president.person_key"
-            cur.execute(sql)
-            if cur.rowcount == 0:
-              tallest = None
-              shortest = None
-            else:
-              res = cur.fetchone()
-              tallest = res["tallest"]
-              shortest = res["shortest"]
-              #        io.echo(f"{tallest=} {shortest=}")
-            
-            sql = "select * from article2.trait where person_key=%s"
+        lb = ListboxCursor(
+            args,
+            "presidents",
+            itemsperpage=20,
+            itemheight=1,
+            cur=cur,
+            totalitems=totalitems,
+            itemclass=Article2PresidentListboxItem,
+            custom_keys=custom_keys,
+        )
+        done = False
+        while not done:
+          op = lb.run(prompt)
+          #    io.echo(f"{op=}", level="debug")
+          if op.status == "cancelled":
+            io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled")
+            done = True
+          elif op.status == "exit":
+            io.echo(f"{{inputcolor}}exit")
+            return True
+          elif op.status == "selected":
+            io.echo(f"selected item {op.item.pk}{{f6:3}}")
+            sql = f"select * from article2.person where person_key=%s"
             dat = (op.item.pk,)
-            cur.execute(sql, dat)
-            if cur.rowcount > 0:
-              util.heading("traits")
-              trait = cur.fetchone()
-              cm = trait["height"]
-              height = cmtofeet(cm)
-              yummyheight = cmtofeet(YUMMYHEIGHT)
-              if cm == shortest:
-                io.echo(f"{{labelcolor}}Height: {{valuecolor}}{height.cm}cm ({height.feet:2.0f}ft {height.inches:3.2f}in) {{reverse}}shortest{{/reverse}}")
-              elif cm == tallest:
-                io.echo(f"{{labelcolor}}Height: {{valuecolor}}{cm}cm ({height.feet:2.0f}ft {height.inches:3.2f}in) {{reverse}}tallest{{/reverse}}")
-              else:
-                io.echo(f"{{labelcolor}}Height: {{valuecolor}}{cm}cm ({height.feet:2.0f}ft {height.inches:3.2f}in)")
+            with database.cursor(dbh) as cur:
+              cur.execute(sql, dat)
+              if cur.rowcount == 0:
+                io.echo("there are no presidents in the database")
+                return False
+
+              person = cur.fetchone()
+
+              util.heading("person")
+              io.echo(f"{{labelcolor}}Name: {{valuecolor}}{person['name_common']} {person['name_sur']}")
+              date_born = person["date_born"]
+              place_born = person["place_born"] if person["place_born"] is not None else ""
+              state_born = person["state_born"] if person["state_born"] is not None else ""
+
+              date_die = person["date_die"] if person["date_die"] != "9999-99-99" else "--"
+              state_die = person["state_die"] if person["state_die"] != "9999-99-99" else ""
+              place_die = person["place_die"] if person["place_die"] is not None else ""
+
+              io.echo(f"{{labelcolor}}Born: {{valuecolor}}{date_born} {place_born} {state_born}")
+              io.echo(f"{{labelcolor}}Died: {{valuecolor}}{date_die} {place_die} {state_die}")
+              #        io.echo(f"{{var:labelcolor}}Party: {{var:valuecolor}}{rec['party']}")
               
-              if cm == YUMMYHEIGHT:
-                io.echo("{{valuecolor}}Same{{labelcolor}} height as Yummy")
-              elif cm < YUMMYHEIGHT:
-                io.echo("{{valuecolor}}Shorter{{labelcolor}} than Yummy")
-              elif cm > YUMMYHEIGHT:
-                d1 = height.cm - yummyheight.cm
-                d2 = cmtofeet(d1)
-                
-                io.echo(f"{{valuecolor}}Taller{{labelcolor}} than Yummy by {{valuecolor}}{d1}cm {{labelcolor}}({{valuecolor}}", end="")
-                if d2.feet > 0:
-                  io.echo(f"{d2.feet}ft", end="")
-                io.echo(f"{d2.inches:2.3f}in{{labelcolor}})")
-                #        io.echo(f"{{var:labelcolor}}{util.pluralize
-
-            util.heading("inauguration")
-            sql = "select date_start, party from article2.president where person_key = %s"
-            dat = (op.item.pk,)
-            cur = database.cursor(dbh)
-            cur.execute(sql, dat)
-            if cur.rowcount < 1:
-              io.echo("** error **")
-            res = cur.fetchall()
-            for rec in res:
-              io.echo(f"{{valuecolor}}{rec['date_start']}", end="")
-              if rec["party"] != "":
-                io.echo(f"{{labelcolor}} ({{valuecolor}}{rec['party']}{{labelcolor}})")
+              sql = "select max(height) as tallest, min(height) as shortest from article2.trait, article2.president where article2.trait.person_key = article2.president.person_key"
+              cur.execute(sql)
+              if cur.rowcount == 0:
+                tallest = None
+                shortest = None
               else:
-                io.echo()
+                res = cur.fetchone()
+                tallest = res["tallest"]
+                shortest = res["shortest"]
+                #        io.echo(f"{tallest=} {shortest=}")
+              
+              sql = "select * from article2.trait where person_key=%s"
+              dat = (op.item.pk,)
+              cur.execute(sql, dat)
+              if cur.rowcount > 0:
+                util.heading("traits")
+                trait = cur.fetchone()
+                cm = trait["height"]
+                height = cmtofeet(cm)
+                yummyheight = cmtofeet(YUMMYHEIGHT)
+                if cm == shortest:
+                  io.echo(f"{{labelcolor}}Height: {{valuecolor}}{height.cm}cm ({height.feet:2.0f}ft {height.inches:3.2f}in) {{reverse}}shortest{{/reverse}}")
+                elif cm == tallest:
+                  io.echo(f"{{labelcolor}}Height: {{valuecolor}}{cm}cm ({height.feet:2.0f}ft {height.inches:3.2f}in) {{reverse}}tallest{{/reverse}}")
+                else:
+                  io.echo(f"{{labelcolor}}Height: {{valuecolor}}{cm}cm ({height.feet:2.0f}ft {height.inches:3.2f}in)")
+                
+                if cm == YUMMYHEIGHT:
+                  io.echo("{{valuecolor}}Same{{labelcolor}} height as Yummy")
+                elif cm < YUMMYHEIGHT:
+                  io.echo("{{valuecolor}}Shorter{{labelcolor}} than Yummy")
+                elif cm > YUMMYHEIGHT:
+                  d1 = height.cm - yummyheight.cm
+                  d2 = cmtofeet(d1)
+                  
+                  io.echo(f"{{valuecolor}}Taller{{labelcolor}} than Yummy by {{valuecolor}}{d1}cm {{labelcolor}}({{valuecolor}}", end="")
+                  if d2.feet > 0:
+                    io.echo(f"{d2.feet}ft", end="")
+                  io.echo(f"{d2.inches:2.3f}in{{labelcolor}})")
 
-            io.echo("{{promptcolor}}press any key to continue: {{inputcolor}}", end="", flush=True)
-            io.getch()
+              util.heading("inauguration")
+              sql = "select date_start, party from article2.president where person_key = %s"
+              dat = (op.item.pk,)
+              cur = database.cursor(dbh)
+              cur.execute(sql, dat)
+              if cur.rowcount < 1:
+                io.echo("** error **")
+              res = cur.fetchall()
+              for rec in res:
+                io.echo(f"{{valuecolor}}{rec['date_start']}", end="")
+                if rec["party"] != "":
+                  io.echo(f"{{labelcolor}} ({{valuecolor}}{rec['party']}{{labelcolor}})")
+                else:
+                  io.echo()
 
-            io.echo(f"enter on {op.item.pk=}", level="debug")
+              io.echo("{{promptcolor}}press any key to continue: {{inputcolor}}", end="", flush=True)
+              io.getch()
+
+              io.echo(f"enter on {op.item.pk=}", level="debug")
+  except psycopg.DatabaseError as e:
+    io.echo(f"demo_listbox_cursor.main.100: database error: {e}", level="error")
+    return False
 
 if __name__ == "__main__":
     init()
