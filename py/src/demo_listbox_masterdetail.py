@@ -84,17 +84,12 @@ def buildargs(args=None, **kw):
 
 
 def init():
-    io.setvar("engine.menu.boxcharcolor", "{bglightgray}{darkgreen}")
-    io.setvar("engine.menu.color", "{bggray}")
-    io.setvar("engine.menu.shadowcolor", "{bgdarkgray}")
-    io.setvar("engine.menu.cursorcolor", "{bglightgray}{blue}")
-    io.setvar("engine.menu.boxcolor", "{bgblue}{green}")
-    io.setvar("engine.menu.titlecolor", "{black}{bglightgray}")
-    io.setvar("engine.menu.disableditemcolor", "{darkgray}")
-    io.setvar("engine.menu.resultfailedcolor", "{bgred}{white}")
-
-    io.setvar("itemcolor", "{blue}{bglightgray}")
-    io.setvar("currentitemcolor", "{bgwhite}{black}")
+    io.setvar("listbox.boxcolor", "{darkgreen}")
+    io.setvar("listbox.titlecolor", "{inverse}")
+    io.setvar("listbox.item.normal", "{white}")
+    io.setvar("listbox.item.highlighted", "{listbox.item.normal}{inverse}")
+    io.setvar("listbox.item.disabled", "{darkgray}")
+    io.setvar("listbox.bgcolor", "")
 
 
 TABLE_KEY_COLUMNS = {
@@ -395,7 +390,7 @@ def display_attraction_join_detail(conn, person_key: str):
                 item = ListboxItem(content=f"place: {title}", pk={"table": "attraction_place", "rec": rec})
                 attraction_items.append(item)
 
-    hours_sql = "select * from article2.attraction_hour where place_key IN (select place_key from article2.attraction_join where person_key=%s)"
+    hours_sql = "select * from article2.attraction_hour where key IN (select place_key from article2.attraction_join where person_key=%s)"
     with database.cursor(conn) as cur:
         cur.execute(hours_sql, (person_key,))
         columns_hours = [desc[0] for desc in cur.description] if cur.description else []

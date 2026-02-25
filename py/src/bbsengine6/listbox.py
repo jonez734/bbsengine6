@@ -44,15 +44,9 @@ class Listbox:
     BORDER_WIDTH_LEFT = 3
     BORDER_WIDTH_RIGHT = 3
     BORDER_CORNER_WIDTH = 2
-    TITLE_BOX_HEIGHT = 4
+    TITLE_BOX_HEIGHT = 2
     MIDDLE_BORDER_HEIGHT = 1
     TOP_BORDER_HEIGHT = 1
-
-    itemcolors = {
-        "disabled": "{bggray}",
-        "highlighted": "{bgwhite}{black}",
-        "normal": "{normalcolor}",
-    }
 
     def __init__(
         self,
@@ -150,11 +144,11 @@ class Listbox:
 
     def _display_item(self, item: ListboxItem, highlighted: bool = False) -> None:
         if item.disabled:
-            io.setvar("cic", self.itemcolors["disabled"])
+            io.setvar("cic", "{listbox.item.disabled}")
         elif highlighted:
-            io.setvar("cic", self.itemcolors["highlighted"])
+            io.setvar("cic", "{listbox.item.highlighted}")
         else:
-            io.setvar("cic", self.itemcolors["normal"])
+            io.setvar("cic", "{listbox.item.normal}")
 
         lines = item.content.split("\n")
         for line_num in range(self.itemheight):
@@ -163,26 +157,24 @@ class Listbox:
             else:
                 line = ""
             padded = line.ljust(self.contentwidth - self.CONTENT_PADDING)
-            io.echo(f" {{vline}} {{cic}}{padded}{{/all}} {{vline}}")
+            io.echo(f" {{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}")
 
     def _display_blank_line(self) -> None:
         for _ in range(self.itemheight):
-            io.echo(f" {{vline}} {' ' * (self.contentwidth - self.CONTENT_PADDING)} {{vline}}")
+            io.echo(f" {{listbox.boxcolor}}{{vline}} {' ' * (self.contentwidth - self.CONTENT_PADDING)} {{listbox.boxcolor}}{{vline}}")
 
     def _display_title_box(self) -> None:
-        io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")
-        io.echo(f" {{vline}}{' ' * (self.contentwidth - self.BORDER_CORNER_WIDTH)}{{vline}}")
-        io.echo(f" {{vline}}{self.title.center(self.contentwidth - self.BORDER_CORNER_WIDTH)}{{vline}}")
-        io.echo(f" {{vline}}{' ' * (self.contentwidth - self.BORDER_CORNER_WIDTH)}{{vline}}")
+        io.echo(f" {{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
+        io.echo(f" {{listbox.boxcolor}}{{vline}}{{listbox.titlecolor}}{self.title.center(self.contentwidth - self.BORDER_CORNER_WIDTH)}{{/all}}{{listbox.boxcolor}}{{vline}}{{/all}}")
 
     def _display_middle_border(self) -> None:
-        io.echo(f" {{rtee}}{self.hline}{{ltee}}")
+        io.echo(f" {{listbox.boxcolor}}{{rtee}}{self.hline}{{listbox.boxcolor}}{{ltee}}")
 
     def _display_top_border(self) -> None:
-        io.echo(f" {{ulcorner}}{self.hline}{{urcorner}}")
+        io.echo(f" {{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
 
     def _display_bottom_border(self) -> None:
-        io.echo(f" {{llcorner}}{self.hline}{{lrcorner}}")
+        io.echo(f" {{listbox.boxcolor}}{{llcorner}}{self.hline}{{listbox.boxcolor}}{{lrcorner}}")
 
     def _display(self) -> None:
         if self.title:
