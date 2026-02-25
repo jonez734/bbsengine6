@@ -435,7 +435,7 @@ class Listbox:
         return (self.itemsperpage - item) * self.itemheight + 1
 
     def run(self, prompt: str) -> ListboxResult:
-        if not self.items:
+        if not self.items and not getattr(self, '_lazy_load', False):
             return ListboxResult("noitems")
 
         self.prompt = prompt

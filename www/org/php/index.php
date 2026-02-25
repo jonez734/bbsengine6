@@ -3,7 +3,7 @@
 /**
  * handles display of the index page
  *
- * @package bbsengine4
+ * @package bbsengine6
  */
 
 /**
@@ -79,7 +79,7 @@ class index
 
   function main()
   {
-    $this->dbh = \bbsengine6\database\connect(SYSTEMDSN);
+    $this->dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
 
     \bbsengine6\session\start();
     
@@ -92,21 +92,21 @@ class index
     $tmpl = \bbsengine6\getsmarty();
 
     $docs = [];
-    $docs[] = ["title" => "handbook", "url" => "/current/handbook/", "updatedepoch" => filemtime(HANDBOOKDIR)];
-    $docs[] = ["title" => "API documentation", "url" => "/current/apidocs/", "updatedepoch" => filemtime(APIDOCSDIR)];
-    $docs[] = ["title" => "changelog", "url" => "/current/CHANGELOG.txt", "updatedepoch" => filemtime(CHANGELOG)];
-    $docs[] = ["title" => "readme", "url" => "/current/README.md", "updatedepoch" => filemtime(README)];
-    $docs[] = ["title" => "install", "url" => "/current/INSTALL.md", "updatedepoch" => filemtime(INSTALL)];
-    $docs[] = ["title" => "releasenotes", "url" => "/current/RELEASENOTES.md", "updatedepoch" => filemtime(RELEASENOTES)];
+    $docs[] = ["title" => "handbook", "url" => \config\HANDBOOKURI, "updatedepoch" => filemtime(\config\HANDBOOKDIR)];
+    $docs[] = ["title" => "API documentation", "url" => \config\APIDOCSURI, "updatedepoch" => filemtime(\config\APIDOCSDIR)];
+    $docs[] = ["title" => "changelog", "url" => \config\CURRENTHANDBOOKURI . "CHANGELOG.txt", "updatedepoch" => filemtime(\config\CHANGELOG)];
+    $docs[] = ["title" => "readme", "url" => \config\CURRENTHANDBOOKURI . "README.md", "updatedepoch" => filemtime(\config\README)];
+    $docs[] = ["title" => "install", "url" => \config\CURRENTHANDBOOKURI. "INSTALL.md", "updatedepoch" => filemtime(\config\INSTALL)];
+    $docs[] = ["title" => "releasenotes", "url" => \config\CURRENTHANDBOOKURI. "/current/RELEASENOTES.md", "updatedepoch" => filemtime(\config\RELEASENOTES)];
     
     usort($docs, [$this, "docsort"]);
 
     $data = [];
     $data["latestrelease"] = null; //["files" => []]; // $latestrelease;
     $data["docs"] = $docs;
-    $data["pagetemplate"] = "index.tmpl";
+//    $data["pagetemplate"] = "index.tmpl";
 
-    $res = \bbsengine6\displaypage($data);
+    $res = \bbsengine6\displaypage($data, "index.tmpl");
     return $res;
   }
 }

@@ -3,9 +3,7 @@ import argparse
 import tkinter as tk
 from tkinter import ttk
 
-import ttyio5 as ttyio
-import bbsengine5 as bbsengine
-
+from bbsengine6 import io, database, util, member
 
 class App(tk.Tk):
     def __init__(self, args):
@@ -18,21 +16,22 @@ class App(tk.Tk):
         self.title('Login')
         # UI options
         paddings = {'padx': 5, 'pady': 5}
-        entry_font = {'font': ('Helvetica', 11)}
+        entry_font = {"font": ("Courier", 20)}
+#        entry_font = {'font': ('Helvetica', 11)}
 
         # configure the grid
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=3)
 
-        self.name = tk.StringVar()
+        self.moniker = tk.StringVar()
         self.password = tk.StringVar()
 
         # username
-        self.name_label = ttk.Label(self, text="Name:")
-        self.name_label.grid(column=0, row=0, sticky=tk.W, **paddings)
+        self.moniker_label = ttk.Label(self, text="Moniker:")
+        self.moniker_label.grid(column=0, row=0, sticky=tk.W, **paddings)
 
-        self.name_entry = ttk.Entry(self, textvariable=self.name, **entry_font)
-        self.name_entry.grid(column=1, row=0, sticky=tk.E, **paddings)
+        self.moniker_entry = ttk.Entry(self, textvariable=self.moniker, **entry_font)
+        self.moniker_entry.grid(column=1, row=0, sticky=tk.E, **paddings)
 
         # password
         self.password_label = ttk.Label(self, text="Password:")
@@ -47,24 +46,20 @@ class App(tk.Tk):
 
         # configure style
         self.style = ttk.Style(self)
-        self.style.configure('TLabel', font=('Helvetica', 11))
-        self.style.configure('TButton', font=('Helvetica', 11))
+        self.style.configure('TLabel', font='Courier 20 bold')
+        self.style.configure('TButton', font='Courier 20 bold')
         self.bind('<Escape>', lambda e: self.close(e))
 
     def check(self):
-        name = self.name.get()
+        moniker = self.moniker.get()
         password = self.password.get()
-        memberid = bbsengine.getmemberidfromname(self.args, name)
-        ttyio.echo(f"name={name!r} password={password!r} memberid={memberid!r}", level="debug")
-        if memberid is False:
-            ttyio.echo("you do not exist! go away!")
-            return
+        io.echo(f"{moniker=} {password=}", level="debug")
 
-        if bbsengine.checkpassword(args, password, memberid) is True:
-            ttyio.echo("password is correct")
+        if util.checkpassword(args, password, moniker) is True:
+            io.echo("password is correct")
             self.destroy()
         else:
-            ttyio.echo("password is wrong")
+            io.echo("password is wrong")
             self.password_entry.delete(0, tk.END)
 
     def close(self, e):
@@ -76,8 +71,8 @@ def buildargs(args=None, **kw):
     parser.add_argument("--debug", action="store_true", dest="debug")
 
 #    defaults = {"databasename": "zoidweb5", "databasehost":"localhost", "databaseuser": None, "databaseport":15433, "databasepassword":None} # port=5432
-    defaults = {"databasename": "zoidweb5", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None} # port=5432
-    bbsengine.buildargdatabasegroup(parser, defaults)
+    defaults = {"databasename": "zoid6", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None} # port=5432
+    database.buildargs(parser, defaults)
 
     return parser
 

@@ -2,7 +2,7 @@
 // @see https://gist.github.com/garyharan/957284
 //
 
-/* 'css3prefix mixin' @see https://github.com/matthieua/sass-css3-mixins/blob/master/css3-mixins.scss */
+///* 'css3prefix mixin' @see https://github.com/matthieua/sass-css3-mixins/blob/master/css3-mixins.scss */
 /// Adds a browser prefix to the property wo regard for actual browser features
 /// @param {*} $property Property
 /// @param {*} $value Value
@@ -49,7 +49,7 @@
 
 }
 
-/* 'keyframes' mixin @see http://zerosixthree.se/8-sass-mixins-you-must-have-in-your-toolbox/*/
+///* 'keyframes' mixin @see http://zerosixthree.se/8-sass-mixins-you-must-have-in-your-toolbox/*/
 @mixin keyframes($animation-name) {
   @-webkit-keyframes #{$animation-name} {
     @content;
@@ -68,7 +68,7 @@
   }
 }
 
-/* 'animation' mixin from https://developer.mozilla.org/en-US/docs/Web/CSS/animation */
+///* 'animation' mixin from https://developer.mozilla.org/en-US/docs/Web/CSS/animation */
 // duration | timing-function | delay | iteration-count | direction | fill-mode | play-state | name
 // duration | timing-function | delay | name 
 // duration | name 
@@ -97,7 +97,7 @@
 /// @require {function} is-direction
 /// @require {function} convert-angle
 /// @throw Cannot convert `#{$value}` to legacy syntax because it doesn't seem to be a direction.;
-/* legacy-direction function @see http://www.sitepoint.com/building-linear-gradient-mixin-sass/ */
+///* legacy-direction function @see http://www.sitepoint.com/building-linear-gradient-mixin-sass/ */
 @function legacy-direction($value) {
   @if is-direction($value) == false {
     @error "Cannot convert `#{$value}` to legacy syntax because it doesn't seem to be a direction.";
@@ -136,7 +136,7 @@
   background: linear-gradient($direction, $color-stops);
 }
 
-/* 'transition' mixin @see http://codepen.io/sawmac/pen/cayhK */
+///* 'transition' mixin @see http://codepen.io/sawmac/pen/cayhK */
 @mixin transition($transition...) {
  transition: $transition;
 //@include css3prefix("transition", $transition);
@@ -174,7 +174,7 @@
 //  transition-delay:         $delay;
 }
 
-/* 'gradientanimation' mixin @see https://medium.com/@dave_lunny/animating-css-gradients-using-only-css-d2fd7671e759#.jlbdgs4jl */
+///* 'gradientanimation' mixin @see https://medium.com/@dave_lunny/animating-css-gradients-using-only-css-d2fd7671e759#.jlbdgs4jl */
 // @since 20151231
 // this is a mixin that will animate between two gradients.  the gradients are
 // generated at run time using the backgroundgradient mixin and are based on
@@ -201,7 +201,7 @@
      }
   }
 }
-/* 'animation' mixin @see http://zerosixthree.se/8-sass-mixins-you-must-have-in-your-toolbox/ */
+///* 'animation' mixin @see http://zerosixthree.se/8-sass-mixins-you-must-have-in-your-toolbox/ */
 @mixin animation($str...) {
   @include css3prefix("animation", $str);
 //  -webkit-animation: #{$str};

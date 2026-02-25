@@ -1,11 +1,11 @@
-<!-- zoidweb3.pagefooter -->
-{* {$mantra = $data.pagefooter.mantra} *}
+<!-- zoidweb4.pagefooter -->
 <footer id="pagefooter" class="blurb">
+{*<a href="http://rtalabel.org/"><img src="{$smarty.const.STATICARTURL}rta120x60.gif"
+/></a>*}
 <ul class="nobullets">
  <li>
 {*  <ul class="inlinelist"> *}
-   <span class="poweredby">[ powered by: <span class="bolt fa fa-fw fa-bolt"></span><a href="//zoidtechnologies.com/">zoid technologies</a> ]</span>
-{*   <li>[ hosted by: <a href="http://cloudieweb.com/">cloudieweb</a> ]</li>*}
+   <span class="poweredby">[ powered by: <span class="bolt fa fa-fw fa-bolt"></span><a href="https://zoidtechnologies.com/">zoidtechnologies.com</a> ]</span>
 {*  </ul> *}
  </li>
 {*
@@ -23,20 +23,17 @@
   </ul>
  </li>
 *}
- {if isset($data.pagefooter)}
-  {$pagefooter = $data.pagefooter}
-  {if isset($pagefooter.mantra)}
-   {$mantra = $pagefooter.mantra}
-   {$description = $mantra.description}
-   {if count($description) > 0}
-   <li>
-    <div class="mantra">{$description|escape|wpprop} - {$mantra.author|escape|wpprop}
-     {include file="actions.tmpl" actions=$mantra.actions}
-    </div>
-   </li>
-   {/if}
-  {/if} {* isset pagefooter.mantra *}
+{if isset($data.pagefooter)}
+ {$pagefooter = $data.pagefooter}
+{* {if isset($pagefooter.mantra) && $currentmember.flags.AUTHENTICATED}
+  {$mantra = $pagefooter.mantra}
+  <li><div class="mantra">{$mantra.description|escape|wpprop} - {$mantra.author|escape|wpprop}</div></li>
+  <li><center>{include file="actions.tmpl" actions=$mantra.actions}</center></li>
+  {/if}
+*}
  {/if} {* isset pagefooter *}
-<li><div class="copyright">copyright &copy; 2002-2019 zoid technologies. all rights reserved.</div></li>
+<li><div class="copyright">copyright &copy; 2002-2024 zoidtechnologies.com. all rights reserved.</div></li>
+<li><div class="trademark">>all trademarks and registered trademarks are the property of their respective holders</div></li>
+<li><div class="fontfootnote">page header font: <a href="https://www.fastcompany.com/3064790/donald-trumps-crazy-handwriting-is-now-a-free-font-called-tiny-hand?fbclid=IwAR3EBJ39rAc0WcnfaPcuVMt0Q0FK5612LcvAgI_H_4Bva5myFzorMOvevO0">tiny hand</a></div></li>
 </ul> {* nobullets *}
 </footer>

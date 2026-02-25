@@ -160,6 +160,330 @@ namespace bbsengine6\util
     return true;
   }
 
+/**
+ * safe_path — robust, flexible filesystem path constructor
+ *
+ * Intended for trusted/internal usage (CLI, config, admin tools).
+ * Mirrors commonl.safe_path() behavior from Python.
+ *
+ * Features:
+ *  - joins path components
+ *  - expands ~ and environment variables
+ *  - normalizes and absolutizes paths
+ *  - optionally resolves symlinks
+ *  - optionally enforces base_dir containment
+ *  - optionally requires existence
+ *
+ * @param array $components   Path components to join
+ * @param array $opts         Options:
+ *                            - base_dir (string|null, optional)
+ *                            - must_exist (bool, default false)
+ *                            - resolve_symlinks (bool, default true)
+ * @return string|false       Resolved safe path or false on failure
+ */
+function safe_path(array $components, array $opts = [])
+{
+    if (empty($components)) {
+        return false;
+    }
+
+    // --- options ------------------------------------------------------------
+
+    $base_dir         = $opts['base_dir'] ?? getcwd();
+    $must_exist       = (bool)($opts['must_exist'] ?? false);
+    $resolve_symlinks = (bool)($opts['resolve_symlinks'] ?? true);
+
+    // --- helpers ------------------------------------------------------------
+
+    $expand = function (string $path): string {
+        // strip null bytes
+        $path = str_replace("\0", '', $path);
+
+        // expand env vars: $VAR or ${VAR}
+        $path = preg_replace_callback(
+            '/\$(\w+)|\$\{([^}]+)\}/',
+            fn($m) => getenv($m[1] ?? $m[2]) ?: '',
+            $path
+        );
+
+        // expand ~
+        if ($path !== '' && $path[0] === '~') {
+            $home = getenv('HOME');
+            if ($home) {
+                $path = $home . substr($path, 1);
+            }
+        }
+
+        return $path;
+    };
+
+    $normalize = function (string $path): string {
+        $parts = [];
+        foreach (explode(DIRECTORY_SEPARATOR, $path) as $part) {
+            if ($part === '' || $part === '.') {
+                continue;
+            }
+            if ($part === '..') {
+                array_pop($parts);
+                continue;
+            }
+            $parts[] = $part;
+        }
+        return DIRECTORY_SEPARATOR . implode(DIRECTORY_SEPARATOR, $parts);
+    };
+
+    // --- expand + join ------------------------------------------------------
+
+    $expanded = [];
+
+    foreach ($components as $c) {
+        if (!is_string($c)) {
+            return false;
+        }
+        $expanded[] = $expand(trim($c));
+    }
+
+    $joined = implode(DIRECTORY_SEPARATOR, $expanded);
+
+    // make absolute
+    if (!str_starts_with($joined, DIRECTORY_SEPARATOR)) {
+        $joined = getcwd() . DIRECTORY_SEPARATOR . $joined;
+    }
+
+    $normalized = $normalize($joined);
+
+    // --- resolve symlinks ---------------------------------------------------
+
+    if ($resolve_symlinks) {
+        $resolved = realpath($normalized);
+
+        // allow non-existent final target
+        if ($resolved === false) {
+            $parent = realpath(dirname($normalized));
+            if ($parent === false) {
+                return false;
+            }
+            $resolved = $parent . DIRECTORY_SEPARATOR . basename($normalized);
+        }
+    } else {
+        $resolved = $normalized;
+    }
+
+    // --- optional base_dir containment -------------------------------------
+
+    if ($base_dir !== null) {
+        if (!is_string($base_dir)) {
+            return false;
+        }
+
+        $base_dir = $expand($base_dir);
+
+        if (!str_starts_with($base_dir, DIRECTORY_SEPARATOR)) {
+            $base_dir = getcwd() . DIRECTORY_SEPARATOR . $base_dir;
+        }
+
+        $base_dir = $normalize($base_dir);
+
+        if ($resolve_symlinks) {
+            $base_dir = realpath($base_dir);
+            if ($base_dir === false || !is_dir($base_dir)) {
+                return false;
+            }
+        } elseif (!is_dir($base_dir)) {
+            return false;
+        }
+
+        $base_dir = rtrim($base_dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+        if (
+            $resolved !== rtrim($base_dir, DIRECTORY_SEPARATOR) &&
+            !str_starts_with($resolved, $base_dir)
+        ) {
+            return false;
+        }
+    }
+
+    // --- existence check ----------------------------------------------------
+
+    if ($must_exist && !file_exists($resolved)) {
+        return false;
+    }
+
+    return $resolved;
 }
+
+/**
+ * safe_path_web — secure path resolver for web-facing input
+ *
+ * Rules:
+ *  - treats all input as untrusted
+ *  - joins relative path components
+ *  - forbids absolute paths
+ *  - forbids ~ and env expansion
+ *  - normalizes ".", ".."
+ *  - enforces strict base_dir containment
+ *  - optionally resolves symlinks
+ *  - optionally requires existence
+ *
+ * @param array $components       Untrusted relative path components
+ * @param array $opts             Options:
+ *                                - base_dir (string, required)
+ *                                - must_exist (bool, default false)
+ *                                - resolve_symlinks (bool, default true)
+ * @return string|false            Safe resolved path or false if invalid
+ */
+function safe_path_web(array $components, array $opts = [])
+{
+    // --- options ------------------------------------------------------------
+
+//    if (!isset($opts['base_dir']) || !is_string($opts['base_dir'])) {
+//        return false;
+//    }
+
+    if (empty($components)) {
+        return false;
+    }
+
+    $base_dir         = $opts['base_dir'] ?? getcwd();
+    $must_exist       = (bool)($opts['must_exist'] ?? false);
+    $resolve_symlinks = (bool)($opts['resolve_symlinks'] ?? true);
+
+    // --- base_dir validation ------------------------------------------------
+
+    $base_dir = str_replace("\0", '', $base_dir);
+    $base_dir = rtrim($base_dir, DIRECTORY_SEPARATOR);
+
+    if (!is_dir($base_dir)) {
+        return false;
+    }
+
+    $base_real = $resolve_symlinks ? realpath($base_dir) : $base_dir;
+    if ($base_real === false) {
+        return false;
+    }
+
+    $base_real = rtrim($base_real, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+    // --- sanitize and normalize components ----------------------------------
+
+    $clean = [];
+
+    foreach ($components as $c) {
+        if (!is_string($c)) {
+            return false;
+        }
+
+        $c = trim(str_replace("\0", '', $c));
+        if ($c === '') {
+            continue;
+        }
+
+        // forbid absolute paths (Unix + Windows)
+        if (
+            str_starts_with($c, DIRECTORY_SEPARATOR) ||
+            preg_match('#^[A-Za-z]:[\\\\/]#', $c)
+        ) {
+            return false;
+        }
+
+        // forbid ~ and env-like expansion tokens
+        if (str_contains($c, '~') || str_contains($c, '$')) {
+            return false;
+        }
+
+        // split on both / and \
+        $parts = preg_split('#[\\\\/]#', $c);
+
+        foreach ($parts as $p) {
+            if ($p === '' || $p === '.') {
+                continue;
+            }
+            if ($p === '..') {
+                array_pop($clean);
+                continue;
+            }
+            $clean[] = $p;
+        }
+    }
+
+    if (empty($clean)) {
+        return false;
+    }
+
+    // --- construct candidate ------------------------------------------------
+
+    $candidate = $base_real . implode(DIRECTORY_SEPARATOR, $clean);
+
+    // --- resolve symlinks ----------------------------------------------------
+
+    if ($resolve_symlinks) {
+        $resolved = realpath($candidate);
+
+        // allow non-existent final target (creation)
+        if ($resolved === false) {
+            $parent = realpath(dirname($candidate));
+            if ($parent === false) {
+                return false;
+            }
+            $resolved = $parent . DIRECTORY_SEPARATOR . basename($candidate);
+        }
+    } else {
+        $resolved = $candidate;
+    }
+
+    // --- containment check --------------------------------------------------
+
+    if (!str_starts_with($resolved, $base_real)) {
+        return false;
+    }
+
+    // --- existence check ----------------------------------------------------
+
+    if ($must_exist && !file_exists($resolved)) {
+        return false;
+    }
+
+    return $resolved;
+}
+
+/**
+ * Append paths to the PHP include_path if they are not already present.
+ *
+ * @param array $paths  Array of directory paths to add.
+ * @return void
+ * @since 20251223
+ */
+function add_include_paths(array $paths): void
+{
+    $separator = PATH_SEPARATOR;
+
+    // Current include_path entries
+    $current = array_filter(
+        explode($separator, get_include_path()),
+        'strlen'
+    );
+
+    // Normalize existing paths
+    $current = array_map(
+        static fn($p) => rtrim($p, DIRECTORY_SEPARATOR),
+        $current
+    );
+
+    foreach ($paths as $path) {
+        if (!is_string($path) || $path === '') {
+            continue;
+        }
+
+        $normalized = rtrim($path, DIRECTORY_SEPARATOR);
+
+        if (!in_array($normalized, $current, true)) {
+            $current[] = $normalized;
+        }
+    }
+
+    set_include_path(implode($separator, $current));
+}
+
+} /* namespace bbsengine6\util */
 
 ?>

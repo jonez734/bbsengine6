@@ -383,6 +383,33 @@ def schemaexists(args: Any, name: str, **kwargs: Any) -> bool:
     io.echo(f"bbsengine6.database.schemaexists.120: error {e}", level="error")
     raise
 
+
+def tableexists(args: Any, schema: str, table: str, **kwargs: Any) -> bool:
+  mogrify = kwargs.get("mogrify", False)
+
+  def _work(conn):
+    sql = "SELECT 't' as exists FROM information_schema.tables where table_schema=%s and table_name=%s"
+    dat = (schema, table)
+    with cursor(conn) as cur:
+      if mogrify is True:
+        io.echo(f"bbsengine6.database.tableexists.100: {mogrifysql(cur, sql, dat)=}", level="debug")
+      cur.execute(sql, dat)
+      return False if cur.rowcount == 0 else True
+
+  try:
+    conn = kwargs.get("conn", None)
+    if conn is None:
+      pool = kwargs.get("pool", None)
+      if pool is None:
+        return False
+      with connect(args, pool=pool) as conn:
+        return _work(conn)
+    return _work(conn)
+  except Exception as e:
+    io.echo(f"bbsengine6.database.tableexists.120: error {e}", level="error")
+    raise
+
+
 # @since 20230510 copied from bbsengine5.py
 def buildargs(parentparser: Any, defaults: dict | None = None, label: str = "database options", suppress: bool = False) -> None:
     if defaults is None:

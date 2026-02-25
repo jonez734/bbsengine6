@@ -12,9 +12,10 @@ export RSYNC = rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --times --verbose \
 	--exclude '*~' \
 	--archive --update --backup --recursive \
 	--human-readable --checksum --rsh=ssh \
-	--delete-after --mkpath
+	--delete-after --mkpath \
+	--exclude 'captchas'
 
-export VERSION = v6
+export VERSION = 6
 
 # @since 20230414
 export SCSSLOADPATH = --load-path $(HOME)/projects/zoidweb6/skin/scss/ # --load-path $(HOME)/projects/bbsengine6/skin/scss/
@@ -25,12 +26,12 @@ export MARKDOWNLIBPROD = merlin:/srv/www/
 
 # @since 20230424
 export ENGINESTAGE = /srv/www/bbsengine6/
-export ENGINESTAGEDOCROOT = /srv/www/vhosts/engine.zoidtechnologies.com/html/
+export ENGINESTAGEDOCROOT = /srv/www/vhosts/zoidtechnologies.com/html/engine/
 
 export ENGINEPROD = $(ENGINEHOST):/srv/www/bbsengine6/
-export ENGINEPRODDOCROOT = $(ENGINEHOST):/srv/www/vhosts/engine.zoidtechnologies.com/html/
+export ENGINEPRODDOCROOT = $(ENGINEHOST):/srv/www/vhosts/zoidtechnologies.com/html/engine/
 
-export WWWPROD = $(COMHOST):/srv/www/vhosts/www.bbsengine.org/
+export WWWPROD = $(ORGHOST):/srv/www/vhosts/www.bbsengine.org/
 export WWWPRODDOCROOT = $(WWWPROD)html/
 
 export WWWSTAGE = /srv/www/vhosts/www.bbsengine.org/
@@ -89,7 +90,7 @@ apidocs:
 
 handbook:
 	-$(MAKE) -C handbook stage
-	$(RSYNC) $(WWWSTAGEDOCROOT)handbook/$(VERSION)/ $(WWWPRODDOCROOT)handbook/$(VERSION)/
+	$(RSYNC) --dry-run $(WWWSTAGEDOCROOT)handbook/$(VERSION)/ $(WWWPRODDOCROOT)handbook/$(VERSION)/
 
 sql:
 	tar zcvf $(PROJECT)-sql-$(datestamp).tar.gz sql/
@@ -97,8 +98,8 @@ sql:
 markdown:
 	$(RSYNC) --links --exclude 'vhosts' /srv/www/php-markdown-lib /srv/www/markdown $(MARKDOWNLIBPROD)
 
-wwwcom:
-	$(MAKE) -C www com
+#wwwcom:
+#	$(MAKE) -C www com
 
 wwworg:
 	$(MAKE) -C www org
@@ -107,12 +108,15 @@ engine:
 	-$(MAKE) -C php stage
 	-$(MAKE) -C skin stage
 	-$(MAKE) -C js stage
+	-$(MAKE) -C smarty stage
 	$(RSYNC) $(ENGINESTAGE) $(ENGINEPROD)
 	$(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT)
-	$(RSYNC) $(STATICSTAGE) $(STATICPROD)
 
 push:
 	git push -u gitlab
 	git push -u github
+
+backup:
+	rsync --recursive --verbose --exclude=.venv . /run/media/jam/AEAB-CF37/projects/$(PROJECT)/
 
 .PHONY: handbook release sql prod www apidocs clean

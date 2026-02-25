@@ -9,7 +9,7 @@ if (set_include_path($includepath) === false)
     print("include path fail");
 }
 
-require_once("zoid6.php");
+//require_once("zoid6.php");
 
 define("SITETITLE", "bbsengine6 official website");
 define("SITEADMINEMAIL", "zoid zechnologies <bbsengine@projects.zoidtechnologies.com>");
@@ -21,21 +21,22 @@ define("STATICSKINURL", "https://bbsengine.org/skin/");
 define("SITEURL", "https://bbsengine.org/");
 define("SITENAME", "bbsenginedotorg");
 define("SKINURL", SITEURL . "skin/");
-define("SYSTEMDSN", \zoid6\SYSTEMDSN); // "pgsql:host=127.0.0.1;port=5432;dbname=zoid6");
+define("config\SYSTEMDSN", "pgsql:host=127.0.0.1;port=5432;dbname=zoid6");
 
-define("VHOSTDIR", "/srv/www/vhosts/www.bbsengine.org/");
-define("DOCUMENTROOT", VHOSTDIR . "html/");
+define("config\VHOSTDIR", "/srv/www/vhosts/www.bbsengine.org/");
+define("config\DOCUMENTROOT", \config\VHOSTDIR . "html/");
 
-define("ZOIDWEBDIR", "/srv/www/zoid6/");
+//define("ZOIDWEBDIR", "/srv/www/zoid6/");
 
-define("SMARTYCOMPILEDTEMPLATESDIR", VHOSTDIR."templates_c");
-define("SMARTYPLUGINSDIR", [ 0 => VHOSTDIR."smarty/"]);
-define("SMARTYTEMPLATESDIR", [ 0 => DOCUMENTROOT."skin/tmpl/", 1 => ZOIDWEBDIR."skin/tmpl/", 2 => "/srv/www/bbsengine6/skin/tmpl/"]);
+define("config\SMARTYCOMPILEDTEMPLATESDIR", \config\VHOSTDIR."templates_c");
+define("config\SMARTYPLUGINSDIR", [ 0 => \config\VHOSTDIR."smarty/"]);
+//define("SMARTYTEMPLATESDIR", [ 0 => DOCUMENTROOT."skin/tmpl/", 1 => ZOIDWEBDIR."skin/tmpl/", 2 => "/srv/www/bbsengine6/skin/tmpl/"]);
+define("config\SMARTYTEMPLATESDIR", [ 0 => \config\DOCUMENTROOT."skin/tmpl/", 1 => "/srv/www/bbsengine6/skin/tmpl/"]);
 
 // @see http://php.net/strftime
 define("DATEFORMAT", "%Y-%b-%d %I:%M %p %Z (%A)");
 
-define("LOGENTRYPREFIX", "bbsenginedotorg");
+define("config\LOGENTRYPREFIX", "bbsenginedotorg");
 
 define("RELEASESDIR", "/srv/repo/");
 
@@ -51,17 +52,24 @@ define("REPOURL", "https://repo.zoidtechnologies.com/");
 
 date_default_timezone_set("America/New_York");
 
-define("CURRENTVERSION", "v6/");
+define("CURRENTVERSION", "6");
 
-define("APIDOCSDIR", DOCUMENTROOT . CURRENTVERSION . "apidocs/");
-define("CHANGELOG", DOCUMENTROOT . CURRENTVERSION . "CHANGELOG.txt");
-define("README", DOCUMENTROOT . CURRENTVERSION . "README.txt");
-define("INSTALL", DOCUMENTROOT . CURRENTVERSION . "INSTALL.txt");
-define("RELEASENOTES", DOCUMENTROOT . CURRENTVERSION . "RELEASENOTES.txt");
+define("config\HANDBOOKDIR", \config\DOCUMENTROOT."handbook/");
+define("config\HANDBOOKURI", "/handbook/");
 
-define("PROJECTURL", "//projects.zoidtechnologies.com/");
+define("config\CURRENTHANDBOOKURI", \config\HANDBOOKURI."current/");
 
-define("ENGINEURL", "/");
+define("config\APIDOCSDIR", \config\HANDBOOKDIR . CURRENTVERSION . "/api/");
+define("config\APIDOCSURI", \config\HANDBOOKURI . CURRENTVERSION . "/api/");
+
+define("config\CHANGELOG", \config\HANDBOOKURI . "CHANGELOG.txt");
+define("config\README", \config\HANDBOOKURI . "README.txt");
+define("config\INSTALL", \config\HANDBOOKURI . "INSTALL.txt");
+define("config\RELEASENOTES", \config\HANDBOOKURI . "RELEASENOTES.txt");
+
+define("PROJECTURL", "https://projects.zoidtechnologies.com/");
+
+define("ENGINEURL", "/engine/");
 
 // @since 20180502 to squash a php notice
 define("WWWURL", "//zoidtechnologies.com/");
@@ -70,12 +78,11 @@ define("WWWURL", "//zoidtechnologies.com/");
 /**
  * @since 20190223
 */
-define("HANDBOOKDIR", DOCUMENTROOT);
 
-define("SESSIONCOOKIEDOMAIN", ".bbsengine.org");
-define("SESSIONCOOKIEEXPIRE", 12*60*60);
-define("SESSIONCOOKIEPATH", "/");
-define("SESSIONNAME", "bbsenginedotorgsession");
+define("config\SESSIONCOOKIEDOMAIN", ".bbsengine.org");
+define("config\SESSIONCOOKIEEXPIRE", 12*60*60);
+define("config\SESSIONCOOKIEPATH", "/");
+define("config\SESSIONNAME", "bbsenginedotorgsession");
 
 // @since 20230409
 define("CURRENTPROJECTNAME", "bbsengine6");

@@ -8,82 +8,27 @@ from . import io, input, database
 
 LOGGER_NAME = "bbsengine6"
 
-def hr(color="{var:engine.title.hrcolor}", chars="-", width=None, padding=" "):
-    if width is None:
-        width = io.getterminalwidth()-2
-    if io.getoption("style", "ttyio") == "ttyio":
-        return f"{{/all}}{padding}{color}{{acs:hline:{width}}}{{/all}}" # % (color, width)
-    return f"{padding}{chars*width}"
+def hr(acs=True, width=None, end="\n"):
+  if width is None:
+    width = io.terminal.width()-2
+  io.echo(f" {{boxcolor}}{{hline:{width}}}{{/all}}", end=end)
+  return True
 
-# titlecolor = "{reverse}"
-# hrcolor = ""
-# hrchars = "{acs:hline}"
-# llcorner="{acs:llcorner}"
-# lrcorner="{acs:lrcorner}"
-# ulcorner="{acs:ulcorner}"
-# urcorner="{acs:urcorner}"
-def heading(title:str, level=1, **kw): # hrchar:str="{acs:hline}", llcorner="{acs:llcorner}", lrcorner="{acs:lrcorner}", ulcorner="{acs:ulcorner}", urcorner="{acs:urcorner}", vline="{acs:vline}", width=None, fillchar=" ", center=True):
-  if io.getoption("style", "ttyio") == "noansi":
-      width = 100
-      hline="-"*width
-      llcorner="+"
-      lrcorner="+"
-      ulcorner="+"
-      urcorner="+"
-      vline="|"
-      #boxcolor = ""
-      #titlecolor = ""
-      #reset = ""
-  else:
-      width = io.getterminalwidth() - 4
-      hline = f"{{acs:hline:{width}}}"
-      llcorner = "{acs:llcorner}"
-      lrcorner = "{acs:lrcorner}"
-      vline = "{acs:vline}"
-      urcorner = "{acs:urcorner}"
-      ulcorner = "{acs:ulcorner}"
-      #boxcolor = "{darkgreen}" # var:engine.title.hrcolor}"
-      #titlecolor = "{white}{bggray}" # {var:engine.title.color}"
-      # reset = "{/all}"
-
+def heading(title:str, **kwargs):
+  width = io.terminal.width() - 4
   w = width - len(title)
-#  print(f"w={w!r}")
   if int(w % 2) == 0:
     repeat = int(w/2)
     leftpadding  = " "*int(repeat)
     rightpadding = " "*int(repeat)
   else:
-    repeat = int(w-1)/2
+    repeat = int(w-2)/2
     leftpadding  = " "*int(repeat+2)
-    rightpadding = " "*int(repeat-1)
+    rightpadding = " "*int(repeat+1)
 
-  io.echo(f"{{/all}}{{normalcolor}} {{boxcolor}}{ulcorner}{hline}{urcorner}", wordwrap=False)
-  io.echo(f" {{boxcolor}}{vline}{{titlecolor}}{leftpadding}{title}{rightpadding}{{/all}}{{boxcolor}}{vline}{{/all}}", wordwrap=False)
-  io.echo(f" {{boxcolor}}{llcorner}{hline}{lrcorner}{{/all}}", wordwrap=False)
-  return
-
-  style = io.getoption("style", "ttyio")
-  if style == "noansi":
-    width = 100
-    hrchar = "-"
-    llcorner = "+"
-    lrcorner = "+"
-    ulcorner = "+"
-    urcorner = "+"
-    vline = "|"
-  else:
-    width = getterminalwidth()-2
-
-  if width is None:
-    width = io.getterminalwidth()-2
-#  buf = ttyio.center(title, width)
-  buf = title.center(width) # ttyio.center(title, width)
-#  b = title.center(width) # ttyio.center(title)
-
-  io.echo("{/all}{var:engine.title.hrcolor}%s{acs:hline:%s}%s" % (ulcorner, width, urcorner), wordwrap=False)
-  io.echo("{var:engine.title.hrcolor}{acs:vline}{/all}{var:engine.title.color}%s{/all}{var:engine.title.hrcolor}{acs:vline}{/all}" % (buf), wordwrap=False)
-  # ttyio.echo("{f6}{acs:vline}{/all}%s%s{/all}%s{acs:vline}{/all}" % (titlecolor, i.center(width), hrcolor), end="")
-  io.echo("{var:engine.title.hrcolor}%s{acs:hline:%s}%s{/all}" % (llcorner, width, lrcorner), wordwrap=False)
+  io.echo(f"{{/all}}{{normalcolor}} {{boxcolor}}{{ulcorner}}{{hline:{width}}}{{urcorner}}", wordwrap=False, end="\n")
+  io.echo(f" {{boxcolor}}{{vline}}{{titlecolor}}{leftpadding}{title}{rightpadding}{{/all}}{{boxcolor}}{{vline}}", wordwrap=False, end="\n")
+  io.echo(f" {{llcorner}}{{hline:{width}}}{{lrcorner}}{{/all}}{{f6}}", wordwrap=False, end="")
   return
 
 # @since 20230509 copied from bbsengine5.py
@@ -215,9 +160,14 @@ def logentry(message, *, level=logging.INFO, handler=None, formatter=None, logge
 #        "exception":logging.EXCEPTION,
     }
 
+    if type(level) == int:
+      return logger.log(level, message)
+
     level = level.lower()
     if level in levels:
         level = levels[level]
+    else:
+        level = logging.INFO
 
     logger.log(level, message)
     return
@@ -294,7 +244,7 @@ def filedisplay(res, **kw) -> None: #more=True, width=None) -> None:
 
 #  ttyio.echo("filename=%r" % (filename), level="debug")
   if width is None:
-    width = io.getterminalwidth()
+    width = io.terminal.width()
 
   buf = ""
   with res as r:

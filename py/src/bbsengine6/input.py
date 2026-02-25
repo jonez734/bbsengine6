@@ -32,6 +32,10 @@ def getdate(buf):
       res = datetime.now(tz=localtz)
       io.echo(f"{res=}", level="debug")
       return datetime.now(tz=localtz)
+    elif buf == "last week":
+      return datetime.now(tz=localtz) + timedelta(days=-7)
+    elif buf == "next week":
+      return datetime.now(tz=localtz) + timedelta(days=+7)
     else:
       try:
         res = add_default_tz(parse(buf), localtz)

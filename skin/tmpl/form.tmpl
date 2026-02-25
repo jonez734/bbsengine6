@@ -1,12 +1,16 @@
 {extends file="page.tmpl"}
 {$form = $data.form}
+{$editor = $smarty.const.TEXTAREAMODE|default:"standard"}
 {block name="title"}{$data.title}{/block}
 {* <pre>{$data|var_export}</pre> *}
 {block name="head" append}
-<link rel="stylesheet" type="text/css" href="{$smarty.const.SKINURL}css/form.css" media="screen" />
-
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/form.css" media="screen" />
+{*<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/form-checkbox.css" media="screen" /> *}
+{* <script src="{$smarty.const.ENGINEURL}js/tinymce/tinymce.min.js"></script> *}
+{if $editor == "tinymce"}
 <script src="https://cdn.tiny.cloud/1/m9bmedo0irw2po5k2ansa5o5x0spllvmd6v68mnlz3fv7ixp/tinymce/5/tinymce.min.js" defer></script>
 <script src="{$smarty.const.ENGINEURL}js/inittinymce.js" defer></script>
+{/if}
 
 {if $form.javascript}
 <script language="javascript">
@@ -16,11 +20,9 @@
 </script>
 {/if}
 {/block}
-{block name="content"}
-{*errors={$form.errors|var_export}<br />*}
-
+{block name="main"}
 {if count($form.errors) > 0}
-  <div class="blurb errors element element--jello">
+  <div class="blurb errors">
    <div class="header"><h1>form errors:</h1></div>
    <div class="body">
 {*   <pre>{$form.errors|var_dump}</pre> *}
@@ -32,7 +34,7 @@
    </div> {* body *}
   </div> {* blurb errors *}
 {/if} {* form.errors *}
-<div class="blurb vstretch element element--bounceInUp">
+<div class="blurb">
 <form {$form.attributes}>
 	{if $form.hidden}
 		<fieldset style="display: none;">

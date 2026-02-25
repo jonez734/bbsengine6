@@ -1,9 +1,6 @@
 from typing import NamedTuple
 
-import ttyio6 as ttyio
-import bbsengine6 as bbsengine
-from . import screen
-from . import module
+from . import screen, module, io
 
 menuitemresults = {}
 
@@ -12,10 +9,10 @@ class Op(NamedTuple):
   menuitem: object
 
 class Item(object):
-  def __init__(self, key, label, module, **kw):
+  def __init__(self, key, label, modulename, **kw):
 
     self.key = key
-    self.module = module
+    self.module = modulename
     self.label = label
 
     self.result = None
@@ -23,7 +20,7 @@ class Item(object):
     self.disabled = False
     self.description = None
     self.requires = kw["requires"] if "requires" in kw else None
-    self.width = ttyio.getterminalwidth()
+    self.width = io.getterminalwidth()
     if self.width > 100:
       self.width = 100
 
@@ -40,7 +37,7 @@ class Item(object):
     elif self.result is False:
       buf += " [FAIL]"
 
-    ttyio.echo(f"{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:cic}}{buf.ljust(self.width-8, ' ')} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}", end="", flush=True)
+    io.echo(f"{{cha}} {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:cic}}{buf.ljust(self.width-8, ' ')} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}{{cha}}", end="", flush=True)
 
 class Menu(object):
   def __init__(self, args, title:str, items:list, area:str="", pagesize=20, **kw):
@@ -53,7 +50,7 @@ class Menu(object):
     self.pagesize = pagesize
     self.currentpage = 0
 
-    self.items.append(Item("X", "eXit menu", None, width=ttyio.getterminalwidth()))
+    self.items.append(Item("X", "eXit menu", None, width=io.getterminalwidth()))
 
   # @see https://stackoverflow.com/questions/11469025/how-to-implement-a-subscriptable-class-in-python-subscriptable-class-not-subsc
   def __getitem__(self, name:str) -> object:
@@ -88,7 +85,7 @@ class Menu(object):
     return True
 
   def display(self):
-    terminalwidth = ttyio.getterminalwidth()
+    terminalwidth = io.getterminalwidth()
     if terminalwidth > 100:
       terminalwidth = 100
     w = terminalwidth - 7
@@ -102,13 +99,13 @@ class Menu(object):
           if l > maxlen:
               maxlen = l
 
-    ttyio.echo("{/all}{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}" % (" "*(terminalwidth-2)), wordwrap=False)
+    io.echo("{/all}{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}" % (" "*(terminalwidth-2)), wordwrap=False)
     if self.title is None or self.title == "":
-      ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:%d}}{{var:engine.menu.boxcharcolor}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}" % (w), wordwrap=False)
+      io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:%d}}{{var:engine.menu.boxcharcolor}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}" % (w), wordwrap=False)
     else:
-      ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:%d}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}" % (w), wordwrap=False)
-      ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.titlecolor}}%s{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (self.title.center(w)), wordwrap=False)
-      ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:%d}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (w), wordwrap=False)
+      io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ulcorner}}{{acs:hline:%d}}{{acs:urcorner}}{{var:engine.menu.color}}  {{/all}}" % (w), wordwrap=False)
+      io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.titlecolor}}%s{{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (self.title.center(w)), wordwrap=False)
+      io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:ltee}}{{acs:hline:%d}}{{acs:rtee}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}" % (w), wordwrap=False)
 
     if self.args.debug is True:
       screen.setarea(f"{self.pos=} {len(self.items)} {self.currentitem=}")
@@ -118,20 +115,20 @@ class Menu(object):
     num = 0
     for item in self.items:
       if item.result is False:
-        ttyio.setvariable("cic", "{var:engine.menu.resultfailedcolor}")
+        io.setvariable("cic", "{var:engine.menu.resultfailedcolor}")
       elif self.resolverequires(item) is False:
-        ttyio.setvariable("cic", "{var:engine.menu.disableditemcolor}")
+        io.setvariable("cic", "{var:engine.menu.disableditemcolor}")
       elif self.currentitem.key == item.key:
-        ttyio.setvar("cic", "{var:currentitemcolor}")
+        io.setvar("cic", "{var:currentitemcolor}")
       else:
-        ttyio.setvariable("cic", "{var:itemcolor}")
+        io.setvariable("cic", "{var:itemcolor}")
 
       num += 1
 #      x = mi.tostr().ljust(terminalwidth-8, " ")
 #      ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.ic}}{x} {{/all}}{{var:engine.menu.boxcharcolor}}{{acs:vline}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}")
 
       item.display()
-      ttyio.echo()
+      io.echo()
 
       options += item.key # chr(ch)
       if num >= self.pagesize:
@@ -142,10 +139,10 @@ class Menu(object):
 #    ttyio.echo(" {var:engine.menu.color} {var:engine.menu.boxcharcolor}{acs:vline}{var:engine.menu.itemcolor}%s {var:engine.menu.boxcharcolor}{acs:vline}{var:engine.menu.shadowcolor} {var:engine.menu.color} {/all}" % ("e[X]it".ljust(terminalwidth-8)), wordwrap=False)
 #    options += "X"
 
-    ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:llcorner}}{{acs:hline:{terminalwidth-7}}}{{acs:lrcorner}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
+    io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}} {{var:engine.menu.boxcharcolor}}{{acs:llcorner}}{{acs:hline:{terminalwidth-7}}}{{acs:lrcorner}}{{var:engine.menu.shadowcolor}} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
 
-    ttyio.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}}  {{var:engine.menu.shadowcolor}}{' '*(terminalwidth-6)} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
-    ttyio.echo(f" {{var:engine.menu.color}}{' '*(terminalwidth-2)}{{/all}}", wordwrap=False)
+    io.echo(f" {{var:engine.menu.cursorcolor}}{{var:engine.menu.color}}  {{var:engine.menu.shadowcolor}}{' '*(terminalwidth-6)} {{var:engine.menu.color}} {{/all}}", wordwrap=False)
+    io.echo(f" {{var:engine.menu.color}}{' '*(terminalwidth-2)}{{/all}}", wordwrap=False)
     return
 
   def handle(self, prompt="menu: "):#, default="X"):
@@ -153,7 +150,7 @@ class Menu(object):
 #      n = self.pagesize
 #    else:
 #      n = self.numitems
-    ttyio.echo(f"{{f6}} {prompt}{{decsc}}{{cha}}{{cursorright:4}}{{cursorup:{n-self.pos+4}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
+    io.echo(f"{{f6}} {prompt}{{decsc}}{{cha}}{{cursorright:4}}{{cursorup:{n-self.pos+4}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 ##    ttyio.echo(f"{{f6}} {prompt}{{savecursor}}{{cha}}{{cursorright:4}}{{cursorup:{4+self.numitems}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 
     res = None
@@ -166,8 +163,8 @@ class Menu(object):
     while not done:
 #      self.currentmenuitem = self.items[self.pos]
 
-      ch = ttyio.getch(noneok=False).upper()
-      ttyio.setvar("cic", "{var:itemcolor}")
+      ch = io.getch(noneok=False).upper()
+      io.setvar("cic", "{var:itemcolor}")
       self.currentitem.display()
 
       if ch == "KEY_DOWN":
@@ -175,29 +172,29 @@ class Menu(object):
           # ttyio.echo("{black}{bggray}%s{cursorleft}{cursordown}" % (chr(ord('A')+pos)), end="", flush=True)
           # ttyio.echo("{var:menu.cursorcolor}{var:menu.boxcolor}%s{cursorleft}{cursordown}" % (chr(ord('A')+pos)), end="", flush=True)
 #          ttyio.echo(f"{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
-          ttyio.echo(f"{{var:engine.menu.cursorcolor}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
+          io.echo(f"{{var:engine.menu.cursorcolor}}{{cursordown}}", end="", flush=True) # chr(ord('A')+self.pos)), end="", flush=True)
 
           self.pos += 1
         else:
-          ttyio.echo(f"{{cursorup:{self.pos}}}", end="", flush=True)
+          io.echo(f"{{cursorup:{self.pos}}}", end="", flush=True)
           self.pos = 0
       elif ch == "KEY_UP":
         if self.pos > 0:
-          ttyio.echo("{cursorup}", end="", flush=True)
+          io.echo("{cursorup}", end="", flush=True)
           self.pos -= 1
         else:
-          ttyio.echo(f"{{cursordown:{self.numitems-1}}}", end="", flush=True)
+          io.echo(f"{{cursordown:{self.numitems-1}}}", end="", flush=True)
           self.pos = self.numitems-1
       elif ch == "KEY_ENTER":
         # ttyio.echo("pos=%d len=%d" % (pos, len(menu)))
-        ttyio.echo("{restorecursor}", end="", flush=True)
+        io.echo("{restorecursor}", end="", flush=True)
         return Op("select", self.items[self.pos])
       elif ch == "KEY_HOME":
         if self.pos > 0:
-          ttyio.echo(f"{{cursorup:{self.pos}}}", end="", flush=True)
+          io.echo(f"{{cursorup:{self.pos}}}", end="", flush=True)
           self.pos = 0
       elif ch == "KEY_END":
-        ttyio.echo(f"{{cursordown:{self.numitems-self.pos-1}}}", end="", flush=True)
+        io.echo(f"{{cursordown:{self.numitems-self.pos-1}}}", end="", flush=True)
         self.pos = self.numitems-1
 #      elif ch == "KEY_LEFT" or ch == "KEY_RIGHT":
 #        ttyio.echo("{bell}", flush=True, end="")
@@ -207,15 +204,15 @@ class Menu(object):
       elif len(ch) == 1:
           for mi in self.items:
             if self.args.debug is True:
-              ttyio.echo(f"{ch=} {mi.key=}", level="debug")
+              io.echo(f"{ch=} {mi.key=}", level="debug")
             if ch == mi.key:
-              ttyio.echo("{restorecursor}", end="", flush=True)
+              io.echo("{restorecursor}", end="", flush=True)
               return Op("select", mi) # ("select", mi)
       else:
-        ttyio.echo("{bell}", end="", flush=True)
+        io.echo("{bell}", end="", flush=True)
         continue
 
-      ttyio.setvar("cic", "{var:currentitemcolor}")
+      io.setvar("cic", "{var:currentitemcolor}")
       self.currentitem = self.items[self.pos]
       self.currentitem.display()
 #      ttyio.echo()
@@ -229,7 +226,7 @@ class Menu(object):
     self.numitems = len(self.items)
 
     if self.numitems == 0:
-      ttyio.echo("no menu items defined.", level="error")
+      io.echo("no menu items defined.", level="error")
       return None
 
     self.currentitem = self.items[self.pos]
@@ -241,35 +238,35 @@ class Menu(object):
       res = self.handle(f"{{var:engine.menu.promptcolor}}{prompt}{{var:engine.menu.inputcolor}}") # {{savecursor}}")
 
       if res is None:
-        ttyio.echo("self.handle() returned None", level="debug")
+        io.echo("self.handle() returned None", level="debug")
         return None
 
       mi = res.menuitem
 
       if res.kind == "refresh":
-        ttyio.echo("{decrc}refresh")
+        io.echo("{decrc}refresh")
         continue
       elif res.kind == "enter":
-          ttyio.echo(f"{{restorecursor}}{{var:optioncolor}}{res.menuitem.key}{{var:promptcolor}}: {{var:labelcolor}}{res.menuitem.label}{{/all}}")
+          io.echo(f"{{restorecursor}}{{var:optioncolor}}{res.menuitem.key}{{var:promptcolor}}: {{var:labelcolor}}{res.menuitem.label}{{/all}}")
       elif res.kind == "help":
-        ttyio.echo(f"{{restorecursor}}{{var:labelcolor}}{mi.label} - help{{f6}}", end="", flush=True)
+        io.echo(f"{{restorecursor}}{{var:labelcolor}}{mi.label} - help{{f6}}", end="", flush=True)
         if not hasattr(mi, "help"):
-          ttyio.echo("{bell}", end="", flush=True)
+          io.echo("{bell}", end="", flush=True)
           continue
 
         if callable(mi.help) is True:
           mi.help()
         elif type(mi.help) is str:
-          ttyio.echo(mi.help)
+          io.echo(mi.help)
         else:
-          ttyio.echo("{f6}no help defined for this option{f6}")
+          io.echo("{f6}no help defined for this option{f6}")
         continue
       elif res.kind == "exit":
-        ttyio.echo("{decrc}exiting{f6}")
+        io.echo("{decrc}exiting{f6}")
         break
 
       if self.resolverequires(res.menuitem) is False:
-        if ttyio.inputboolean("{f6}{var:labelcolor}not all requirements have been resolved. proceed? {var:optioncolor}[yN]{var:promptcolor}: {var:inputcolor}", "N") is False:
+        if io.inputboolean("{f6}{var:labelcolor}not all requirements have been resolved. proceed? {var:optioncolor}[yN]{var:promptcolor}: {var:inputcolor}", "N") is False:
           continue
 
       return res

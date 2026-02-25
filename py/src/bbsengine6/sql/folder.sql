@@ -16,5 +16,5 @@ create table engine.__folder (
 
 CREATE INDEX idx_folder_attrs ON engine.__folder USING gin (attrs);
 
-grant select on table engine.__folder to web;
-grant all on table engine.__folder to sysop, term;
+grant select on table engine.__folder to web, term;
+grant all on table engine.__folder to sysop;

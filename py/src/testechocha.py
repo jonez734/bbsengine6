@@ -28,7 +28,10 @@ class TestCHACommand(unittest.TestCase):
             bbsengine6.io.echo("{cha}", end="")
         
         output = self.captured_output.getvalue()
-        self.assertEqual(output, "\x1b[1G")
+        expected = "\x1b[1G"
+        print(f"  Expected: {repr(expected)}")
+        print(f"  Actual:   {repr(output)}")
+        self.assertEqual(output, expected)
         
     def test_cha_specific_column(self):
         """Test {cha:N} moves cursor to column N"""
@@ -36,7 +39,10 @@ class TestCHACommand(unittest.TestCase):
             bbsengine6.io.echo("{cha:5}", end="")
         
         output = self.captured_output.getvalue()
-        self.assertEqual(output, "\x1b[5G")
+        expected = "\x1b[5G"
+        print(f"  Expected: {repr(expected)}")
+        print(f"  Actual:   {repr(output)}")
+        self.assertEqual(output, expected)
         
     def test_cha_column_10(self):
         """Test {cha:10} moves cursor to column 10"""
@@ -44,7 +50,10 @@ class TestCHACommand(unittest.TestCase):
             bbsengine6.io.echo("{cha:10}", end="")
         
         output = self.captured_output.getvalue()
-        self.assertEqual(output, "\x1b[10G")
+        expected = "\x1b[10G"
+        print(f"  Expected: {repr(expected)}")
+        print(f"  Actual:   {repr(output)}")
+        self.assertEqual(output, expected)
         
     def test_cha_with_text(self):
         """Test {cha} followed by text"""
@@ -52,8 +61,10 @@ class TestCHACommand(unittest.TestCase):
             bbsengine6.io.echo("{cha:3}hello", end="")
         
         output = self.captured_output.getvalue()
-        # Just verify it starts with the CHA sequence
-        self.assertTrue(output.startswith("\x1b[3G"))
+        expected = "\x1b[3G"
+        print(f"  Expected starts with: {repr(expected)}")
+        print(f"  Actual:               {repr(output)}")
+        self.assertTrue(output.startswith(expected))
         
     def test_cha_repeated(self):
         """Test multiple {cha} commands"""
@@ -61,7 +72,10 @@ class TestCHACommand(unittest.TestCase):
             bbsengine6.io.echo("{cha}{cha:5}", end="")
         
         output = self.captured_output.getvalue()
-        self.assertEqual(output, "\x1b[1G\x1b[5G")
+        expected = "\x1b[1G\x1b[5G"
+        print(f"  Expected: {repr(expected)}")
+        print(f"  Actual:   {repr(output)}")
+        self.assertEqual(output, expected)
 
 
 if __name__ == "__main__":

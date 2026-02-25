@@ -1,5 +1,5 @@
 {extends file="page.tmpl"}
-{block name="title"}bbsengine6 - official home page{/block}
+{block name="title"}bbsengine - official home page{/block}
 {block name="head" append}
 {*<link rel="stylesheet" type="text/css" href="/skin/css/index.css" media="screen" />*}
 <link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/lists.css" media="screen" />
@@ -10,48 +10,54 @@
 {* how do I get it *}
 {block name="content"}
 <div class="blurb">
-<div class="header"><h1>bbsengine - simple yet elegant open source (GPLv2) application framework</h1></div>
+<div class="header"><h1>bbsengine</h1></div>
 <div class="body">
 
-<p><b>bbsengine.org</b> was registered on 2008-10-11 with the goal of providing a
-simple yet elegant php-based web application library for developers using, at the time, php4. bbsengine1 had some security problems
-<a href="#bbsengine1security">bbsengine1security</a>) which were fixed in bbsengine2.
-<b>bbsengine3</b> is written in <a href="//php.net/">php5.4</a>
-(requires 5.4.x or above) and uses <a
-href="//postgresql.org/">PostgreSQL</a> (9.2.x or above), <a
-href="//smarty.net/">the Smarty3 template engine</a> (3.1.30+), and several modules from <a href="//pear.php.net/">PEAR</a> including <a
-href="//pear.php.net/pager">pager</a>, <a
-href="//pear.php.net/html_quickform2">html_quickform2</a>, <a
-href="//pear.php.net/html_quickform2_captcha">html_quickform2_captcha</a>
-and <a href="//pear.php.net/mdb2">mdb2</a>.</p>
-<p>The first release of bbsengine has a datestamp of 20040118 16:47 EST</p>
-<p>In June 2011 use of <a href="//pear.php.net/html_page2">html_page2</a>
-(requires 0.6.5-beta or above) was added and an upgrade to <a
-href="//smarty.net/">Smarty3</a> from smarty2 was performed.</p>
+<ul>
+<li><b>what is it?</b> - bbsengine is an open source (GPLv2+) application platform that primarily uses
+text interfaces with a web version available</li>
+<li><b>what can it do?</b> - bbsengine has been used to build office applications ("projectflow") as well as games ("empyre" for starters).
+ <ul>
+  <li>ANSI escape sequences are a standard for in-band signaling to control cursor location, color, font styling, and other options on video text terminals</li>
+  <li>support for vt102 and ECMA-48 (also known as ISO/IEC 6429 or ANSI X3.64) for
+color, </li>
+  <li><a href="https://vt100.net/">vt100.net</a></li>
+ <li> io
+  <ul>
+  <li> echo()</li>
+  <li> getch()</li>
+  <li> inputchoice(), inputstring(), etc</li>
+  </ul></li>
+ <li> session management</li>
+ <li> user authentication and management</li>
+ <li> database management including roles</li>
+ <li> some of the utilities:
+  <ul>
+  <li> pluralize()</li>
+  <li> oxfordcomma()</li>
+  <li> diceroll()</li>
+  <li> hr() - horizontal rule, like in HTML</li>
+  <li> heading() - a box with centered text inside it</li>
+  </ul>
+ </li>
+ </ul>
+</li>
+<li><b>how do I get it?</b> - 20250515: there are no public downloads of bbsengine available at this time</li>
+</ul>
+<ul>
+<li>the first release of bbsengine is dated 200401181647 (ET)</li>
+<li><b>bbsengine.org</b> was registered on 2008-10-11</li>
+{*<li>In June 2011 use of <a href="//pear.php.net/html_page2">html_page2</a> (requires 0.6.5-beta or above) was added and an upgrade to <a href="//smarty.net/">Smarty3</a> from smarty2 was
+performed.</li>*}
 
 {*<p>To make effective use of bbsengine4 you will need to be a developer
 comfortable with the use of PEAR packages, Smarty3 Templates, and have
 hosting with PostgreSQL available.  bbsengine4 has not been tested on
 servers using web-based control panels for system administration.  it can be
 done.  </p>*}
-
+</ul>
 </div>
 </div>
-
-<div class="blurb">
-<div class="header"><h1>bbsengine6</h1></div>
-<div class="body">
-<ul>
-<li> switches PEAR::MDB2 with PDO</li>
-<li> uses php8.x</li>
-<li> namespaces</li>
-<li> groups database and session functions into their own namespace
-<code>databaseconnect(SYSTEMDSN)</code> to
-<code>\bbsengine6\database\connect(SYSTEMDSN)</code></li>
-<li>named bound paramters instead of positional</li>
-<li>calls to utility functions like getcurrenturi() become \bbsengine6\gertcurrenturi()</li>
-</div> {* body *}
-</div> {* blurb *}
 
 {if $data.latestrelease !== null}
 <div class="blurb">
@@ -74,19 +80,47 @@ done.  </p>*}
 <div class="body">
 <ul class="commadelimited">
 {foreach $data.docs as $doc}
-<li><a href="{$doc.url}">{$doc.title}</a> (updated {$doc.updatedepoch|ago} ago)</li>
+<li><a href="{$doc.url}">{$doc.title}</a>{* (updated {$doc.updatedepoch|ago} ago)*}</li>
 {/foreach}
 </ul>
 </div> {* body *}
 </div> {* docs *}
 {/if}
+<div class="blurb">
+<div class="header"><h1>bbsengine6</h1></div>
+<div class="body">
+<ul>
+<li> AI</li>
+<li> upgrade to psycopg3 (database adapter, python, threaded connection pooling)
+<li> RBOC (role based access control) (database)</li>
+<li> switches PEAR::MDB2 with PDO (database adapter, php)</li>
+<li> uses php8.x and python3.x</li>
+<li> <code>\config</code> namespace for defines (php 5.3+)</li>
+<li> groups database and session functions into their own namespace
+<code>databaseconnect(SYSTEMDSN)</code> to
+<code>\bbsengine6\database\connect(\config\SYSTEMDSN)</code> (php) <code>bbsengine6.database.connect()</code> (python)</li>
+<li>named bound parameters instead of positional</li>
+{*<li>calls to utility functions like getcurrenturi() become \bbsengine6\gertcurrenturi()</li>*}
+<li>ttyio6 -> bbsengine6.io</li>
+<li>getdate3 -> bbsengine6.input.getdate()</li>
+{*<li>very modular (python and php) fe <code>bbsengine.database.connect()</code>,
+<code>bbsengine.member.getcurrentmoniker()</code></li>*}
+<li>reworked database constraints which referred to views</li>
+<li>use smarty4</li>
+<li>psycopg3 - threaded database abstraction layer</li>
+<li>pl/pgsql</li>
+<li>wcwidth</li>
+</ul>
+</div> {* body *}
+</div> {* blurb *}
 
 <div class="blurb">
 <div class="header"><h1>bbsengine5</h1></div>
 <div class="body">
 <ul>
 <li>mostly enhancements to the python version</li>
-<li>use pgcrypto</li>
+<li>sessions (python)</li>
+<li>pgcrypto</li>
 </ul>
 </div>
 </div>
@@ -104,6 +138,12 @@ done.  </p>*}
 <div class="header"><h1>bbsengine3 news: docs updated, new release made which include bbsengine.org source, new form handling (2015-nov-03)</h1>
 </div>
 <div class="body">
+<p><b>bbsengine3</b> is written in <a href="//php.net/">php5.4</a> (requires 5.4.x or above) and uses <a href="//postgresql.org/">PostgreSQL</a> (9.2.x or above), <a
+href="//smarty.net/">the Smarty3 template engine</a> (3.1.30+), and several modules from <a href="//pear.php.net/">PEAR</a> including <a
+href="//pear.php.net/pager">pager</a>, <a href="//pear.php.net/html_quickform2">html_quickform2</a>, <a
+href="//pear.php.net/html_quickform2_captcha">html_quickform2_captcha</a>
+and <a href="//pear.php.net/mdb2">mdb2</a>.</p>
+
 <p>based on suggestions from a user, I've merged the project 'bbsenginedotorg' (this website) with 'bbsengine3' to serve as a basic example of how to get a site working using this framework.</p>
 <p>I've radically updated the <a href="/current/INSTALL">INSTALL</a> file so the version numbers of various packages are accurate, to make descriptions more concise, and to offer some useful hints as to how to configure things so they will work well.</p> <!-- it was so old, it referred to 'fc4' -->
 <p>form handling has been simplified down to three function calls which allows for <b>very</b> straight-forward use of enhanced forms:</p>
@@ -185,20 +225,24 @@ abstraction layer instead of <a href="//pear.php.net/db">DB</a></li>
 </div> {* blurb *}
 
 
+{* this list is dated and none of the urls are in DNS anymore. commented out. 20251029 *}
+{*
 <div class="blurb">
 <div class="header"><h1>some sites built with bbsengine4</h1></div>
 <div class="body">
 <ul>
+*}
 {*<li><b>Demeter</b> is a "feed harvester" similar to google's "feed reader". This can easily be customized to have feeds relevant to a specific interest group, for example the military community. This needs to be rewritten to use bbsengine3 and licensing issues need to be
 sorted.</li>*}
+{*
 <li><a href="//sophia.zoidtechnologies.com/">Sophia</a> is a threaded discussion system which could be configured as a "blog" (which means a select group of people can start new threads) or "forum" (which means anyone can start a new thread)</li>
 <li><a href="//teos.zoidtechnologies.com/" title="Greek Librarian">Teos</a> is a "catalog view" into the <a href="//zoidtechnologies.com/">zoidtechnologies.com</a> content, similar to <a href="//dir.yahoo.com/">dir.yahoo.com</a> or <a href="//dmoz.org">dmoz.org</a>.</li>
 <li><a href="//vulcan.zoidtechnologies.com/" title="Roman God of Blacksmithing and extensive collection of links">Vulcan</a> is a view of only the "links" part of the content database</li>
 <li><a href="//repo.zoidtechnologies.com/" title="Software Repository">Repo</a> is a software repository where you can find various open source packages that Zoid Technologies maintains</li>
 <li><a href="//projects.zoidtechnologies.com/" title="Projects site">Projects</a> is a list of released projects crosslinked into the repo site for file downloads</li>
 </ul>
-</div> {* body *}
-</div> {* blurb *}
+</div>*} {* body *}
+{*</div>*} {* blurb *}
 {*
 <div class="blurb">
 <div class="header"><h1 id="bbsengine1security">security issues in bbsengine1 (2006)</h1></a></div>

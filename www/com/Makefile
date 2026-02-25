@@ -1,10 +1,10 @@
-export HOST = copper
+#export HOST = copper
 
-export WWWPROD = $(HOST):/srv/www/vhosts/www.bbsengine.com/
-export WWWPRODDOCROOT = $(WWWPROD)html/
+#export WWWPROD = $(HOST):/srv/www/vhosts/www.bbsengine.com/
+#export WWWPRODDOCROOT = $(WWWPROD)html/
 
-export WWWSTAGE = /srv/www/vhosts/www.bbsengine.com/
-export WWWSTAGEDOCROOT = $(WWWSTAGE)html/
+#export WWWSTAGE = /srv/www/vhosts/www.bbsengine.com/
+#export WWWSTAGEDOCROOT = $(WWWSTAGE)html/
 
 all:
 
@@ -20,13 +20,13 @@ stage:
 	$(MAKE) -C smarty stage
 	$(MAKE) -C js stage
 
-	mkdir -p $(WWWSTAGE)templates_c/
-	$(RSYNC) config-prod.php $(WWWSTAGEDOCROOT)config.php
-	-$(RSYNC) htpasswd-prod $(WWWSTAGEDOCROOT).htpasswd
-	$(RSYNC) htaccess-prod $(WWWSTAGEDOCROOT).htaccess
+	mkdir -p $(COMSTAGE)templates_c/
+	$(RSYNC) config-prod.php $(COMSTAGEDOCROOT)config.php
+	-$(RSYNC) htpasswd-prod $(COMSTAGEDOCROOT).htpasswd
+	$(RSYNC) htaccess-prod $(COMSTAGEDOCROOT).htaccess
 
 prod:  stage
-	$(RSYNC) $(WWWSTAGE) $(HOST):$(WWWPROD)
+	$(RSYNC) $(WWWSTAGE) $(COMHOST):$(COMPROD)
 #release:
 #	$(MAKE) -C php release;
 #	$(MAKE) -C smarty release;

@@ -4,7 +4,7 @@
 {$title = $data.title}
 {block name="title"}{$statuscode} - {$title|default:"errormessage.tmpl title"} - {$message}{/block}
 {block name="head" append}
-<link rel="stylesheet" type="text/css" href="{$smarty.const.SKINURL}css/errormessage.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/errormessage.css" media="screen" />
 {/block}
 {block name="content"}
 <div class="blurb errormessage vstretch">

@@ -1,6 +1,10 @@
-PACKAGENAME = "setupimagebbs"
+PACKAGENAME = "skel"
 
 from bbsengine6 import module, database
+
+def checkmodule(args, module, **kw):
+    module = PACKAGENAME + "." + module
+    return bbsengine.checkmodule(args, module, **kw)
 
 def runmodule(args, modulename, **kw):
     return module.runmodule(args, f"{PACKAGENAME}.{modulename}", **kw)

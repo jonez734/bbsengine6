@@ -12,7 +12,6 @@ function connect($dsn)
 
   if (array_key_exists($dsn, $pdocache))
   {
-//    logentry("databaseconnect.100: returning cached pdo ref");
     return $pdocache[$dsn];
   }
 
@@ -29,7 +28,20 @@ function connect($dsn)
   try {
     $pdo = new \PDO($dsn, $user, $pass, $options);
   } catch (\PDOException $e) {
-    throw new \PDOException($e->getMessage(), (int)$e->getCode());
+    // Check if the exception is "connection refused"
+    // SQLSTATE[08006] [7] connection to server at "127.0.0.1", port 5432 failed: Connection refused
+    if (strpos($e->getMessage(), 'SQLSTATE[08006] [7]') !== false) {
+      // Gracefully handle the error
+      error_log('Database connection error: ' . $e->getMessage());
+      echo 'We are experiencing technical difficulties [database]. Please try again later.';
+    } 
+    else 
+    {
+      // Re-throw the exception for unexpected cases
+      throw $e;
+    }
+
+//    throw new \PDOException($e->getMessage(), (int)$e->getCode());
   }
   
   $pdocache[$dsn] = $pdo;

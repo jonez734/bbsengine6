@@ -1,16 +1,14 @@
-import ttyio6 as ttyio
-import bbsengine6 as bbsengine
+from bbsengine6 import io, screen
 
-
-bbsengine.screen.init()
+screen.init()
 
 for x in ("foo", "bar", "baz", "bing"):
-    bbsengine.screen.setarea(x, stack=True)
-    ttyio.inputboolean("continue? [Yn]: ")
+    screen.setbottombar(x, stack=True)
+    io.inputboolean("continue? [Yn]: ")
 
-ttyio.echo("blah")
+io.echo("blah")
 
 for x in ("foo", "bar", "baz", "bing"):
-    bbsengine.screen.poparea()
-    ttyio.inputboolean("continue? [Yn]: ")
+    screen.poparea()
+    io.inputboolean("continue? [Yn]: ")
 

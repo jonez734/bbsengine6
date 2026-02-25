@@ -12,12 +12,25 @@ require_once("Log.php");
  * pull in smarty class
  */
 require_once("Smarty.class.php");
-}
+
+require_once("PEAR.php");
+
+require_once("HTML/QuickForm2.php");
+require_once("HTML/QuickForm2/Renderer.php");
+//require_once("HTML/QuickForm2/Element/Captcha/TextCAPTCHA.php");
+//require_once("HTML/QuickForm2/Element/Captcha/Image.php");
+require_once("HTML/QuickForm2/Element/Captcha/ReCaptcha.php");
+
+require_once("libmember.php");
+require_once("util.php");
+
+} /* root namespace */
 
 namespace bbsengine6 {
 
 /**
  * @since 20180804
+ * @since 20240807 ported to bbsengine6
  * @param mixed field
  * @param string label
  * @param boolean default 
@@ -35,12 +48,12 @@ function toboolean($value, $label="label", $default=false)
     return $value;
   }
 
-  if ($value === "t" || $value == 1)
+  if ($value === "t" || $value == 1 || $value == "true")
   {
     return true;
   }
 
-  if ($value === "f" || $value == 0)
+  if ($value === "f" || $value == 0 || $value == "false")
   {
     return false;
   }
@@ -52,60 +65,24 @@ function toboolean($value, $label="label", $default=false)
 /**
  * @since 20221116
  */
-function displaypage($data=[])
+function displaypage($data=[], $pagetemplate="page.tmpl")
 {
-  logentry("displaypage called");
-  $pagetemplate = isset($data["pagetemplate"]) ? $data["pagetemplate"] : "page.tmpl";
-//  $dsn = isset($data["systemdsn"]) ? $data["systemdsn"] : SYSTEMDSN;
-  $data["pagetemplate"] = $pagetemplate;
+//  util\logentry("displaypage called");
+//  $pagetemplate = isset($data["pagetemplate"]) ? $data["pagetemplate"] : "page.tmpl";
+//  $data["pagetemplate"] = $pagetemplate;
+
   $data["pagefooter"]["fortune"] = null; // getrandomfortune();
 
-  $choices = isset($data["choices"]) ? $data["choices"] : null;
-  $data["choices"] = buildchoices($choices);
-  logentry("bbsengine6.displaypage.100: data=".var_export($data, true));
-//  logentry("kw.choices=".var_export($data["choices"], true)." pagetemplate=".var_export($pagetemplate, true), true);
+  $data["choices"] = isset($data["choices"]) ? $data["choices"] : null; // buildchoices($choices);
+//  util\logentry("bbsengine6.displaypage.100: choices=".var_export($choices, true));
 
   $tmpl = getsmarty();
   $tmpl->assign("data", $data);
+//  $tmpl->assign("currentpage", \bbsengine6\getcurrrentpage());
   $tmpl->display($pagetemplate);
   return;
 }
 
-/**
- * display an error page template with message
- * 
- * @param string $message
- * @param integer $statuscode http error code (i.e. 500, 404)
- * @param string $title
- * @param string $template
- * @access public
- * @since 20120608
- * @since 20230214 added to bbsengine5/engine.php
- */
-function displayerrorpage($message, $statuscode=418, $title="error", $template="errormessage.tmpl", $data=[])
-{
-  logentry("displayerrorpage.100: message=".var_export($message, true)." statuscode=".var_export($statuscode, true));
-  
-/*
-  $tmpl = getsmarty();
-  $tmpl->assign("message", $message);
-  $tmpl->assign("statuscode", $statuscode);
-  $tmpl->assign("title", $title);
-*/
-//  $page = getpage($title);
-
-  header("HTTP/1.0 {$statuscode} {$title}", true, $statuscode);
-//  $data = [];
-  $data["statuscode"] = $statuscode;
-  $data["message"] = $message;
-  $data["title"] = $title;
-  $data["pagetemplate"] = $template;
-//  logentry("displayerrorpage.200: data=".var_export($data, True));
-//  $options["pagedata"]["body"] = $tmpl->fetch($template);
-//  $page = getpage("displayerrorpage");
-  displaypage($data);
-  return;
-}
 
 /**
  * @since 20221116
@@ -250,36 +227,6 @@ function getreturntotitle()
 }
 
 /**
- * return the "current member id" for the session
- *
- * @param string key optional key to use when accessing $_SESSION, defaults to "currentmemberid"
- * @since 20221116
- *
- * @return int
- */
-function getcurrentmemberid()
-{
-  $res = isset($_SESSION["currentmemberid"]) ? intval($_SESSION["currentmemberid"]) : null;
-  return $res;
-}
-
-/**
- * set the "current member id" for the session
- * 
- * @param integer
- * @return int previous value
- * @since 20221116
- */
-function setcurrentmemberid($id)
-{
-  logentry("setcurrentmemberid.10: id=".var_export($id, true));
-
-  $old = getcurrentmemberid();
-  $_SESSION["currentmemberid"] = intval($id);
-  return $old;
-}
-
-/**
  * permission checking function
  * 
  * permissions "PUBLIC" and "AUTHENTICATED" are built-in and checked for
@@ -294,11 +241,12 @@ function setcurrentmemberid($id)
  * @since 20080324
  * @since 20221116
  */ 
+/*
 function flag($name, $memberid=0)
 {
   if ($memberid == 0)
   {
-    $memberid = getcurrentmemberid();
+    $memberid = member\lib\getcurrentid();
   }
 	
   $name = strtoupper($name);
@@ -318,12 +266,7 @@ function flag($name, $memberid=0)
     return true;
   }
     
-  $res = getflag($name, $memberid);
-  if (PEAR::isError($res))
-  {
-    logentry("permission: ERROR: " . $res->toString());
-    return PEAR::raiseError($res);
-  }
+  $res = \bbsengine6\member\lib\getflag($name, $memberid);
   
   if (is_null($res))
   {
@@ -337,7 +280,7 @@ function flag($name, $memberid=0)
   
   return false;
 }
-
+*/
 /**
  * returns flag value given the flag name and member id.
  *
@@ -346,13 +289,14 @@ function flag($name, $memberid=0)
  * @return boolean
  * @since 20221116
  */
-function getmemberflag($flag, $memberid, $dsn=SYSTEMDSN)
+/*
+function getmemberflag($flag, $memberid, $dsn=\config\SYSTEMDSN)
 {
-  $dbh = dbconnect($dsn);
-  if (PEAR::isError($dbh))
-  {
-    return $dbh;
-  }
+  //$dbh = \bbsengine6\database\connect($dsn);
+  //if (\PEAR::isError($dbh))
+  //{
+  //  return $dbh;
+  //}
   
   // @since 20130617
   // thanks to pingwin and teh1ghool on #php (oftc)
@@ -374,149 +318,17 @@ SQL;
   $stmt->execute($dat);
 
   $res = $dbh->getRow($sql, null, $dat, array("integer", "text"));
-  if (PEAR::isError($res))
+  if (\PEAR::isError($res))
   {
     logentry("bbsengine3.getflag.0: " . $res->toString());
-    return PEAR::raiseError($res);
+    return \PEAR::raiseError($res);
   }
 
   $res = (isset($res["value"]) && $res["value"] == "t") ? true : false;
 //  logentry("getflag.100: flag=".var_export($flag, true). " memberid=".var_export($memberid, true)." res=".var_export($res, true));
   return $res;
 }
-
-/**
- * return the set of flags and their values for a given memberid.
- * rewritten 2011-jun-23 so it actually works without smarty3 throwing notices about undefined vars
- *
- * @since 20081002
- * @param integer $memberid
- * @return array or PEAR_Error
- */
-function getmemberflags($memberid, $dsn=SYSTEMDSN)
-{
-  $sql = <<<SQL
-select 
-  flag.name, 
-  coalesce(map_member_flag.value, flag.defaultvalue) as value
-from engine.flag 
-left outer join engine.map_member_flag on flag.name = engine.map_member_flag.name and engine.map_member_flag.memberid=?
-SQL;
-  $dat = array($memberid);
-  $pdo = \bbsengine6\database\connect($dsn);
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute($dat);
-  $res = $stmt->fetchAll();
-
-  $flags = [];
-  if ($memberid > 0)
-  {
-    $flags["AUTHENTICATED"] = true;
-  }
-  else
-  {
-    $flags["AUTHENTICATED"] = false;
-  }
-
-  foreach ($res as $rec)
-  {
-    $k = $rec["name"];
-    $v = $rec["value"];
-
-    if ($v == "t" || $v == "1")
-    {
-      $flags[$k] = true;
-    }
-    elseif ($v == "f" || $v == "0")
-    {
-      $flags[$k] = false;
-    }
-  }
-  return $flags;
-}
-
-/**
- * permission checking function f.k.a flag()
- * 
- * permissions "PUBLIC" and "AUTHENTICATED" are built-in and checked for
- * specially before any database connection is made. other permissions are
- * in uppercase and must be listed in the flag table. if the member being
- * checked does not have a value set for a particular flag, the default
- * value will be returned.
- *
- * @param string $name 
- * @param integer $memberid
- * @return boolean
- * @since 20080324
- * @since 20221116
- */ 
-function checkmemberflag($name, $memberid=0)
-{
-  if ($memberid == 0)
-  {
-    $memberid = getcurrentmemberid();
-  }
-	
-  $name = strtoupper($name);
-    
-  if ($name == "PUBLIC")
-  {
-    return true;
-  }
-
-  if ($memberid == 0 || is_null($memberid))
-  {
-    return false;
-  }
-	
-  if ($name == "AUTHENTICATED")
-  {
-    return true;
-  }
-    
-  $res = getmemberflag($name, $memberid);
-  if (PEAR::isError($res))
-  {
-    logentry("permission: ERROR: " . $res->toString());
-    return PEAR::raiseError($res);
-  }
-  
-  if (is_null($res))
-  {
-    return $res;
-  }
-  
-  if ($res == true)
-  {
-    return true;
-  }
-  
-  return false;
-}
-
-/**
- * put $message into a log at the given priority
- *
- * @since 20080105
- * @since 20221116
- * @param string
- * @param enum
- */
-function logentry($message, $priority=PEAR_LOG_DEBUG)
-{
-  
-  if (defined("LOGENTRYPREFIX") === false)
-  {
-    define("LOGENTRYPREFIX", "define-logentryprefix");
-  }
-  
-  $logger = \Log::factory("syslog", "", LOGENTRYPREFIX, [], PEAR_LOG_DEBUG);
-//  $logger->log("bbsengine5.logentry.100: _SERVER=".var_export($_SERVER, true), $priority);
-  $ip = $_SERVER["REMOTE_ADDR"];
-  
-  $logger->log($message, $priority);
-  return;
-}
+*/
 
 /** 
  * @since 20140512
@@ -528,7 +340,7 @@ function getfortune($fortuneid)
   
   $sql = "select * from engine.mantra where id=?";
   $dat = [$fortuneid];
-  $pdo = \bbsengine6\database\connect(SYSTEMDSN);
+  $pdo = \bbsengine6\database\connect(\config\SYSTEMDSN);
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   $res = $stmt->fetch();
@@ -553,7 +365,7 @@ function getfortune($fortuneid)
  * @since 20140512
  * @since 20221116
  */
-function getrandomfortune($dsn=SYSTEMDSN)
+function getrandomfortune($dsn=\config\SYSTEMDSN)
 {
   $sql = "select id from engine.mantra order by random() limit 1";
   $dat = [];
@@ -653,20 +465,21 @@ function accessfortune($op, $data=null, $memberid=null)
 function getsmarty($options=null)
 {
   $options = [];
-  $options["pluginsdir"] = SMARTYPLUGINSDIR;
-  $options["templatedir"] = SMARTYTEMPLATESDIR;
-  $options["compiledir"] = SMARTYCOMPILEDTEMPLATESDIR;
-  $options["compileid"] = LOGENTRYPREFIX;
+  $options["pluginsdir"] = \SMARTYPLUGINSDIR;
+  $options["templatedir"] = \SMARTYTEMPLATESDIR;
+  $options["compiledir"] = \SMARTYCOMPILEDTEMPLATESDIR;
+  $options["compileid"] = \LOGENTRYPREFIX;
 
-  logentry("getsmarty.100: options=".var_export($options, true));
+  // logentry("getsmarty.100: options=".var_export($options, true));
 
   $s = new \Smarty();
 
+/*
   $currentcart = [];
   $currentcart["items"] = [];
   $currentcart["itemcount"] = 0;
-  
-  $s->assign("currentcart", $currentcart); // getcurrentcart());
+*/  
+//  $s->assign("currentcart", $currentcart); // getcurrentcart());
 
   if (is_array($options))
   {
@@ -676,11 +489,12 @@ function getsmarty($options=null)
     }
     if (array_key_exists("pluginsdir", $options) === true)
     {
+      // \bbsengine6\logentry("pluginsdir=".var_export($options["pluginsdir"]));
       $s->addPluginsDir($options["pluginsdir"]);
     }
     if (array_key_exists("compiledir", $options) === true)
     {
-      $s->compile_dir = $options["compiledir"];
+      $s->setCompileDir($options["compiledir"]);
     }
     if (array_key_exists("compileid", $options) === true)
     {
@@ -695,37 +509,36 @@ function getsmarty($options=null)
     }
   }
   
-  $currentmemberid = getcurrentmemberid();
+  $currentmoniker = member\lib\getcurrentmoniker();
+  $currentmemberid = member\lib\getcurrentid();
+  $currentmember = member\lib\getbymoniker($currentmoniker);
   
+/*
   if ($currentmemberid > 0)
   {
-    $currentmember = getcurrentmember();
-    if (PEAR::isError($currentmember))
-    {
-      logentry("getsmarty.10: " . $currentmember->toString());
-      return PEAR::raiseError($currentmember);
-    }
+    $currentmember = member\getcurrent();
   }
   else
   {
     $currentmember = [];
     $currentmember["id"] = null;
   }
-
-  $flags = getmemberflags($currentmemberid);
-
+*/
+  $flags = member\lib\getflags($currentmemberid);
   $currentmember["flags"] = $flags;
 
+//  \bbsengine6\logentry("engine.getsmarty.100: currentmember=".var_export($currentmember, true));
   $s->assign("currentpage", getcurrentpage());
   $s->assign("currentmemberid", $currentmemberid);
   $s->assign("currentmember", $currentmember);
+  $s->assign("currentmoniker", $currentmoniker);
   $s->assign("currentaction", getcurrentaction());
   $s->assign("currentsite", getcurrentsite());
   $s->assign("currenturi", getcurrenturi());
-  $s->assign("currentpath", getcurrentpath());
   $s->assign("currentsig", getcurrentsig());
+//  $s->assign("currentpath", getcurrentpath());
 //  $s->assign("sitevars", getsitevars());
-
+//  $s->register_modifier('var_export', 'var_export');
   return $s;
 }
 
@@ -737,11 +550,20 @@ function getsmarty($options=null)
  */
 function getcurrenturi()
 {
+/*
   $protocol = (isset($_SERVER["HTTPS"]) && $_SERVER["HTTPS"] !== "off") ? "https" : "http";
   $host = $_SERVER["HTTP_HOST"];
   $uri = $_SERVER["REQUEST_URI"];
   $buf = "{$protocol}://{$host}{$uri}";
-  return $buf;
+*/
+// $protocol = $_SERVER['SERVER_PROTOCOL'];
+// $requestscheme = $_SERVER["REQUEST_SCHEME"];
+// $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER["HTTP_HOST"] : $_SERVER["SERVER_NAME"];
+// $uri = $_SERVER['REQUEST_URI'];
+
+ $buf = $_SERVER["REQUEST_SCHEME"]."://".$_SERVER["SERVER_NAME"].$_SERVER["REQUEST_URI"];
+ util\logentry("getcurrenturi.100: buf=".var_export($buf, true));
+ return $buf;
 }
 
 /**
@@ -791,9 +613,9 @@ function setcurrentsig($sig=null)
  */
 function buildbreadcrumbs($path)
 {
-  logentry("buildbreadcrumbs.100: ".var_export($path, true));
+  util\logentry("buildbreadcrumbs.100: ".var_export($path, true));
 
-  $pdo = \bbsengine6\database\connect(SYSTEMDSN);
+  $pdo = \bbsengine6\database\connect(\config\SYSTEMDSN);
   $sql = "select * from engine.sig where path @> ? order by path asc";
   $dat = [$path];
   $stmt = $pdo->prepare($sql);
@@ -824,26 +646,19 @@ function buildsiguri($sigpath)
 }
 
 /**
- * function which converts a postgres array (comma separated text) to a php array
- * https://prosuncsedu.wordpress.com/2009/10/13/postgres-array-to-php-array-or-vice-versa/
- *
- * @since 20190822 in bbsengine4
- * @since 20200223 in bbsengine5
- * @since 20221118
- *
- * @param $text postgres array in text format
- * @return array
+ * @since 20240812
  */
-function postgres_to_php_array($text)
+function buildsigpath($uri)
 {
-  logentry("postgres_to_php_array.100: text=".var_export($text, true));
-  $text = trim($text, "{}");
-  logentry("postgres_to_php_array.120: text=".var_export($text, true));
-  $res = explode(",", $text);
-  logentry("postgres_to_php_array.130: res=".var_export($res, true));
-  return $res;
+ if ($sigpath === null || $sigpath === "")
+ {
+  return "top";
+ }
+ $sigpath = str_replace($uri, "/", ".");
+ $sigpath = str_replace($sigpath, "-", "_");
+ $sigpath = "top.".$sigpath;
+ return $sigpath;
 }
-
 /**
  * copied from zoidweb2
  * 
@@ -867,15 +682,15 @@ function sortchoices($a, $b)
  * @since 20131014
  * @since 20221120
  */
-function buildchoices($menu=[])
+function buildchoices($choices=[])
 {
 //  $currentpage = getcurrentpage();
 //  $menu = array();
 
-  if (checkmemberflag("ADMIN"))
+  if (member\lib\checkflag("SYSOP"))
   {
-      $menu[] = ["name" => "addflag", "title" => "add system flag", "url" => ENGINEURL."flag-add", "desc" => "add system flag to the database"];
-      $menu[] = ["name" => "addmantra", "title" => "add mantra", "url" => ENGINEURL."mantra-add", "desc" => "add mantra"];
+//      $menu[] = ["name" => "addflag", "title" => "add system flag", "url" => \config\ENGINEURL."flag-add", "desc" => "add system flag to the database"];
+      $choices[] = ["name" => "addmantra", "title" => "add mantra", "url" => \config\ENGINEURL."mantra-add", "desc" => "add mantra"];
 //      $menu[] = ["name" => "addsitenews", "title" => "add site news", "url" => TEOSURL."sitenews/add-post", "desc" => "add a post to the 'site news' sig to be displayed on the www site"];
 //      $menu[] = array("name" => "addlink", "title" => "add link", "url" => VULCANURL . "add");
 //      $menu[] = array("name" => "addfeed", "title" => "add feed", "url" => DEMETERURL . "add");
@@ -907,12 +722,12 @@ function buildchoices($menu=[])
   }
   $menu[] = ["name" => "mantrasummary", "title" => "mantra summary", "url" => ENGINEURL."mantra-summary", "desc" => "mantra summary pages"];
 */
- if ($menu !== null)
+ if ($choices !== null and count($choices) > 0)
  {
-  uasort($menu, "\\bbsengine6\\sortchoices");
+  uasort($choices, "\\bbsengine6\\sortchoices");
  }
-//  logentry("menu=".var_export($menu, true));
-  return $menu;
+//  util\logentry("bbsengine6.engine.buildchoices.100: choices=".var_export($choices, true));
+  return $choices;
 }
 
 
@@ -953,34 +768,6 @@ function buildbreadcrumbs($sigpath, $skiptop=true, $hidepath=null)
   return $crumbs;
 }
 */
-
-/**
- * calls json_encode() with default parameters
- *
- * @since 20140730
- * @since 20230329 copied from bbsengine5.php
- */
-function encodejson($data)
-{
- // @see http://us3.php.net/manual/en/json.constants.php
- return json_encode($data); // , JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_NUMERIC_CHECK); // JSON_UNESCAPED_UNICODE in 5.4+
-}
-
-/**
- * decodes given json data into a dictionary (associative array)
- * 
- * @since 20140730
- * @since 20230329 copied from bbsengine5.php
- */
-function decodejson($data)
-{
- if (is_string($data) === false)
- {
-  logentry("decodejson.100: data=".var_export($data, true));
-  return;
- }
- return json_decode($data, true);
-}
 
 /**
  * builds a valid ltree label from the given buffer
@@ -1028,6 +815,7 @@ function normalizelabelpath()
  {
   array_unshift($foo, "top");
  }
+ util\logentry("normalizepath.104: ".var_export($foo, true));
  $res = implode(".", $foo);
  if ($res === "")
  {
@@ -1036,6 +824,683 @@ function normalizelabelpath()
 // logentry("normalizepath.100: res=".var_export($res, true));
  return $res;
 }
+
+/**
+ * Takes one or more path/filenames and joins them using DIRECTORY_SEPARATOR. then it strips a leading or trailing DIRECTORY_SEPARATOR, then it replaces "//" with "/"
+ * Example: joinpath('/var','www/html/','/try.php'); // returns 'var/www/html/try.php'
+ * original idea from http://www.bin-co.com/php//scripts/filesystem/join_path/
+ * re-written to not use for loops (array_filter, join instead)
+ * 
+ * @since 20240619 copied from bbsengine5
+ * @todo consider using preg_replace
+ */
+function joinpath()
+{
+    $arguments = func_get_args();
+//    logentry("bbsengine5.joinpath.100: arguments=".var_export($arguments, true));
+    $arguments = array_filter($arguments);
+
+    $path = join(DIRECTORY_SEPARATOR, $arguments);
+    if ($path === "")
+    {
+      return "";
+    }
+
+//    logentry("joinpath.140: before // removal: path=".var_export($path, true));
+    $path = preg_replace("@[/]{2,}@", "/", $path);
+//    $path = str_replace(DIRECTORY_SEPARATOR.DIRECTORY_SEPARATOR, DIRECTORY_SEPARATOR, $path);
+//    logentry("joinpath.160: after // removal: path=".var_export($path, true));
+
+//    logentry("bbsengine5.joinpath.120: path=".var_export($path, true));
+    if ($path[0] === DIRECTORY_SEPARATOR)
+    {
+      $path = substr($path, 1);
+    }
+
+    if (substr($path, -1) === DIRECTORY_SEPARATOR)
+    {
+      $path = substr($path, 0, -1);
+    }
+//    logentry("joinpath.110: path=".var_export($path, true));
+    return $path;
+}
+
+/**
+ * @since 20240621 copied from bbsengine4 
+ */
+function normalizeuri($uri)
+{
+ $uri = preg_replace("@(/){2,}@", '$1', $uri);
+ return $uri;
+}
+
+/**
+ *
+ * given one or more URIs (the function has a variable number of arguments),
+ * compose a proper labelpath, calling normalizelabelpath() at the end.
+ *
+ * @since 20240621 copied from bbsengin4
+ */
+function buildlabelpath()
+{
+  $argv = func_get_args();
+  $argc = func_num_args();
+
+  $teospath = parse_url(\TEOSURL, PHP_URL_PATH);
+  if ($teospath === null)
+  {
+      return \PEAR::raiseError("unable to parse url (code: buildlabelpath.100)");
+  }
+  $teospath = ltrim($teospath, "/");
+//  logentry("buildlabelpath.120: teospath=".var_export($teospath, True));
+
+  $foo = [];
+
+  foreach ($argv as $arg)
+  {
+   $explode = explode("/", $arg);
+
+   $uripath = parse_url($arg, PHP_URL_PATH);
+
+   $count = 1;
+   $res = str_replace($teospath, "", $uripath, $count);
+
+   $fragments = explode("/", $res);
+   foreach ($fragments as $fragment)
+   {
+    $foo[] = buildlabel($fragment);
+   }
+  }
+  $foo = array_filter($foo);
+
+  $path = implode(".", $foo);
+
+  $path = normalizelabelpath($path);
+  return $path;
+}
+
+function getsubsigs($labelpath)
+{
+  $sql = "select path from engine.sig where path ~ ?";
+  $dat = ["{$labelpath}.*{1}",];
+
+  $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($dat);
+  if ($stmt->rowCount() === 0)
+  {
+    \bbsengine6\util\logentry("engine.getsubsigs.100: no subsigs for ".var_export($labelpath, true));
+  }
+  $res = $stmt->fetchAll();
+
+  $subsigs = [];
+  foreach ($res as $rec)
+  {
+    $subsigs[] = getsig($rec["path"], false);
+  }
+  return $subsigs;
+}
+/**
+ * @since 20240626 copied from bbsengine4
+ *
+ */
+function getsig($labelpath, $subsigs=true)
+{
+  \bbsengine6\util\logentry("getsig.100: labelpath=".var_export($labelpath, true));
+  $sql = "select * from engine.sig where path=:labelpath";
+  $dat = ["labelpath" => $labelpath];
+
+  $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
+
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($dat);
+  if ($stmt->rowCount() == 0)
+  {
+   return null;
+  }
+  $sig = $stmt->fetch();
+  if ($sig["uri"] === null)
+  {
+   $sig["uri"] = util\ltreeToPath($sig["path"]); 
+  }
+  $sig["actions"] = buildsigactions($sig);
+
+  $sig["icon"] = "fa fa-folder";
+
+  $sig["sigs"] = null;
+  if ($subsigs === true)
+  {
+    $sig["sigs"] = getsubsigs($labelpath);
+  }
+  return $sig;
+}
+
+/**
+ * @since 20240626 copied from bbsengine4
+ * @return boolean
+ * @param string op delete, edit, add, view
+ * @param dictionary sig dictionary containing a sig record
+ * @param integer memberid memberid to check or null to use currentmemberid
+ */
+function accesssig($op, $sig=null, $memberid=null)
+{
+    if ($memberid === null)
+    {
+        $memberid = member\lib\getcurrentid();
+    }
+
+    //    logentry("accesssig.200: op=".var_export($op, True));
+    switch ($op)
+    {
+        case "sig.delete":
+        case "sig.edit":
+        case "sig.add":
+        {
+            $adminflag = member\lib\checkflag("SYSOP");
+            util\logentry("accesssig.210: adminflag=".var_export($adminflag, true));
+            if ($adminflag === true)
+            {
+                util\logentry("accesssig.220: adminflag is true");
+                $res = true;
+                break;
+            }
+            else
+            {
+                util\logentry("accesssig.230: adminflag is false");
+                $res = false;
+                break;
+            }
+        }
+        case "sig.view":
+        {
+            $res = true;
+            break;
+        }
+        case "post.add":
+//        case "addpost":
+        {
+            $res = true;
+            break;
+        }
+        case "link.add":
+        {
+            $res = false;
+            break;
+        }
+        default:
+        {
+            util\logentry("accesssig.100: unknown op ".var_export($op, true));
+            $res = false;
+            //$res = \PEAR::raiseError("unknown mode (code: accesssig.100)");
+            break;
+        }
+    }
+    util\logentry("accesssig.120: op=".var_export($op, true)." res=".var_export($res, true));
+    return $res;
+}
+
+  /**
+   * @since 20240626 copied from zoidweb4
+   */
+  function buildsigactions($sig)
+  {
+    $uri = isset($sig["uri"]) ? $sig["uri"] : null;
+    $labelpath = isset($sig["path"]) ? $sig["path"] : null;
+    
+    $currentmemberid = member\lib\getcurrentid();
+
+    $actions = [];
+    if (accesssig("sig.edit", $sig) === true)
+    {
+      $actions[] = ["href" => \TEOSURL . $uri . "edit-sig", "title" => "edit sig", "class" => "fa fa-edit fa-fw"];
+    }
+    if (accesssig("link.add", $sig) === true)
+    {
+      $actions[] = ["href" => \TEOSURL . $uri . "add-link", "title" => "add link", "class" => "fa fa-plus fa-fw"];
+    }
+    if (accesssig("post.add", $sig) === true)
+    {
+      $actions[] = ["href" => \TEOSURL . $uri . "add-post", "title" => "add post", "class" => "fa fa-fw fa-plus"];
+    }
+    if (accesssig("sig.add", $sig) === true)
+    {
+      $actions[] = ["href" => \TEOSURL . $uri . "add-sig", "title" => "add sig", "class" => "fas fa-fw fa-folder-plus"];
+    }
+    if (accesssig("sig.detail", $sig) === true)
+    {
+      $actions[] = ["href" => \TEOSURL . $uri . "sig-detail", "title" => "detail", "class" => "fa fa-fw fa-angle-double-down"];
+    }
+
+    return $actions;
+  }
+
+/*
+ * Smarty plugin
+ * -------------------------------------------------------------
+ * File:     modifier.var_export.php
+ * Type:     modifier
+ * Name:     var_export
+ * Purpose:  export a given var
+ * -------------------------------------------------------------
+ */
+function smarty_modifier_var_export($string)
+{
+    return var_export($string);
+}
+
+function getquickform($id, $method="post", $attributes="", $tracksubmit=true, $editor="standard")
+{
+  util\logentry("getquickform()");
+  $form = new \HTML_QuickForm2($id, $method, $attributes, $tracksubmit);
+  $form->setAttribute("enctype", "multipart/form-data");
+  $form->addHidden("mode")->setValue("NEEDINFO");
+  $form->addHidden("id")->setValue("NEEDINFO");
+  $form->addHidden("memberid")->setValue("NEEDINFO");
+//  $form->addHidden("pageprotocol")->setValue("standard");
+  $form->addRecursiveFilter("trim");
+//  $form->addRecursiveFilter("strip_tags");
+
+  return $form;
+}
+
+/**
+ *
+ * function which returns a configured Array renderer for use by quickform2
+ *
+ * @param $options array optional dictionary containing renderer options
+ * @return QF2 Array renderer
+ * @since 20140902
+ */
+function getquickformrenderer($options=null)
+{
+ $_options = array(
+  "group_errors" => true, 
+  "group_hiddens" => true, 
+  "required_note" => "<span class='requiredstar'>*</span> denotes required fields."
+ );
+ 
+ if (is_array($options))
+ {
+  $_options = array_merge($_options, $options);
+ }
+
+ $renderer = \HTML_QuickForm2_Renderer::factory("array")->setOption($_options);
+ return $renderer;
+}
+
+function buildcaptchafieldset($form, $sessionVar=null, $options=null)
+{
+//  $form->addElement("header", "captchafieldset", "Verification");
+
+  util\logentry("buildcaptchafieldset.10: disabled");
+  return;
+
+  if ($sessionVar === null)
+  {
+    $sessionVar = basename(__FILE__, ".php");
+  }
+
+  util\logentry("buildcaptchafieldset.5: sessionVar=".var_export($sessionVar, true));
+  
+  $_options = [
+    "width"        => 250,
+    "height"       => 90,
+    "callback"     => "/gencaptchaimage.php?var=".$sessionVar,
+    "sessionVar"   => $sessionVar,
+    "alt" => "testing",
+    "imageOptions" => [
+      "font_size" => 20,
+      "font_path" => "/usr/share/fonts/truetype/",
+      "font_file" => "cour.ttf",
+      "min_font_size" => 10,
+      "max_font_size" => 30,
+      "lines_color" => "#FF0000",
+      "background_color" => "#F0F0F0"]
+    ];
+
+  if ($options !== null)
+  {
+    $options = array_merge($_options, $options);
+  }
+  else
+  {
+    $options = $_options;
+  }
+  return;
+
+  util\logentry("options=".var_export($options, true));
+//  $form->addElement(new \HTML_QuickForm2_Element_Static, "<div class='g-recaptcha' data-sitekey=".\config\RECAPTCHASITEKEY."></div>");
+  return;
+  
+  $captcha_question = &$form->addElement(new \HTML_QuickForm2_Element_Captcha_ReCaptcha(
+      'captcha[recaptcha]',
+      ['id' => 'captcha_recaptcha'],
+      [
+          'label' => 'ReCaptcha',
+          
+          "public-key" => "6Leb_S0qAAAAABOm1eXSHRJn5YIqH_xAqyg7qvKl",
+          "private-key" => "6Leb_S0qAAAAADEtPVFnRQx-0SxcXiG0ykhumsVV",
+// v3         'public-key' => "6Lcq_C0qAAAAANPElHD1x8OsEIunwY73EYnaZa39",
+//            'private-key' => "6Lcq_C0qAAAAANrP5Hqoe1TyV0zsc5nrDQqx5kkp",
+      ]
+    )
+);
+
+/*
+  $captcha_question = $form->addElement(new \HTML_QuickForm2_Element_Captcha_Image(
+    'captcha[image]',
+    ['id' => 'captcha_image'],
+    ['label' => 'Image',
+    // Captcha options
+     'output' => 'png',
+     'width'  => 300,
+     'height' => 100,
+     // Path where to store images
+     'imageDir' => \config\CAPTCHAIMAGEDIR, // __DIR__ . '/tmp/',
+     'imageDirUrl' => \config\CAPTCHAIMAGEURL, // 'tmp/',
+     'imageOptions' => [
+      'font_path'        => '/usr/share/fonts/truetype/dejavu/',
+      'font_file'        => 'DejaVuSans.ttf',
+      'text_color'       => '#000000',
+      'background_color' => '#ffffff',
+      'lines_color'      => '#000000',
+    ]
+   ]
+  )
+ );
+//  $captcha_question = &$form->addElement("CAPTCHA_Image", "captcha_question",
+//                                         "Type the letters you see", $options);
+*/  
+  if (\PEAR::isError($captcha_question))
+  {
+    util\logentry("buildcaptchafieldset.10: " . $captcha_question->toString());
+    return \PEAR::raiseError("Form Error (code: buildcaptchafieldset.10)");
+  }
+
+  $captcha_answer = $form->addElement("text", "captcha", "Enter the answer");
+  if (\PEAR::isError($captcha_answer))
+  {
+    util\logentry("buildcaptchafieldset.12: " . $captcha_answer->toString());
+    return \PEAR::raiseError("Form Error (code: buildcaptchafieldset.12)");
+  }
+
+//  $form->addRule("captcha", "Enter the answer to the verification",
+//                 "required");
+//                 
+//  $form->addRule("captcha", "You did not answer the verification correctly",
+//                  "CAPTCHA", $captcha_question);
+
+//  var_export($options);
+//  exit;
+}
+
+function handleform($form, $callback)
+{
+  $issubmitted = $form->isSubmitted();
+  $validate = $form->validate();
+
+  util\logentry("handleform.100: issubmitted=".var_export($issubmitted, true)." validate=".var_export($validate, true));
+  
+  if ($issubmitted === true)
+  {
+    $value = $form->getValue();
+  }
+  if ($issubmitted === true && $validate === true)
+  {
+    foreach ($form->getElements() as $element)
+    {
+      // @FIX: handle nested fieldsets
+      util\logentry("handleform.200: inside foreach. class=".var_export(get_class($element), true));
+      if ($element instanceof HTML_QuickForm2_Element_Captcha)
+      {
+        util\logentry("handleform.210: clearing captcha session");
+        $element->clearCaptchaSession();
+      }
+    }
+
+    util\logentry("handleform.110: form validated");
+    
+    $form->toggleFrozen(true);
+// now done in getquickform()
+//    $form->addRecursiveFilter("trim");
+    $values = $form->getValue();
+    util\logentry("handleform.120: values=".var_export($values, true));
+    if (is_callable($callback) === true)
+    {
+      util\logentry("handleform.150: calling form callback with form values");
+      $res = call_user_func($callback, $values);
+    }
+    else
+    {
+      util\logentry("handleform.140: callback is not callable!");
+      $res = null;
+    }
+    if (\PEAR::isError($res))
+    {
+      util\logentry("handleform.130: " . $res->toString());
+    }
+    return $res;
+  }
+
+/*
+  $renderer = getquickformrenderer(); 
+  $form->render($renderer);
+  $rendered = $renderer->toArray();
+
+  $tmpl = getsmarty();
+  $tmpl->assign("form", $rendered);
+
+  $bodycontent = array();
+  $bodycontent[] = fetchpageheader($pagetitle);
+  $bodycontent[] = fetchtopbar();
+  $bodycontent[] = fetchsidebar();
+  $bodycontent[] = $tmpl->fetch($formtemplate);
+  $bodycontent[] = fetchpagefooter();
+
+  $page = getpage($pagetitle);
+  $page->addScript(STATICJAVASCRIPTURL."form.js");
+  $page->addStyleSheet(STATICSKINURL . "css/form.css");
+  $page->addBodyContent($bodycontent);
+  $res = displaypage($page);
+*/
+  return false;
+}
+
+  function displayform($renderer, $title, $data=[])
+  {
+    $pagetemplate = isset($data["pagetemplate"]) ? $data["pagetemplate"] : "form.tmpl";
+    util\logentry("bbsengine6.displayform.125: pagetemplate=".var_export($pagetemplate, true));
+    $data["title"] = $title;
+    $data["form"] = $renderer->toArray();
+    
+    displaypage($data, $pagetemplate);
+  }
+
+  /**
+   * @since 20240807 copied from bbsengine5
+   */
+  function buildnewpasswordfieldset($form)
+  {
+   $fieldset = $form->addElement("fieldset");
+   $fieldset->setLabel("password");
+   $newpassword = $fieldset->addElement("password", "password", array("style" => "width: 200px;"))->setLabel("password:");
+   $newpassword->addRule("required", "'Password' is a required field.");
+   $repeatpassword = $fieldset->addElement("password", "repeatpassword", array("style" => "width: 200px;"))->setLabel("repeat password:");
+   $repeatpassword->addRule("required", "'PasswordRepeat' is a required field.");
+  // $newPassword->addRule("nonempty")->and_($repPassword->createRule("nonempty"))->or_($repPassword->createRule("eq", "The passwords do not match", $newPassword));
+   $repeatpassword->addRule("eq", "The passwords do not match.", $newpassword);
+   return;
+  }
+  /**
+   * @since 20240807 copied from bbsengine5
+   */
+  function buildchangepasswordfieldset($form, $data=array())
+  {
+  /*
+    $group = $form->addGroup()->setLabel("group");
+    $group->addPassword("password")->setLabel("Password");
+    $group->addPassword("repeatpassword")->setLabel("Repeat Password");
+  */
+   $memberid = isset($data["memberid"]) ? intval($data["memberid"]) : null;
+   util\logentry("buildpasswordfieldset.100: memberid=".var_export($memberid, true));
+   
+   $fieldset = $form->addElement("fieldset")->setLabel("Password");
+   $oldPassword = $fieldset->addElement("password", "oldPassword", array("class" => "form-control"))->setLabel("Type your old password");
+
+   $oldPassword->addRule("empty")->or_($oldPassword->createRule("callback", "wrong password", array("callback" => "checkpassword", "arguments" => array($memberid))));
+   $newPassword = $fieldset->addElement("password", "newPassword", array("class" => "form-control"))->setLabel("Type your new password");
+   $repPassword = $fieldset->addElement("password", "newPasswordRepeat", array("class" => "form-control"))->setLabel("Confirm your new password");
+
+   // this behaves exactly as it reads: either "password" and "password
+   // repeat" are both empty or they should be equal
+
+   $newPassword->addRule("empty")->and_($repPassword->createRule("empty"))->or_($repPassword->createRule("eq", "The passwords do not match", $newPassword));
+
+   // Either new password is not given, or old password is required
+   $newPassword->addRule("empty")->or_($oldPassword->createRule("nonempty", "Supply old password if you want to change it"));
+
+   //  $newPassword->addRule("minlength", 'The password is too short', 6, HTML_QuickForm2_Rule::ONBLUR_CLIENT_SERVER);
+
+   // No sense changing the password to the same value
+   $newPassword->addRule("nonempty")->and_($newPassword->createRule("neq", "New password is the same as the old one", $oldPassword));
+
+    return;
+  }
+
+  function checkpostflag($flagname, $post)
+  {
+   if (\array_key_exists($flag, $post->flags) === true)
+   {
+    $value = $flags[$flagname];
+   }
+  }
+
+  function accesspost($op, $post)
+  {
+   $sysop = \bbsengine6\member\lib\checkflag("SYSOP");
+   $auth = \bbsengine6\member\lib\checkflag("AUTHENTICATED");
+//   $flags = $post["flags"];
+//   \bbsengine6\logentry("accesspost.100: op=".var_export($op, true)." post=".var_export($post, true));
+   switch ($op)
+   {
+    case "add":
+    {
+     return true;
+
+     if ($auth === true)
+     {
+      return true;
+     }
+    }
+    case "view":
+    {
+     \bbsengine6\util\logentry("accesspost.120: view returning true");
+     return true;
+    }
+    case "reply":
+    {
+     if ($auth === true && $post["flags"]["frozen"] == false)
+     {
+      return true;
+     }
+     return false;
+    }
+   }
+   \bbsengine6\util\logentry("accesspost.140: op=".var_export($op, true));
+   return true;
+  }
+  
+  /**
+   * @since 20240810 copied from zoidweb4
+   */
+  function buildsiglist($sigs)
+  {
+    if (is_array($sigs) === true)
+    {
+      util\logentry("bbsengine6.buildsiglist.120: sigs is an array");
+      return $sigs;
+    }
+    $foo = preg_split("/[, ]/",$sigs);
+    $foo = array_filter($foo);
+    $foo = array_values($foo);
+    util\logentry("bbsengine6.buildsiglist.100: foo=".var_export($foo, true));
+    return $foo;
+  }
+
+/*
+  function getpost($pdo, $postid)
+  {
+    $sql = "select * from socrates.post where id=:id";
+    $dat = ["id" => $postid];
+
+//    \bbsengine6\logentry("dat=".var_export($dat, true));
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($dat);
+    $post = $stmt->fetch();
+    $post["actions"] = buildpostactions($pdo, $post);
+//    \bbsengine6\logentry("res=".var_export($res, true));
+    return $post;
+  }
+*/
+/*
+ function buildpostactions($pdo, $post)
+ {
+   $id = intval($post["id"]);
+
+   $currentaction = getcurrentaction();
+   $currentpage = getcurrentpage();
+   $currentsite = getcurrentsite();
+ //  $currentsection = getcurrentsection();
+
+ //  logentry("buildmantraactions.100: currentaction=".var_export($currentaction, true));
+
+   $actions = [];
+   if (accesspost($pdo, "edit") === true)
+   {
+     $actions[] = array("href" => \config\SOCRATESURL."post-edit-{$id}", "title" => "edit", "desc" => "edit post #{$id}"); //, "class" => "fa fa-fw fa-edit");
+   }
+   if (accesspost($pdo, "freeze") === true)
+   {
+     $actions[] = array("href" => \config\SOCRATESURL."post-freeze-{$id}", "title" => "freeze", "desc" => "freeze post #{$id}"); //, "class" => "fa fa-fw fa-edit");
+   }
+   if (accesspost($pdo, "thaw") === true)
+   {
+     $actions[] = array("href" => \config\SOCRATESURL."post-thaw-{$id}", "title" => "thaw", "desc" => "thaw post #{$id}");//, "class" => "fa fa-fw fa-edit");
+   }
+   if (accesspost($pdo, "reply") === true)
+   {
+     $actions[] = array("href" => \config\SOCRATESURL."post-reply-{$id}", "title" => "reply", "desc" => "reply to post #{$id}"); // , "class" => "fa fa-fw fa-edit");
+   }
+   if (accesspost($pdo, "markdraft") === true)
+   {
+     $actions[] = array("href" => \config\SOCRATESURL."post-markdraft-{$id}", "title" => "draft", "desc" => "mark #{$id} as draft"); //, "class" => "fa fa-fw fa-edit");
+   }
+
+   return $actions;
+  }
+*/
+  // @since 20240921 human generated ("jam")
+  function getparentsig($labelpath)
+  {
+    util\logentry("engine.parentsig.100: labelpath=".var_export($labelpath, true));
+    $labelpath = util\chopLastElement($labelpath);
+    util\logentry("engine.parentsig.120: chopped path=".var_export($labelpath, true));
+    if ($labelpath == "")
+    {
+      util\logentry("engine.getparentsig.120: labelpath is null");
+      return null;
+    }
+    $parentsig = getsig($labelpath, false);
+    if ($parentsig === null)
+    {
+     util\logentry("engine.getparentsig.160: parentsig is null");
+     return null;
+    }
+    $parentsig["icon"] = "fa fa-level-up";
+    util\logentry("engine.getparentsig.140: parentsig=".var_export($parentsig, true));
+    return $parentsig;
+  }
 
 } /* bbsengine6 namespace */
 ?>

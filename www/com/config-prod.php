@@ -80,5 +80,4 @@ define("SESSIONNAME", "bbsenginedotcomsession");
 // @since 20230409
 define("CURRENTPROJECTNAME", "bbsengine6");
 
-
 ?>

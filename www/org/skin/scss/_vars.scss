@@ -15,10 +15,10 @@
 //$headertextcolor: white;
 
 $page-backgroundcolor: rgb(3, 62, 107); // gray; // pink; // #33CCFF; // gray;
-$page-color: white;
+$page-color: silver;
 
 // $blurb-backgroundcolor: gray; // $page-backgroundcolor;
-$blurb-backgroundcolor: white; // skyblue; 
+$blurb-backgroundcolor: darkblue;
 $blurb-color: $page-color;
 
 $blurb-body-backgroundcolor: $blurb-backgroundcolor; 
@@ -34,7 +34,7 @@ $blurb-footer-color: $blurb-body-color;
 $blurb-metadata-color: $blurb-body-color; // #909090
 $blurb-metadata-backgroundcolor: $blurb-body-backgroundcolor;
 
-$blurb-border-color: #006633; // blue; // $blurb-body-backgroundcolor;
+$blurb-border-color: yellow;
 // $blurb-border-gradient-start: lighten($blurb-body-backgroundcolor, 15%);
 // $blurb-border-gradient-end: darken($blurb-body-backgroundcolor, 15%);
 
@@ -59,7 +59,7 @@ $notify-footer-backgroundcolor: #ababab;
 // these are deprecated.. need to be renamed!
 //
 $linkcolor: white;
-//$linkhovercolor: darken($page-color, 5%);
+$linkhovercolor: darken($page-color, 5%);
 //$linkhoverbackgroundcolor: darken($page-backgroundcolor, 10%);
 $linkvisitedcolor: darken($linkcolor, 10%);
 

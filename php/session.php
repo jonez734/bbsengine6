@@ -20,7 +20,7 @@ function start()
 {
 //  logentry("startsession.50: expire=".var_export(SESSIONCOOKIEEXPIRE, true)." domain=".var_export(SESSIONCOOKIEDOMAIN, true));
   
-  session_set_cookie_params(\config\SESSIONCOOKIEEXPIRE, "/", \config\SESSIONCOOKIEDOMAIN, false, true);
+  session_set_cookie_params(\SESSIONCOOKIEEXPIRE, "/", \SESSIONCOOKIEDOMAIN, false, true);
   session_set_save_handler(
     "\\bbsengine6\\session\\open",
     "\\bbsengine6\\session\\close",
@@ -36,7 +36,7 @@ function start()
   ini_set("session.gc_divisor", 100);
   ini_set("session.serialize_handler", "php_serialize");
 
-  session_name(\config\SESSIONNAME);
+  session_name(\SESSIONNAME);
   session_start();
   $lifetime = 0;
   setcookie(session_name(),session_id(),time()+$lifetime, false, true);
@@ -58,7 +58,7 @@ function end()
 
 function get($sessionid)
 {
-  $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
   if (PEAR::isError($dbh))
   {
     \bbsengine6\util\logentry("bbsengine5.getsession.120: " . $dbh->toString());
@@ -129,7 +129,7 @@ function read($sessionid)
 
   $sql = "select * from engine.session where id=:id";
   $dat = ["id" => $sessionid ];
-  $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
   $stmt = $dbh->prepare($sql);
   $stmt->execute($dat);
   if ($stmt->rowcount() === 0)
@@ -223,7 +223,7 @@ function write($sessionid, $data)
 //  logentry("_writesession.10: id=".var_export($id, True)." data=".var_export($data, True));
 //  \bbsengine6\logentry("bbsengine6.session.write.125: session=".var_export($_SESSION, True));
 
-  $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
 /*
   $sql = "select 1 from engine.__session where id=:id";
   $dat = ["id" => $sessionid];
@@ -236,7 +236,7 @@ function write($sessionid, $data)
 
   $dbh->beginTransaction();
 
-  $memberid = \bbsengine6\member\lib\getcurrentid();
+  $moniker = \bbsengine6\member\lib\getcurrentmoniker();
   
   $validsession = validate($sessionid);
   \bbsengine6\util\logentry("bbsengine6.session.write.120: validsession=".var_export($validsession, true));
@@ -245,7 +245,7 @@ function write($sessionid, $data)
   if ($validsession === false)
   {
     \bbsengine6\util\logentry("bbsengine6.session.write.130: validsession is false");
-    $expiry = time() + \config\SESSIONCOOKIEEXPIRE;
+    $expiry = time() + \SESSIONCOOKIEEXPIRE;
     $sessionid = session_create_id();
     logentry("bbsengine6.session.write.100=$sessionid");
     insert($sessionid, $_SESSION);
@@ -260,7 +260,7 @@ function write($sessionid, $data)
 
     $session = [];
     $session["data"] = \bbsengine6\util\encodejson($_SESSION); // session_encode();
-    $session["memberid"] = $memberid;
+    $session["moniker"] = $moniker;
     $session["dateupdated"] = "now()";
     $session["lastactivity"] = "now()";
     
@@ -291,7 +291,7 @@ function write($sessionid, $data)
 function destroy($sessionid)
 {
   \bbsengine6\util\logentry("_destroy.10: sessionid=".var_export($sessionid, true));
-  $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
   $dbh->beginTransaction();
   $sql = "delete from engine.__session where id=:id";
   $dat = ["id" => $sessionid];
@@ -310,7 +310,7 @@ function destroy($sessionid)
  */
 function garbagecollect($maxlifetime)
 {
-  $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
   $dbh->beginTransaction();
   $sql = "delete from engine.__session where expiry < now()";
   $stmt = $dbh->prepare($sql);
@@ -323,7 +323,7 @@ function validate($sessionid)
 {
   \bbsengine6\util\logentry("bbsengine6.session.validate.100: sessionid=".var_export($sessionid, true));
 
-  $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
   $sql = "select 1 from engine.__session where id=:id and expiry > now()";
   $dat = ["id" => $sessionid];
   $stmt = $dbh->prepare($sql);
@@ -335,7 +335,7 @@ function updatelastactivity($sessionid)
 {
   \bbsengine6\util\logentry("bbsengine6.session.updatelastactivity.100: sessionid=".var_export($sessionid, true));
 
-  $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
   $dbh->beginTransaction();
   $sql = "update engine.__session set lastactivity=:lastactivity where id=:id";
   $dat = ["lastactivity" => "now()", "id" => $sessionid];
@@ -350,16 +350,16 @@ function insert($sessionid, $data=[])
 {
     \bbsengine6\util\logentry("bbsengine6.session.insert.100: sessionid=".var_export($sessionid, true));
 
-    $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
 
     \bbsengine6\util\logentry("bbsengine6.session.insert.100: sessionid=$sessionid");
     $session = [];
     $session["id"] = $sessionid; // session_create_id(); // $sessionid;
     $session["data"] = \bbsengine6\util\encodejson($data);
-    $session["expiry"] = \date(DATE_RFC822, time() + \config\SESSIONCOOKIEEXPIRE);
+    $session["expiry"] = \date(DATE_RFC822, time() + \SESSIONCOOKIEEXPIRE);
     $session["ipaddress"] = $_SERVER["REMOTE_ADDR"];
     $session["useragent"] = isset($_SERVER["HTTP_USER_AGENT"]) ? $_SERVER["HTTP_USER_AGENT"] : "";
-    $session["memberid"] = \bbsengine6\member\lib\getcurrentid();
+    $session["moniker"] = \bbsengine6\member\lib\getcurrentmoniker();
     $session["datecreated"] = "now()";
 
 //    \bbsengine6\logentry("bbsengine6.session.insert.100: session=".var_export($session, true));

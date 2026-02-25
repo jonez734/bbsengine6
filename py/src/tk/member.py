@@ -3,15 +3,15 @@ import argparse
 import tkinter as tk
 from tkinter import ttk
 
-import ttyio5 as ttyio
-import bbsengine5 as bbsengine
+from bbsengine6 import io, database, member
 
 class App(tk.Tk):
-    def __init__(self, args):
+    def __init__(self, args, **kwargs):
         super().__init__()
 
         self.args = args
         self.sysop = False # bbsengine.checksysop(args)
+        self.pool = kwargs.get("pool", None)
         
         self.vars = {}
 
@@ -31,11 +31,11 @@ class App(tk.Tk):
 
         # self.datecreated = tk.StringVar()
         
-        ttyio.echo(f"self.args={self.args!r}", level="debug")
-        self.dbh = bbsengine.databaseconnect(self.args)
+        io.echo(f"tk.App.100; {self.args=}", level="debug")
+        self.conn = database.connect(self.args, pool=self.pool)
 
-        self.memberid = bbsengine.getcurrentmemberid(args)
-        self.member = bbsengine.getmemberbyid(self.dbh, self.memberid)
+        self.membermoniker = member.getcurrentmoniker(args, conn=self.conn, pool=self.pool)
+        self.member = member.getbymoniker(args, self.membermoniker, conn=self.conn, pool=self.pool)
 
         row = 0
 
@@ -49,7 +49,7 @@ class App(tk.Tk):
         self.name_entry.grid(column=1, row=row, sticky=tk.E, **paddings)
 
         self.name_entry.delete(0, tk.END)
-        self.name_entry.insert(0, self.member["name"])
+        self.name_entry.insert(0, self.member["moniker"])
         
         if self.sysop is False:
             self.name_entry.config(state="disabled")
@@ -83,18 +83,18 @@ class App(tk.Tk):
 
         row += 1
         
-        self.member["flags"] = bbsengine.getflags(self.args, self.memberid)
+        self.member["flags"] = member.getflags(self.args, self.membermoniker, conn=self.conn, pool=self.pool)
 
         for v in self.member["flags"].values():
             v["var"] = tk.BooleanVar()
 
-        ttyio.echo(f"flags={self.member['flags']!r}", level="debug")
+        io.echo(f"{self.member['flags']=}", level="debug")
         flags_frame = tk.LabelFrame(self, borderwidth=2, relief=tk.GROOVE, text="Flags")
         flags_frame.grid(column=0, row=row, columnspan=2, sticky=tk.W+tk.E, **paddings)
         
         self.flagvars = {}
         for f, v in self.member["flags"].items():
-            ttyio.echo(f"f={f!r} v={v!r}", level="debug") #  v.value={v['value']!r} v.description={v['description']!r}", level="debug")
+            io.echo(f"{f=} {v=}", level="debug") #  v.value={v['value']!r} v.description={v['description']!r}", level="debug")
             self.flagvars[f] = tk.BooleanVar()
             self.flagvars[f].set(v["value"])
             
@@ -148,7 +148,7 @@ class App(tk.Tk):
 
         self.uivars = {
             "tkinter": {"var":tk.BooleanVar()},
-            "ansi":    {"var":tk.BooleanVar()},
+            "term":    {"var":tk.BooleanVar()},
             "web":     {"var":tk.BooleanVar()}
         }
         ui_frame = tk.LabelFrame(self, borderwidth=2, relief=tk.GROOVE, text="UI")
@@ -172,14 +172,15 @@ class App(tk.Tk):
 
     def update(self):
         name = self.name.get()
-        if self.memberid is None:
-            ttyio.echo("you do not exist! go away!")
+        if self.membermoniker is None:
+            io.echo("bbsengine6.tk.member.update.100: you do not exist! go away!")
             return
+
         for k, v in self.vars.items():
-            ttyio.echo(f"{k!r}={v.get()!r}", level="debug")
+            io.echo(f"{k=} {v.get()=}", level="debug")
 #        ttyio.echo(f"vars={vars!r}", level="debug")
 
-        ttyio.echo("update button clicked", level="debug")
+        io.echo("update button clicked", level="debug")
         ui = []
         for k, v in self.uivars.items():
 #            ttyio.echo(f"{k}={v['var'].get()}", level="debug")
@@ -188,18 +189,16 @@ class App(tk.Tk):
         self.member["ui"] = " ".join(ui)
 
         for v in self.member["flags"].values():
-            ttyio.echo(f"self.member.update.100: v.var.get(): {v['var'].get()}", level="debug")
+            io.echo(f"self.member.update.100: v.var.get(): {v['var'].get()}", level="debug")
             if v["var"].get() is True:
                 v["value"] = True
             else:
                 v["value"] = False
-            ttyio.echo(f"self.member.flags.100: v={v!r}", level="debug")
-        ttyio.echo(f"self.member.flags={self.member['flags']!r}", level="debug")
-        ttyio.echo(f"self.dbh={self.dbh!r}", level="debug")
-        ttyio.echo(f"self.member={self.member!r} type={type(self.member)}", level="debug")
-        bbsengine.updatemember(self.args, self.member, self.memberid)
-        bbsengine.setmemberflags(self.args, self.member["flags"], self.memberid)
-        self.dbh.commit()
+            io.echo(f"self.member.flags.100: {v=}", level="debug")
+        io.echo(f"{self.member.flags=} {self.conn=} {self.member=} {type(self.member)=}", level="debug")
+        member.update(self.args, self.member, self.memberid)
+        member.setflags(self.args, self.member["flags"], self.memberid)
+        self.conn.commit()
         
     def close(self, e):
         # ttyio.echo(f"tkmember.close.100: {e!r}", level="debug")
@@ -211,8 +210,8 @@ def buildargs(args=None, **kw):
     parser.add_argument("--debug", action="store_true", dest="debug")
 
 #    defaults = {"databasename": "zoidweb5", "databasehost":"localhost", "databaseuser": None, "databaseport":15433, "databasepassword":None} # port=5432
-    defaults = {"databasename": "zoidweb5", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None} # port=5432
-    bbsengine.buildargdatabasegroup(parser)
+    defaults = {"databasename": "zoid6", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None}
+    database.buildargs(parser, defaults=defaults)
 
     return parser
 
@@ -220,6 +219,8 @@ if __name__ == "__main__":
     parser = buildargs()
     args = parser.parse_args()
 
-    ttyio.echo(f"__main__.100: args={args!r}", level="debug")
-    app = App(args)
-    app.mainloop()
+    io.echo(f"__main__.100: {args=}", level="debug")
+    pool = database.getpool(args)
+    with pool:
+        app = App(args, pool=pool)
+        app.mainloop()

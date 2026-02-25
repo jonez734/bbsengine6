@@ -16,7 +16,7 @@ classlist = (
         ("engine.__member",  "member.sql"),
         ("engine.__session", "session.sql"),
         ("engine.alert",     "alert.sql"),
-        ("engine.__sig",     "sig.sql"),
+        ("engine.__folder",     "folder.sql"),
         ("engine.member",    "memberview.sql"),
     )
 

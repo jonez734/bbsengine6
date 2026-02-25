@@ -26,7 +26,11 @@ def editflags(args, moniker=None, **kwargs):
     """
 
     conn = kwargs.get("conn", None)
-    flags = libmember.getflags(args, moniker, conn=conn)
+    mode = kwargs.get("mode", "add")
+    if mode == "add":
+      flags = libmember.getflags(args, None, conn=conn)
+    else:
+      flags = libmember.getflags(args, moniker, conn=conn)
     io.echo(f"bbsengine.con.member.100: {flags=}", level="debug")
     updated_flags = {flag_name: {"value":flag_data["value"]} for flag_name, flag_data in flags.items()}
 
@@ -131,7 +135,29 @@ def help(args, **kwargs):
   else:
     io.echo(f"  {{var:optioncolor}}[C]{{var:labelcolor}} Credits: {{var:valuecolor}}{member['credits']}")
 
-  showui(args, member["ui"], _member["ui"])
+  ui = member["ui"]
+  _ui = _member["ui"]
+  io.echo(f"{ui=} {_ui=}", level="debug")
+  if ui is None or len(ui) == 0:
+    io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: None", end="")
+    if _ui is not None:
+      _ui.sort()
+      io.echo(f" (was: {', '.join(_ui)})")
+    else:
+      io.echo()
+
+  if ui is not None:
+    ui.sort()
+  if _ui is not None:
+    _ui.sort()
+
+  if ui != _ui:
+      if _ui is None:
+        io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: {', '.join(ui)} (was: None)")
+      else:
+        io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: {', '.join(ui)} (was: {', '.join(_ui)})")
+  else:
+    io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: {', '.join(ui)}")
     
   flags = member["flags"] or {}
   #io.echo(f"bbsengine.con.member.help.100: {flags=} {member['flags']=}", level="debug")
@@ -155,6 +181,8 @@ def help(args, **kwargs):
       io.echo()
   elif member["refcode"] != _member["refcode"]:
     io.echo(f"  {{var:optioncolor}}[R]{{var:labelcolor}} Refcode: {member['refcode']} {{var:labelcolor}}(was: {{var:valuecolor}}{_member['refcode']}{{var:labelcolor}})")
+  else:
+    io.echo(f"  {{var:optioncolor}}[R]{{var:labelcolor}} Refcode: {member['refcode']}")
 
 def _edit(args, mode, member, **kwargs):
 #  cur = kwargs.get("cur", None)
@@ -167,11 +195,11 @@ def _edit(args, mode, member, **kwargs):
   while not done:
     help(args, member=member, _member=_member)
 #    flags = member["flags"]
-    ch = io.inputchoice(f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFUQ]{{var:promptcolor}}: {{var:inputcolor}}", "LMECPFURQ", "", help=help, member=member, _member=_member)
+    ch = io.inputchoice(f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFURQ]{{var:promptcolor}}: {{var:inputcolor}}", "LMECPFURQ", "", help=help, member=member, _member=_member)
     if ch == "M":
       io.echo("Moniker")
       _moniker = member["moniker"]
-      moniker = io.inputstring("{var:promptcolor}moniker: {var:inputcolor}", _moniker, args=args) # verify=bbsengine.member.verifyMemberFound, args=args)
+      moniker = io.inputstring("moniker:", _moniker, args=args) # verify=bbsengine.member.verifyMemberFound, args=args)
       if _moniker != moniker:
         if libmember.verifyMemberFound(args, moniker, column="moniker", **kwargs) is True:
           io.echo(f"{moniker} is already in use.", level="error")
@@ -179,7 +207,7 @@ def _edit(args, mode, member, **kwargs):
           member["moniker"] = moniker
     elif ch == "F":
       io.echo("Flags")
-      member["flags"] = editflags(args, member["moniker"], conn=conn)
+      member["flags"] = editflags(args, member["moniker"], conn=conn, mode=mode)
     elif ch == "L":
       io.echo("Loginid")
       member["loginid"] = io.inputstring("{var:promptcolor}loginid: {var:inputcolor}", member["loginid"], args=args)
@@ -269,11 +297,11 @@ def configurerole(args, rolename:str, sysop=False, **kwargs:dict) -> bool:
       io.echo("role not created.")
       return False
     io.echo(f"bbsengine.con.configurerole.120: trying to create role", level="debug")
-    database.createrol(args, rolename, conn=conn, **kwargs)
+    database.createrol(args, rolename, **kwargs)
 
     io.echo(f"bbsengine.con.configurerole.140: calling manage_role_privs()", level="debug")
-    database.manage_role_privs(args, rolename, "grant", "login", conn=conn, **kwargs)
-    database.manage_role_privs(args, rolename, "grant", "inherit", conn=conn,  **kwargs)
+    database.manage_role_privs(args, rolename, "grant", "login", **kwargs)
+    database.manage_role_privs(args, rolename, "grant", "inherit", **kwargs)
 
   if sysop is True:
     database.manage_secondary_role(args, rolename, "grant", "sysop", **kwargs)
@@ -321,7 +349,7 @@ def edit(args, **kwargs):
 
       loginid = m["loginid"]
       moniker = m["moniker"]
-      memberid = m["id"]
+#      memberid = m["id"]
       password = m["password"]
       ui = m["ui"]
 

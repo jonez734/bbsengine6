@@ -28,7 +28,7 @@ form {
     }
 
     label {
-      color: $blurb-body-color;
+      color: $blurb-body-textcolor;
       &.error {
         background-color: yellow;
         color: #000;
@@ -93,4 +93,21 @@ input[type=checkbox]:checked {
 
 .captchaclass img {
      margin-bottom: 0.25em;
+}
+
+.col-25 {
+  float: left;
+  width: 25%;
+  margin-top: 6px;
+}
+
+.col-75 {
+  float: left;
+  width: 75%;
+  margin-top: 6px;
+}
+
+form .row { 
+	width: 100%; 
+	color: purple; 
 }

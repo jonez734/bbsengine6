@@ -1,4 +1,4 @@
-SCSS = sass --stop-on-error --trace --style expanded --sourcemap=none
+#SCSS = sass --stop-on-error --trace --style expanded --sourcemap=none
 
 all:
 
@@ -6,7 +6,7 @@ all:
 	$(SCSS) $< $@
 
 stage: 
-	$(SCSS) --update --watch .:$(ENGINESTAGEDOCROOT)skin/css/
+	$(SCSS) --update --watch .:$(STATICSTAGEDOCROOT)skin/css/
 
 clean:
 	-rm *~ *.css *.css.map

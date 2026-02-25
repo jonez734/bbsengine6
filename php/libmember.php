@@ -1,6 +1,13 @@
 <?php
 
-namespace bbsengine6\member\lib {
+namespace {
+  require_once("util.php");
+  require_once("database.php");
+}
+
+namespace bbsengine6\member\lib
+{
+    \bbsengine6\util\logentry("namespace=".var_export(__NAMESPACE__, true));
 
     function getcurrentid()
     {
@@ -10,23 +17,45 @@ namespace bbsengine6\member\lib {
 
     function setcurrentid($id)
     {
-        \bbsengine6\logentry("setcurrentid.10: id=".var_export($id, true));
+        \bbsengine6\util\logentry("setcurrentid.10: id=".var_export($id, true));
 
         $_SESSION["currentmemberid"] = intval($id);
     }
 
     function getcurrentmoniker()
     {
-        return isset($_SESSION["currentmembermoniker"]) ? $_SESSION["currentmembermoniker"] : null;
+        return isset($_SESSION["currentmoniker"]) ? $_SESSION["currentmoniker"] : null;
     }
 
     function setcurrentmoniker($moniker)
     {
-        \bbsengine6\logentry("setcurrentmoniker.10: id=".var_export($moniker, true));
-        $_SESSION["currentmembermoniker"] = $moniker;
+        \bbsengine6\util\logentry("setcurrentmoniker.10: moniker=".var_export($moniker, true));
+        $_SESSION["currentmoniker"] = $moniker;
     }
 
     
+/*
+    function checkflag($flag, $moniker=null)
+    {
+      $sql = "select engine.checkflag(:flag, :moniker)";
+      $dat = ["flag" => $flag, "moniker" => $moniker];
+
+      $pdo = \bbsengine6\database\connect(\config\SYSTEMDSN);
+      if (\PEAR::isError($pdo))
+      {
+        \bbsengine6\util\logentry("libmember.approved.100: " . $pdo->toString());
+        return false;
+      }
+      $stmt = $pdo->prepare($sql);
+      $stmt->execute($dat);
+      if ($stmt->rowCount() == 0)
+      {
+        return null;
+      }
+      return $stmt->fetch()["checkflag"];
+    }
+*/
+/*
     function getflag($flag, $memberid, $dsn=\config\SYSTEMDSN)
     {
         $sql = <<<SQL
@@ -53,48 +82,23 @@ SQL;
       }
       return false;
     }
+*/
     /**
-     * return the set of flags and their values for a given memberid.
+     * return the set of flags and their values for a given membermoniker
      * rewritten 2011-jun-23 so it actually works without smarty3 throwing notices about undefined vars
      *
      * @since 20081002
-     * @param integer $memberid
-     * @return array or PEAR_Error
+     * @param text $moniker
+     * @return array
      */
-    function getflags($memberid)
+    function getflags($moniker)
     {
-      $sql = <<<SQL
-    select 
-      flag.name, 
-      coalesce(map_member_flag.value, flag.defaultvalue) as value
-    from engine.flag 
-    left outer join engine.map_member_flag on flag.name = engine.map_member_flag.name and engine.map_member_flag.memberid=:memberid
-SQL;
-      $dat = ["memberid" => $memberid];
-      $pdo = \bbsengine6\database\connect(\config\SYSTEMDSN);
+      $sql = "select engine.getflags(:moniker)";
+      $dat = ["moniker" => $moniker];
+      $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
       $stmt = $pdo->prepare($sql);
-      \bbsengine6\logentry(var_export($stmt->execute($dat), true));
-      $res = $stmt->fetchAll();
-
-      $flags = [];
-/*
-      if ($memberid > 0)
-      {
-        $flags["AUTHENTICATED"] = true;
-      }
-      else
-      {
-        $flags["AUTHENTICATED"] = false;
-      }
-*/
-      foreach ($res as $rec)
-      {
-        $k = $rec["name"];
-        $v = $rec["value"];
-        $v = \bbsengine6\toboolean($v, $k);
-        $flags[$k] = $v;
-      }
-      return $flags;
+      $stmt->execute($dat);
+      return $stmt->fetchAll();
     }
 
     /**
@@ -107,48 +111,35 @@ SQL;
      * value will be returned.
      *
      * @param string $name 
-     * @param integer $memberid
+     * @param string $moniker
      * @return boolean
      * @since 20080324
      * @since 20221116
      */ 
-    function checkflag($name, $memberid=0)
+    function checkflag($name, $moniker=null)
     {
-      if ($memberid == 0)
+      if ($moniker === null)
       {
-        $memberid = getcurrentid();
+        $moniker = getcurrentmoniker();
       }
             
-      $name = strtoupper($name);
-        
-      if ($name == "PUBLIC")
+      $sql = "select engine.checkflag(:name, :moniker)";
+      $dat = ["name" => $name, "moniker" => $moniker];
+      $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
+      $stmt = $pdo->prepare($sql);
+      $stmt->execute($dat);
+      if ($stmt->rowCount() == 0)
       {
-        return true;
+        \bbsengine6\util\logentry("query for flag {$name} for moniker {$moniker} failed.");
+        return null;
       }
-
-      if ($memberid == 0 || is_null($memberid))
+      $value = $stmt->fetchColumn()["checkflag"];
+      if ($value === null) // invalid flag
       {
-        return false;
+        \bbsengine6\util\logentry("invalid flag {$name} for moniker {$moniker} requested");
+        return null;
       }
-            
-      if ($name == "AUTHENTICATED")
-      {
-        return true;
-      }
-        
-      $res = getflag($name, $memberid);
-      
-      if (is_null($res))
-      {
-        return $res;
-      }
-      
-      if ($res == true)
-      {
-        return true;
-      }
-      
-      return false;
+      return $value;
     }
 
     /**
@@ -165,7 +156,7 @@ SQL;
       $sql = "select 1 from engine.member where moniker ilike ?";
       $dat = array($value);
 
-      $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+      $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
       if (\PEAR::isError($dbh))
       {
         logentry("uniqueusernamecallback.1: " . $res->toString());
@@ -181,117 +172,66 @@ SQL;
       return false;
     }
 
+    // @since 20240925
+    function refcodevalid($value)
+    {
+      $value = trim($value);
+      $value = strip_tags($value);
+
+      if ($value === null || $value == "")
+      {
+        util\logentry("refcodevalid.100: no need to check ".var_export($value, true));
+        return true;
+      }
+
+      $sql = "select * from engine.refcode where code=:refcode";
+      $dat = ["refcode" => $value];
+      $dbh = database\connect(\SYSTEMDSN);
+      $stmt = $dbh->prepare($sql);
+      $stmt->execute($dat);
+      if ($stmt->rowCount() == 0)
+      {
+        util\logentry("refcodevalid.120: refcode ".var_export($value, true)." not found");
+        return false;
+      }
+      $res = $stmt->fetch();
+      if ($res["status"] == "active")
+      {
+        util\logentry("refcodevalid.140: refcode ".var_export($value, true)." active. returning true");
+        return true;
+      }
+      return false;
+    }
+
     function buildfieldset($form)
     {
       $fieldset = $form->addFieldset("member");
       $fieldset->setLabel("account");
-      
+
       $moniker = $fieldset->addText("moniker");
       $moniker->setLabel("moniker");
       $moniker->addRule("required", "'moniker' is a required field");
-      $moniker->addRule("callback", "Moniker is currently in use", "bbsengine6\\member\\uniquemonikercallback");
+      $moniker->addRule("callback", "Moniker is currently in use", "bbsengine6\\member\\lib\\uniquemonikercallback");
 
       $email = $fieldset->addText("email");
       $email->setLabel("e-mail address (must be valid for account verification)");
       $email->addRule("required", "'E-Mail address' is a required field.");
+
+      $refcode = $fieldset->addText("refcode");
+      $refcode->setLabel("refcode (optional)");
+      $refcode->addRule("callback", "refcode invalid", "bbsengine6\\member\\lib\\refcodevalid");
       
 /*
       $realname = $fieldset->addText("realname");
       $realname->setLabel("real name");
 */      
-      if (\bbsengine6\member\access("editcredits"))
+      if (checkflag("sysop") === true)
       {
         $credits = $fieldset->addText("credits", ["id" => "credits"]);
         $credits->setLabel("credits");
         $credits->addRule("regex", "'Credits' must be an integer", '/^[0-9]+$/');
       }
       return;
-    }
-
-    function access($op, $data=null, $memberid=null)
-    {
-      if ($memberid === null)
-      {
-        $memberid = getcurrentid();
-      }
-
-      $member = isset($data["member"]) ? $data["member"] : null;
-
-      switch ($op)
-      {
-        case "editcredits":
-        {
-          if (checkflag("ADMIN"))
-          {
-            $res = true;
-            break;
-          }
-          $res = False;
-          break;
-        }
-        case "detail":
-        {
-          $res = true;
-          break;
-        }
-        case "changepassword":
-        {
-          if (checkflag("AUTHENTICATED") === False)
-          {
-            $res = False;
-            break;
-          }
-          if (flag("ADMIN", $memberid) === true || ($memberid !== null && $data["id"] == $memberid))
-          {
-            $res = true;
-            break;
-          }
-          $res = False; 
-          break;
-        }
-        case "add":
-        {
-         $res = true;
-         break;
-        }
-        case "edit":
-        {
-          if (flag("ADMIN", $memberid) === true || $data["id"] == $memberid)
-          {
-            $res = true; 
-            break;
-          }
-          $res = False; 
-          break;
-        }
-        case "editflags":
-        {
-          if (flag("ADMIN", $memberid) === true)
-          {
-            $res = true; 
-            break;
-          }
-          $res = False; 
-          break;
-        }
-        case "sendverifyemail":
-        {
-          if (flag("ADMIN", $memberid) === true)
-          {
-            $res = true; 
-            break;
-          }
-          $res = False; 
-          break;
-        }
-        default:
-        {
-          $res = null;
-          break;
-        }
-      }
-    //  logentry("accessmember.50: op=".var_export($op, true)." member.id=".var_export($data["id"], True)." memberid=".var_export($memberid, True)." res=".var_export($res, True));
-      return $res;  
     }
     
     function update($pdo, $memberid, $member)
@@ -304,23 +244,31 @@ SQL;
     /**
      * @since 20240825 copied from bbsengine4
      * @param text $password plain text password i.e. from a quickform
-     * @param integer memberid memberid to check against
+     * @param text $moniker moniker to check against
      * 
-     * @see hashpassword()
      */
-    function checkpassword($password, $memberid)
+    function checkpassword($password, $moniker)
     {
-      $sql = "select 1 as valid from engine.member where id=:memberid and password=crypt(:password, password)"; //  engine.__member set password=crypt(%s, gen_salt('bf')) where id=%s"
-      // $sql = "select crypt(:password, password) as valid from engine.member where id=:memberid";
-      $dat = ["memberid" => $memberid, "password" => $password];
+      $sql = "select 1 as valid from engine.member where moniker=:moniker and password=crypt(:password, password)";
+      $dat = ["moniker" => $moniker, "password" => $password];
 
 //      \bbsengine6\logentry("checkpassword.100: password=".var_export($password, true)." memberid=".var_export($memberid, true));
-      $pdo = \bbsengine6\database\connect(\config\SYSTEMDSN);
+      $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
       if (\PEAR::isError($pdo))
       {
-        \bbsengine6\logentry("checkpassword.100: " . $pdo->toString());
+        \bbsengine6\util\logentry("checkpassword.100: " . $pdo->toString());
         return false;
       }
+      $stmt = $pdo->prepare($sql);
+      $stmt->execute($dat);
+      return $stmt->rowCount() === 1;
+    }
+
+    function setpassword($moniker, $plaintext)
+    {
+      $sql = "update engine.__member set password=crypt(:password, gen_salt('bf')) where moniker=:moniker";
+      $dat = ["password" => $plaintext, "moniker" => $moniker];
+      $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
       $stmt = $pdo->prepare($sql);
       $stmt->execute($dat);
       if ($stmt->rowCount() == 1)
@@ -329,19 +277,43 @@ SQL;
       }
       return false;
     }
-    
+
+    function approved($moniker)
+    {
+      return checkflag("approved", $moniker);
+    }
+
+    function updatelastlogin($moniker)
+    {
+      $lastloginfrom = \bbsengine6\util\getremoteaddr();
+
+      \bbsengine6\util\actionlog(name: "login", moniker: $moniker);
+/*
+      $sql = "update engine.__member set lastlogin=:lastlogin, lastloginfrom=:lastloginfrom where moniker=:moniker";
+      $dat = ["lastlogin" => "now()", "lastloginfrom" => $lastloginfrom, "moniker" => $moniker];
+      $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+      $stmt = $dbh->prepare($sql);
+      $stmt->execute($dat);
+
+      \bbsengine6\util\logentry("lastlogin for {$moniker} from {$lastloginfrom} updated");
+*/
+      return true;
+    }
+
     function getbymoniker($moniker)
     {
       $sql = "select * from engine.member where moniker=:moniker";
       $dat = ["moniker" => $moniker];
-      $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+      $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
       $stmt = $dbh->prepare($sql);
       $stmt->execute($dat);
       if ($stmt->rowCount() == 0)
       {
-        return null;
+        return ["moniker" => null];
       }
-      return $stmt->fetch();
+      $res = $stmt->fetch();
+      $res["password"] = null;
+      return $res;
     }
     
     function setflag($name, $value, $memberid=0)
@@ -350,7 +322,7 @@ SQL;
       {
         $memberid = getcurrentid();
       }
-      $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+      $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
       $dbh->beginTransaction();
       $sql = "delete from engine.map_member_flag where memberid=:memberid and name=:name";
       $dat = ["name" => $name, "memberid" => $memberid];
@@ -364,18 +336,5 @@ SQL;
       $dbh->commit();
     }
     
-    function setpassword($memberid, $plaintext)
-    {
-      $sql = "update engine.__member set password=crypt(:password, gen_salt('bf')) where id=:memberid";
-      $dat = ["password" => $plaintext, "memberid" => $memberid];
-      $pdo = \bbsengine6\database\connect(\config\SYSTEMDSN);
-      $stmt = $pdo->prepare($sql);
-      $stmt->execute($dat);
-      if ($stmt->rowCount() == 1)
-      {
-        return true;
-      }
-      return false;
-    }
 }
 ?>

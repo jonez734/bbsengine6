@@ -1,6 +1,6 @@
 {*{$actions = $data.actions}*}
 {*<pre>actions={$actions|var_export}</pre>*}
-{if count($actions) > 0}
+{if is_array($actions) && count($actions) > 0}
 <ul class="actions inlinelist">
 {foreach $actions as $action}
 <li>[&nbsp;{if isset($action.class) && empty($action.class) === false}<span class="{$action.class}"></span>&nbsp;{/if}

@@ -1,8 +1,14 @@
 <header id="pageheader" class="blurb">
 {block name="pageheader"}
 <div class="body">
- <h1>zoid technologies</h1>
- <h2>software that sucks less</h2>
+{* <h1 class="animate__animated animate__lightSpeedInRight">Zoid Technologies</h1>*}
+ <h1>Zoid Technologies</h1>
+  {if $currentmember.flags.NOCALUMNI} 
+   <h2>Software That Sucks Less</h2>
+  {else}
+   <h2>Custom Information Systems for Your Intranet, Extranet, or Public Website</h2>
+  {/if}
+  <h2 class="est2002">~ Est. 2002 ~</h2>
 </div> {* body *}
 {/block}
 </header>

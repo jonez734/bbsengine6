@@ -2,6 +2,7 @@ from math import ceil
 from typing import Any, Callable, List, Optional
 
 from .listbox import Listbox, ListboxItem, ListboxResult
+from . import io
 
 
 class ListboxCursor(Listbox):
@@ -32,17 +33,26 @@ class ListboxCursor(Listbox):
         self.totalitems = totalitems
         self.itemclass = itemclass
         self._cursor_position = 0
+        self._lazy_load = True
 
         self.numpages = max(1, ceil(self.totalitems / self.itemsperpage))
 
     def fetchitems(self) -> List[ListboxItem]:
         start = self._curpage * self.itemsperpage
+        if getattr(self.args, 'debug', False):
+            io.echo(f"fetchitems: start={start} _cursor_position={self._cursor_position}", level="debug")
 
         if start != self._cursor_position:
+            if getattr(self.args, 'debug', False):
+                io.echo(f"fetchitems: scrolling to {start}", level="debug")
             self.cur.scroll(start - self._cursor_position, mode="relative")
             self._cursor_position = start
 
+        if getattr(self.args, 'debug', False):
+            io.echo(f"fetchitems: about to fetchmany", level="debug")
         rows = self.cur.fetchmany(self.itemsperpage)
+        if getattr(self.args, 'debug', False):
+            io.echo(f"fetchitems: got {len(rows)} rows", level="debug")
         self._cursor_position += len(rows)
 
         items = []

@@ -10,11 +10,11 @@
   color: $blurb-color;
   margin: 0.25em;
   // margin-top: 0.5em;
-  border: 1px solid transparent;
-  -webkit-text-stroke-width: 1px;
-  -webkit-text-stroke-color: black;
-  @include bordergradient(lighten($blurb-border-color, 10%), darken($blurb-border-color, 10%), top left, to bottom right);
-  @include boxshadow();
+//  border: 1px solid transparent;
+//  -webkit-text-stroke-width: 1px;
+//  -webkit-text-stroke-color: black;
+//  @include bordergradient(lighten($blurb-border-color, 10%), darken($blurb-border-color, 10%), top left, to bottom right);
+//  @include boxshadow();
   // @include textshadow();
 //	text-shadow: 2px 3px rgba(0,0,0, 0.4);
 
@@ -45,18 +45,18 @@
     @include transition(all 0.25s);
       
     &:link {
-    	color: orange;
+    	color: $linkcolor;
     }
 
     &:visited {
-    	background-color: red;
+    	background-color: $linkvisitedcolor;
     }
 
     &:active {
     }
 
     &:hover {
-        background-color: lightblue;
+        background-color: $linkhovercolor;
         color: white;
     }
 

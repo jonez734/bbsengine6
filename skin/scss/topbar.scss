@@ -9,6 +9,16 @@ div#topbar {
     flex-direction: row;
     // padding: 0.50em;
     flex: 0 1 auto; // stretch h but not v
+    font-size: 1.0em;
+
+    color: $topbar-textcolor; // /* #303030; */
+
+    background-color: $topbar-backgroundcolor; // #ababab;
+
+    border: 0;
+    border: $topbar-border;
+    margin: 0.5em;
+    padding: 0;
 
     ul {
         padding: 0;
@@ -25,14 +35,13 @@ div#topbar {
     }
 
     .start { 
-        border: 0em;
-        border-right: 0.125em solid $blurb-border-color;
+        border: 0;
+        border-right: $topbar-border;
         justify-content: flex-start;
         order: -1;
     }
 
     .middle { 
-        // border: 0px solid green;
         flex: 1;
         flex-grow: 1;
         padding: 0.50em;
@@ -40,7 +49,7 @@ div#topbar {
 
     .end {
         border: 0em;
-        border-left: 0.125em solid $blurb-border-color;
+        border-left: $topbar-border;
         justify-content: flex-end;
         order: 1;
     }
@@ -48,4 +57,29 @@ div#topbar {
     #clock {
         display: inline;
     }
+
+	a {
+		color: $blurb-textcolor;
+		text-decoration-color: yellowgreen;
+		text-decoration: underline;
+		@include transition(all 0.25s);
+        
+		&:hover {
+			color: $blurb-body-textcolor;
+			background-color: invert($blurb-body-textcolor);
+		}
+	}
+    &.fixed {
+            position: sticky;
+            top: 0; // -5px;
+            left: 0;
+            width: 100%;
+            z-index: 10;
+            opacity: 1.00;
+            margin-left: 0;
+
+            box-shadow: 0 0 1.0em rgba(0, 0, 0, 0.2);
+    }
+    transition: all 0.5s ease;
 }
+

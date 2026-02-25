@@ -1,54 +1,60 @@
 import argparse
 
-import ttyio6 as ttyio
-import bbsengine6 as bbsengine
+from bbsengine6 import io, menu
 
-parser = argparse.ArgumentParser("menu")
-parser.add_argument("--debug", action="store_true")
+def main():
+    parser = argparse.ArgumentParser("menu")
+    parser.add_argument("--debug", action="store_true")
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-ttyio.setvar("engine.menu.boxcharcolor", "{bglightgray}{darkgreen}")
-ttyio.setvar("engine.menu.color", "{bggray}")
-ttyio.setvar("engine.menu.shadowcolor", "{bgdarkgray}")
-ttyio.setvar("engine.menu.cursorcolor", "{bglightgray}{blue}")
-ttyio.setvar("engine.menu.boxcolor", "{bgblue}{green}")
-ttyio.setvar("engine.menu.itemcolor", "{blue}{bglightgray}")
-ttyio.setvar("engine.menu.titlecolor", "{black}{bglightgray}")
-ttyio.setvar("engine.menu.promptcolor", "")
-ttyio.setvar("engine.menu.inputcolor", "{white}")
-ttyio.setvar("engine.menu.disableditemcolor", "{darkgray}")
-ttyio.setvar("engine.menu.resultfailedcolor", "{bgred}{white}")
+    io.setvar("engine.menu.boxcharcolor", "{bglightgray}{darkgreen}")
+    io.setvar("engine.menu.color", "{bggray}")
+    io.setvar("engine.menu.shadowcolor", "{bgdarkgray}")
+    io.setvar("engine.menu.cursorcolor", "{bglightgray}{blue}")
+    io.setvar("engine.menu.boxcolor", "{bgblue}{green}")
+    io.setvar("engine.menu.itemcolor", "{blue}{bglightgray}")
+    io.setvar("engine.menu.titlecolor", "{black}{bglightgray}")
+    io.setvar("engine.menu.promptcolor", "{promptcolor}")
+    io.setvar("engine.menu.inputcolor", "{inputcolor}")
+    io.setvar("engine.menu.disableditemcolor", "{darkgray}")
+    io.setvar("engine.menu.resultfailedcolor", "{bgred}{white}")
 
-ttyio.setvar("itemcolor", "{blue}{bglightgray}")
-ttyio.setvar("currentitemcolor", "{bgwhite}{black}")
+    io.setvar("itemcolor", "{blue}{bglightgray}")
+    io.setvar("currentitemcolor", "{bgwhite}{black}")
 
-menuitems = []
+    menuitems = []
+    for x in range(0, 15):
+        menuitems.append(menu.Item(chr(65+x), f"item {chr(65+x)}", blah))
+
+    m = menu.Menu(args, "testing bbsengine.menu", menuitems, pagesize=20)
+    done = False
+    while not done:
+        op = m.run()
+        if op.kind == "select":
+            io.echo(f"{{var:inputcolor}}selected option {op.menuitem.key=}")
+            if io.inputboolean("continue: ") is False:
+                done = True
+                break
 
 def blah(args, menuitem):
-    ttyio.echo(f"{menuitem=}", level="debug")
+    io.echo(f"running 'blah': {menuitem=}", level="debug")
 
 #bbsengine.screen.init()
 #bbsengine.screen.setarea("testing")
 
-for x in range(0, 10):
-    menuitems.append(bbsengine.menu.Item(chr(65+x), f"item {chr(65+x)}", "blah"))
 
 try:
-    menu = bbsengine.menu.Menu(args, "title here", menuitems, pagesize=20)
-    op = menu.run()
-#    ttyio.echo(f"{Op=}")
-    if op.kind == "select":
-        ttyio.echo(f"{{var:inputcolor}}selected option {op.menuitem.key=}")
+    main()
 #    elif op.kind == "exit":
 #        ttyio.echo(f"{{var:inputcolor}}exit")
 #    elif op.kind == "enter":
 #        ttyio.echo(f"enter on {op.menuitem.key=}", level="debug")
 except KeyboardInterrupt:
-    ttyio.echo("{/all}{restorecursor}*INTR*")
+    io.echo("{/all}{restorecursor}*INTR*")
 except EOFError:
-    ttyio.echo("{/all}{restorecursor}*EOF*")
+    io.echo("{/all}{restorecursor}*EOF*")
 finally:
-    ttyio.echo(f"{{savecursor}}{{curpos:{ttyio.getterminalheight()},0}}{{/all}}{{el}}{{restorecursor}}{{reset}}")
+    io.echo(f"{{savecursor}}{{curpos:{io.getterminalheight()},0}}{{/all}}{{el}}{{restorecursor}}{{reset}}")
 
-ttyio.echo(f"{ttyio.terminal.cursorpositions=}", level="debug")
+# ttyio.echo(f"{ttyio.terminal.cursorpositions=}", level="debug")
