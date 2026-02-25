@@ -2,7 +2,9 @@ import argparse
 
 from typing import NamedTuple
 
-from bbsengine6 import io, util, listbox, database, screen
+from bbsengine6 import io, util, database, screen
+from bbsengine6.listboxcursor import ListboxCursor
+from bbsengine6.listbox import ListboxItem, ListboxResult
 
 YUMMYHEIGHT = 166 # cm
 class Height(NamedTuple):
@@ -16,21 +18,22 @@ def cmtofeet(cm:int) -> NamedTuple:
   inches -= feet*12
   return Height(cm, feet, inches)
   
-class Article2PresidentListboxItem(listbox.ListboxItem):
-    def __init__(self, rec:dict, width:int, height=1):
-      super().__init__(rec, width, height)
-      self.status = ""
-      self.pk = f"{rec['person_key']}"
-      self.label = f"{rec['name_given']} {rec['name_sur']}"
-#      self.itemid = None
-      self.rec = rec
-      self.width = width
+class Article2PresidentListboxItem(ListboxItem):
+    def __init__(self, rec: dict, width: int, height=1):
+        super().__init__()
+        self.status = ""
+        self.pk = f"{rec['person_key']}"
+        self.content = f"{rec['name_given']} {rec['name_sur']}".ljust(width - 9, ' ')
+        self.data = rec
+        self.width = width
+        self.disabled = False
+
     def help(self):
-      io.echo("this is a help message in a function")
+        io.echo("this is a help message in a function")
 
     def display(self):
-      io.echo(f"{{/all}}{{cha}} {{engine.menu.cursorcolor}}{{engine.menu.color}} {{engine.menu.boxcharcolor}}{{acs:vline}}{{cic}} {self.label.ljust(self.width-9, ' ')} {{/all}}{{engine.menu.boxcharcolor}}{{acs:vline}}{{engine.menu.shadowcolor}} {{engine.menu.color}} {{/all}}{{cha}}", end="", flush=True)
-      return
+        io.echo(f"{{/all}}{{cha}} {{engine.menu.cursorcolor}}{{engine.menu.color}} {{engine.menu.boxcharcolor}}{{acs:vline}}{{cic}} {self.content} {{/all}}{{engine.menu.boxcharcolor}}{{acs:vline}}{{engine.menu.shadowcolor}} {{engine.menu.color}} {{/all}}{{cha}}", end="", flush=True)
+        return
 
 def buildargs(args=None, **kw):
     parser = argparse.ArgumentParser("testlistbox")
@@ -56,26 +59,6 @@ def init():
     io.setvar("itemcolor", "{blue}{bglightgray}")
     io.setvar("currentitemcolor", "{bgwhite}{black}")
 
-def keyhandler(args, ch, listbox):
-    currentitem = listbox.currentitem
-    #    datestart = rec["date_start"]
-
-    keys = {}
-    keys["KEY_INS"] = "insertperson"
-
-    if ch in ("KEY_INS", "E", "KEY_ENTER"):
-        io.setvar("cic", "{currentitemcolor}")
-        currentitem.display()
-        io.echo("{restorecursor}", end="", flush=True)
-
-    if ch == "KEY_INS":
-        io.echo("insert new record!")
-        return True # key has been handled
-    elif ch == "E":
-        io.echo(f"edit record: {listbox.currentitem.pk}")
-        return True
-    return False
-
 parser = buildargs()
 
 def main(args, **kw):
@@ -94,7 +77,23 @@ def main(args, **kw):
         io.echo("no presidents")
         return None
       screen.init(args)
-      lb = listbox.Listbox(args, "presidents", keyhandler=keyhandler, itemclass=Article2PresidentListboxItem, totalitems=totalitems, cur=cur)
+
+      custom_keys = {
+        "KEY_INS": lambda: (io.echo("insert new record!"), True)[1],
+        "E": lambda: (io.echo(f"edit record: {lb.currentitem.pk}"), True)[1],
+        "KEY_ENTER": lambda: ListboxResult("selected", lb.currentitem) if lb.currentitem else False,
+      }
+
+      lb = ListboxCursor(
+          args,
+          "presidents",
+          itemsperpage=20,
+          itemheight=1,
+          cur=cur,
+          totalitems=totalitems,
+          itemclass=Article2PresidentListboxItem,
+          custom_keys=custom_keys,
+      )
       done = False
       while not done:
         op = lb.run(prompt)
@@ -105,7 +104,7 @@ def main(args, **kw):
         elif op.status == "exit":
           io.echo(f"{{inputcolor}}exit")
           return True
-        elif op.status == "select":
+        elif op.status == "selected":
           io.echo(f"selected item {op.item.pk}{{f6:3}}")
           sql = f"select * from article2.person where person_key=%s"
           dat = (op.item.pk,)
@@ -204,6 +203,6 @@ if __name__ == "__main__":
     except EOFError:
       io.echo("{/all}{restorecursor}*EOF*")
     finally:
-      io.echo(f"{{savecursor}}{{curpos:{io.getterminalheight()},0}}{{/all}}{{eraseline}}{{restorecursor}}{{reset}}")
+      io.echo(f"{{savecursor}}{{curpos:{io.terminal.height()},0}}{{/all}}{{eraseline}}{{restorecursor}}{{reset}}")
 
 #    io.echo(f"{io.terminal.cursorpositions=}", level="debug")
