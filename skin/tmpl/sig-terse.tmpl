@@ -1,0 +1,10 @@
+{*<pre>{$sig|var_dump}</pre>*}
+{if $sig !== null}
+<div class="blurb">
+<div class="header"><h1>{if $sig.icon !== ""}<i class="fa fa-fw {$sig.icon}"></i> {/if}<a href="{$smarty.const.TEOSURL}{$sig.uri}">{$sig.title}</a></h1></div>
+<div class="body">{$sig.intro|default:$sig.title}</div> {* body *}
+<div class="footer">
+{include file="actions.tmpl" actions=$sig.actions}
+</div> {* footer *}
+</div>
+{/if}

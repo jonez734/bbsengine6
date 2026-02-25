@@ -1,0 +1,14 @@
+{* base template for all notifies: terse, detail, and popup modes *}
+<div class="blurb notify {$mode} noborder">
+{if $mode == "popup"}<div class="closebutton"></div>{/if}
+<div class="body">{block name="message"}{/block}</div>
+<div class="footer">
+<ul class="actions">
+<li>foo</li>
+<li>bar</li>
+</ul>
+{* <p>notify.type={$notify.type}</p>  *}
+{*<br /><pre>{$notify.data|var_dump}</pre> *}
+<div style="float: right; width: 50%; text-align: right; font-size: 0.75em;">Sent: {$notify.datesentepoch|datestamp}<br />{$notify.type} #{$notify.id}</div>
+</div>
+</div>

@@ -1,0 +1,7 @@
+{if count($siglist) > 0}
+<ul class="commadelimited">
+{foreach $siglist as $sig}
+<li>{teos path=$sig}</li>
+{/foreach}
+</ul>
+{/if}

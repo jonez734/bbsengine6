@@ -1,0 +1,13 @@
+numbered squares, 1-15
+pick any four numbers
+total is *always* 34
+
+5x5 matrix gives diff numbers
+
+ 1  2  3  
+ 4  5  6  
+ 7  8  9
+ 10 11 12
+ 13 14 15
+
+1+5+8+12

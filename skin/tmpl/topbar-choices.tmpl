@@ -1,0 +1,17 @@
+{*<pre> {$data|var_dump} </pre>*}
+<!-- bbsengine6/skin/tmpl/topbar-choices.tmpl -->
+{if count($data.choices) > 0}
+{*<pre>currentpage={$currentpage|var_dump}</pre>*}
+{foreach $data.choices as $choice}
+  {$class = $choice.class|default:""}
+  <div class="end choice" data-req="topbar.choices">
+   <div class="inner">
+   {if $choice.name === $currentpage || $choice.name == $currentsite || $choice.name === $currentaction|cat:$currentpage}
+    {if $class !== ""}<span class="{$class}"></span>&nbsp;{/if}<b>{$choice.title}</b>
+   {else}
+    {if $class !== ""}<span class="{$class}"></span>&nbsp;{/if}<a href="{$choice.url}">{$choice.name}</a>
+   {/if}
+   </div>
+  </div>
+{/foreach}
+{/if}

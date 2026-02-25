@@ -1,0 +1,41 @@
+{extends file="page.tmpl"}
+{block name="head" append}
+<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/form.css" media="screen" />
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+{/block} {* head *}
+{block name="title"}{$smarty.block.parent} - software that sucks less - login{/block}
+{block name="pageheader"}
+<div class="body">
+ <h1 class="animate__animated animate__fadeInUp">Zoid Technologies</h1>
+  {if $currentmember.flags.NOC}
+   <h2 class="animate__animated animate__fadeInUp">Software That Sucks Less</h2>
+  {else}
+   <h2 class="animate__animated animate__fadeInUp">Custom Information Systems</h2>
+  {/if}
+  <h2 class="est2002 animate__animated animate__fadeInUp">~ Est. 2002 ~</h2>
+</div> {* body *}
+{/block}
+{block name="main"}
+<ul class="nobullets nopadding nomargin">
+<li>{include file="maturecontentwarning.tmpl"}</li>
+<li><div class="blurb vstretch">
+<div class="header">knock, knock, neo..</div>
+<div class="body">
+<form action="/login" method="post" enctype="multipart/form-data">
+<div class="row">
+	<div class="col-25"><span class="requiredstar">*</span><label for="login">login: </label></div>
+	<div class="col-75"><span class="element{if $error} error{/if}"><input type="text" id="login" /></span></div>
+</div><br />
+<div class="row">
+	<div class="col-25"><span class="requiredstar">*</span><label for="password">password: </label></div>
+	<div class="col-75"><input type="password" id="password" /></div>
+</div>
+<div class="row"><div class="col-25"><span class="requiredstar">*</span>captcha: </span></div><div class="col-75 g-recaptcha" data-sitekey="{$smarty.const.RECAPTCHASITEKEY}"></div></div><br />
+<div class="row"><input value="red pill (accept)" type="submit" id="redpill">
+<input value="blue pill" type="submit" id="bluepill"><br />
+</div>
+</form>
+</div>
+</div></li>
+</ul>
+{/block}

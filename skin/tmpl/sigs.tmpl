@@ -1,0 +1,23 @@
+<div class="blurb teos vstretch">
+  <div class="header">
+    <h1>sigs</h1>
+  </div>
+  <div class="body vstretch">
+    <ul class="nobullets">
+      {if count($breadcrumbs) > 1}
+	<li><span class="fa fa-level-up-alt fa-fw"></span> <a href=".."> parent sig</a></li>
+      {/if}
+      {if count($sigs) > 0}
+        {foreach from=$sigs item=sig}
+      	  <li>
+      	   <span class="fa fa-folder fa-fw"></span>
+      	   {teos path=$sig.path}
+      	   {if count($sig.actions) > 0}
+      	     {include file="actions.tmpl" actions=$sig.actions}
+      	   {/if}
+      	  </li>
+    	{/foreach}
+      {/if}
+    </ul>
+  </div> {* body *}
+</div> {* blurb folders *}
