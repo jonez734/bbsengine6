@@ -85,6 +85,19 @@ Custom `ListboxItem` subclass for displaying presidents in the master list.
 
 Custom `ListboxItem` subclass for displaying available categories in the category list.
 
+## Echovars
+
+The demo uses the following echovars for listbox styling:
+
+| Echovar | Value | Description |
+|---------|-------|-------------|
+| `listbox.boxcolor` | `{darkgreen}` | Color for box drawing characters |
+| `listbox.titlecolor` | `{inverse}` | Color for title text |
+| `listbox.item.normal` | `{white}` | Normal item color |
+| `listbox.item.highlighted` | `{listbox.item.normal}{inverse}` | Highlighted item color |
+| `listbox.item.disabled` | `{darkgray}` | Disabled item color |
+| `listbox.bgcolor` | `""` | Box background (empty) |
+
 ## Error Handling
 
 - Checks database existence before connecting
