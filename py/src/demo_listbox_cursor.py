@@ -62,8 +62,9 @@ def init():
 parser = buildargs()
 
 def main(args, **kw):
-  prompt = "demo_listbox_database: "
-  with database.connect(args) as dbh:
+  prompt = "demo_listbox_cursor: "
+  pool = database.getpool(args, dbname=args.databasename)
+  with database.connect(args, pool=pool) as dbh:
     with database.cursor(dbh) as cur:
       cur.execute("select count(distinct person_key) as totalitems from article2.president")
       res = cur.fetchone()
