@@ -4,10 +4,8 @@
 #from . import module
 #from . import screen
 #from . import blurb
-#from . import sig
+#from . import folder
 #from . import menu
 #from . import listbox
 #from . import input
 #from . import io
-
-from .util import init

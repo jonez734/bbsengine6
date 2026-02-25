@@ -1,4 +1,5 @@
 from math import ceil
+import logging
 from typing import Any, Callable, List, NamedTuple, Optional
 
 from . import io
@@ -83,7 +84,7 @@ class Listbox:
 
         self.numpages = max(1, int(ceil(len(self.items) / self.itemsperpage)))
 
-        self.key_handlers: dict[str, Callable[[], Optional[ListboxResult]]] = {
+        self.key_handlers: dict[str, Callable[[], bool | Optional[ListboxResult]]] = {
             "KEY_ESC": self._handle_key_esc,
             "KEY_ENTER": self._handle_key_enter,
             "KEY_UP": self._handle_key_up,
@@ -193,11 +194,23 @@ class Listbox:
         page_items = self.fetchitems()
         for i in range(self.itemsperpage):
             if i < len(page_items):
-                self._display_item(page_items[i], highlighted=False)
+                if i == self._currentindex:
+                    self._display_item(page_items[i], highlighted=True)
+                else:
+                    self._display_item(page_items[i], highlighted=False)
             else:
                 self._display_blank_line()
 
         self._display_bottom_border()
+
+    def _highlight_item(self, item_index: int) -> None:
+        """Highlight the item at item_index on current page."""
+        page_items = self.fetchitems()
+        if item_index < len(page_items):
+            if item_index != self._currentindex:
+                self._position_from_prompt(item_index)
+            self._display_item(page_items[item_index], highlighted=True)
+            io.echo("{restorecursor}", end="", flush=True)
 
     def _redraw_content_area(self) -> None:
         io.echo(f"{{cursorup:{self.itemsperpage * self.itemheight + 1}}}", end="", flush=True)
@@ -211,20 +224,20 @@ class Listbox:
 
     def _position_from_prompt(self, item_index: int) -> None:
         """Position cursor from prompt line to item at item_index on page."""
-        lines_up = 1 + (self.itemsperpage - item_index) * self.itemheight
-        io.echo(f"{{cha}}{{cursorup:{lines_up}}}", end="", flush=True)
+        cursor_up = self._cursor_moves_to_item(item_index)
+        io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
 
     def _handle_key_esc(self) -> Optional[ListboxResult]:
         """Handle KEY_ESC - cancel selection and return cancelled result."""
         return ListboxResult("cancelled")
 
-    def _handle_key_enter(self) -> Optional[ListboxResult]:
+    def _handle_key_enter(self) -> bool | Optional[ListboxResult]:
         """Handle KEY_ENTER - select current item and return selected result."""
         if self.currentitem is not None and not self.currentitem.disabled:
             return ListboxResult("selected", self.currentitem)
         return False
 
-    def _handle_key_up(self) -> Optional[ListboxResult]:
+    def _handle_key_up(self) -> bool | Optional[ListboxResult]:
         """Handle KEY_UP - move to previous enabled item.
 
         If there is an item above, move cursor up and highlight it.
@@ -258,7 +271,7 @@ class Listbox:
             io.echo("{BEL}", end="", flush=True)
             return None
 
-    def _handle_key_down(self) -> Optional[ListboxResult]:
+    def _handle_key_down(self) -> bool | Optional[ListboxResult]:
         """Handle KEY_DOWN - move to next enabled item.
 
         If there is an item below, move cursor down and highlight it.
@@ -290,7 +303,7 @@ class Listbox:
             io.echo("{BEL}", end="", flush=True)
             return None
 
-    def _handle_key_pageup(self) -> Optional[ListboxResult]:
+    def _handle_key_pageup(self) -> bool | Optional[ListboxResult]:
         """Handle KEY_PAGEUP - move to previous page.
 
         If not on first page, decrement page and highlight first enabled item.
@@ -322,7 +335,7 @@ class Listbox:
                 io.echo("{BEL}", end="", flush=True)
             return True
 
-    def _handle_key_pagedown(self) -> Optional[ListboxResult]:
+    def _handle_key_pagedown(self) -> bool | Optional[ListboxResult]:
         """Handle KEY_PAGEDOWN - move to next page.
 
         If not on last page, increment page and highlight first enabled item.
@@ -354,7 +367,7 @@ class Listbox:
                 io.echo("{BEL}", end="", flush=True)
             return True
 
-    def _handle_key_home(self) -> Optional[ListboxResult]:
+    def _handle_key_home(self) -> bool | Optional[ListboxResult]:
         """Handle KEY_HOME - jump to first enabled item on current page.
 
         Moves highlight to the first enabled item on the current page.
@@ -367,13 +380,14 @@ class Listbox:
             cursor_up = self._cursor_moves_to_item(old_idx)
             io.echo(f"{{cursorup:{cursor_up}}}{{cha}}", end="", flush=True)
             self._display_item(page_items[old_idx], highlighted=False)
-            diff = old_idx - first_idx
-            io.echo(f"{{cursorup:{diff * self.itemheight}}}{{cha}}", end="", flush=True)
+            io.echo("{cha}", end="", flush=True)
+            diff = (old_idx - first_idx + 1) * self.itemheight
+            io.echo(f"{{cursorup:{diff}}}{{cha}}", end="", flush=True)
             self._currentindex = first_idx
             self._display_item(page_items[first_idx], highlighted=True)
         return True
 
-    def _handle_key_end(self) -> Optional[ListboxResult]:
+    def _handle_key_end(self) -> bool | Optional[ListboxResult]:
         """Handle KEY_END - jump to last enabled item on current page.
 
         Moves highlight to the last enabled item on the current page.
@@ -386,6 +400,7 @@ class Listbox:
             cursor_up = self._cursor_moves_to_item(old_idx)
             io.echo(f"{{cursorup:{cursor_up}}}{{cha}}", end="", flush=True)
             self._display_item(page_items[old_idx], highlighted=False)
+            io.echo("{cha}", end="", flush=True)
             diff = last_idx - old_idx - 1
             io.echo(f"{{cursordown:{diff * self.itemheight}}}{{cha}}", end="", flush=True)
             self._currentindex = last_idx
@@ -423,11 +438,13 @@ class Listbox:
         if not self.items:
             return ListboxResult("noitems")
 
+        self.prompt = prompt
+
         self._display()
-        io.echo(f"{prompt}{{savecursor}}", end="", flush=True)
+        io.echo(f"{{savecursor}} {{promptcolor}}{prompt}{{cha}}", end="", flush=True)
 
         cursor_up = self._cursor_moves_to_item(self._currentindex)
-        logentry(f"{cursor_up=}", level="debug")
+        logentry(f"{cursor_up=}", level=logging.DEBUG)
         io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
 
         page_items = self.fetchitems()
@@ -439,6 +456,16 @@ class Listbox:
         while True:
             result = self.onkey(io.getch(self.GETCH_TIMEOUT))
             if isinstance(result, ListboxResult):
+                if result.status == "redraw":
+                    self._display()
+                    io.echo(f"{{savecursor}} {{promptcolor}}{self.prompt}{{cha}}", end="", flush=True)
+                    cursor_up = self._cursor_moves_to_item(self._currentindex)
+                    io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+                    page_items = self.fetchitems()
+                    if self._currentindex < len(page_items):
+                        self._display_item(page_items[self._currentindex], highlighted=True)
+                    io.echo("{restorecursor}", end="", flush=True)
+                    continue
                 return result
             if result is True:
                 io.echo("{restorecursor}", end="", flush=True)

@@ -19,6 +19,7 @@
 | `currentindex` | int | Index of current item (0-indexed) |
 | `curpage` | int | Current page number (0-indexed) |
 | `pos` | int | Cursor position within current page |
+| `prompt` | str | Prompt string stored from run() |
 
 ## REQUIRES / PROVIDES
 
@@ -79,6 +80,25 @@ When displaying each item:
 - If item is disabled: use `itemcolors["disabled"]` and call `io.setvar("cic", itemcolors["disabled"])`
 - If item is highlighted (current): use `itemcolors["highlighted"]` and call `io.setvar("cic", itemcolors["highlighted"])`
 - Otherwise: use `itemcolors["normal"]` and call `io.setvar("cic", itemcolors["normal"])`
+
+## _display() Method
+
+The `_display()` method draws the entire listbox widget:
+- Title box (if title is provided)
+- Middle border
+- Content area with all items
+- Bottom border
+
+The current item (at `self._currentindex`) is automatically highlighted.
+
+## _highlight_item() Method
+
+The `_highlight_item(item_index)` method highlights a specific item on the current page:
+- If item_index is different from current index, positions cursor to the item
+- Displays the item with highlight styling (always)
+- Restores cursor position
+
+This is a lightweight helper for re-highlighting after partial updates, used by key handlers and when returning `ListboxResult("redraw")` from custom key handlers.
 
 ## Width Calculation
 
@@ -158,7 +178,7 @@ class ListboxItem:
     def handle_key(self, key: str) -> bool: ...
 
 class ListboxResult(NamedTuple):
-    status: str  # "selected" | "cancelled" | "noitems" | "custom"
+    status: str  # "selected" | "cancelled" | "noitems" | "redraw" | "custom"
     item: Optional[ListboxItem] = None
     data: Optional[dict] = None
 
@@ -184,11 +204,14 @@ class Listbox:
     
     def fetchitems(self) -> List[ListboxItem]: ...
 
+    def _highlight_item(self, item_index: int) -> None: ...
+
     def onkey(self, ch: Optional[str]) -> Optional[ListboxResult] | bool: ...
 
     def run(self, prompt: str) -> ListboxResult: ...
 
-    key_handlers: dict[str, Callable[[], Optional[ListboxResult]]]
+    prompt: str
+    key_handlers: dict[str, Callable[[], bool | Optional[ListboxResult]]]
 
 ## Key Handler Methods
 
@@ -211,20 +234,42 @@ Each standard key has a corresponding private handler method:
 
 1. If there are no items to display:
     - Return `ListboxResult("noitems")`
-2. Display the listbox (title box + content area)
-3. Show the prompt (REQUIRED - must be passed as positional argument)
-4. Echo `{savecursor}` to save cursor position
-5. Enter a loop:
+2. Store `self.prompt = prompt` for access by key handlers
+3. Display the listbox (title box + content area)
+4. Show the prompt (REQUIRED - must be passed as positional argument)
+5. Echo `{savecursor}` to save cursor position
+6. Enter a loop:
    ```
    while True:
        result = self.onkey(io.getch(GETCH_TIMEOUT))
        if isinstance(result, ListboxResult):
+           if result.status == "redraw":
+               # Redisplay entire listbox, title box, content, borders, and prompt
+               self._display()
+               io.echo(f"{{savecursor}} {{promptcolor}}{self.prompt}{{cha}}", end="", flush=True)
+               cursor_up = self._cursor_moves_to_item(self._currentindex)
+               io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
+               page_items = self.fetchitems()
+               if self._currentindex < len(page_items):
+                   self._display_item(page_items[self._currentindex], highlighted=True)
+               io.echo("{restorecursor}", end="", flush=True)
+               continue
            return result
        if result is True:
            io.echo("{restorecursor}", end="", flush=True)
        elif result is False:
            io.echo("{BEL}", end="", flush=True)
    ```
+
+### ListboxResult("redraw")
+
+A key handler (including custom_keys) can return `ListboxResult("redraw")` to signal that the listbox should be completely redrawn, including:
+- Title box (if any)
+- Content area (all items)
+- Bottom border
+- Prompt line
+
+The current item selection is preserved. This is useful when a key handler modifies the listbox state and needs a full refresh.
 
 ## onkey() Method
 

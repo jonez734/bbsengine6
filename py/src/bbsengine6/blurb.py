@@ -1,6 +1,4 @@
-import ttyio6 as ttyio
-from . import database
-from . import member
+from . import database, member, io
 
 from psycopg2.extras import Json
 
@@ -10,30 +8,32 @@ def insert(args, blurb:dict, prg:str, table:str="engine.__blurb", returnid:bool=
     blurb["datecreated"] = "now()"
     blurb["createdbyid"] = member.getcurrentid(args)
     if args.debug is True:
-      ttyio.echo(f"bbsengine.blurb.insert.100: blurb={blurb!r} table={table!r}", level="debug")
+      io.echo(f"bbsengine.blurb.insert.100: blurb={blurb!r} table={table!r}", level="debug")
     return database.insert(args, table, blurb, returnid=returnid, primarykey=primarykey, mogrify=mogrify)
 
 def updatesigs(args, blurbid:int, sigpaths, completerdelims=", ", mogrify:bool=False):
   if sigpaths is None or len(sigpaths) == 0:
     return None
 
-  ttyio.echo(f"bbsengine6.blurb.updatesigs.100: sigpaths={sigpaths!r}", level="debug")
-  sigpaths = buildsiglist(sigpaths)
-#  if type(sigpaths) == str:
-#    sigpaths = re.split("|".join(completerdelims), sigpaths)
-#    sigpaths = [s.strip() for s in sigpaths]
-#    sigpaths = [s for s in sigpaths if s]
-  
+  # FIXME: buildsiglist is not defined - function needs to be implemented or removed
+  # io.echo(f"bbsengine6.blurb.updatesigs.100: sigpaths={sigpaths!r}", level="debug")
+  # sigpaths = buildsiglist(sigpaths)
+  # if type(sigpaths) == str:
+  #   sigpaths = re.split("|".join(completerdelims), sigpaths)
+  #   sigpaths = [s.strip() for s in sigpaths]
+  #   sigpaths = [s for s in sigpaths if s]
+  return None
+
   dbh = database.connect(args)
   cur = dbh.cursor()
   sql = "delete from engine.map_blurb_sig where blurbid=%s"
   dat = (blurbid,)
   if mogrify is True:
-    ttyio.echo(cur.mogrify(sql, dat), level="debug")
+    io.echo(cur.mogrify(sql, dat), level="debug")
 
   cur.execute(sql, dat)
   for sigpath in sigpaths:
-    ttyio.echo("bbsengine6.blurb.updatesigs.100: sigpath=%r" % (sigpath))
+    io.echo("bbsengine6.blurb.updatesigs.100: sigpath=%r" % (sigpath))
     sigmap = { "blurbid": blurbid, "sigpath": sigpath }
     database.insert(args, "engine.map_blurb_sig", sigmap, returnid=False, mogrify=mogrify)
 #  dbh.commit()
@@ -46,14 +46,14 @@ def updateattributes(args, blurbid:int, attributes:dict, reset:bool=False, table
     sql = "update %s set attributes=%%s where id=%s" % (table, blurbid)
 
   if args.debug is True:
-    ttyio.echo("updateblurbattributes.120: sql=%s" % (sql), level="debug")
+    io.echo("updateblurbattributes.120: sql=%s" % (sql), level="debug")
 
   dat = (Json(attributes),)
 
   dbh = database.connect(args)
   cur = dbh.cursor()
   if mogrify is True:
-    ttyio.echo("updateblurbattributes.100: %r" % (cur.mogrify(sql, dat)), level="debug")
+    io.echo("updateblurbattributes.100: %r" % (cur.mogrify(sql, dat)), level="debug")
   return cur.execute(sql, dat)
 
 def update(args, id:int, blurb:dict, reset=False, mogrify=False):
@@ -67,3 +67,44 @@ def update(args, id:int, blurb:dict, reset=False, mogrify=False):
 
 def commit(args):
   return database.commit(args)
+
+def build(args, rec, cur=None):
+  blurb = {}
+  for k in ("id", "parentid", "prg", "attributes", "datecreated", "createdbymoniker", "dateupdated", "updatedbymoniker", "dateapproved", "approvedbymoniker"):
+    blurb[k] = rec[k]
+
+  sql = "select flag.name, coalesce(map_blurb_flag.value, flag.defaultvalue) as value from engine.flag left outer join engine.map_blurb_flag on flag.name = engine.map_blurb_flag.name and engine.map_blurb_flag.memberid=%s"
+  if cur is None:
+    dbh = database.connect(args)
+    cur = dbh.cursor()
+  dat = (rec.get("id"),)
+  cur.execute(sql, dat)
+  if cur.rowcount == 0:
+    return blurb
+
+  res = cur.fetchall()
+  flag = {}
+  for f in res:
+    flag = {}
+    flag[f] = res[f]
+  blurb["flags"] = cur.fetchone()
+  
+  return blurb
+  
+def get(args, id:int):
+  sql = "select * from engine.__blurb where id=%s"
+  dat = (id,)
+  dbh = database.connect(args)
+  cur = dbh.cursor()
+  cur.execute(sql, dat)
+  if cur.rowcount == 0:
+    return None
+  rec = cur.fetchone()
+  blurb = build(args, rec, cur)
+  return blurb
+
+def approve(args, id:int, value:str=True):
+  blurb = get(args, id)
+  blurb["flags"]["approved"] = value
+  return True
+

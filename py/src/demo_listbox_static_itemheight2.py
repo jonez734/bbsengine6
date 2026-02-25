@@ -1,6 +1,6 @@
 import argparse
 from bbsengine6 import io, screen
-from bbsengine6.listbox import Listbox, ListboxItem
+from bbsengine6.listbox import Listbox, ListboxItem, ListboxResult
 
 
 def buildargs():
@@ -17,16 +17,7 @@ def handle_e(listbox):
     io.echo(f"{{labelcolor}}data: {{valuecolor}}{item.data}{{/all}}\n")
     io.echo(f"Press any key to continue...")
     io.getch(30)
-    listbox._display()
-    io.echo(f"listbox_next: ", end="", flush=True)
-    io.echo(f"{{savecursor}}", end="", flush=True)
-    cursor_up = listbox._cursor_moves_to_item(listbox.currentindex)
-    io.echo(f"{{cha}}{{cursorup:{cursor_up}}}", end="", flush=True)
-    page_items = listbox.fetchitems()
-    if listbox.currentindex < len(page_items):
-        listbox._display_item(page_items[listbox.currentindex], highlighted=True)
-    io.echo(f"{{restorecursor}}", end="", flush=True)
-    return True
+    return ListboxResult("redraw")
 
 
 def main(args):
@@ -76,7 +67,8 @@ def main(args):
     elif result.status == "noitems":
         io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}no items")
     elif result.status == "cancelled":
-        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled")
+#        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled")
+        io.echo(f"{{restorecursor}}cancelled")
     elif result.status == "selected" and result.item is not None:
         io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}{result.item.content} (pk={result.item.pk})")
 
