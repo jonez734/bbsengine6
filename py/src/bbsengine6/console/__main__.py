@@ -1,6 +1,4 @@
-from bbsengine6 import io, screen, session, database
-import sys
-import argparse
+from bbsengine6 import io, screen
 
 # Import argcomplete for shell completion (optional - continues if not installed)
 try:

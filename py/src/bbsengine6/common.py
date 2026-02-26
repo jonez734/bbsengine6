@@ -1,6 +1,8 @@
+import logging
+import logging.handlers
 import os
 
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from . import conf
 
@@ -79,12 +81,6 @@ def safe_path(*components: Union[str, os.PathLike],
     return resolved_path
 
 get_safe_path = safe_path
-
-# ---------
-# logging
-# ---------
-import logging
-import logging.handlers
 
 # default syslog handler
 default_handler = logging.handlers.SysLogHandler(address="/dev/log")

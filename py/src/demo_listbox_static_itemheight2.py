@@ -21,21 +21,12 @@ def handle_e(listbox):
 
 
 def main(args):
-    io.setvar("engine.menu.boxcharcolor", "{bglightgray}{darkgreen}")
-    io.setvar("engine.menu.color", "{bggray}")
-    io.setvar("engine.menu.shadowcolor", "{bgdarkgray}")
-    io.setvar("engine.menu.cursorcolor", "{bglightgray}{blue}")
-    io.setvar("engine.menu.boxcolor", "{bgblue}{green}")
-    io.setvar("engine.menu.titlecolor", "{black}{bglightgray}")
-    io.setvar("engine.menu.disableditemcolor", "{darkgray}")
-    io.setvar("engine.menu.resultfailedcolor", "{bgred}{white}")
-
-    io.setvar("itemcolor", "{blue}{bglightgray}")
-    io.setvar("currentitemcolor", "{bgwhite}{black}")
-    io.setvar("normalcolor", "{blue}{bglightgray}")
-    io.setvar("cic", "{blue}{bglightgray}")
-    io.setvar("labelcolor", "{yellow}")
-    io.setvar("valuecolor", "{cyan}")
+    io.setvar("listbox.boxcolor", "{darkgreen}")
+    io.setvar("listbox.titlecolor", "{inverse}")
+    io.setvar("listbox.item.normal", "{white}")
+    io.setvar("listbox.item.highlighted", "{listbox.item.normal}{inverse}")
+    io.setvar("listbox.item.disabled", "{darkgray}")
+    io.setvar("listbox.bgcolor", "")
 
     prompt = "projmon: "
 
@@ -53,7 +44,7 @@ def main(args):
 
     lb = Listbox(
         args,
-        title="Demo Listbox Itemheight=3",
+        title="Demo Listbox Itemheight=2",
         itemsperpage=5,
         itemheight=2,
         items=items,

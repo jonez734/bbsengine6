@@ -25,7 +25,7 @@ python demo_listbox_static_itemheight2.py --debug
 ## Features
 
 - Creates 28 `ListboxItem` objects programmatically
-- Uses default `itemsperpage=20`
+- Uses `itemsperpage=5`
 - Uses `itemheight=2` (each item takes 2 lines)
 - Multi-line content using `\n` in the content string
 - NATO phonetic alphabet codes for second line content
@@ -51,7 +51,7 @@ Where NATO_CODE cycles through: alpha, bravo, charlie, delta, echo, foxtrot, gol
 ## Height Calculation
 
 With `itemheight=2`:
-- Content area height = itemsperpage × itemheight = 20 × 2 = 40 lines
+- Content area height = itemsperpage × itemheight = 5 × 2 = 10 lines
 - Each item displays on 2 consecutive lines
 - The listbox scrolls by item, not by line
 
