@@ -18,20 +18,22 @@
 | person | article2.person | Personal details (name, birth, death) |
 | edu | article2.edu | Education history |
 | elector | article2.elector | Electoral information |
-| attractions | article2.attraction_* | Attractions including place, hours, social media |
+| attractions | article2.attraction_place | Attractions places |
 
 ## Attractions
 
-When "attractions" is selected, displays items from:
-- `attraction_place` - place details
-- `attraction_hour` - hours of operation
-- `attraction_social_media` - social media links
+When "attractions" is selected, the listbox shows only `attraction_place` entries. When a place is selected, the detail view shows:
+- Place details
+- Related `attraction_hour` data (or "needinfo" if none)
+- Related `attraction_social_media` data
 
 ## Features
 
 - Single item: If there's only one record, detail is shown directly without listbox
 - Dynamic key column detection via `TABLE_KEY_COLUMNS` dictionary
 - All detail views use `{{labelcolor}}` for column names and `{{valuecolor}}` for values
+- Detail views skip columns with `None` values by default (shows empty string when `--debug` flag is set)
+- After viewing details, returns to categories listbox for same president
 
 ## Usage
 
@@ -59,8 +61,9 @@ python demo_listbox_masterdetail.py --databasename yummyjam --databasehost local
 4. Category listbox shows available categories for that president
 5. User selects a category
 6. If multiple records exist, detail listbox is shown
-7. Detail view displays all columns with labels and values
-8. User presses any key to return
+7. Detail view displays columns (skipping None values unless --debug is set)
+8. User presses any key to return to categories listbox
+9. User can select another category or cancel to return to presidents
 
 ## Constants
 

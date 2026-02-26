@@ -67,6 +67,14 @@ class CategoryListboxItem(ListboxItem):
 CATEGORY_TABLES = ["person", "edu", "attractions", "attraction_place", "elector"]
 
 
+def display_column_value(col_name: str, value, args) -> str | None:
+    if value is None:
+        if hasattr(args, 'debug') and args.debug:
+            return ""
+        return None
+    return value
+
+
 def buildargs(args=None, **kw):
     parser = argparse.ArgumentParser("demo_listbox_masterdetail")
     parser.add_argument("--verbose", action="store_true", dest="verbose")
@@ -149,7 +157,7 @@ def get_available_categories(conn, person_key: str) -> list[str]:
     return available
 
 
-def display_person_detail(conn, person_key: str):
+def display_person_detail(args, conn, person_key: str):
     keycol = get_table_key_column( "person")
     sql = f"select * from article2.person where {keycol}=%s"
     dat = (person_key,)
@@ -162,20 +170,36 @@ def display_person_detail(conn, person_key: str):
         person = cur.fetchone()
 
         util.heading("person")
-        io.echo(f"{{labelcolor}}Name: {{valuecolor}}{person['name_common']} {person['name_sur']}")
-        date_born = person["date_born"]
-        place_born = person["place_born"] if person["place_born"] is not None else ""
-        state_born = person["state_born"] if person["state_born"] is not None else ""
+        
+        name_common = display_column_value("name_common", person["name_common"], args)
+        name_sur = display_column_value("name_sur", person["name_sur"], args)
+        if name_common is not None and name_sur is not None:
+            io.echo(f"{{labelcolor}}Name: {{valuecolor}}{name_common} {name_sur}")
+        
+        date_born = display_column_value("date_born", person["date_born"], args)
+        place_born = display_column_value("place_born", person["place_born"], args)
+        state_born = display_column_value("state_born", person["state_born"], args)
+        
+        if date_born is not None or place_born is not None or state_born is not None:
+            parts = [p for p in [date_born, place_born, state_born] if p]
+            if parts:
+                io.echo(f"{{labelcolor}}Born: {{valuecolor}}{' '.join(parts)}")
+        
+        date_die = person["date_die"] if person["date_die"] != "9999-99-99" else None
+        if date_die is None and hasattr(args, 'debug') and args.debug:
+            date_die = ""
+        state_die = person["state_die"] if person["state_die"] != "9999-99-99" else None
+        if state_die is None and hasattr(args, 'debug') and args.debug:
+            state_die = ""
+        place_die = display_column_value("place_die", person["place_die"], args)
+        
+        if date_die is not None or place_die is not None or state_die is not None:
+            die_parts = [p for p in [date_die, place_die, state_die] if p]
+            if die_parts:
+                io.echo(f"{{labelcolor}}Died: {{valuecolor}}{' '.join(die_parts)}")
 
-        date_die = person["date_die"] if person["date_die"] != "9999-99-99" else "--"
-        state_die = person["state_die"] if person["state_die"] != "9999-99-99" else ""
-        place_die = person["place_die"] if person["place_die"] is not None else ""
 
-        io.echo(f"{{labelcolor}}Born: {{valuecolor}}{date_born} {place_born} {state_born}")
-        io.echo(f"{{labelcolor}}Died: {{valuecolor}}{date_die} {place_die} {state_die}")
-
-
-def display_edu_detail(conn, person_key: str):
+def display_edu_detail(args, conn, person_key: str):
     keycol = get_table_key_column("edu")
     sql = f"select * from article2.edu where {keycol}=%s order by date_start"
     dat = (person_key,)
@@ -197,8 +221,9 @@ def display_edu_detail(conn, person_key: str):
         rec = edu_items[0].pk
         util.heading("education")
         for col in columns:
-            val = rec[col] if rec[col] is not None else ""
-            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+            val = display_column_value(col, rec[col], args)
+            if val is not None:
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
     else:
         lb_edu = Listbox(
             args,
@@ -215,11 +240,12 @@ def display_edu_detail(conn, person_key: str):
             util.heading("education")
             rec = edu_op.item.pk
             for col in columns:
-                val = rec[col] if rec[col] is not None else ""
-                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+                val = display_column_value(col, rec[col], args)
+                if val is not None:
+                    io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
-def display_attractions_detail(conn, person_key: str):
+def display_attractions_detail(args, conn, person_key: str):
     keycol = get_table_key_column("attractions")
     sql = f"select * from article2.attractions where {keycol}=%s"
     dat = (person_key,)
@@ -241,8 +267,9 @@ def display_attractions_detail(conn, person_key: str):
         rec = attraction_items[0].pk
         util.heading("attraction")
         for col in columns:
-            val = rec[col] if rec[col] is not None else ""
-            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+            val = display_column_value(col, rec[col], args)
+            if val is not None:
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
     else:
         lb_attractions = Listbox(
             args,
@@ -259,11 +286,12 @@ def display_attractions_detail(conn, person_key: str):
             util.heading("attraction")
             rec = attr_op.item.pk
             for col in columns:
-                val = rec[col] if rec[col] is not None else ""
-                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+                val = display_column_value(col, rec[col], args)
+                if val is not None:
+                    io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
-def display_attraction_table_detail(conn, person_key: str, table_name: str, key_col: str | None = None):
+def display_attraction_table_detail(args, conn, person_key: str, table_name: str, key_col: str | None = None):
     if key_col is None:
         key_col = get_table_key_column(table_name)
 
@@ -287,8 +315,9 @@ def display_attraction_table_detail(conn, person_key: str, table_name: str, key_
         rec = table_items[0].pk
         util.heading(table_name)
         for col in columns:
-            val = rec[col] if rec[col] is not None else ""
-            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+            val = display_column_value(col, rec[col], args)
+            if val is not None:
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
     else:
         lb_table = Listbox(
             args,
@@ -305,11 +334,12 @@ def display_attraction_table_detail(conn, person_key: str, table_name: str, key_
             util.heading(table_name)
             rec = table_op.item.pk
             for col in columns:
-                val = rec[col] if rec[col] is not None else ""
-                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+                val = display_column_value(col, rec[col], args)
+                if val is not None:
+                    io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
-def display_elector_detail(conn, person_key: str):
+def display_elector_detail(args, conn, person_key: str):
     keycol = get_table_key_column("elector")
     sql = f"select * from article2.elector where {keycol}=%s order by date"
     dat = (person_key,)
@@ -331,8 +361,9 @@ def display_elector_detail(conn, person_key: str):
         rec = elector_items[0].pk
         util.heading("elector")
         for col in columns:
-            val = rec[col] if rec[col] is not None else ""
-            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+            val = display_column_value(col, rec[col], args)
+            if val is not None:
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
     else:
         lb_electors = Listbox(
             args,
@@ -349,8 +380,9 @@ def display_elector_detail(conn, person_key: str):
             util.heading("elector")
             rec = elector_op.item.pk
             for col in columns:
-                val = rec[col] if rec[col] is not None else ""
-                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+                val = display_column_value(col, rec[col], args)
+                if val is not None:
+                    io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
 def get_attraction_join_keys(conn) -> list[str]:
@@ -366,7 +398,7 @@ def get_attraction_join_keys(conn) -> list[str]:
     return [c for c in columns if c.endswith("_key")]
 
 
-def display_attraction_join_detail(conn, person_key: str):
+def display_attraction_join_detail(args, conn, person_key: str):
     attraction_items = []
 
     place_sql = "select place_key from article2.attraction_join where person_key=%s"
@@ -390,24 +422,6 @@ def display_attraction_join_detail(conn, person_key: str):
                 item = ListboxItem(content=f"place: {title}", pk={"table": "attraction_place", "rec": rec})
                 attraction_items.append(item)
 
-    hours_sql = "select * from article2.attraction_hour where key IN (select place_key from article2.attraction_join where person_key=%s)"
-    with database.cursor(conn) as cur:
-        cur.execute(hours_sql, (person_key,))
-        columns_hours = [desc[0] for desc in cur.description] if cur.description else []
-        for rec in cur.fetchall():
-            day = rec.get("day", "")
-            item = ListboxItem(content=f"hour: {day}", pk={"table": "attraction_hour", "rec": rec, "columns": columns_hours})
-            attraction_items.append(item)
-
-    social_sql = "select * from article2.attraction_social_media where place_key IN (select place_key from article2.attraction_join where person_key=%s)"
-    with database.cursor(conn) as cur:
-        cur.execute(social_sql, (person_key,))
-        columns_social = [desc[0] for desc in cur.description] if cur.description else []
-        for rec in cur.fetchall():
-            platform = rec.get("platform", "")
-            item = ListboxItem(content=f"social: {platform}", pk={"table": "attraction_social_media", "rec": rec, "columns": columns_social})
-            attraction_items.append(item)
-
     if not attraction_items:
         io.echo(f"no attraction records")
         return
@@ -419,8 +433,9 @@ def display_attraction_join_detail(conn, person_key: str):
         columns = item_data.get("columns", list(rec.keys()))
         util.heading(table)
         for col in columns:
-            val = rec[col] if rec[col] is not None else ""
-            io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+            val = display_column_value(col, rec[col], args)
+            if val is not None:
+                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
     else:
         lb_attractions = Listbox(
             args,
@@ -440,21 +455,56 @@ def display_attraction_join_detail(conn, person_key: str):
             columns = item_data.get("columns", list(rec.keys()))
             util.heading(table)
             for col in columns:
-                val = rec[col] if rec[col] is not None else ""
-                io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+                val = display_column_value(col, rec[col], args)
+                if val is not None:
+                    io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+
+            if table == "attraction_place":
+                place_key = rec.get("place_key")
+                if place_key:
+                    hours_sql = "select * from article2.attraction_hour where key = %s"
+                    with database.cursor(conn) as cur:
+                        cur.execute(hours_sql, (place_key,))
+                        hours_columns = [desc[0] for desc in cur.description] if cur.description else []
+                        if cur.rowcount > 0:
+                            util.heading("attraction_hour")
+                            for hour_rec in cur.fetchall():
+                                for col in hours_columns:
+                                    val = display_column_value(col, hour_rec[col], args)
+                                    if val is not None:
+                                        io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+                        else:
+                            util.heading("attraction_hour")
+                            io.echo(f"{{valuecolor}}needinfo")
+
+                    social_sql = "select * from article2.attraction_social_media where place_key = %s"
+                    with database.cursor(conn) as cur:
+                        cur.execute(social_sql, (place_key,))
+                        if cur.rowcount > 0:
+                            util.heading("attraction_social_media")
+                            for social_rec in cur.fetchall():
+                                url = display_column_value("url", social_rec.get("url"), args)
+                                if url is not None:
+                                    io.echo(f"{{labelcolor}}url: {{valuecolor}}{url}")
+                                link_text = display_column_value("link_text", social_rec.get("link_text"), args)
+                                if link_text is not None:
+                                    io.echo(f"{{labelcolor}}link_text: {{valuecolor}}{link_text}")
+                                note = display_column_value("note", social_rec.get("note"), args)
+                                if note is not None:
+                                    io.echo(f"{{labelcolor}}note: {{valuecolor}}{note}")
 
 
-def display_category_detail(conn, person_key: str, category: str):
+def display_category_detail(args, conn, person_key: str, category: str):
     if category == "person":
-        display_person_detail(conn, person_key)
+        display_person_detail(args, conn, person_key)
     elif category == "edu":
-        display_edu_detail(conn, person_key)
+        display_edu_detail(args, conn, person_key)
     elif category == "elector":
-        display_elector_detail(conn, person_key)
+        display_elector_detail(args, conn, person_key)
     elif category == "attractions":
-        display_attraction_join_detail(conn, person_key)
+        display_attraction_join_detail(args, conn, person_key)
     elif category.startswith("attraction_"):
-        display_attraction_table_detail(conn, person_key, category)
+        display_attraction_table_detail(args, conn, person_key, category)
 
 
 parser = buildargs()
@@ -561,18 +611,22 @@ def main(args, **kw):
                             if args.debug:
                                 io.echo(f"categories available: {available}", level="debug")
 
-                            io.echo(f"{{promptcolor}}select a category: ", flush=True, end="")
-                            cat_op = lb_category.run("category: ")
+                            category_done = False
+                            while not category_done:
+                                io.echo(f"{{promptcolor}}select a category: ", flush=True, end="")
+                                cat_op = lb_category.run("category: ")
 
-                            if cat_op.status == "selected" and cat_op.item:
-                                category = cat_op.item.pk
-                                io.echo(f"selected category: {category}")
+                                if cat_op.status == "selected" and cat_op.item:
+                                    category = cat_op.item.pk
+                                    io.echo(f"selected category: {category}")
 
-                                display_category_detail(conn, current_person_key, category)
+                                    display_category_detail(args, conn, current_person_key, category)
 
-                                io.echo(f"{{promptcolor}}press any key to continue: {{/all}}", flush=True, end="")
-                                io.getch()
-                                io.echo()
+                                    io.echo(f"{{promptcolor}}press any key to continue: {{/all}}", flush=True, end="")
+                                    io.getch()
+                                    io.echo()
+                                else:
+                                    category_done = True
 
     except psycopg.DatabaseError as e:
         io.echo(f"demo_listbox_masterdetail.main.100: database error: {e}", level="error")
