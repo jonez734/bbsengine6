@@ -169,8 +169,12 @@ class Listbox:
             io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {' ' * self.contentwidth} {{listbox.boxcolor}}{{vline}}")
 
     def _display_title_box(self) -> None:
-        io.echo(f" {{/all}}{{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
-        io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}}{{listbox.titlecolor}}{self.title.center(self.contentwidth)}{{/all}} {{listbox.boxcolor}}{{vline}}{{/all}}")
+        io.echo(f"{{/all}} {{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
+        width = self.contentwidth
+        centered = self.title.center(width)
+        if len(self.title) % 2 == width % 2:
+            centered = centered + "*"
+        io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {{listbox.titlecolor}}{centered}{{/all}} {{listbox.boxcolor}}{{vline}}{{/all}}")
 
     def _display_middle_border(self) -> None:
         io.echo(f" {{/all}}{{listbox.boxcolor}}{{rtee}}{self.hline}{{listbox.boxcolor}}{{ltee}}")
