@@ -55,6 +55,7 @@ class Listbox:
         itemsperpage: int = 20,
         itemheight: int = 1,
         items: Optional[List[ListboxItem]] = None,
+
         idle: Optional[Callable[[], None]] = None,
         custom_keys: Optional[dict[str, Callable[[], Optional[ListboxResult]]]] = None,
         **kwargs: Any,
@@ -73,8 +74,9 @@ class Listbox:
 
         self.terminalwidth = io.terminal.width()
         self.contentwidth = self.terminalwidth - self.BORDER_WIDTH_LEFT - self.BORDER_WIDTH_RIGHT
+        logentry(f"{self.contentwidth=} {self.terminalwidth=} {self.BORDER_WIDTH_LEFT=} {self.BORDER_WIDTH_RIGHT=}", level="debug")
         self.totalwidth = self.contentwidth + self.BORDER_WIDTH_LEFT + self.BORDER_WIDTH_RIGHT
-        self.hline = f"{{hline:{self.contentwidth - self.BORDER_CORNER_WIDTH}}}"
+        self.hline = f"{{hline:{self.contentwidth + self.BORDER_CORNER_WIDTH}}}"
 
         self.numpages = max(1, int(ceil(len(self.items) / self.itemsperpage)))
 
@@ -156,25 +158,28 @@ class Listbox:
                 line = lines[line_num]
             else:
                 line = ""
-            padded = line.ljust(self.contentwidth - self.CONTENT_PADDING)
-            io.echo(f" {{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}")
+            padded = line.ljust(self.contentwidth, ".")
+            if highlighted:
+                io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}")
+            else:
+                io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}")
 
     def _display_blank_line(self) -> None:
         for _ in range(self.itemheight):
-            io.echo(f" {{listbox.boxcolor}}{{vline}} {' ' * (self.contentwidth - self.CONTENT_PADDING)} {{listbox.boxcolor}}{{vline}}")
+            io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {' ' * self.contentwidth} {{listbox.boxcolor}}{{vline}}")
 
     def _display_title_box(self) -> None:
-        io.echo(f" {{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
-        io.echo(f" {{listbox.boxcolor}}{{vline}}{{listbox.titlecolor}}{self.title.center(self.contentwidth - self.BORDER_CORNER_WIDTH)}{{/all}}{{listbox.boxcolor}}{{vline}}{{/all}}")
+        io.echo(f" {{/all}}{{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
+        io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}}{{listbox.titlecolor}}{self.title.center(self.contentwidth)}{{/all}} {{listbox.boxcolor}}{{vline}}{{/all}}")
 
     def _display_middle_border(self) -> None:
-        io.echo(f" {{listbox.boxcolor}}{{rtee}}{self.hline}{{listbox.boxcolor}}{{ltee}}")
+        io.echo(f" {{/all}}{{listbox.boxcolor}}{{rtee}}{self.hline}{{listbox.boxcolor}}{{ltee}}")
 
     def _display_top_border(self) -> None:
-        io.echo(f" {{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
+        io.echo(f" {{/all}}{{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
 
     def _display_bottom_border(self) -> None:
-        io.echo(f" {{listbox.boxcolor}}{{llcorner}}{self.hline}{{listbox.boxcolor}}{{lrcorner}}")
+        io.echo(f" {{/all}}{{listbox.boxcolor}}{{llcorner}}{self.hline}{{listbox.boxcolor}}{{lrcorner}}")
 
     def _display(self) -> None:
         if self.title:
