@@ -1,6 +1,6 @@
 import argparse
 
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 import psycopg
 from bbsengine6 import io, util, database, screen
@@ -98,6 +98,33 @@ def init():
     io.setvar("listbox.item.highlighted", "{listbox.item.normal}{inverse}")
     io.setvar("listbox.item.disabled", "{darkgray}")
     io.setvar("listbox.bgcolor", "")
+
+
+def compose_person_name(person: dict) -> str:
+    """Compose a display name from available name parts."""
+    name_common = person.get("name_common")
+    name_given = person.get("name_given")
+    name_sur = person.get("name_sur")
+    
+    if name_common and name_sur:
+        return f"{name_common} {name_sur}"
+    elif name_given and name_sur:
+        return f"{name_given} {name_sur}"
+    elif name_sur:
+        return name_sur
+    elif name_common:
+        return name_common
+    elif name_given:
+        return name_given
+    else:
+        io.echo(f"{{warncolor}}warning: no name found for person_key {person.get('person_key', 'unknown')}", level="warn")
+        return "[NEEDINFO]"
+
+
+def setbottombar(args, left: str) -> None:
+    """Set the bottom bar with left side and preserve right side based on debug flag."""
+    right = "[debug]" if args.debug else ""
+    io.screen.setbottombar(left, right)
 
 
 TABLE_KEY_COLUMNS = {
@@ -528,6 +555,7 @@ def main(args, **kw):
                 io.echo(f"schema article2 exists", level="debug")
 
             screen.init(args)
+            setbottombar(args, "article2")
 
             with database.connect(args, pool=pool) as conn:
                 if args.debug:
@@ -597,14 +625,16 @@ def main(args, **kw):
                                 return False
 
                             current_person_key = op.item.pk
+                            president_name = compose_person_name(op.item.data)
 
                             io.echo(f"selected president {op.item.pk} {op.item.content}")
+                            setbottombar(args, f"article2 | {president_name}")
 
                             available = get_available_categories(conn, current_person_key)
                             category_items = [
                                 CategoryListboxItem(cat, 20) for cat in available
                             ]
-                            lb_category.items = category_items
+                            lb_category.items = cast(list[ListboxItem], category_items)
                             lb_category._currentindex = 0
                             lb_category._curpage = 0
 
@@ -613,12 +643,13 @@ def main(args, **kw):
 
                             category_done = False
                             while not category_done:
-                                io.echo(f"{{promptcolor}}select a category: ", flush=True, end="")
+                                setbottombar(args, f"article2 | {president_name} | select category")
                                 cat_op = lb_category.run("category: ")
 
                                 if cat_op.status == "selected" and cat_op.item:
                                     category = cat_op.item.pk
                                     io.echo(f"selected category: {category}")
+                                    setbottombar(args, f"article2 | {president_name} | {category}")
 
                                     display_category_detail(args, conn, current_person_key, category)
 
@@ -627,6 +658,7 @@ def main(args, **kw):
                                     io.echo()
                                 else:
                                     category_done = True
+            setbottombar(args, "article2")
 
     except psycopg.DatabaseError as e:
         io.echo(f"demo_listbox_masterdetail.main.100: database error: {e}", level="error")
