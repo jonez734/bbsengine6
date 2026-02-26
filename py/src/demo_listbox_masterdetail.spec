@@ -32,8 +32,9 @@ When "attractions" is selected, the listbox shows only `attraction_place` entrie
 - Single item: If there's only one record, detail is shown directly without listbox
 - Dynamic key column detection via `TABLE_KEY_COLUMNS` dictionary
 - All detail views use `{{labelcolor}}` for column names and `{{valuecolor}}` for values
-- Detail views skip columns with `None` values by default (shows empty string when `--debug` flag is set)
+- Detail views skip columns with `None` values by default (shows blank when `--debug` flag is set)
 - After viewing details, returns to categories listbox for same president
+- Bottom bar shows navigation path: `article2 | {president_name} | {category}`
 
 ## Usage
 
@@ -87,6 +88,32 @@ Custom `ListboxItem` subclass for displaying presidents in the master list.
 ### CategoryListboxItem
 
 Custom `ListboxItem` subclass for displaying available categories in the category list.
+
+## Helper Functions
+
+### compose_person_name(person: dict) -> str
+
+Composes a display name from available name parts in a person record. Tries combinations in order of preference:
+1. `name_common` + `name_sur` (e.g., "Bill Clinton")
+2. `name_given` + `name_sur` (e.g., "William Clinton")
+3. `name_sur` only
+4. `name_common` only
+5. `name_given` only
+
+If no name parts are available, logs a warning and returns `"[NEEDINFO]"`.
+
+### setbottombar(args, left: str) -> None
+
+Sets the bottom bar with the given left side text. The right side shows `[debug]` when `args.debug` is True, otherwise blank.
+
+## Bottom Bar
+
+The bottom bar displays navigation context:
+- Initial: `article2`
+- After selecting president: `article2 | {president_name}`
+- In category selection: `article2 | {president_name} | select category`
+- After selecting category: `article2 | {president_name} | {category}`
+- Right side: `[debug]` when `--debug` flag is set, otherwise blank
 
 ## Echovars
 
