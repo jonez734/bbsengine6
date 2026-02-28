@@ -89,6 +89,7 @@ class Listbox:
             "KEY_PAGEDOWN": self._handle_key_pagedown,
             "KEY_HOME": self._handle_key_home,
             "KEY_END": self._handle_key_end,
+            "KEY_FF": self._handle_key_ff,
         }
         if self.custom_keys:
             self.key_handlers.update(self.custom_keys)
@@ -172,8 +173,6 @@ class Listbox:
         io.echo(f"{{/all}} {{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
         width = self.contentwidth
         centered = self.title.center(width)
-        if len(self.title) % 2 == width % 2:
-            centered = centered + "*"
         io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {{listbox.titlecolor}}{centered}{{/all}} {{listbox.boxcolor}}{{vline}}{{/all}}")
 
     def _display_middle_border(self) -> None:
@@ -407,6 +406,10 @@ class Listbox:
             self._currentindex = last_idx
             self._display_item(page_items[last_idx], highlighted=True)
         return True
+
+    def _handle_key_ff(self) -> ListboxResult:
+        """Handle KEY_FF - full redraw of the listbox."""
+        return ListboxResult("redraw")
 
     def onkey(self, ch: Optional[str]) -> Optional[ListboxResult] | bool:
         if ch is None:
