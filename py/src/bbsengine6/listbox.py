@@ -159,7 +159,7 @@ class Listbox:
                 line = lines[line_num]
             else:
                 line = ""
-            padded = line.ljust(self.contentwidth, ".")
+            padded = line.ljust(self.contentwidth, " ")
             if highlighted:
                 io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}")
             else:
