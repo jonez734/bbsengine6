@@ -260,8 +260,7 @@ def display_edu_detail(args, conn, person_key: str):
             items=edu_items,
         )
 
-        io.echo(f"{{promptcolor}}select an education: ", flush=True, end="")
-        edu_op = lb_edu.run("education: ")
+        edu_op = lb_edu.run("select an education: ")
 
         if edu_op.status == "selected" and edu_op.item:
             util.heading("education")
@@ -306,8 +305,7 @@ def display_attractions_detail(args, conn, person_key: str):
             items=attraction_items,
         )
 
-        io.echo(f"{{promptcolor}}select an attraction: ", flush=True, end="")
-        attr_op = lb_attractions.run("attraction: ")
+        attr_op = lb_attractions.run("select an attraction: ")
 
         if attr_op.status == "selected" and attr_op.item:
             util.heading("attraction")
@@ -354,8 +352,7 @@ def display_attraction_table_detail(args, conn, person_key: str, table_name: str
             items=table_items,
         )
 
-        io.echo(f"{{promptcolor}}select a record: ", flush=True, end="")
-        table_op = lb_table.run(f"{table_name}: ")
+        table_op = lb_table.run("select a record: ")
 
         if table_op.status == "selected" and table_op.item:
             util.heading(table_name)
@@ -400,8 +397,7 @@ def display_elector_detail(args, conn, person_key: str):
             items=elector_items,
         )
 
-        io.echo(f"{{promptcolor}}select an elector: ", flush=True, end="")
-        elector_op = lb_electors.run("elector: ")
+        elector_op = lb_electors.run("select an elector: ")
 
         if elector_op.status == "selected" and elector_op.item:
             util.heading("elector")
@@ -472,8 +468,7 @@ def display_attraction_join_detail(args, conn, person_key: str):
             items=attraction_items,
         )
 
-        io.echo(f"{{promptcolor}}select an attraction: ", flush=True, end="")
-        attr_op = lb_attractions.run("attraction: ")
+        attr_op = lb_attractions.run("select an attraction: ")
 
         if attr_op.status == "selected" and attr_op.item:
             item_data = attr_op.item.pk
