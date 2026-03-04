@@ -1,3 +1,4 @@
+# DEPRECATED: This module is not used.
 def darken(prefix, rgb, percentage):
   if len(rgb) == 3:
     (r, g, b) = rgb

@@ -10,7 +10,7 @@ import collections
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 
-from .const import MAX_TERMINAL_WIDTH, BEL, ESC
+from .const import ESC, CSI
 
 from . import terminal
 

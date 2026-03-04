@@ -1,4 +1,7 @@
+# DEPRECATED: This module is not used. Only used by deprecated output.py.
 variables = {}
+savedvariables = []
+
 variables["boxcolor"]= "{darkgreen}"
 variables["titlecolor"] = "{white}{bggray}"
 
@@ -24,7 +27,7 @@ variables["level.warning"] = "{bgyellow}{black}"
 variables["level.error"] = "{bgred}{black}"
 variables["level.ok"] = "{bggreen}{black}"
 variables["level.info"] = "{bgwhite}{blue}"
-variables["level.crit"] = "{bgblue}{white]"
+variables["level.crit"] = "{bgblue}{white}"
 variables["engine.menu.boxcharcolor"]= "{bglightgray}{darkgreen}"
 variables["engine.menu.color"] = "{bggray}"
 variables["engine.menu.shadowcolor"] = "{bgdarkgray}"
@@ -40,12 +43,10 @@ variables["currentitemcolor"] ="{bgwhite}{black}"
 # add 'engine.menu.resultfailedcolor'?
 
 def set(name:str, value):
-#  print("setvariable.100: name=%r value=%r" % (name, value))
   variables[name] = value
   return
 
 def get(name:str, default=None):
-  global variables
   if name in variables:
     return variables[name]
   return f"NOTFOUND:{name}"

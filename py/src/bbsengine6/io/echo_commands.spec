@@ -7,9 +7,8 @@ The `echo()` function supports various formatting commands enclosed in curly bra
 ## Basic Usage
 
 ```python
-from bbsengine6.io import register_emojis
-register_emojis({"horse": "\\U0001F40E", "grain": "\\U0001F33E"})
-echo(":horse: :grain:")
+from asimov.io import echo
+echo("{red}Hello {bold}World{/bold}!{/red}")
 ```
 
 ---
@@ -164,7 +163,7 @@ Closing syntax: `{/bold}`, `{/italic}`, etc.
 You can also register custom emojis at runtime:
 
 ```python
-from bbsengine6.io import register_emojis
+from asimov.io import register_emojis
 register_emojis({"horse": "\\U0001F40E", "grain": "\\U0001F33E"})
 echo(":horse: :grain:")
 ```

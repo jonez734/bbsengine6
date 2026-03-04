@@ -1,10 +1,9 @@
+# DEPRECATED: This module is not used. Use echo.py instead.
 import re
-import sys
 import time
 
 from typing import NamedTuple
 from argparse import Namespace
-from .terminal import _streamout, _streamin
 #from tzlocal import tzlocal
 
 from . import echovars, terminal

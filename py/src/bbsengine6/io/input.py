@@ -1,3 +1,4 @@
+# DEPRECATED: Use inputstring.py instead. This module is not used.
 import os
 import tty
 import time

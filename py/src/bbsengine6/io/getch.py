@@ -68,7 +68,7 @@ def _proc_char(char:str, debug:bool=False) -> str | None:
     # 5. Return a regular character
     return char
 
-def getch_str(timeout: float | None = None, debug: bool = False, **kwargs) -> str | None:
+def getch_str(timeout:float=1.0, debug:bool=False, **kwargs) -> str | None:
     """Reads a single keypress without blocking and handles control/extended keys.
     
     Args:

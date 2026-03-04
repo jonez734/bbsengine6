@@ -15,7 +15,7 @@ def inputinteger(prompt:str, oldvalue:int|str|None=None, **kwargs) -> int | list
     for b in buf:
       try:
         res.append(int(b))
-      except:
+      except Exception:
         return
 #    echo(f"res={res!r}", level="debug")
     return res

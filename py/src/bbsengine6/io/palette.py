@@ -1,4 +1,3 @@
-from .common import Token
 from .const import CSI, DEFAULT_PALETTE_NAME
 
 # ----------------------------

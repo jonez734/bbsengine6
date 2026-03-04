@@ -16,13 +16,13 @@
 ### Main Function
 
 ```python
-getch_str(timeout: float | None = None, debug: bool = False, **kwargs) -> str | None
+getch_str(timeout=1.0, debug=False, **kwargs) -> str | None
 ```
 
 Reads a single keypress and returns a key name or character.
 
 **Parameters:**
-- `timeout`: Seconds to wait for input. If `None` (default), blocks indefinitely. If 0, returns immediately.
+- `timeout`: Seconds to wait for input (default: 1.0). If 0, returns immediately.
 - `debug`: If True, log unknown escape sequences and return None (default: False)
 - `**kwargs`: Additional arguments (reserved)
 

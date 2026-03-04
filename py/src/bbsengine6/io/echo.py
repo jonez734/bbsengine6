@@ -784,10 +784,6 @@ def _handle_command(token, **kwargs): # palette=None, vars=None):
 
     # command name is lowercase
     cmd = token.value.lower()
-    args = token.args
-    kwargs = token.kwargs
-    raw  = token.raw
-    repeat = token.repeat
 
     yield from _acs_off()
 

@@ -9,7 +9,7 @@ default_handler = logging.handlers.SysLogHandler(address="/dev/log")
 default_formatter = logging.Formatter('%(name)s[%(process)d]: %(levelname)s %(message)s')
 default_handler.setFormatter(default_formatter)
 
-def logentry(message, level=logging.INFO, *, handler=None, formatter=None, logger_name="asimov"):
+def logentry(message, level: int | str = logging.INFO, *, handler=None, formatter=None, logger_name="asimov"):
     """
     Write a log entry to syslog (by default), with optional handler/formatter overrides.
 
