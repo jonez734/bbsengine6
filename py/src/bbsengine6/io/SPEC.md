@@ -16,7 +16,6 @@ io/
 ├── output.py                # Output stream handling
 ├── palette.py               # Color palettes
 ├── util.py                  # Logging utilities
-├── echovars.py              # Runtime variables
 ├── keymap.py                # Key mappings
 ├── lib.py                   # Library utilities
 ├── screen.py                # Screen utilities
@@ -26,8 +25,7 @@ io/
 ├── inputstring.py           # String input
 ├── inputinteger.py          # Integer input
 ├── inputboolean.py          # Boolean input
-├── inputchoice.py           # Choice input
-└── echo_commands.spec       # Echo command specifications
+└── inputchoice.py           # Choice input
 ```
 
 ## Module Specifications
@@ -81,7 +79,7 @@ Common I/O primitives:
 
 ### echo.py
 
-Main echo function with rich formatting:
+Main echo function with rich formatting and runtime variables:
 
 **Functions:**
 
@@ -90,6 +88,10 @@ Main echo function with rich formatting:
 | `echo` | `(text, level='info', flush=False, end='\\n', wordwrap=True)` | Output formatted text |
 | `echo_traceback` | `(msg='')` | Output traceback |
 | `rendered_length` | `(text) -> int` | Calculate rendered length |
+| `setvar` | `(name, value)` | Set runtime variable |
+| `getvar` | `(name, default=None)` | Get runtime variable |
+| `register_emoji` | `(name, value)` | Register custom emoji |
+| `register_emojis` | `(emojis: dict)` | Register multiple emojis |
 
 **Echo Commands:**
 The echo function supports these formatting commands:
@@ -101,6 +103,8 @@ The echo function supports these formatting commands:
 - Bell: `{bell}`, `{bel}`
 - RGB colors: `{rgb:r,g,b}`
 - Reset: `{reset}`, `{/all}`
+- Variables: `{var:<name>}` or `{<name>}`
+- Emojis: `:name:`
 
 ### output.py
 
@@ -121,15 +125,6 @@ Color palettes:
 | `get_current_palette` | `() -> dict` | Get current palette |
 | `get_palette_entry` | `(name) -> tuple` | Get palette entry |
 | `rgb` | `(r, g, b) -> str` | Create RGB color string |
-
-### echovars.py
-
-Runtime variables:
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `setvar` | `(name, value)` | Set runtime variable |
-| `getvar` | `(name, default=None)` | Get runtime variable |
 
 ### getch.py
 
