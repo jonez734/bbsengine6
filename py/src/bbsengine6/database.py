@@ -8,7 +8,7 @@ import psycopg
 import psycopg.sql
 
 from psycopg import sql
-from psycopg.types.json import Jsonb
+from psycopg.types.json import Jsonb  # noqa: F401
 
 from psycopg_pool import ConnectionPool
 
