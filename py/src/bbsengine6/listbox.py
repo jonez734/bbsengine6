@@ -5,6 +5,7 @@ from typing import Any, Callable, List, NamedTuple, Optional
 from . import io
 from .common import logentry
 
+
 class ListboxItem:
     content: str
     pk: Any
@@ -55,7 +56,6 @@ class Listbox:
         itemsperpage: int = 20,
         itemheight: int = 1,
         items: Optional[List[ListboxItem]] = None,
-
         idle: Optional[Callable[[], None]] = None,
         custom_keys: Optional[dict[str, Callable[[], Optional[ListboxResult]]]] = None,
         **kwargs: Any,
@@ -73,9 +73,16 @@ class Listbox:
         self._currentindex = 0
 
         self.terminalwidth = io.terminal.width()
-        self.contentwidth = self.terminalwidth - self.BORDER_WIDTH_LEFT - self.BORDER_WIDTH_RIGHT
-        logentry(f"{self.contentwidth=} {self.terminalwidth=} {self.BORDER_WIDTH_LEFT=} {self.BORDER_WIDTH_RIGHT=}", level="debug")
-        self.totalwidth = self.contentwidth + self.BORDER_WIDTH_LEFT + self.BORDER_WIDTH_RIGHT
+        self.contentwidth = (
+            self.terminalwidth - self.BORDER_WIDTH_LEFT - self.BORDER_WIDTH_RIGHT
+        )
+        logentry(
+            f"{self.contentwidth=} {self.terminalwidth=} {self.BORDER_WIDTH_LEFT=} {self.BORDER_WIDTH_RIGHT=}",
+            level="debug",
+        )
+        self.totalwidth = (
+            self.contentwidth + self.BORDER_WIDTH_LEFT + self.BORDER_WIDTH_RIGHT
+        )
         self.hline = f"{{hline:{self.contentwidth + self.BORDER_CORNER_WIDTH}}}"
 
         self.numpages = max(1, int(ceil(len(self.items) / self.itemsperpage)))
@@ -161,28 +168,44 @@ class Listbox:
                 line = ""
             padded = line.ljust(self.contentwidth, " ")
             if highlighted:
-                io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}")
+                io.echo(
+                    f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}"
+                )
             else:
-                io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}")
+                io.echo(
+                    f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}"
+                )
 
     def _display_blank_line(self) -> None:
         for _ in range(self.itemheight):
-            io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {' ' * self.contentwidth} {{listbox.boxcolor}}{{vline}}")
+            io.echo(
+                f" {{/all}}{{listbox.boxcolor}}{{vline}} {' ' * self.contentwidth} {{listbox.boxcolor}}{{vline}}"
+            )
 
     def _display_title_box(self) -> None:
-        io.echo(f"{{/all}} {{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
+        io.echo(
+            f"{{/all}} {{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}"
+        )
         width = self.contentwidth
         centered = self.title.center(width)
-        io.echo(f" {{/all}}{{listbox.boxcolor}}{{vline}} {{listbox.titlecolor}}{centered}{{/all}} {{listbox.boxcolor}}{{vline}}{{/all}}")
+        io.echo(
+            f" {{/all}}{{listbox.boxcolor}}{{vline}} {{listbox.titlecolor}}{centered}{{/all}} {{listbox.boxcolor}}{{vline}}{{/all}}"
+        )
 
     def _display_middle_border(self) -> None:
-        io.echo(f" {{/all}}{{listbox.boxcolor}}{{rtee}}{self.hline}{{listbox.boxcolor}}{{ltee}}")
+        io.echo(
+            f" {{/all}}{{listbox.boxcolor}}{{rtee}}{self.hline}{{listbox.boxcolor}}{{ltee}}"
+        )
 
     def _display_top_border(self) -> None:
-        io.echo(f" {{/all}}{{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}")
+        io.echo(
+            f" {{/all}}{{listbox.boxcolor}}{{ulcorner}}{self.hline}{{listbox.boxcolor}}{{urcorner}}"
+        )
 
     def _display_bottom_border(self) -> None:
-        io.echo(f" {{/all}}{{listbox.boxcolor}}{{llcorner}}{self.hline}{{listbox.boxcolor}}{{lrcorner}}")
+        io.echo(
+            f" {{/all}}{{listbox.boxcolor}}{{llcorner}}{self.hline}{{listbox.boxcolor}}{{lrcorner}}"
+        )
 
     def _display(self) -> None:
         if self.title:
@@ -213,11 +236,15 @@ class Listbox:
             io.echo("{restorecursor}", end="", flush=True)
 
     def _redraw_content_area(self) -> None:
-        io.echo(f"{{cursorup:{self.itemsperpage * self.itemheight + 1}}}", end="", flush=True)
+        io.echo(
+            f"{{cursorup:{self.itemsperpage * self.itemheight + 1}}}",
+            end="",
+            flush=True,
+        )
         page_items = self.fetchitems()
         for i in range(self.itemsperpage):
             if i < len(page_items):
-                highlighted = (i == self._currentindex)
+                highlighted = i == self._currentindex
                 self._display_item(page_items[i], highlighted=highlighted)
             else:
                 self._display_blank_line()
@@ -402,7 +429,9 @@ class Listbox:
             self._display_item(page_items[old_idx], highlighted=False)
             io.echo("{cha}", end="", flush=True)
             diff = last_idx - old_idx - 1
-            io.echo(f"{{cursordown:{diff * self.itemheight}}}{{cha}}", end="", flush=True)
+            io.echo(
+                f"{{cursordown:{diff * self.itemheight}}}{{cha}}", end="", flush=True
+            )
             self._currentindex = last_idx
             self._display_item(page_items[last_idx], highlighted=True)
         return True
@@ -439,7 +468,7 @@ class Listbox:
         return (self.itemsperpage - item) * self.itemheight + 1
 
     def run(self, prompt: str) -> ListboxResult:
-        if not self.items and not getattr(self, '_lazy_load', False):
+        if not self.items and not getattr(self, "_lazy_load", False):
             return ListboxResult("noitems")
 
         self.prompt = prompt
@@ -462,12 +491,18 @@ class Listbox:
             if isinstance(result, ListboxResult):
                 if result.status == "redraw":
                     self._display()
-                    io.echo(f"{{savecursor}} {{promptcolor}}{self.prompt}{{cha}}", end="", flush=True)
+                    io.echo(
+                        f"{{savecursor}} {{promptcolor}}{self.prompt}{{cha}}",
+                        end="",
+                        flush=True,
+                    )
                     cursor_up = self._cursor_moves_to_item(self._currentindex)
                     io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
                     page_items = self.fetchitems()
                     if self._currentindex < len(page_items):
-                        self._display_item(page_items[self._currentindex], highlighted=True)
+                        self._display_item(
+                            page_items[self._currentindex], highlighted=True
+                        )
                     io.echo("{restorecursor}", end="", flush=True)
                     continue
                 return result
@@ -475,3 +510,12 @@ class Listbox:
                 io.echo("{restorecursor}", end="", flush=True)
             elif result is False:
                 io.echo("{BEL}", end="", flush=True)
+
+
+def init():
+    io.setvar("listbox.boxcolor", "{darkgreen}")
+    io.setvar("listbox.titlecolor", "{inverse}")
+    io.setvar("listbox.item.normal", "{white}")
+    io.setvar("listbox.item.highlighted", "{listbox.item.normal}{inverse}")
+    io.setvar("listbox.item.disabled", "{darkgray}")
+    io.setvar("listbox.bgcolor", "")

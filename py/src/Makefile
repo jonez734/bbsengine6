@@ -7,7 +7,7 @@ PYTHON = python3
 .PHONY: build version
 .PHONY: clean build rename-sdist sign release all
 
-build:
+build: version
 	VERSION=$(VERSION) python3 -m build --outdir $(OUTDIR)
 
 rename-sdist:
@@ -39,9 +39,10 @@ clean:
 sdist:
 	$(PYTHON) -m setup sdist --dist-dir /srv/repo/$(PROJECT)/
 
-#version:
+version:
 #	@echo '__version__ = "'`git log -1 --format='%H' | cut -c 1-16`'"' > bbsengine6/_version.py
-#	@echo '__datestamp__ = "'`date +%Y%m%d-%H%M`-`whoami`'"' >> bbsengine6/_version.py
+	@echo '__version__ = "0.0.1.dev$(VERSION)"' > bbsengine6/_version.py
+	@echo '__datestamp__ = "'`date +%Y%m%d-%H%M`-`whoami`'"' >> bbsengine6/_version.py
 
 push: tag
 #	git push -u gitlab v$(VERSION)

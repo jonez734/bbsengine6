@@ -19,7 +19,7 @@ setup(
   license="GPLv2+",
 #  py_modules=["bbsengine6.menu", "bbsengine6.session"],
 #  scripts=["con"],
-  requires=["wcwidth", "argcomplete",],
+  requires=["argcomplete",],
   url="https://bbsengine.org/",
   classifiers=[
     "Programming Language :: Python :: 3.10",
