@@ -10,11 +10,10 @@ license = "GPL-2.0-or-later"
 authors = [
     { name = "zoidtechnologies.com", email = "bbsengine6@projects.zoidtechnologies.com" },
 ]
-url = "https://bbsengine.org/"
+urls = { Homepage = "https://bbsengine.org/" }
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: GNU General Public License v2+ (GPLv2+)",
     "Operating System :: POSIX",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
@@ -26,13 +25,13 @@ classifiers = [
     "Topic :: Terminals",
 ]
 dependencies = [
-    "wcwidth",
+    # "wcwidth",
     "argcomplete",
     "psycopg[binary]",
     "psycopg2-binary",
     "psycopg-pool",
     "python-dateutil",
-    "getdate-next",
+    # "getdate-next",
 ]
 
 [project.optional-dependencies]
@@ -46,4 +45,4 @@ where = ["."]
 include = ["bbsengine6*"]
 
 [tool.setuptools.dynamic]
-version = { env = "VERSION" }
+version = { attr = "bbsengine6._version.__version__" }
