@@ -17,6 +17,7 @@
 
 ```python
 getch_str(timeout=1.0, debug=False, **kwargs) -> str | None
+getch = getch_str  # alias exported from bbsengine6.io
 ```
 
 Reads a single keypress and returns a key name or character.

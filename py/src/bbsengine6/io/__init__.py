@@ -6,6 +6,7 @@ from .inputstring import inputstring
 from .inputinteger import inputinteger
 from .inputboolean import inputboolean
 from .inputchoice import inputchoice
+from .getch import getch_str as getch
 
 __all__ = [
     "echo",
@@ -20,4 +21,5 @@ __all__ = [
     "inputinteger",
     "inputboolean",
     "inputchoice",
+    "getch"
 ]
