@@ -462,7 +462,7 @@ def setflag(args, name, value, **kwargs): # moniker=None, mogrify=False,):
   
 #  conn = kwargs.get("conn", database.connect(args))
   if moniker is None:
-    moniker = getcurrentmoniker(conn)
+    moniker = getcurrentmoniker(args, conn=conn)
     if moniker is None:
       return False
 
@@ -557,30 +557,27 @@ def setflag(args, name, value, **kwargs): # moniker=None, mogrify=False,):
 #    return flags
 
 # @since 20230523 copied from bbsengine5
-def setpassword(args, plaintextpassword:str, moniker:str=None, **kwargs) -> bool:
-  def _work(cur):
-    sql = "update engine.__member set password=crypt(%s, gen_salt('bf')) where moniker=%s"
-    dat = (plaintextpassword, moniker)
-    rows = cur.execute(sql, dat)
-    io.echo(f"member.setpassword.100: {rows} row updated", level="debug")
-    if cur.rowcount == 0:
-      return False
-    return True
+def setpassword(args, plaintextpassword:str, moniker:str, **kwargs) -> bool:
+  def _setpw(conn):
+    with database.cursor(conn=conn) as cur:
+      sql = "update engine.__member set password=crypt(%s, gen_salt('bf')) where moniker=%s"
+      dat = (plaintextpassword, moniker)
+      rows = cur.execute(sql, dat)
+      io.echo(f"member.setpassword.100: {rows} row updated", level="debug")
+      if cur.rowcount == 0:
+        return False
+      return True
   
-  if moniker is None:
-    moniker = getcurrentmoniker(args)
-    if moniker is None:
-      io.echo("bbsengine.member.setpassword.140: You do not exist! Go away!", level="error")
+  conn = kwargs.get("conn")
+  if conn is None:
+    pool = kwargs.get("pool")
+    if pool is None:
+      io.echo("bbsengine6.setpassword.160: {pool=}", level="error")
       return False
-  try:
-    cur = kwargs.get("cur", None)
-    if cur is None:
-      io.echo("bbsengine.member.setpassword.120: {cur=}", level="error")
-      return False
-    return _work(cur)
-  except psycopg.DatabaseError as e:
-    io.echo(f"engine.member.setpassword.100: Database error: {e}")
-    raise
+
+    with database.connect(args, pool=pool) as conn:
+      return _setpw(conn)
+  return _setpw(conn)
 
 # @since 20240901
 def checkpassword(args, plaintextpassword:str, membermoniker:str=None, **kwargs) -> bool:
