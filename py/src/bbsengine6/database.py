@@ -846,7 +846,6 @@ def manage_secondary_role(
         )
         raise
 
-
 def cursor(conn: Any, row_factory: Any = dict_row, **kwargs: Any) -> Any:
     """Create a cursor with the specified row factory.
 
