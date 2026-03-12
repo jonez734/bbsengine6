@@ -8,6 +8,8 @@ from .inputboolean import inputboolean
 from .inputchoice import inputchoice
 from .getch import getch_str as getch
 
+inputchar = inputchoice
+
 __all__ = [
     "echo",
     "echo_traceback",
@@ -21,5 +23,6 @@ __all__ = [
     "inputinteger",
     "inputboolean",
     "inputchoice",
-    "getch"
+    "inputchar",
+    "getch",
 ]
