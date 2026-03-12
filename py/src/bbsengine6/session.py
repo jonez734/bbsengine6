@@ -78,9 +78,7 @@ def start(args, **kwargs):
             return False
         with database.connect(args, pool=pool) as conn:
             return _work(conn)
-    return _work(args, conn)
-
-    return True
+    return _work(conn)
 
 def getmembersession(args, moniker=None, **kwargs):
     def _work(conn):
