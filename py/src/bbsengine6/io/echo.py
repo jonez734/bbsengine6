@@ -60,6 +60,13 @@ _skin = {
 #"engine.menu.titlecolor": "{black}{bglightgray}",
 #"engine.menu.disableditemcolor": "{darkgray}",
 #"engine.menu.resultfailedcolor": "{bgred}{white}",
+
+"listbox.boxcolor": "{darkgreen}",
+"listbox.titlecolor": "{inverse}",
+"listbox.item.normal": "{white}",
+"listbox.item.highlighted: "{listbox.item.normal}{inverse}",
+"listbox.item.disabled": "{darkgray}",
+"listbox.bgcolor": "",
 }
 
 # Runtime variables dictionary
@@ -166,6 +173,10 @@ def tokenize(text, **kwargs):
     """Yields Token(kind, value, args, kwargs, raw)"""
 
     if text is None:
+        return
+    
+    if type(text) is not str:
+        logentry(f"bbsengine.io.echo.tokenize.100: warning: text is not str", level="warn")
         return
 
     pos = 0
