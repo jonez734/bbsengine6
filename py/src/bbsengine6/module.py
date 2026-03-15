@@ -113,10 +113,10 @@ def check(args, modulename, op="run", **kwargs):
 
   # --- Check main() ---
   if hasattr(m, "main") is False:
-    io.echo("no working main function", level="error")
+    io.echo("main function not found", level="error")
     return False
   if callable(m.main) is False:
-    io.echo("no working main function", level="error")
+    io.echo("main function not callable", level="error")
     return False
 
   if debug is True:
