@@ -42,6 +42,7 @@ def setbottombar(left, right=None, **kwargs):
 
     if callable(right) is True:
       right_buf =  right(**kwargs)
+      echo(f"called right({kwargs=})", level="debug")
     else:
       right_buf = right
 
