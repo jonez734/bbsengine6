@@ -350,7 +350,12 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
 
     dat = []
     for v in items.values():
-        dat.append(v)
+        if type(v) is dict:
+            dat.append(Jsonb(v))
+        elif type(v) is list:
+            dat.append(Jsonb(v))
+        else:
+            dat.append(v)
     if returnid is True:
         query = sql.SQL("{} returning {}.{}").format(
             query, _table_identifier(table), sql.Identifier(primarykey)
