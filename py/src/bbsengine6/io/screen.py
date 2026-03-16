@@ -14,7 +14,7 @@ bottombarstack = []
 def init(args=None, topmargin=1, bottommargin=1):
   echo("{f6:3}{cursorup:3}", end="", flush=True)
   h = terminal.lines() - bottommargin
-  logentry(f"asimov.io.util.screen_init.100: {topmargin=} {h=}", level="debug")
+#  logentry(f"asimov.io.util.screen_init.100: {topmargin=} {h=}", level="debug")
   echo(f"{{savecursor}}", end="")
   echo(f"{{decstbm:{topmargin},{h}}}", end="")
   echo(f"{{restorecursor}}", flush=True, end="")
@@ -42,7 +42,7 @@ def setbottombar(left, right=None, **kwargs):
 
     if callable(right) is True:
       right_buf =  right(**kwargs)
-      echo(f"called right({kwargs=})", level="debug")
+#      echo(f"called right({kwargs=})", level="debug")
     else:
       right_buf = right
 
