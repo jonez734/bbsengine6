@@ -64,7 +64,7 @@ _skin = {
 "listbox.boxcolor": "{darkgreen}",
 "listbox.titlecolor": "{inverse}",
 "listbox.item.normal": "{white}",
-"listbox.item.highlighted: "{listbox.item.normal}{inverse}",
+"listbox.item.highlighted": "{listbox.item.normal}{inverse}",
 "listbox.item.disabled": "{darkgray}",
 "listbox.bgcolor": "",
 }
