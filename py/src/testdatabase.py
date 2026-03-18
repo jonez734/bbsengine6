@@ -526,5 +526,146 @@ class TestUnixSocketDefault(unittest.TestCase):
         self.assertIn("dbname=testdb", dsn)
 
 
+class TestSQLInjectionParseDSN(unittest.TestCase):
+    def test_parse_dsn_malicious_host(self):
+        dsn = "host=localhost'; DROP TABLE users;--"
+        result = database.parse_dsn(dsn)
+        self.assertIsInstance(result, dict)
+        self.assertIn("host", result)
+
+    def test_parse_dsn_injection_in_dbname(self):
+        dsn = "dbname=zoid6'; DELETE FROM users;--"
+        result = database.parse_dsn(dsn)
+        self.assertIsInstance(result, dict)
+        self.assertIn("dbname", result)
+
+    def test_parse_dsn_no_key_value(self):
+        dsn = "just some text without equals"
+        result = database.parse_dsn(dsn)
+        self.assertEqual(result, {})
+
+    def test_parse_dsn_equals_in_value(self):
+        dsn = "host=localhost port=5432 connection=host=1.2.3.4"
+        result = database.parse_dsn(dsn)
+        self.assertEqual(result["host"], "localhost")
+        self.assertEqual(result["connection"], "host=1.2.3.4")
+
+    def test_parse_dsn_empty_value_handled(self):
+        dsn = "host= dbname=test"
+        result = database.parse_dsn(dsn)
+        self.assertEqual(result.get("host"), "")
+
+
+class TestSQLInjectionMogrify(unittest.TestCase):
+    def test_mogrifysql_escapes_single_quotes(self):
+        result = database.mogrifysql(
+            MagicMock(),
+            "SELECT * FROM t WHERE x = %s",
+            ("'; DROP TABLE users;--",),
+        )
+        self.assertIn("''", result)
+        self.assertIn("DROP TABLE users", result)
+
+    def test_mogrifysql_or_injection(self):
+        result = database.mogrifysql(
+            MagicMock(),
+            "SELECT * FROM t WHERE x = %s",
+            ("' OR '1'='1",),
+        )
+        self.assertIn("'' OR ''", result)
+
+    def test_mogrifysql_double_quotes(self):
+        result = database.mogrifysql(
+            MagicMock(),
+            "SELECT * FROM t WHERE x = %s",
+            ('Robert"); DROP TABLE users;--',),
+        )
+        self.assertIsInstance(result, str)
+        self.assertIn("DROP TABLE users", result)
+
+    def test_mogrifysql_multiple_quotes(self):
+        result = database.mogrifysql(
+            MagicMock(),
+            "SELECT * FROM t WHERE x = %s",
+            ("user's name''; DELETE--",),
+        )
+        self.assertNotIn("DELETE--',", result)
+
+
+class TestSQLInjectionTableIdentifier(unittest.TestCase):
+    def test_table_identifier_quotes_malicious_name(self):
+        malicious = "users; DROP TABLE"
+        result = database._table_identifier(malicious)
+        self.assertIn('"', result.as_string())
+        self.assertIn("DROP TABLE", result.as_string())
+
+    def test_table_identifier_schema_injection(self):
+        malicious = "public'; DROP TABLE users;--"
+        result = database._table_identifier(malicious)
+        self.assertIn('"', result.as_string())
+
+    def test_table_identifier_double_quote_attempt(self):
+        malicious = 'users" DROP TABLE'
+        result = database._table_identifier(malicious)
+        self.assertIn('"', result.as_string())
+
+
+class TestSQLInjectionIntegration(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.args = get_real_args()
+        cls.pool = database.getpool(cls.args)
+
+    @classmethod
+    def tearDownClass(cls):
+        if hasattr(cls, "pool"):
+            cls.pool.close()
+
+    def test_classexists_malicious_name(self):
+        malicious = "'; DROP TABLE pg_class;--"
+        result = database.classexists(self.args, malicious, pool=self.pool)
+        self.assertFalse(result)
+        self.assertTrue(
+            database.tableexists(self.args, "pg_catalog", "pg_class", pool=self.pool)
+        )
+
+    def test_schemaexists_malicious_name(self):
+        malicious = "'; DELETE FROM pg_class;--"
+        result = database.schemaexists(self.args, malicious, pool=self.pool)
+        self.assertFalse(result)
+        self.assertTrue(database.schemaexists(self.args, "public", pool=self.pool))
+
+    def test_tableexists_malicious_schema(self):
+        malicious_schema = "pg_catalog'; DROP TABLE users"
+        result = database.tableexists(
+            self.args, malicious_schema, "pg_class", pool=self.pool
+        )
+        self.assertFalse(result)
+
+    def test_tableexists_malicious_table(self):
+        malicious_table = "pg_class'; DELETE FROM users"
+        result = database.tableexists(
+            self.args, "pg_catalog", malicious_table, pool=self.pool
+        )
+        self.assertFalse(result)
+
+    def test_insert_malicious_column_names(self):
+        malicious_columns = {
+            "id'; DROP TABLE users;--": 1,
+            "name'; DELETE FROM users;--": "test",
+        }
+        result = database.insert(
+            self.args,
+            "pg_class",
+            malicious_columns,
+            pool=self.pool,
+            returnid=False,
+        )
+        self.assertFalse(result)
+        self.assertTrue(
+            database.tableexists(self.args, "pg_catalog", "pg_class", pool=self.pool)
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
