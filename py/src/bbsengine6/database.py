@@ -248,16 +248,15 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
         if primarykey in _items and updatepk is False:
             del _items[primarykey]
 
-        query = sql.SQL("update {} set ").format(_table_identifier(table))
+        query = sql.SQL(f"update {_table_identifier(table)} set ")
         params = []
         dat = []
         for k, v in _items.items():
-            params.append(sql.SQL("{} = %s").format(sql.Identifier(k)))
+            params.append(sql.SQL(f"{sql.Identifier(k)} = %s"))
             dat.append(v)
 
-        query = sql.SQL("{}").format(query)
         query += sql.SQL(", ").join(params)
-        query = sql.SQL("{} where {} = %s").format(query, sql.Identifier(primarykey))
+        query = sql.SQL(f"{query} where {sql.Identifier(primarykey)} = %s")
         dat.append(pk)
 
         cur.execute(query, dat)
@@ -313,7 +312,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
         if k == "datecreatedepoch":
             del items[k]
 
-    query = sql.SQL("insert into {}(").format(_table_identifier(table))
+    query = sql.SQL(f"insert into {_table_identifier(table)}(")
     query = query + sql.SQL(", ").join([sql.Identifier(c) for c in columns])
     query = query + sql.SQL(") values (")
 
@@ -332,8 +331,8 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
         else:
             dat.append(v)
     if returnid is True:
-        query = sql.SQL("{} returning {}.{}").format(
-            query, _table_identifier(table), sql.Identifier(primarykey)
+        query = sql.SQL(
+            f"{query} returning {_table_identifier(table)}.{sql.Identifier(primarykey)}"
         )
 
     def _work(conn):
@@ -644,20 +643,20 @@ def createrol(args: Any, name: str, **kwargs: Any) -> bool:
             options.append(enabled if value else disabled)
 
         if "password" in kwargs:
-            query = sql.SQL("create role {} with {} password %s").format(
-                sql.Identifier(name), sql.SQL(" ").join([sql.SQL(o) for o in options])
+            query = sql.SQL(
+                f"create role {sql.Identifier(name)} with {sql.SQL(' ').join([sql.SQL(o) for o in options])} password %s"
             )
             io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
             cur.execute(query, (kwargs["password"],))
         elif "expiration" in kwargs:
-            query = sql.SQL("create role {} with {} valid until %s").format(
-                sql.Identifier(name), sql.SQL(" ").join([sql.SQL(o) for o in options])
+            query = sql.SQL(
+                f"create role {sql.Identifier(name)} with {sql.SQL(' ').join([sql.SQL(o) for o in options])} valid until %s"
             )
             io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
             cur.execute(query, (kwargs["expiration"],))
         else:
-            query = sql.SQL("create role {} with {}").format(
-                sql.Identifier(name), sql.SQL(" ").join([sql.SQL(o) for o in options])
+            query = sql.SQL(
+                f"create role {sql.Identifier(name)} with {sql.SQL(' ').join([sql.SQL(o) for o in options])}"
             )
             io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
             cur.execute(query)
@@ -727,7 +726,7 @@ def create(args: Any, name: str, **kwargs: Any) -> bool:
     def _work(cur):
         # Use psycopg.sql.Identifier to safely handle the database name
         try:
-            sql = SQL("CREATE DATABASE {}").format(Identifier(name))
+            sql = SQL(f"CREATE DATABASE {Identifier(name)}")
             cur.execute(sql)
         except Exception as e:
             io.echo_traceback(f"bbsengine6.database.create.200: {e}")
@@ -748,7 +747,7 @@ def createschema(args: Any, name: str, **kwargs: Any) -> bool:
 
     # Connect to the database using args
     def _work(conn):
-        stmt = sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(name))
+        stmt = sql.SQL(f"CREATE SCHEMA {sql.Identifier(name)}")
         io.echo(f"bbsengine6.database.createschema.260: {stmt=}", level="debug")
         with cursor(conn) as cur:
             cur.execute(stmt)
@@ -896,8 +895,8 @@ def extensioninstalled(args: Any, ext: str, **kwargs: Any) -> bool:
 def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
     def _work(cur):
         try:
-            sql = psycopg.sql.SQL("CREATE EXTENSION IF NOT EXISTS {}").format(
-                psycopg.sql.Identifier(ext)
+            sql = psycopg.sql.SQL(
+                f"CREATE EXTENSION IF NOT EXISTS {psycopg.sql.Identifier(ext)}"
             )
             #            sql = "create extension if not exists %s"
             cur.execute(sql)
