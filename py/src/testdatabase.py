@@ -1,11 +1,52 @@
 import argparse
+import atexit
 import getpass
+import os
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from psycopg import sql
 
 from bbsengine6 import database
+
+_tracked_pools: list = []
+
+
+def _cleanup_pools() -> None:
+    import gc
+    import threading
+    import time
+
+    for pool in list(_tracked_pools):
+        try:
+            pool.close()
+        except Exception:
+            pass
+        _tracked_pools.remove(pool)
+
+    gc.collect()
+
+    for _ in range(20):
+        active_workers = sum(
+            1
+            for t in threading.enumerate()
+            if t.name.startswith("psycopg") or t.name.startswith("pool-")
+        )
+        if active_workers == 0:
+            break
+        time.sleep(0.05)
+    else:
+        pass
+
+
+atexit.register(_cleanup_pools)
+
+
+class _TestCaseWithPoolCleanup(unittest.TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        _cleanup_pools()
 
 
 def get_real_args():
@@ -314,21 +355,42 @@ class TestCursor(unittest.TestCase):
 
 
 class TestConnect(unittest.TestCase):
-    def test_connect_with_no_pool(self):
+    @patch("bbsengine6.database.getpool")
+    def test_connect_works_as_context_manager(self, mock_getpool):
         mock_args = MagicMock()
-        mock_pool = None
+        mock_conn = MagicMock()
+        mock_conn.__enter__ = MagicMock(return_value=mock_conn)
+        mock_conn.__exit__ = MagicMock(return_value=False)
+        mock_pool = MagicMock()
+        mock_pool.connection.return_value = mock_conn
+        mock_getpool.return_value = mock_pool
 
-        with database.connect(mock_args, pool=mock_pool) as result:
-            self.assertIsNone(result)
+        with database.connect(mock_args) as conn:
+            self.assertEqual(conn, mock_conn)
+        mock_conn.__exit__.assert_called_once()
 
-    def test_connect_with_pool(self):
+    @patch("bbsengine6.database.getpool")
+    def test_connect_autocommit_false(self, mock_getpool):
+        mock_args = MagicMock()
+        mock_conn = MagicMock()
+        mock_pool = MagicMock()
+        mock_pool.connection.return_value = mock_conn
+        mock_getpool.return_value = mock_pool
+
+        database.connect(mock_args)
+        self.assertFalse(mock_conn.autocommit)
+
+    @patch("bbsengine6.database.getpool")
+    def test_connect_removes_readonly_kwarg(self, mock_getpool):
         mock_args = MagicMock()
         mock_pool = MagicMock()
-        mock_conn = MagicMock()
-        mock_pool.getconn.return_value = mock_conn
+        mock_pool.connection.return_value = MagicMock()
+        mock_getpool.return_value = mock_pool
 
-        with database.connect(mock_args, pool=mock_pool) as result:
-            self.assertEqual(result, mock_conn)
+        database.connect(mock_args, readonly=True)
+        mock_getpool.assert_called_once()
+        call_kwargs = mock_getpool.call_args[1]
+        self.assertNotIn("readonly", call_kwargs)
 
 
 class TestTransaction(unittest.TestCase):
@@ -341,16 +403,12 @@ class TestTransaction(unittest.TestCase):
         self.assertEqual(result, mock_tx)
 
 
-class TestDatabaseIntegration(unittest.TestCase):
+class TestDatabaseIntegration(_TestCaseWithPoolCleanup):
     @classmethod
     def setUpClass(cls):
         cls.args = get_real_args()
         cls.pool = database.getpool(cls.args)
-
-    @classmethod
-    def tearDownClass(cls):
-        if hasattr(cls, "pool"):
-            cls.pool.close()
+        _tracked_pools.append(cls.pool)
 
     def test_connect_to_real_database(self):
         with database.connect(self.args, pool=self.pool) as conn:
@@ -462,16 +520,12 @@ class TestDatabaseIntegration(unittest.TestCase):
                 self.assertEqual(results[4]["num"], 5)
 
 
-class TestTCPConnection(unittest.TestCase):
+class TestTCPConnection(_TestCaseWithPoolCleanup):
     @classmethod
     def setUpClass(cls):
         cls.tcp_args = get_tcp_args()
         cls.tcp_pool = database.getpool(cls.tcp_args)
-
-    @classmethod
-    def tearDownClass(cls):
-        if hasattr(cls, "tcp_pool"):
-            cls.tcp_pool.close()
+        _tracked_pools.append(cls.tcp_pool)
 
     def test_tcp_connect_to_database(self):
         with database.connect(self.tcp_args, pool=self.tcp_pool) as conn:
@@ -610,16 +664,12 @@ class TestSQLInjectionTableIdentifier(unittest.TestCase):
         self.assertIn('"', result.as_string())
 
 
-class TestSQLInjectionIntegration(unittest.TestCase):
+class TestSQLInjectionIntegration(_TestCaseWithPoolCleanup):
     @classmethod
     def setUpClass(cls):
         cls.args = get_real_args()
         cls.pool = database.getpool(cls.args)
-
-    @classmethod
-    def tearDownClass(cls):
-        if hasattr(cls, "pool"):
-            cls.pool.close()
+        _tracked_pools.append(cls.pool)
 
     def test_classexists_malicious_name(self):
         malicious = "'; DROP TABLE pg_class;--"
@@ -668,4 +718,13 @@ class TestSQLInjectionIntegration(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    import sys
+
+    suite = unittest.TestLoader().loadTestsFromModule(__import__(__name__))
+    result = unittest.TextTestRunner(verbosity=2).run(suite)
+    _cleanup_pools()
+
+    sys.stderr.flush()
+    sys.stdout.flush()
+
+    os._exit(0 if result.wasSuccessful() else 1)

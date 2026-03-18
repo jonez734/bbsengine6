@@ -1,6 +1,5 @@
 import copy
-from contextlib import contextmanager
-from typing import Any, Generator, Iterator
+from typing import Any, Iterator
 
 import argparse
 
@@ -185,28 +184,19 @@ def transaction(conn: Any, **kwargs: Any) -> Any:
     return conn.transaction()
 
 
-@contextmanager
-def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, None]:
-    """Context manager that safely gets a connection and returns it to the pool.
+def connect(args, pool=None, **kwargs):
+    if args.debug is True:
+        io.echo(f"bbsengine6.database.connect.100: {args=}", level="debug")
 
-    Args:
-      args: Application args (for logging)
-      pool: ConnectionPool instance
-      **kwargs: Additional arguments
+    if "readonly" in kwargs:
+        del kwargs["readonly"]
+    pool = getpool(args, **kwargs)
+    if args.debug is True:
+        io.echo(f"{pool=}", level="debug")
 
-    Yields:
-      Connection from pool
-    """
-    if pool is None:
-        io.echo("bbsengine6.database.connect.100: pool is None", level="error")
-        yield None
-        return
-
-    conn = pool.getconn()
-    try:
-        yield conn
-    finally:
-        pool.putconn(conn)
+    conn = pool.connection()
+    conn.autocommit = False
+    return conn
 
 
 # def buildkwargs(args, **kwargs):
