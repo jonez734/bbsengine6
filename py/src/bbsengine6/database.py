@@ -149,7 +149,7 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
 
     for k in ("dbname", "user", "password", "host", "port"):
         v = kwargs.get(k, defaults.get(k))
-        if v is not None:
+        if v not in (None, ""):
             components.append(f"{k}={v}")
 
     return " ".join(components)
