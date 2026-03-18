@@ -21,7 +21,7 @@
 ### Error Handling
 
 - Pool/connection errors: return `False`
-- Database errors: raise exceptions
+- Database errors: return `False` with `echo_traceback()` for full stack trace
 - Return types: consistent `bool` for success/failure operations
 
 ## Public API
@@ -36,9 +36,11 @@ Create connection pool with DSN from args.
 ---
 
 ```python
-connect(args: Any, **kwargs: Any) -> Any
+@contextmanager
+connect(args: Any, pool: Any = None, **kwargs: Any)
 ```
-Get connection from pool. Requires `pool` kwarg. Returns `None` if pool is `None`.
+Context manager that safely gets a connection from pool and returns it automatically.
+Yields connection. Use `with connect(args, pool=pool) as conn:` pattern.
 
 ---
 
@@ -75,7 +77,7 @@ update(args: Any, table: str, pk: str, items: dict, **kwargs: Any) -> bool
 ```
 Update rows. Kwargs: `primarykey`, `mogrify`, `updatepk`, `commit`.
 Uses `sql.Identifier()` for table/column names to prevent SQL injection.
-Returns `True` on success, `False` on connection error, raises on database error.
+Returns `True` on success, `False` on error.
 
 ---
 
@@ -219,7 +221,7 @@ Iterator for memory-efficient result fetching.
 ```python
 mogrifysql(cur: Any, query: str, params: tuple) -> str
 ```
-Format query with params for debugging.
+Format query with params for debugging (safe for display only). Uses manual escaping to prevent SQL injection in logs.
 
 ---
 

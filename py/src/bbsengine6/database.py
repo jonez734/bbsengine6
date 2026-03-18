@@ -1,5 +1,6 @@
 import copy
-from typing import Any, Iterator
+from contextlib import contextmanager
+from typing import Any, Generator, Iterator
 
 import argparse
 
@@ -62,7 +63,7 @@ def getoid(args: Any, typ: str, cur: Any = None) -> int | None:
         else:
             return _work(cur)
     except Exception as e:
-        io.echo(f"bbsengine6.database.getoid.100: {e}", level="error")
+        io.echo_traceback(f"bbsengine6.database.getoid.100: {e}")
         raise
 
 
@@ -71,7 +72,7 @@ def getoid(args: Any, typ: str, cur: Any = None) -> int | None:
 
 
 def mogrifysql(cur: Any, query: str, params: tuple) -> str:
-    """Format a query with params for debugging/logging.
+    """Format a query with params for debugging/logging (safe for display only).
 
     Args:
       cur: Database cursor
@@ -79,18 +80,21 @@ def mogrifysql(cur: Any, query: str, params: tuple) -> str:
       params: Tuple of parameter values
 
     Returns:
-      Formatted string with params interpolated
+      Formatted string with params interpolated safely
     """
-    # Create a SQL object using sql.SQL and format it with sql.Placeholder()
-    formatted_query = sql.SQL(query).format(*[sql.Placeholder()] * len(params))
+    escaped = []
+    for p in params:
+        if p is None:
+            escaped.append("NULL")
+        elif isinstance(p, (bool, int, float)):
+            escaped.append(str(p))
+        else:
+            escaped.append("'" + str(p).replace("'", "''") + "'")
 
-    # Manually interpolate the params into the query for logging/debugging
-    formatted_query_str = formatted_query.as_string(cur.connection)
-
-    # Replace placeholders with actual parameter values (escaping them correctly)
-    formatted_query_with_values = formatted_query_str % params
-
-    return formatted_query_with_values
+    try:
+        return query % tuple(escaped)
+    except (ValueError, TypeError):
+        return query + " [param interpolation failed]"
 
 
 def parse_dsn(dsn: str) -> dict[str, str]:
@@ -133,6 +137,7 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
             "autocommit": False,
         }
     except AttributeError:
+        io.echo_traceback("bbsengine6.database.make_dsn.100:")
         defaults = {
             "dbname": None,
             "user": None,
@@ -180,45 +185,28 @@ def transaction(conn: Any, **kwargs: Any) -> Any:
     return conn.transaction()
 
 
-def connect(args: Any, **kwargs: Any) -> Any:
-    """Get a connection from the pool.
+@contextmanager
+def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, None]:
+    """Context manager that safely gets a connection and returns it to the pool.
 
     Args:
-      args: Application args (used for logging)
-      pool: ConnectionPool instance (required)
+      args: Application args (for logging)
+      pool: ConnectionPool instance
+      **kwargs: Additional arguments
 
-    Returns:
-      Connection from pool, or None if pool is None
+    Yields:
+      Connection from pool
     """
-    pool = kwargs.pop("pool", None)
     if pool is None:
-        io.echo(f"bbsengine6.database.connect.100: {pool=}", level="error")
-        return None
+        io.echo("bbsengine6.database.connect.100: pool is None", level="error")
+        yield None
+        return
 
     conn = pool.getconn()
-    # io.echo(f"bbsengine.database.260: {conn=}", level="debug")
-    return conn
-
-    #  conn = pool.connection()
-    #  autocommit = kwargs.pop("autocommit", False)
-    #  conn.autocommit = autocommit
-    #  with pool.connection() as conn:
-    #    io.echo(f"bbsengine.database.260: {conn=}", level="debug")
-    #    return conn
-    #  io.echo(f"bbsengine.database.connect.240: {conn=}", level="debug")
-    #  return conn
-    #  conn.autocommit = False
-    #  conn.read_only = True
-
-    #  readonly = kwargs.get("readonly", False)
-    #  if readonly is True:
-    #    conn.set_isolation_level(psycopg.ISOLATION_LEVEL_READ_ONLY)
-
-    #  conn.row_factory = psycopg.rows.dict_row
-
-    # this one is only truly useful when custom dumps and loads are needed
-    #  psycopg.types.json.register_json(conn, dumps=json.dumps, loads=json.loads, oids=[JSON_OID, JSONB_OID])
-    return conn
+    try:
+        yield conn
+    finally:
+        pool.putconn(conn)
 
 
 # def buildkwargs(args, **kwargs):
@@ -287,8 +275,8 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
             if commit is True:
                 conn.commit()
     except Exception as e:
-        io.echo(f"bbsengine.database.update.130: {e}", level="error")
-        raise
+        io.echo_traceback(f"bbsengine6.database.update.200: {e}")
+        return False
     return True
 
 
@@ -304,19 +292,6 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
     Returns:
       Inserted ID if returnid=True, True on success, False on error
     """
-
-    def _work(conn):
-        with cursor(conn) as cur:
-            cur.execute(query, dat)
-            if returnid is True:
-                res = cur.fetchone()
-                if res is None:
-                    return False
-                if primarykey in res:
-                    return res[primarykey]
-                else:
-                    return False
-        return True
 
     primarykey = kwargs.get("primarykey", "id")
     returnid = kwargs.get("returnid", True)
@@ -334,7 +309,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
     if args.debug is True:
         io.echo(f"bbsengine6.database.insert.140: {columns=}", level="debug")
 
-    for k, v in items.items():
+    for k in list(items.keys()):
         if k == "datecreatedepoch":
             del items[k]
 
@@ -361,6 +336,19 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
             query, _table_identifier(table), sql.Identifier(primarykey)
         )
 
+    def _work(conn):
+        with cursor(conn) as cur:
+            cur.execute(query, dat)
+            if returnid is True:
+                res = cur.fetchone()
+                if res is None:
+                    return False
+                if primarykey in res:
+                    return res[primarykey]
+                else:
+                    return False
+        return True
+
     try:
         conn = kwargs.get("conn", None)
         if conn is None:
@@ -372,8 +360,8 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
                 return _work(conn)
         return _work(conn)
     except Exception as e:
-        io.echo(f"bbsengine6.database.insert.180: database error: {e}", level="error")
-        raise
+        io.echo_traceback(f"bbsengine6.database.insert.200: {e}")
+        return False
 
 
 # @see https://soft-builder.com/how-to-list-all-schemas-in-postgresql/
@@ -409,8 +397,8 @@ def classexists(args: Any, name: str, **kwargs: Any) -> bool:
                 return _work(conn)
         return _work(conn)
     except Exception as e:
-        io.echo(f"bbsengine6.database.classexists.140: {e}", level="error")
-        raise
+        io.echo_traceback(f"bbsengine6.database.classexists.200: {e}")
+        return False
 
 
 def schemaexists(args: Any, name: str, **kwargs: Any) -> bool:
@@ -440,8 +428,8 @@ def schemaexists(args: Any, name: str, **kwargs: Any) -> bool:
                 return _work(conn)
         return _work(conn)
     except Exception as e:
-        io.echo(f"bbsengine6.database.schemaexists.120: error {e}", level="error")
-        raise
+        io.echo_traceback(f"bbsengine6.database.schemaexists.200: {e}")
+        return False
 
 
 def tableexists(args: Any, schema: str, table: str, **kwargs: Any) -> bool:
@@ -469,8 +457,8 @@ def tableexists(args: Any, schema: str, table: str, **kwargs: Any) -> bool:
                 return _work(conn)
         return _work(conn)
     except Exception as e:
-        io.echo(f"bbsengine6.database.tableexists.120: error {e}", level="error")
-        raise
+        io.echo_traceback(f"bbsengine6.database.tableexists.200: {e}")
+        return False
 
 
 # @since 20230510 copied from bbsengine5.py
@@ -683,8 +671,8 @@ def createrol(args: Any, name: str, **kwargs: Any) -> bool:
         with cursor(conn) as cur:
             return _work(cur)
     except psycopg.DatabaseError as e:
-        io.echo(f"bbsengine6.createrol.100: Error creating role: {e}", level="error")
-        raise
+        io.echo_traceback(f"bbsengine6.database.createrol.200: {e}")
+        return False
 
 
 def rolexists(args: Any, rolname: str, **kwargs: Any) -> bool:
@@ -710,8 +698,8 @@ def rolexists(args: Any, rolname: str, **kwargs: Any) -> bool:
         with cursor(conn) as cur:
             return _work(cur)
     except psycopg.DatabaseError as e:
-        io.echo(f"bbsengine6.database.rolexists.120: database error {e}", level="error")
-        raise
+        io.echo_traceback(f"bbsengine6.database.rolexists.200: {e}")
+        return False
 
 
 def exists(args: Any, databasename: str, **kwargs: Any) -> bool:
@@ -722,15 +710,15 @@ def exists(args: Any, databasename: str, **kwargs: Any) -> bool:
         return False
 
     try:
-        with connect(args, database=DEFAULTDATABASE, pool=pool) as conn:
+        with connect(args, pool=pool) as conn:
             sql = "SELECT datname FROM pg_catalog.pg_database WHERE lower(datname) = lower(%s)"
             dat = (databasename,)
             with cursor(conn) as cur:
                 cur.execute(sql, dat)
                 return False if cur.rowcount == 0 else True
     except psycopg.DatabaseError as e:
-        io.echo(f"bbsengine6.database.exists.120: database error {e}", level="error")
-        raise
+        io.echo_traceback(f"bbsengine6.database.exists.200: {e}")
+        return False
 
 
 def create(args: Any, name: str, **kwargs: Any) -> bool:
@@ -742,7 +730,7 @@ def create(args: Any, name: str, **kwargs: Any) -> bool:
             sql = SQL("CREATE DATABASE {}").format(Identifier(name))
             cur.execute(sql)
         except Exception as e:
-            io.echo(f"bbsengine.database.create.200: {e}", level="error")
+            io.echo_traceback(f"bbsengine6.database.create.200: {e}")
             return False
         return True
 
@@ -779,8 +767,8 @@ def createschema(args: Any, name: str, **kwargs: Any) -> bool:
                 return _work(conn)
         return _work(conn)
     except psycopg.DatabaseError as e:
-        io.echo(f"bbsengine6.database.createschema.100: database error: {e}")
-        raise
+        io.echo_traceback(f"bbsengine6.database.createschema.200: {e}")
+        return False
 
 
 def get_role_privs(
@@ -845,11 +833,9 @@ def manage_secondary_role(
         with cursor(conn) as cur:
             return _work(cur)
     except psycopg.DatabaseError as e:
-        io.echo(
-            f"bbsengine6.database.manage_secondary_role.100: database error {e}",
-            level="error",
-        )
-        raise
+        io.echo_traceback(f"bbsengine6.database.manage_secondary_role.200: {e}")
+        return False
+
 
 def cursor(conn: Any, row_factory: Any = dict_row, **kwargs: Any) -> Any:
     """Create a cursor with the specified row factory.
@@ -894,7 +880,7 @@ def extensioninstalled(args: Any, ext: str, **kwargs: Any) -> bool:
                 return False
             return True
         except Exception as e:
-            io.echo(f"exception while checking to see if {ext} is installed: {e}")
+            io.echo_traceback(f"bbsengine6.database.extensioninstalled.200: {e}")
             return False
 
     cur = kwargs.get("cur", None)
@@ -922,7 +908,7 @@ def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
             io.echo(f"error: {ext} is not available", level="error")
             return False
         except Exception as e:
-            io.echo(f"error: {e}", level="error")
+            io.echo_traceback(f"bbsengine6.database.creatextension.200: {e}")
             return False
         else:
             return True
@@ -953,14 +939,10 @@ def importsql(args: Any, filename: str, **kwargs: Any) -> bool:
                 try:
                     cur.execute(sql_script)
                 except psycopg.errors.Error as e:
-                    io.echo(f"fail", level="error")
-                    io.echo(f"sql execute: {e}")
+                    io.echo_traceback(f"bbsengine6.database.importsql.200: {e}")
                     return False
         except Exception as e:
-            io.echo(
-                f"bbsengine.database.importsql.160: An error occurred: {e}",
-                level="error",
-            )
+            io.echo_traceback(f"bbsengine6.database.importsql.300: {e}")
             return False
         return True
 
@@ -970,7 +952,7 @@ def importsql(args: Any, filename: str, **kwargs: Any) -> bool:
         if pool is None:
             io.echo(f"importsql.100: no connection and no pool", level="error")
             return False
-        with connect(pool) as conn:
+        with connect(args, pool=pool) as conn:
             return _work(conn)
     return _work(conn)
 
@@ -997,8 +979,8 @@ def functionexists(args: Any, name: str, **kwargs: Any) -> bool:
             return False
         return _work(conn)
     except Exception as e:
-        io.echo(f"bbsengine6.database.functionexists.140: {e}", level="error")
-        raise
+        io.echo_traceback(f"bbsengine6.database.functionexists.200: {e}")
+        return False
 
 
 # @since 20250511
