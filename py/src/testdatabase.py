@@ -359,35 +359,36 @@ class TestConnect(unittest.TestCase):
     def test_connect_works_as_context_manager(self, mock_getpool):
         mock_args = MagicMock()
         mock_conn = MagicMock()
-        mock_conn.__enter__ = MagicMock(return_value=mock_conn)
-        mock_conn.__exit__ = MagicMock(return_value=False)
         mock_pool = MagicMock()
-        mock_pool.connection.return_value = mock_conn
+        mock_pool.getconn.return_value = mock_conn
         mock_getpool.return_value = mock_pool
 
         with database.connect(mock_args) as conn:
             self.assertEqual(conn, mock_conn)
-        mock_conn.__exit__.assert_called_once()
+        mock_pool.putconn.assert_called_once_with(mock_conn)
 
     @patch("bbsengine6.database.getpool")
     def test_connect_autocommit_false(self, mock_getpool):
         mock_args = MagicMock()
         mock_conn = MagicMock()
         mock_pool = MagicMock()
-        mock_pool.connection.return_value = mock_conn
+        mock_pool.getconn.return_value = mock_conn
         mock_getpool.return_value = mock_pool
 
-        database.connect(mock_args)
+        with database.connect(mock_args) as conn:
+            self.assertEqual(conn, mock_conn)
         self.assertFalse(mock_conn.autocommit)
 
     @patch("bbsengine6.database.getpool")
     def test_connect_removes_readonly_kwarg(self, mock_getpool):
         mock_args = MagicMock()
+        mock_conn = MagicMock()
         mock_pool = MagicMock()
-        mock_pool.connection.return_value = MagicMock()
+        mock_pool.getconn.return_value = mock_conn
         mock_getpool.return_value = mock_pool
 
-        database.connect(mock_args, readonly=True)
+        with database.connect(mock_args, readonly=True):
+            pass
         mock_getpool.assert_called_once()
         call_kwargs = mock_getpool.call_args[1]
         self.assertNotIn("readonly", call_kwargs)

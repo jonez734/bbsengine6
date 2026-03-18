@@ -1,5 +1,6 @@
 import copy
-from typing import Any, Iterator
+from contextlib import contextmanager
+from typing import Any, Generator, Iterator
 
 import argparse
 
@@ -184,9 +185,23 @@ def transaction(conn: Any, **kwargs: Any) -> Any:
     return conn.transaction()
 
 
-def connect(args, pool=None, **kwargs):
+@contextmanager
+def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, None]:
+    """Context manager that safely gets a connection and returns it to the pool.
+
+    Args:
+      args: Application args (for logging)
+      pool: ConnectionPool instance
+      **kwargs: Additional arguments
+
+    Yields:
+      Connection from pool
+    """
     if args.debug is True:
         io.echo(f"bbsengine6.database.connect.100: {args=}", level="debug")
+
+    if "readonly" in kwargs:
+        del kwargs["readonly"]
 
     try:
         pool = getpool(args, **kwargs)
@@ -201,12 +216,16 @@ def connect(args, pool=None, **kwargs):
         io.echo(f"{pool=}", level="debug")
 
     try:
-        conn = pool.connection()
+        conn: Any = pool.getconn()
         conn.autocommit = False
     except Exception as e:
         io.echo_traceback(f"bbsengine6.database.connect.300: {e}")
         raise
-    return conn
+
+    try:
+        yield conn
+    finally:
+        pool.putconn(conn)
 
 
 # def buildkwargs(args, **kwargs):
