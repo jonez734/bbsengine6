@@ -188,14 +188,24 @@ def connect(args, pool=None, **kwargs):
     if args.debug is True:
         io.echo(f"bbsengine6.database.connect.100: {args=}", level="debug")
 
-    if "readonly" in kwargs:
-        del kwargs["readonly"]
-    pool = getpool(args, **kwargs)
+    try:
+        pool = getpool(args, **kwargs)
+    except AttributeError as e:
+        io.echo_traceback(f"bbsengine6.database.connect.200: {e}")
+        raise
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.database.connect.210: {e}")
+        raise
+
     if args.debug is True:
         io.echo(f"{pool=}", level="debug")
 
-    conn = pool.connection()
-    conn.autocommit = False
+    try:
+        conn = pool.connection()
+        conn.autocommit = False
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.database.connect.300: {e}")
+        raise
     return conn
 
 
