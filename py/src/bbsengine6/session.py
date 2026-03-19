@@ -244,11 +244,13 @@ def write(args, session, sessionid=None, **kwargs):
                 args, "engine.__session", sessionid, _session, mogrify=mogrify, **kwargs
             )
             conn.commit()
+        return True
     else:
         database.update(
             args, "engine.__session", sessionid, _session, mogrify=mogrify, **kwargs
         )
         conn.commit()
+        return True
 
 
 def buildsession(args, sessionid=None, data={}, **kwargs):
