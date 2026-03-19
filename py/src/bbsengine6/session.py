@@ -3,21 +3,13 @@ import uuid
 from datetime import datetime, timedelta
 import copy
 
-# from psycopg.types.json import Json
-# from psycopg2.extras import Json
-
-# import ttyio6 as ttyio
-
 from . import database, member, io
 
-# same as php version
 
 currentsessionid = None
 
 
 def build(rec):
-    #    io.echo(f"bbsengine6.session.120: {rec=} {type(rec)=}", level="debug")
-
     session = {}
     for s in (
         "id",
@@ -30,11 +22,7 @@ def build(rec):
         "dateupdated",
         "moniker",
     ):
-        #        io.echo(f"{s=}", level="debug")
         session[s] = rec[s]
-
-    #    io.echo(f"bbsengine6.session.build.100: {session=}", level="debug")
-
     return session
 
 
@@ -44,9 +32,7 @@ def start(args, **kwargs):
     def _work(conn):
         global currentsessionid
 
-        ###        garbagecollect(args, **kwargs)
-
-        if currentsessionid is None:  # and exists in the database
+        if currentsessionid is None:
             io.echo("session.start.100: currentsessionid is None", level="debug")
             session = getmembersession(args, conn=conn)
             if session is False:
@@ -55,11 +41,7 @@ def start(args, **kwargs):
             if session is None:
                 io.echo("session.start.120: creating new session", level="debug")
                 session = buildsession(args, **kwargs)
-                if args.debug is True:
-                    mogrify = True
-                else:
-                    mogrify = False
-                    # io.echo(f"bbsengine6.session.start.120: {session=}", level="debug")
+                mogrify = True if args.debug else False
                 currentsessionid = database.insert(
                     args, "engine.__session", session, mogrify=mogrify, conn=conn
                 )
@@ -76,32 +58,35 @@ def start(args, **kwargs):
             )
             session = read(args, currentsessionid, conn=conn)
             if session is None:
-                io.echo(f"read of session returned None", level="debug")
+                io.echo("read of session returned None", level="debug")
                 session = buildsession(args, **kwargs)
-                mogrify = True if args.debug is True else False
+                mogrify = True if args.debug else False
                 database.insert(
                     args, "engine.__session", session, mogrify=mogrify, conn=conn
                 )
                 conn.commit()
                 return True
-            if type(session) is list and len(session) > 1:
+            if isinstance(session, list) and len(session) > 1:
                 io.echo(
                     f"multiple sessions for member {member.moniker=} detected",
                     level="error",
                 )
                 return False
-
             currentsessionid = session["id"]
 
+        return True
+
     conn = kwargs.get("conn", None)
-    if conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            io.echo(f"bbsengine6.session.start.180: {pool=}", level="critical")
-            return False
-        with database.connect(args, pool=pool) as conn:
-            return _work(conn)
-    return _work(conn)
+    if conn is not None:
+        return _work(conn)
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo("bbsengine6.session.start.100: no conn or pool", level="error")
+        return False
+
+    with database.connect(args, pool=pool) as conn:
+        return _work(conn)
 
 
 def getmembersession(args, moniker=None, **kwargs):
@@ -116,7 +101,6 @@ def getmembersession(args, moniker=None, **kwargs):
                 io.echo(f"multiple sessions for member {moniker=} found", level="error")
                 return False
             rec = cur.fetchone()
-            ###            io.echo(f"getmembersession.100: {rec=}", level="debug")
             return build(rec)
 
     if moniker is None:
@@ -125,20 +109,21 @@ def getmembersession(args, moniker=None, **kwargs):
             io.echo("getmembersession.100: You do not exist! Go Away!", level="error")
             return None
 
-    #    garbagecollect(args)
-
     conn = kwargs.get("conn", None)
-    if conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            io.echo(f"getmembersession.140: {pool=}", level="error")
-            return False
-        with database.connect(args, pool=pool) as conn:
-            result = _work(conn)
-            conn.commit()
-            return result
-    else:
-        return _work(conn)
+    if conn is not None:
+        result = _work(conn)
+        conn.commit()
+        return result
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo("bbsengine6.getmembersession.100: no conn or pool", level="error")
+        return None
+
+    with database.connect(args, pool=pool) as conn:
+        result = _work(conn)
+        conn.commit()
+        return result
 
 
 def updatelastactivity(args, sessionid, **kwargs):
@@ -151,24 +136,23 @@ def updatelastactivity(args, sessionid, **kwargs):
 
         io.echo(f"bbsengine.session.updatelastactivity.120: {session=}", level="debug")
 
-        session["lastactivity"] = "now()"  # datetime.ctime()
+        session["lastactivity"] = "now()"
         session["expiry"] = datetime.now() + timedelta(minutes=15)
-        session["useragent"] = (
-            os.environ["TERM"] if "TERM" in os.environ else "NEEDINFO"
-        )
+        session["useragent"] = os.environ.get("TERM", "NEEDINFO")
         write(args, session, sessionid, conn=conn)
         conn.commit()
         return True
 
     conn = kwargs.get("conn", None)
-    if conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            io.echo(f"bbsengine.updatelastactivity.100: {pool=}", level="error")
-            return False
-        with database.connect(args, pool=pool) as conn:
-            return _work(conn)
-    else:
+    if conn is not None:
+        return _work(conn)
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo("bbsengine.updatelastactivity.100: no conn or pool", level="error")
+        return False
+
+    with database.connect(args, pool=pool) as conn:
         return _work(conn)
 
 
@@ -201,17 +185,20 @@ def read(args, sessionid=None, **kwargs):
         io.echo(f"bbsengine6.session.read.100: {sessionid=}", level="debug")
 
     conn = kwargs.get("conn", None)
-    if conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            io.echo(f"bbsengine6.session.read.140: {pool=}", level="critical")
-            return None
-        with database.connect(args, pool=pool) as conn:
-            result = _work(conn)
-            conn.commit()
-            return result
+    if conn is not None:
+        result = _work(conn)
+        conn.commit()
+        return result
 
-    return _work(conn)
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo("bbsengine6.session.read.100: no conn or pool", level="error")
+        return None
+
+    with database.connect(args, pool=pool) as conn:
+        result = _work(conn)
+        conn.commit()
+        return result
 
 
 def write(args, session, sessionid=None, **kwargs):
@@ -231,28 +218,29 @@ def write(args, session, sessionid=None, **kwargs):
     if args.debug is True:
         io.echo(f"bbsengine6.session.write.100: {session=}", level="debug")
 
-    if "data" in _session and type(_session["data"]) is dict:
+    if "data" in _session and isinstance(_session["data"], dict):
         _session["data"] = database.Jsonb(_session["data"])
 
-    mogrify = True if args.debug is True else False
+    mogrify = True if args.debug else False
 
-    conn = kwargs.get("conn", None)
-    if conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            return False
-        with database.connect(args, pool=pool) as conn:
-            database.update(
-                args, "engine.__session", sessionid, _session, mogrify=mogrify, **kwargs
-            )
-            conn.commit()
-        return True
-    else:
+    def _work(conn):
         database.update(
-            args, "engine.__session", sessionid, _session, mogrify=mogrify, **kwargs
+            args, "engine.__session", sessionid, _session, mogrify=mogrify, conn=conn
         )
         conn.commit()
         return True
+
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        return _work(conn)
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo("bbsengine6.session.write.100: no conn or pool", level="error")
+        return False
+
+    with database.connect(args, pool=pool) as conn:
+        return _work(conn)
 
 
 def buildsession(args, sessionid=None, data={}, **kwargs):
@@ -267,13 +255,11 @@ def buildsession(args, sessionid=None, data={}, **kwargs):
     session = {}
     session["id"] = sessionid
     session["moniker"] = moniker
-    session["expiry"] = datetime.now() + timedelta(
-        hours=2
-    )  # "now()" # +'42 days'::interval"
-    session["lastactivity"] = "now()"  # datetime.ctime()
+    session["expiry"] = datetime.now() + timedelta(hours=2)
+    session["lastactivity"] = "now()"
     session["data"] = database.Jsonb(data)
     session["datecreated"] = "now()"
-    session["useragent"] = os.environ["TERM"]
+    session["useragent"] = os.environ.get("TERM", "xterm")
 
     if args.debug is True:
         io.echo(f"bbsengine6.session.buildsession.100: {session=}", level="debug")
@@ -305,9 +291,8 @@ def set(
     mogrify=True,
     **kwargs,
 ):
-    def _work(cur):
-        data = {}
-        data[name] = value
+    def _work(conn):
+        data = {name: value}
 
         if args.debug is True:
             io.echo(f"bbsengine6.session.set.100: {data=}", level="debug")
@@ -317,8 +302,10 @@ def set(
         else:
             sql = "update engine.__session set data=%s where id=%s"
 
-        dat = (data, sessionid)
-        cur.execute(sql, dat)
+        with database.cursor(conn) as cur:
+            cur.execute(sql, (data, sessionid))
+        conn.commit()
+        return value
 
     if sessionid is None:
         if currentsessionid is None:
@@ -334,43 +321,61 @@ def set(
             return None
 
     conn = kwargs.get("conn", None)
-    conn = kwargs.get("conn", None)
-    if conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            io.echo(f"bbsengine6.session.set.100: {pool=}", level="error")
-            return False
-        with database.connect(args, pool=pool) as conn:
-            with database.cursor(conn) as cur:
-                _work(cur)
-            conn.commit()
-    else:
-        with database.cursor(conn) as cur:
-            _work(cur)
-        conn.commit()
-    return value
+    if conn is not None:
+        return _work(conn)
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo("bbsengine6.session.set.100: no conn or pool", level="error")
+        return False
+
+    with database.connect(args, pool=pool) as conn:
+        return _work(conn)
 
 
 def garbagecollect(args, **kwargs):
-    conn = kwargs.pop("conn", None)
-    if conn is None:
-        io.echo(f"bbsengine.session.garbagecollect.100: {conn=}", level="error")
-        return False
-    with database.cursor(conn, **kwargs) as cur:
-        sql = "delete from engine.__session where expiry < now()"
-        cur.execute(sql)
+    def _work(conn):
+        with database.cursor(conn) as cur:
+            sql = "delete from engine.__session where expiry < now()"
+            cur.execute(sql)
         conn.commit()
-    return True
+        return True
+
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        return _work(conn)
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo("bbsengine.session.garbagecollect.100: no conn or pool", level="error")
+        return False
+
+    with database.connect(args, pool=pool) as conn:
+        return _work(conn)
 
 
 def count(args, **kwargs):
     def _work(conn):
-        sql: str = "select count(*) from engine.session"
-        with database.cursor(conn, **kwargs) as cur:
+        sql = "select count(*) from engine.session"
+        with database.cursor(conn) as cur:
             cur.execute(sql)
             if cur.rowcount == 0:
                 return 0
+            rec = cur.fetchone()
+            return rec["count"] if rec else 0
 
-    conn = kwargs.pop("conn", None)
-    if conn is None:
-        return False
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        result = _work(conn)
+        conn.commit()
+        return result
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo("bbsengine.session.count.100: no conn or pool", level="error")
+        return 0
+
+    with database.connect(args, pool=pool) as conn:
+        result = _work(conn)
+        conn.commit()
+        return result
