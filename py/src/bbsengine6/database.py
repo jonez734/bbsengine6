@@ -217,14 +217,10 @@ def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, 
         io.echo_traceback(f"bbsengine6.database.connect.300: {e}")
         raise
 
-    io.echo(f"database.connect: got conn {id(conn)}", level="debug")
     try:
         yield conn
     finally:
-        io.echo(
-            f"database.connect: returning conn {id(conn)} txstatus={conn.info.transaction_status}",
-            level="debug",
-        )
+        pool.putconn(conn)
         pool.putconn(conn)
 
 

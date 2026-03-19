@@ -117,19 +117,15 @@ def getcurrentmoniker(args, **kwargs):
     )  # works on windows, too. @project:8158
 
     conn = kwargs.get("conn", None)
-    io.echo(f"getcurrentmoniker: {conn=}", level="debug")
     if conn is None:
-        import traceback
-
-        io.echo(f"getcurrentmoniker: traceback:", level="debug")
-        for line in traceback.format_stack()[-5:-1]:
-            io.echo(line.strip(), level="debug")
         pool = kwargs.get("pool", None)
         if pool is None:
             io.echo(f"bbsengine.member.getcurrentmoniker.120: {pool=}", level="error")
             return None
         with database.connect(args, pool=pool) as conn:
-            return _work(conn)
+            result = _work(conn)
+            conn.commit()
+            return result
     return _work(conn)
 
 
