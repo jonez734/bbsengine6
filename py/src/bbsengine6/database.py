@@ -204,12 +204,16 @@ def transaction(conn: Any, **kwargs: Any) -> Any:
 
 
 @contextmanager
-def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, None]:
+def connect(
+    args: Any, pool: Any = None, *, auto_commit: bool = True, **kwargs: Any
+) -> Generator[Any, None, None]:
     """Context manager that safely gets a connection and returns it to the pool.
 
     Args:
       args: Application args (for logging)
       pool: ConnectionPool instance
+      auto_commit: If True (default), commits before returning connection to pool.
+                   Set to False for multi-statement transactions.
       **kwargs: Additional arguments
 
     Yields:
@@ -238,34 +242,9 @@ def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, 
     try:
         yield conn
     finally:
+        if auto_commit:
+            conn.commit()
         pool.putconn(conn)
-
-
-def with_connection(args, pool, callback, **kwargs):
-    """Execute a callback with a database connection.
-
-    If conn is passed, uses it directly. Otherwise gets connection from pool.
-    Always commits before returning connection to pool.
-
-    Args:
-      args: Application args
-      pool: ConnectionPool
-      callback: Function that takes conn and returns result
-      **kwargs: Optional conn, pool overrides
-
-    Returns:
-      Result from callback
-    """
-    conn = kwargs.get("conn", None)
-    if conn is not None:
-        result = callback(conn)
-        conn.commit()
-        return result
-
-    with connect(args, pool=pool) as conn:
-        result = callback(conn)
-        conn.commit()
-        return result
 
 
 # def buildkwargs(args, **kwargs):
