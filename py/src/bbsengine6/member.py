@@ -117,6 +117,7 @@ def getcurrentmoniker(args, **kwargs):
     )  # works on windows, too. @project:8158
 
     conn = kwargs.get("conn", None)
+    io.echo(f"getcurrentmoniker: {conn=}", level="debug")
     if conn is None:
         pool = kwargs.get("pool", None)
         if pool is None:
