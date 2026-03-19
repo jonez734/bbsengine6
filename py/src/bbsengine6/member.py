@@ -115,20 +115,15 @@ def getcurrentmoniker(args, **kwargs):
     loginid = util.getcurrentloginid(
         args, **kwargs
     )  # works on windows, too. @project:8158
-    # io.echo(f"bbsengine6.member.140: {loginid=}", level="debug")
 
     conn = kwargs.get("conn", None)
-    io.echo(f"getcurrentmoniker.100: {conn=}", level="debug")
     if conn is None:
         pool = kwargs.get("pool", None)
-        io.echo(f"getcurrentmoniker.110: {pool=}", level="debug")
         if pool is None:
             io.echo(f"bbsengine.member.getcurrentmoniker.120: {pool=}", level="error")
             return None
         with database.connect(args, pool=pool) as conn:
-            io.echo(f"getcurrentmoniker.120: got new conn {conn}", level="debug")
             return _work(conn)
-    io.echo(f"getcurrentmoniker.130: using passed conn {conn}", level="debug")
     return _work(conn)
 
 

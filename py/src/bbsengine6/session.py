@@ -50,15 +50,7 @@ def start(args, **kwargs):
             else:
                 io.echo(f"bbsengine6.session.start.140: {session=}", level="debug")
                 currentsessionid = session["id"]
-                io.echo(
-                    f"session.start.145: txstatus before={conn.info.transaction_status}",
-                    level="debug",
-                )
                 conn.commit()
-                io.echo(
-                    f"session.start.146: txstatus after={conn.info.transaction_status}",
-                    level="debug",
-                )
         else:
             io.echo(
                 f"bbsengine6.session.start.160: reading {currentsessionid=}",
@@ -111,13 +103,13 @@ def getmembersession(args, moniker=None, **kwargs):
             rec = cur.fetchone()
             return build(rec)
 
+    conn = kwargs.get("conn", None)
     if moniker is None:
-        moniker = member.getcurrentmoniker(args, **kwargs)
+        moniker = member.getcurrentmoniker(args, conn=conn, **kwargs)
         if moniker is None:
             io.echo("getmembersession.100: You do not exist! Go Away!", level="error")
             return None
 
-    conn = kwargs.get("conn", None)
     if conn is not None:
         result = _work(conn)
         conn.commit()
