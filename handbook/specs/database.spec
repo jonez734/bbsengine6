@@ -39,8 +39,13 @@ Create connection pool with DSN from args.
 @contextmanager
 connect(args: Any, pool: Any = None, **kwargs: Any)
 ```
-Context manager that safely gets a connection from pool and returns it automatically.
-Yields connection. Use `with connect(args, pool=pool) as conn:` pattern.
+Context manager that gets a connection from the passed `pool` using `pool.getconn()`
+and returns it via `pool.putconn()` on exit. Raises `ValueError` if `pool is None`.
+The `readonly` kwarg is stripped from kwargs (not supported by psycopg_pool). Use:
+```python
+with database.connect(args, pool=pool) as conn:
+    database.cursor(conn)  # or pass conn to other database functions
+```
 
 ---
 
