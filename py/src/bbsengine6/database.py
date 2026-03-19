@@ -220,6 +220,10 @@ def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, 
     try:
         yield conn
     finally:
+        io.echo(
+            f"database.connect.400: txstatus={conn.info.transaction_status}",
+            level="debug",
+        )
         pool.putconn(conn)
 
 
