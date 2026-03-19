@@ -363,7 +363,7 @@ class TestConnect(unittest.TestCase):
         mock_pool.getconn.return_value = mock_conn
         mock_getpool.return_value = mock_pool
 
-        with database.connect(mock_args) as conn:
+        with database.connect(mock_args, pool=mock_pool) as conn:
             self.assertEqual(conn, mock_conn)
         mock_pool.putconn.assert_called_once_with(mock_conn)
 
@@ -375,7 +375,7 @@ class TestConnect(unittest.TestCase):
         mock_pool.getconn.return_value = mock_conn
         mock_getpool.return_value = mock_pool
 
-        with database.connect(mock_args) as conn:
+        with database.connect(mock_args, pool=mock_pool) as conn:
             self.assertEqual(conn, mock_conn)
         self.assertFalse(mock_conn.autocommit)
 
@@ -387,11 +387,9 @@ class TestConnect(unittest.TestCase):
         mock_pool.getconn.return_value = mock_conn
         mock_getpool.return_value = mock_pool
 
-        with database.connect(mock_args, readonly=True):
+        with database.connect(mock_args, pool=mock_pool, readonly=True):
             pass
-        mock_getpool.assert_called_once()
-        call_kwargs = mock_getpool.call_args[1]
-        self.assertNotIn("readonly", call_kwargs)
+        mock_getpool.assert_not_called()
 
 
 class TestTransaction(unittest.TestCase):

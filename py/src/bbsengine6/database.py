@@ -203,14 +203,9 @@ def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, 
     if "readonly" in kwargs:
         del kwargs["readonly"]
 
-    try:
-        pool = getpool(args, **kwargs)
-    except AttributeError as e:
-        io.echo_traceback(f"bbsengine6.database.connect.200: {e}")
-        raise
-    except Exception as e:
-        io.echo_traceback(f"bbsengine6.database.connect.210: {e}")
-        raise
+    if pool is None:
+        io.echo("bbsengine6.database.connect.200: pool is None", level="error")
+        raise ValueError("pool is None")
 
     if args.debug is True:
         io.echo(f"{pool=}", level="debug")
