@@ -270,10 +270,25 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
     Returns:
       True on success, False on connection error, raises on database error
     """
+    import datetime
+
     primarykey = kwargs.get("primarykey", "id")
     _mogrify = kwargs.get("mogrify", False)
     updatepk = kwargs.get("updatepk", False)
     commit = kwargs.get("commit", True)
+
+    def _convert_value(v):
+        """Convert values to types psycopg can handle."""
+        if isinstance(v, type):
+            # Handle type objects (like datetime.datetime) - convert to string representation
+            return str(v)
+        if isinstance(v, dict):
+            return Jsonb(v)
+        elif isinstance(v, list):
+            return Jsonb(v)
+        elif isinstance(v, datetime.datetime):
+            return v.isoformat()
+        return v
 
     def _work(cur):
         _items = copy.deepcopy(items)
@@ -285,12 +300,7 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
         dat = []
         for k, v in _items.items():
             params.append(sql.Identifier(k) + sql.SQL(" = %s"))
-            if type(v) is dict:
-                dat.append(Jsonb(v))
-            elif type(v) is list:
-                dat.append(Jsonb(v))
-            else:
-                dat.append(v)
+            dat.append(_convert_value(v))
 
         query = (
             query
