@@ -126,7 +126,9 @@ class TestBuildsession(unittest.TestCase):
         self.assertIn("datecreated", result)
 
     @patch("bbsengine6.session.member")
-    def test_buildsession_returns_none_when_no_moniker(self, mock_member: MagicMock) -> None:
+    def test_buildsession_returns_none_when_no_moniker(
+        self, mock_member: MagicMock
+    ) -> None:
         mock_member.getcurrentmoniker.return_value = None
 
         result = session.buildsession(self.mock_args)
@@ -185,7 +187,9 @@ class TestGet(unittest.TestCase):
         self.mock_args.debug = False
 
     @patch("bbsengine6.session.getmembersession")
-    def test_get_returns_value_from_session_data(self, mock_getmembersession: MagicMock) -> None:
+    def test_get_returns_value_from_session_data(
+        self, mock_getmembersession: MagicMock
+    ) -> None:
         mock_getmembersession.return_value = {"data": {"mykey": "myvalue"}}
 
         result = session.get(self.mock_args, "mykey")
@@ -193,7 +197,9 @@ class TestGet(unittest.TestCase):
         self.assertEqual(result, "myvalue")
 
     @patch("bbsengine6.session.getmembersession")
-    def test_get_returns_default_when_key_missing(self, mock_getmembersession: MagicMock) -> None:
+    def test_get_returns_default_when_key_missing(
+        self, mock_getmembersession: MagicMock
+    ) -> None:
         mock_getmembersession.return_value = {"data": {}}
 
         result = session.get(self.mock_args, "missingkey", default="defaultvalue")
@@ -201,7 +207,9 @@ class TestGet(unittest.TestCase):
         self.assertEqual(result, "defaultvalue")
 
     @patch("bbsengine6.session.getmembersession")
-    def test_get_returns_false_when_no_session(self, mock_getmembersession: MagicMock) -> None:
+    def test_get_returns_false_when_no_session(
+        self, mock_getmembersession: MagicMock
+    ) -> None:
         mock_getmembersession.return_value = None
 
         result = session.get(self.mock_args, "key")
@@ -302,9 +310,7 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
         mock_pool = MagicMock()
         mock_pool.getconn.return_value = mock_conn
 
-        result = session.set(
-            self.mock_args, "key", "value", reset=True, pool=mock_pool
-        )
+        result = session.set(self.mock_args, "key", "value", reset=True, pool=mock_pool)
 
         self.assertEqual(result, "value")
         mock_cursor.execute.assert_called_once()
@@ -383,7 +389,9 @@ class TestSessionConnectionManagement(_TestCaseWithPoolCleanup):
         session.currentsessionid = None
 
     @patch("bbsengine6.session.member")
-    def test_set_obtains_own_connection_and_commits(self, mock_member: MagicMock) -> None:
+    def test_set_obtains_own_connection_and_commits(
+        self, mock_member: MagicMock
+    ) -> None:
         mock_member.getcurrentid.return_value = 1
         session.currentsessionid = "test-session-id"
 
@@ -429,8 +437,18 @@ class TestSessionConnectionManagement(_TestCaseWithPoolCleanup):
 
         session.currentsessionid = None
 
-    def test_read_obtains_own_connection(self) -> None:
-        result = session.read(self.mock_args, sessionid="nonexistent", pool=self.pool)
+    @patch("bbsengine6.database.connect")
+    def test_read_obtains_own_connection(self, mock_connect: MagicMock) -> None:
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 0
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_connect.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = session.read(self.mock_args, sessionid="nonexistent", pool=MagicMock())
 
         self.assertIsNone(result)
 
