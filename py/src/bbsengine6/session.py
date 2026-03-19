@@ -48,7 +48,7 @@ def start(args, **kwargs):
 
         if currentsessionid is None:  # and exists in the database
             io.echo("session.start.100: currentsessionid is None", level="debug")
-            session = getmembersession(args, **kwargs)
+            session = getmembersession(args, conn=conn)
             if session is False:
                 io.echo("multiple sessions detected", level="error")
                 return False
@@ -61,7 +61,7 @@ def start(args, **kwargs):
                     mogrify = False
                     # io.echo(f"bbsengine6.session.start.120: {session=}", level="debug")
                 currentsessionid = database.insert(
-                    args, "engine.__session", session, mogrify=mogrify, **kwargs
+                    args, "engine.__session", session, mogrify=mogrify, conn=conn
                 )
                 conn.commit()
                 return True
@@ -74,15 +74,13 @@ def start(args, **kwargs):
                 f"bbsengine6.session.start.160: reading {currentsessionid=}",
                 level="debug",
             )
-            session = read(
-                args, currentsessionid, **kwargs
-            )  # getmembersession(args, member.getcurrentid())
+            session = read(args, currentsessionid, conn=conn)
             if session is None:
                 io.echo(f"read of session returned None", level="debug")
                 session = buildsession(args, **kwargs)
                 mogrify = True if args.debug is True else False
                 database.insert(
-                    args, "engine.__session", session, mogrify=mogrify, **kwargs
+                    args, "engine.__session", session, mogrify=mogrify, conn=conn
                 )
                 conn.commit()
                 return True
@@ -136,7 +134,9 @@ def getmembersession(args, moniker=None, **kwargs):
             io.echo(f"getmembersession.140: {pool=}", level="error")
             return False
         with database.connect(args, pool=pool) as conn:
-            return _work(conn)
+            result = _work(conn)
+            conn.commit()
+            return result
     else:
         return _work(conn)
 
@@ -145,7 +145,7 @@ def updatelastactivity(args, sessionid, **kwargs):
     def _work(conn):
         import os
 
-        session = read(args, sessionid, **kwargs)
+        session = read(args, sessionid, conn=conn)
         if session is None:
             return False
 
@@ -156,7 +156,7 @@ def updatelastactivity(args, sessionid, **kwargs):
         session["useragent"] = (
             os.environ["TERM"] if "TERM" in os.environ else "NEEDINFO"
         )
-        write(args, session, sessionid, **kwargs)
+        write(args, session, sessionid, conn=conn)
         conn.commit()
         return True
 
@@ -207,7 +207,9 @@ def read(args, sessionid=None, **kwargs):
             io.echo(f"bbsengine6.session.read.140: {pool=}", level="critical")
             return None
         with database.connect(args, pool=pool) as conn:
-            return _work(conn)
+            result = _work(conn)
+            conn.commit()
+            return result
 
     return _work(conn)
 
