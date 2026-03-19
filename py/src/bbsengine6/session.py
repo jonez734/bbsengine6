@@ -68,6 +68,7 @@ def start(args, **kwargs):
             else:
                 io.echo(f"bbsengine6.session.start.140: {session=}", level="debug")
                 currentsessionid = session["id"]
+                conn.commit()
         else:
             io.echo(
                 f"bbsengine6.session.start.160: reading {currentsessionid=}",
