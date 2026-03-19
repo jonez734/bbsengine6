@@ -239,7 +239,6 @@ def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, 
         yield conn
     finally:
         pool.putconn(conn)
-        pool.putconn(conn)
 
 
 # def buildkwargs(args, **kwargs):
