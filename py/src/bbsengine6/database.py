@@ -255,22 +255,27 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
     primarykey = kwargs.get("primarykey", "id")
     _mogrify = kwargs.get("mogrify", False)
     updatepk = kwargs.get("updatepk", False)
-    commit = kwargs.get("commit", False)
+    commit = kwargs.get("commit", True)
 
     def _work(cur):
         _items = copy.deepcopy(items)
         if primarykey in _items and updatepk is False:
             del _items[primarykey]
 
-        query = sql.SQL(f"update {_table_identifier(table)} set ")
+        query = sql.SQL("update ") + _table_identifier(table) + sql.SQL(" set ")
         params = []
         dat = []
         for k, v in _items.items():
-            params.append(sql.SQL(f"{sql.Identifier(k)} = %s"))
+            params.append(sql.Identifier(k) + sql.SQL(" = %s"))
             dat.append(v)
 
-        query += sql.SQL(", ").join(params)
-        query = sql.SQL(f"{query} where {sql.Identifier(primarykey)} = %s")
+        query = (
+            query
+            + sql.SQL(", ").join(params)
+            + sql.SQL(" where ")
+            + sql.Identifier(primarykey)
+            + sql.SQL(" = %s")
+        )
         dat.append(pk)
 
         cur.execute(query, dat)
@@ -309,6 +314,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
     primarykey = kwargs.get("primarykey", "id")
     returnid = kwargs.get("returnid", True)
     _mogrify = kwargs.get("mogrify", True)
+    commit = kwargs.get("commit", True)
 
     #  cur = kwargs.get("cur", None)
 
@@ -326,7 +332,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
         if k == "datecreatedepoch":
             del items[k]
 
-    query = sql.SQL(f"insert into {_table_identifier(table)}(")
+    query = sql.SQL("insert into ") + _table_identifier(table) + sql.SQL("(")
     query = query + sql.SQL(", ").join([sql.Identifier(c) for c in columns])
     query = query + sql.SQL(") values (")
 
@@ -345,8 +351,12 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
         else:
             dat.append(v)
     if returnid is True:
-        query = sql.SQL(
-            f"{query} returning {_table_identifier(table)}.{sql.Identifier(primarykey)}"
+        query = (
+            query
+            + sql.SQL(" returning ")
+            + _table_identifier(table)
+            + sql.SQL(".")
+            + sql.Identifier(primarykey)
         )
 
     def _work(conn):
@@ -355,12 +365,16 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
             if returnid is True:
                 res = cur.fetchone()
                 if res is None:
-                    return False
-                if primarykey in res:
-                    return res[primarykey]
+                    returnval = False
+                elif primarykey in res:
+                    returnval = res[primarykey]
                 else:
-                    return False
-        return True
+                    returnval = False
+            else:
+                returnval = True
+        if commit is True:
+            conn.commit()
+        return returnval
 
     try:
         conn = kwargs.get("conn", None)
