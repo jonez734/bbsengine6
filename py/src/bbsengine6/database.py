@@ -155,8 +155,11 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
     return " ".join(components)
 
 
+_pool_cache: dict = {}
+
+
 def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
-    """Create a connection pool to PostgreSQL.
+    """Get or create a connection pool to PostgreSQL.
 
     Args:
       args: Application args for DSN construction
@@ -167,8 +170,23 @@ def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
     """
     dsn = make_dsn(args, **kwargs)
 
-    pool = ConnectionPool(dsn, min_size=10, max_size=100, timeout=5, open=True)
-    return pool
+    if dsn not in _pool_cache or _pool_cache[dsn].closed:
+        _pool_cache[dsn] = ConnectionPool(
+            dsn, min_size=10, max_size=100, timeout=5, open=True
+        )
+
+    return _pool_cache[dsn]
+
+
+def reset_pool_cache() -> None:
+    """Reset the pool cache. Call this in tests."""
+    global _pool_cache
+    for pool in _pool_cache.values():
+        try:
+            pool.close()
+        except Exception:
+            pass
+    _pool_cache = {}
 
 
 def transaction(conn: Any, **kwargs: Any) -> Any:

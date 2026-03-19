@@ -17,6 +17,8 @@ def _cleanup_pools() -> None:
     import threading
     import time
 
+    database.reset_pool_cache()
+
     for pool in list(_tracked_pools):
         try:
             pool.close()
