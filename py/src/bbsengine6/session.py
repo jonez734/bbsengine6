@@ -103,12 +103,14 @@ def getmembersession(args, moniker=None, **kwargs):
             rec = cur.fetchone()
             return build(rec)
 
-    conn = kwargs.get("conn", None)
+    conn = kwargs.pop("conn", None)
     if moniker is None:
         moniker = member.getcurrentmoniker(args, conn=conn, **kwargs)
         if moniker is None:
             io.echo("getmembersession.100: You do not exist! Go Away!", level="error")
             return None
+    else:
+        kwargs["conn"] = conn  # restore for later use
 
     if conn is not None:
         result = _work(conn)
