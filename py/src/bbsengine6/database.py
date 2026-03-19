@@ -267,7 +267,12 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
         dat = []
         for k, v in _items.items():
             params.append(sql.Identifier(k) + sql.SQL(" = %s"))
-            dat.append(v)
+            if type(v) is dict:
+                dat.append(Jsonb(v))
+            elif type(v) is list:
+                dat.append(Jsonb(v))
+            else:
+                dat.append(v)
 
         query = (
             query
