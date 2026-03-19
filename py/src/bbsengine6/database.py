@@ -241,6 +241,33 @@ def connect(args: Any, pool: Any = None, **kwargs: Any) -> Generator[Any, None, 
         pool.putconn(conn)
 
 
+def with_connection(args, pool, callback, **kwargs):
+    """Execute a callback with a database connection.
+
+    If conn is passed, uses it directly. Otherwise gets connection from pool.
+    Always commits before returning connection to pool.
+
+    Args:
+      args: Application args
+      pool: ConnectionPool
+      callback: Function that takes conn and returns result
+      **kwargs: Optional conn, pool overrides
+
+    Returns:
+      Result from callback
+    """
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        result = callback(conn)
+        conn.commit()
+        return result
+
+    with connect(args, pool=pool) as conn:
+        result = callback(conn)
+        conn.commit()
+        return result
+
+
 # def buildkwargs(args, **kwargs):
 #    # Set default values from args if not already present in kwargs
 #    if "dbname" not in kwargs and "databasename" in args:
