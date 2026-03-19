@@ -765,7 +765,9 @@ def exists(args: Any, databasename: str, **kwargs: Any) -> bool:
             dat = (databasename,)
             with cursor(conn) as cur:
                 cur.execute(sql, dat)
-                return False if cur.rowcount == 0 else True
+                result = False if cur.rowcount == 0 else True
+            conn.commit()
+            return result
     except psycopg.DatabaseError as e:
         io.echo_traceback(f"bbsengine6.database.exists.200: {e}")
         return False
