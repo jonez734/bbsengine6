@@ -286,14 +286,19 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
     def _convert_value(v):
         """Convert values to types psycopg can handle."""
         if isinstance(v, type):
-            # Handle type objects (like datetime.datetime) - convert to string representation
             return str(v)
+        if isinstance(v, Jsonb):
+            # Jsonb objects are already in the correct format for psycopg
+            return v
         if isinstance(v, dict):
             return Jsonb(v)
         elif isinstance(v, list):
             return Jsonb(v)
         elif isinstance(v, datetime.datetime):
             return v.isoformat()
+        elif v is not None and not isinstance(v, (str, int, float, bool)):
+            # Safety check: convert anything else that might not be serializable
+            return str(v)
         return v
 
     def _work(cur):
