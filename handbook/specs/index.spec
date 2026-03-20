@@ -1,12 +1,12 @@
-# bbsengine6 v0.0.1.dev Master Specification
+# bbsengine6 Master Specification
 
-**Version:** v0.0.1.dev  
+**Version:** 0.0.1.dev  
 **Last Updated:** 2026-02-23  
 **Target Audience:** Developers & Architects
 
 ## Overview
 
-bbsengine6 v0.0.1.dev is a comprehensive Bulletin Board System (BBS) engine written in Python, PHP, and JavaScript with a PostgreSQL database backend. It provides both terminal-based and web-based interfaces for running bulletin board systems with features including user authentication, messaging, forums, and a modular plugin system for extensibility.
+bbsengine6 is a comprehensive Bulletin Board System (BBS) engine written in Python, PHP, and JavaScript with a PostgreSQL database backend. It provides both terminal-based and web-based interfaces for running bulletin board systems with features including user authentication, messaging, forums, and a modular plugin system for extensibility.
 
 ### Quick Facts
 
@@ -230,16 +230,14 @@ bbsengine6/
 ├── skin/                        # CSS/SCSS styling
 ├── smarty/                      # Template plugins
 └── handbook/                    # Documentation
-    ├── bbsengine6.spec          # Master spec index
     └── specs/                   # Specification files
+        ├── index.spec          # Master spec index
         ├── architecture.spec
         ├── modules.spec
         ├── flows.spec
         ├── web.spec
         ├── dependencies.spec
-        ├── decisions.spec
-        ├── index.spec
-        └── ...
+        └── decisions.spec
 ```
 
 ---
@@ -278,5 +276,5 @@ To dive deeper into the system:
 
 ---
 
-*Master Specification for bbsengine6 v0.0.1.dev*  
+*Master Specification for bbsengine6*  
 *For questions or updates, refer to the main handbook documentation*

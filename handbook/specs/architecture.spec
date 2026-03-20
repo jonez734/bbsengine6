@@ -1,6 +1,6 @@
-# bbsengine6 v0.0.1.dev Architecture Specification
+# bbsengine6 Architecture Specification
 
-**Version:** v0.0.1.dev  
+**Version:** 0.0.1.dev  
 **Last Updated:** 2026-02-23
 
 ## Table of Contents
@@ -15,7 +15,7 @@
 
 ## Layered Architecture
 
-bbsengine6 v0.0.1.dev follows a **4-layer architectural pattern**:
+bbsengine6 follows a **4-layer architectural pattern**:
 
 ### Layer 1: Data Layer (Foundation)
 
@@ -623,7 +623,7 @@ The module system overlays across layers 2 and 3, allowing dynamic loading of mo
 
 ## Domain-Based Organization
 
-bbsengine6 v0.0.1.dev can also be viewed as a collection of **feature domains**, each with supporting modules:
+bbsengine6 can also be viewed as a collection of **feature domains**, each with supporting modules:
 
 ### Domain 1: Session Management
 
@@ -1126,4 +1126,4 @@ User's Terminal Display
 
 ---
 
-*Specification for bbsengine6 v0.0.1.dev Architecture*
+*Specification for bbsengine6 Architecture*

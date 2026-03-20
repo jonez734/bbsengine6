@@ -1,6 +1,6 @@
-# bbsengine6 v0.0.1.dev Module Dependencies Specification
+# bbsengine6 Module Dependencies Specification
 
-**Version:** v0.0.1.dev  
+**Version:** 0.0.1.dev  
 **Last Updated:** 2026-02-23
 
 This document describes module dependencies, their rationale, and how modules relate to each other.
@@ -446,7 +446,7 @@ io.getch() → expects HTTP POST
 
 ### Current Status: NONE
 
-bbsengine6 v0.0.1.dev has **no circular dependencies**.
+bbsengine6 has **no circular dependencies**.
 
 This is achieved through:
 
@@ -648,4 +648,4 @@ CREATE INDEX idx_blurb_folderid ON engine.__blurb(folderid);
 
 ---
 
-*Module Dependencies Specification for bbsengine6 v0.0.1.dev*
+*Module Dependencies Specification for bbsengine6*

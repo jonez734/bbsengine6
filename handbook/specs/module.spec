@@ -2,7 +2,7 @@
 
 ## Overview
 
-`module.py` provides the runtime plugin loading, validation, access control, and execution framework for bbsengine6 v0.0.1.dev. It handles dynamic module discovery, lifecycle management, and user-facing help.
+`module.py` provides the runtime plugin loading, validation, access control, and execution framework for bbsengine6. It handles dynamic module discovery, lifecycle management, and user-facing help.
 
 **File:** `bbsengine6/module.py`
 **Size:** ~359 lines

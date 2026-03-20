@@ -1,6 +1,6 @@
-# bbsengine6 v0.0.1.dev Web Layer Specification
+# bbsengine6 Web Layer Specification
 
-**Version:** v0.0.1.dev  
+**Version:** 0.0.1.dev  
 **Last Updated:** 2026-02-23
 
 This document describes the complete web layer architecture, including PHP endpoints, Smarty template integration, JavaScript interaction, and connection to the Python backend.
@@ -19,7 +19,7 @@ This document describes the complete web layer architecture, including PHP endpo
 
 ## Web Layer Architecture
 
-The web layer provides HTTP access to bbsengine6 v0.0.1.dev functionality through Apache web server and PHP.
+The web layer provides HTTP access to bbsengine6 functionality through Apache web server and PHP.
 
 ### Component Stack
 
@@ -946,7 +946,7 @@ LIMIT 20 OFFSET (page - 1) * 20
 
 **Authentication:** None
 
-**Purpose:** Display information about bbsengine6 v0.0.1.dev
+**Purpose:** Display information about bbsengine6
 
 **Response:**
 - Features overview
@@ -1209,7 +1209,7 @@ $('#loginForm').on('submit', function(e) {
 
 ### Architecture
 
-The web layer is **secondary** in bbsengine6 v0.0.1.dev. The primary application is the Python-based terminal interface. The web layer can optionally call Python backend for certain operations.
+The web layer is **secondary** in bbsengine6. The primary application is the Python-based terminal interface. The web layer can optionally call Python backend for certain operations.
 
 ```
 Web Layer (PHP)
@@ -1340,4 +1340,4 @@ $member = json_decode($response, true);
 
 ---
 
-*Web Layer Specification for bbsengine6 v0.0.1.dev*
+*Web Layer Specification for bbsengine6*
