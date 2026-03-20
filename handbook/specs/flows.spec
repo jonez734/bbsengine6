@@ -1,9 +1,9 @@
-# BBSEngine v6.0 Data Flow Specifications
+# bbsengine6 v0.0.1.dev Data Flow Specifications
 
-**Version:** 6.0  
+**Version:** v0.0.1.dev  
 **Last Updated:** 2026-02-23
 
-This document describes how data flows through BBSEngine v6.0 during critical operations, both at high level and in detailed sequence form.
+This document describes how data flows through bbsengine6 v0.0.1.dev during critical operations, both at high level and in detailed sequence form.
 
 ## Table of Contents
 
@@ -784,4 +784,4 @@ module.run(modulename)
 
 ---
 
-*Data Flow Specification for BBSEngine v6.0*
+*Data Flow Specification for bbsengine6 v0.0.1.dev*

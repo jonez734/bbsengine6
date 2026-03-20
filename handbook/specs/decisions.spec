@@ -1,9 +1,9 @@
-# BBSEngine v6.0 Architectural Decisions Specification
+# bbsengine6 v0.0.1.dev Architectural Decisions Specification
 
-**Version:** 6.0  
+**Version:** v0.0.1.dev  
 **Last Updated:** 2026-02-23
 
-This document explains the major architectural decisions made in BBSEngine v6.0, the rationale behind them, and alternatives that were considered.
+This document explains the major architectural decisions made in bbsengine6 v0.0.1.dev, the rationale behind them, and alternatives that were considered.
 
 ## Table of Contents
 
@@ -22,7 +22,7 @@ This document explains the major architectural decisions made in BBSEngine v6.0,
 
 ### The Decision
 
-BBSEngine v6.0 uses a **4-layer architecture**:
+bbsengine6 v0.0.1.dev uses a **4-layer architecture**:
 1. **Data Layer** - PostgreSQL database
 2. **Business Logic Layer** - Session, member, module, message management
 3. **Presentation Layer** - Terminal UI widgets and web interface
@@ -104,7 +104,7 @@ Service 3: Session service
 
 ### The Decision
 
-BBSEngine v6.0 implements a **runtime-loadable plugin system** via `module.py`:
+bbsengine6 v0.0.1.dev implements a **runtime-loadable plugin system** via `module.py`:
 - Modules are Python packages with standard interface
 - Required functions: `init()`, `access()`, `buildargs()`, `main()`
 - Loaded dynamically at runtime
@@ -186,7 +186,7 @@ import games, forum
 
 ### The Decision
 
-BBSEngine v6.0 is **designed primarily for terminal access**:
+bbsengine6 v0.0.1.dev is **designed primarily for terminal access**:
 - Rich terminal UI (colors, widgets, keyboard navigation)
 - Web interface is secondary
 - Python backend is terminal-optimized
@@ -268,7 +268,7 @@ PyQt/GTK Desktop Application
 
 ### The Decision
 
-BBSEngine v6.0 uses **3 languages**:
+bbsengine6 v0.0.1.dev uses **3 languages**:
 - **Python** - Core application logic
 - **PHP** - Web interface (secondary)
 - **JavaScript** - Client-side interactivity (web only)
@@ -356,7 +356,7 @@ Node.js service: Web frontend
 
 ### The Decision
 
-BBSEngine v6.0 uses **PostgreSQL 12+** as the primary database:
+bbsengine6 v0.0.1.dev uses **PostgreSQL 12+** as the primary database:
 - Advanced SQL features (JSON, ltree, UUID)
 - Roles and permissions system
 - Connection pooling support
@@ -540,7 +540,7 @@ member = Member.query.get(123)
 
 ### The Decision
 
-BBSEngine v6.0 is designed to have **zero circular dependencies**:
+bbsengine6 v0.0.1.dev is designed to have **zero circular dependencies**:
 - Data layer imports nothing upward
 - Util layer has no imports of dependent modules
 - Module system is cleanly meta-layer
@@ -613,7 +613,7 @@ from module_a import func_a
 
 ### The Decision
 
-BBSEngine v6.0 implements **rich terminal UI** with:
+bbsengine6 v0.0.1.dev implements **rich terminal UI** with:
 - ANSI color support (16, 256, 24-bit RGB)
 - Interactive widgets (menu, listbox, form, editor)
 - Keyboard navigation
@@ -779,4 +779,4 @@ Alternative: Shared ORM (requires complex middleware)
 
 ---
 
-*Architectural Decisions for BBSEngine v6.0*
+*Architectural Decisions for bbsengine6 v0.0.1.dev*

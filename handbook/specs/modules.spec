@@ -1,9 +1,9 @@
-# BBSEngine v6.0 Module Specifications
+# bbsengine6 v0.0.1.dev Module Specifications
 
-**Version:** 6.0  
+**Version:** v0.0.1.dev  
 **Last Updated:** 2026-02-23
 
-This document provides complete specifications for all modules in BBSEngine v6.0, including function signatures, parameters, return types, and brief descriptions.
+This document provides complete specifications for all modules in bbsengine6 v0.0.1.dev, including function signatures, parameters, return types, and brief descriptions.
 
 ## Table of Contents
 
@@ -1601,4 +1601,4 @@ Any          - Variable return type
 
 ---
 
-*Module Specifications for BBSEngine v6.0*
+*Module Specifications for bbsengine6 v0.0.1.dev*
