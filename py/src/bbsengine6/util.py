@@ -1,214 +1,183 @@
-import os
-import re
-import random
-import syslog
+# util - general-purpose utilities for the BBS engine
 
-#import ttyio6 as ttyio
-from . import io, input, database
+import logging
+import logging.handlers
+import os
+import random
+import re
+import threading
+from datetime import datetime
+from typing import Optional
+
+from . import database, input, io
 
 LOGGER_NAME = "bbsengine6"
 
-def hr(acs=True, width=None, end="\n"):
-  if width is None:
-    width = io.terminal.width()-2
-  io.echo(f" {{boxcolor}}{{hline:{width}}}{{/all}}", end=end)
-  return True
+_log_lock = threading.Lock()
+_default_handler: Optional[logging.handlers.SysLogHandler] = None
 
-def heading(title:str, **kwargs):
-  width = io.terminal.width() - 4
-  w = width - len(title)
-  if int(w % 2) == 0:
-    repeat = int(w/2)
-    leftpadding  = " "*int(repeat)
-    rightpadding = " "*int(repeat)
-  else:
-    repeat = int(w-2)/2
-    leftpadding  = " "*int(repeat+2)
-    rightpadding = " "*int(repeat+1)
 
-  io.echo(f"{{/all}}{{normalcolor}} {{boxcolor}}{{ulcorner}}{{hline:{width}}}{{urcorner}}", wordwrap=False, end="\n")
-  io.echo(f" {{boxcolor}}{{vline}}{{titlecolor}}{leftpadding}{title}{rightpadding}{{/all}}{{boxcolor}}{{vline}}", wordwrap=False, end="\n")
-  io.echo(f" {{llcorner}}{{hline:{width}}}{{lrcorner}}{{/all}}{{f6}}", wordwrap=False, end="")
-  return
+def _get_default_handler() -> logging.handlers.SysLogHandler:
+    global _default_handler
+    if _default_handler is None:
+        _default_handler = logging.handlers.SysLogHandler(address="/dev/log")
+        _default_handler.setFormatter(
+            logging.Formatter("%(name)s[%(process)d]: %(levelname)s %(message)s")
+        )
+    return _default_handler
 
-# @since 20230509 copied from bbsengine5.py
-def pluralize(amount:int, singular:str="singular", plural:str="plural", quantity:bool=True, emoji:str="", determiner:str="a", **kw) -> str:
-  if amount is None or amount == 0:
+
+def hr(acs: bool = True, width: Optional[int] = None, end: str = "\n") -> bool:
+    if width is None:
+        width = io.terminal.width() - 2
+    io.echo(f" {{boxcolor}}{{hline:{width}}}{{/all}}", end=end)
+    return True
+
+
+def heading(title: str, **kwargs) -> None:
+    width = io.terminal.width() - 4
+    w = width - len(title)
+    if w % 2 == 0:
+        repeat = w // 2
+        leftpadding = " " * repeat
+        rightpadding = " " * repeat
+    else:
+        repeat = (w - 2) // 2
+        leftpadding = " " * (repeat + 2)
+        rightpadding = " " * (repeat + 1)
+
+    io.echo(
+        f"{{/all}}{{normalcolor}} {{boxcolor}}{{ulcorner}}{{hline:{width}}}{{urcorner}}",
+        wordwrap=False,
+        end="\n",
+    )
+    io.echo(
+        f" {{boxcolor}}{{vline}}{{titlecolor}}{leftpadding}{title}{rightpadding}{{/all}}{{boxcolor}}{{vline}}",
+        wordwrap=False,
+        end="\n",
+    )
+    io.echo(
+        f" {{llcorner}}{{hline:{width}}}{{lrcorner}}{{/all}}{{f6}}",
+        wordwrap=False,
+        end="",
+    )
+
+
+def pluralize(
+    amount: int,
+    singular: str = "singular",
+    plural: str = "plural",
+    quantity: bool = True,
+    emoji: str = "",
+    determiner: str = "a",
+    **kw,
+) -> str:
+    if amount is None or amount == 0:
+        if quantity is True:
+            return f"no {emoji}{plural}"
+        return plural
+
     if quantity is True:
-      return f"no {emoji}{plural}"
-    return plural
+        if amount == 1:
+            if determiner != "":
+                return f"{emoji} {determiner} {singular}"
+            return f"{emoji}{amount} {singular}"
+        return f"{emoji}{amount:n} {plural}"
 
-  if quantity is True:
     if amount == 1:
-      if determiner != "":
-        return f"{emoji} {determiner} {singular}"
-      else:
-        return f"{emoji}{amount} {singular}"
-    return f"{emoji}{amount:n} {plural}"
-
-  if amount == 1:
-    return f"{emoji}{singular}"
-  else:
+        return f"{emoji}{singular}"
     return f"{emoji}{plural}"
 
-# @since 20230510 copied from bbsengine5
-def datestamp(t=None, format:str="%Y-%m-%d %I:%M%P %Z (%a)") -> str:
-#  import getdate3 as getdate
 
-  from dateutil.tz import tzlocal
-  from datetime import datetime
-  from time import tzset
+def datestamp(
+    t: Optional[object] = None, format: str = "%Y-%m-%d %I:%M%P %Z (%a)"
+) -> str:
+    from dateutil.tz import tzlocal
+    from time import tzset
 
-  # ttyio.echo("bbsengine.datestamp.100: type(t)=%r" % (type(t)), level="debug")
+    tzset()
 
-  tzset()
+    if isinstance(t, (int, float)):
+        t = datetime.fromtimestamp(t, tzinfo=tzlocal())
+    elif t is None:
+        t = datetime.now(tzlocal())
+    elif isinstance(t, str):
+        t = input.getdate(t)
+        if isinstance(t, str):
+            return t
 
-  if type(t) == int or type(t) == float:
-    t = datetime.fromtimestamp(t, tzinfo=tzlocal())
-  elif t is None:
-    t = datetime.now(tzlocal())
-  elif type(t) == str:
-    t = input.getdate(t)
-#    ttyio.echo(f"after getdate: {t=} {type(t)=}")
-    if type(t) is str:
-#      ttyio.echo(f"after getdate(), {type(t)=}")
-      return t
+    assert isinstance(t, datetime), f"datestamp: unexpected type {type(t)} for t"
+    return t.strftime(format)
 
-  return t.strftime(format)
 
-# @since 20230523 copied from bbsengine5
-def inputpassword(prompt:str="password: ", mask:str="X", **kwargs) -> str:
-  return io.inputstring(prompt, "", mask=mask, **kwargs)
+def inputpassword(prompt: str = "password: ", mask: str = "X", **kwargs) -> str:
+    return io.inputstring(prompt, "", mask=mask, **kwargs)
 
-  buf = ""
-  done = False
-  io.echo(prompt, end="", flush=True)
-  while not done:
-    ch = io.getch()
-#    ttyio.echo("ch=%r" % (ch))
-    if ch == "KEY_ENTER":
-      done = True
-      break
-    if len(ch) == 1:
-      buf += ch
-      io.echo(mask, end="", flush=True)
-  # ttyio.echo(buf)
-  return buf
 
-# @see https://stackoverflow.com/a/53981846
-# @since 20230523 copied from bbsengine5
-def oxfordcomma(seq, conjunction:str="and") -> str:
+def oxfordcomma(seq, conjunction: str = "and") -> Optional[str]:
     """Return a grammatically correct human readable string (with an Oxford comma)."""
     if seq is None:
-      return None
+        return None
 
     seq = [str(s) for s in seq]
 
-#    ttyio.echo("seq=%r" % (seq))
     if len(seq) == 0:
-      return ""
+        return ""
 
     if len(seq) < 3:
-      buf = f"{{var:sepcolor}} {conjunction} {{var:valuecolor}}"
-      return f"{{var:valuecolor}}{buf.join(seq)}" # itemcolor+buf.join(seq) # " and ".join(seq)
+        buf = f"{{var:sepcolor}} {conjunction} {{var:valuecolor}}"
+        return f"{{var:valuecolor}}{buf.join(seq)}"
 
     buf = f"{{var:sepcolor}}, {{var:valuecolor}}"
     return f"{{var:valuecolor}}{buf.join(seq[:-1])}{{var:sepcolor}}, {conjunction} {{var:valuecolor}}{seq[-1]}"
 
-# ---------
-# logging
-# ---------
-import logging
-import logging.handlers
 
-# default syslog handler
-default_handler = logging.handlers.SysLogHandler(address="/dev/log")
-default_formatter = logging.Formatter('%(name)s[%(process)d]: %(levelname)s %(message)s')
-default_handler.setFormatter(default_formatter)
-
-# @since 20251006 copied from asimov
-def logentry(message, *, level=logging.INFO, handler=None, formatter=None, logger_name=LOGGER_NAME):
-    """
-    Write a log entry to syslog (by default), with optional handler/formatter overrides.
-
-    Args:
-        message (str): The log message.
-        level (int): Logging level (default=logging.INFO).
-        handler (logging.Handler, optional): Custom logging handler.
-        formatter (logging.Formatter, optional): Custom formatter.
-        logger_name (str): Name for the logger (default="myapp").
-    """
-
-    h = handler or default_handler
-    f = formatter or default_formatter
-
-    # Ensure formatter is applied
+def logentry(
+    message: str,
+    *,
+    level: object = logging.INFO,
+    handler: Optional[logging.Handler] = None,
+    formatter: Optional[logging.Formatter] = None,
+    logger_name: str = LOGGER_NAME,
+) -> None:
+    h = handler or _get_default_handler()
+    f = formatter or h.formatter
     h.setFormatter(f)
 
     logger = logging.getLogger(logger_name)
-    logger.setLevel(logging.DEBUG)   # capture all levels
-    if not any(isinstance(x, type(h)) for x in logger.handlers):
-        logger.addHandler(h)
+    logger.setLevel(logging.DEBUG)
+
+    with _log_lock:
+        if not any(isinstance(x, type(h)) for x in logger.handlers):
+            logger.addHandler(h)
 
     levels = {
-        "debug":    logging.DEBUG,
-        "info":     logging.INFO,
-        "warn":     logging.WARNING,
-        "warning":  logging.WARNING,
-        "error":    logging.ERROR,
+        "debug": logging.DEBUG,
+        "info": logging.INFO,
+        "warn": logging.WARNING,
+        "warning": logging.WARNING,
+        "error": logging.ERROR,
         "critical": logging.CRITICAL,
-#        "exception":logging.EXCEPTION,
     }
 
-    if type(level) == int:
-      return logger.log(level, message)
+    if isinstance(level, int):
+        logger.log(level, message)
+        return
 
-    level = level.lower()
-    if level in levels:
-        level = levels[level]
-    else:
-        level = logging.INFO
+    level_str = str(level).lower()
+    logger.log(levels.get(level_str, logging.INFO), message)
 
-    logger.log(level, message)
-    return
 
-#def logentry(message, output=True, level=None, priority=syslog.LOG_INFO, strip=False, datestamp=True, prg=None):
-#  import logging
-#
-#  if level is not None:
-#    if level == "debug":
-#      logging.debug(message)
-#      message = f"{{var:level.debug}}** debug ** {message}{{/all}}"
-#    elif level == "info":
-#      logging.info(message)
-#      message = f"{{var:level.info}}** info ** {message}{{/all}}"
-#    elif level == "warn" or level == "warning":
-#      logging.warning(message)
-#      message = f"{{var:level.warn}}** warn ** {message}{{/all}}"
-#    elif level == "error":
-#      logging.error(message)
-#      message = f"{{var:level.error}}** error ** {message}{{/all}}"
-#    elif level == "critical" or level == "crit":
-#      logging.critical(message)
-#      message = f"{{var:level.crit}}** critical ** {message}{{/all}}"
-#
-#  syslog.syslog(priority, io.tostr(message, strip=True))
-#
-#  if output is True:
-#    io.echo(message, strip=strip, datestamp=datestamp)
-#  return
-
-# @since 20230612 copied from bbsengine5
-# @see https://rosettacode.org/wiki/Range_extraction#Python
-def collapserange(lst:list):
-    'Yield 2-tuple ranges or 1-tuple single elements from list of increasing ints'
+def collapserange(lst: list):
+    "Yield 2-tuple ranges or 1-tuple single elements from list of increasing ints"
     lenlst = len(lst)
     i = 0
     while i < lenlst:
         low = lst[i]
-        while i <lenlst-1 and lst[i]+1 == lst[i+1]: i +=1
+        while i < lenlst - 1 and lst[i] + 1 == lst[i + 1]:
+            i += 1
         hi = lst[i]
-        if   hi - low >= 2:
+        if hi - low >= 2:
             yield (low, hi)
         elif hi - low == 1:
             yield (low,)
@@ -217,284 +186,248 @@ def collapserange(lst:list):
             yield (low,)
         i += 1
 
-# @since 20230612 copied from bbsengine5
-def expandrange(txt:str) -> list:
-  "accepts an str with a range expression, returns a list"
-  elle = []
-  for r in txt.split(','):
-    if '-' in r[1:]:
-      r0, r1 = r[1:].split('-', 1)
-      elle += range(int(r[0] + r0), int(r1) + 1)
-    else:
-      elle.append(int(r))
-  return list(set(elle))
+
+def expandrange(txt: str) -> list:
+    "accepts an str with a range expression, returns a list"
+    elle = []
+    for r in txt.split(","):
+        if "-" in r[1:]:
+            r0, r1 = r[1:].split("-", 1)
+            elle += range(int(r[0] + r0), int(r1) + 1)
+        else:
+            elle.append(int(r))
+    return list(set(elle))
+
 
 def rangestr(ranges):
-    return ','.join( (('%i-%i' % r) if len(r) == 2 else '%i' % r) for r in ranges )
+    return ",".join(("%i-%i" % r if len(r) == 2 else "%i" % r) for r in ranges)
+
 
 def printr(ranges):
-  print(rangestr(ranges))
+    print(rangestr(ranges))
 
-# @since 20230618 copied from bbsengine5
-def filedisplay(res, **kw) -> None: #more=True, width=None) -> None:
-  more = kw["more"] if "more" in kw else True
-  width = kw["width"] if "width" in kw else None
-  indent = kw["indent"] if "indent" in kw else 0
-  args = kw["args"] if "args" in kw else None
 
-#  ttyio.echo("filename=%r" % (filename), level="debug")
-  if width is None:
-    width = io.terminal.width()
+def filedisplay(res, **kw) -> None:
+    width = kw["width"] if "width" in kw else None
+    indent = kw["indent"] if "indent" in kw else 0
 
-  buf = ""
-  with res as r:
-    for elle in r:
-      buf += elle # rstrip
-#  fp = open(filename, "r")
-#  buf = fp.read()
-#  fp.close()
-  io.echo(buf, width=width, indent=indent, wordwrap=True)
-#  height = ttyio.getterminalheight()-1
-#  ttyio.echo("filedisplay.100: filename=%r type=%r" % (filename, type(filename)), level="debug")
-#  with filename as f:
-#    for line in f:
-#      ttyio.echo(line)
+    if width is None:
+        width = io.terminal.width()
 
-#    pager(f, width=width, height=height, indent=indent)
-  io.echo("{/all}{f6}")
+    buf = ""
+    with res as r:
+        for elle in r:
+            buf += elle
+    io.echo(buf, width=width, indent=indent, wordwrap=True)
+    io.echo("{/all}{f6}")
 
-# @since 20230715 copied from bbsengine5
-# mode = single, average, mean, list, ....?
-def diceroll(sides:int=6, count:int=1, mode:str="single"):
-  if mode == "single":
-    return random.randint(1, sides)
 
-  result = []
-  for x in range(1, count+1):
-    result.append(random.randint(1, sides))
+_dice_rng = random.SystemRandom()
 
-  if mode == "list":
-    return result
-  elif mode == "average":
-    avg = 0.0
-    total = 0
-    for x in result:
-      total += x
-    return total/len(result)
-  elif mode == "median":
-    median = 0.0
-    # ttyio.echo("result=%r" % (result))
-    result.sort()
-    # ttyio.echo("result=%r" % (result))
-    middle = int(len(result)//2)
-    if len(result) % 2 == 1:
-      return result[middle]
-    else:
-      return int((result[middle-1] + result[middle]) / 2.0)
-  else:
+
+def diceroll(sides: int = 6, count: int = 1, mode: str = "single"):
+    if mode == "single":
+        return _dice_rng.randint(1, sides)
+
+    result = []
+    for x in range(1, count + 1):
+        result.append(_dice_rng.randint(1, sides))
+
+    if mode == "list":
+        return result
+    if mode == "average":
+        total = sum(result)
+        return total / len(result)
+    if mode == "median":
+        result.sort()
+        middle = len(result) // 2
+        if len(result) % 2 == 1:
+            return result[middle]
+        return int((result[middle - 1] + result[middle]) / 2.0)
     return None
 
-def verifyDirExistsWritable(dirname:str, **kw) -> bool:
 
-  dirname = os.path.expanduser(dirname)
-  dirname = os.path.expandvars(dirname)
-  io.echo(f"verifyDirExistsWritable.100: {dirname=}", level="debug")
+def verifyDirExistsWritable(dirname: str, **kw) -> bool:
+    dirname = os.path.expanduser(dirname)
+    dirname = os.path.expandvars(dirname)
+    io.echo(f"verifyDirExistsWritable.100: {dirname=}", level="debug")
 
-  if os.path.exists(dirname) is False:
-    io.echo(f"{dirname!r} does not exist", level="error")
-    return False
+    if not os.path.exists(dirname):
+        io.echo(f"{dirname!r} does not exist", level="error")
+        return False
 
-  if os.path.isdir(dirname) is False:
-    io.echo(f"{dirname!r} is not a directory", level="error")
-    return False
+    if not os.path.isdir(dirname):
+        io.echo(f"{dirname!r} is not a directory", level="error")
+        return False
 
-  if os.access(dirname, os.W_OK) is False:
-    io.echo(f"{dirname!r} is not writable", level="error")
-    return False
+    if not os.access(dirname, os.W_OK):
+        io.echo(f"{dirname!r} is not writable", level="error")
+        return False
 
-  return True
-
-def verifyFileExistsReadable(filename:str, **kw) -> bool:
-  args = kw["args"] if "args" in kw else None
-
-  filename = os.path.expanduser(filename)
-  filename = os.path.expandvars(filename)
-  if args is not None and args.debug is True:
-    io.echo(f"{filename=}", level="debug")
-  if os.path.exists(filename) is True and os.access(filename, os.R_OK) is True:
     return True
-  return False
+
+
+def verifyFileExistsReadable(filename: str, **kw) -> bool:
+    args = kw.get("args")
+
+    filename = os.path.expanduser(filename)
+    filename = os.path.expandvars(filename)
+    if args is not None and args.debug is True:
+        io.echo(f"{filename=}", level="debug")
+    return os.path.exists(filename) and os.access(filename, os.R_OK)
+
 
 def verifyFileExistsReadableWritable(filename, **kw):
-  args = kw["args"] if "args" in kw else None
+    args = kw.get("args")
 
-  filename = os.path.expanduser(filename)
-  filename = os.path.expandvars(filename)
-  if args is not None and "debug" in args and args.debug is True:
-    io.echo(f"bbsengine6.util.verifyFileExistsReadableWritable.100: {args=} {filename=}")
+    filename = os.path.expanduser(filename)
+    filename = os.path.expandvars(filename)
+    if args is not None and args.debug is True:
+        io.echo(
+            f"bbsengine6.util.verifyFileExistsReadableWritable.100: {args=} {filename=}"
+        )
 
-  if os.path.exists(filename) is False:
-    io.echo(f"{filename!r} does not exist")
-    return False
+    if not os.path.exists(filename):
+        io.echo(f"{filename!r} does not exist")
+        return False
 
-  if os.access(filename, os.W_OK) is False:
-    io.echo(f"{filename!r} is not writable")
-    return False
+    if not os.access(filename, os.W_OK):
+        io.echo(f"{filename!r} is not writable")
+        return False
 
-  if os.access(filename, os.R_OK) is False:
-    io.echo(f"{filename!r} is not readable")
-    return False
+    if not os.access(filename, os.R_OK):
+        io.echo(f"{filename!r} is not readable")
+        return False
 
-  return True
-
-# @since 20240105
-def timedelta(delta):
-  buf = ""
-
-  seconds = delta.total_seconds()
-  minutes = seconds // 60
-  seconds -= minutes * 60
-  hours = minutes // 60
-  minutes -= hours * 60
-  days = hours // 24
-  hours -= days*24
-
-#  if weeks != 0:
-#    buf += f"{weeks}w"
-#  if days != 0:
-#    buf += f"{days}d"
-  if days != 0:
-    buf += f"{days:02.0f}d"
-  if hours != 0:
-    buf += f"{hours:02.0f}h"
-  if minutes != 0:
-    buf += f"{minutes:02.0f}m"
-  if seconds != 0:
-    buf += f"{seconds:02.0f}s"
-  return buf
-
-# @since 20240113
-# copied from bbsengine5
-def getencryptedpassword(args, plaintextpassword:str) -> str:
-  io.echo(f"getencryptedpassword.100: {plaintextpassword=}", level="debug")
-  sql = "select crypt(%s, gen_salt('md5'))" # previously 'bf' which does not work with dovecot
-  dat = (plaintextpassword,)
-  with database.connect(args) as conn:
-    with conn.cursor() as cur:
-      cur.execute(sql, dat)
-      if cur.rowcount == 0:
-        return None
-
-      res = cur.fetchone()
-      return res["crypt"]
-
-def init(args=None, **kw):
-  import time, locale
-
-  locale.setlocale(locale.LC_ALL, "")
-  time.tzset()
-
-#
-# @since 20140831 bbsengine5.php
-# @since 20221107 bbsengine5.py
-# @since 20240509 copied from bbsengine5.py
-# @since 20241125 moved to member
-#def checkpassword(args, plaintext, memberid=None):
-
-# @since 20240921 generated by chatgpt.com
-def checksum(data):
-  crc = 0xffffffff
-  for byte in data:
-    crc ^= byte
-    for _ in range(8):
-      crc = (crc >> 1) ^ (0xedb88320 if (crc & 1) else 0)
-  crc ^= 0xffffffff
-  return f"{crc:08X}"
-
-# @since 20240921 generated by chatgpt.com
-def ltree_to_path(ltree):
-  # Split the ltree path by periods
-  labels = ltree.split('.')
-
-  # Remove the reference to 'top'
-  if labels[0] == 'top':
-    labels.pop(0)
-
-  # Join the remaining labels into a filesystem path with slashes
-  return '/'.join(labels)
-
-def chop_last_element(ltree):
-    labels = ltree.split('.')
-
-#    # If there's only one element, return the original ltree
-#    if len(labels) <= 1:
-#        return ltree
-
-    labels.pop()
-    return '.'.join(labels)
-
-def tobool(value):
-  if value is True or value.lower() == "true" or value.lower() == "t":
     return True
-  return False
 
-def getremoteaddr():
-  import os
-  if "SSH_CONNECTION" in os.environ:
-    return os.environ.get("SSH_CONNECTION", None).split()[0]
-  return None
 
-def getcurrentloginid(args, **kwargs):
-  import os
-  # loginid = os.getlogin()
-  # io.echo(f"bbsengine.util.getcurrentloginid.100: {loginid=}", level="debug")
-  return os.getlogin()
+def timedelta_(delta):
+    buf = ""
 
-# @since 20241212
-def get_safe_path(args, *components, **kwargs):
+    seconds = delta.total_seconds()
+    minutes = seconds // 60
+    seconds -= minutes * 60
+    hours = minutes // 60
+    minutes -= hours * 60
+    days = hours // 24
+    hours -= days * 24
+
+    if days != 0:
+        buf += f"{days:02.0f}d"
+    if hours != 0:
+        buf += f"{hours:02.0f}h"
+    if minutes != 0:
+        buf += f"{minutes:02.0f}m"
+    if seconds != 0:
+        buf += f"{seconds:02.0f}s"
+    return buf
+
+
+def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
+    io.echo(f"getencryptedpassword.100: {plaintextpassword=}", level="debug")
+    sql = "select crypt(%s, gen_salt('md5'))"
+    dat = (plaintextpassword,)
+    with database.connect(args) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, dat)
+            if cur.rowcount == 0:
+                return None
+
+            res = cur.fetchone()
+            return res["crypt"]
+
+
+def init(args=None, **kw) -> None:
+    import locale
+    import time
+
+    locale.setlocale(locale.LC_ALL, "")
+    time.tzset()
+
+
+def checksum(data: bytes) -> str:
+    crc = 0xFFFFFFFF
+    for byte in data:
+        crc ^= byte
+        for _ in range(8):
+            crc = (crc >> 1) ^ (0xEDB88320 if (crc & 1) else 0)
+    crc ^= 0xFFFFFFFF
+    return f"{crc:08X}"
+
+
+def ltree_to_path(ltree: str) -> str:
+    labels = ltree.split(".")
+
+    if labels[0] == "top":
+        labels.pop(0)
+
+    return "/".join(labels)
+
+
+def chop_last_element(ltree: str) -> str:
+    labels = ltree.split(".")
+    labels.pop()
+    return ".".join(labels)
+
+
+def tobool(value) -> bool:
+    if value is True:
+        return True
+    if isinstance(value, str) and value.lower() in ("true", "t"):
+        return True
+    return False
+
+
+def getremoteaddr() -> Optional[str]:
+    val = os.environ.get("SSH_CONNECTION")
+    if val is not None:
+        return val.split()[0]
+    return None
+
+
+def getcurrentloginid(args, **kwargs) -> str:
+    return os.getlogin()
+
+
+def get_safe_path(args, *components, **kwargs) -> str:
     """
     Constructs a safe path by joining multiple path components.
-    Expands environment variables and user home director and normalizes
+    Expands environment variables and user home directory and normalizes.
     """
     if not components:
         raise ValueError("At least one path component must be provided.")
 
-    # Expand environment variables and `~` in all components
-    components = [os.path.expandvars(os.path.expanduser(component)) for component in components]
+    components = [
+        os.path.expandvars(os.path.expanduser(component)) for component in components
+    ]
 
-    # Join all components
     joined_path = os.path.join(*components)
 
-    # Normalize the resulting path
     safe_path = os.path.normpath(joined_path)
 
-    # Ensure the resulting path is absolute
     base_dir = os.path.abspath(components[0])
     if not safe_path.startswith(base_dir):
         raise ValueError("Invalid path: directory traversal detected.")
 
-#    # Ensure the file exists
-#    if not os.path.isfile(safe_path):
-#        raise FileNotFoundError(f"File not found: {safe_path}")
-
     return safe_path
 
-def load_sql(args, resource_name: str, *, package: str = None) -> str:
+
+def load_sql(args, resource_name: str, *, package: Optional[str] = None) -> str:
     """
     Loads an SQL resource file and returns its contents as a string.
     """
-
     try:
-      from importlib.resources import files
+        from importlib.resources import files
     except ImportError:
-      try:
-          from importlib_resources import files  # backport
-      except ImportError:
-          files = None  # will error later if used
+        try:
+            from importlib_resources import files
+        except ImportError:
+            raise ImportError(
+                "load_sql requires 'importlib.resources' (Python 3.9+) or 'importlib_resources'"
+            )
 
-#    import importlib.resources as resources
     import pathlib
-    from typing import Optional
 
     def _resolve_package(package: Optional[str]) -> str:
         if package is not None:
@@ -502,35 +435,32 @@ def load_sql(args, resource_name: str, *, package: str = None) -> str:
         if __package__:
             return __package__ + ".sql"
 
-        # Walk up the directory tree to find the root package (by detecting the first `__init__.py`)
         base_path = pathlib.Path(__file__).resolve()
         while base_path.parent != base_path:
-            # Check if the current directory has an __init__.py (indicating it's a package)
             if (base_path / "__init__.py").exists():
                 return base_path.name + ".sql"
             base_path = base_path.parent
 
-        # If we reached here, we couldn't determine the package — raise an error
         raise ValueError("Unable to determine the package for resource loading")
 
     resolved_package = _resolve_package(package)
-    return files(resolved_package).joinpath(resource_name).read_text(encoding='utf-8')
+    return files(resolved_package).joinpath(resource_name).read_text(encoding="utf-8")
 
-from datetime import datetime
 
 def serialize_datetimes(data):
     result = {}
     for key, subdict in data.items():
         val = subdict.get("value")
         if isinstance(val, datetime):
-            # Use ISO format or str(val) if you prefer
             result[key] = {"value": val.isoformat()}
         else:
             result[key] = subdict
     return result
 
-ANSI_ESCAPE_RE = re.compile(r'\x1b\[[0-9;]*m')
+
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
 
 def strip_ansi(s: str) -> str:
     """Remove ANSI escape sequences from a string for display width measurement."""
-    return ANSI_ESCAPE_RE.sub('', s)
+    return ANSI_ESCAPE_RE.sub("", s)

@@ -29,6 +29,7 @@ BBSEngine6 is a comprehensive Bulletin Board System (BBS) engine written in Pyth
 
 ### 2. [Module Specifications](bbsengine6-modules.spec)
    - Core Python modules (database, session, member, util, menu, listbox, module system)
+   - [util.spec](specs/util.spec) -- General-purpose utilities (display, dates, logging, file ops, passwords)
    - Subpackages (io, console)
    - PHP layer modules
    - JavaScript modules
@@ -216,7 +217,7 @@ bbsengine6/
 │       ├── module.py            # Module/plugin system
 │       ├── menu.py              # Menu widget
 │       ├── listbox.py           # List widget
-│       ├── util.py              # Utilities
+│       ├── util.py              # Utilities ([spec](specs/util.spec))
 │       ├── io/                  # Terminal I/O subpackage
 │       └── console/             # Admin tools
 ├── php/                         # PHP backend
@@ -266,7 +267,7 @@ bbsengine6/
 To dive deeper into the system:
 
 1. Read **[bbsengine6-architecture.spec](bbsengine6-architecture.spec)** for a complete architectural overview
-2. Explore **[bbsengine6-modules.spec](bbsengine6-modules.spec)** for detailed module APIs
+2. Explore **[bbsengine6-modules.spec](bbsengine6-modules.spec)** for detailed module APIs, including **[util.spec](specs/util.spec)**
 3. Study **[bbsengine6-flows.spec](bbsengine6-flows.spec)** to understand critical workflows
 4. Review **[bbsengine6-web.spec](bbsengine6-web.spec)** for web layer integration
 5. Check **[bbsengine6-dependencies.spec](bbsengine6-dependencies.spec)** to understand module coupling
