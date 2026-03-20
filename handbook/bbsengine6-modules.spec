@@ -248,79 +248,107 @@ def authenticate(args: object, loginid: str, password: str, **kwargs)
 
 **Purpose:** Runtime plugin loading, validation, access control, and execution
 
-**File Size:** ~322 lines
+**File Size:** ~359 lines
 
 #### Functions
 
 ```python
-def check(args: object, modulename: str, op: str = "run", **kwargs) 
+def check(args: object, modulename: str, op: str = "run", **kwargs)
   -> bool
   "Check if module operation is allowed for current user"
   "Common ops: 'run', 'edit', 'delete'"
-  
-def load(args: object, modulepath: str) 
+  "Uses _check_params() + inspect.signature() to validate function signatures"
+   
+def load(args: object, modulepath: str)
   -> types.ModuleType
   "Load and return a Python module dynamically"
   "Uses importlib.import_module() to load by full Python module name (e.g. 'mygame.mymodule')"
-  
-def run(args: object, modulename: str, **kwargs) 
+   
+def run(args: object, modulename: str, **kwargs)
   -> Any
   "Execute module main() function with arguments"
-  "Calls: check() → load() → validate_function() → runcallback(main)"
-  
-def runcallback(args: object, callback: Callable, optional: bool = False, **kwargs) 
+  "Handles --help/-h: calls buildargs() and prints help if requested"
+  "Calls: check() → init() → buildargs() → main() via runcallback()"
+   
+def runcallback(args: object, callback: Callable, optional: bool = False, **kwargs)
   -> Any
   "Execute callback function with error handling"
+  "Accepts dotted 'module.func' strings or direct callables"
   "Catches exceptions and displays errors via io.echo()"
-  
-def validate_function(module_name: str, func_name: str, required_signature: Callable) 
+   
+def validate_function(module_name: str, func_name: str, required_signature: Callable)
   -> bool
   "Validate module function exists and matches signature"
-  
-def _check_params(func_name: str, params: dict, required: list, optional_kwargs: bool = False) 
+  "Standalone utility: NOT part of check()/run() flow; uses get_type_hints()"
+   
+def _check_params(func_name: str, params: dict, required: list, optional_kwargs: bool = False)
   -> bool
   "Validate function parameters against requirements"
+  "Used internally by check() to verify function signatures"
+   
+def _is_help_request(argv: list) -> bool
+  "Check if argv contains --help or -h"
+   
+def _create_help_from_docstring(module) -> argparse.ArgumentParser | None
+  "Auto-generate ArgumentParser from module docstring for --help support"
 ```
+
+**Alias:** `runmodule = run` (backward compatibility alias)
 
 **Required Module Interface:**
 Every module must implement these four functions:
 
 ```python
-def init(args: object, **kwargs) 
+def init(args: object, **kwargs)
   -> None
   "Initialize module (called once at startup)"
-  
-def access(args: object, **kwargs) 
+   
+def access(args: object, op: str = "run", **kwargs)
   -> bool
   "Check if current user has access to module"
-  
-def buildargs(args: object, **kwargs) 
-  -> argparse.Namespace
+  "Receives op parameter for granular permission control (e.g. 'run', 'edit')"
+   
+def buildargs(args: object, **kwargs)
+  -> argparse.ArgumentParser | None
   "Build and validate arguments for main()"
-  
-def main(args: object, **kwargs) 
+  "Returns ArgumentParser or None"
+   
+def main(args: object, **kwargs)
   -> Any
   "Execute module functionality"
 ```
 
+All four functions must accept `**kwargs`.
+
 **Module Execution Flow:**
 ```
-1. check() - Query database for access rules
-2. load() - Import Python module from filesystem
-3. validate_function() - Verify init, access, buildargs, main exist
-4. init() - Run module initialization
-5. access() - Check user permission
-6. buildargs() - Parse and validate arguments
-7. main() - Execute module logic
-8. runcallback() - Handle exceptions and return result
+module.run()
+  │
+  ├─ check(modulename, op)
+  │    ├─ importlib.reload() if args.debug is True
+  │    ├─ importlib.import_module()
+  │    ├─ Verify init(), access(), buildargs(), main() exist + callable
+  │    ├─ _check_params() + inspect.signature() to validate each function
+  │    └─ Call m.access(args, op, **kwargs); return False if not True
+  │
+  ├─ runcallback("modulename.init")
+  │
+  ├─ [if --help/-h in argv]
+  │    └─ runcallback("modulename.buildargs") → print help → return True
+  │
+  ├─ runcallback("modulename.buildargs") → parse_args()
+  │
+  └─ runcallback("modulename.main")
 ```
 
+Note: `validate_function()` is a standalone signature validator using `get_type_hints()`. It is **not** part of the `check()`/`run()` execution flow — those use `_check_params()` + `inspect.signature()` directly.
+
 **Dependencies:**
-- database module (access control)
 - io module (logging, error display)
 - importlib (module loading)
-- argparse (argument parsing)
-- sys, types (Python standard)
+- inspect (signature inspection)
+- argparse (argument parsing and help generation)
+- sys (module cache)
 
 ---
 

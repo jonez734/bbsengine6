@@ -910,24 +910,30 @@ User's Browser
 ### Module Loading Process
 
 ```
-module.run()
+module.run(modulename, **kwargs)
   │
-  ├─ check(modulename, op="run")
-  │    └─ Query database for access rules
+  ├─ check(modulename, op, **kwargs)
+  │    ├─ importlib.reload() if args.debug is True
+  │    ├─ importlib.import_module(modulename)
+  │    ├─ Verify init(), access(), buildargs(), main() exist + callable
+  │    ├─ _check_params() + inspect.signature() to validate signatures
+  │    └─ m.access(args, op, **kwargs) — return False if not True
   │
-  ├─ load(modulepath)
-  │    └─ Import Python module from filesystem
+  ├─ runcallback("modulename.init", **kwargs)
   │
-  ├─ validate_function("init", signature)
-  ├─ validate_function("access", signature)
-  ├─ validate_function("buildargs", signature)
-  ├─ validate_function("main", signature)
-  │    └─ Each must exist and have correct params
+  ├─ [if --help/-h in argv]
+  │    ├─ runcallback("modulename.buildargs") → parser
+  │    ├─ parser.print_help() (or auto-generated from docstring)
+  │    └─ return True
   │
-  └─ runcallback(main, **kwargs)
-       └─ Execute main() with error handling
-            └─ Return result to caller
+  ├─ runcallback("modulename.buildargs", **kwargs) → parser
+  │    └─ parser.parse_args() (whitespace-stripped argv)
+  │
+  └─ runcallback("modulename.main", **kwargs)
+       └─ Return result to caller
 ```
+
+Note: `validate_function()` is a standalone utility (uses `get_type_hints()`) and is **not** part of the `check()`/`run()` flow. Those use `_check_params()` + `inspect.signature()` instead.
 
 ### Module File Structure
 
