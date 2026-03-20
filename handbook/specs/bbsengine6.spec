@@ -21,13 +21,13 @@ BBSEngine6 is a comprehensive Bulletin Board System (BBS) engine written in Pyth
 
 ## Table of Contents
 
-### 1. [Architecture Overview](bbsengine6-architecture.spec)
+### 1. [Architecture Overview](specs/bbsengine6-architecture.spec)
    - Layered architecture (data, business logic, presentation, modules)
    - Domain-based organization (sessions, members, messaging, module system, I/O)
    - Layer responsibilities and data flow between layers
    - Visual architecture diagrams
 
-### 2. [Module Specifications](bbsengine6-modules.spec)
+### 2. [Module Specifications](specs/bbsengine6-modules.spec)
    - Core Python modules (database, session, member, util, menu, listbox, module system)
    - [util.spec](specs/util.spec) -- General-purpose utilities (display, dates, logging, file ops, passwords)
    - Subpackages (io, console)
@@ -36,7 +36,7 @@ BBSEngine6 is a comprehensive Bulletin Board System (BBS) engine written in Pyth
    - Complete function signatures with brief descriptions
    - Class and method specifications
 
-### 3. [Data Flows & Workflows](bbsengine6-flows.spec)
+### 3. [Data Flows & Workflows](specs/bbsengine6-flows.spec)
    - High-level workflows:
      - User login flow
      - Message posting flow
@@ -45,7 +45,7 @@ BBSEngine6 is a comprehensive Bulletin Board System (BBS) engine written in Pyth
    - Detailed sequence flows showing function calls and state changes
    - State transformations at each layer
 
-### 4. [Web Layer Specification](bbsengine6-web.spec)
+### 4. [Web Layer Specification](specs/bbsengine6-web.spec)
    - PHP architecture and bootstrap process
    - HTTP endpoints and their purposes
    - Smarty template integration
@@ -53,14 +53,14 @@ BBSEngine6 is a comprehensive Bulletin Board System (BBS) engine written in Pyth
    - Connection between web layer and Python backend
    - Request/response lifecycle
 
-### 5. [Module Dependencies](bbsengine6-dependencies.spec)
+### 5. [Module Dependencies](specs/bbsengine6-dependencies.spec)
    - Complete dependency matrix (which modules depend on which)
    - Dependency rationale (why each dependency exists)
    - Layer-to-layer dependencies
    - Inter-module dependencies
    - External package dependencies
 
-### 6. [Architectural Decisions](bbsengine6-decisions.spec)
+### 6. [Architectural Decisions](specs/bbsengine6-decisions.spec)
    - Design decisions and their rationale
    - Architectural alternatives explored
    - Trade-offs documented
@@ -196,12 +196,12 @@ Database schema checks, member management, configuration validation
 
 ## How to Use This Specification
 
-1. **New to BBSEngine6?** Start with [Architecture Overview](bbsengine6-architecture.spec)
-2. **Need to understand a module?** Go to [Module Specifications](bbsengine6-modules.spec)
-3. **Tracing a workflow?** Check [Data Flows](bbsengine6-flows.spec)
-4. **Working with web layer?** See [Web Layer Spec](bbsengine6-web.spec)
-5. **Understanding dependencies?** Review [Module Dependencies](bbsengine6-dependencies.spec)
-6. **Need design rationale?** Read [Architectural Decisions](bbsengine6-decisions.spec)
+1. **New to BBSEngine6?** Start with [Architecture Overview](specs/bbsengine6-architecture.spec)
+2. **Need to understand a module?** Go to [Module Specifications](specs/bbsengine6-modules.spec)
+3. **Tracing a workflow?** Check [Data Flows](specs/bbsengine6-flows.spec)
+4. **Working with web layer?** See [Web Layer Spec](specs/bbsengine6-web.spec)
+5. **Understanding dependencies?** Review [Module Dependencies](specs/bbsengine6-dependencies.spec)
+6. **Need design rationale?** Read [Architectural Decisions](specs/bbsengine6-decisions.spec)
 
 ---
 
@@ -231,12 +231,13 @@ bbsengine6/
 ├── smarty/                      # Template plugins
 └── handbook/                    # Documentation
     ├── bbsengine6.spec          # Master spec index
-    ├── bbsengine6-architecture.spec
-    ├── bbsengine6-modules.spec
-    ├── bbsengine6-flows.spec
-    ├── bbsengine6-web.spec
-    ├── bbsengine6-dependencies.spec
-    └── bbsengine6-decisions.spec
+    └── specs/                   # Specification files
+        ├── bbsengine6-architecture.spec
+        ├── bbsengine6-modules.spec
+        ├── bbsengine6-flows.spec
+        ├── bbsengine6-web.spec
+        ├── bbsengine6-dependencies.spec
+        └── bbsengine6-decisions.spec
 ```
 
 ---
@@ -266,12 +267,12 @@ bbsengine6/
 
 To dive deeper into the system:
 
-1. Read **[bbsengine6-architecture.spec](bbsengine6-architecture.spec)** for a complete architectural overview
-2. Explore **[bbsengine6-modules.spec](bbsengine6-modules.spec)** for detailed module APIs, including **[util.spec](specs/util.spec)**
-3. Study **[bbsengine6-flows.spec](bbsengine6-flows.spec)** to understand critical workflows
-4. Review **[bbsengine6-web.spec](bbsengine6-web.spec)** for web layer integration
-5. Check **[bbsengine6-dependencies.spec](bbsengine6-dependencies.spec)** to understand module coupling
-6. Reference **[bbsengine6-decisions.spec](bbsengine6-decisions.spec)** for design rationale
+1. Read **[bbsengine6-architecture.spec](specs/bbsengine6-architecture.spec)** for a complete architectural overview
+2. Explore **[bbsengine6-modules.spec](specs/bbsengine6-modules.spec)** for detailed module APIs, including **[util.spec](specs/util.spec)**
+3. Study **[bbsengine6-flows.spec](specs/bbsengine6-flows.spec)** to understand critical workflows
+4. Review **[bbsengine6-web.spec](specs/bbsengine6-web.spec)** for web layer integration
+5. Check **[bbsengine6-dependencies.spec](specs/bbsengine6-dependencies.spec)** to understand module coupling
+6. Reference **[bbsengine6-decisions.spec](specs/bbsengine6-decisions.spec)** for design rationale
 
 ---
 
