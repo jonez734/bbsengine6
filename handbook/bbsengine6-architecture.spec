@@ -931,19 +931,20 @@ module.run()
 
 ### Module File Structure
 
+Modules are Python packages discovered via `sys.path`. There is no `bbsengine6/modules/` directory -- the module system uses `importlib.import_module()` with the full module name. User plugins are typically installed in a separate package (e.g., `mygame/`, `plugins/`) added to `PYTHONPATH`.
+
 ```
-bbsengine6/modules/
-├── mymodule/
-│   ├── __init__.py
-│   │   ├── init(args, **kwargs)
-│   │   ├── access(args, **kwargs) -> bool
-│   │   ├── buildargs(args, **kwargs) -> argparse.Namespace
-│   │   └── main(args, **kwargs) -> Any
-│   │
-│   ├── submodule1.py
-│   ├── submodule2.py
-│   └── data/
-│       └── resource.sql
+mymodule/
+├── __init__.py
+│   ├── init(args, **kwargs)
+│   ├── access(args, **kwargs) -> bool
+│   ├── buildargs(args, **kwargs) -> argparse.Namespace
+│   └── main(args, **kwargs) -> Any
+│
+├── submodule1.py
+├── submodule2.py
+└── data/
+    └── resource.sql
 ```
 
 ---

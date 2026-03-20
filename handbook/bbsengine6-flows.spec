@@ -346,10 +346,10 @@ CALLER                   MODULE SYSTEM          DATABASE/FILESYSTEM   RESULT
   │                          │<──────────────────────────                  │
   │                          │  ├─ Result: access=True │                  │
   │                          │                         │                  │
-  │                   module.load()                    │                  │
-  │                          ├─ Find: bbsengine6/      │                  │
-  │                          │  modules/messages/      │                  │
-  │                          │  __init__.py            │                  │
+   │                   module.load()                    │                  │
+   │                          ├─ import_module() via     │                  │
+   │                          │  sys.path (e.g.          │                  │
+   │                          │  "mymodule.messages")    │                  │
   │                          │──────────────────────────>                  │
   │                          │  ├─ Load module from    │                  │
   │                          │     filesystem          │                  │

@@ -261,7 +261,7 @@ def check(args: object, modulename: str, op: str = "run", **kwargs)
 def load(args: object, modulepath: str) 
   -> types.ModuleType
   "Load and return a Python module dynamically"
-  "Searches: bbsengine6.modules.<modulepath>"
+  "Uses importlib.import_module() to load by full Python module name (e.g. 'mygame.mymodule')"
   
 def run(args: object, modulename: str, **kwargs) 
   -> Any
