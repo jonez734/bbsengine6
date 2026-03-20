@@ -123,9 +123,7 @@ def getcurrentmoniker(args, **kwargs):
             io.echo(f"bbsengine.member.getcurrentmoniker.120: {pool=}", level="error")
             return None
         with database.connect(args, pool=pool) as conn:
-            result = _work(conn)
-            conn.commit()
-            return result
+            return _work(conn)
     return _work(conn)
 
 

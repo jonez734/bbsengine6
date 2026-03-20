@@ -123,9 +123,7 @@ def getmembersession(args, moniker=None, **kwargs):
         return None
 
     with database.connect(args, pool=pool) as conn:
-        result = _work(conn)
-        conn.commit()
-        return result
+        return _work(conn)
 
 
 def updatelastactivity(args, sessionid, **kwargs):
@@ -198,9 +196,7 @@ def read(args, sessionid=None, **kwargs):
         return None
 
     with database.connect(args, pool=pool) as conn:
-        result = _work(conn)
-        conn.commit()
-        return result
+        return _work(conn)
 
 
 def write(args, session, sessionid=None, **kwargs):
@@ -229,7 +225,6 @@ def write(args, session, sessionid=None, **kwargs):
         database.update(
             args, "engine.__session", sessionid, _session, mogrify=mogrify, conn=conn
         )
-        conn.commit()
         return True
 
     conn = kwargs.get("conn", None)
@@ -306,7 +301,6 @@ def set(
 
         with database.cursor(conn) as cur:
             cur.execute(sql, (data, sessionid))
-        conn.commit()
         return value
 
     if sessionid is None:
@@ -340,7 +334,6 @@ def garbagecollect(args, **kwargs):
         with database.cursor(conn) as cur:
             sql = "delete from engine.__session where expiry < now()"
             cur.execute(sql)
-        conn.commit()
         return True
 
     conn = kwargs.get("conn", None)
@@ -379,5 +372,4 @@ def count(args, **kwargs):
 
     with database.connect(args, pool=pool) as conn:
         result = _work(conn)
-        conn.commit()
         return result

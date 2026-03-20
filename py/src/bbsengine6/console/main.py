@@ -90,7 +90,6 @@ def stage_one(args, **kwargs):
           io.echo("FAIL")
           conn.rollback()
           return False
-        conn.commit()
 
       with database.connect(args, pool=pool, **kwargs) as conn:
         io.echo(f"con.main.stage_one.140: {conn=}", level="debug")
@@ -98,21 +97,16 @@ def stage_one(args, **kwargs):
           io.echo("FAIL")
           conn.rollback()
           return False
-        conn.commit()
 
       with database.connect(args, pool=pool, **kwargs) as conn:
         res = lib.checkclasses(args, conn=conn, **kwargs)
         if res is False:
           conn.rollback()
-        elif res is True:
-          conn.commit()
 
       with database.connect(args, pool=pool, **kwargs) as conn:
         res = lib.checkflag(args, conn=conn, **kwargs)
         if res is False:
           conn.rollback()
-        elif res is True:
-          conn.commit()
 
 def main(args, **kwargs):
   parser = buildargs(args)
