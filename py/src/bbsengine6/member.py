@@ -73,7 +73,7 @@ def buildrec(member):
         ):
             continue
         elif type(v) is dict:
-            m[k] = json.dumps(v)
+            m[k] = json.dumps(database.convert_for_jsonb(v))
             continue
         elif k == "ui" and type(v) is list:
             m[k] = ", ".join(v)

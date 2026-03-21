@@ -1,11 +1,13 @@
 import argparse
 import atexit
+import datetime
 import getpass
 import os
 import unittest
 from unittest.mock import MagicMock, patch
 
 from psycopg import sql
+from psycopg.types.json import Jsonb
 
 from bbsengine6 import database
 
@@ -714,6 +716,148 @@ class TestSQLInjectionIntegration(_TestCaseWithPoolCleanup):
         self.assertTrue(
             database.tableexists(self.args, "pg_catalog", "pg_class", pool=self.pool)
         )
+
+
+class TestConvertForJsonb(unittest.TestCase):
+    def test_passthrough_strings(self):
+        self.assertEqual(database.convert_for_jsonb("test"), "test")
+        self.assertEqual(database.convert_for_jsonb(""), "")
+
+    def test_passthrough_numbers(self):
+        self.assertEqual(database.convert_for_jsonb(42), 42)
+        self.assertEqual(database.convert_for_jsonb(3.14), 3.14)
+
+    def test_passthrough_booleans(self):
+        self.assertEqual(database.convert_for_jsonb(True), True)
+        self.assertEqual(database.convert_for_jsonb(False), False)
+
+    def test_passthrough_none(self):
+        self.assertIsNone(database.convert_for_jsonb(None))
+
+    def test_convert_type_to_string(self):
+        result = database.convert_for_jsonb(int)
+        self.assertEqual(result, "<class 'int'>")
+
+    def test_convert_type_nested_in_dict(self):
+        result = database.convert_for_jsonb({"key": int, "other": "value"})
+        self.assertIsInstance(result, Jsonb)
+        self.assertEqual(result.obj["key"], "<class 'int'>")
+        self.assertEqual(result.obj["other"], "value")
+
+    def test_convert_type_nested_in_list(self):
+        result = database.convert_for_jsonb([int, "string", 123])
+        self.assertIsInstance(result, Jsonb)
+        self.assertEqual(result.obj[0], "<class 'int'>")
+        self.assertEqual(result.obj[1], "string")
+        self.assertEqual(result.obj[2], 123)
+
+    def test_convert_type_nested_in_tuple(self):
+        result = database.convert_for_jsonb((int, "string"))
+        self.assertIsInstance(result, Jsonb)
+        self.assertEqual(result.obj[0], "<class 'int'>")
+        self.assertEqual(result.obj[1], "string")
+
+    def test_convert_datetime_to_isoformat(self):
+        dt = datetime.datetime(2024, 1, 15, 10, 30, 0, tzinfo=datetime.timezone.utc)
+        result = database.convert_for_jsonb(dt)
+        self.assertEqual(result, "2024-01-15T10:30:00+00:00")
+
+    def test_convert_datetime_in_dict(self):
+        dt = datetime.datetime(2024, 1, 15, 10, 30, 0, tzinfo=datetime.timezone.utc)
+        result = database.convert_for_jsonb({"timestamp": dt})
+        self.assertIsInstance(result, Jsonb)
+        self.assertEqual(result.obj["timestamp"], "2024-01-15T10:30:00+00:00")
+
+    def test_convert_dict_with_mixed_values(self):
+        data = {
+            "string": "value",
+            "number": 42,
+            "nested": {"inner": int, "datetime": datetime.datetime.now()},
+            "list": [str, 1, True],
+        }
+        result = database.convert_for_jsonb(data)
+        self.assertIsInstance(result, Jsonb)
+        self.assertEqual(result.obj["string"], "value")
+        self.assertEqual(result.obj["number"], 42)
+        nested = result.obj["nested"]
+        self.assertEqual(nested.obj["inner"], "<class 'int'>")
+        self.assertIsInstance(nested.obj["datetime"], str)
+        self.assertEqual(result.obj["list"].obj[0], "<class 'str'>")
+
+    def test_convert_datetime_naive(self):
+        dt = datetime.datetime(2024, 1, 15, 10, 30, 0)
+        result = database.convert_for_jsonb(dt)
+        self.assertEqual(result, "2024-01-15T10:30:00")
+
+    def test_convert_datetime_with_timezone(self):
+        tz = datetime.timezone(datetime.timedelta(hours=-5))
+        dt = datetime.datetime(2024, 1, 15, 10, 30, 0, tzinfo=tz)
+        result = database.convert_for_jsonb(dt)
+        self.assertEqual(result, "2024-01-15T10:30:00-05:00")
+
+    def test_jsonb_passthrough(self):
+        original = Jsonb({"key": "value"})
+        result = database.convert_for_jsonb(original)
+        self.assertEqual(result, original)
+
+    def test_convert_unknown_type_to_string(self):
+        class CustomClass:
+            pass
+
+        obj = CustomClass()
+        result = database.convert_for_jsonb(obj)
+        self.assertIsInstance(result, str)
+
+
+class TestExecute(_TestCaseWithPoolCleanup):
+    @classmethod
+    def setUpClass(cls):
+        cls.args = get_real_args()
+        cls.pool = database.getpool(cls.args)
+        _tracked_pools.append(cls.pool)
+
+    def test_execute_with_simple_params(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            with database.cursor(conn) as cur:
+                database.execute(cur, "SELECT 1 as val, 'test' as name")
+                result = cur.fetchone()
+                self.assertEqual(result["val"], 1)
+                self.assertEqual(result["name"], "test")
+
+    def test_execute_with_type_object(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            with database.cursor(conn) as cur:
+                query = "SELECT %s::text as type_name"
+                database.execute(cur, query, int)
+                result = cur.fetchone()
+                self.assertEqual(result["type_name"], "<class 'int'>")
+
+    def test_execute_with_datetime(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            with database.cursor(conn) as cur:
+                query = "SELECT %s::timestamptz as ts"
+                dt = datetime.datetime(
+                    2024, 1, 15, 10, 30, 0, tzinfo=datetime.timezone.utc
+                )
+                database.execute(cur, query, dt)
+                result = cur.fetchone()
+                self.assertIn("2024-01-15", result["ts"].isoformat())
+
+    def test_execute_with_dict_param(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            with database.cursor(conn) as cur:
+                query = "SELECT (%s::jsonb)->'key' as value"
+                database.execute(cur, query, {"key": "value"})
+                result = cur.fetchone()
+                self.assertEqual(result["value"], "value")
+
+    def test_execute_with_dict_containing_type(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            with database.cursor(conn) as cur:
+                query = "SELECT (%s::jsonb)->>'type_key' as type_str"
+                database.execute(cur, query, {"type_key": int})
+                result = cur.fetchone()
+                self.assertEqual(result["type_str"], "<class 'int'>")
 
 
 if __name__ == "__main__":

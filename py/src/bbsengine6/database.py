@@ -18,6 +18,53 @@ from . import io, util
 DEFAULTDATABASE = "postgres"
 
 
+def convert_for_jsonb(v: Any) -> Any:
+    """Recursively convert values for safe JSONB encoding.
+
+    Handles: type, datetime, dict, list, tuple, and other non-serializable types.
+    Logs suspicious values (type objects, unknown types) at debug level.
+    """
+    import datetime
+
+    if isinstance(v, type):
+        io.echo(f"convert_for_jsonb: converting type {v}", level="debug")
+        return str(v)
+    if isinstance(v, Jsonb):
+        return v
+    if isinstance(v, datetime.datetime):
+        return v.isoformat()
+    if isinstance(v, dict):
+        return Jsonb({k: convert_for_jsonb(val) for k, val in v.items()})
+    elif isinstance(v, (list, tuple)):
+        return Jsonb([convert_for_jsonb(item) for item in v])
+    if v is not None and not isinstance(v, (str, int, float, bool)):
+        io.echo(
+            f"convert_for_jsonb: converting {type(v).__name__} to str", level="debug"
+        )
+        return str(v)
+    return v
+
+
+def execute(cur: Any, query: Any, *params: Any) -> Any:
+    """Execute query with auto-converted params for safe JSONB encoding.
+
+    Use this instead of direct cur.execute() when params may contain
+    dicts, lists, datetime objects, or type objects.
+
+    Args:
+        cur: Database cursor
+        query: SQL query (sql.SQL or str)
+        *params: Query parameters to convert
+
+    Returns:
+        Cursor result from cur.execute()
+    """
+    if not params or (len(params) == 1 and params[0] is None):
+        return cur.execute(query)
+    converted = [convert_for_jsonb(p) for p in params]
+    return cur.execute(query, converted)
+
+
 def _table_identifier(table: str):
     """Create proper SQL identifier for schema-qualified table names.
 
@@ -276,28 +323,10 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
     Returns:
       True on success, False on connection error, raises on database error
     """
-    import datetime
-
     primarykey = kwargs.get("primarykey", "id")
     _mogrify = kwargs.get("mogrify", False)
     updatepk = kwargs.get("updatepk", False)
     commit = kwargs.get("commit", True)
-
-    def _convert_value(v):
-        """Convert values to types psycopg can handle."""
-        if isinstance(v, type):
-            return str(v)
-        if isinstance(v, Jsonb):
-            return v
-        if isinstance(v, dict):
-            return Jsonb({k: _convert_value(val) for k, val in v.items()})
-        elif isinstance(v, list):
-            return Jsonb([_convert_value(item) for item in v])
-        elif isinstance(v, datetime.datetime):
-            return v.isoformat()
-        elif v is not None and not isinstance(v, (str, int, float, bool)):
-            return str(v)
-        return v
 
     def _work(cur):
         _items = copy.deepcopy(items)
@@ -309,7 +338,7 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
         dat = []
         for k, v in _items.items():
             params.append(sql.Identifier(k) + sql.SQL(" = %s"))
-            dat.append(_convert_value(v))
+            dat.append(convert_for_jsonb(v))
 
         query = (
             query
@@ -319,6 +348,12 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
             + sql.SQL(" = %s")
         )
         dat.append(pk)
+
+        if args.debug is True:
+            io.echo(
+                f"bbsengine6.database.update.150: dat types={[type(d).__name__ for d in dat]}",
+                level="debug",
+            )
 
         cur.execute(query, dat)
         return cur.rowcount
@@ -384,14 +419,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
     query = query + sql.SQL(", ").join([sql.SQL(p) for p in params])
     query = query + sql.SQL(")")
 
-    dat = []
-    for v in items.values():
-        if type(v) is dict:
-            dat.append(Jsonb(v))
-        elif type(v) is list:
-            dat.append(Jsonb(v))
-        else:
-            dat.append(v)
+    dat = [convert_for_jsonb(v) for v in items.values()]
     if returnid is True:
         query = (
             query
