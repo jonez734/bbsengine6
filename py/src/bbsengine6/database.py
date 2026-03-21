@@ -288,16 +288,14 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
         if isinstance(v, type):
             return str(v)
         if isinstance(v, Jsonb):
-            # Jsonb objects are already in the correct format for psycopg
             return v
         if isinstance(v, dict):
-            return Jsonb(v)
+            return Jsonb({k: _convert_value(val) for k, val in v.items()})
         elif isinstance(v, list):
-            return Jsonb(v)
+            return Jsonb([_convert_value(item) for item in v])
         elif isinstance(v, datetime.datetime):
             return v.isoformat()
         elif v is not None and not isinstance(v, (str, int, float, bool)):
-            # Safety check: convert anything else that might not be serializable
             return str(v)
         return v
 
