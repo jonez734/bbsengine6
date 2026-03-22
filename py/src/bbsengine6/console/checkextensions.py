@@ -10,26 +10,32 @@ from bbsengine6 import io, database, util
 
 from . import lib
 
+
 def init(args, **kwargs):
     return True
 
+
 def buildargs(args, **kwargs):
     return lib.buildargs(args, **kwargs)
+
 
 def access(args, op, **kwargs):
     return True
 
 
 def main(args, **kwargs):
-#    util.heading("extensions")
+    #    util.heading("extensions")
     # SELECT * FROM pg_available_extensions WHERE name = 'citext';
     # SELECT * FROM pg_extension WHERE extname = 'citext';
     # CREATE EXTENSION IF NOT EXISTS citext;
     conn = kwargs.pop("conn", None)
-#    with database.connect(args, **kwargs) as conn:
+    #    with database.connect(args, **kwargs) as conn:
     with database.cursor(conn, **kwargs) as cur:
         for ext in ("pgcrypto", "ltree", "citext"):
-            io.echo(f"{{var:labelcolor}}extension {{var:valuecolor}}{ext}{{var:labelcolor}}: {{var:valuecolor}}", end="")
+            io.echo(
+                f"{{var:labelcolor}}extension {{var:valuecolor}}{ext}{{var:labelcolor}}: {{var:valuecolor}}",
+                end="",
+            )
             if database.extensionavailable(args, ext, cur=cur) is True:
                 if database.extensioninstalled(args, ext, cur=cur) is False:
                     if database.creatextension(args, ext, cur=cur) is False:

@@ -15,7 +15,7 @@ KEY_MAP = {
     f"{ESC}[5~": "KEY_PAGEUP",
     f"{ESC}[6~": "KEY_PAGEDOWN",
     f"{ESC}OP": "KEY_F1",
-#    f"{ESC}OP": "KEY_HELP", # PF1
+    #    f"{ESC}OP": "KEY_HELP", # PF1
     f"{ESC}OQ": "KEY_F2",
     f"{ESC}OR": "KEY_F3",
     f"{ESC}OS": "KEY_F4",

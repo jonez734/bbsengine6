@@ -4,14 +4,18 @@ from . import util, screen, io
 buf = []
 currentline = 0
 
+
 def init(args, **kwargs):
     return True
+
 
 def access(args, op, **kwargs):
     return True
 
+
 def buildargs(args, **kwargs):
     return None
+
 
 def help(**kw):
     util.heading("editor help")
@@ -22,6 +26,7 @@ def help(**kw):
     io.echo(".D -- delete line or range")
     io.echo(".I -- insert at line")
     io.echo(".V -- version")
+
 
 def line(args, **kwargs):
     terminalwidth = io.getterminalwidth()
@@ -38,7 +43,12 @@ def line(args, **kwargs):
 
         ch = io.getch()
         if ch == "." and pos == 0 and command is False:
-            io.echo("{var:promptcolor}command: {var:inputcolor}", end="", flush=True, help=help)
+            io.echo(
+                "{var:promptcolor}command: {var:inputcolor}",
+                end="",
+                flush=True,
+                help=help,
+            )
             command = True
             continue
         elif ch == "KEY_HELP":
@@ -48,7 +58,7 @@ def line(args, **kwargs):
             pos = 0
             io.echo()
             currentlinenumber += 1
-            if (currentlinenumber > len(buf)):
+            if currentlinenumber > len(buf):
                 buf.append(linebuf)
             continue
         elif command is True:
@@ -70,7 +80,9 @@ def line(args, **kwargs):
                     continue
                 io.echo(f"editing line {editline=}", level="debug")
             elif ch == "s":
-                filename = io.inputstring(f"Save. {{var:promptcolor}}filename: {{var:inputcolor}}")
+                filename = io.inputstring(
+                    f"Save. {{var:promptcolor}}filename: {{var:inputcolor}}"
+                )
             elif ch == "d":
                 if len(buf) == 0:
                     io.echo("{bell}")
@@ -79,7 +91,7 @@ def line(args, **kwargs):
             else:
                 io.echo("{bell}", flush=True, end="")
         else:
-            if pos < terminalwidth-2:
+            if pos < terminalwidth - 2:
                 io.echo(ch, end="", flush=True, interpret=False)
                 linebuf += ch
                 pos += 1
@@ -87,34 +99,36 @@ def line(args, **kwargs):
                 pass
                 # find last whitespce, erase to it, then start a new line
 
-def visual(args, text:str="", suffix:str="noteupdate"):
-  filefp, fn  = tempfile.mkstemp(suffix=suffix)
-  
-  with open(fn, "w") as fp:
-    fp.writelines(text)
 
-  if "VISUAL" in os.environ:
-    editor = os.environ["VISUAL"]
-  elif "EDITOR" in os.environ:
-    editor = os.environ["EDITOR"]
-  else:
-    editor = "joe -r"
+def visual(args, text: str = "", suffix: str = "noteupdate"):
+    filefp, fn = tempfile.mkstemp(suffix=suffix)
 
-  os.system(f"{editor} {diaryfn}")
-  if os.access(diaryfn, os.F_OK|os.R_OK|os.W_OK):
-    fp = open(diaryfn, "r")
-    notes = fp.readlines()
-    fp.close()
+    with open(fn, "w") as fp:
+        fp.writelines(text)
 
-  notes = "\n".join(notes)
-  notes = notes.strip()
-  
-  diary = {}
-  diary["lastmodified"] = "now()"
-  diary["lastmodifiedbyid"] = member.getcurrentid(args)
-  diary["notes"] = notes
-  
-  io.echo(f"{diary=}", level="debug")
+    if "VISUAL" in os.environ:
+        editor = os.environ["VISUAL"]
+    elif "EDITOR" in os.environ:
+        editor = os.environ["EDITOR"]
+    else:
+        editor = "joe -r"
+
+    os.system(f"{editor} {diaryfn}")
+    if os.access(diaryfn, os.F_OK | os.R_OK | os.W_OK):
+        fp = open(diaryfn, "r")
+        notes = fp.readlines()
+        fp.close()
+
+    notes = "\n".join(notes)
+    notes = notes.strip()
+
+    diary = {}
+    diary["lastmodified"] = "now()"
+    diary["lastmodifiedbyid"] = member.getcurrentid(args)
+    diary["notes"] = notes
+
+    io.echo(f"{diary=}", level="debug")
+
 
 def main(args, **kw):
     kind = kw["kind"] if "kind" in kw else None

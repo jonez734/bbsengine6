@@ -2,6 +2,7 @@ import argparse
 
 from bbsengine6 import io, menu
 
+
 def main():
     parser = argparse.ArgumentParser("menu")
     parser.add_argument("--debug", action="store_true")
@@ -25,7 +26,7 @@ def main():
 
     menuitems = []
     for x in range(0, 15):
-        menuitems.append(menu.Item(chr(65+x), f"item {chr(65+x)}", blah))
+        menuitems.append(menu.Item(chr(65 + x), f"item {chr(65 + x)}", blah))
 
     m = menu.Menu(args, "testing bbsengine.menu", menuitems, pagesize=20)
     done = False
@@ -37,11 +38,13 @@ def main():
                 done = True
                 break
 
+
 def blah(args, menuitem):
     io.echo(f"running 'blah': {menuitem=}", level="debug")
 
-#bbsengine.screen.init()
-#bbsengine.screen.setarea("testing")
+
+# bbsengine.screen.init()
+# bbsengine.screen.setarea("testing")
 
 
 try:
@@ -55,6 +58,8 @@ except KeyboardInterrupt:
 except EOFError:
     io.echo("{/all}{restorecursor}*EOF*")
 finally:
-    io.echo(f"{{savecursor}}{{curpos:{io.getterminalheight()},0}}{{/all}}{{el}}{{restorecursor}}{{reset}}")
+    io.echo(
+        f"{{savecursor}}{{curpos:{io.getterminalheight()},0}}{{/all}}{{el}}{{restorecursor}}{{reset}}"
+    )
 
 # ttyio.echo(f"{ttyio.terminal.cursorpositions=}", level="debug")

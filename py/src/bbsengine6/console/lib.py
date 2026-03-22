@@ -16,93 +16,91 @@ def discover_console_modules(args=None, force_refresh=False):
     - Module has main() function
     - Module has docstring
     - Module can be imported successfully
-    
+
     Args:
         args: Optional args object (for debug flag)
         force_refresh: Force rediscovery even if cached
-        
+
     Returns:
         dict: {module_name: help_text}
     """
     global _discovered_modules_cache
-    
+
     # Determine if we should use cache
-    debug_mode = getattr(args, 'debug', False) if args else False
-    
+    debug_mode = getattr(args, "debug", False) if args else False
+
     use_cache = (
-        not force_refresh and 
-        not debug_mode and 
-        _discovered_modules_cache is not None
+        not force_refresh and not debug_mode and _discovered_modules_cache is not None
     )
-    
+
     if use_cache:
         return _discovered_modules_cache
-    
+
     # Perform discovery
     modules = {}
     console_package = "bbsengine6.console"
-    
+
     try:
         # Get the directory where this module (lib.py) is located
         # That's the console package directory
         console_path = os.path.dirname(os.path.abspath(__file__))
-        
+
         if os.path.isdir(console_path):
             for filename in os.listdir(console_path):
-                if filename.endswith('.py') and not filename.startswith('_'):
+                if filename.endswith(".py") and not filename.startswith("_"):
                     module_name = filename[:-3]  # Remove .py extension
-                    
+
                     # Skip special modules
-                    if module_name in ['lib', '__init__', '__main__', 'main']:
+                    if module_name in ["lib", "__init__", "__main__", "main"]:
                         continue
-                    
+
                     # Try to validate the module
                     is_valid, help_text = validate_module_for_discovery(
                         f"{console_package}.{module_name}"
                     )
-                    
+
                     if is_valid:
                         modules[module_name] = help_text
-    
+
     except Exception as e:
         if debug_mode:
             io.echo(f"Error discovering modules: {e}", level="debug")
-    
+
     # Cache the result (unless in debug mode)
     if not debug_mode:
         _discovered_modules_cache = modules
-    
+
     return modules
 
 
 def validate_module_for_discovery(module_fullname):
     """
     Check if module meets discovery criteria.
-    
+
     Args:
         module_fullname: Full module name (e.g., 'bbsengine6.console.member')
-        
+
     Returns:
         tuple: (is_valid: bool, help_text: str or None)
     """
     try:
         # Try to import the module
         m = importlib.import_module(module_fullname)
-        
+
         # Check for main() function
-        if not hasattr(m, 'main') or not callable(getattr(m, 'main', None)):
+        if not hasattr(m, "main") or not callable(getattr(m, "main", None)):
             return (False, None)
-        
+
         # Check for docstring
-        doc = getattr(m, '__doc__', None)
+        doc = getattr(m, "__doc__", None)
         if not doc or not isinstance(doc, str):
             return (False, None)
-        
+
         # Extract first line of docstring as help text
-        help_text = doc.strip().split('\n')[0].strip()
-        
+        help_text = doc.strip().split("\n")[0].strip()
+
         return (True, help_text)
-    
+
     except Exception:
         return (False, None)
 
@@ -119,15 +117,23 @@ def buildargs(args=None, **kwargs):
     parser.add_argument("--verbose", action="store_true", dest="verbose")
     parser.add_argument("--debug", action="store_true", dest="debug")
 
-    defaults = {"databasename": "zoid6", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None}
+    defaults = {
+        "databasename": "zoid6",
+        "databasehost": "localhost",
+        "databaseuser": None,
+        "databaseport": 5432,
+        "databasepassword": None,
+    }
     database.buildargs(parser, defaults)
-    
+
     return parser
+
 
 # @since 20230523
 def runmodule(args, submodule, **kwargs):
-#  io.echo(f"con.lib.runmodule.100: {kwargs=}", level="debug")
-  return module.runmodule(args, f"bbsengine6.console.{submodule}", **kwargs)
+    #  io.echo(f"con.lib.runmodule.100: {kwargs=}", level="debug")
+    return module.runmodule(args, f"bbsengine6.console.{submodule}", **kwargs)
+
 
 # @since 20230523 copied from teos
 def setbottombar(args, left, **kwargs):
@@ -139,35 +145,46 @@ def setbottombar(args, left, **kwargs):
     screen.setbottombar(left, right, **kwargs)
     return
 
+
 def checkroles(args, **kwargs):
-  return runmodule(args, "checkroles", **kwargs)
+    return runmodule(args, "checkroles", **kwargs)
+
 
 def checkextensions(args, **kwargs):
-  return runmodule(args, "checkextensions", **kwargs)
+    return runmodule(args, "checkextensions", **kwargs)
+
 
 def checkdatabase(args, **kwargs):
-  return runmodule(args, "checkdatabase", **kwargs)
+    return runmodule(args, "checkdatabase", **kwargs)
+
 
 def checksuperuser(args, **kwargs):
-  return runmodule(args, "checksuperuser", **kwargs)
+    return runmodule(args, "checksuperuser", **kwargs)
+
 
 def createdatabase(args, **kwargs):
-  return runmodule(args, "createdatabase", **kwargs)
+    return runmodule(args, "createdatabase", **kwargs)
+
 
 def checkfunctions(args, **kwargs):
-  return runmodule(args, "checkfunctions", **kwargs)
+    return runmodule(args, "checkfunctions", **kwargs)
+
 
 def checkclasses(args, **kwargs):
-  return runmodule(args, "checkclasses", **kwargs)
+    return runmodule(args, "checkclasses", **kwargs)
+
 
 def checkschema(args, **kwargs):
-  return runmodule(args, "checkschema", **kwargs)
+    return runmodule(args, "checkschema", **kwargs)
+
 
 def checkflag(args, **kwargs):
-  return runmodule(args, "checkflag", **kwargs)
+    return runmodule(args, "checkflag", **kwargs)
+
 
 def checkwebserverrole(args, **kwargs):
-   return runmodule(args, "checkwebserverrole", **kwargs)
+    return runmodule(args, "checkwebserverrole", **kwargs)
+
 
 # @since 20260223 - Argparse subcommand support
 # @since 20260223 - Updated to use dynamic module discovery
@@ -175,48 +192,46 @@ def build_subcommand_parser(parser=None, **kwargs):
     """
     Create or extend parser with subcommands for console modules.
     Uses argparse subparsers to add dynamically discovered modules as subcommands.
-    
+
     Args:
         parser: Optional existing parser to extend
         kwargs: Additional arguments (including 'args' for debug mode)
-        
+
     Returns:
         tuple: (parser, subparsers)
     """
     # Get args from kwargs if available (for debug mode detection)
-    args = kwargs.get('args')
-    
+    args = kwargs.get("args")
+
     if parser is None:
         parser = argparse.ArgumentParser(
             prog="zoidoffice",
             description="BBS Engine 6 Console - Manage your BBS system",
-            add_help=True
+            add_help=True,
         )
         parser.add_argument("--verbose", action="store_true", dest="verbose")
         parser.add_argument("--debug", action="store_true", dest="debug")
-        
+
         defaults = {
             "databasename": "zoid6",
             "databasehost": "localhost",
             "databaseuser": None,
             "databaseport": 5432,
-            "databasepassword": None
+            "databasepassword": None,
         }
         database.buildargs(parser, defaults)
-    
+
     # Create subparsers for module commands
-    subparsers = parser.add_subparsers(
-        dest='subcommand',
-        help='Available modules'
-    )
-    
+    subparsers = parser.add_subparsers(dest="subcommand", help="Available modules")
+
     # Dynamically discover modules (uses cache in normal mode, refreshes in debug mode)
     subcommands = discover_console_modules(args=args) or {}
-    
+
     for cmd_name, cmd_help in subcommands.items():
         subparsers.add_parser(cmd_name, help=cmd_help, add_help=True)
-    
+
     return parser, subparsers
+
 
 # ============================================================================
 # Module-Specific Arguments Pattern
@@ -264,27 +279,28 @@ Example module (bbsengine6/console/mytest.py):
 Modules that don't define custom arguments will work as before.
 """
 
+
 def handle_subcommand(args, subcommand, **kwargs):
     """
     Route to appropriate module based on subcommand.
-    
+
     Args:
         args: Parsed arguments namespace
         subcommand: Name of subcommand (module) to run
         argv: Optional list of arguments to pass to the module's buildargs()
               These are the arguments that come AFTER the subcommand name.
-              Example: "zoidoffice member --filter sysop" 
+              Example: "zoidoffice member --filter sysop"
               → subcommand="member", argv=["--filter", "sysop"]
-        
+
     Returns:
         bool: True if successful, False on error
     """
-    if subcommand == 'member':
-        return runmodule(args, 'member', **kwargs)
-    elif subcommand == 'session':
-        return runmodule(args, 'session', **kwargs)
-    elif subcommand == 'memberapproval':
-        return runmodule(args, 'memberapproval', **kwargs)
+    if subcommand == "member":
+        return runmodule(args, "member", **kwargs)
+    elif subcommand == "session":
+        return runmodule(args, "session", **kwargs)
+    elif subcommand == "memberapproval":
+        return runmodule(args, "memberapproval", **kwargs)
     else:
         io.echo(f"Unknown subcommand: {subcommand}", level="error")
         return False

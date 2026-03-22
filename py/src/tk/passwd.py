@@ -13,10 +13,10 @@ class App(tk.Tk):
 
         self.args = args
 
-        self.title('Change Password')
+        self.title("Change Password")
         # UI options
-        paddings = {'padx': 5, 'pady': 5}
-        entry_font = {'font': ('monospace', 11)}
+        paddings = {"padx": 5, "pady": 5}
+        entry_font = {"font": ("monospace", 11)}
 
         # configure the grid
         self.columnconfigure(0, weight=1)
@@ -36,7 +36,7 @@ class App(tk.Tk):
         self.username_entry.delete(0, tk.END)
         self.username_entry.insert(0, bbsengine.getmembername(args))
 
-        self.sysop = False # bbsengine.checksysop(self.args)
+        self.sysop = False  # bbsengine.checksysop(self.args)
 
         row = 1
         # old_password
@@ -44,9 +44,11 @@ class App(tk.Tk):
             self.old_password_label = ttk.Label(self, text="Old Password:")
             self.old_password_label.grid(column=0, row=row, sticky=tk.W, **paddings)
 
-            self.old_password_entry = ttk.Entry(self, textvariable=self.old_password, show="*", **entry_font)
+            self.old_password_entry = ttk.Entry(
+                self, textvariable=self.old_password, show="*", **entry_font
+            )
             self.old_password_entry.grid(column=1, row=row, sticky=tk.E, **paddings)
-            
+
             self.username_entry.config(state="disabled")
 
             row += 1
@@ -54,26 +56,32 @@ class App(tk.Tk):
         self.new_password_label = ttk.Label(self, text="New Password:")
         self.new_password_label.grid(column=0, row=row, sticky=tk.W, **paddings)
 
-        self.new_password_entry = ttk.Entry(self, textvariable=self.new_password, show="*", **entry_font)
+        self.new_password_entry = ttk.Entry(
+            self, textvariable=self.new_password, show="*", **entry_font
+        )
         self.new_password_entry.grid(column=1, row=row, sticky=tk.E, **paddings)
 
         row += 1
         self.repeat_password_label = ttk.Label(self, text="Repeat Password:")
         self.repeat_password_label.grid(column=0, row=row, sticky=tk.W, **paddings)
 
-        self.repeat_password_entry = ttk.Entry(self, textvariable=self.repeat_password, show="*", **entry_font)
+        self.repeat_password_entry = ttk.Entry(
+            self, textvariable=self.repeat_password, show="*", **entry_font
+        )
         self.repeat_password_entry.grid(column=1, row=row, sticky=tk.E, **paddings)
-        
+
         row += 1
 
         # change button
-        self.change_button = ttk.Button(self, text="change password", command=self.change)
+        self.change_button = ttk.Button(
+            self, text="change password", command=self.change
+        )
         self.change_button.grid(column=1, row=row, sticky=tk.E, **paddings)
 
         # configure style
         self.style = ttk.Style(self)
-        self.style.configure('TLabel', font=('Helvetica', 11))
-        self.style.configure('TButton', font=('Helvetica', 11))
+        self.style.configure("TLabel", font=("Helvetica", 11))
+        self.style.configure("TButton", font=("Helvetica", 11))
 
     def change(self):
         username = self.username.get()
@@ -86,14 +94,14 @@ class App(tk.Tk):
         if self.sysop is False:
             self.old_password_entry.delete(0, tk.END)
         self.repeat_password_entry.delete(0, tk.END)
-        
+
         if self.sysop is False:
             if bbsengine.checkpassword(args, old_password) is False:
                 ttyio.echo("password mismatch (oldpassword)", level="error")
                 return
 
         if new_password != repeat_password:
-            ttyio.echo("enter your new password twice", level="error") # dialog box?
+            ttyio.echo("enter your new password twice", level="error")  # dialog box?
             return
 
         ttyio.echo(f"username={username!r}", level="debug")
@@ -111,30 +119,39 @@ class App(tk.Tk):
 
         dbh = bbsengine.databaseconnect(args)
         dbh.commit()
-#        if bbsengine.checkpassword(args, username, memberid) is True:
-#            ttyio.echo("password is correct")
-#        else:
-#            ttyio.echo("password is wrong")
-#        ttyio.echo(f"memberid={memberid!r}", level="debug")
+
+    #        if bbsengine.checkpassword(args, username, memberid) is True:
+    #            ttyio.echo("password is correct")
+    #        else:
+    #            ttyio.echo("password is wrong")
+    #        ttyio.echo(f"memberid={memberid!r}", level="debug")
 
     def close(self, e):
-       self.destroy()
+        self.destroy()
+
 
 def buildargs(args=None, **kw):
     parser = argparse.ArgumentParser("tkpasswd")
     parser.add_argument("--verbose", action="store_true", dest="verbose")
     parser.add_argument("--debug", action="store_true", dest="debug")
 
-    defaults = {"databasename": "zoidweb5", "databasehost":"localhost", "databaseuser": None, "databaseport":15433, "databasepassword":None} # port=5432
-#    defaults = {"databasename": "zoidweb5", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None} # port=5432
+    defaults = {
+        "databasename": "zoidweb5",
+        "databasehost": "localhost",
+        "databaseuser": None,
+        "databaseport": 15433,
+        "databasepassword": None,
+    }  # port=5432
+    #    defaults = {"databasename": "zoidweb5", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None} # port=5432
     bbsengine.buildargdatabasegroup(parser, defaults)
 
     return parser
+
 
 if __name__ == "__main__":
     parser = buildargs()
     args = parser.parse_args()
 
     app = App(args)
-    app.bind('<Escape>', lambda e: app.close(e))
+    app.bind("<Escape>", lambda e: app.close(e))
     app.mainloop()

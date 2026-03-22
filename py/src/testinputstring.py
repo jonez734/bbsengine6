@@ -7,4 +7,3 @@ except KeyboardInterrupt:
     bbsengine6.io.echo("{/all}*INTR*")
 except EOFError:
     bbsengine6.io.echo("{/all}*EOF*")
-

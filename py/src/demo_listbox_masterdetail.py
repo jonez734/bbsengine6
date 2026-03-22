@@ -3,7 +3,7 @@ import argparse
 from typing import NamedTuple, cast
 
 import psycopg
-from bbsengine6 import io, util, database, screen
+from bbsengine6 import io, util, database, screen, common
 from bbsengine6.listboxcursor import ListboxCursor
 from bbsengine6.listbox import Listbox, ListboxItem
 
@@ -28,22 +28,24 @@ class PresidentListboxItem(ListboxItem):
     def __init__(self, rec: dict, width: int, height=1):
         super().__init__()
         self.status = ""
-        self.pk = f"{rec['person_key']}"
+        self.pk = rec['person_key']
         self.content = f"{rec['name_given']} {rec['name_sur']}".ljust(width - 9, " ")
         self.data = rec
         self.width = width
         self.disabled = False
+##        common.logentry("PresidentListboxItem._init.100: trace", level="debug")
 
     def help(self):
         io.echo(f"this is a help message in a function")
 
-    def display(self):
-        io.echo(
-            f"{{/all}}{{cha}} {{engine.menu.cursorcolor}}{{engine.menu.color}} {{engine.menu.boxcharcolor}}{{acs:vline}}{{cic}} {self.content} {{/all}}{{engine.menu.boxcharcolor}}{{acs:vline}}{{engine.menu.shadowcolor}} {{engine.menu.color}} {{/all}}{{cha}}",
-            end="",
-            flush=True,
-        )
-        return
+#    def display(self, listbox: "Listbox", highlighted: bool):
+#        common.logentry("PresidentListboxItem.display.100: trace", level="debug")
+#        io.echo(
+#            f"{{/all}}{{cha}} {{engine.menu.cursorcolor}}{{engine.menu.color}} {{engine.menu.boxcharcolor}}{{acs:vline}}{{cic}} {self.content} {{/all}}{{engine.menu.boxcharcolor}}{{acs:vline}}{{engine.menu.shadowcolor}} {{engine.menu.color}} {{/all}}{{cha}}",
+#            end="",
+#            flush=True,
+#        )
+#        return
 
 
 class CategoryListboxItem(ListboxItem):
@@ -55,7 +57,7 @@ class CategoryListboxItem(ListboxItem):
         self.width = width
         self.disabled = False
 
-    def display(self):
+    def display(self, listbox: "Listbox", highlighted: bool):
         io.echo(
             f"{{/all}}{{cha}} {{engine.menu.cursorcolor}}{{engine.menu.color}} {{engine.menu.boxcharcolor}}{{acs:vline}}{{cic}} {self.content} {{/all}}{{engine.menu.boxcharcolor}}{{acs:vline}}{{engine.menu.shadowcolor}} {{engine.menu.color}} {{/all}}{{cha}}",
             end="",
@@ -69,7 +71,7 @@ CATEGORY_TABLES = ["person", "edu", "attractions", "attraction_place", "elector"
 
 def display_column_value(col_name: str, value, args) -> str | None:
     if value is None:
-        if hasattr(args, 'debug') and args.debug:
+        if hasattr(args, "debug") and args.debug:
             return ""
         return None
     return value
@@ -105,7 +107,7 @@ def compose_person_name(person: dict) -> str:
     name_common = person.get("name_common")
     name_given = person.get("name_given")
     name_sur = person.get("name_sur")
-    
+
     if name_common and name_sur:
         return f"{name_common} {name_sur}"
     elif name_given and name_sur:
@@ -117,7 +119,10 @@ def compose_person_name(person: dict) -> str:
     elif name_given:
         return name_given
     else:
-        io.echo(f"{{warncolor}}warning: no name found for person_key {person.get('person_key', 'unknown')}", level="warn")
+        io.echo(
+            f"{{warncolor}}warning: no name found for person_key {person.get('person_key', 'unknown')}",
+            level="warn",
+        )
         return "[NEEDINFO]"
 
 
@@ -157,7 +162,7 @@ def get_attraction_tables(conn) -> list[tuple[str, str]]:
         cur.execute(sql)
         for row in cur.fetchall():
             tbl = row["table_name"]
-            keycol = get_table_key_column( tbl)
+            keycol = get_table_key_column(tbl)
             tables.append((tbl, keycol))
     return tables
 
@@ -175,7 +180,7 @@ def get_available_categories(conn, person_key: str) -> list[str]:
                         available.append("attractions")
                         break
         else:
-            keycol = get_table_key_column( tbl)
+            keycol = get_table_key_column(tbl)
             sql = f"SELECT 1 FROM article2.{tbl} WHERE {keycol} = %s LIMIT 1"
             with database.cursor(conn) as cur:
                 cur.execute(sql, (person_key,))
@@ -185,7 +190,7 @@ def get_available_categories(conn, person_key: str) -> list[str]:
 
 
 def display_person_detail(args, conn, person_key: str):
-    keycol = get_table_key_column( "person")
+    keycol = get_table_key_column("person")
     sql = f"select * from article2.person where {keycol}=%s"
     dat = (person_key,)
     with database.cursor(conn) as cur:
@@ -197,29 +202,29 @@ def display_person_detail(args, conn, person_key: str):
         person = cur.fetchone()
 
         util.heading("person")
-        
+
         name_common = display_column_value("name_common", person["name_common"], args)
         name_sur = display_column_value("name_sur", person["name_sur"], args)
         if name_common is not None and name_sur is not None:
             io.echo(f"{{labelcolor}}Name: {{valuecolor}}{name_common} {name_sur}")
-        
+
         date_born = display_column_value("date_born", person["date_born"], args)
         place_born = display_column_value("place_born", person["place_born"], args)
         state_born = display_column_value("state_born", person["state_born"], args)
-        
+
         if date_born is not None or place_born is not None or state_born is not None:
             parts = [p for p in [date_born, place_born, state_born] if p]
             if parts:
                 io.echo(f"{{labelcolor}}Born: {{valuecolor}}{' '.join(parts)}")
-        
+
         date_die = person["date_die"] if person["date_die"] != "9999-99-99" else None
-        if date_die is None and hasattr(args, 'debug') and args.debug:
+        if date_die is None and hasattr(args, "debug") and args.debug:
             date_die = ""
         state_die = person["state_die"] if person["state_die"] != "9999-99-99" else None
-        if state_die is None and hasattr(args, 'debug') and args.debug:
+        if state_die is None and hasattr(args, "debug") and args.debug:
             state_die = ""
         place_die = display_column_value("place_die", person["place_die"], args)
-        
+
         if date_die is not None or place_die is not None or state_die is not None:
             die_parts = [p for p in [date_die, place_die, state_die] if p]
             if die_parts:
@@ -316,7 +321,9 @@ def display_attractions_detail(args, conn, person_key: str):
                     io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
 
 
-def display_attraction_table_detail(args, conn, person_key: str, table_name: str, key_col: str | None = None):
+def display_attraction_table_detail(
+    args, conn, person_key: str, table_name: str, key_col: str | None = None
+):
     if key_col is None:
         key_col = get_table_key_column(table_name)
 
@@ -442,7 +449,10 @@ def display_attraction_join_detail(args, conn, person_key: str):
             cur.execute(sql, dat)
             for rec in cur.fetchall():
                 title = rec["title"] if rec["title"] else ""
-                item = ListboxItem(content=f"place: {title}", pk={"table": "attraction_place", "rec": rec})
+                item = ListboxItem(
+                    content=f"place: {title}",
+                    pk={"table": "attraction_place", "rec": rec},
+                )
                 attraction_items.append(item)
 
     if not attraction_items:
@@ -487,14 +497,20 @@ def display_attraction_join_detail(args, conn, person_key: str):
                     hours_sql = "select * from article2.attraction_hour where key = %s"
                     with database.cursor(conn) as cur:
                         cur.execute(hours_sql, (place_key,))
-                        hours_columns = [desc[0] for desc in cur.description] if cur.description else []
+                        hours_columns = (
+                            [desc[0] for desc in cur.description]
+                            if cur.description
+                            else []
+                        )
                         if cur.rowcount > 0:
                             util.heading("attraction_hour")
                             for hour_rec in cur.fetchall():
                                 for col in hours_columns:
                                     val = display_column_value(col, hour_rec[col], args)
                                     if val is not None:
-                                        io.echo(f"{{labelcolor}}{col}: {{valuecolor}}{val}")
+                                        io.echo(
+                                            f"{{labelcolor}}{col}: {{valuecolor}}{val}"
+                                        )
                         else:
                             util.heading("attraction_hour")
                             io.echo(f"{{valuecolor}}needinfo")
@@ -505,13 +521,21 @@ def display_attraction_join_detail(args, conn, person_key: str):
                         if cur.rowcount > 0:
                             util.heading("attraction_social_media")
                             for social_rec in cur.fetchall():
-                                url = display_column_value("url", social_rec.get("url"), args)
+                                url = display_column_value(
+                                    "url", social_rec.get("url"), args
+                                )
                                 if url is not None:
                                     io.echo(f"{{labelcolor}}url: {{valuecolor}}{url}")
-                                link_text = display_column_value("link_text", social_rec.get("link_text"), args)
+                                link_text = display_column_value(
+                                    "link_text", social_rec.get("link_text"), args
+                                )
                                 if link_text is not None:
-                                    io.echo(f"{{labelcolor}}link_text: {{valuecolor}}{link_text}")
-                                note = display_column_value("note", social_rec.get("note"), args)
+                                    io.echo(
+                                        f"{{labelcolor}}link_text: {{valuecolor}}{link_text}"
+                                    )
+                                note = display_column_value(
+                                    "note", social_rec.get("note"), args
+                                )
                                 if note is not None:
                                     io.echo(f"{{labelcolor}}note: {{valuecolor}}{note}")
 
@@ -559,14 +583,18 @@ def main(args, **kw):
                 with database.cursor(conn) as cur:
                     if args.debug:
                         io.echo(f"cursor started", level="debug")
-                    cur.execute("select count(distinct person_key) as totalitems from article2.president")
+                    cur.execute(
+                        "select count(distinct person_key) as totalitems from article2.president"
+                    )
                     res = cur.fetchone()
                     totalitems = res["totalitems"]
                     if args.debug:
                         io.echo(f"{totalitems=}", level="debug")
 
                 sql = "select distinct person_key, name_given, name_sur, name_common from article2.president"
-                with database.cursor(conn, scrollable=True, name="presidentlistbox") as cur:
+                with database.cursor(
+                    conn, scrollable=True, name="presidentlistbox"
+                ) as cur:
                     if args.debug:
                         io.echo(f"Executing query", level="debug")
                     cur.execute(sql)
@@ -610,7 +638,9 @@ def main(args, **kw):
                             io.echo(f"no items")
                             done = True
                         elif op.status == "cancelled":
-                            io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled")
+                            io.echo(
+                                f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled"
+                            )
                             done = True
                         elif op.status == "exit":
                             io.echo(f"{{inputcolor}}exit")
@@ -622,10 +652,14 @@ def main(args, **kw):
                             current_person_key = op.item.pk
                             president_name = compose_person_name(op.item.data)
 
-                            io.echo(f"selected president {op.item.pk} {op.item.content}")
+                            io.echo(
+                                f"selected president {op.item.pk} {op.item.content}"
+                            )
                             setbottombar(args, f"article2 | {president_name}")
 
-                            available = get_available_categories(conn, current_person_key)
+                            available = get_available_categories(
+                                conn, current_person_key
+                            )
                             category_items = [
                                 CategoryListboxItem(cat, 20) for cat in available
                             ]
@@ -634,21 +668,35 @@ def main(args, **kw):
                             lb_category._curpage = 0
 
                             if args.debug:
-                                io.echo(f"categories available: {available}", level="debug")
+                                io.echo(
+                                    f"categories available: {available}", level="debug"
+                                )
 
                             category_done = False
                             while not category_done:
-                                setbottombar(args, f"article2 | {president_name} | select category")
+                                setbottombar(
+                                    args,
+                                    f"article2 | {president_name} | select category",
+                                )
                                 cat_op = lb_category.run("category: ")
 
                                 if cat_op.status == "selected" and cat_op.item:
                                     category = cat_op.item.pk
                                     io.echo(f"selected category: {category}")
-                                    setbottombar(args, f"article2 | {president_name} | {category}")
+                                    setbottombar(
+                                        args,
+                                        f"article2 | {president_name} | {category}",
+                                    )
 
-                                    display_category_detail(args, conn, current_person_key, category)
+                                    display_category_detail(
+                                        args, conn, current_person_key, category
+                                    )
 
-                                    io.echo(f"{{promptcolor}}press any key to continue: {{/all}}", flush=True, end="")
+                                    io.echo(
+                                        f"{{promptcolor}}press any key to continue: {{/all}}",
+                                        flush=True,
+                                        end="",
+                                    )
                                     io.getch()
                                     io.echo()
                                 else:
@@ -656,7 +704,9 @@ def main(args, **kw):
             setbottombar(args, "article2")
 
     except psycopg.DatabaseError as e:
-        io.echo(f"demo_listbox_masterdetail.main.100: database error: {e}", level="error")
+        io.echo(
+            f"demo_listbox_masterdetail.main.100: database error: {e}", level="error"
+        )
         return False
 
 
@@ -672,4 +722,6 @@ if __name__ == "__main__":
     except EOFError:
         io.echo(f"{{/all}}{{restorecursor}}*EOF*")
     finally:
-        io.echo(f"{{savecursor}}{{curpos:{io.terminal.height()},0}}{{/all}}{{eraseline}}{{reset}}{{restorecursor}}")
+        io.echo(
+            f"{{savecursor}}{{curpos:{io.terminal.height()},0}}{{/all}}{{eraseline}}{{reset}}{{restorecursor}}"
+        )

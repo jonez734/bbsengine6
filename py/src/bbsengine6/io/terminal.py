@@ -4,8 +4,10 @@ from .const import MAX_TERMINAL_WIDTH, FALLBACK_TERMINAL_WIDTH
 import shutil
 import os
 
+
 def size() -> os.terminal_size:
-  return shutil.get_terminal_size()
+    return shutil.get_terminal_size()
+
 
 def columns():
     """
@@ -32,10 +34,13 @@ def columns():
 
     return min(w, max_sz)
 
+
 width = columns
 
+
 def lines():
-  return size().lines
+    return size().lines
+
 
 height = lines
 

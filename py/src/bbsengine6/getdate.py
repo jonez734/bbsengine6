@@ -2,15 +2,16 @@ import time
 from datetime import datetime, timedelta
 from dateutil.parser import parse
 
-#import datetime
+# import datetime
 import dateutil.tz
 
 add_default_tz = lambda x, tzinfo: x.replace(tzinfo=x.tzinfo or tzinfo)
 
-#@since 20231203 merged from getdate3
+
+# @since 20231203 merged from getdate3
 def getdate(buf):
     time.tzset()
-#    tz = datetime.tzinfo("US/Pacific") # .tzname # ("US/Pacific")
+    #    tz = datetime.tzinfo("US/Pacific") # .tzname # ("US/Pacific")
     localtz = dateutil.tz.tzlocal()
 
     buf = buf.strip()
@@ -25,29 +26,31 @@ def getdate(buf):
     elif buf == "-2 days":
         return datetime.now(tz=localtz) + timedelta(days=-2)
     elif buf == "today":
-      res = datetime.now(tz=localtz)
-      io.echo(f"{res=}", level="debug")
-      return datetime.now(tz=localtz)
+        res = datetime.now(tz=localtz)
+        io.echo(f"{res=}", level="debug")
+        return datetime.now(tz=localtz)
     elif buf == "last week":
-      return datetime.now(tz=localtz) + timedelta(days=-7)
+        return datetime.now(tz=localtz) + timedelta(days=-7)
     elif buf == "next week":
-      return datetime.now(tz=localtz) + timedelta(days=+7)
+        return datetime.now(tz=localtz) + timedelta(days=+7)
     else:
-      try:
-        res = add_default_tz(parse(buf), localtz)
-      except dateutil.parser._parser.ParserError:
-        return None
-      else:
-        return res
+        try:
+            res = add_default_tz(parse(buf), localtz)
+        except dateutil.parser._parser.ParserError:
+            return None
+        else:
+            return res
+
 
 def verifyValidDateExpression(buf, **kwargs):
     if getdate(buf) is not None:
         return True
     return False
 
+
 def date(args, prompt, value, **kw):
     buf = io.inputstring(prompt, value, verify=verifyValidDateExpression)
-#    return buf
+    #    return buf
     res = getdate(buf)
     if res is None:
         ttyio.echo("invalid date expression")

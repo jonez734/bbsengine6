@@ -10,14 +10,18 @@ from bbsengine6 import io, database
 
 from . import lib
 
+
 def init(args, **kwargs) -> bool:
     return True
+
 
 def buildargs(args, **kwargs):
     return lib.buildargs(args, **kwargs)
 
+
 def access(args, op, **kwargs) -> bool:
     return True
+
 
 def main(args, **kwargs):
     failcount = 0
@@ -36,7 +40,9 @@ def main(args, **kwargs):
     else:
         io.echo(" ok ", level="ok")
 
-    io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}engine.map_member_flag: ", end="")
+    io.echo(
+        f"{{var:labelcolor}}class {{var:valuecolor}}engine.map_member_flag: ", end=""
+    )
     if database.classexists(args, "engine.map_member_flag", conn=conn) is False:
         io.echo("import ", end="")
         if database.importsql(args, "map_member_flag.sql", conn=conn) is False:

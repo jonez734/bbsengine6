@@ -11,4 +11,3 @@ io.echo("blah")
 for x in ("foo", "bar", "baz", "bing"):
     screen.poparea()
     io.inputboolean("continue? [Yn]: ")
-

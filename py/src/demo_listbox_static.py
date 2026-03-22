@@ -20,6 +20,17 @@ def handle_e(listbox):
     return ListboxResult("redraw")
 
 
+def custom_display(listbox: Listbox, highlighted: bool) -> None:
+    """Example custom display function for ListboxItem."""
+    if highlighted:
+        io.setvar("cic", "{bgwhite}{black}")
+    else:
+        io.setvar("cic", "{blue}{bglightgray}")
+    io.echo(
+        f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}Custom: {listbox.currentitem.content}{{/all}} {{listbox.boxcolor}}{{vline}}"
+    )
+
+
 def main(args):
     io.setvar("engine.menu.boxcharcolor", "{bglightgray}{darkgreen}")
     io.setvar("engine.menu.color", "{bggray}")
@@ -43,7 +54,10 @@ def main(args):
 
     items = []
     for i in range(30):
-        items.append(ListboxItem(content=f"demo item #{i}", pk=i, data=None))
+        if i == 5:
+            items.append(ListboxItem(content=f"custom item #{i}", pk=i, data=None, display=custom_display))
+        else:
+            items.append(ListboxItem(content=f"demo item #{i}", pk=i, data=None))
 
     def custom_e():
         return handle_e(lb)
@@ -60,13 +74,17 @@ def main(args):
     result = lb.run(prompt)
 
     if result is None:
-        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}listbox_next.run() returned None")
+        io.echo(
+            f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}listbox_next.run() returned None"
+        )
     elif result.status == "noitems":
         io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}no items")
     elif result.status == "cancelled":
         io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}cancelled")
     elif result.status == "selected" and result.item is not None:
-        io.echo(f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}{result.item.content} (pk={result.item.pk})")
+        io.echo(
+            f"{{restorecursor}}{{promptcolor}}{prompt}{{valuecolor}}{result.item.content} (pk={result.item.pk})"
+        )
 
 
 if __name__ == "__main__":

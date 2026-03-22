@@ -14,19 +14,21 @@ from .const import ESC, CSI
 
 from . import terminal
 
+
 @dataclass
 class Token:
-    kind: str                  # e.g., WORD, WHITESPACE, F6, RGB
-    value: str = None          # the literal string or command
-    args: List = field(default_factory=list)   # positional args
-    kwargs: Dict = field(default_factory=dict) # keyword args
-    text: str = field(default="") # {f6:3} -> \n*3, {home} -> \033[H, etc
+    kind: str  # e.g., WORD, WHITESPACE, F6, RGB
+    value: str = None  # the literal string or command
+    args: List = field(default_factory=list)  # positional args
+    kwargs: Dict = field(default_factory=dict)  # keyword args
+    text: str = field(default="")  # {f6:3} -> \n*3, {home} -> \033[H, etc
     repeat: int = 1
-    raw: Optional[str] = None                  # raw input that generated this token
+    raw: Optional[str] = None  # raw input that generated this token
+
     def __repr__(self):
         parts = [self.kind]
         if self.value:
-            parts.append(f"value={repr(self.value)}") # repr(self.value))
+            parts.append(f"value={repr(self.value)}")  # repr(self.value))
         if self.args:
             parts.append(f"args={self.args}")
         if self.kwargs:
@@ -40,8 +42,8 @@ class Token:
         return f"Token({', '.join(parts)})"
 
 
-#_cursor_row = 1
-#_cursor_col = 1
+# _cursor_row = 1
+# _cursor_col = 1
 
 _current_input_stream = sys.stdin
 
@@ -49,37 +51,46 @@ _current_output_stream = sys.stdout
 
 _current_stream_lock = threading.Lock()
 
+
 def set_output_stream(stream):
     global _current_output_stream
     _current_output_stream = stream
+
 
 def set_input_stream(stream):
     global _current_input_stream
     _current_input_stream = stream
 
+
 _input_queue = collections.deque()
 
-def _read_current_input_stream(size:int=1) -> str:
+
+def _read_current_input_stream(size: int = 1) -> str:
     if _input_queue:
         return _input_queue.popleft()
     return _current_input_stream.read(size)
 
-def read_current_input_stream(size:int=1) -> str:
+
+def read_current_input_stream(size: int = 1) -> str:
     with _current_stream_lock:
         return _read_current_input_stream(size)
 
-def _write_current_output_stream(s:str, flush=False):
+
+def _write_current_output_stream(s: str, flush=False):
     _current_output_stream.write(s)
     if flush:
         _current_output_stream.flush()
 
-def write_current_output_stream(s:str, flush=False):
+
+def write_current_output_stream(s: str, flush=False):
     with _current_stream_lock:
         return _write_current_output_stream(s, flush=flush)
+
 
 # --------------------------
 # DSR (Device Status Report)
 # --------------------------
+
 
 def _read_terminal_response(terminator: str, timeout: float = 1.0) -> str | None:
     """
@@ -92,7 +103,7 @@ def _read_terminal_response(terminator: str, timeout: float = 1.0) -> str | None
     old_settings = termios.tcgetattr(fd)
     try:
         # Set to cbreak mode (raw-like, but includes signal processing)
-        tty.setcbreak(fd) 
+        tty.setcbreak(fd)
 
         response = ""
         for _ in range(10):
@@ -104,22 +115,24 @@ def _read_terminal_response(terminator: str, timeout: float = 1.0) -> str | None
         # 3. Restore terminal settings
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
+
 # Regex for DSR reply: ESC [ <row> ; <col> R
-DSR_CURPOS_RE = re.compile(r'\x1b\[(\d+);(\d+)R')
+DSR_CURPOS_RE = re.compile(r"\x1b\[(\d+);(\d+)R")
+
 
 def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
     """
     Query the terminal for cursor position (DSR) and return the response string.
-    
+
     Sends ESC[6n and reads raw bytes until the terminating 'R' is received.
     Uses the global _current_stream_lock to prevent interleaved output.
-    
+
     Args:
         timeout: Optional timeout in seconds for the DSR response.
-    
+
     Returns:
         Decoded response string, e.g., '\x1b[12;40R'.
-    
+
     Raises:
         TimeoutError if no complete response is received in time.
     """
@@ -144,7 +157,7 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 
         try:
             # Step 0: set raw mode
-            tty.setraw(fd) # _current_input_stream
+            tty.setraw(fd)  # _current_input_stream
             # Step 1: send the DSR request
             _write_current_output_stream(f"{ESC}[{code}n", flush=True)
 
@@ -170,16 +183,20 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 
                 # Step 2c: check for timeout
                 if (time.time() - start_time) > timeout:
-                    raise TimeoutError(f"DSR response not received in {timeout}s: {buffer!r}")
+                    raise TimeoutError(
+                        f"DSR response not received in {timeout}s: {buffer!r}"
+                    )
                     break
 
-            return buffer # .decode(errors="ignore")
+            return buffer  # .decode(errors="ignore")
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # restore
+
 
 ##    write_current_output_stream(f"{CSI}{code}n", flush=True)
 ##    _current_output_stream.flush()
 ##    return _read_terminal_response(terminator)
+
 
 def get_cursor_position(timeout: float = 1.0):
     """
@@ -197,6 +214,7 @@ def get_cursor_position(timeout: float = 1.0):
     """
     return get_dsr("curpos", timeout=timeout)
 
+
 ##    # Expect something like: ESC [ row ; col R
 ##    if not resp.startswith(CSI) or not resp.endswith("R"):
 ##        raise ValueError(f"Unexpected DSR response: {resp!r}")
@@ -208,13 +226,14 @@ def get_cursor_position(timeout: float = 1.0):
 ##    except Exception as e:
 ##        raise ValueError(f"Failed to parse DSR response: {resp!r}") from e
 
+
 def get_terminal_status():
     """Device Status (DECTST / terminal readiness)
 
     Query: ESC [ 5 n
 
     Response: ESC [ 0 n → OK, ESC [ 3 n → error
-"""
+    """
 
     with _current_stream_lock:
         response = get_dsr("status")
@@ -226,6 +245,7 @@ def get_terminal_status():
                 return False
             else:
                 return None
+
 
 def drain_stream_to_queue(stream, queue):
     """
@@ -243,7 +263,7 @@ def drain_stream_to_queue(stream, queue):
 
         while True:
             try:
-#                print(BEL, flush=True, end="")
+                #                print(BEL, flush=True, end="")
                 ch = stream.read(1)
                 if not ch:
                     break  # EOF or no more data
@@ -254,23 +274,28 @@ def drain_stream_to_queue(stream, queue):
         # Restore original flags
         fcntl.fcntl(fd, fcntl.F_SETFL, fl)
 
+
 # save/restore cursor attributes
 @dataclass
-class TerminalState():
+class TerminalState:
     cursor_row: int = 1
     cursor_col: int = 1
-    wordwrap:bool  = True
-    has_color:bool = True
-    hidden:bool = False
-    width:int = 100
-    acs:bool = False
-    raw:bool = False
-    decdhl:bool = False # double height
-    decdwl:bool = False
+    wordwrap: bool = True
+    has_color: bool = True
+    hidden: bool = False
+    width: int = 100
+    acs: bool = False
+    raw: bool = False
+    decdhl: bool = False  # double height
+    decdwl: bool = False
+
     def __repr__(self):
         return f"TerminalState({self.cursor_row=}, {self.cursor_col=}, {self.wordwrap=}, {self.has_color=}, {self.hidden=}, {self.acs=}, {self.raw=})"
 
-_terminal_state = TerminalState(cursor_row=terminal.lines(), cursor_col=terminal.columns())
+
+_terminal_state = TerminalState(
+    cursor_row=terminal.lines(), cursor_col=terminal.columns()
+)
 _terminal_state_stack = []
 _terminal_state_stack_enabled = False
 

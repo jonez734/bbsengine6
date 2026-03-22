@@ -3,28 +3,36 @@ from bbsengine6 import io, database, util
 
 from . import lib
 
+
 def init(args, **kwargs) -> bool:
     return True
+
 
 def buildargs(args, **kwargs):
     return lib.buildargs(args, **kwargs)
 
+
 def access(args, op, **kwargs) -> bool:
     return True
 
+
 classlist = (
-        ("engine.__member",  "member.sql"),
-        ("engine.__session", "session.sql"),
-        ("engine.alert",     "alert.sql"),
-        ("engine.__folder",     "folder.sql"),
-        ("engine.member",    "memberview.sql"),
-    )
+    ("engine.__member", "member.sql"),
+    ("engine.__session", "session.sql"),
+    ("engine.alert", "alert.sql"),
+    ("engine.__folder", "folder.sql"),
+    ("engine.member", "memberview.sql"),
+)
+
 
 def main(args, **kwargs) -> bool:
     def _work(conn):
         failcount = 0
-        for (c, sql) in classlist:
-            io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}{c}{{var:labelcolor}}: ", end="")
+        for c, sql in classlist:
+            io.echo(
+                f"{{var:labelcolor}}class {{var:valuecolor}}{c}{{var:labelcolor}}: ",
+                end="",
+            )
             if database.classexists(args, c, conn=conn) is False:
                 io.echo("import ", end="")
                 if database.importsql(args, sql, conn=conn) is False:
@@ -36,7 +44,6 @@ def main(args, **kwargs) -> bool:
                     conn.commit()
             else:
                 io.echo("ok", level="ok")
-        
 
         return True if failcount == 0 else False
 

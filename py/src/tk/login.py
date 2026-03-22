@@ -5,19 +5,20 @@ from tkinter import ttk
 
 from bbsengine6 import io, database, util, member
 
+
 class App(tk.Tk):
     def __init__(self, args):
         super().__init__()
 
         self.args = args
 
-#        self.geometry('300x110')
-#        self.resizable(0, 0)
-        self.title('Login')
+        #        self.geometry('300x110')
+        #        self.resizable(0, 0)
+        self.title("Login")
         # UI options
-        paddings = {'padx': 5, 'pady': 5}
+        paddings = {"padx": 5, "pady": 5}
         entry_font = {"font": ("Courier", 20)}
-#        entry_font = {'font': ('Helvetica', 11)}
+        #        entry_font = {'font': ('Helvetica', 11)}
 
         # configure the grid
         self.columnconfigure(0, weight=1)
@@ -37,7 +38,9 @@ class App(tk.Tk):
         self.password_label = ttk.Label(self, text="Password:")
         self.password_label.grid(column=0, row=1, sticky=tk.W, **paddings)
 
-        self.password_entry = ttk.Entry(self, textvariable=self.password, show="*", **entry_font)
+        self.password_entry = ttk.Entry(
+            self, textvariable=self.password, show="*", **entry_font
+        )
         self.password_entry.grid(column=1, row=1, sticky=tk.E, **paddings)
 
         # login button
@@ -46,9 +49,9 @@ class App(tk.Tk):
 
         # configure style
         self.style = ttk.Style(self)
-        self.style.configure('TLabel', font='Courier 20 bold')
-        self.style.configure('TButton', font='Courier 20 bold')
-        self.bind('<Escape>', lambda e: self.close(e))
+        self.style.configure("TLabel", font="Courier 20 bold")
+        self.style.configure("TButton", font="Courier 20 bold")
+        self.bind("<Escape>", lambda e: self.close(e))
 
     def check(self):
         moniker = self.moniker.get()
@@ -63,18 +66,26 @@ class App(tk.Tk):
             self.password_entry.delete(0, tk.END)
 
     def close(self, e):
-       self.destroy()
+        self.destroy()
+
 
 def buildargs(args=None, **kw):
     parser = argparse.ArgumentParser("tklogin")
     parser.add_argument("--verbose", action="store_true", dest="verbose")
     parser.add_argument("--debug", action="store_true", dest="debug")
 
-#    defaults = {"databasename": "zoidweb5", "databasehost":"localhost", "databaseuser": None, "databaseport":15433, "databasepassword":None} # port=5432
-    defaults = {"databasename": "zoid6", "databasehost":"localhost", "databaseuser": None, "databaseport":5432, "databasepassword":None} # port=5432
+    #    defaults = {"databasename": "zoidweb5", "databasehost":"localhost", "databaseuser": None, "databaseport":15433, "databasepassword":None} # port=5432
+    defaults = {
+        "databasename": "zoid6",
+        "databasehost": "localhost",
+        "databaseuser": None,
+        "databaseport": 5432,
+        "databasepassword": None,
+    }  # port=5432
     database.buildargs(parser, defaults)
 
     return parser
+
 
 if __name__ == "__main__":
     parser = buildargs()

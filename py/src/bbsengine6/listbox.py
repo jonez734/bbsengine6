@@ -13,6 +13,7 @@ class ListboxItem:
     data: Any
     disabled: bool
     onkey: Optional[Callable[["ListboxItem", str], bool]] = None
+    display: Optional[Callable[["Listbox", bool], None]] = None
 
     def __init__(
         self,
@@ -21,6 +22,7 @@ class ListboxItem:
         data: Any = None,
         disabled: bool = False,
         onkey: Optional[Callable[["ListboxItem", str], bool]] = None,
+        display: Optional[Callable[["Listbox", bool], None]] = None,
         **kwargs: Any,
     ) -> None:
         self.content = content
@@ -28,6 +30,7 @@ class ListboxItem:
         self.data = data
         self.disabled = disabled
         self.onkey = onkey
+        self.display = display
 
     def handle_key(self, key: str) -> bool:
         return False
@@ -156,6 +159,15 @@ class Listbox:
         return -1
 
     def _display_item(self, item: ListboxItem, highlighted: bool = False) -> None:
+        display_method = getattr(item, "display", None)
+        if display_method is None:
+            display_method = getattr(type(item), "display", None)
+        logentry(f"_display_item.200: checking for item.display {display_method=}", level="debug")
+        if display_method is not None and callable(display_method):
+            logentry("_display_item.100: calling item.display()", level="debug")
+            display_method(item, self, highlighted)
+            return
+
         if item.disabled:
             io.setvar("cic", "{listbox.item.disabled}")
         elif highlighted:
@@ -170,18 +182,19 @@ class Listbox:
             else:
                 line = ""
             visible_len = rendered_length(line)
-            if visible_len > self.contentwidth:
-                truncated = ""
-                for i, ch in enumerate(line):
-                    if rendered_length(truncated + ch + "...") <= self.contentwidth:
-                        truncated += ch
-                    else:
-                        break
-                padded = truncated + "..."
-            else:
-                padded = line + " " * (self.contentwidth - visible_len)
+            logentry(f"{visible_len=} {self.contentwidth=} {line=}", level="debug")
+##            if visible_len > self.contentwidth:
+##                truncated = ""
+##                for i, ch in enumerate(line):
+##                    if rendered_length(truncated + ch + "...") <= self.contentwidth:
+##                        truncated += ch
+##                    else:
+##                        break
+##                padded = truncated + "..."
+##            else:
+            padded = line + " " * (self.contentwidth - visible_len)
             io.echo(
-                f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}"
+                f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}&{{/all}}{{listbox.boxcolor}}{{vline}}"
             )
 
     def _display_blank_line(self) -> None:

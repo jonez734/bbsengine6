@@ -1,6 +1,7 @@
 import argparse
 from bbsengine6 import screen, io
 
+
 def setarea(args, buf, stack=False, **kwargs) -> None:
     player = kwargs.get("player", None)
     help = kwargs.get("help", None)
@@ -32,13 +33,14 @@ def setarea(args, buf, stack=False, **kwargs) -> None:
                 return ""
 
     screen.setbottombar(buf, rightside, stack)
-    #if args.debug is True:
+    # if args.debug is True:
     #    io.echo(f"empyre.setarea.100: {buf=} {stack=} {screen.areastack=}", level="debug")
     return
+
 
 args = argparse.Namespace(debug=True)
 io.util.screen_init()
 io.util.setbottombar("this is the left side")
-#screen.init()
-#setarea(args, "this is the left side")
-#io.inputboolean("done? ")
+# screen.init()
+# setarea(args, "this is the left side")
+# io.inputboolean("done? ")

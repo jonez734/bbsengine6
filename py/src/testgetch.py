@@ -8,4 +8,3 @@ while True:
         print(f"{ch=} ", end="", flush=True)
 print
 print
-
