@@ -4,6 +4,7 @@ from typing import Any, Callable, List, NamedTuple, Optional
 
 from . import io
 from .common import logentry
+from .io.echo import rendered_length
 
 
 class ListboxItem:
@@ -58,6 +59,7 @@ class Listbox:
         items: Optional[List[ListboxItem]] = None,
         idle: Optional[Callable[[], None]] = None,
         custom_keys: Optional[dict[str, Callable[[], Optional[ListboxResult]]]] = None,
+        itemclass: Optional[type] = None,
         **kwargs: Any,
     ) -> None:
         self.args = args
@@ -68,6 +70,7 @@ class Listbox:
         self.idle = idle
         self.custom_keys = custom_keys if custom_keys else {}
         self.kwargs = kwargs
+        self.itemclass = itemclass
 
         self._curpage = 0
         self._currentindex = 0
@@ -166,15 +169,20 @@ class Listbox:
                 line = lines[line_num]
             else:
                 line = ""
-            padded = line.ljust(self.contentwidth, " ")
-            if highlighted:
-                io.echo(
-                    f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}"
-                )
+            visible_len = rendered_length(line)
+            if visible_len > self.contentwidth:
+                truncated = ""
+                for i, ch in enumerate(line):
+                    if rendered_length(truncated + ch + "...") <= self.contentwidth:
+                        truncated += ch
+                    else:
+                        break
+                padded = truncated + "..."
             else:
-                io.echo(
-                    f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}"
-                )
+                padded = line + " " * (self.contentwidth - visible_len)
+            io.echo(
+                f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}{{/all}} {{listbox.boxcolor}}{{vline}}"
+            )
 
     def _display_blank_line(self) -> None:
         for _ in range(self.itemheight):

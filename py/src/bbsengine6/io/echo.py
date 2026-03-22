@@ -12,11 +12,19 @@
 import re
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
 
 from .const import CSI, BEL, ESC, ECHO_END, OSC
 
-from .common import Token, write_current_output_stream, get_cursor_position, _terminal_state, _terminal_state_stack, _terminal_state_stack_enabled, _current_stream_lock, TerminalState
+from .common import (
+    Token,
+    write_current_output_stream,
+    get_cursor_position,
+    _terminal_state,
+    _terminal_state_stack,
+    _terminal_state_stack_enabled,
+    _current_stream_lock,
+    TerminalState,
+)
 from .util import logentry
 from .palette import c64_palette, get_current_palette, get_palette_entry, rgb
 
@@ -25,48 +33,43 @@ from . import terminal
 _previous_token = Token("UNKNOWN")
 
 _skin = {
-"theanswer": 42,
-"engine.title.color": "{bggray}{white}",
-"engine.title.hrcolor": "{darkgreen}",
-
-"optioncolor": "{white}{bggray}",
-"currentoptioncolor": "{bgwhite}{gray}",
-"bottombarcolor": "{bgwhite}{black}",
-"promptcolor": "{/bgcolor}{white}", # {lightgray}",
-"inputcolor": "{/bgcolor}{green}",
-"normalcolor": "{/bgcolor}{lightgray}",
-"highlightcolor": "{green}",
-"labelcolor": "{/bgcolor}{lightgray}",
-"valuecolor": "{/bgcolor}{green}",
-"hrcolor": "{/bgcolor}{gray}",
-"acscolor": "{/bgcolor}{gray}", # @since 20220916
-"sepcolor": "{lightgray}", # @since 20220924
-
-"level.debug": "{bglightblue}{blue}",
-"level.warning": "{bgyellow}{black}",
-"level.error": "{bgred}{white}",
-"level.ok": "{bggreen}{black}",
-"level.info": "{bgwhite}{blue}",
-"level.crit": "{bgblue}{white}",
-
-"boxcolor": "{darkgreen}",
-"titlecolor": "{white}{bggray}",
-
-#"engine.menu.boxcharcolor": "{bglightgray}{darkgreen}",
-#"engine.menu.color": "{bggray}",
-#"engine.menu.shadowcolor": "{bgdarkgray}",
-#"engine.menu.cursorcolor": "{bglightgray}{blue}",
-#"engine.menu.boxcolor": "{bgblue}{green}",
-#"engine.menu.titlecolor": "{black}{bglightgray}",
-#"engine.menu.disableditemcolor": "{darkgray}",
-#"engine.menu.resultfailedcolor": "{bgred}{white}",
-
-"listbox.boxcolor": "{darkgreen}",
-"listbox.titlecolor": "{inverse}",
-"listbox.item.normal": "{white}",
-"listbox.item.highlighted": "{listbox.item.normal}{inverse}",
-"listbox.item.disabled": "{darkgray}",
-"listbox.bgcolor": "",
+    "theanswer": 42,
+    "engine.title.color": "{bggray}{white}",
+    "engine.title.hrcolor": "{darkgreen}",
+    "optioncolor": "{white}{bggray}",
+    "currentoptioncolor": "{bgwhite}{gray}",
+    "bottombarcolor": "{bgwhite}{black}",
+    "promptcolor": "{/bgcolor}{white}",  # {lightgray}",
+    "inputcolor": "{/bgcolor}{green}",
+    "normalcolor": "{/bgcolor}{lightgray}",
+    "highlightcolor": "{green}",
+    "labelcolor": "{/bgcolor}{lightgray}",
+    "valuecolor": "{/bgcolor}{green}",
+    "hrcolor": "{/bgcolor}{gray}",
+    "acscolor": "{/bgcolor}{gray}",  # @since 20220916
+    "sepcolor": "{lightgray}",  # @since 20220924
+    "level.debug": "{bglightblue}{blue}",
+    "level.warning": "{bgyellow}{black}",
+    "level.error": "{bgred}{white}",
+    "level.ok": "{bggreen}{black}",
+    "level.info": "{bgwhite}{blue}",
+    "level.crit": "{bgblue}{white}",
+    "boxcolor": "{darkgreen}",
+    "titlecolor": "{white}{bggray}",
+    # "engine.menu.boxcharcolor": "{bglightgray}{darkgreen}",
+    # "engine.menu.color": "{bggray}",
+    # "engine.menu.shadowcolor": "{bgdarkgray}",
+    # "engine.menu.cursorcolor": "{bglightgray}{blue}",
+    # "engine.menu.boxcolor": "{bgblue}{green}",
+    # "engine.menu.titlecolor": "{black}{bglightgray}",
+    # "engine.menu.disableditemcolor": "{darkgray}",
+    # "engine.menu.resultfailedcolor": "{bgred}{white}",
+    "listbox.boxcolor": "{darkgreen}",
+    "listbox.titlecolor": "{inverse}",
+    "listbox.item.normal": "{white}",
+    "listbox.item.highlighted": "{listbox.item.normal}{inverse}",
+    "listbox.item.disabled": "{darkgray}",
+    "listbox.bgcolor": "",
 }
 
 # Runtime variables dictionary
@@ -78,82 +81,78 @@ _runtime_vars.update({"home": "{curpos:1,1}"})
 
 _runtime_vars.update(_skin)
 
+
 def setvar(name, value):
     """Set a runtime variable for use in {var:<name>} or {<name>} commands."""
     _runtime_vars[name] = value
 
+
 def getvar(name, default=None):
     return _runtime_vars.get(name, default)
+
 
 def register_emoji(name, value):
     """Register a custom emoji for use with :name: syntax."""
     _emoji[name] = value
 
+
 def register_emojis(emojis: dict):
     """Register multiple custom emojis at once."""
     _emoji.update(emojis)
+
 
 # ----------------------------
 # Command patterns
 # ----------------------------
 _command_handlers = {
     # cursor movements (repeat n)
-    "cuu":     r'cup|cuu|cursorup',
-    "cud":     r'cud|cursordown',
-    "cuf":     r'cuf|cursorforward|cursorright',
-    "cub":     r'cub|cursorleft|cursorback|cursorbackward',
-    "curpos":  r'curpos',
-
-    "decsc":   r'decsc|savecursor',
-    "decrc":   r'decrc|restorecursor',
-
-    "decstbm": r'decstbm',
-
-    "acs":     r'acs',
-    "f6":      r'f6',
-
-    "literalopen" : r'\{\{',
-    "literalclose" : r'\}\}',
-
+    "cuu": r"cup|cuu|cursorup",
+    "cud": r"cud|cursordown",
+    "cuf": r"cuf|cursorforward|cursorright",
+    "cub": r"cub|cursorleft|cursorback|cursorbackward",
+    "curpos": r"curpos",
+    "decsc": r"decsc|savecursor",
+    "decrc": r"decrc|restorecursor",
+    "decstbm": r"decstbm",
+    "acs": r"acs",
+    "f6": r"f6",
+    "literalopen": r"\{\{",
+    "literalclose": r"\}\}",
     # runtime variables
-    "var": r'var',
-    "attr": r'attr',
-
+    "var": r"var",
+    "attr": r"attr",
     # rgb color
-    "rgb": r'rgb',
-
+    "rgb": r"rgb",
     # reset attributes and color
-    "reset": r'reset',
-
+    "reset": r"reset",
     # erase display
-    "ed": r'ed|erasedisplay',
-
+    "ed": r"ed|erasedisplay",
     # erase line
-    "elo": r'el|eraseline',
-    "bel": r'bel|bell',
-
+    "elo": r"el|eraseline",
+    "bel": r"bel|bell",
     # clear fg or bg color
-    "slashfgcolor": r'/fgcolor',
-    "slashbgcolor": r'/bgcolor',
-
+    "slashfgcolor": r"/fgcolor",
+    "slashbgcolor": r"/bgcolor",
     # doublewidth
-    "decdhl": r'fullwidth|/fullwidth',
-
+    "decdhl": r"fullwidth|/fullwidth",
     # cursor horizontal absolute @since 20251025
-    "cha": r'cha',
-
-    "slashall": r'/all',
-
-    "settitle": r'settitle',
+    "cha": r"cha",
+    "slashall": r"/all",
+    "settitle": r"settitle",
 }
 
-_compiled_command_handlers = [(kind, re.compile(pattern, re.IGNORECASE)) for kind, pattern in _command_handlers.items()]
+_compiled_command_handlers = [
+    (kind, re.compile(pattern, re.IGNORECASE))
+    for kind, pattern in _command_handlers.items()
+]
 
-_whitespace_re = re.compile(r'(\s+)')
-_word_re = re.compile(r'[^\s{}]+')
-_literal_braces_re = re.compile(r'(\{\{|\}\})')
+_whitespace_re = re.compile(r"(\s+)")
+_word_re = re.compile(r"[^\s{}]+")
+_literal_braces_re = re.compile(r"(\{\{|\}\})")
 
-_command_re = re.compile(r"\{(?P<name>/?[a-zA-Z_][a-zA-Z0-9_.]*)(?::?(?P<params>[^}]*))\}", re.IGNORECASE)
+_command_re = re.compile(
+    r"\{(?P<name>/?[a-zA-Z_][a-zA-Z0-9_.]*)(?::?(?P<params>[^}]*))\}", re.IGNORECASE
+)
 _emoji_re = re.compile(r":(?P<name>[\w _-]+):", re.IGNORECASE)
 
 # ----------------------------
@@ -166,6 +165,7 @@ command_aliases = {}
 ##    "reset": "{/reset}",
 ##}
 
+
 # ----------------------------
 # Tokenizer
 # ----------------------------
@@ -174,9 +174,11 @@ def tokenize(text, **kwargs):
 
     if text is None:
         return
-    
+
     if type(text) is not str:
-        logentry(f"bbsengine.io.echo.tokenize.100: warning: text is not str", level="warn")
+        logentry(
+            f"bbsengine.io.echo.tokenize.100: warning: text is not str", level="warn"
+        )
         return
 
     pos = 0
@@ -185,13 +187,14 @@ def tokenize(text, **kwargs):
         m = _whitespace_re.match(text, pos)
         if m:
             # emit a single WHITESPACE token
-            token = Token("WHITESPACE",
-              value=m.group(1),       # optional semantic info
-              repeat=len(m.group(0)), # total length of run
-              text=None,              # to be filled by handler
-              raw=m.group(0)
+            token = Token(
+                "WHITESPACE",
+                value=m.group(1),  # optional semantic info
+                repeat=len(m.group(0)),  # total length of run
+                text=None,  # to be filled by handler
+                raw=m.group(0),
             )
-##            print(f"tokenize.100: {tok=}")
+            ##            print(f"tokenize.100: {tok=}")
             yield from _handle_whitespace(token)
             pos = m.end()
             continue
@@ -213,16 +216,22 @@ def tokenize(text, **kwargs):
             params = m.group("params") or ""
             args, kwargs = parse_command_params(name, params)
 
-##            print(f"tokenize.200: {name=} {args=} {m.group(0)=}")
+            ##            print(f"tokenize.200: {name=} {args=} {m.group(0)=}")
 
-            tok = Token(kind="COMMAND", value=name, args=tuple(args), kwargs=kwargs, raw=m.group(0))
+            tok = Token(
+                kind="COMMAND",
+                value=name,
+                args=tuple(args),
+                kwargs=kwargs,
+                raw=m.group(0),
+            )
             yield from _handle_command(tok)
             pos += m.end()
             continue
 
-#        m = re.match(_compiled_command_handlers[1], m.group("name").lower())
-#        if m:
-#            tok = Token(_compiled_command_handler[0], raw=m.group(0))
+        #        m = re.match(_compiled_command_handlers[1], m.group("name").lower())
+        #        if m:
+        #            tok = Token(_compiled_command_handler[0], raw=m.group(0))
 
         m = re.match(_emoji_re, text[pos:])
         if m:
@@ -247,6 +256,7 @@ def tokenize(text, **kwargs):
         yield Token("UNKNOWN", value=run, text=run)
         pos += len(text[pos:])
 
+
 def to_fullwidth(s: str) -> str:
     """
     Convert a string to its fullwidth Unicode equivalent.
@@ -257,14 +267,15 @@ def to_fullwidth(s: str) -> str:
     result = []
     for c in s:
         code = ord(c)
-        if c == ' ':
-            result.append('\u3000')  # Fullwidth space
+        if c == " ":
+            result.append("\u3000")  # Fullwidth space
         elif 0x21 <= code <= 0x7E:
             result.append(chr(code - 0x21 + 0xFF01))
         else:
             result.append(c)
-##    print(f"{result=}")
-    return ''.join(result)
+    ##    print(f"{result=}")
+    return "".join(result)
+
 
 # ----------------------------
 # token handlers
@@ -296,12 +307,12 @@ def _handle_word(token, **kwargs):
         else:
             word_len = len(token_text)
 
-            if (
-                _terminal_state.wordwrap
-                and _terminal_state.cursor_col + word_len > width - 1
-            ):
-                emit_f6 = True
-                _terminal_state.cursor_col = 0
+            if _terminal_state.wordwrap:
+                if _terminal_state.cursor_col >= width:
+                    _terminal_state.cursor_col = 0
+                if _terminal_state.cursor_col + word_len > width - 1:
+                    emit_f6 = True
+                    _terminal_state.cursor_col = 0
 
             _terminal_state.cursor_col += word_len
             emit_token = True
@@ -315,6 +326,7 @@ def _handle_word(token, **kwargs):
         token.text = token_text
         yield token
 
+
 def _handle_whitespace(token):
     """
     Consolidate repeated whitespace characters into tokens.
@@ -324,7 +336,7 @@ def _handle_whitespace(token):
     global _acs, _raw
 
     if not _raw:
-      yield from _acs_off()
+        yield from _acs_off()
 
     run = token.value
     i = 0
@@ -333,19 +345,22 @@ def _handle_whitespace(token):
         repeat = 1
         while i + repeat < len(run) and run[i + repeat] == ch:
             repeat += 1
-        yield Token("WHITESPACE",
-            value=ch,           # the character itself (' ', '\t', or '\n')
-            repeat=repeat,       # how many times it repeats
-            text=ch,    # string that will be written
-            raw=ch
+        yield Token(
+            "WHITESPACE",
+            value=ch,  # the character itself (' ', '\t', or '\n')
+            repeat=repeat,  # how many times it repeats
+            text=ch,  # string that will be written
+            raw=ch,
         )
         i += repeat
+
 
 ###_wordwrap = True
 ###_color = True
 ###_acs = False
 ###_raw = False
 ###_term_width = None
+
 
 # DECSC / DECRC operate on software-defined TerminalState.
 # All operations occur under _current_stream_lock to keep
@@ -366,6 +381,7 @@ def _handle_decsc(token):
             )
         )
 
+
 def _handle_decrc(token):
     global _terminal_state, _terminal_state_stack
 
@@ -380,61 +396,63 @@ def _handle_decrc(token):
     # restore software state
     _terminal_state.cursor_row = state.cursor_row
     _terminal_state.cursor_col = state.cursor_col
-    _terminal_state.wordwrap   = state.wordwrap
-    _terminal_state.has_color  = state.has_color
-    _terminal_state.hidden     = state.hidden
+    _terminal_state.wordwrap = state.wordwrap
+    _terminal_state.has_color = state.has_color
+    _terminal_state.hidden = state.hidden
 
     # restore hardware cursor
-    yield from _handle_curpos(Token("CURPOS", args=(_terminal_state.cursor_row, _terminal_state.cursor_col)))
+    yield from _handle_curpos(
+        Token("CURPOS", args=(_terminal_state.cursor_row, _terminal_state.cursor_col))
+    )
+
 
 # ----------------------------
 # ACS characters
 # ----------------------------
 _acs_map = {
     # Box drawing
-    "ulcorner": "l",    # ┌
-    "urcorner": "k",    # ┐
-    "llcorner": "m",    # └
-    "lrcorner": "j",    # ┘
-    "hline":    "q",    # ─
-    "vline":    "x",    # │
-    "ttee":     "w",    # ┬
-    "btee":     "v",    # ┴
-    "ltee":     "u",    # ┤
-    "rtee":     "t",    # ├
-    "plus":     "n",    # ┼
-#    "ttee":        "\u252C", # ┬
-#    "btee":        "\u2534", # ┴
-#    "ltee":        "\u251C", # ├
-#    "rtee":        "\u2524", # ┤
-#    "cross":       "\u253C", # ┼
-
+    "ulcorner": "l",  # ┌
+    "urcorner": "k",  # ┐
+    "llcorner": "m",  # └
+    "lrcorner": "j",  # ┘
+    "hline": "q",  # ─
+    "vline": "x",  # │
+    "ttee": "w",  # ┬
+    "btee": "v",  # ┴
+    "ltee": "u",  # ┤
+    "rtee": "t",  # ├
+    "plus": "n",  # ┼
+    #    "ttee":        "\u252C", # ┬
+    #    "btee":        "\u2534", # ┴
+    #    "ltee":        "\u251C", # ├
+    #    "rtee":        "\u2524", # ┤
+    #    "cross":       "\u253C", # ┼
     # Other symbols
-    "diamond":      "`",  # ◆
+    "diamond": "`",  # ◆
     "checkerboard": "a",  # ▒
-    "ht":           "b",  # HT symbol
-    "ff":           "c",  # FF symbol
-    "cr":           "d",  # CR symbol
-    "lf":           "e",  # LF symbol
-    "degree":       "f",  # °
-    "pluminus":     "g",  # ±
-    "board":        "h",  # board of squares
-    "lantern":      "i",  # lantern / scan line / bell symbol
-    "scan1":        "o",  # scan line 1
-    "scan3":        "p",  # scan line 3
-    "scan7":        "r",  # scan line 7
-    "scan9":        "s",  # scan line 9
-    "lequal":       "y",  # ≤
-    "gequal":       "z",  # ≥
-    "pi":           "{",  # π
-    "nequal":       "|",  # ≠
-    "sterling":     "}",  # £
-    "bullet":       "~",  # • / ≈
-
+    "ht": "b",  # HT symbol
+    "ff": "c",  # FF symbol
+    "cr": "d",  # CR symbol
+    "lf": "e",  # LF symbol
+    "degree": "f",  # °
+    "pluminus": "g",  # ±
+    "board": "h",  # board of squares
+    "lantern": "i",  # lantern / scan line / bell symbol
+    "scan1": "o",  # scan line 1
+    "scan3": "p",  # scan line 3
+    "scan7": "r",  # scan line 7
+    "scan9": "s",  # scan line 9
+    "lequal": "y",  # ≤
+    "gequal": "z",  # ≥
+    "pi": "{",  # π
+    "nequal": "|",  # ≠
+    "sterling": "}",  # £
+    "bullet": "~",  # • / ≈
     # Extras sometimes present in DEC tables
-    "notdef":       "^",  # undefined glyph
-    "space":        "_",  # blank space
+    "notdef": "^",  # undefined glyph
+    "space": "_",  # blank space
 }
+
 
 def _acs_on():
     global _current_stream_lock, _terminal_state
@@ -449,6 +467,7 @@ def _acs_on():
     if token is not None:
         yield token
 
+
 def _acs_off():
     global _current_stream_lock, _terminal_state
 
@@ -462,8 +481,9 @@ def _acs_off():
     if token is not None:
         yield token
 
+
 def _handle_acs(token):
-    global _terminal_state ### _cursor_col
+    global _terminal_state  ### _cursor_col
 
     if token.value == "acs":
         name = token.args[0]
@@ -485,6 +505,7 @@ def _handle_acs(token):
     yield token
     return
 
+
 def _handle_var(token):
     var_name = token.args[0] if token.args else token.value
     var_val = _runtime_vars.get(var_name, "")
@@ -493,8 +514,9 @@ def _handle_var(token):
         yield t
     return
 
+
 def _handle_rgb(token):
-##    print(f"_handle_rgb.100: {token=}")
+    ##    print(f"_handle_rgb.100: {token=}")
     if len(token.args) == 2:
         mode = 38 if token.args[0] == "fg" else 48
         token.text = rgb(mode, token.args[1])
@@ -507,6 +529,7 @@ def _handle_rgb(token):
 
     raise ValueError("Argument Error")
     return
+
 
 def _handle_curpos(token):
     global _terminal_state
@@ -530,7 +553,8 @@ def _handle_curpos(token):
     # emit escape AFTER lock is released
     token.text = f"{CSI}{y};{x}H"
     yield token
-    
+
+
 def _handle_f6(token):
     global _cursor_col, _cursor_row
 
@@ -542,15 +566,17 @@ def _handle_f6(token):
     yield token
 
     with _current_stream_lock:
-        _terminal_state.cursor_col = 0 ### _cursor_col = 0
-###    _cursor_row += 1
+        _terminal_state.cursor_col = 0  ### _cursor_col = 0
+    ###    _cursor_row += 1
 
     return
+
 
 def _handle_home(token):
     token.text = f"{CSI}H"
     yield token
     return
+
 
 # erasedisplay
 # tobottom = 1, totop = 2, default = 0 = full
@@ -559,6 +585,7 @@ def _handle_ed(token):
     mode = int(token.args[0]) if len(token.args) == 1 else 2
     token.text = f"{CSI}{mode}J"
     yield token
+
 
 # 0 = clear right of cursor
 # 1 = clear left of cursor
@@ -569,47 +596,52 @@ def _handle_elo(token):
     token.text = f"{CSI}{mode}K"
     yield token
 
+
 def _handle_cuu(token):
     if len(token.args) == 0:
-      repeat = 1
+        repeat = 1
     else:
-      repeat = token.args[0] or 1
+        repeat = token.args[0] or 1
 
     token.repeat = 1
     token.text = f"{CSI}{repeat}A"
     yield token
 
+
 def _handle_cud(token):
     if len(token.args) == 0:
-      repeat = 1
+        repeat = 1
     else:
-      repeat = token.args[0] or 1
+        repeat = token.args[0] or 1
 
     token.repeat = 1
     token.text = f"{CSI}{repeat}B"
     yield token
     return
 
+
 def _handle_cuf(token):
     if len(token.args) == 0:
-      repeat = 1
+        repeat = 1
     else:
-      repeat = int(token.args[0])
+        repeat = int(token.args[0])
 
     token.repeat = 1
     token.text = f"{CSI}{repeat}C"
     yield token
 
+
 def _handle_cub(token):
     if len(token.args) == 0:
-      repeat = 1
+        repeat = 1
     else:
-      repeat = int(token.args[0])
+        repeat = int(token.args[0])
 
     token.repeat = 1
     token.text = f"{CSI}{repeat}D"
     yield token
     return
+
 
 def _handle_decstbm(token):
     token.repeat = 1
@@ -627,91 +659,109 @@ def _handle_decstbm(token):
 
     token.text = f"{CSI}{t};{b}r"
     yield token
+
+
 ##    logentry(f"asimov.io.echo._handle_decstbm.100: {t=} {b=} {token.text=}", level="debug")
 ##    return
 
-def _handle_settitle(token):
-  if len(token.args) == 0:
-    return iter()
 
-  token.repeat = 1
-  token.text = f"{OSC}0;{' '.join(token.args)}{BEL}"
-  yield token
+def _handle_settitle(token):
+    if len(token.args) == 0:
+        return iter()
+
+    token.repeat = 1
+    token.text = f"{OSC}0;{' '.join(token.args)}{BEL}"
+    yield token
+
 
 def _handle_slashall(token):
-  token.kind = "COLOR"
-  token.repeat = 1
-  token.text = f"{ESC}[0m"
-  yield token
+    token.kind = "COLOR"
+    token.repeat = 1
+    token.text = f"{ESC}[0m"
+    yield token
+
 
 def _handle_reset(token):
-  if len(token.args) > 0:
-    return iter()
+    if len(token.args) > 0:
+        return iter()
 
-  if not _raw:
-    yield from _acs_off()
-  
-  yield from _handle_slashall(token)
-  yield from _handle_decstbm(token)
-  return
+    if not _raw:
+        yield from _acs_off()
 
-##  if mode == "all":
-##    logentry(f"echo._handle_reset.100: {mode=}", level="debug")
-##    token.args = ()
-##    yield from _handle_decstbm(token)
+    yield from _handle_slashall(token)
+    yield from _handle_decstbm(token)
+    return
 
-  return
+    ##  if mode == "all":
+    ##    logentry(f"echo._handle_reset.100: {mode=}", level="debug")
+    ##    token.args = ()
+    ##    yield from _handle_decstbm(token)
+
+    return
+
 
 def _handle_unknown(token):
     token.text = f"{token.kind=}: no registered handler"
     yield token
 
+
 def _handle_slashfgcolor(token):
-  if len(token.args) > 0:
-    raise ValueError
-  token.text = f"{CSI}39m"
-  yield token
+    if len(token.args) > 0:
+        raise ValueError
+    token.text = f"{CSI}39m"
+    yield token
+
 
 def _handle_slashbgcolor(token):
-  if len(token.args) > 0:
-    raise ValueError
-  token.text = f"{CSI}49m"
-  yield token
+    if len(token.args) > 0:
+        raise ValueError
+    token.text = f"{CSI}49m"
+    yield token
+
 
 def _handle_cha(token):
-  repeat = token.args[0] if len(token.args) == 1 else 1
-  token.kind = "CURSOR"
-  token.repeat = 1
-  token.text = f"{CSI}{repeat}G"
-  yield token
+    repeat = token.args[0] if len(token.args) == 1 else 1
+    token.kind = "CURSOR"
+    token.repeat = 1
+    token.text = f"{CSI}{repeat}G"
+    yield token
+
 
 def _handle_literalopen(token):
-  ## print("literalopen", flush=True)
-  token.kind = "WORD"
-  token.repeat = 1
-  token.text = "{"
-  yield token
+    ## print("literalopen", flush=True)
+    token.kind = "WORD"
+    token.repeat = 1
+    token.text = "{"
+    yield token
+
 
 def _handle_literalclose(token):
-  token.kind = "WORD"
-  token.repeat = 1
-  token.text = "}"
-  yield token
+    token.kind = "WORD"
+    token.repeat = 1
+    token.text = "}"
+    yield token
+
 
 options = {}
-def setoption(opt:str, value):
-  global options
-  options[opt] = value
-  return value
 
-def getoption(opt:str, default=None):
-  global options
 
-  return options[opt] if opt in options else default
+def setoption(opt: str, value):
+    global options
+    options[opt] = value
+    return value
+
+
+def getoption(opt: str, default=None):
+    global options
+
+    return options[opt] if opt in options else default
+
 
 PARAM_SPLIT_RE = re.compile(r"[:,]")
+
+
 def parse_command_params(name, params):
-    args = [] # [name,]
+    args = []  # [name,]
     kwargs = {}
     if not params:
         return args, kwargs
@@ -724,6 +774,7 @@ def parse_command_params(name, params):
         elif part:
             args.append(part)
     return args, kwargs
+
 
 def handler_dispatch(token):
     """Yield from the appropriate handler given a token."""
@@ -747,44 +798,48 @@ def handler_dispatch(token):
     yield token
     return False
 
+
 def _handle_bel(token):
     token.text = BEL
     yield token
 
+
 _unicode = {
-##    "ulcorner":    "\u250C", # ┌
-##    "urcorner":    "\u2510", # ┐
-##    "llcorner":    "\u2514", # └
-##    "lrcorner":    "\u2518", # ┘
-##    "hline":       "\u2500", # ─
-##    "vline":       "\u2502", # │
-##    "ttee":        "\u252C", # ┬
-##    "btee":        "\u2534", # ┴
-##    "ltee":        "\u251C", # ├
-##    "rtee":        "\u2524", # ┤
-##    "cross":       "\u253C", # ┼
-    "dblhline":    "\u2550", # ═
-    "dblvline":    "\u2551", # ║
-    "dblul":       "\u2554", # ╔
-    "dblur":       "\u2557", # ╗
-    "dblll":       "\u255A", # ╚
-    "dbllr":       "\u255D", # ╝
-    "arrow":       "\u2192", # →
-    "arrow_left":  "\u2190", # ←
-    "arrow_up":    "\u2191", # ↑
-    "arrow_right": "\u2192", # →
-    "arrow_down":  "\u2193", # ↓
+    ##    "ulcorner":    "\u250C", # ┌
+    ##    "urcorner":    "\u2510", # ┐
+    ##    "llcorner":    "\u2514", # └
+    ##    "lrcorner":    "\u2518", # ┘
+    ##    "hline":       "\u2500", # ─
+    ##    "vline":       "\u2502", # │
+    ##    "ttee":        "\u252C", # ┬
+    ##    "btee":        "\u2534", # ┴
+    ##    "ltee":        "\u251C", # ├
+    ##    "rtee":        "\u2524", # ┤
+    ##    "cross":       "\u253C", # ┼
+    "dblhline": "\u2550",  # ═
+    "dblvline": "\u2551",  # ║
+    "dblul": "\u2554",  # ╔
+    "dblur": "\u2557",  # ╗
+    "dblll": "\u255a",  # ╚
+    "dbllr": "\u255d",  # ╝
+    "arrow": "\u2192",  # →
+    "arrow_left": "\u2190",  # ←
+    "arrow_up": "\u2191",  # ↑
+    "arrow_right": "\u2192",  # →
+    "arrow_down": "\u2193",  # ↓
 }
 
-def _handle_unicode(token):
-  if token.kind in _unicode:
-    token.text = _unicode[token.kind]
-    yield token
 
-def _handle_command(token, **kwargs): # palette=None, vars=None):
+def _handle_unicode(token):
+    if token.kind in _unicode:
+        token.text = _unicode[token.kind]
+        yield token
+
+
+def _handle_command(token, **kwargs):  # palette=None, vars=None):
     """
     Processes a single command token and yields one or more Tokens.
-    
+
     Args:
         token: Token of kind COMMAND from tokenize()
         _runtime_vars: optional dict of runtime variables
@@ -799,7 +854,7 @@ def _handle_command(token, **kwargs): # palette=None, vars=None):
     yield from _acs_off()
 
     # Palette color
-    if cmd.lstrip('/') in get_current_palette():
+    if cmd.lstrip("/") in get_current_palette():
         token.text = get_palette_entry(cmd)
         yield token
         return
@@ -808,14 +863,14 @@ def _handle_command(token, **kwargs): # palette=None, vars=None):
         yield from _handle_var(token)
         return
 
-    if cmd.lstrip('/') in ANSI_ATTRS:
+    if cmd.lstrip("/") in ANSI_ATTRS:
         yield from _handle_attr(token)
         return
 
     if cmd in _acs_map:
         yield from _handle_acs(token)
         return
-      
+
     if cmd in _unicode:
         yield from _handle_unicode(token)
         return
@@ -833,101 +888,90 @@ def _handle_command(token, **kwargs): # palette=None, vars=None):
         yield Token("CHA", args=(col,))
         return
 
+
 _emoji = {
-  "grin":                   "\U0001f600", # 😀 @since 20260221
-  "smile":                  "\U0001f642", # 🙂 @since 20260221
-  "rofl":                   "\U0001f923", # 🤪 @since 20260221
-  "wink":                   "\U0001f609", # 😉 @since 20260221
-  "thinking":               "\U0001f914", # 🤔 @since 20260221
-  "sunglasses":             "\U0001f60e", # 😎 @since 20260221
-  "100":                    "\U0001f4af", # 💯 @since 20260221
-  "thumbup":                "\U0001f44d", # 👍 @since 20260221
-  "thumbdown":              "\U0001f44e", # 👎 @since 20260221
-  "vulcan":                 "\U0001f596", # 🖖 @since 20260221
-  "spiral":                 "\U0001f4ab", # 💫 @since 20260221
-  "fire":                   "\U0001f525", # 🔥 @since 20260221
-  "bank":                   "\U0001f3e6", # 🏦 @since 20260221
-  "house":                  "\U0001f3e0", # 🏠 @since 20260221
-  "military-helmet":        "\U0001fa96", # 🪖 @since 20260221
-  "door":                   "\U0001f6aa", # 🚪 @since 20260221
-  "receipt":                "\U0001f9fe", # 🧾 @since 20260221
-  "newspaper":              "\U0001f4f0", # 📰 @since 20260221
-  "prince":                 "\U0001f934", # 🤴 @since 20260221
-  "princess":               "\U0001f478", # 👸 @since 20260221
-  "thread":                 "\U0001f9f5", # 🧵 @since 20260221
-  "ice":                    "\U0001f9ca", # 🧊 @since 20260221
-  "moneybag":               "\U0001f4b0", # 💰 @since 20260221
-  "person":                 "\U0001f9d1", # 👤 @since 20260221
-  "sun":                    "\U00002600", # ☀ @since 20260221
-  "thunder-cloud-and-rain": "\U000026C8", # ⛈ @since 20260221
-  "crop":                   "\U0001F33E", # 🌾 @since 20260221
-  "horse":                  "\U0001F40E", # 🐎 @since 20260221
-  "cactus":                 "\U0001F335", # 🪴 @since 20260221
-  "ship":                   "\U0001F6A2", # 🚢 @since 20260221
-  "wood":                   "\U0001FAB5", # 🪵 @since 20260221
-  "link":                   "\U0001F517", # 🔗 @since 20260221
-  "anchor":                 "\U00002693", # ⚓ @since 20260221
-  "ballot-box":             "\U0001F5F3", # 🗳 @since 20260221
-  "building":               "\U0001F3DB", # 🏛 @since 20260221
-  "envelope":               "\U00002709", # ✉ @since 20260221
-  "dolphin":                "\U0001F42C", # 🐬 @since 20260221
-  "bellhop-bell":           "\U0001F6CE", # 🛎 @since 20260221 for murdermotel
-  "hotel":                  "\U0001F3E8", # 🏨 @since 20260221 for murdermotel
-  "mousetrap":              "\U0001FAA4", # 🪤 @since 20260221 for murdermotel
-
-  "waninggibbousmoon":      "\U0001F316", # 🌖 @since 20260221
-  "waxinggibbousmoon":      "\U0001F314", # 🌔 @since 20260221
-  "waningcrescentmoon":     "\U0001F318", # 🌘 @since 20260221
-  "waxingcrescentmoon":     "\U0001F312", # 🌒 @since 20260221
-  "lastquartermoon":        "\U0001F317", # 🌗 @since 20260221
-  "firstquartermoon":       "\U0001F313", # 🌓 @since 20260221
-  "newmoon":                "\U0001F311", # 🌑 @since 20260221
-  "fullmoon":               "\U0001F315", # 🌕 @since 20260221
-
-  "sco":                    "\U0000264F", # ⛏ @since 20260221
-  "sag":                    "\U00002650", # ⛐ @since 20260221
-  "cap":                    "\U00002651", # ⛑ @since 20260221
-  "aqu":                    "\U00002652", # ⛒ @since 20260221
-  "pic":                    "\U00002653", # ⛓ @since 20260221
-  "ari":                    "\U00002648", # ♈ @since 20260221
-  "tau":                    "\U00002649", # ♉ @since 20260221
-  "gem":                    "\U0000264A", # ♊ @since 20260221
-  "can":                    "\U0000264B", # ♋ @since 20260221
-  "leo":                    "\U0000264C", # ♌ @since 20260221
-  "vir":                    "\U0000264D", # ♍ @since 20260221
-  "lib":                    "\U0000264E", # ♎ @since 20260221
-
-  "package":                "\U0001F4E6", # 📦 @since 20220907
-  "compass":                "\U0001F9ED", # 🧭 @since 20220907
-  "worldmap":               "\U0001F5FA", # 🗺 @since 20220916
-
-  "wolf":                   "\U0001F43A", # 🐺 @since 20221002
-  "person":                 "\U0001F9D1", # 👤 @since 20260221
-
-  "supervillian":           "\U0001F9B9", # 🦹 @since 20221016
-  "joker":                  "\U0001F0CF", # 🃏 @since 20221127
-
-  "warning":                "\U000026A0", # ⚠ @since 20260221
-  "stopsign":               "\U0001F6D1", # 🛑 @since 20260221
-
-  "shopping":               "\U0001F6CD", # 🛍 @since 20240128
-
-  "maint":                  "\U0001F6E0", # 🛠 @since 20230827 for empyre, murdermotel
-  "axe":                    "\U0001FA93", # 🪓 @since 20230827 for murdermotel
-
-  "zap":                    "\U000026A1", # ⚡ @since 20240422 for weather
-
-  "palmtree":               "\U0001F334", # 🌴 @since 20260221
-  "evergreentree":          "\U0001F332", # 🌲 @since 20260221
-
-  "tophat":                 "\U0001F3A9", # 🎩 @since 20260221
-  "magicwand":              "\U0001FA84", # 🪄 @since 20260221
-
-  "mercenary":              "\U0001F977", # 🦷 @since 20260221
-
-  "checkmark":              "\U00002714", # ✅ @since 20260221
-  "crossmark":              "\U00002718", # ❌ @since 20260221
+    "grin": "\U0001f600",  # 😀 @since 20260221
+    "smile": "\U0001f642",  # 🙂 @since 20260221
+    "rofl": "\U0001f923",  # 🤪 @since 20260221
+    "wink": "\U0001f609",  # 😉 @since 20260221
+    "thinking": "\U0001f914",  # 🤔 @since 20260221
+    "sunglasses": "\U0001f60e",  # 😎 @since 20260221
+    "100": "\U0001f4af",  # 💯 @since 20260221
+    "thumbup": "\U0001f44d",  # 👍 @since 20260221
+    "thumbdown": "\U0001f44e",  # 👎 @since 20260221
+    "vulcan": "\U0001f596",  # 🖖 @since 20260221
+    "spiral": "\U0001f4ab",  # 💫 @since 20260221
+    "fire": "\U0001f525",  # 🔥 @since 20260221
+    "bank": "\U0001f3e6",  # 🏦 @since 20260221
+    "house": "\U0001f3e0",  # 🏠 @since 20260221
+    "military-helmet": "\U0001fa96",  # 🪖 @since 20260221
+    "door": "\U0001f6aa",  # 🚪 @since 20260221
+    "receipt": "\U0001f9fe",  # 🧾 @since 20260221
+    "newspaper": "\U0001f4f0",  # 📰 @since 20260221
+    "prince": "\U0001f934",  # 🤴 @since 20260221
+    "princess": "\U0001f478",  # 👸 @since 20260221
+    "thread": "\U0001f9f5",  # 🧵 @since 20260221
+    "ice": "\U0001f9ca",  # 🧊 @since 20260221
+    "moneybag": "\U0001f4b0",  # 💰 @since 20260221
+    "person": "\U0001f9d1",  # 👤 @since 20260221
+    "sun": "\U00002600",  # ☀ @since 20260221
+    "thunder-cloud-and-rain": "\U000026c8",  # ⛈ @since 20260221
+    "crop": "\U0001f33e",  # 🌾 @since 20260221
+    "horse": "\U0001f40e",  # 🐎 @since 20260221
+    "cactus": "\U0001f335",  # 🪴 @since 20260221
+    "ship": "\U0001f6a2",  # 🚢 @since 20260221
+    "wood": "\U0001fab5",  # 🪵 @since 20260221
+    "link": "\U0001f517",  # 🔗 @since 20260221
+    "anchor": "\U00002693",  # ⚓ @since 20260221
+    "ballot-box": "\U0001f5f3",  # 🗳 @since 20260221
+    "building": "\U0001f3db",  # 🏛 @since 20260221
+    "envelope": "\U00002709",  # ✉ @since 20260221
+    "dolphin": "\U0001f42c",  # 🐬 @since 20260221
+    "bellhop-bell": "\U0001f6ce",  # 🛎 @since 20260221 for murdermotel
+    "hotel": "\U0001f3e8",  # 🏨 @since 20260221 for murdermotel
+    "mousetrap": "\U0001faa4",  # 🪤 @since 20260221 for murdermotel
+    "waninggibbousmoon": "\U0001f316",  # 🌖 @since 20260221
+    "waxinggibbousmoon": "\U0001f314",  # 🌔 @since 20260221
+    "waningcrescentmoon": "\U0001f318",  # 🌘 @since 20260221
+    "waxingcrescentmoon": "\U0001f312",  # 🌒 @since 20260221
+    "lastquartermoon": "\U0001f317",  # 🌗 @since 20260221
+    "firstquartermoon": "\U0001f313",  # 🌓 @since 20260221
+    "newmoon": "\U0001f311",  # 🌑 @since 20260221
+    "fullmoon": "\U0001f315",  # 🌕 @since 20260221
+    "sco": "\U0000264f",  # ⛏ @since 20260221
+    "sag": "\U00002650",  # ⛐ @since 20260221
+    "cap": "\U00002651",  # ⛑ @since 20260221
+    "aqu": "\U00002652",  # ⛒ @since 20260221
+    "pic": "\U00002653",  # ⛓ @since 20260221
+    "ari": "\U00002648",  # ♈ @since 20260221
+    "tau": "\U00002649",  # ♉ @since 20260221
+    "gem": "\U0000264a",  # ♊ @since 20260221
+    "can": "\U0000264b",  # ♋ @since 20260221
+    "leo": "\U0000264c",  # ♌ @since 20260221
+    "vir": "\U0000264d",  # ♍ @since 20260221
+    "lib": "\U0000264e",  # ♎ @since 20260221
+    "package": "\U0001f4e6",  # 📦 @since 20220907
+    "compass": "\U0001f9ed",  # 🧭 @since 20220907
+    "worldmap": "\U0001f5fa",  # 🗺 @since 20220916
+    "wolf": "\U0001f43a",  # 🐺 @since 20221002
+    "person": "\U0001f9d1",  # 👤 @since 20260221
+    "supervillian": "\U0001f9b9",  # 🦹 @since 20221016
+    "joker": "\U0001f0cf",  # 🃏 @since 20221127
+    "warning": "\U000026a0",  # ⚠ @since 20260221
+    "stopsign": "\U0001f6d1",  # 🛑 @since 20260221
+    "shopping": "\U0001f6cd",  # 🛍 @since 20240128
+    "maint": "\U0001f6e0",  # 🛠 @since 20230827 for empyre, murdermotel
+    "axe": "\U0001fa93",  # 🪓 @since 20230827 for murdermotel
+    "zap": "\U000026a1",  # ⚡ @since 20240422 for weather
+    "palmtree": "\U0001f334",  # 🌴 @since 20260221
+    "evergreentree": "\U0001f332",  # 🌲 @since 20260221
+    "tophat": "\U0001f3a9",  # 🎩 @since 20260221
+    "magicwand": "\U0001fa84",  # 🪄 @since 20260221
+    "mercenary": "\U0001f977",  # 🦷 @since 20260221
+    "checkmark": "\U00002714",  # ✅ @since 20260221
+    "crossmark": "\U00002718",  # ❌ @since 20260221
 }
+
 
 def _handle_emoji(token):
     if token.value in _emoji:
@@ -936,11 +980,13 @@ def _handle_emoji(token):
         token.text = token.raw
     yield token
 
+
 @dataclass
 class Attr:
     start: str
     end: str
     state: bool = field(default=None)
+
 
 # Global stack of active attributes
 ## ATTR_STACK: list[Attr] = []
@@ -956,13 +1002,14 @@ ANSI_ATTRS = {
 
 ## ATTR_RE = re.compile(r"(/?\w+)")
 
+
 def _handle_attr(token: Token):
     """
     Mutate a Token containing {attr} or {/attr} to emit corresponding ANSI sequence(s).
     Each ANSI sequence is yielded as a separate Token.
     """
 
-##    print(f"_handle_attr.100: {token.kind=} {token.value=}")
+    ##    print(f"_handle_attr.100: {token.kind=} {token.value=}")
 
     name = token.value.lstrip("/")
     attr = ANSI_ATTRS.get(name)
@@ -983,16 +1030,18 @@ def _handle_attr(token: Token):
     yield token
     return
 
+
 def _handle_decdhl(token):
     if token.value.startswith("/"):
-      _terminal_state.decdhl = False
-      token.text = f"{ESC}[5m"  # DECSWL - single-width single-height
+        _terminal_state.decdhl = False
+        token.text = f"{ESC}[5m"  # DECSWL - single-width single-height
     else:
-      _terminal_state.decdhl = True
-      token.text = f"{ESC}[6m"  # DECDWL - double-width
+        _terminal_state.decdhl = True
+        token.text = f"{ESC}[6m"  # DECDWL - double-width
     yield token
 
-def _write_token(token: Token, flush: bool=True, stream=None):
+
+def _write_token(token: Token, flush: bool = True, stream=None):
     """
     Write a Token to the current stream (defaults to sys.stdout), interpreting commands and attributes.
     - WORD/WHITESPACE: printed directly
@@ -1000,14 +1049,15 @@ def _write_token(token: Token, flush: bool=True, stream=None):
     - COMMANDS: processed via _handle_command()
     """
     global _raw, _current_output_stream, _current_stream_lock
-##    print(f"_write_token.100: {token.kind=} {token.repeat=} {token.value=}", flush=True)
+    ##    print(f"_write_token.100: {token.kind=} {token.repeat=} {token.value=}", flush=True)
     repeat = int(token.repeat) or 1
     if not _raw:
-      text = str(token.text) * repeat
+        text = str(token.text) * repeat
     else:
-      text = (str(token.raw) or str(text)) * repeat
+        text = (str(token.raw) or str(text)) * repeat
     write_current_output_stream(text, flush=flush)
     return
+
 
 # ----------------------------
 # echo_iter(), echo(), and echo_file()
@@ -1018,12 +1068,13 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
     Handles WORD, WHITESPACE, F6 (hard newline), attributes, and commands.
     """
     global _runtime_vars, _cursor_col, _raw, _wordwrap, _previous_token
-    
+
     _raw = raw
+    _terminal_state.wordwrap = wordwrap
 
     if width is None:
         width = terminal.columns()  # default or queried width
-    
+
     palette = palette or c64_palette
     _runtime_vars = _runtime_vars or {}
     _term_width = width
@@ -1031,20 +1082,20 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
     for token in tokenize(text):
         if token.kind == "COMMAND":
             yield from _handle_command(token)
-        elif token.kind == "WORD": # in ("WORD", "WHITESPACE"):
+        elif token.kind == "WORD":  # in ("WORD", "WHITESPACE"):
             yield from _handle_word(token)
-##            word_len = len(token.text)
-##
-##           if _wordwrap and _cursor_col + word_len > width - 1:
-##                # insert hard newline before this word/space
-##                yield Token("F6", raw="{f6}", text="\n")
-##                _cursor_col = 0
-##
-##            _cursor_col += word_len
-##            yield token
+        ##            word_len = len(token.text)
+        ##
+        ##           if _wordwrap and _cursor_col + word_len > width - 1:
+        ##                # insert hard newline before this word/space
+        ##                yield Token("F6", raw="{f6}", text="\n")
+        ##                _cursor_col = 0
+        ##
+        ##            _cursor_col += word_len
+        ##            yield token
         elif token.kind == "WHITESPACE":
-##            if _previous_token.kind == "F6" and token.text == " ":
-##                continue
+            ##            if _previous_token.kind == "F6" and token.text == " ":
+            ##                continue
             with _current_stream_lock:
                 _terminal_state.cursor_col += len(token.text)
             yield token
@@ -1056,7 +1107,8 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
 
         _previous_token = token
 
-def echo(text="", *, flush:bool=True, end=ECHO_END, **kwargs):
+
+def echo(text="", *, flush: bool = True, end=ECHO_END, **kwargs):
     """
     Print text to stdout, interpreting inline commands unless raw=True.
     width: override detected terminal width if not None
@@ -1068,27 +1120,29 @@ def echo(text="", *, flush:bool=True, end=ECHO_END, **kwargs):
 
     _raw = kwargs.get("raw", False)
 
-    palette:dict = kwargs.get("palette", None)
-    width:int = kwargs.get("width", terminal.width())
-    wordwrap:bool = kwargs.get("wordwrap", True)
+    palette: dict = kwargs.get("palette", None)
+    width: int = kwargs.get("width", terminal.width())
+    wordwrap: bool = kwargs.get("wordwrap", True)
 
     level = kwargs.get("level", None)
     if level is not None:
-      prefix = ""
-      if level == "debug":
-        prefix = "{level.debug}D: " # {bglightblue}{blue}"
-      elif level == "warn" or level == "warning":
-        prefix = "{level.warning}W: " # {bgyellow}{black}"
-      elif level == "error":
-        prefix = "{level.error}E: " # {bgred}{white}"
-      elif level == "success" or level == "ok":
-        prefix = "{level.ok}" # {bggreen}{black}"
-      elif level == "info":
-        prefix = "{level.info}I: " # {bgwhite}{blue}"
+        prefix = ""
+        if level == "debug":
+            prefix = "{level.debug}D: "  # {bglightblue}{blue}"
+        elif level == "warn" or level == "warning":
+            prefix = "{level.warning}W: "  # {bgyellow}{black}"
+        elif level == "error":
+            prefix = "{level.error}E: "  # {bgred}{white}"
+        elif level == "success" or level == "ok":
+            prefix = "{level.ok}"  # {bggreen}{black}"
+        elif level == "info":
+            prefix = "{level.info}I: "  # {bgwhite}{blue}"
 
-      text = prefix + text + "{/all}"
+        text = prefix + text + "{/all}"
 
-    for token in echo_iter(text, width=width, wordwrap=wordwrap, raw=_raw, palette=palette):
+    for token in echo_iter(
+        text, width=width, wordwrap=wordwrap, raw=_raw, palette=palette
+    ):
         _write_token(token, flush=flush)
 
     # Always write the "end" string
@@ -1096,20 +1150,22 @@ def echo(text="", *, flush:bool=True, end=ECHO_END, **kwargs):
         write_current_output_stream(end, flush=flush)
         if end == "\n":
             with _current_stream_lock:
-              _terminal_state.cursor_col = 0
-              _terminal_state.cursor_row += 1
+                _terminal_state.cursor_col = 0
+                _terminal_state.cursor_row += 1
 
     if level is not None:
-      return logentry(text, level=level)
+        return logentry(text, level=level)
+
 
 def echo_file(filepath, page_size=20, raw=False, wordwrap=True, end=""):
-    with open(filepath, 'r') as f:
+    with open(filepath, "r") as f:
         line_count = 0
         for line in f:
             echo(line, end=end, raw=raw, wordwrap=wordwrap)  # don't add extra newline
             line_count += 1
             if line_count % page_size == 0:
                 input("More?")  # wait every page
+
 
 # @since 20251212
 def rendered_length(text, **kwargs):
@@ -1122,13 +1178,13 @@ def rendered_length(text, **kwargs):
     """
     length = 0
 
-##    echo(f"{text=}", flush=True)
+    ##    echo(f"{text=}", flush=True)
     for token in echo_iter(text, wordwrap=False, raw=False):
         # Get the effective repeat count, default to 1
         repeat = int(token.repeat) if token.repeat is not None else 1
 
         # Only count tokens that produce visible text on the terminal:
-##        print(f"{token=}", flush=True)
+        ##        print(f"{token=}", flush=True)
         if token.kind == "WORD":
             # WORD: Count visible characters.
             # Note: If {fullwidth} is active, len(token.text) might be
@@ -1160,23 +1216,33 @@ def rendered_length(text, **kwargs):
 
     return length
 
-def echo_traceback(message: str = "Traceback (most recent call last):", level: str = "error"):
+
+def echo_traceback(
+    message: str = "Traceback (most recent call last):", level: str = "error"
+):
     """
     Captures the current exception and outputs the entire stack
     via a single echo() call, using {f6} as the newline separator.
     """
     import traceback as tb
+
     # Get the formatted traceback string from Python
     raw_traceback = tb.format_exc()
 
     # Split into lines to filter/process
-    lines = raw_traceback.strip().split('\n')
+    lines = raw_traceback.strip().split("\n")
 
     # Filter out the redundant first line if we provided a custom header
-    filtered_lines = [line for line in lines if not line.startswith("Traceback (most recent call last):")]
+    filtered_lines = [
+        line
+        for line in lines
+        if not line.startswith("Traceback (most recent call last):")
+    ]
 
     # Join everything with your engine's newline code {f6}
-    traceback_string = f"{{level.error}}{message}{{/all}}{{f6}}" + "{f6}".join(filtered_lines)
+    traceback_string = f"{{level.error}}{message}{{/all}}{{f6}}" + "{f6}".join(
+        filtered_lines
+    )
 
     # Single call to echo
     echo(traceback_string, level=None)
