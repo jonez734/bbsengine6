@@ -1,6 +1,11 @@
 import argparse
+
 from bbsengine6 import io, screen
 from bbsengine6.listbox import Listbox, ListboxItem, ListboxResult
+
+
+class CustomListboxItem(ListboxItem):
+    pass
 
 
 def buildargs():
@@ -20,12 +25,12 @@ def handle_e(listbox):
     return ListboxResult("redraw")
 
 
-def custom_display(listbox: Listbox, highlighted: bool) -> None:
+def custom_display(item: ListboxItem, listbox: Listbox, highlighted: bool) -> None:
     if highlighted:
         io.setvar("cic", "{listbox.item.highlighted}")
     else:
         io.setvar("cic", "{yellow}")
-    content = listbox.currentitem.content
+    content = item.content
     lines = content.split("\n")
     for line in lines:
         io.echo(
@@ -77,14 +82,9 @@ def main(args):
     items = []
     for i in range(28):
         nato_code = nato[i % len(nato)]
-        if i == 3:
-            items.append(
-                ListboxItem(content=f"custom item #{i}\n{nato_code}", pk=i, data=None, display=custom_display)
-            )
-        else:
-            items.append(
-                ListboxItem(content=f"demo item #{i}\n{nato_code}", pk=i, data=None)
-            )
+        content = f"demo item #{i}\n{nato_code}"
+#        items.append(ListboxItem(content=content, pk=i, data=None, display=custom_display))
+        items.append(ListboxItem(content=content, pk=i, data=None))
 
     def custom_e():
         return handle_e(lb)
