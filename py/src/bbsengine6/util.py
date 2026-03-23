@@ -168,35 +168,104 @@ def logentry(
     logger.log(levels.get(level_str, logging.INFO), message)
 
 
-def collapserange(lst: list):
-    "Yield 2-tuple ranges or 1-tuple single elements from list of increasing ints"
-    lenlst = len(lst)
+def collapserange(lst: list) -> list:
+    """Yield 2-tuple ranges or 1-tuple single elements from list of ints.
+
+    Accepts str or list input. Strings are parsed via expandrange.
+    Input is automatically sorted. Negative numbers are not allowed.
+    """
+    if isinstance(lst, str):
+        lst = expandrange(lst)
+    elif not isinstance(lst, list):
+        raise TypeError(f"Expected str or list, got {type(lst).__name__}")
+
+    if not lst:
+        return []
+
+    for item in lst:
+        if not isinstance(item, int) or isinstance(item, bool):
+            raise ValueError(
+                f"All elements must be integers, got {type(item).__name__}"
+            )
+        if item < 0:
+            raise ValueError("Negative numbers not allowed")
+
+    sorted_lst = sorted(lst)
+
+    lenlst = len(sorted_lst)
+    result = []
     i = 0
     while i < lenlst:
-        low = lst[i]
-        while i < lenlst - 1 and lst[i] + 1 == lst[i + 1]:
+        low = sorted_lst[i]
+        while i < lenlst - 1 and sorted_lst[i] + 1 == sorted_lst[i + 1]:
             i += 1
-        hi = lst[i]
+        hi = sorted_lst[i]
         if hi - low >= 2:
-            yield (low, hi)
+            result.append((low, hi))
         elif hi - low == 1:
-            yield (low,)
-            yield (hi,)
+            result.append((low,))
+            result.append((hi,))
         else:
-            yield (low,)
+            result.append((low,))
         i += 1
+
+    return result
 
 
 def expandrange(txt: str) -> list:
-    "accepts an str with a range expression, returns a list"
+    """Parse a range expression string into a sorted list of unique integers.
+
+    Accepts str or list input. Handles ranges like "1-5" and "1,3-5,7".
+    Reversed ranges (e.g., "5-1") are automatically corrected to "1-5".
+    Negative numbers are not allowed.
+    """
+    if isinstance(txt, list):
+        txt = ",".join(str(x) for x in txt)
+    elif not isinstance(txt, str):
+        raise TypeError(f"Expected str or list, got {type(txt).__name__}")
+
+    txt = txt.strip()
+    if not txt:
+        return []
+
     elle = []
     for r in txt.split(","):
-        if "-" in r[1:]:
-            r0, r1 = r[1:].split("-", 1)
-            elle += range(int(r[0] + r0), int(r1) + 1)
+        r = r.strip()
+        if not r:
+            continue
+
+        if "-" in r:
+            parts = r.split("-", 1)
+            if len(parts) != 2:
+                raise ValueError(f"Invalid range format: '{r}'")
+
+            start_str, end_str = parts[0], parts[1]
+
+            try:
+                start = int(start_str)
+                end = int(end_str)
+            except ValueError:
+                raise ValueError(f"Invalid number in range: '{r}'")
+
+            if start < 0 or end < 0:
+                raise ValueError("Negative numbers not allowed")
+
+            if start > end:
+                start, end = end, start
+
+            elle.extend(range(start, end + 1))
         else:
-            elle.append(int(r))
-    return list(set(elle))
+            try:
+                num = int(r)
+            except ValueError:
+                raise ValueError(f"Invalid number: '{r}'")
+
+            if num < 0:
+                raise ValueError("Negative numbers not allowed")
+
+            elle.append(num)
+
+    return sorted(set(elle))
 
 
 def rangestr(ranges):
