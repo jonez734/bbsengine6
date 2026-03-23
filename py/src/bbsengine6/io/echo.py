@@ -138,7 +138,6 @@ _command_handlers = {
     # cursor horizontal absolute @since 20251025
     "cha": r"cha",
     "slashall": r"/all",
-    "settitle": r"settitle",
 }
 
 _compiled_command_handlers = [
@@ -660,14 +659,8 @@ def _handle_decstbm(token):
     token.text = f"{CSI}{t};{b}r"
     yield token
 
-
-##    logentry(f"asimov.io.echo._handle_decstbm.100: {t=} {b=} {token.text=}", level="debug")
-##    return
-
-
-def _handle_settitle(token):
-    if len(token.args) == 0:
-        return iter()
+    ##    logentry(f"asimov.io.echo._handle_decstbm.100: {t=} {b=} {token.text=}", level="debug")
+    ##    return
 
     token.repeat = 1
     token.text = f"{OSC}0;{' '.join(token.args)}{BEL}"

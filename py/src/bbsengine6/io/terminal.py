@@ -1,5 +1,4 @@
-from .const import MAX_TERMINAL_WIDTH, FALLBACK_TERMINAL_WIDTH
-###from .echo import echo
+from .const import MAX_TERMINAL_WIDTH, FALLBACK_TERMINAL_WIDTH, OSC, BEL
 
 import shutil
 import os
@@ -44,6 +43,12 @@ def lines():
 
 height = lines
 
-###def title(t:str) -> None:
-###  echo(f"{{settitle:{t}}}", flush=True, end="")
-###  return
+
+def title(t: str) -> None:
+    """Set the terminal window title."""
+    from .common import write_current_output_stream
+
+    write_current_output_stream(f"{OSC}0;{t}{BEL}", flush=True)
+
+
+# TODO: Apply same fix to asimov/src/asimov/io/terminal.py
