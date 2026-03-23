@@ -462,7 +462,7 @@ def _acs_on():
     with _current_stream_lock:
         if not _terminal_state.acs:
             _terminal_state.acs = True
-            token = Token(kind="ACS", repeat=1, text=f"{ESC}(0")
+            token = Token(kind="ACS_ON", repeat=1, text=f"{ESC}(0")
 
     if token is not None:
         yield token
@@ -476,7 +476,7 @@ def _acs_off():
     with _current_stream_lock:
         if _terminal_state.acs:
             _terminal_state.acs = False
-            token = Token(kind="ACS", repeat=1, text=f"{ESC}(B")
+            token = Token(kind="ACS_OFF", repeat=1, text=f"{ESC}(B")
 
     if token is not None:
         yield token
@@ -498,7 +498,7 @@ def _handle_acs(token):
     if not _raw:
         yield from _acs_on()
 
-    token.kind = "ACS"
+    token.kind = "ACS_CHAR"
     token.text = _acs_map.get(name, "?")
     token.repeat = repeat
 
@@ -1195,11 +1195,15 @@ def rendered_length(text, **kwargs):
             # Assuming terminal output width is what we want.
             length += len(token.text) * repeat
 
-        elif token.kind in ("EMOJI", "ACS"):
-            # EMOJI/ACS: Emojis are usually 1 or 2 columns, ACS is 1 column.
-            # We count based on the number of times they were repeated.
-            # Assuming 1 column per instance for ACS and EMOJI for simplicity.
+        elif token.kind == "EMOJI":
+            # Emojis are usually 1 or 2 columns. Assuming 1 for simplicity.
             length += repeat
+
+        elif token.kind == "ACS_CHAR":
+            # ACS_CHAR: The actual alternate character, counts as 1 column.
+            length += repeat
+
+        # ACS_ON and ACS_OFF are control sequences, not visible - skip them
 
         elif token.kind == "WHITESPACE":
             # Only count spaces/tabs, ignore newlines ('\n') which don't consume horizontal space.
