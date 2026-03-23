@@ -13,7 +13,7 @@ class ListboxItem:
     data: Any
     disabled: bool
     onkey: Optional[Callable[["ListboxItem", str], bool]] = None
-    display: Optional[Callable[["Listbox", bool], None]] = None
+    display: Optional[Callable[["ListboxItem", "Listbox", bool], None]] = None
 
     def __init__(
         self,
@@ -22,7 +22,7 @@ class ListboxItem:
         data: Any = None,
         disabled: bool = False,
         onkey: Optional[Callable[["ListboxItem", str], bool]] = None,
-        display: Optional[Callable[["Listbox", bool], None]] = None,
+        display: Optional[Callable[["ListboxItem", "Listbox", bool], None]] = None,
         **kwargs: Any,
     ) -> None:
         self.content = content
@@ -82,10 +82,10 @@ class Listbox:
         self.contentwidth = (
             self.terminalwidth - self.BORDER_WIDTH_LEFT - self.BORDER_WIDTH_RIGHT
         )
-        logentry(
-            f"{self.contentwidth=} {self.terminalwidth=} {self.BORDER_WIDTH_LEFT=} {self.BORDER_WIDTH_RIGHT=}",
-            level="debug",
-        )
+##        logentry(
+##            f"{self.contentwidth=} {self.terminalwidth=} {self.BORDER_WIDTH_LEFT=} {self.BORDER_WIDTH_RIGHT=}",
+##            level="debug",
+##        )
         self.totalwidth = (
             self.contentwidth + self.BORDER_WIDTH_LEFT + self.BORDER_WIDTH_RIGHT
         )
@@ -162,9 +162,9 @@ class Listbox:
         display_method = getattr(item, "display", None)
         if display_method is None:
             display_method = getattr(type(item), "display", None)
-        logentry(f"_display_item.200: checking for item.display {display_method=}", level="debug")
+##        logentry(f"_display_item.200: checking for item.display {display_method=}", level="debug")
         if display_method is not None and callable(display_method):
-            logentry("_display_item.100: calling item.display()", level="debug")
+##            logentry("_display_item.100: calling item.display()", level="debug")
             display_method(item, self, highlighted)
             return
 
@@ -182,7 +182,7 @@ class Listbox:
             else:
                 line = ""
             visible_len = rendered_length(line)
-            logentry(f"{visible_len=} {self.contentwidth=} {line=}", level="debug")
+##            logentry(f"{visible_len=} {self.contentwidth=} {line=}", level="debug")
 ##            if visible_len > self.contentwidth:
 ##                truncated = ""
 ##                for i, ch in enumerate(line):
@@ -498,7 +498,7 @@ class Listbox:
         io.echo(f"{{savecursor}} {{promptcolor}}{prompt}{{cha}}", end="", flush=True)
 
         cursor_up = self._cursor_moves_to_item(self._currentindex)
-        logentry(f"{cursor_up=}", level=logging.DEBUG)
+##        logentry(f"{cursor_up=}", level=logging.DEBUG)
         io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
 
         page_items = self.fetchitems()
