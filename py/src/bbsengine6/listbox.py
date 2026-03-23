@@ -194,7 +194,7 @@ class Listbox:
 ##            else:
             padded = line + " " * (self.contentwidth - visible_len)
             io.echo(
-                f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded}&{{/all}}{{listbox.boxcolor}}{{vline}}"
+                f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded} {{/all}}{{listbox.boxcolor}}{{vline}}"
             )
 
     def _display_blank_line(self) -> None:
