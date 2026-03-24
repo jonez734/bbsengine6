@@ -37,7 +37,7 @@ class Article2PresidentListboxItem(ListboxItem):
     def help(self):
         io.echo(f"this is a help message in a function")
 
-    def display(self):
+    def display(self, listbox: "Listbox", highlighted: bool):
         io.echo(
             f"{{/all}}{{cha}} {{engine.menu.cursorcolor}}{{engine.menu.color}} {{engine.menu.boxcharcolor}}{{acs:vline}}{{cic}} {self.content} {{/all}}{{engine.menu.boxcharcolor}}{{acs:vline}}{{engine.menu.shadowcolor}} {{engine.menu.color}} {{/all}}{{cha}}",
             end="",
