@@ -1,9 +1,7 @@
 from math import ceil
-import logging
 from typing import Any, Callable, List, NamedTuple, Optional
 
 from . import io
-from .common import logentry
 from .io.echo import rendered_length
 
 
@@ -82,10 +80,10 @@ class Listbox:
         self.contentwidth = (
             self.terminalwidth - self.BORDER_WIDTH_LEFT - self.BORDER_WIDTH_RIGHT
         )
-##        logentry(
-##            f"{self.contentwidth=} {self.terminalwidth=} {self.BORDER_WIDTH_LEFT=} {self.BORDER_WIDTH_RIGHT=}",
-##            level="debug",
-##        )
+        ##        logentry(
+        ##            f"{self.contentwidth=} {self.terminalwidth=} {self.BORDER_WIDTH_LEFT=} {self.BORDER_WIDTH_RIGHT=}",
+        ##            level="debug",
+        ##        )
         self.totalwidth = (
             self.contentwidth + self.BORDER_WIDTH_LEFT + self.BORDER_WIDTH_RIGHT
         )
@@ -162,9 +160,9 @@ class Listbox:
         display_method = getattr(item, "display", None)
         if display_method is None:
             display_method = getattr(type(item), "display", None)
-##        logentry(f"_display_item.200: checking for item.display {display_method=}", level="debug")
+        ##        logentry(f"_display_item.200: checking for item.display {display_method=}", level="debug")
         if display_method is not None and callable(display_method):
-##            logentry("_display_item.100: calling item.display()", level="debug")
+            ##            logentry("_display_item.100: calling item.display()", level="debug")
             display_method(item, self, highlighted)
             return
 
@@ -182,25 +180,27 @@ class Listbox:
             else:
                 line = ""
             visible_len = rendered_length(line)
-##            logentry(f"{visible_len=} {self.contentwidth=} {line=}", level="debug")
-##            if visible_len > self.contentwidth:
-##                truncated = ""
-##                for i, ch in enumerate(line):
-##                    if rendered_length(truncated + ch + "...") <= self.contentwidth:
-##                        truncated += ch
-##                    else:
-##                        break
-##                padded = truncated + "..."
-##            else:
+            ##            logentry(f"{visible_len=} {self.contentwidth=} {line=}", level="debug")
+            ##            if visible_len > self.contentwidth:
+            ##                truncated = ""
+            ##                for i, ch in enumerate(line):
+            ##                    if rendered_length(truncated + ch + "...") <= self.contentwidth:
+            ##                        truncated += ch
+            ##                    else:
+            ##                        break
+            ##                padded = truncated + "..."
+            ##            else:
             padded = line + " " * (self.contentwidth - visible_len)
             io.echo(
-                f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded} {{/all}}{{listbox.boxcolor}}{{vline}}"
+                f" {{/all}}{{listbox.boxcolor}}{{vline}} {{cic}}{padded} {{/all}}{{listbox.boxcolor}}{{vline}}",
+                wordwrap=False,
             )
 
     def _display_blank_line(self) -> None:
         for _ in range(self.itemheight):
             io.echo(
-                f" {{/all}}{{listbox.boxcolor}}{{vline}} {' ' * self.contentwidth} {{listbox.boxcolor}}{{vline}}"
+                f" {{/all}}{{listbox.boxcolor}}{{vline}} {' ' * self.contentwidth} {{listbox.boxcolor}}{{vline}}",
+                wordwrap=False,
             )
 
     def _display_title_box(self) -> None:
@@ -498,7 +498,7 @@ class Listbox:
         io.echo(f"{{savecursor}} {{promptcolor}}{prompt}{{cha}}", end="", flush=True)
 
         cursor_up = self._cursor_moves_to_item(self._currentindex)
-##        logentry(f"{cursor_up=}", level=logging.DEBUG)
+        ##        logentry(f"{cursor_up=}", level=logging.DEBUG)
         io.echo(f"{{cursorup:{cursor_up}}}", end="", flush=True)
 
         page_items = self.fetchitems()
