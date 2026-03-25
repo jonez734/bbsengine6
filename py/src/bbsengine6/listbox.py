@@ -10,6 +10,7 @@ class ListboxItem:
     pk: Any
     data: Any
     disabled: bool
+    hotkey: str
     onkey: Optional[Callable[["ListboxItem", str], bool]] = None
     display: Optional[Callable[["ListboxItem", "Listbox", bool], None]] = None
 
@@ -19,6 +20,7 @@ class ListboxItem:
         pk: Any = None,
         data: Any = None,
         disabled: bool = False,
+        hotkey: str = "",
         onkey: Optional[Callable[["ListboxItem", str], bool]] = None,
         display: Optional[Callable[["ListboxItem", "Listbox", bool], None]] = None,
         **kwargs: Any,
@@ -27,6 +29,7 @@ class ListboxItem:
         self.pk = pk
         self.data = data
         self.disabled = disabled
+        self.hotkey = hotkey
         self.onkey = onkey
         self.display = display
 
@@ -42,6 +45,7 @@ class ListboxResult(NamedTuple):
 
 class Listbox:
     GETCH_TIMEOUT = 0.25
+    LISTBOX_ONKEY_BUFFER_LEN = 5
     BOTTOM_BORDER_HEIGHT = 1
     CONTENT_PADDING = 4
     BORDER_WIDTH_LEFT = 3
@@ -60,6 +64,7 @@ class Listbox:
         items: Optional[List[ListboxItem]] = None,
         idle: Optional[Callable[[], None]] = None,
         custom_keys: Optional[dict[str, Callable[[], Optional[ListboxResult]]]] = None,
+        hotkeys: Optional[dict[str, Callable[[], Optional[ListboxResult]]]] = None,
         itemclass: Optional[type] = None,
         **kwargs: Any,
     ) -> None:
@@ -70,11 +75,15 @@ class Listbox:
         self.items = items if items is not None else []
         self.idle = idle
         self.custom_keys = custom_keys if custom_keys else {}
+        self.hotkeys = hotkeys if hotkeys else {}
         self.kwargs = kwargs
         self.itemclass = itemclass
 
         self._curpage = 0
         self._currentindex = 0
+        self._key_buffer: str = ""
+        self._hotkey_map: dict[str, ListboxItem] = {}
+        self._build_hotkey_map()
 
         self.terminalwidth = io.terminal.width()
         self.contentwidth = (
@@ -104,6 +113,24 @@ class Listbox:
         }
         if self.custom_keys:
             self.key_handlers.update(self.custom_keys)
+
+    def _build_hotkey_map(self) -> None:
+        self._hotkey_map = {}
+        for item in self.items:
+            if hasattr(item, "hotkey") and item.hotkey:
+                self._hotkey_map[item.hotkey] = item
+
+    def _navigate_to_item(self, item: ListboxItem) -> bool:
+        try:
+            item_index = self.items.index(item)
+        except ValueError:
+            return False
+        target_page = item_index // self.itemsperpage
+        if target_page != self._curpage:
+            self._curpage = target_page
+            self._redraw_content_area()
+        self._currentindex = item_index % self.itemsperpage
+        return True
 
     @property
     def currentitem(self) -> Optional[ListboxItem]:
@@ -462,7 +489,13 @@ class Listbox:
         return ListboxResult("redraw")
 
     def onkey(self, ch: Optional[str]) -> Optional[ListboxResult] | bool:
+        if ch == "KEY_ESC":
+            self._key_buffer = ""
+            return ListboxResult("cancelled")
+
         if ch is None:
+            if self._key_buffer:
+                return True
             if self.idle is not None and callable(self.idle):
                 result = self.idle()
                 if isinstance(result, ListboxResult):
@@ -476,6 +509,19 @@ class Listbox:
             if result is not None:
                 return result
             return True
+
+        self._key_buffer += ch
+        if len(self._key_buffer) > self.LISTBOX_ONKEY_BUFFER_LEN:
+            self._key_buffer = self._key_buffer[1:]
+
+        if self._key_buffer in self._hotkey_map:
+            matched_item = self._hotkey_map[self._key_buffer]
+            if self._navigate_to_item(matched_item):
+                if matched_item.onkey:
+                    matched_item.onkey(matched_item, self._key_buffer)
+                self._key_buffer = ""
+                return True
+            self._key_buffer = ""
 
         if self.currentitem is not None and callable(self.currentitem.onkey):
             if self.currentitem.onkey(self.currentitem, ch):
