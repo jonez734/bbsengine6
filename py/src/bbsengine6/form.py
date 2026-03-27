@@ -1,3 +1,8 @@
+class FormItem:
+    def __init__(self):
+        self.kind = "BASE"
+
+
 class FormItemCheckbox(FormItem):
     def __init__(self):
         super().__init__()

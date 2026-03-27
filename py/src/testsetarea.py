@@ -1,5 +1,6 @@
 import argparse
 
+import bbsengine6 as bbsengine
 from bbsengine6 import io
 
 

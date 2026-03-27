@@ -1,4 +1,6 @@
 # @since 20230801 it's about time
+import os
+import tempfile
 from . import util, screen, io
 
 buf = []

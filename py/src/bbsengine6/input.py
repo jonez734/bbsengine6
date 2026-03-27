@@ -1,7 +1,7 @@
 import os
 
 # import ttyio6 as ttyio
-from . import io
+from . import io, util
 import time
 from datetime import datetime, timedelta
 from dateutil.parser import parse
@@ -63,7 +63,7 @@ def date(args, prompt, value, **kw):
 
 # @since 20230923 copied from bbsengine5
 def filename(prompt, currentvalue, **kw):
-    verify = kw["verify"] if "verify" in kw else verifyFileExistsReadable
+    verify = kw["verify"] if "verify" in kw else util.verifyFileExistsReadable
     path = os.path.expanduser(currentvalue)
     path = os.path.expandvars(path)
     #  dirname = os.path.dirname(path)

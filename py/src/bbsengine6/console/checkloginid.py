@@ -93,7 +93,7 @@ def check_user_permission():
 
 
 def change_user_shell(username, shell):
-    bus = SystemBus()
+    bus = dbus.SystemBus()
     accounts = bus.get("org.freedesktop.Accounts")
     try:
         user = accounts.FindUserByName(username)
