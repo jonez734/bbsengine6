@@ -3,6 +3,12 @@ import tty
 import select
 import fcntl
 import termios
+import time
+import queue
+import threading
+from collections import deque
+from dataclasses import dataclass
+from typing import Callable, Dict, Optional, List
 
 
 from .common import (
@@ -15,33 +21,339 @@ from .util import logentry
 from .keymap import KEY_MAP
 from .const import ESC, ETX, EOF
 
+# ============================================================================
+# KEY EVENT SYSTEM - Threading-based async event notification
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class KeyEvent:
+    """Immutable event data for keyboard input."""
+
+    raw_char: str  # Original byte(s): 'a', '\x1b[A', etc.
+    processed_key: str | None  # After _proc_char: 'a', 'KEY_UP', None
+    timestamp: float  # time.time() when event was created
+    stage: str  # "raw" or "processed"
+    source_func: str  # "getch_str", "inputstring", "inputchoice", etc.
+
+
+@dataclass
+class EventHandler:
+    """Registered callback with optional filtering."""
+
+    name: str  # Unique identifier
+    callback: Callable[[KeyEvent], None]  # Invoked with event
+    filter_fn: Optional[Callable[[KeyEvent], bool]]  # Predicate; None = all events
+
+    def matches(self, event: KeyEvent) -> bool:
+        """Check if event passes filter."""
+        return self.filter_fn(event) if self.filter_fn else True
+
+
+class KeyEventBus:
+    """Manages handler registration and filtering."""
+
+    def __init__(self, history_size: int = 100):
+        self._handlers: Dict[str, EventHandler] = {}
+        self._lock = threading.Lock()
+        self.history: deque = deque(maxlen=history_size)
+
+    def register(
+        self,
+        name: str,
+        callback: Callable[[KeyEvent], None],
+        filter_fn: Optional[Callable[[KeyEvent], bool]] = None,
+    ) -> None:
+        """Register a callback handler."""
+        with self._lock:
+            if name in self._handlers:
+                raise ValueError(f"Handler '{name}' already registered")
+            self._handlers[name] = EventHandler(name, callback, filter_fn)
+
+    def unregister(self, name: str) -> None:
+        """Remove a registered handler."""
+        with self._lock:
+            if name not in self._handlers:
+                raise KeyError(f"Handler '{name}' not found")
+            del self._handlers[name]
+
+    def get_handlers(self) -> Dict[str, EventHandler]:
+        """Get snapshot of all handlers."""
+        with self._lock:
+            return dict(self._handlers)
+
+    def get_history(self, limit: int = 10) -> List[KeyEvent]:
+        """Get recent events from history."""
+        return list(self.history)[-limit:] if limit > 0 else list(self.history)
+
+    def clear_history(self) -> None:
+        """Clear history buffer."""
+        self.history.clear()
+
+    def add_to_history(self, event: KeyEvent) -> None:
+        """Add event to history buffer."""
+        self.history.append(event)
+
+
+class EventDispatcher:
+    """Manages background thread and event dispatch."""
+
+    def __init__(self, bus: KeyEventBus):
+        self.bus = bus
+        self._queue: deque = deque()
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._use_timeout = False
+        self._timeout_sec = 0.1
+        self._lock = threading.Lock()
+
+    def start(self, use_timeout: bool = False, timeout_sec: float = 0.1) -> None:
+        """Start the dispatcher background thread."""
+        if self.is_running():
+            raise RuntimeError("Event dispatcher already running")
+
+        with self._lock:
+            self._use_timeout = use_timeout
+            self._timeout_sec = timeout_sec
+            self._stop_event.clear()
+            self._thread = threading.Thread(
+                target=self._run, daemon=True, name="KeyEventDispatcher"
+            )
+            self._thread.start()
+
+    def stop(self, wait_timeout: float = 2.0) -> None:
+        """Stop the dispatcher gracefully."""
+        if not self.is_running():
+            raise RuntimeError("Event dispatcher not running")
+
+        self._stop_event.set()
+        if self._thread:
+            self._thread.join(timeout=wait_timeout)
+            self._thread = None
+
+    def is_running(self) -> bool:
+        """Check if dispatcher is active."""
+        return self._thread is not None and self._thread.is_alive()
+
+    def push_event(self, event: KeyEvent) -> None:
+        """Enqueue event for dispatch."""
+        self._queue.append(event)
+        _event_queue.put(event)  # Also push to public queue
+        self.bus.add_to_history(event)
+
+    def set_timeout(self, use_timeout: bool, timeout_sec: float = 0.1) -> None:
+        """Change timeout settings at runtime."""
+        if not self.is_running():
+            raise RuntimeError("Event dispatcher not running")
+        with self._lock:
+            self._use_timeout = use_timeout
+            self._timeout_sec = timeout_sec
+
+    def _run(self) -> None:
+        """Background thread main loop."""
+        while not self._stop_event.is_set():
+            try:
+                event = self._queue.popleft()
+            except IndexError:
+                time.sleep(0.001)  # Small sleep to avoid busy loop
+                continue
+
+            # Fire all matching handlers
+            for handler in self.bus.get_handlers().values():
+                if handler.matches(event):
+                    self._fire_callback(handler, event)
+
+    def _fire_callback(self, handler: EventHandler, event: KeyEvent) -> None:
+        """Fire callback with optional timeout."""
+        with self._lock:
+            use_timeout = self._use_timeout
+            timeout_sec = self._timeout_sec
+
+        try:
+            if use_timeout:
+                self._fire_with_timeout(handler.callback, event, timeout_sec)
+            else:
+                handler.callback(event)
+        except Exception as e:
+            self._handle_error(e, event, handler.name)
+
+    def _fire_with_timeout(
+        self,
+        callback: Callable[[KeyEvent], None],
+        event: KeyEvent,
+        timeout_sec: float,
+    ) -> None:
+        """Fire callback in separate thread with timeout."""
+        result_holder = []
+        error_holder = []
+
+        def callback_wrapper() -> None:
+            try:
+                callback(event)
+                result_holder.append(True)
+            except Exception as e:
+                error_holder.append(e)
+
+        thread = threading.Thread(target=callback_wrapper, daemon=True)
+        thread.start()
+        thread.join(timeout=timeout_sec)
+
+        if thread.is_alive():
+            logentry(f"Event handler exceeded timeout ({timeout_sec}s)")
+        elif error_holder:
+            raise error_holder[0]
+
+    def _handle_error(self, exc: Exception, event: KeyEvent, handler_name: str) -> None:
+        """Handle callback error."""
+        if _event_error_handler:
+            try:
+                _event_error_handler(exc, event, handler_name)
+            except Exception as e:
+                logentry(f"Error handler failed: {e}")
+        else:
+            logentry(f"Event handler '{handler_name}' error: {exc}")
+
+
+# Module-level state
+_event_bus = KeyEventBus()
+_event_dispatcher = EventDispatcher(_event_bus)
+_event_queue: queue.Queue[KeyEvent] = queue.Queue()
+_event_error_handler: Optional[Callable[[Exception, KeyEvent, str], None]] = None
+
+
+# Public API Functions
+
+
+def register_key_event_handler(
+    name: str,
+    callback: Callable[[KeyEvent], None],
+    filter_fn: Optional[Callable[[KeyEvent], bool]] = None,
+) -> None:
+    """Register a callback to fire on matching events."""
+    _event_bus.register(name, callback, filter_fn)
+
+
+def unregister_key_event_handler(name: str) -> None:
+    """Remove a registered handler by name."""
+    _event_bus.unregister(name)
+
+
+def get_registered_handlers() -> Dict[str, EventHandler]:
+    """Get snapshot of all registered handlers."""
+    return _event_bus.get_handlers()
+
+
+def start_event_dispatcher(use_timeout: bool = False, timeout_sec: float = 0.1) -> None:
+    """Start the event dispatcher background thread."""
+    _event_dispatcher.start(use_timeout=use_timeout, timeout_sec=timeout_sec)
+
+
+def stop_event_dispatcher(wait_timeout: float = 2.0) -> None:
+    """Stop the event dispatcher gracefully."""
+    _event_dispatcher.stop(wait_timeout=wait_timeout)
+
+
+def is_event_dispatcher_running() -> bool:
+    """Check if dispatcher thread is active."""
+    return _event_dispatcher.is_running()
+
+
+def set_event_dispatcher_timeout(use_timeout: bool, timeout_sec: float = 0.1) -> None:
+    """Adjust timeout settings at runtime."""
+    _event_dispatcher.set_timeout(use_timeout, timeout_sec)
+
+
+def get_event_queue() -> queue.Queue[KeyEvent]:
+    """Get the shared event queue for custom consumption."""
+    return _event_queue
+
+
+def is_event_queue_empty() -> bool:
+    """Check if public queue has no pending events."""
+    return _event_queue.empty()
+
+
+def clear_event_queue() -> None:
+    """Drain all pending events from public queue."""
+    while not _event_queue.empty():
+        try:
+            _event_queue.get_nowait()
+        except queue.Empty:
+            break
+
+
+def set_event_error_handler(
+    handler: Optional[Callable[[Exception, KeyEvent, str], None]],
+) -> None:
+    """Set custom error handler for callback exceptions."""
+    global _event_error_handler
+    _event_error_handler = handler
+
+
+def get_key_event_history(limit: int = 10) -> List[KeyEvent]:
+    """Get recent events from circular history buffer."""
+    return _event_bus.get_history(limit)
+
+
+def clear_key_event_history() -> None:
+    """Clear the event history buffer."""
+    _event_bus.clear_history()
+
+
+# ============================================================================
+# GETCH IMPLEMENTATION
+# ============================================================================
+
 # def _read():
 #    if _input_queue:
 #        return _input_queue.popleft()
 #    return _current_input_stream.read(1)
 
 
-def _proc_char(char: str, debug: bool = False) -> str | None:
+def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str | None:
+    """Process character and optionally fire events.
+
+    Args:
+        char: Raw character to process
+        debug: If True, log unknown escape sequences
+        fire_events: If True and dispatcher running, fire key events
+
+    Returns:
+        Processed key name or character, or None for unknown sequences when debug=True
+    """
+    # Fire raw event before processing
+    if fire_events and _event_dispatcher.is_running():
+        raw_event = KeyEvent(
+            raw_char=char,
+            processed_key=None,
+            timestamp=time.time(),
+            stage="raw",
+            source_func="getch_str",
+        )
+        _event_dispatcher.push_event(raw_event)
+
+    # Initialize processed (will be set in all non-exception paths)
+    processed: str | None = None
+
     # 3. Handle Control Characters
     if char == "\x01":
-        return "KEY_CTRL_A"
-    if char == ETX:  # Ctrl+C (ETX)
+        processed = "KEY_CTRL_A"
+    elif char == ETX:  # Ctrl+C (ETX)
         raise KeyboardInterrupt
-    if char == EOF:  # Ctrl+D (EOF)
+    elif char == EOF:  # Ctrl+D (EOF)
         raise EOFError
-    if char == "\x05":  # ctrl-e (EOL)
-        return "KEY_CTRL_E"
-    if char in ("\x7f", "\x08"):
-        return "KEY_BACKSPACE"
-    if char == "\r":
-        return "KEY_ENTER"
-    if char == "\x15":  # ctrl-u
-        return "KEY_CUTTOBOL"
-    if char == "\t":
-        return "KEY_TAB"
-
+    elif char == "\x05":  # ctrl-e (EOL)
+        processed = "KEY_CTRL_E"
+    elif char in ("\x7f", "\x08"):
+        processed = "KEY_BACKSPACE"
+    elif char == "\r":
+        processed = "KEY_ENTER"
+    elif char == "\x15":  # ctrl-u
+        processed = "KEY_CUTTOBOL"
+    elif char == "\t":
+        processed = "KEY_TAB"
     # 4. Handle Escape Sequences and Plain ESC
-    if char == ESC:  # ESCAPE
+    elif char == ESC:  # ESCAPE
         sequence = char
         # Read subsequent bytes without blocking to check for a sequence
         # Wait a short period, then check up to a maximum number of bytes (e.g., 10)
@@ -57,32 +369,55 @@ def _proc_char(char: str, debug: bool = False) -> str | None:
 
         # A. Check for plain ESC
         if len(sequence) == 1:
-            return "KEY_ESC"  # Plain ESC key was pressed (as no other bytes followed)
+            processed = (
+                "KEY_ESC"  # Plain ESC key was pressed (as no other bytes followed)
+            )
+        else:
+            # B. Check for known escape sequences
+            # Sort keys by length descending to match longest possible sequence first
+            found = False
+            for code, name in sorted(
+                KEY_MAP.items(), key=lambda item: len(item[0]), reverse=True
+            ):
+                if sequence.endswith(code):
+                    processed = name
+                    found = True
+                    break
 
-        # B. Check for known escape sequences
-        # Sort keys by length descending to match longest possible sequence first
-        for code, name in sorted(
-            KEY_MAP.items(), key=lambda item: len(item[0]), reverse=True
-        ):
-            if sequence.endswith(code):
-                return name
-
-        # C. Unknown escape sequence
-        if debug:
-            logentry(f"unknown escape sequence: {sequence!r}")
-            return None
-        return sequence
-
+            # C. Unknown escape sequence
+            if not found:
+                if debug:
+                    logentry(f"unknown escape sequence: {sequence!r}")
+                    processed = None
+                else:
+                    processed = sequence
     # 5. Return a regular character
-    return char
+    else:
+        processed = char
+
+    # Fire processed event after processing
+    if fire_events and _event_dispatcher.is_running():
+        processed_event = KeyEvent(
+            raw_char=char,
+            processed_key=processed,
+            timestamp=time.time(),
+            stage="processed",
+            source_func="getch_str",
+        )
+        _event_dispatcher.push_event(processed_event)
+
+    return processed
 
 
-def getch_str(timeout: float = 1.0, debug: bool = False, **kwargs) -> str | None:
+def getch_str(
+    timeout: float = 1.0, debug: bool = False, fire_events: bool = True, **kwargs
+) -> str | None:
     """Reads a single keypress without blocking and handles control/extended keys.
 
     Args:
-        timeout: Seconds to wait for input (default: None, blocks indefinitely)
+        timeout: Seconds to wait for input (default: 1.0)
         debug: If True, log unknown escape sequences and return None
+        fire_events: If True, fire key events if dispatcher is running
     """
 
     with _current_stream_lock:
