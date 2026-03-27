@@ -1,5 +1,4 @@
-import psycopg
-from bbsengine6 import io, database, util
+from bbsengine6 import io, database
 
 from . import lib
 

@@ -1,13 +1,13 @@
 import argparse
 
-from bbsengine6 import database, sig
+from bbsengine6 import database, io, sig
 
 
 class Completer(object):
     def __init__(self, args, **kw):
         self.args = kw["args"]
         #      self.args = kw["args"] if "args" in kw else "ARGS!"
-        ttyio.echo(f"Completer.init.100: {kw=}", level="debug")
+        io.echo(f"Completer.init.100: {kw=}", level="debug")
         self.debug = True
 
     def build(self, word):
@@ -23,7 +23,7 @@ class Completer(object):
         with database.connect(self.args) as conn:
             with database.cursor(conn) as cur:
                 if self.debug is True:
-                    ttyio.echo(f"{database.sqlmogrify(sql,dat)=}", level="debug")
+                    io.echo(f"{database.sqlmogrify(sql,dat)=}", level="debug")
                 cur.execute(sql, dat)
                 if cur.rowcount == 0:
                     return None
@@ -36,7 +36,7 @@ class Completer(object):
         self.results = [
             x for x in self.build(word) if x is not None and x.startswith(word)
         ]
-        ttyio.echo(f"{self.results=} {state=}", level="debug")
+        io.echo(f"{self.results=} {state=}", level="debug")
         return self.results
 
 

@@ -5,8 +5,7 @@ Checks if the main database exists and creates it if necessary,
 initializing all required settings and permissions.
 """
 
-import psycopg
-from bbsengine6 import io, database, util
+from bbsengine6 import io, database
 
 from . import lib
 

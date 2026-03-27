@@ -1,3 +1,7 @@
+from bbsengine6 import io, util
+from bbsengine6.inputdate import inputdate as _inputdate
+
+
 def email(args, **kwargs):
     def _edit(args, **kwargs):
         if "prompt" in kwargs:
@@ -13,36 +17,36 @@ def email(args, **kwargs):
             if "address" in attributes:
                 address = attributes["address"]
                 if address is not None:
-                    ttyio.echo("[A]ddress: %s" % (address))
+                    io.echo("[A]ddress: %s" % (address))
             else:
-                ttyio.echo("[A]ddress")
-            ttyio.echo("[P]assword")
+                io.echo("[A]ddress")
+            io.echo("[P]assword")
             if "status" in attributes:
                 status = attributes["status"]
-                ttyio.echo("[S]tatus: %s" % (status), end="")
+                io.echo("[S]tatus: %s" % (status), end="")
                 if status == "suspend" and "suspenduntil" in attributes:
                     suspenduntil = attributes["suspenduntil"]
-                    ttyio.echo(" until: %s" % (bbsengine.datestamp(suspenduntil)))
+                    io.echo(" until: %s" % (util.datestamp(suspenduntil)))
                 else:
-                    ttyio.echo()
+                    io.echo()
             else:
-                ttyio.echo("[S]tatus")
-            ttyio.echo("[H]ost")
-            ttyio.echo("{f6}[Q]uit")
-            ch = ttyio.inputchar("%s [AEDSQ]: " % (prompt), "ASMHQ", "Q")
+                io.echo("[S]tatus")
+            io.echo("[H]ost")
+            io.echo("{f6}[Q]uit")
+            ch = io.inputchar("%s [AEDSQ]: " % (prompt), "ASMHQ", "Q")
             if ch == "Q":
-                ttyio.echo("quit")
+                io.echo("quit")
                 done = True
                 break
             elif ch == "P":
-                p = bbsengine.inputpassword("password: ", mask="X")
+                p = util.inputpassword("password: ", mask="X")
                 attributes["password"] = p
             elif ch == "A":
                 if "address" in attributes:
                     address = attributes["address"]
                 else:
                     address = None
-                attributes["address"] = ttyio.inputstring(
+                attributes["address"] = io.inputstring(
                     "address: ", address, noneok=True
                 )
             elif ch == "H":
@@ -50,22 +54,22 @@ def email(args, **kwargs):
                     default = attributes["host"]
                 else:
                     default = "merlin.zoidtechnologies.com"
-                host = ttyio.inputstring("host: ", default)
+                host = io.inputstring("host: ", default)
                 attributes["host"] = host
 
             elif ch == "S":
-                ch = ttyio.inputchar("Status [S]uspend [A]ctive: ", "SA", noneok=True)
+                ch = io.inputchar("Status [S]uspend [A]ctive: ", "SA", noneok=True)
                 if ch == "S":
-                    suspenduntil = bbsengine.inputdate("Suspend until: ")
+                    suspenduntil = _inputdate("Suspend until: ")
                     attributes["suspenduntil"] = suspenduntil
                     attributes["status"] = "suspend"
                 elif ch == "A":
-                    ttyio.echo("Active")
+                    io.echo("Active")
                     attributes["status"] = "active"
                     if "suspenduntil" in attributes:
                         del attributes["suspenduntil"]
 
-        ttyio.echo("_editemail.100: attributes=%r" % (attributes), interpret=False)
+        io.echo("_editemail.100: attributes=%r" % (attributes), interpret=False)
         return
 
     def delete():
@@ -75,8 +79,8 @@ def email(args, **kwargs):
         pass
 
     def add():
-        newattributes = _editemail(args, attributes={}, prompt="email.add")
-        ttyio.echo("email.add.100: newattributes=%r" % (newattributes), interpret=False)
+        newattributes = _edit(args, attributes={}, prompt="email.add")
+        io.echo("email.add.100: newattributes=%r" % (newattributes), interpret=False)
         return
 
     def summary():

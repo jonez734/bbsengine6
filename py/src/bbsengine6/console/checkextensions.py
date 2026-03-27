@@ -5,8 +5,7 @@ Checks for and installs required PostgreSQL extensions (uuid-ossp, etc.)
 needed for the BBS engine to function properly.
 """
 
-import psycopg
-from bbsengine6 import io, database, util
+from bbsengine6 import io, database
 
 from . import lib
 

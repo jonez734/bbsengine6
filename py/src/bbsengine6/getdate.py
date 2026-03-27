@@ -5,6 +5,8 @@ from dateutil.parser import parse
 # import datetime
 import dateutil.tz
 
+from bbsengine6 import io
+
 add_default_tz = lambda x, tzinfo: x.replace(tzinfo=x.tzinfo or tzinfo)
 
 
@@ -53,5 +55,5 @@ def date(args, prompt, value, **kw):
     #    return buf
     res = getdate(buf)
     if res is None:
-        ttyio.echo("invalid date expression")
+        io.echo("invalid date expression")
     return res

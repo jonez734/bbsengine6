@@ -5,8 +5,7 @@ Creates and validates all required PostgreSQL stored procedures and functions
 that implement the business logic for the BBS engine.
 """
 
-import psycopg
-from bbsengine6 import io, database, util
+from bbsengine6 import io, database
 
 from . import lib
 

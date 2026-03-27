@@ -5,7 +5,6 @@ Validates that all required system flags and configuration flags exist
 in the database with correct default values.
 """
 
-import psycopg
 from bbsengine6 import io, database
 
 from . import lib
