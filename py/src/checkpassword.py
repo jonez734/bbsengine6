@@ -1,5 +1,5 @@
 import argparse
-from bbsengine6 import io, member, database, screen, util
+from bbsengine6 import io, member, database, screen
 
 
 def buildargs(args=None):

@@ -1,3 +1,3 @@
-from bbsengine6 import io, util
+from bbsengine6 import util
 
 util.heading("zoidtechnologies.com")

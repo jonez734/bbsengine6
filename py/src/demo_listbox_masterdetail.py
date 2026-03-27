@@ -3,7 +3,7 @@ import argparse
 from typing import NamedTuple, cast
 
 import psycopg
-from bbsengine6 import io, util, database, screen, common
+from bbsengine6 import io, util, database, screen
 from bbsengine6.listboxcursor import ListboxCursor
 from bbsengine6.listbox import Listbox, ListboxItem
 

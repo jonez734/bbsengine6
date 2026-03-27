@@ -1,4 +1,3 @@
-from . import io
 
 
 def readfile(filename, escape=True):

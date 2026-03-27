@@ -1,6 +1,6 @@
 PACKAGENAME = "skel"
 
-from bbsengine6 import module, database
+from bbsengine6 import module
 
 
 def checkmodule(args, module, **kw):

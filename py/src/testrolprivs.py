@@ -2,7 +2,7 @@ import time
 import locale
 import argparse
 
-from bbsengine6 import io, database, member
+from bbsengine6 import io, database
 
 
 def buildargs(args=None, **kw):

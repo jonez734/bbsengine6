@@ -13,6 +13,17 @@ def _is_help_request(argv: list) -> bool:
     return "--help" in argv or "-h" in argv
 
 
+def _has_subparser_info(args) -> bool:
+    """Check if args has subparser-related attributes set from parent parser."""
+    if args is None:
+        return False
+    subparser_attrs = ["_subsubparser", "_subparser", "subcommand", "command"]
+    return any(
+        hasattr(args, attr) and getattr(args, attr) is not None
+        for attr in subparser_attrs
+    )
+
+
 def _create_help_from_docstring(module) -> object:
     """Create argparse parser from module docstring for help display"""
     if not hasattr(module, "__doc__") or not module.__doc__:
@@ -63,7 +74,7 @@ def check(args, modulename, op="run", **kwargs):
         if silent is False:
             io.echo(f"module {modulename=} not importable", level="error")
         return False
-    except Exception as e:
+    except Exception:
         import traceback
 
         traceback.print_exc(file=sys.stdout)
@@ -290,10 +301,20 @@ def run(args, modulename, **kwargs):
 
         if prgargparser is not None:
             try:
-                # argv already doesn't include subcommand name (extracted by console/__main__.py)
-                # Just clean up whitespace
                 argv = [a.strip() for a in argv] if argv else []
-                prgargs = prgargparser.parse_args(argv)
+
+                # If argv is empty but args already has subparser info from parent
+                # parser, use args directly to preserve that info
+                if not argv and _has_subparser_info(args):
+                    prgargs = args
+                    if debug is True:
+                        io.echo(
+                            "bbsengine6.module.run.135: using existing args "
+                            "(argv empty, subparser info present)",
+                            level="debug",
+                        )
+                else:
+                    prgargs = prgargparser.parse_args(argv)
                 if debug is True:
                     io.echo(
                         f"bbsengine6.module.run.140: {prgargs=} {argv=}", level="debug"

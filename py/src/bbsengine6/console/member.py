@@ -1,6 +1,4 @@
-import json
 import copy
-import argparse
 
 from bbsengine6 import io, database, util
 from bbsengine6 import member as libmember

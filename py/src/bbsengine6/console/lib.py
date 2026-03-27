@@ -2,7 +2,7 @@ import argparse
 import importlib
 import os
 
-from bbsengine6 import io, database, session, screen, module
+from bbsengine6 import io, database, screen, module
 
 SQLDIR = "$HOME/projects/bbsengine6/sql/"
 

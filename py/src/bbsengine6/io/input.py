@@ -411,7 +411,9 @@ def ctrl_key_name(ch):
 # @since 20250527 rewrite to use select instead of time.sleep()
 def getch(keytimeout=0.125, **kwargs):
     """Reads a single character from standard input non-blocking, handling escape sequences with a timeout."""
-    import time, platform, tty, fcntl, termios, sys, os, select
+    import platform
+    import sys
+    import select
 
     stream = kwargs.get("stream", sys.stdin)
     fd = stream.fileno()

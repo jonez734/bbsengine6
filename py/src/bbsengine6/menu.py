@@ -1,6 +1,6 @@
 from typing import NamedTuple
 
-from . import screen, module, io
+from . import screen, io
 
 menuitemresults = {}
 

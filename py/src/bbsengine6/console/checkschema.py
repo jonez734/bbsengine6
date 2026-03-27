@@ -7,7 +7,6 @@ indexes, and constraints required for BBS engine operations.
 
 from bbsengine6 import io, database
 
-from . import lib
 
 
 def init(args, **kwargs) -> bool:

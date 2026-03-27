@@ -2,9 +2,7 @@ from .echo import echo, rendered_length
 from . import terminal
 
 # terminal import lines as terminal_lines, columns as terminal_columns
-from .util import logentry
 
-from typing import Callable, Any
 
 # ------------------------
 # screen related functions

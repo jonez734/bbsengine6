@@ -3,7 +3,7 @@ import argparse
 import tkinter as tk
 from tkinter import ttk
 
-from bbsengine6 import io, database, util, member
+from bbsengine6 import io, database, util
 
 
 class App(tk.Tk):
