@@ -1,16 +1,37 @@
-import re
+"""
+folder.py - BBS folder/board management module
 
-# import ttyio6 as ttyio
+Security Considerations:
+- All path/URI inputs are validated against _SAFE_PATH_PATTERN before SQL queries
+- Path validation prevents ReDoS attacks via malicious regex in SQL ~ operator
+- Path validation prevents path traversal attacks
+- Database connections use context managers for proper resource cleanup
+"""
+
+import re
 
 import psycopg
 from . import member, database, io
 
 
-def buildpath(args, path: str):
+# Security: Validate folder path to prevent regex DoS and path traversal attacks
+_SAFE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
+
+
+def _validate_path(path: str) -> bool:
+    """Validate that path contains only safe characters to prevent ReDoS and path traversal."""
+    if not path or len(path) > 256:
+        return False
+    return _SAFE_PATH_PATTERN.match(path) is not None
+
+
+def buildpath(args, path: str) -> str:
+    """Convert folder path hyphens to underscores."""
     return path.replace("-", "_")
 
 
-def builduri(args, path: str, top="top"):
+def builduri(args, path: str, top: str = "top") -> str:
+    """Build URI from folder path."""
     path = striptop(path)
     path = path.lstrip(".")
     path = path.replace(".", "/")
@@ -97,6 +118,10 @@ def insert(args, folder, **kwargs):
 
 
 def get(args, path, **kwargs):
+    if not _validate_path(path):
+        io.echo(f"engine.folder.get.100: invalid path: {path!r}", level="error")
+        return None
+
     def _work(conn):
         with database.cursor(conn) as cur:
             sql = "select * from engine.folder where path ~ %s"
@@ -142,18 +167,19 @@ class foldercompleter(object):
             dat = (text + "*{1}",)
         else:
             dat = (text + "*",)
-        cur = self.dbh.cursor()
-        if self.debug is True:
-            io.echo(f"{database.sqlmogrify(cur, sql,dat)=}", level="debug")
-        cur.execute(sql, dat)
-        res = cur.fetchall()
-        foo = []
-        for rec in res:
-            foo.append(rec["path"])
 
-        cur.close()
-        #    print foo
-        return foo
+        if not _validate_path(text):
+            return []
+
+        with self.dbh.cursor() as cur:
+            if self.debug is True:
+                io.echo(f"{database.sqlmogrify(cur, sql,dat)=}", level="debug")
+            cur.execute(sql, dat)
+            res = cur.fetchall()
+            foo = []
+            for rec in res:
+                foo.append(rec["path"])
+            return foo
 
     def complete(self, text, state):
         #    print "state=",state,"text=",text
@@ -164,8 +190,8 @@ class foldercompleter(object):
 
 
 # @since 20230521 copied from bbsengine5
-def buildlist(args, folders: str) -> list:
-    if type(folders) == str:
+def buildlist(folders: str, args=None) -> list:
+    if isinstance(folders, str):
         folders = re.split("[, ]", folders)
 
     folders = [s.strip() for s in folders]
@@ -178,15 +204,21 @@ def buildlist(args, folders: str) -> list:
 def noneexist(buf: str, **kwargs: dict) -> bool:
     args = kwargs.get("args", None)
 
-    dbh = database.connect(args)
-    cur = dbh.cursor()
     sql = "select 1 from engine.folder where path ~ %s"
-    for s in buildlist(buf):
-        dat = (s,)
-        cur.execute(sql, dat)
-        if cur.rowcount == 1:
-            io.echo(f"folder {s!r} already exists")
-            return False
+    with database.connect(args) as dbh:
+        with dbh.cursor() as cur:
+            for s in buildlist(buf):
+                if not _validate_path(s):
+                    io.echo(
+                        f"engine.folder.noneexist.100: invalid path: {s!r}",
+                        level="error",
+                    )
+                    return False
+                dat = (s,)
+                cur.execute(sql, dat)
+                if cur.rowcount == 1:
+                    io.echo(f"folder {s!r} already exists")
+                    return False
     return True
 
 
@@ -194,6 +226,11 @@ def allexist(buf, **kwargs):
     def _work(cur):
         sql = "select 1 from engine.folder where path ~ %s"
         for s in buildlist(buf):
+            if not _validate_path(s):
+                io.echo(
+                    f"engine.folder.allexist.100: invalid path: {s!r}", level="error"
+                )
+                return False
             dat = (s,)
             cur.execute(sql, dat)
             if cur.rowcount == 0:
@@ -206,7 +243,7 @@ def allexist(buf, **kwargs):
 
     if cur is None:
         with database.connect(args) as conn:
-            with database.cursor(args) as cur:
+            with database.cursor(conn) as cur:
                 return _work(cur)
     else:
         return _work(cur)
@@ -215,6 +252,9 @@ def allexist(buf, **kwargs):
 def getchfoldercompleter(word, **kwargs):
     def build(word, **kwargs):
         args = kwargs.get("args", None)
+
+        if not _validate_path(word):
+            return
 
         sql = "select distinct path from engine.folder where path ~ %s"
 
@@ -256,10 +296,15 @@ def exists(args, buf: str, **kwargs: dict) -> bool:
     cur = kwargs.get("cur", None)
     sql: str = "select 1 from engine.folder where path ~ %s"
 
+    for s in buildlist(buf):
+        if not _validate_path(s):
+            io.echo(f"engine.folder.exists.050: invalid path: {s!r}", level="error")
+            return False
+
     if cur is None:
         with database.connect(args) as conn:
             with database.cursor(conn) as cur:
-                for s in buildlist(args, buf):
+                for s in buildlist(buf):
                     dat: tuple = (s,)
                     io.echo(
                         f"engine.folder.exists.100: {database.mogrifysql(cur, sql, dat)=}",
@@ -277,7 +322,7 @@ def exists(args, buf: str, **kwargs: dict) -> bool:
                     )
                     return False
     else:
-        for s in buildlist(args, buf):
+        for s in buildlist(buf):
             dat: tuple = (s,)
             io.echo(
                 f"engine.folder.exists.160: {database.mogrifysql(cur, sql, dat)=}",
@@ -292,6 +337,10 @@ def exists(args, buf: str, **kwargs: dict) -> bool:
 
 
 def uriexists(args, buf: str, **kwargs: dict) -> bool:
+    if not _validate_path(buf):
+        io.echo(f"engine.folder.uriexists.050: invalid uri: {buf!r}", level="error")
+        return False
+
     cur = kwargs.get("cur", None)
     if cur is None:
         with database.connect(args) as conn:
