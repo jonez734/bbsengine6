@@ -31,11 +31,17 @@ Reads a single keypress and returns a key name or character.
 - Key name string (e.g., `"KEY_UP"`, `"KEY_LEFT"`, `"KEY_ENTER"`)
 - Single character for regular input
 - Raw escape sequence for unknown sequences (when `debug=False`)
-- `None` if timeout occurred or unknown sequence (when `debug=True`)
+- `None` if timeout occurred, unknown sequence (when `debug=True`), or F2 was pressed while viewing notifications
 
 **Raises:**
 - `KeyboardInterrupt` on Ctrl+C
 - `EOFError` on Ctrl+D
+
+**Special Behavior - Notifications:**
+- When pending notifications are detected, a system bell (`{bel}`) is emitted once per session
+- When F2 key is pressed, pending notifications are displayed and the key is consumed (returns `None`)
+- Notification display shows: urgency level, timestamp, recipient, and message
+- Colors for notifications are configurable via echo vars: `notify.criticalcolor`, `notify.urgentcolor`, `notify.importantcolor`, `notify.routinecolor`, `notify.datestampcolor`, `notify.recipientcolor`
 
 ---
 
@@ -120,6 +126,18 @@ Processes a single character and returns the appropriate key name.
 
 - Uses `_input_queue` from `common.py` for buffered input
 - Checks queue first before doing blocking read
+
+### Notification Integration
+
+- Before waiting for input, checks for pending notifications (queue + database)
+- If notifications exist, emits bell once per session via `{bel}` command
+- F2 key is reserved for notification display:
+  - Shows all pending notifications with formatting
+  - Waits for user keypress to dismiss
+  - Resets bell flag for next notification batch
+  - Returns `None` to consume the key (caller doesn't receive F2)
+- Uses thread-local storage from `bbsengine6.member` to auto-detect current user
+- Gracefully disables if notification modules unavailable
 
 ---
 

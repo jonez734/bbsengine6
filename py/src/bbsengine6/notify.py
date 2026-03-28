@@ -636,6 +636,25 @@ def get_queue(moniker: str) -> UserNotificationQueue:
         return _queues[moniker]
 
 
+def get_notification_count(moniker: str, conn: Optional[Any] = None) -> int:
+    """Get total unread notification count for user (queue + database)."""
+    if not moniker:
+        return 0
+
+    # In-memory queue count
+    queue = get_queue(moniker)
+    queue_count = queue.size()
+
+    # Database unread count
+    try:
+        notifications = get_notifications(moniker, unread_only=True, conn=conn)
+        db_count = len(notifications)
+    except Exception:
+        db_count = 0
+
+    return queue_count + db_count
+
+
 def get_urgent(moniker: str, conn: Optional[Any] = None) -> List[Notification]:
     """Get urgent (URGENT or CRITICAL) unread notifications for user."""
     notifications = get_notifications(moniker, unread_only=True, conn=conn)
@@ -1037,6 +1056,7 @@ __all__ = [
     "send",
     "get_notifications",
     "get_queue",
+    "get_notification_count",
     "get_urgent",
     "mark_read",
     "mark_delivered",

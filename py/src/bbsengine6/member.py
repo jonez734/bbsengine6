@@ -167,6 +167,21 @@ def getcurrentmoniker(args, **kwargs):
     return _work(conn)
 
 
+def notifycount(args, **kwargs) -> int:
+    """Get total unread notification count for current user.
+
+    Returns:
+        Number of unread notifications (queue + database), or 0 if not logged in.
+    """
+    from bbsengine6 import notify
+
+    moniker = getcurrentmoniker(args, **kwargs)
+    if not moniker:
+        return 0
+
+    return notify.get_notification_count(moniker)
+
+
 def getcurrentid(args, **kwargs):
     cached = getattr(_threadlocal, "id", None)
     if cached is not None:

@@ -70,6 +70,12 @@ _skin = {
     "listbox.item.highlighted": "{listbox.item.normal}{inverse}",
     "listbox.item.disabled": "{darkgray}",
     "listbox.bgcolor": "",
+    "notify.criticalcolor": "{bgred}{white}",
+    "notify.urgentcolor": "{orange}",
+    "notify.importantcolor": "{yellow}",
+    "notify.routinecolor": "{lightgray}",
+    "notify.datestampcolor": "{darkgray}",
+    "notify.recipientcolor": "{cyan}",
 }
 
 # Runtime variables dictionary

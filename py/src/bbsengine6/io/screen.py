@@ -69,6 +69,30 @@ def setbottombar(left, right=None, **kwargs):
 setarea = setbottombar
 
 
+# @since 20260327 - notification status for bottombar right side
+def get_notification_status() -> str:
+    """Get notification status string for bottombar right side.
+
+    Returns:
+        "F2: notify (N)" if notifications > 0, else empty string.
+    """
+    try:
+        from bbsengine6 import member, notify
+        from bbsengine6.member import _threadlocal
+
+        # Get moniker from thread-local storage (already logged in)
+        moniker = getattr(_threadlocal, "moniker", None)
+        if not moniker:
+            return ""
+
+        count = notify.get_notification_count(moniker)
+        if count > 0:
+            return f"F2: notify ({count})"
+    except Exception:
+        pass
+    return ""
+
+
 # @since 20230523 copied from bbsengine5
 def popbottombar():
     global bottombarstack

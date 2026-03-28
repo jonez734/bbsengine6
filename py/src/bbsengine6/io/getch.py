@@ -8,6 +8,7 @@ import queue
 import threading
 from collections import deque
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Callable, Dict, Optional, List
 
 
@@ -17,9 +18,26 @@ from .common import (
     _input_queue,
     _read_current_input_stream,
 )
+from .echo import echo
 from .util import logentry
 from .keymap import KEY_MAP
 from .const import ESC, ETX, EOF
+
+# Notification support (with graceful fallback)
+try:
+    from bbsengine6.member import _threadlocal
+    _has_member_module = True
+except ImportError:
+    _has_member_module = False
+
+try:
+    from bbsengine6 import notify
+    _has_notify_module = True
+except ImportError:
+    _has_notify_module = False
+
+# Track if bell has been emitted this session (emit only once)
+_notified_this_session = False
 
 # ============================================================================
 # KEY EVENT SYSTEM - Threading-based async event notification
@@ -301,6 +319,78 @@ def clear_key_event_history() -> None:
 
 
 # ============================================================================
+# NOTIFICATION SUPPORT HELPERS
+# ============================================================================
+
+
+def _check_notifications(moniker: str) -> tuple[bool, int]:
+    """Check for pending notifications. Returns (has_notifications, count)."""
+    if not _has_notify_module:
+        return False, 0
+    try:
+        count = notify.get_notification_count(moniker)
+        return count > 0, count
+    except Exception:
+        return False, 0
+
+
+def _emit_notification_bell_once() -> bool:
+    """Emit bell once per session when notifications exist."""
+    global _notified_this_session
+    if _notified_this_session:
+        return False
+    _notified_this_session = True
+    echo("{bel}", end="", flush=True)
+    return True
+
+
+def _get_urgency_color(urgency) -> str:
+    """Get color code for urgency level using echo var."""
+    from bbsengine6.notify import NotificationUrgency
+
+    mapping = {
+        NotificationUrgency.CRITICAL: "{var:notify.criticalcolor}",
+        NotificationUrgency.URGENT: "{var:notify.urgentcolor}",
+        NotificationUrgency.IMPORTANT: "{var:notify.importantcolor}",
+        NotificationUrgency.ROUTINE: "{var:notify.routinecolor}",
+    }
+    return mapping.get(urgency, "{var:notify.routinecolor}")
+
+
+def _show_pending_notifications(moniker: str) -> None:
+    """Display pending notifications for user."""
+    if not _has_notify_module:
+        echo("{var:normalcolor}Notifications unavailable.{/all}")
+        return
+
+    try:
+        queue = notify.get_queue(moniker)
+        notifications = queue.get_all()
+
+        if not notifications:
+            echo("{var:normalcolor}No pending notifications.{/all}")
+            return
+
+        # Display each notification with colors from echo vars
+        for n in notifications:
+            urgency_color = _get_urgency_color(n.urgency)
+            timestamp = datetime.fromtimestamp(n.timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            recipient = n.recipients[0] if n.recipients else "Unknown"
+
+            echo(f"{urgency_color}[{n.urgency.value}]{{/all}} {{var:notify.datestampcolor}}{timestamp}{{/all}}")
+            echo(f"{{var:notify.recipientcolor}}To:{{/all}} {recipient}")
+            echo(f"{n.message}")
+            echo("{var:normalcolor}" + "─" * 40 + "{/all}")
+
+        echo("{var:normalcolor}Press any key to dismiss...{/all}")
+        # Wait for keypress to dismiss by calling getch_str recursively
+        getch_str(timeout=1.0)
+
+    except Exception as e:
+        echo(f"{{var:normalcolor}}Error displaying notifications: {e}{{/all}}")
+
+
+# ============================================================================
 # GETCH IMPLEMENTATION
 # ============================================================================
 
@@ -418,12 +508,34 @@ def getch_str(
         timeout: Seconds to wait for input (default: 1.0)
         debug: If True, log unknown escape sequences and return None
         fire_events: If True, fire key events if dispatcher is running
+
+    Special behavior:
+        - Emits {bel} once when pending notifications are detected
+        - F2 key displays pending notifications (returns None to consume key)
     """
+    global _notified_this_session
+
+    # Check for notifications and emit bell (once) before waiting for input
+    moniker = None
+    if _has_member_module:
+        moniker = getattr(_threadlocal, "moniker", None)
+
+    if moniker and _has_notify_module:
+        has_notifications, notification_count = _check_notifications(moniker)
+        if has_notifications:
+            _emit_notification_bell_once()
 
     with _current_stream_lock:
         if _input_queue:
             char = _input_queue.popleft()
-            return _proc_char(char, debug=debug)
+            result = _proc_char(char, debug=debug)
+            # Check if result is F2
+            if result == "KEY_F2" and moniker:
+                _show_pending_notifications(moniker)
+                # Reset bell flag for next batch of notifications
+                _notified_this_session = False
+                return None  # Don't propagate F2 to caller
+            return result
         else:
             fd = _current_input_stream.fileno()
             old_settings = termios.tcgetattr(fd)
@@ -454,7 +566,14 @@ def getch_str(
                     # If nothing is available, return None immediately
                     return None
 
-                return _proc_char(char)
+                result = _proc_char(char)
+                # Check if result is F2
+                if result == "KEY_F2" and moniker:
+                    _show_pending_notifications(moniker)
+                    # Reset bell flag for next batch of notifications
+                    _notified_this_session = False
+                    return None  # Don't propagate F2 to caller
+                return result
 
             finally:
                 # 6. Restore Terminal Settings (CRUCIAL!)
