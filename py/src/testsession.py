@@ -3,7 +3,7 @@ import atexit
 import getpass
 import os
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
 from bbsengine6 import database, session
@@ -70,13 +70,13 @@ class TestBuild(unittest.TestCase):
     def test_build_returns_session_dict(self):
         rec: dict = {
             "id": "test-session-id",
-            "expiry": datetime.now() + timedelta(hours=2),
-            "lastactivity": datetime.now(),
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=2),
+            "lastactivity": datetime.now(timezone.utc),
             "data": {},
             "ipaddress": "127.0.0.1",
             "useragent": "test-agent",
-            "datecreated": datetime.now(),
-            "dateupdated": datetime.now(),
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
             "moniker": "testuser",
         }
         result = session.build(rec)
@@ -87,13 +87,13 @@ class TestBuild(unittest.TestCase):
     def test_build_handles_missing_keys(self):
         rec: dict = {
             "id": "test-session-id",
-            "expiry": datetime.now(),
-            "lastactivity": datetime.now(),
+            "expiry": datetime.now(timezone.utc),
+            "lastactivity": datetime.now(timezone.utc),
             "data": {},
             "ipaddress": None,
             "useragent": None,
-            "datecreated": datetime.now(),
-            "dateupdated": datetime.now(),
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
             "moniker": "testuser",
         }
         result = session.build(rec)

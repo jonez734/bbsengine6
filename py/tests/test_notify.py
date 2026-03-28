@@ -6,7 +6,7 @@ Covers validation, data structures, and queue operations without database depend
 
 import pytest
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from bbsengine6.notify import (
     NotificationUrgency,
@@ -55,7 +55,7 @@ class TestNotificationDataclass:
             urgency=NotificationUrgency.ROUTINE,
             timestamp=time.time(),
             should_persist=True,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
         )
 
         assert notif.id == 1
