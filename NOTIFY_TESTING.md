@@ -4,9 +4,38 @@ This guide shows how to test sending and receiving notifications.
 
 ## Prerequisites
 
-- PostgreSQL database running
-- bbsengine6 database initialized with notify schema
-- Test users: `jam`, `alice`, `bob` created in `engine.__member` table
+- PostgreSQL database running with oidentd authentication
+- Test database `zoid6test` (will be created if it doesn't exist)
+- `opencode` PostgreSQL user (oidentd auth, no password needed)
+- Engine schema and member table already initialized in `zoid6test`
+
+## Automatic Database Setup
+
+**Good news!** Tests automatically initialize the notify schema on first run. You don't need to manually set up anything beyond the prerequisites above.
+
+**How it works:**
+1. Pytest fixtures in `conftest.py` run before tests
+2. Database connection established to `zoid6test` as `opencode` user
+3. 7 notify-specific SQL files loaded (skip if already exist)
+4. Test users `alice` and `bob` created (skip if already exist)
+5. Each test runs in its own transaction (rolled back after test)
+
+**First Run:**
+```bash
+cd /home/opencode/data/work/bbsengine6/py
+source /home/opencode/.venv/bin/activate
+BBSENGINE6_DBNAME=zoid6test python -m pytest tests/test_notify_integration.py -v -s
+```
+
+**Subsequent Runs:**
+```bash
+# Same command - tables already exist, tests run faster
+BBSENGINE6_DBNAME=zoid6test python -m pytest tests/test_notify_integration.py -v -s
+```
+
+**Environment Variables:**
+- `BBSENGINE6_DBNAME`: Database name to use (default: `bbsengine6`)
+- Set to `zoid6test` for testing, `bbsengine6` for production
 
 ## Running Tests
 
@@ -82,6 +111,13 @@ End-to-end examples:
 - `test_complete_notification_workflow()` - Full send→receive→read flow
 - `test_social_notification_example()` - Real-world social feature
 - `test_game_victory_example()` - Real-world game notification
+
+### 9. TestNotificationCount
+Test the notification count function:
+- `test_count_returns_integer()` - Verify count() returns an integer
+- `test_count_for_valid_moniker()` - Count notifications for jam
+- `test_count_for_alice()` - Count notifications for alice
+- `test_count_for_bob()` - Count notifications for bob
 
 ## Quick Start: Manual Testing
 
@@ -210,6 +246,42 @@ WHERE nrl.sender_moniker = 'jam'
   AND (now() - nrl.window_start) < interval '1 hour';
 ```
 
+## How conftest.py Works
+
+The `py/tests/conftest.py` file provides pytest fixtures for automatic database setup:
+
+### Session-Scoped Fixtures (run once per test session)
+
+**`db_connection`**: Connects to `zoid6test` database as `opencode` user
+- Uses oidentd authentication (no password needed)
+- Creates database if it doesn't exist
+- Connection persists for entire test session
+
+**`schema_init`**: Initializes 7 notify-specific SQL files
+- Smart approach: only loads files needed for notify system
+- Skips already-existing tables (idempotent)
+- Order: notify.sql → notify_recipient.sql → ... → notifyview.sql
+- Logs "already exists" warnings on re-runs (this is normal)
+
+**`create_test_users`**: Creates test users
+- Inserts `alice` and `bob` into `engine.__member` (skip if exist)
+- Uses minimal fields: moniker, email
+- `jam` already exists, not re-created
+
+### Function-Scoped Fixtures (run before/after each test)
+
+**`test_transaction`** (autouse):
+- Automatically wraps each test in its own transaction
+- Schema persists (session fixtures), test data is isolated
+- Rolls back after test to keep database clean
+- Allows tests to run multiple times without data accumulation
+
+### Helper Functions
+
+**`_get_notify_sql_files()`**: Returns 7 notify SQL files in correct order
+**`_read_sql_file()`**: Reads SQL and removes psql metacommands (\set, \echo, etc)
+**`_execute_sql_file()`**: Executes SQL, handles "already exists" errors
+
 ## Troubleshooting
 
 ### "Invalid moniker" error
@@ -226,9 +298,25 @@ WHERE nrl.sender_moniker = 'jam'
 - Adjust with `set_rate_limit()` or wait for window to expire
 
 ### Database connection errors
-- Ensure PostgreSQL is running
-- Check bbsengine6 database exists
-- Run schema initialization if needed
+- Ensure PostgreSQL is running: `psql -U opencode -d postgres -c "SELECT 1"`
+- Check `zoid6test` database exists: `psql -U opencode -d zoid6test -c "SELECT 1"`
+- Check `opencode` user exists in PostgreSQL
+- Conftest will create `zoid6test` if it doesn't exist
+
+### "relation does not exist" errors
+- Ensure `BBSENGINE6_DBNAME=zoid6test` environment variable is set
+- Without it, code connects to wrong database (default: `bbsengine6`)
+- Run: `BBSENGINE6_DBNAME=zoid6test pytest tests/test_notify_integration.py`
+
+### "already exists" warnings in conftest logs
+- This is **normal and expected** on subsequent test runs
+- Tables are persistent, fixtures skip creation
+- Warnings can be suppressed (no functional impact)
+
+### Transaction isolation errors
+- If tests see "UndefinedTable" errors within a test, it may be a transaction issue
+- Check that conftest fixtures ran successfully (look for setup logs)
+- Try running tests sequentially: `pytest tests/ -v` (not parallel)
 
 ## Next Steps
 
