@@ -9,7 +9,7 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
@@ -58,7 +58,7 @@ class Notification:
     blocked_from: Set[str] = field(default_factory=set)
     errors: Dict[str, str] = field(default_factory=dict)
     should_persist: bool = True
-    created_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class UserNotificationQueue:
@@ -503,7 +503,7 @@ def send(
             timestamp=time.time(),
             errors=errors,
             should_persist=should_persist,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
         )
     finally:
         if should_close_conn:
@@ -538,7 +538,7 @@ def _add_to_user_queue(
                 urgency=urgency,
                 timestamp=time.time(),
                 should_persist=True,
-                created_at=datetime.now(),
+                created_at=datetime.now(timezone.utc),
             )
             _queues[moniker].put(notification)
 
