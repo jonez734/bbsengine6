@@ -636,7 +636,7 @@ def get_queue(moniker: str) -> UserNotificationQueue:
         return _queues[moniker]
 
 
-def get_notification_count(moniker: str, conn: Optional[Any] = None) -> int:
+def count(moniker: str, conn: Optional[Any] = None) -> int:
     """Get total unread notification count for user (queue + database)."""
     if not moniker:
         return 0
@@ -1056,7 +1056,7 @@ __all__ = [
     "send",
     "get_notifications",
     "get_queue",
-    "get_notification_count",
+    "count",
     "get_urgent",
     "mark_read",
     "mark_delivered",

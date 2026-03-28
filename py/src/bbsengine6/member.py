@@ -179,7 +179,7 @@ def notifycount(args, **kwargs) -> int:
     if not moniker:
         return 0
 
-    return notify.get_notification_count(moniker)
+    return notify.count(moniker)
 
 
 def getcurrentid(args, **kwargs):

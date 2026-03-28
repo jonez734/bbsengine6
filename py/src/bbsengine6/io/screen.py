@@ -77,7 +77,7 @@ def get_notification_status() -> str:
         "F2: notify (N)" if notifications > 0, else empty string.
     """
     try:
-        from bbsengine6 import member, notify
+        from bbsengine6 import notify
         from bbsengine6.member import _threadlocal
 
         # Get moniker from thread-local storage (already logged in)
@@ -85,7 +85,7 @@ def get_notification_status() -> str:
         if not moniker:
             return ""
 
-        count = notify.get_notification_count(moniker)
+        count = notify.count(moniker)
         if count > 0:
             return f"F2: notify ({count})"
     except Exception:

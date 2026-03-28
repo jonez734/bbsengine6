@@ -328,7 +328,7 @@ def _check_notifications(moniker: str) -> tuple[bool, int]:
     if not _has_notify_module:
         return False, 0
     try:
-        count = notify.get_notification_count(moniker)
+        count = notify.count(moniker)
         return count > 0, count
     except Exception:
         return False, 0
