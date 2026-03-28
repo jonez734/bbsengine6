@@ -75,9 +75,7 @@ def check(args, modulename, op="run", **kwargs):
             io.echo(f"module {modulename=} not importable", level="error")
         return False
     except Exception:
-        import traceback
-
-        traceback.print_exc(file=sys.stdout)
+        io.echo_traceback("bbsengine6.module.check.100:")
         return False
 
     if debug is True:

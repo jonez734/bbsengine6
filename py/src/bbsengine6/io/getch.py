@@ -18,7 +18,7 @@ from .common import (
     _input_queue,
     _read_current_input_stream,
 )
-from .echo import echo
+from .echo import echo, echo_traceback
 from .util import logentry
 from .keymap import KEY_MAP
 from .const import ESC, ETX, EOF
@@ -26,12 +26,14 @@ from .const import ESC, ETX, EOF
 # Notification support (with graceful fallback)
 try:
     from bbsengine6.member import _threadlocal
+
     _has_member_module = True
 except ImportError:
     _has_member_module = False
 
 try:
     from bbsengine6 import notify
+
     _has_notify_module = True
 except ImportError:
     _has_notify_module = False
@@ -331,6 +333,7 @@ def _check_notifications(moniker: str) -> tuple[bool, int]:
         count = notify.count(moniker)
         return count > 0, count
     except Exception:
+        echo_traceback("bbsengine6.io.getch.333:")
         return False, 0
 
 
@@ -374,10 +377,14 @@ def _show_pending_notifications(moniker: str) -> None:
         # Display each notification with colors from echo vars
         for n in notifications:
             urgency_color = _get_urgency_color(n.urgency)
-            timestamp = datetime.fromtimestamp(n.timestamp).strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = datetime.fromtimestamp(n.timestamp).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
             recipient = n.recipients[0] if n.recipients else "Unknown"
 
-            echo(f"{urgency_color}[{n.urgency.value}]{{/all}} {{var:notify.datestampcolor}}{timestamp}{{/all}}")
+            echo(
+                f"{urgency_color}[{n.urgency.value}]{{/all}} {{var:notify.datestampcolor}}{timestamp}{{/all}}"
+            )
             echo(f"{{var:notify.recipientcolor}}To:{{/all}} {recipient}")
             echo(f"{n.message}")
             echo("{var:normalcolor}" + "─" * 40 + "{/all}")

@@ -232,7 +232,7 @@ def reset_pool_cache() -> None:
         try:
             pool.close()
         except Exception:
-            pass
+            io.echo_traceback("bbsengine6.database.234:")
     _pool_cache = {}
 
 

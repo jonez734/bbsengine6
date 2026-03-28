@@ -1,4 +1,4 @@
-from .echo import echo, rendered_length
+from .echo import echo, rendered_length, echo_traceback
 from . import terminal
 
 # terminal import lines as terminal_lines, columns as terminal_columns
@@ -89,7 +89,7 @@ def get_notification_status() -> str:
         if count > 0:
             return f"F2: notify ({count})"
     except Exception:
-        pass
+        echo_traceback("bbsengine6.io.screen.91:")
     return ""
 
 

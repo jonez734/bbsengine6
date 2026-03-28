@@ -102,6 +102,7 @@ def validate_module_for_discovery(module_fullname):
         return (True, help_text)
 
     except Exception:
+        io.echo_traceback("bbsengine6.console.lib.104:")
         return (False, None)
 
 
