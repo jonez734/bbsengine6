@@ -3,4 +3,5 @@
 [lint]
 # F541: f-string without any placeholders - we use f-strings for io.echo() calls
 # to support echo commands like {restorecursor}, {savecursor}, etc.
-ignore = ["F541"]
+# ANN401: Dynamically typed expressions - we use Any for kwargs and database connections
+ignore = ["F541", "ANN401"]

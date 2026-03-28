@@ -159,7 +159,7 @@ class TestSet(unittest.TestCase):
         self.mock_args.debug = False
 
     def test_set_returns_false_when_no_sessionid(self) -> None:
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
         result = session.set(self.mock_args, "key", "value")
 
@@ -168,7 +168,7 @@ class TestSet(unittest.TestCase):
     @patch("bbsengine6.session.member")
     def test_set_with_passed_connection_commits(self, mock_member: MagicMock) -> None:
         mock_member.getcurrentid.return_value = 1
-        session.currentsessionid = "test-session-id"
+        session.setcurrentsessionid("test-session-id")
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -180,7 +180,7 @@ class TestSet(unittest.TestCase):
         self.assertEqual(result, "value")
         mock_conn.commit.assert_called()
 
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
 
 class TestGet(unittest.TestCase):
@@ -225,7 +225,7 @@ class TestWrite(unittest.TestCase):
         self.mock_args.debug = False
 
     def test_write_returns_false_when_no_sessionid(self) -> None:
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
         result = session.write(self.mock_args, {})
 
@@ -272,17 +272,17 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
         _tracked_pools.append(cls.pool)
 
     def setUp(self):
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
         self.mock_args = MagicMock()
         self.mock_args.debug = False
 
     def tearDown(self):
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     @patch("bbsengine6.session.member")
     def test_set_uses_currentsessionid(self, mock_member: MagicMock) -> None:
         mock_member.getcurrentid.return_value = 1
-        session.currentsessionid = "test-session-id"
+        session.setcurrentsessionid("test-session-id")
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -297,12 +297,12 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
         self.assertEqual(result, "testvalue")
         mock_conn.commit.assert_called()
 
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     @patch("bbsengine6.session.member")
     def test_set_with_reset_replaces_data(self, mock_member: MagicMock) -> None:
         mock_member.getcurrentid.return_value = 1
-        session.currentsessionid = "test-session-id"
+        session.setcurrentsessionid("test-session-id")
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -321,12 +321,12 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
         sql = call_args[0][0]
         self.assertIn("data=%s", sql)
 
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     @patch("bbsengine6.session.member")
     def test_set_without_reset_appends_data(self, mock_member: MagicMock) -> None:
         mock_member.getcurrentid.return_value = 1
-        session.currentsessionid = "test-session-id"
+        session.setcurrentsessionid("test-session-id")
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -347,10 +347,10 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
         sql = call_args[0][0]
         self.assertIn("data=data||%s", sql)
 
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     def test_read_uses_currentsessionid_when_not_provided(self) -> None:
-        session.currentsessionid = "test-session-id"
+        session.setcurrentsessionid("test-session-id")
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -365,10 +365,10 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
 
         self.assertIsNone(result)
 
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     def test_read_returns_none_when_no_sessionid(self) -> None:
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
         result = session.read(self.mock_args, sessionid=None)
 
@@ -383,19 +383,19 @@ class TestSessionConnectionManagement(_TestCaseWithPoolCleanup):
         _tracked_pools.append(cls.pool)
 
     def setUp(self):
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
         self.mock_args = MagicMock()
         self.mock_args.debug = False
 
     def tearDown(self):
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     @patch("bbsengine6.session.member")
     def test_set_obtains_own_connection_and_commits(
         self, mock_member: MagicMock
     ) -> None:
         mock_member.getcurrentid.return_value = 1
-        session.currentsessionid = "test-session-id"
+        session.setcurrentsessionid("test-session-id")
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
@@ -410,14 +410,14 @@ class TestSessionConnectionManagement(_TestCaseWithPoolCleanup):
         self.assertEqual(result, "testvalue")
         mock_conn.commit.assert_called()
 
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     @patch("bbsengine6.database.connect")
     @patch("bbsengine6.session.copy")
     def test_write_obtains_own_connection_and_commits(
         self, mock_copy: MagicMock, mock_connect: MagicMock
     ) -> None:
-        session.currentsessionid = "test-session-id"
+        session.setcurrentsessionid("test-session-id")
 
         mock_conn = MagicMock()
         mock_connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
@@ -437,7 +437,7 @@ class TestSessionConnectionManagement(_TestCaseWithPoolCleanup):
         self.assertTrue(result)
         mock_conn.commit.assert_called()
 
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     @patch("bbsengine6.database.connect")
     def test_read_obtains_own_connection(self, mock_connect: MagicMock) -> None:
@@ -463,22 +463,22 @@ class TestCurrentsessionidGlobal(_TestCaseWithPoolCleanup):
         _tracked_pools.append(cls.pool)
 
     def setUp(self):
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     def tearDown(self):
-        session.currentsessionid = None
+        session.setcurrentsessionid(None)
 
     def test_currentsessionid_starts_as_none(self) -> None:
-        self.assertIsNone(session.currentsessionid)
+        self.assertIsNone(session.getcurrentsessionid())
 
     def test_set_sets_currentsessionid(self) -> None:
-        session.currentsessionid = "my-session-id"
-        self.assertEqual(session.currentsessionid, "my-session-id")
+        session.setcurrentsessionid("my-session-id")
+        self.assertEqual(session.getcurrentsessionid(), "my-session-id")
 
     def test_set_clears_currentsessionid(self) -> None:
-        session.currentsessionid = "my-session-id"
-        session.currentsessionid = None
-        self.assertIsNone(session.currentsessionid)
+        session.setcurrentsessionid("my-session-id")
+        session.setcurrentsessionid(None)
+        self.assertIsNone(session.getcurrentsessionid())
 
 
 if __name__ == "__main__":

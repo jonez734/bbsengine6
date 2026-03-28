@@ -1,7 +1,10 @@
 import os
 import uuid
 import threading
+from argparse import Namespace
 from datetime import datetime, timedelta
+from typing import Any
+
 import copy
 
 from . import database, member, io
@@ -10,11 +13,11 @@ from . import database, member, io
 _threadlocal = threading.local()
 
 
-def _get_currentsessionid() -> str | None:
+def getcurrentsessionid() -> str | None:
     return getattr(_threadlocal, "currentsessionid", None)
 
 
-def _set_currentsessionid(sessionid: str | int | bool | None) -> None:
+def setcurrentsessionid(sessionid: str | int | bool | None) -> None:
     _threadlocal.currentsessionid = sessionid
 
 
@@ -29,7 +32,7 @@ def is_valid(session: dict | None) -> bool:
     return expiry > datetime.now()
 
 
-def build(rec):
+def build(rec: dict) -> dict:
     session = {}
     for s in (
         "id",
@@ -46,9 +49,9 @@ def build(rec):
     return session
 
 
-def start(args, **kwargs):
-    def _work(conn):
-        currentsessionid = _get_currentsessionid()
+def start(args: Namespace, **kwargs: Any) -> bool:
+    def _work(conn: Any) -> bool:
+        currentsessionid = getcurrentsessionid()
 
         if currentsessionid is None:
             io.echo("session.start.100: currentsessionid is None", level="debug")
@@ -66,13 +69,13 @@ def start(args, **kwargs):
                 currentsessionid = database.insert(
                     args, "engine.__session", session, mogrify=mogrify, conn=conn
                 )
-                _set_currentsessionid(currentsessionid)
+                setcurrentsessionid(currentsessionid)
                 conn.commit()
                 return True
             else:
                 io.echo(f"bbsengine6.session.start.140: {session=}", level="debug")
                 currentsessionid = session["id"]
-                _set_currentsessionid(currentsessionid)
+                setcurrentsessionid(currentsessionid)
                 conn.commit()
         else:
             io.echo(
@@ -100,7 +103,7 @@ def start(args, **kwargs):
                 )
                 return False
             currentsessionid = session["id"]
-            _set_currentsessionid(currentsessionid)
+            setcurrentsessionid(currentsessionid)
 
         return True
 
@@ -117,8 +120,10 @@ def start(args, **kwargs):
         return _work(conn)
 
 
-def getmembersession(args, moniker=None, **kwargs):
-    def _work(conn):
+def getmembersession(
+    args: Namespace, moniker: str | None = None, **kwargs: Any
+) -> dict | bool | None:
+    def _work(conn: Any) -> dict | bool | None:
         sql = "select * from engine.__session where moniker=%s"
         dat = (moniker,)
         with database.cursor(conn) as cur:
@@ -154,8 +159,8 @@ def getmembersession(args, moniker=None, **kwargs):
         return _work(conn)
 
 
-def updatelastactivity(args, sessionid, **kwargs):
-    def _work(conn):
+def updatelastactivity(args: Namespace, sessionid: str, **kwargs: Any) -> bool:
+    def _work(conn: Any) -> bool:
         import os
 
         session = read(args, sessionid, conn=conn)
@@ -184,8 +189,8 @@ def updatelastactivity(args, sessionid, **kwargs):
         return _work(conn)
 
 
-def read(args, sessionid=None, **kwargs):
-    def _work(conn):
+def read(args: Namespace, sessionid: str | None = None, **kwargs: Any) -> dict | None:
+    def _work(conn: Any) -> dict | None:
         with database.cursor(conn) as cur:
             sql = "select * from engine.session where id=%s"
             dat = (sessionid,)
@@ -206,7 +211,7 @@ def read(args, sessionid=None, **kwargs):
             return session
 
     if sessionid is None:
-        currentsessionid = _get_currentsessionid()
+        currentsessionid = getcurrentsessionid()
         if currentsessionid is None:
             io.echo("session not initialized", level="error")
             return None
@@ -230,11 +235,13 @@ def read(args, sessionid=None, **kwargs):
         return _work(conn)
 
 
-def write(args, session, sessionid=None, **kwargs):
+def write(
+    args: Namespace, session: dict, sessionid: str | None = None, **kwargs: Any
+) -> bool:
     io.echo(f"bbsengine.session.write.220: {kwargs=}", level="debug")
 
     if sessionid is None:
-        currentsessionid = _get_currentsessionid()
+        currentsessionid = getcurrentsessionid()
         if currentsessionid is None:
             return False
         sessionid = currentsessionid
@@ -257,7 +264,7 @@ def write(args, session, sessionid=None, **kwargs):
 
     mogrify = True if args.debug else False
 
-    def _work(conn):
+    def _work(conn: Any) -> bool:
         database.update(
             args, "engine.__session", sessionid, _session, mogrify=mogrify, conn=conn
         )
@@ -276,7 +283,12 @@ def write(args, session, sessionid=None, **kwargs):
         return _work(conn)
 
 
-def buildsession(args, sessionid=None, data=None, **kwargs):
+def buildsession(
+    args: Namespace,
+    sessionid: str | None = None,
+    data: dict | None = None,
+    **kwargs: Any,
+) -> dict | None:
     if data is None:
         data = {}
     if sessionid is None:
@@ -301,7 +313,13 @@ def buildsession(args, sessionid=None, data=None, **kwargs):
     return session
 
 
-def get(args, name: str, default=None, memberid: int | None = None, **kwargs):
+def get(
+    args: Namespace,
+    name: str,
+    default: Any = None,
+    memberid: int | None = None,
+    **kwargs: Any,
+) -> Any:
     session = getmembersession(args, memberid, **kwargs)
     if args.debug is True:
         io.echo(f"bbsengine6.session.get.100: {session=}", level="debug")
@@ -321,16 +339,16 @@ def get(args, name: str, default=None, memberid: int | None = None, **kwargs):
 
 
 def set(
-    args,
-    name,
-    value,
-    sessionid=None,
-    memberid=None,
-    reset=False,
-    mogrify=True,
-    **kwargs,
-):
-    def _work(conn):
+    args: Namespace,
+    name: str,
+    value: Any,
+    sessionid: str | None = None,
+    memberid: int | None = None,
+    reset: bool = False,
+    mogrify: bool = True,
+    **kwargs: Any,
+) -> Any:
+    def _work(conn: Any) -> Any:
         data = {name: value}
 
         if args.debug is True:
@@ -346,7 +364,7 @@ def set(
         return value
 
     if sessionid is None:
-        currentsessionid = _get_currentsessionid()
+        currentsessionid = getcurrentsessionid()
         if currentsessionid is None:
             return False
         sessionid = currentsessionid
@@ -377,8 +395,8 @@ def set(
         return _work(conn)
 
 
-def garbagecollect(args, **kwargs):
-    def _work(conn):
+def garbagecollect(args: Namespace, **kwargs: Any) -> bool:
+    def _work(conn: Any) -> bool:
         with database.cursor(conn) as cur:
             sql = "delete from engine.__session where expiry < now()"
             cur.execute(sql)
@@ -397,8 +415,8 @@ def garbagecollect(args, **kwargs):
         return _work(conn)
 
 
-def count(args, **kwargs):
-    def _work(conn):
+def count(args: Namespace, **kwargs: Any) -> int:
+    def _work(conn: Any) -> int:
         sql = "select count(*) from engine.session"
         with database.cursor(conn) as cur:
             cur.execute(sql)

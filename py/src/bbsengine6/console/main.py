@@ -156,7 +156,7 @@ def main(args, **kwargs):
             membercount = member.count(args, conn=conn)
             if membercount > 0:
                 session.updatelastactivity(
-                    args, session.currentsessionid, conn=conn, **kwargs
+                    args, session.getcurrentsessionid(), conn=conn, **kwargs
                 )
             else:
                 io.echo(f"no session", level="warn")
