@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Set
 import psycopg
 from psycopg import sql
 
-from . import database
+from . import database, io
 
 logger = logging.getLogger(__name__)
 
@@ -286,6 +286,7 @@ def _check_is_blocked(
         )
         return cur.fetchone() is not None
     except Exception:
+        io.echo_traceback("bbsengine6.notify._check_is_blocked.100:")
         return False
 
 
@@ -650,6 +651,7 @@ def count(moniker: str, conn: Optional[Any] = None) -> int:
         notifications = get_notifications(moniker, unread_only=True, conn=conn)
         db_count = len(notifications)
     except Exception:
+        io.echo_traceback("bbsengine6.notify.count.100:")
         db_count = 0
 
     return queue_count + db_count
