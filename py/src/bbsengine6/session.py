@@ -2,7 +2,7 @@ import os
 import uuid
 import threading
 from argparse import Namespace
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import copy
@@ -29,7 +29,7 @@ def is_valid(session: dict | None) -> bool:
         return False
     if isinstance(expiry, str):
         return True
-    return expiry > datetime.now()
+    return expiry > datetime.now(timezone.utc)
 
 
 def build(rec: dict) -> dict:
@@ -170,7 +170,7 @@ def updatelastactivity(args: Namespace, sessionid: str, **kwargs: Any) -> bool:
         io.echo(f"bbsengine.session.updatelastactivity.120: {session=}", level="debug")
 
         session["lastactivity"] = "now()"
-        session["expiry"] = datetime.now() + timedelta(minutes=15)
+        session["expiry"] = datetime.now(timezone.utc) + timedelta(minutes=15)
         session["useragent"] = os.environ.get("TERM", "NEEDINFO")
         write(args, session, sessionid, conn=conn)
         conn.commit()
@@ -302,7 +302,7 @@ def buildsession(
     session = {}
     session["id"] = sessionid
     session["moniker"] = moniker
-    session["expiry"] = datetime.now() + timedelta(hours=2)
+    session["expiry"] = datetime.now(timezone.utc) + timedelta(hours=2)
     session["lastactivity"] = "now()"
     session["data"] = database.Jsonb(data)
     session["datecreated"] = "now()"
