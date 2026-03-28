@@ -609,7 +609,7 @@ def get_notifications(
                         sender_moniker=row[2],
                         template=row[3],
                         template_vars=row[4] or {},
-                        message=row[5],
+                        message=_render_template(row[3], row[4] or {}),
                         data=row[6] or {},
                         urgency=NotificationUrgency(row[7]),
                         timestamp=row[8].timestamp() if row[8] else time.time(),

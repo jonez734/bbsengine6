@@ -118,6 +118,11 @@ def stage_one(args, **kwargs):
             if res is False:
                 conn.rollback()
 
+        with database.connect(args, pool=pool, **kwargs) as conn:
+            res = lib.checknotify(args, conn=conn, **kwargs)
+            if res is False:
+                conn.rollback()
+
 
 def main(args, **kwargs):
     parser = buildargs(args)
