@@ -676,8 +676,18 @@ def get_queue(moniker: str) -> UserNotificationQueue:
         return _queues[moniker]
 
 
-def count(moniker: str, conn: Optional[Any] = None) -> int:
-    """Get total unread notification count for user (queue + database)."""
+def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int:
+    """Get total unread notification count for user (queue + database).
+    
+    Args:
+        moniker: User moniker to count notifications for
+        conn: Optional explicit database connection
+        **kwargs: May contain 'pool' (ConnectionPool) for database access
+    
+    Returns:
+        Total unread notification count (queue + database)
+        Returns 0 if database unavailable
+    """
     if not moniker:
         return 0
 
@@ -685,13 +695,38 @@ def count(moniker: str, conn: Optional[Any] = None) -> int:
     queue = get_queue(moniker)
     queue_count = queue.size()
 
-    # Database unread count
-    try:
-        notifications = get_notifications(moniker, unread_only=True, conn=conn)
-        db_count = len(notifications)
-    except Exception:
-        io.echo_traceback("bbsengine6.notify.count.100:")
-        db_count = 0
+    # Database unread count - empyre three-tier pattern
+    def _work(db_conn: Any) -> int:
+        """Query database for unread notification count."""
+        try:
+            notifications = get_notifications(moniker, unread_only=True, conn=db_conn)
+            return len(notifications)
+        except Exception:
+            io.echo_traceback(
+                f"bbsengine6.notify.count.200: Failed to get unread count for moniker={moniker}"
+            )
+            return 0
+
+    # Connection priority: explicit conn > pool > fail
+    db_conn = kwargs.get("conn", None)
+    if db_conn is None:
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            io.echo(
+                f"bbsengine6.notify.count.100: {pool=}",
+                level="error"
+            )
+            return 0  # Option B: Strict BC - return 0 if no pool
+        
+        # Get connection from pool
+        db_conn = pool.getconn()
+        try:
+            db_count = _work(db_conn)
+        finally:
+            db_conn.close()  # Return to pool
+    else:
+        # Use provided connection
+        db_count = _work(db_conn)
 
     return queue_count + db_count
 
