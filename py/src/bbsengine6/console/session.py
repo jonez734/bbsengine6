@@ -59,10 +59,10 @@ def main(args, **kwargs):
 
                     #                    if m is None:
                     #                        continue
-                    la = util.timedelta(
+                    la = util.timedeltastr(
                         datetime.now(tz=localtz) - session["lastactivity"]
                     )
-                    ex = util.timedelta(session["expiry"] - datetime.now(tz=localtz))
+                    ex = util.timedeltastr(session["expiry"] - datetime.now(tz=localtz))
 
                     io.echo(
                         f"{{var:labelcolor}}Moniker:    {{var:valuecolor}}{session['moniker']}"

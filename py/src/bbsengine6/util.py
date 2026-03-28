@@ -371,7 +371,20 @@ def verifyFileExistsReadableWritable(filename, **kw):
     return True
 
 
-def timedelta_(delta):
+def timedeltastr(delta):
+    """Convert a timedelta object to a human-readable duration string.
+
+    Args:
+        delta: A datetime.timedelta object
+
+    Returns:
+        A formatted string like "02d03h15m30s" (only non-zero units included)
+
+    Example:
+        >>> td = datetime.timedelta(days=2, hours=3, minutes=15, seconds=30)
+        >>> timedeltastr(td)
+        '02d03h15m30s'
+    """
     buf = ""
 
     seconds = delta.total_seconds()
