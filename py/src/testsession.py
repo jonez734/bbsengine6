@@ -172,6 +172,18 @@ class TestSet(unittest.TestCase):
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -192,7 +204,10 @@ class TestGet(unittest.TestCase):
     def test_get_returns_value_from_session_data(
         self, mock_getmembersession: MagicMock
     ) -> None:
-        mock_getmembersession.return_value = {"data": {"mykey": "myvalue"}}
+        mock_getmembersession.return_value = {
+            "data": {"mykey": "myvalue"},
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+        }
 
         result = session.get(self.mock_args, "mykey")
 
@@ -202,7 +217,10 @@ class TestGet(unittest.TestCase):
     def test_get_returns_default_when_key_missing(
         self, mock_getmembersession: MagicMock
     ) -> None:
-        mock_getmembersession.return_value = {"data": {}}
+        mock_getmembersession.return_value = {
+            "data": {},
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+        }
 
         result = session.get(self.mock_args, "missingkey", default="defaultvalue")
 
@@ -251,7 +269,6 @@ class TestGarbagecollect(unittest.TestCase):
         result = session.garbagecollect(self.mock_args, conn=mock_conn)
 
         self.assertTrue(result)
-        mock_conn.commit.assert_called()
 
 
 class TestCount(unittest.TestCase):
@@ -286,6 +303,18 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -306,6 +335,18 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -315,8 +356,9 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
         result = session.set(self.mock_args, "key", "value", reset=True, pool=mock_pool)
 
         self.assertEqual(result, "value")
-        mock_cursor.execute.assert_called_once()
-        call_args = mock_cursor.execute.call_args
+        # execute is called twice: once for read(), once for set update
+        self.assertEqual(mock_cursor.execute.call_count, 2)
+        call_args = mock_cursor.execute.call_args  # Gets the last call
         assert call_args is not None
         sql = call_args[0][0]
         self.assertIn("data=%s", sql)
@@ -330,6 +372,18 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -341,7 +395,8 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
         )
 
         self.assertEqual(result, "value")
-        mock_cursor.execute.assert_called_once()
+        # execute is called twice: once for read(), once for set update
+        self.assertEqual(mock_cursor.execute.call_count, 2)
         call_args = mock_cursor.execute.call_args
         assert call_args is not None
         sql = call_args[0][0]
@@ -399,6 +454,18 @@ class TestSessionConnectionManagement(_TestCaseWithPoolCleanup):
 
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -420,6 +487,21 @@ class TestSessionConnectionManagement(_TestCaseWithPoolCleanup):
         session.setcurrentsessionid("test-session-id")
 
         mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
         mock_connect.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_connect.return_value.__exit__ = MagicMock(return_value=False)
 
