@@ -1,12 +1,32 @@
 import os
 import uuid
+import threading
 from datetime import datetime, timedelta
 import copy
 
 from . import database, member, io
 
 
-currentsessionid = None
+_threadlocal = threading.local()
+
+
+def _get_currentsessionid() -> str | None:
+    return getattr(_threadlocal, "currentsessionid", None)
+
+
+def _set_currentsessionid(sessionid: str | int | bool | None) -> None:
+    _threadlocal.currentsessionid = sessionid
+
+
+def is_valid(session: dict | None) -> bool:
+    if session is None:
+        return False
+    expiry = session.get("expiry")
+    if expiry is None:
+        return False
+    if isinstance(expiry, str):
+        return True
+    return expiry > datetime.now()
 
 
 def build(rec):
@@ -27,10 +47,8 @@ def build(rec):
 
 
 def start(args, **kwargs):
-    global currentsessionid
-
     def _work(conn):
-        global currentsessionid
+        currentsessionid = _get_currentsessionid()
 
         if currentsessionid is None:
             io.echo("session.start.100: currentsessionid is None", level="debug")
@@ -41,15 +59,20 @@ def start(args, **kwargs):
             if session is None:
                 io.echo("session.start.120: creating new session", level="debug")
                 session = buildsession(args, **kwargs)
+                if session is None:
+                    io.echo("session.start.130: buildsession failed", level="error")
+                    return False
                 mogrify = True if args.debug else False
                 currentsessionid = database.insert(
                     args, "engine.__session", session, mogrify=mogrify, conn=conn
                 )
+                _set_currentsessionid(currentsessionid)
                 conn.commit()
                 return True
             else:
                 io.echo(f"bbsengine6.session.start.140: {session=}", level="debug")
                 currentsessionid = session["id"]
+                _set_currentsessionid(currentsessionid)
                 conn.commit()
         else:
             io.echo(
@@ -60,6 +83,9 @@ def start(args, **kwargs):
             if session is None:
                 io.echo("read of session returned None", level="debug")
                 session = buildsession(args, **kwargs)
+                if session is None:
+                    io.echo("session.start.170: buildsession failed", level="error")
+                    return False
                 mogrify = True if args.debug else False
                 database.insert(
                     args, "engine.__session", session, mogrify=mogrify, conn=conn
@@ -67,12 +93,14 @@ def start(args, **kwargs):
                 conn.commit()
                 return True
             if isinstance(session, list) and len(session) > 1:
+                current_moniker = member.getcurrentmoniker(args, conn=conn)
                 io.echo(
-                    f"multiple sessions for member {member.moniker=} detected",
+                    f"multiple sessions for member moniker={current_moniker} detected",
                     level="error",
                 )
                 return False
             currentsessionid = session["id"]
+            _set_currentsessionid(currentsessionid)
 
         return True
 
@@ -157,8 +185,6 @@ def updatelastactivity(args, sessionid, **kwargs):
 
 
 def read(args, sessionid=None, **kwargs):
-    global currentsessionid
-
     def _work(conn):
         with database.cursor(conn) as cur:
             sql = "select * from engine.session where id=%s"
@@ -173,9 +199,14 @@ def read(args, sessionid=None, **kwargs):
                     )
                 return None
             rec = cur.fetchone()
-            return build(rec)
+            session = build(rec)
+            if not is_valid(session):
+                io.echo("session.read.130: session expired or invalid", level="debug")
+                return None
+            return session
 
     if sessionid is None:
+        currentsessionid = _get_currentsessionid()
         if currentsessionid is None:
             io.echo("session not initialized", level="error")
             return None
@@ -200,13 +231,18 @@ def read(args, sessionid=None, **kwargs):
 
 
 def write(args, session, sessionid=None, **kwargs):
-    global currentsessionid
     io.echo(f"bbsengine.session.write.220: {kwargs=}", level="debug")
 
     if sessionid is None:
+        currentsessionid = _get_currentsessionid()
         if currentsessionid is None:
             return False
         sessionid = currentsessionid
+
+    existing_session = read(args, sessionid, **kwargs)
+    if not is_valid(existing_session):
+        io.echo("session.write.110: session expired or invalid", level="error")
+        return False
 
     session["dateupdated"] = "now()"
     session["lastactivity"] = "now()"
@@ -240,9 +276,11 @@ def write(args, session, sessionid=None, **kwargs):
         return _work(conn)
 
 
-def buildsession(args, sessionid=None, data={}, **kwargs):
+def buildsession(args, sessionid=None, data=None, **kwargs):
+    if data is None:
+        data = {}
     if sessionid is None:
-        sessionid = str(uuid.uuid1())
+        sessionid = str(uuid.uuid4())
 
     moniker = member.getcurrentmoniker(args, **kwargs)
     if moniker is None:
@@ -263,13 +301,17 @@ def buildsession(args, sessionid=None, data={}, **kwargs):
     return session
 
 
-def get(args, name: str, default=None, memberid: int = None, **kwargs):
+def get(args, name: str, default=None, memberid: int | None = None, **kwargs):
     session = getmembersession(args, memberid, **kwargs)
     if args.debug is True:
         io.echo(f"bbsengine6.session.get.100: {session=}", level="debug")
 
     if session is False or session is None:
         io.echo("session does not exist", level="error")
+        return False
+
+    if not is_valid(session):
+        io.echo("session.get.110: session expired or invalid", level="error")
         return False
 
     if name in session["data"]:
@@ -304,9 +346,15 @@ def set(
         return value
 
     if sessionid is None:
+        currentsessionid = _get_currentsessionid()
         if currentsessionid is None:
             return False
         sessionid = currentsessionid
+
+    existing_session = read(args, sessionid, **kwargs)
+    if not is_valid(existing_session):
+        io.echo("session.set.110: session expired or invalid", level="error")
+        return False
 
     if memberid is None:
         memberid = member.getcurrentid(args)
