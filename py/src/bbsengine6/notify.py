@@ -454,7 +454,7 @@ def send(
                 )
                 type_urgency = default_urg
             else:
-                type_urgency = type_row[0]
+                type_urgency = type_row["default_urgency"]
 
             # Determine urgency
             if urgency is None:
@@ -481,14 +481,14 @@ def send(
                     notification_type,
                     sender_moniker,
                     template,
-                    template_vars,
+                    database.convert_for_jsonb(template_vars),
                     message,
-                    data,
+                    database.convert_for_jsonb(data),
                     urgency.value,
                     should_persist,
                 ),
             )
-            notify_id = cur.fetchone()[0]
+            notify_id = cur.fetchone()["id"]
 
             # Insert per-recipient tracking
             recipients_ok = []
