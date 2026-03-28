@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from bbsengine6.notify import (
     NotificationUrgency,
     send,
+    count,
     get_notifications,
     get_queue,
     get_urgent,
@@ -514,6 +515,35 @@ class TestCompleteWorkflow:
 
         print(f"✓ Game victory notification: {result.message}")
         print(f"  Reward: {result.data['reward']} credits")
+
+
+class TestNotificationCount:
+    """Test the count() function."""
+
+    def test_count_returns_integer(self):
+        """Test that count() returns an integer."""
+        count_result = count("jam")
+        assert isinstance(count_result, int)
+        assert count_result >= 0
+
+    def test_count_for_valid_moniker(self):
+        """Test count() with a valid test user."""
+        # jam, alice, bob are created by fixtures
+        count_result = count("jam")
+        assert isinstance(count_result, int)
+        print(f"✓ Notification count for jam: {count_result}")
+
+    def test_count_for_alice(self):
+        """Test count() for alice user."""
+        count_result = count("alice")
+        assert isinstance(count_result, int)
+        print(f"✓ Notification count for alice: {count_result}")
+
+    def test_count_for_bob(self):
+        """Test count() for bob user."""
+        count_result = count("bob")
+        assert isinstance(count_result, int)
+        print(f"✓ Notification count for bob: {count_result}")
 
 
 if __name__ == "__main__":

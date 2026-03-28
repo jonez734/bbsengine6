@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import queue
 import re
 import threading
@@ -19,6 +20,10 @@ from psycopg import sql
 from . import database, io
 
 logger = logging.getLogger(__name__)
+
+# Default database name - can be overridden by environment variable
+# This allows tests to use a different database (e.g., zoid6test) than production (bbsengine6)
+_DEFAULT_DBNAME = os.environ.get("BBSENGINE6_DBNAME", "bbsengine6")
 
 
 def _table_identifier(table: str) -> sql.Identifier:
@@ -422,7 +427,7 @@ def send(
     # Use provided connection or create new one
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -576,7 +581,7 @@ def _add_to_user_queue(
 
             # Mark as delivered
             try:
-                conn = psycopg.connect("dbname=postgres")
+                conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
                 with database.cursor(conn) as cur:
                     cur.execute(
                         sql.SQL(
@@ -602,7 +607,7 @@ def get_notifications(
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -710,7 +715,7 @@ def mark_read(notification_id: int, moniker: str, conn: Optional[Any] = None) ->
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -740,7 +745,7 @@ def mark_delivered(
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -784,7 +789,7 @@ def register_type(
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -808,7 +813,7 @@ def get_types(conn: Optional[Any] = None) -> Dict[str, Dict]:
     """Get all registered notification types and their settings."""
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -845,7 +850,7 @@ def set_rate_limit(
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -881,7 +886,7 @@ def create_group(
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -910,7 +915,7 @@ def add_to_group(group_name: str, moniker: str, conn: Optional[Any] = None) -> N
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -940,7 +945,7 @@ def remove_from_group(
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -964,7 +969,7 @@ def get_group_members(group_name: str, conn: Optional[Any] = None) -> List[str]:
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -992,7 +997,7 @@ def block(
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -1022,7 +1027,7 @@ def unblock(
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -1050,7 +1055,7 @@ def is_blocked(
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
@@ -1068,7 +1073,7 @@ def get_blocked(moniker: str, conn: Optional[Any] = None) -> List[str]:
 
     should_close_conn = False
     if not conn:
-        conn = psycopg.connect("dbname=postgres")
+        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
         should_close_conn = True
 
     try:
