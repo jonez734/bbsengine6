@@ -579,18 +579,20 @@ def get_notifications(
                 query = sql.SQL("""
                     SELECT n.id, n.notification_type, n.sender_moniker, n.template, n.template_vars,
                            n.rendered_message, n.data, n.urgency, n.datecreated, nr.read_at, nr.delivered_at
-                    FROM engine.notify_unread
-                    WHERE recipient_moniker = %s
-                    ORDER BY datecreated DESC
+                    FROM engine.__notify n
+                    JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
+                    WHERE nr.recipient_moniker = %s AND nr.read_at IS NULL AND nr.is_blocked = false
+                    ORDER BY n.datecreated DESC
                     LIMIT %s
                 """)
             else:
                 query = sql.SQL("""
                     SELECT n.id, n.notification_type, n.sender_moniker, n.template, n.template_vars,
                            n.rendered_message, n.data, n.urgency, n.datecreated, nr.read_at, nr.delivered_at
-                    FROM engine.notify
-                    WHERE recipient_moniker = %s
-                    ORDER BY datecreated DESC
+                    FROM engine.__notify n
+                    JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
+                    WHERE nr.recipient_moniker = %s
+                    ORDER BY n.datecreated DESC
                     LIMIT %s
                 """)
 
