@@ -20,6 +20,22 @@ from . import database, io
 
 logger = logging.getLogger(__name__)
 
+
+def _table_identifier(table: str) -> sql.Identifier:
+    """Create proper SQL identifier for schema-qualified table names.
+
+    Args:
+      table: Table name, optionally qualified with schema (e.g., 'engine.__notify')
+
+    Returns:
+      sql.Identifier for the table
+    """
+    if "." in table:
+        schema, table_name = table.split(".", 1)
+        return sql.Identifier(schema, table_name)
+    return sql.Identifier(table)
+
+
 # Thread-local storage for per-user notification queues
 _queues_lock = threading.Lock()
 _queues: Dict[str, UserNotificationQueue] = {}
@@ -124,7 +140,12 @@ def _validate_moniker(moniker: str, cur: Optional[Any] = None) -> bool:
     # Query database to verify existence
     try:
         cur.execute(
-            sql.SQL("SELECT 1 FROM engine.__member WHERE moniker = %s"), (moniker,)
+            sql.SQL("SELECT 1 FROM ")
+            + _table_identifier("engine.__member")
+            + sql.SQL(" WHERE ")
+            + sql.Identifier("moniker")
+            + sql.SQL(" = %s"),
+            (moniker,),
         )
         return cur.fetchone() is not None
     except Exception as e:
@@ -224,40 +245,51 @@ def _expand_recipients(
 
     for recipient in recipients:
         if recipient.startswith("@"):
-            # Handle special @everyone
-            if recipient == "@everyone":
-                # Try explicit @everyone group first
-                cur.execute(
-                    sql.SQL(
-                        "SELECT DISTINCT member_moniker FROM engine.__notify_group WHERE group_name = %s"
-                    ),
-                    ("@everyone",),
-                )
-                members = [row[0] for row in cur.fetchall()]
+             # Handle special @everyone
+             if recipient == "@everyone":
+                 # Try explicit @everyone group first
+                 cur.execute(
+                     sql.SQL("SELECT DISTINCT ")
+                     + sql.Identifier("member_moniker")
+                     + sql.SQL(" FROM ")
+                     + _table_identifier("engine.__notify_group")
+                     + sql.SQL(" WHERE ")
+                     + sql.Identifier("group_name")
+                     + sql.SQL(" = %s"),
+                     ("@everyone",),
+                 )
+                 members = [row[0] for row in cur.fetchall()]
 
-                if members:
-                    expanded.extend(members)
-                else:
-                    # Fall back to active sessions
-                    cur.execute(
-                        sql.SQL("SELECT DISTINCT moniker FROM engine.__session")
-                    )
-                    active = [row[0] for row in cur.fetchall()]
-                    expanded.extend(active)
-            else:
-                # Regular group
-                cur.execute(
-                    sql.SQL(
-                        "SELECT DISTINCT member_moniker FROM engine.__notify_group WHERE group_name = %s"
-                    ),
-                    (recipient,),
-                )
-                members = [row[0] for row in cur.fetchall()]
+                 if members:
+                     expanded.extend(members)
+                 else:
+                     # Fall back to active sessions
+                     cur.execute(
+                         sql.SQL("SELECT DISTINCT ")
+                         + sql.Identifier("moniker")
+                         + sql.SQL(" FROM ")
+                         + _table_identifier("engine.__session")
+                     )
+                     active = [row[0] for row in cur.fetchall()]
+                     expanded.extend(active)
+             else:
+                 # Regular group
+                 cur.execute(
+                     sql.SQL("SELECT DISTINCT ")
+                     + sql.Identifier("member_moniker")
+                     + sql.SQL(" FROM ")
+                     + _table_identifier("engine.__notify_group")
+                     + sql.SQL(" WHERE ")
+                     + sql.Identifier("group_name")
+                     + sql.SQL(" = %s"),
+                     (recipient,),
+                 )
+                 members = [row[0] for row in cur.fetchall()]
 
-                if not members:
-                    errors[recipient] = "Group does not exist"
-                else:
-                    expanded.extend(members)
+                 if not members:
+                     errors[recipient] = "Group does not exist"
+                 else:
+                     expanded.extend(members)
         else:
             # Direct moniker
             if _validate_moniker(recipient, cur):

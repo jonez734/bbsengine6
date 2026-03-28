@@ -7,10 +7,27 @@ from typing import Any
 
 import copy
 
+from psycopg import sql
+
 from . import database, member, io
 
 
 _threadlocal = threading.local()
+
+
+def _table_identifier(table: str) -> sql.Identifier:
+    """Create proper SQL identifier for schema-qualified table names.
+
+    Args:
+      table: Table name, optionally qualified with schema (e.g., 'engine.__session')
+
+    Returns:
+      sql.Identifier for the table
+    """
+    if "." in table:
+        schema, table_name = table.split(".", 1)
+        return sql.Identifier(schema, table_name)
+    return sql.Identifier(table)
 
 
 def getcurrentsessionid() -> str | None:
@@ -124,10 +141,16 @@ def getmembersession(
     args: Namespace, moniker: str | None = None, **kwargs: Any
 ) -> dict | bool | None:
     def _work(conn: Any) -> dict | bool | None:
-        sql = "select * from engine.__session where moniker=%s"
+        query = (
+            sql.SQL("SELECT * FROM ")
+            + _table_identifier("engine.__session")
+            + sql.SQL(" WHERE ")
+            + sql.Identifier("moniker")
+            + sql.SQL(" = %s")
+        )
         dat = (moniker,)
         with database.cursor(conn) as cur:
-            cur.execute(sql, dat)
+            cur.execute(query, dat)
             if cur.rowcount == 0:
                 return None
             elif cur.rowcount > 1:
@@ -355,12 +378,30 @@ def set(
             io.echo(f"bbsengine6.session.set.100: {data=}", level="debug")
 
         if reset is False:
-            sql = "update engine.__session set data=data||%s where id=%s"
+            query = (
+                sql.SQL("UPDATE ")
+                + _table_identifier("engine.__session")
+                + sql.SQL(" SET ")
+                + sql.Identifier("data")
+                + sql.SQL(" = ")
+                + sql.Identifier("data")
+                + sql.SQL(" || %s WHERE ")
+                + sql.Identifier("id")
+                + sql.SQL(" = %s")
+            )
         else:
-            sql = "update engine.__session set data=%s where id=%s"
+            query = (
+                sql.SQL("UPDATE ")
+                + _table_identifier("engine.__session")
+                + sql.SQL(" SET ")
+                + sql.Identifier("data")
+                + sql.SQL(" = %s WHERE ")
+                + sql.Identifier("id")
+                + sql.SQL(" = %s")
+            )
 
         with database.cursor(conn) as cur:
-            cur.execute(sql, (data, sessionid))
+            cur.execute(query, (data, sessionid))
         return value
 
     if sessionid is None:
@@ -398,8 +439,14 @@ def set(
 def garbagecollect(args: Namespace, **kwargs: Any) -> bool:
     def _work(conn: Any) -> bool:
         with database.cursor(conn) as cur:
-            sql = "delete from engine.__session where expiry < now()"
-            cur.execute(sql)
+            query = (
+                sql.SQL("DELETE FROM ")
+                + _table_identifier("engine.__session")
+                + sql.SQL(" WHERE ")
+                + sql.Identifier("expiry")
+                + sql.SQL(" < now()")
+            )
+            cur.execute(query)
         return True
 
     conn = kwargs.get("conn", None)
