@@ -54,6 +54,15 @@ def _validate_fields(fields: str, allowed: frozenset = ALLOWED_MEMBER_COLUMNS) -
 
 # @since 20221113
 def buildrec(member):
+    """Transform member dict for database operations.
+
+    Removes excluded fields and handles special types (lists, dicts).
+    Dict values are kept as dicts (not JSON strings) - JSON serialization
+    is handled by database.py via convert_for_jsonb() and psycopg3.
+
+    This is a structural transformation only. The database module handles
+    all conversions to psycopg3 types (Jsonb, etc.) when executing queries.
+    """
     #  rec = {}
     #  for k in ("credits", "attributes", "id", "name", "email", "password", "datecreated", "createdbyid", "dateupdated", "updatedbyid", "approvedbyid", "dateapproved", "lastlogin", "lastloginfrom"): # , "datecreatedepoch", "lastloginepoch", "dateapprovedepoch", "dateupdatedepoch"): # attributes, datecreated, createdbyid
     #    if k == "attributes":
@@ -73,7 +82,10 @@ def buildrec(member):
         ):
             continue
         elif type(v) is dict:
-            m[k] = json.dumps(database.convert_for_jsonb(v))
+            # Keep dicts as-is. database.update() will call convert_for_jsonb()
+            # to wrap them in psycopg3.Jsonb for database storage.
+            # Do NOT call json.dumps() here - that was the bug.
+            m[k] = v
             continue
         elif k == "ui" and type(v) is list:
             m[k] = ", ".join(v)
@@ -167,11 +179,12 @@ def getcurrentmoniker(args, **kwargs):
     return _work(conn)
 
 
-def notifycount(args, **kwargs) -> int:
+def notifycount(args, **kwargs) -> int | None:
     """Get total unread notification count for current user.
 
     Returns:
         Number of unread notifications (queue + database), or 0 if not logged in.
+        Returns None if no database connection available.
     """
     from bbsengine6 import notify
 
@@ -179,7 +192,7 @@ def notifycount(args, **kwargs) -> int:
     if not moniker:
         return 0
 
-    return notify.count(moniker)
+    return notify.count(moniker, args=args, **kwargs)
 
 
 def getcurrentid(args, **kwargs):

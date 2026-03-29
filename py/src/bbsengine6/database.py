@@ -21,8 +21,23 @@ DEFAULTDATABASE = "postgres"
 def convert_for_jsonb(v: Any) -> Any:
     """Recursively convert values for safe JSONB encoding.
 
+    Wraps Python objects in psycopg3 Jsonb/Json types for database storage.
+
     Handles: type, datetime, dict, list, tuple, and other non-serializable types.
     Logs suspicious values (type objects, unknown types) at debug level.
+
+    IMPORTANT: This function is called by database.update() and database.insert()
+    when executing queries. Do NOT call json.dumps() before passing values to these
+    functions - let this function handle the conversion.
+
+    Example (correct):
+        rec = {"flags": {"APPROVED": {"value": True}}}
+        database.update(args, table, pk, rec)  # rec["flags"] is dict, not JSON string
+        # database.update() calls convert_for_jsonb(rec["flags"]) internally
+
+    Example (wrong):
+        rec = {"flags": json.dumps({"APPROVED": {"value": True}})}  # Don't do this!
+        # json.dumps() can't serialize Jsonb objects if convert_for_jsonb() is called on them
     """
     import datetime
 
