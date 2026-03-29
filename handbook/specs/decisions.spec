@@ -15,6 +15,7 @@ This document explains the major architectural decisions made in bbsengine6, the
 6. [Decision: Separation of Web Layer](#decision-6-separation-of-web-layer)
 7. [Decision: No Circular Dependencies](#decision-7-no-circular-dependencies)
 8. [Decision: Rich Terminal UI](#decision-8-rich-terminal-ui)
+9. [Decision: Explicit Cascade Ordering for Primary Key Changes](#decision-9-explicit-cascade-ordering-for-primary-key-changes)
 
 ---
 
@@ -692,6 +693,129 @@ window.show()
 
 ---
 
+## Decision 9: Explicit Cascade Ordering for Primary Key Changes
+
+### The Decision
+
+When changing a primary key value (e.g., member moniker), the application uses **explicit cascade ordering** rather than relying solely on PostgreSQL CASCADE constraints:
+
+1. **Before updating the primary key in the parent table**: Explicitly update all dependent records to use the new key value
+2. **Then update the primary key** in the parent table with `updatepk=True`
+3. **PostgreSQL CASCADE constraints** automatically handle remaining related tables
+4. **Entire operation is atomic** within a single transaction
+
+### Rationale
+
+**Why explicit cascade for moniker changes?**
+
+```
+Problem: Foreign key constraint violated if order is wrong
+- When changing moniker from "alice" → "alicia"
+- If we UPDATE __member first, map_member_flag still has old "alice"
+- FK constraint violation occurs before CASCADE can help!
+
+Solution: Update dependent tables BEFORE primary key change
+- Step 1: UPDATE map_member_flag SET moniker='alicia' WHERE moniker='alice'
+- Step 2: UPDATE __member SET moniker='alicia' WHERE moniker='alice'
+- Step 3: (Optional) handle flag value changes
+- Step 4: conn.commit() - atomic transaction
+```
+
+**PostgreSQL CASCADE ON UPDATE isn't enough:**
+```sql
+-- Schema definition (correct):
+ALTER TABLE map_member_flag 
+  ADD CONSTRAINT fk_mmf_membermoniker 
+  REFERENCES __member(moniker) 
+  ON UPDATE CASCADE;
+
+-- The CASCADE is for when __member.moniker is ALREADY changed
+-- But we can't change __member.moniker until map_member_flag points 
+-- to the new moniker (which doesn't exist yet!)
+-- Catch-22: FK violation prevents the cascade from happening
+```
+
+### Alternatives Considered
+
+#### Alternative 1: Rely Only on PostgreSQL CASCADE
+
+```sql
+-- Assume this works:
+UPDATE __member SET moniker='alicia' WHERE moniker='alice';
+-- (CASCADE should update map_member_flag)
+```
+
+**Problems:**
+- FK constraint violation occurs BEFORE cascade can fire
+- New moniker doesn't exist yet in __member
+- Database rejects the operation immediately
+- ✗ Rejected because: Doesn't work
+
+#### Alternative 2: Disable/Re-enable Constraints
+
+```python
+# Disable FK checking, update, re-enable
+conn.execute("SET CONSTRAINTS ALL DEFERRED")
+database.update(..., old_moniker, new_moniker)
+conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
+conn.commit()
+```
+
+**Problems:**
+- Complex transaction management
+- Error-prone if constraint re-enable fails
+- Violates principle of explicit constraint enforcement
+- Less clear about data consistency
+- ✗ Rejected because: Unnecessary complexity
+
+#### Alternative 3: Use Surrogate Key (ID) Instead
+
+```python
+# Don't allow moniker changes at all
+# Use numeric ID as PK instead
+ALTER TABLE __member ADD COLUMN id SERIAL PRIMARY KEY;
+-- All FK constraints reference id, not moniker
+-- moniker becomes unique constraint, not PK
+-- Can be changed safely
+```
+
+**Pros:**
+- Avoids complex ordering logic
+- Moniker changes become simple UPDATE
+
+**Cons:**
+- Breaking schema change
+- Would require data migration
+- Affects all dependent code
+- ✗ Rejected because: Too invasive for existing system
+
+### Decision Outcome
+
+**Explicit cascade ordering chosen because:**
+
+1. **Correctness**: Solves FK constraint violation problem
+2. **Clarity**: Code explicitly shows the ordering requirement
+3. **Safety**: All operations in single atomic transaction
+4. **Maintainability**: Future developers see why order matters
+5. **Non-invasive**: Works with existing schema
+6. **Documentation**: Code is self-documenting about constraint dependencies
+
+### Implementation Details
+
+See `member.py:update()` for the implementation:
+```python
+if moniker_is_changing:
+    with database.cursor(conn) as cur:
+        sql_stmt = sql.SQL(
+            "UPDATE engine.map_member_flag SET moniker = %s WHERE moniker = %s"
+        )
+        cur.execute(sql_stmt, (new_moniker, moniker))
+    # Only now is it safe to update __member
+    database.update(..., updatepk=True, commit=False, conn=conn)
+```
+
+---
+
 ## Summary of Architectural Decisions
 
 | Decision | Choice | Rationale | Key Benefit |
@@ -704,6 +828,7 @@ window.show()
 | Web Layer | Separate/optional | Independence from core | Evolutionary development |
 | Dependencies | No cycles | Clean design | System reliability |
 | Terminal UI | Rich (colors, widgets) | User experience | Engagement + usability |
+| PK Changes | Explicit cascade ordering | FK constraint safety, clarity | Data consistency |
 
 ---
 

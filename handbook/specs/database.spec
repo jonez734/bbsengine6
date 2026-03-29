@@ -80,18 +80,36 @@ Roll back transaction on connection.
 ```python
 update(args: Any, table: str, pk: str, items: dict, **kwargs: Any) -> bool
 ```
-Update rows. Kwargs: `primarykey`, `mogrify`, `updatepk`, `commit`.
+Update rows. 
+
+Kwargs:
+- `primarykey` (default: `"id"`) - name of primary key column
+- `mogrify` (default: `False`) - log SQL query for debugging
+- `updatepk` (default: `False`) - if `True`, allows updating the primary key itself (use with care; required for moniker changes)
+- `commit` (default: `True`) - if `True`, commits transaction immediately; if `False`, keeps transaction open
+
 Uses `sql.Identifier()` for table/column names to prevent SQL injection.
 Returns `True` on success, `False` on error.
+
+**Note:** When changing a primary key (e.g., member moniker), the calling code must explicitly handle related table updates BEFORE calling this function, to avoid FK constraint violations. The `updatepk=True` parameter is only half the solution; proper transaction ordering is required.
 
 ---
 
 ```python
 insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool
 ```
-Insert row. Kwargs: `primarykey`, `returnid`, `mogrify`.
+Insert row.
+
+Kwargs:
+- `primarykey` (default: `"id"`) - name of primary key column for `RETURNING` clause
+- `returnid` (default: `True`) - if `True`, return inserted ID; if `False`, return `True`
+- `mogrify` (default: `True`) - log SQL query for debugging
+- `commit` (default: `True`) - if `True`, commits transaction immediately; if `False`, keeps transaction open for caller
+
 Uses `sql.Identifier()` for table/column names to prevent SQL injection.
 Returns inserted ID if `returnid=True`, otherwise `True` on success, `False` on error.
+
+**Note:** Pass `commit=False` when inserting as part of a multi-step transaction (e.g., when flags must also be inserted atomically with the parent record).
 
 ### Metadata Functions
 

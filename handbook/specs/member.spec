@@ -90,9 +90,18 @@ Check if a specific flag is set for a member via `engine.checkflag()`. Returns t
 ---
 
 ```python
+_update_member_flags(args, moniker, flags_dict, conn, commit=False) -> bool
+```
+Helper function to manage member flags in `engine.map_member_flag`. For each flag in `flags_dict`, calls `setflag()` to delete existing entry (if any) and insert new one. Returns `True` on success, `False` on error (with traceback logging). Pass `commit=False` to keep transaction open for caller; `commit=True` to commit immediately.
+
+Used internally by `insert()` and `update()` to handle flag operations as part of a transaction.
+
+---
+
+```python
 setflag(args, name, value, **kwargs)
 ```
-Set a flag for a member by inserting/updating `engine.map_member_flag`. Deletes existing row then inserts new one.
+Set a flag for a member by inserting/updating `engine.map_member_flag`. Deletes existing row then inserts new one. Kwargs: `moniker`, `mogrify`, `conn`. Pass `conn` to participate in caller's transaction; pass `pool` for standalone operation.
 
 ---
 
@@ -132,16 +141,29 @@ Update member attributes (JSONB). By default merges with existing attrs (`||`). 
 ---
 
 ```python
-update(args, member, moniker: str | None = None, **kwargs)
+update(args, member, moniker: str | None = None, **kwargs) -> None
 ```
-Update a member record in `engine.__member`. Also updates individual flags via `setflag()`. Removes `password` and `flags` from record before writing.
+Update a member record in `engine.__member`. Handles moniker changes as a special case:
+- If moniker is being changed (old moniker parameter ≠ new moniker in member dict):
+  * Explicitly UPDATE `engine.map_member_flag` records to new moniker FIRST
+  * Then update `engine.__member` with `updatepk=True` to allow primary key change
+  * PostgreSQL CASCADE constraints automatically handle other related tables
+- If moniker is NOT changing:
+  * Updates `engine.__member` normally
+- Always calls `_update_member_flags()` after updating member record to handle any flag value changes
+
+Removes `password` and `flags` from record before writing. Requires `conn` kwarg. Always commits transaction (commit=False is used internally). Returns `None` on success, `None` on error (with traceback logging).
 
 ---
 
 ```python
-insert(args, member, **kwargs)
+insert(args, member, **kwargs) -> str | False
 ```
 Insert a new member. Removes `flags`, `attrs`, and `id` from record before inserting. Uses `engine.__member` by default.
+
+If `conn` is provided, keeps transaction open (`commit=False`) and explicitly commits after flags are inserted, allowing caller to rollback on error. If no `conn` is provided, auto-commits per default `database.insert()` behavior.
+
+Calls `_update_member_flags()` after member insert to handle flag creation. Returns new moniker on success, `False` on error.
 
 ---
 
@@ -189,6 +211,54 @@ Convert a member dict to insert/update format. Strips internal fields (`datecrea
 - Failures log via `io.echo_traceback()` with a location tag (e.g., `bbsengine6.member.getcurrentid.180`)
 - Pool/connection validation returns `None` or logs an error
 - Most functions return `None` on error, `False` for authentication failures, or a result on success
+
+## Transaction Management
+
+### Overview
+
+Member operations (`insert()` and `update()`) maintain database consistency through atomic transactions:
+- Both functions keep transactions open when `conn` is provided (use `commit=False` internally)
+- Both functions explicitly commit after ALL operations complete (member + flags)
+- Exceptions propagate to caller, allowing rollback on error
+- All foreign key constraints on `__member.moniker` are set to `ON UPDATE CASCADE`
+
+### Moniker Changes (Special Case)
+
+When changing a member's moniker via `update()`:
+
+1. **Explicit map_member_flag cascade**: Before updating `__member`, explicitly UPDATE `engine.map_member_flag` records to new moniker
+   - Prevents FK constraint violation that would occur if flags were updated after the `__member` record
+   - Uses properly quoted SQL with `psycopg.sql.SQL()` for safety
+
+2. **Primary key update**: Call `database.update()` with `updatepk=True` to allow updating the moniker PK
+
+3. **Flag value changes**: Call `_update_member_flags()` for any flag value changes using the new moniker
+
+4. **Atomic commit**: Single `conn.commit()` at end ensures all operations (flag cascade + member update + flag value changes) complete together or roll back together
+
+### Example Transaction Flow
+
+**For moniker change `"alice" → "alicia"`:**
+```
+1. UPDATE map_member_flag SET moniker='alicia' WHERE moniker='alice'
+2. UPDATE __member SET moniker='alicia', ... WHERE moniker='alice'
+   (CASCADE ON UPDATE automatically updates all other related tables)
+3. (Optional) INSERT/UPDATE flags for new moniker if values changed
+4. conn.commit()
+```
+
+All four steps are atomic. If any step fails, caller can `conn.rollback()`.
+
+### Non-Moniker Updates
+
+For updates that don't change moniker:
+```
+1. UPDATE __member SET ... WHERE moniker=X
+2. (Optional) INSERT/UPDATE flags if values changed
+3. conn.commit()
+```
+
+All steps are atomic.
 
 ## Known Issues / TODOs
 
