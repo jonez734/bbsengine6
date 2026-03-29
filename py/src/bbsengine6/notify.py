@@ -721,12 +721,17 @@ def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int:
                 _pool_warning_logged = True
             return 0  # Option B: Strict BC - return 0 if no pool
 
-        # Get connection from pool
-        db_conn = pool.getconn()
-        try:
+        # Use database.connect context manager to properly return connection to pool
+        args = kwargs.get("args", None)
+        if args is None:
+            io.echo(
+                "bbsengine6.notify.count.110: args=None, cannot use database.connect",
+                level="error",
+            )
+            return 0
+
+        with database.connect(args, pool=pool) as db_conn:
             db_count = _work(db_conn)
-        finally:
-            db_conn.close()  # Return to pool
     else:
         # Use provided connection
         db_count = _work(db_conn)
