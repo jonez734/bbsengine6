@@ -4,5 +4,7 @@ create table engine.map_member_flag (
   "value" boolean
 );
 
+create unique index if not exists idx_map_member_flag on engine.map_member_flag (moniker, name);
+
 grant select on engine.map_member_flag to web, term;
 grant all on engine.map_member_flag to sysop;
