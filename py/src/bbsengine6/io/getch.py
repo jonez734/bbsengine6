@@ -507,7 +507,11 @@ def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str 
 
 
 def getch_str(
-    timeout: float = 1.0, debug: bool = False, fire_events: bool = True, **kwargs
+    timeout: float = 1.0,
+    debug: bool = False,
+    fire_events: bool = True,
+    check_notifications: bool = True,
+    **kwargs
 ) -> str | None:
     """Reads a single keypress without blocking and handles control/extended keys.
 
@@ -515,6 +519,7 @@ def getch_str(
         timeout: Seconds to wait for input (default: 1.0)
         debug: If True, log unknown escape sequences and return None
         fire_events: If True, fire key events if dispatcher is running
+        check_notifications: If True, check for notifications and emit bell (default: True)
 
     Special behavior:
         - Emits {bel} once when pending notifications are detected
@@ -527,7 +532,7 @@ def getch_str(
     if _has_member_module:
         moniker = getattr(_threadlocal, "moniker", None)
 
-    if moniker and _has_notify_module:
+    if check_notifications and moniker and _has_notify_module:
         has_notifications, notification_count = _check_notifications(moniker)
         if has_notifications:
             _emit_notification_bell_once()
@@ -535,7 +540,7 @@ def getch_str(
     with _current_stream_lock:
         if _input_queue:
             char = _input_queue.popleft()
-            result = _proc_char(char, debug=debug)
+            result = _proc_char(char, debug=debug, fire_events=fire_events)
             # Check if result is F2
             if result == "KEY_F2" and moniker:
                 _show_pending_notifications(moniker)
@@ -573,7 +578,7 @@ def getch_str(
                     # If nothing is available, return None immediately
                     return None
 
-                result = _proc_char(char)
+                result = _proc_char(char, debug=debug, fire_events=fire_events)
                 # Check if result is F2
                 if result == "KEY_F2" and moniker:
                     _show_pending_notifications(moniker)

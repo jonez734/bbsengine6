@@ -2,6 +2,7 @@ import re
 
 from . import terminal
 
+from .const import INPUTSTRING_GETCH_TIMEOUT
 from .echo import echo, rendered_length, echo_traceback
 from .getch import getch_str as getch
 from .common import (
@@ -603,7 +604,11 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
             _terminal_state.cursor_row = start_row
             _terminal_state.cursor_col = cursor_display_col
 
-        ch = getch(timeout=0.015)
+        ch = getch(
+            timeout=INPUTSTRING_GETCH_TIMEOUT,
+            fire_events=False,
+            check_notifications=False,
+        )
         if ch is None:
             continue
 

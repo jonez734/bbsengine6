@@ -11,3 +11,6 @@ FALLBACK_TERMINAL_WIDTH = 100
 DEFAULT_PALETTE_NAME = "c64"
 
 ECHO_END = "\n"
+
+# Input timeout for interactive string editing (in seconds)
+INPUTSTRING_GETCH_TIMEOUT = 0.015
