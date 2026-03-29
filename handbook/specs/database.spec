@@ -41,7 +41,11 @@ connect(args: Any, pool: Any = None, **kwargs: Any)
 ```
 Context manager that gets a connection from the passed `pool` using `pool.getconn()`
 and returns it via `pool.putconn()` on exit. Raises `ValueError` if `pool is None`.
-The `readonly` kwarg is stripped from kwargs (not supported by psycopg_pool). Use:
+The `readonly` kwarg is stripped from kwargs (not supported by psycopg_pool). 
+
+**Note:** `args` parameter is optional and only used for debug logging. Can be `None` without affecting core functionality.
+
+Use:
 ```python
 with database.connect(args, pool=pool) as conn:
     database.cursor(conn)  # or pass conn to other database functions
