@@ -237,6 +237,7 @@ def _edit(args, mode, member, **kwargs):
 
     util.heading(f"{mode} member")
     conn = kwargs.get("conn", None)
+    pool = kwargs.get("pool", None)
     done = False
     while not done:
         help(args, member=member, _member=_member)
@@ -248,6 +249,9 @@ def _edit(args, mode, member, **kwargs):
             help=help,
             member=member,
             _member=_member,
+            pool=pool,
+            args=args,
+            **kwargs,
         )
         if ch == "M":
             io.echo("Moniker")
@@ -584,7 +588,12 @@ def main(args, **kwargs):
         io.echo(f"{{var:optioncolor}}[A]{{var:labelcolor}} Approvals")
         io.echo(f"{{f6}}{{var:optioncolor}}[Q]{{var:labelcolor}} Quit")
         ch = io.inputchoice(
-            f"{{var:promptcolor}}member:{{var:inputcolor}} ", "NAEQX", "Q"
+            f"{{var:promptcolor}}member:{{var:inputcolor}} ",
+            "NAEQX",
+            "Q",
+            pool=pool,
+            args=args,
+            **kwargs,
         )
         if ch == "E":
             io.echo("Edit")
