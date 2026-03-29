@@ -390,7 +390,14 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
     return True
 
 
-def upsert(args: Any, table: str, items: dict, conflict_columns: list, update_columns: list | None = None, **kwargs) -> bool:
+def upsert(
+    args: Any,
+    table: str,
+    items: dict,
+    conflict_columns: list,
+    update_columns: list | None = None,
+    **kwargs,
+) -> bool:
     """Insert or update a row (UPSERT) - atomic operation.
 
     Uses PostgreSQL INSERT ... ON CONFLICT ... DO UPDATE for atomic upsert.
@@ -431,7 +438,9 @@ def upsert(args: Any, table: str, items: dict, conflict_columns: list, update_co
     conn = kwargs.get("conn", None)
 
     if not conflict_columns:
-        io.echo("bbsengine6.database.upsert.100: conflict_columns required", level="error")
+        io.echo(
+            "bbsengine6.database.upsert.100: conflict_columns required", level="error"
+        )
         return False
 
     # Determine which columns to update on conflict
@@ -446,15 +455,21 @@ def upsert(args: Any, table: str, items: dict, conflict_columns: list, update_co
             values = [convert_for_jsonb(items[col]) for col in columns]
 
             # Build INSERT clause
-            insert_clause = sql.SQL("INSERT INTO ") + _table_identifier(table) + sql.SQL(" (")
-            insert_clause += sql.SQL(", ").join([sql.Identifier(col) for col in columns])
+            insert_clause = (
+                sql.SQL("INSERT INTO ") + _table_identifier(table) + sql.SQL(" (")
+            )
+            insert_clause += sql.SQL(", ").join(
+                [sql.Identifier(col) for col in columns]
+            )
             insert_clause += sql.SQL(") VALUES (")
             insert_clause += sql.SQL(", ").join([sql.SQL("%s") for _ in columns])
             insert_clause += sql.SQL(")")
 
             # Build ON CONFLICT clause
             conflict_clause = sql.SQL(" ON CONFLICT (")
-            conflict_clause += sql.SQL(", ").join([sql.Identifier(col) for col in conflict_columns])
+            conflict_clause += sql.SQL(", ").join(
+                [sql.Identifier(col) for col in conflict_columns]
+            )
             conflict_clause += sql.SQL(") DO UPDATE SET ")
 
             # Build UPDATE assignments using EXCLUDED
@@ -482,13 +497,19 @@ def upsert(args: Any, table: str, items: dict, conflict_columns: list, update_co
         return True
 
     if args.debug is True:
-        io.echo(f"bbsengine6.database.upsert.100: table={table}, items={items}, conflict={conflict_columns}", level="debug")
+        io.echo(
+            f"bbsengine6.database.upsert.100: table={table}, items={items}, conflict={conflict_columns}",
+            level="debug",
+        )
 
     try:
         if conn is None:
             pool = kwargs.get("pool", None)
             if pool is None:
-                io.echo("bbsengine6.database.upsert.200: conn and pool both None", level="error")
+                io.echo(
+                    "bbsengine6.database.upsert.200: conn and pool both None",
+                    level="error",
+                )
                 return False
             with connect(args, pool=pool) as conn:
                 return _work(conn)
@@ -649,6 +670,37 @@ def schemaexists(args: Any, name: str, **kwargs: Any) -> bool:
         return _work(conn)
     except Exception as e:
         io.echo_traceback(f"bbsengine6.database.schemaexists.200: {e}")
+        return False
+
+
+def typeexists(args: Any, name: str, **kwargs: Any) -> bool:
+    def _work(conn):
+        mogrify = kwargs.get("mogrify", False)
+        with cursor(conn) as cur:
+            sql = "select to_regtype(%s) as type"
+            dat = (name,)
+            cur.execute(sql, dat)
+            if mogrify is True:
+                io.echo(
+                    f"bbsengine6.database.typeexists.100: {mogrifysql(cur, sql, dat)=}",
+                    level="debug",
+                )
+            if cur.rowcount == 0:
+                return False
+            res = cur.fetchone()
+            return res["type"] is not None
+
+    try:
+        conn = kwargs.get("conn", None)
+        if conn is None:
+            pool = kwargs.get("pool", None)
+            if pool is None:
+                return False
+            with connect(args, pool=pool) as conn:
+                return _work(conn)
+        return _work(conn)
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.database.typeexists.200: {e}")
         return False
 
 
