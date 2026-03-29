@@ -272,7 +272,7 @@ def connect(
     """Context manager that safely gets a connection and returns it to the pool.
 
     Args:
-      args: Application args (for logging)
+      args: Application args (for logging, optional)
       pool: ConnectionPool instance
       auto_commit: If True (default), commits before returning connection to pool.
                    Set to False for multi-statement transactions.
@@ -281,7 +281,7 @@ def connect(
     Yields:
       Connection from pool
     """
-    if args.debug is True:
+    if args and args.debug is True:
         io.echo(f"bbsengine6.database.connect.100: {args=}", level="debug")
 
     if "readonly" in kwargs:
@@ -291,7 +291,7 @@ def connect(
         io.echo("bbsengine6.database.connect.200: pool is None", level="error")
         raise ValueError("pool is None")
 
-    if args.debug is True:
+    if args and args.debug is True:
         io.echo(f"{pool=}", level="debug")
 
     try:

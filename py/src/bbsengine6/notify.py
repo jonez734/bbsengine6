@@ -723,13 +723,6 @@ def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int:
 
         # Use database.connect context manager to properly return connection to pool
         args = kwargs.get("args", None)
-        if args is None:
-            io.echo(
-                "bbsengine6.notify.count.110: args=None, cannot use database.connect",
-                level="error",
-            )
-            return 0
-
         with database.connect(args, pool=pool) as db_conn:
             db_count = _work(db_conn)
     else:
