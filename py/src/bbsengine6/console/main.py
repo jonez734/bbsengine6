@@ -170,7 +170,13 @@ def main(args, **kwargs):
             io.echo("{var:optioncolor}[S]{var:labelcolor} Sessions")
             io.echo("{f6}{var:optioncolor}[X]{var:labelcolor} Exit{f6}")
             ch = io.inputchoice(
-                "{var:promptcolor}console: {var:inputcolor}", "SMXQ", "X"
+                "{var:promptcolor}console: {var:inputcolor}",
+                "SMXQ",
+                "X",
+                conn=conn,
+                args=args,
+                pool=pool,
+                **kwargs,
             )
             if ch == "M":
                 io.echo("Members")

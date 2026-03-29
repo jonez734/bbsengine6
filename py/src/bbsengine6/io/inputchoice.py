@@ -8,7 +8,6 @@ from .getch import getch_str as getch
 def inputchoice(
     prompt: str, options: str, default: str | None = "", **kwargs
 ) -> str | None:
-    args = kwargs.get("args", None)
     noneok = kwargs.get("noneok", False)
     help = kwargs.get("help", None)
 
@@ -26,7 +25,7 @@ def inputchoice(
 
     done = False
     while not done:
-        ch = getch()  # .decode("UTF-8")
+        ch = getch(**kwargs)
         if ch is not None:
             ch = ch.upper()
 

@@ -325,12 +325,12 @@ def clear_key_event_history() -> None:
 # ============================================================================
 
 
-def _check_notifications(moniker: str) -> tuple[bool, int]:
+def _check_notifications(moniker: str, **kwargs) -> tuple[bool, int]:
     """Check for pending notifications. Returns (has_notifications, count)."""
     if not _has_notify_module:
         return False, 0
     try:
-        count = notify.count(moniker)
+        count = notify.count(moniker, **kwargs)
         return count > 0, count
     except Exception:
         echo_traceback("bbsengine6.io.getch.333:")
@@ -511,7 +511,7 @@ def getch_str(
     debug: bool = False,
     fire_events: bool = True,
     check_notifications: bool = True,
-    **kwargs
+    **kwargs,
 ) -> str | None:
     """Reads a single keypress without blocking and handles control/extended keys.
 
@@ -533,7 +533,7 @@ def getch_str(
         moniker = getattr(_threadlocal, "moniker", None)
 
     if check_notifications and moniker and _has_notify_module:
-        has_notifications, notification_count = _check_notifications(moniker)
+        has_notifications, notification_count = _check_notifications(moniker, **kwargs)
         if has_notifications:
             _emit_notification_bell_once()
 

@@ -48,6 +48,9 @@ _types_lock = threading.Lock()
 _types: Dict[str, Dict[str, Any]] = {}
 _rate_limit_lock = threading.Lock()
 
+# Session-level flag to log pool warning only once
+_pool_warning_logged = False
+
 
 class NotificationUrgency(Enum):
     """Notification urgency levels."""
@@ -250,51 +253,51 @@ def _expand_recipients(
 
     for recipient in recipients:
         if recipient.startswith("@"):
-             # Handle special @everyone
-             if recipient == "@everyone":
-                 # Try explicit @everyone group first
-                 cur.execute(
-                     sql.SQL("SELECT DISTINCT ")
-                     + sql.Identifier("member_moniker")
-                     + sql.SQL(" FROM ")
-                     + _table_identifier("engine.__notify_group")
-                     + sql.SQL(" WHERE ")
-                     + sql.Identifier("group_name")
-                     + sql.SQL(" = %s"),
-                     ("@everyone",),
-                 )
-                 members = [row[0] for row in cur.fetchall()]
+            # Handle special @everyone
+            if recipient == "@everyone":
+                # Try explicit @everyone group first
+                cur.execute(
+                    sql.SQL("SELECT DISTINCT ")
+                    + sql.Identifier("member_moniker")
+                    + sql.SQL(" FROM ")
+                    + _table_identifier("engine.__notify_group")
+                    + sql.SQL(" WHERE ")
+                    + sql.Identifier("group_name")
+                    + sql.SQL(" = %s"),
+                    ("@everyone",),
+                )
+                members = [row[0] for row in cur.fetchall()]
 
-                 if members:
-                     expanded.extend(members)
-                 else:
-                     # Fall back to active sessions
-                     cur.execute(
-                         sql.SQL("SELECT DISTINCT ")
-                         + sql.Identifier("moniker")
-                         + sql.SQL(" FROM ")
-                         + _table_identifier("engine.__session")
-                     )
-                     active = [row[0] for row in cur.fetchall()]
-                     expanded.extend(active)
-             else:
-                 # Regular group
-                 cur.execute(
-                     sql.SQL("SELECT DISTINCT ")
-                     + sql.Identifier("member_moniker")
-                     + sql.SQL(" FROM ")
-                     + _table_identifier("engine.__notify_group")
-                     + sql.SQL(" WHERE ")
-                     + sql.Identifier("group_name")
-                     + sql.SQL(" = %s"),
-                     (recipient,),
-                 )
-                 members = [row[0] for row in cur.fetchall()]
+                if members:
+                    expanded.extend(members)
+                else:
+                    # Fall back to active sessions
+                    cur.execute(
+                        sql.SQL("SELECT DISTINCT ")
+                        + sql.Identifier("moniker")
+                        + sql.SQL(" FROM ")
+                        + _table_identifier("engine.__session")
+                    )
+                    active = [row[0] for row in cur.fetchall()]
+                    expanded.extend(active)
+            else:
+                # Regular group
+                cur.execute(
+                    sql.SQL("SELECT DISTINCT ")
+                    + sql.Identifier("member_moniker")
+                    + sql.SQL(" FROM ")
+                    + _table_identifier("engine.__notify_group")
+                    + sql.SQL(" WHERE ")
+                    + sql.Identifier("group_name")
+                    + sql.SQL(" = %s"),
+                    (recipient,),
+                )
+                members = [row[0] for row in cur.fetchall()]
 
-                 if not members:
-                     errors[recipient] = "Group does not exist"
-                 else:
-                     expanded.extend(members)
+                if not members:
+                    errors[recipient] = "Group does not exist"
+                else:
+                    expanded.extend(members)
         else:
             # Direct moniker
             if _validate_moniker(recipient, cur):
@@ -678,12 +681,12 @@ def get_queue(moniker: str) -> UserNotificationQueue:
 
 def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int:
     """Get total unread notification count for user (queue + database).
-    
+
     Args:
         moniker: User moniker to count notifications for
         conn: Optional explicit database connection
         **kwargs: May contain 'pool' (ConnectionPool) for database access
-    
+
     Returns:
         Total unread notification count (queue + database)
         Returns 0 if database unavailable
@@ -712,12 +715,12 @@ def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int:
     if db_conn is None:
         pool = kwargs.get("pool", None)
         if pool is None:
-            io.echo(
-                f"bbsengine6.notify.count.100: {pool=}",
-                level="error"
-            )
+            global _pool_warning_logged
+            if not _pool_warning_logged:
+                io.echo(f"bbsengine6.notify.count.100: {pool=}", level="error")
+                _pool_warning_logged = True
             return 0  # Option B: Strict BC - return 0 if no pool
-        
+
         # Get connection from pool
         db_conn = pool.getconn()
         try:

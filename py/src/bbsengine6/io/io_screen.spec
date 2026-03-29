@@ -64,6 +64,18 @@ Display progress bar in bottom bar.
 - `total`: Total iterations
 - `fill`: Fill character (default: "#")
 
+---
+
+### `get_notification_status(**kwargs) -> str`
+
+Get notification status string for bottombar right side.
+
+**Parameters:**
+- `**kwargs`: Passed to `notify.count()` (supports `args`, `conn`, `pool`)
+
+**Returns:**
+- `"F2: notify (N)"` if notifications > 0, else empty string
+
 ## Known Issues
 
 1. ~~Line 66 references `io.getterminalwidth()` which is undefined~~ (FIXED - now uses `terminal.width()`)

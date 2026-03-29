@@ -70,7 +70,7 @@ setarea = setbottombar
 
 
 # @since 20260327 - notification status for bottombar right side
-def get_notification_status() -> str:
+def get_notification_status(**kwargs) -> str:
     """Get notification status string for bottombar right side.
 
     Returns:
@@ -85,7 +85,7 @@ def get_notification_status() -> str:
         if not moniker:
             return ""
 
-        count = notify.count(moniker)
+        count = notify.count(moniker, **kwargs)
         if count > 0:
             return f"F2: notify ({count})"
     except Exception:
