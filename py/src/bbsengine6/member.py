@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import threading
-import json
 import copy
+import threading
 
 import psycopg
 from psycopg import sql
@@ -345,6 +344,23 @@ def getcredits(args, membermoniker: str | None = None, **kwargs) -> int | None:
 
 
 def update(args, member, moniker: str | None = None, **kwargs):
+    """
+    Update a member record.
+
+    Handles moniker changes as a special case:
+    - If moniker is being changed, explicitly update all related map_member_flag
+      records BEFORE updating __member (where CASCADE on UPDATE will handle others)
+    - All database operations are kept in a transaction (commit=False by default)
+
+    Args:
+        args: Application args
+        member: Member dict with fields to update
+        moniker: Old moniker (primary key to match). If None, gets current user.
+        **kwargs: Optional - conn (required), commit (default False)
+
+    Returns:
+        None on success, None on error (exceptions logged)
+    """
     conn = kwargs.get("conn", None)
     if conn is None:
         io.echo(f"bbsengine.member.update.140: conn=None", level="error")
@@ -356,7 +372,30 @@ def update(args, member, moniker: str | None = None, **kwargs):
             io.echo("bbsengine.member.update.150: moniker is None", level="error")
             return None
 
-    def _work(conn):
+    if "password" in member:
+        del member["password"]
+
+    rec = buildrec(member)
+    flags_dict = rec.pop("flags", None)
+
+    # Detect if moniker is changing
+    new_moniker = rec.get("moniker", None)
+    moniker_is_changing = moniker != new_moniker and new_moniker is not None
+
+    try:
+        # If moniker is changing, explicitly update map_member_flag FIRST
+        if moniker_is_changing:
+            with database.cursor(conn) as cur:
+                sql_stmt = sql.SQL(
+                    "UPDATE engine.map_member_flag SET moniker = %s WHERE moniker = %s"
+                )
+                cur.execute(sql_stmt, (new_moniker, moniker))
+                io.echo(
+                    f"bbsengine6.member.update.160: Updated {cur.rowcount} flag records from {moniker} to {new_moniker}",
+                    level="debug",
+                )
+
+        # Update member record (with updatepk=True to allow moniker change)
         database.update(
             args,
             "engine.__member",
@@ -364,21 +403,22 @@ def update(args, member, moniker: str | None = None, **kwargs):
             rec,
             primarykey="moniker",
             mogrify=True,
+            updatepk=True,  # Allow primary key to be updated
+            commit=False,  # Keep transaction open
             conn=conn,
         )
-        if member.get("flags"):
-            for name, data in member["flags"].items():
-                io.echo(f"bbsengine6.member.update.100: {name=} {data=}", level="debug")
-                setflag(args, name, data["value"], moniker=member["moniker"], conn=conn)
 
-    if "password" in member:
-        del member["password"]
+        # Handle any flag value changes using new moniker (if changed) or old (if not)
+        flags_moniker = new_moniker if moniker_is_changing else moniker
+        if flags_dict:
+            _update_member_flags(
+                args, flags_moniker, flags_dict, conn=conn, commit=False
+            )
 
-    rec = buildrec(member)
-    rec.pop("flags", None)
+        # Commit the entire transaction
+        conn.commit()
+        return None
 
-    try:
-        return _work(conn)
     except Exception:
         io.echo_traceback("bbsengine6.member.update.120:")
         return None
@@ -526,26 +566,75 @@ def getflags(args, moniker=None, **kwargs):
         return None
 
 
+def _update_member_flags(args, moniker, flags_dict, conn, commit=False):
+    """
+    Helper to manage member flags in map_member_flag table.
+
+    Updates or inserts flag values for a member. For each flag in flags_dict,
+    deletes existing entry (if any) and inserts new one.
+
+    Args:
+        args: Application args (for debug logging)
+        moniker: Member moniker (target moniker)
+        flags_dict: Dict of {flag_name: {value: bool, ...}, ...}
+        conn: Database connection (must be open)
+        commit: If True, commits transaction. If False, keeps it open.
+
+    Returns:
+        True on success, False on error
+
+    Raises:
+        Exception: On database errors (logged before raising)
+    """
+    if not flags_dict:
+        return True
+
+    try:
+        for name, data in flags_dict.items():
+            io.echo(
+                f"bbsengine6.member._update_member_flags: {name=} {data=}",
+                level="debug",
+            )
+            setflag(args, name, data["value"], moniker=moniker, conn=conn)
+
+        if commit is True:
+            conn.commit()
+
+        return True
+
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.member._update_member_flags.100: {e}")
+        return False
+
+
 def setflag(args, name, value, **kwargs):
     moniker = kwargs.get("moniker", None)
     mogrify = kwargs.get("mogrify", False)
     conn = kwargs.get("conn", None)
 
-    def _work(cur):
-        sql = "delete from engine.map_member_flag where moniker=%s and name=%s"
-        dat = (moniker, name)
+    def _work(conn):
+        with database.cursor(conn) as cur:
+            sql = "delete from engine.map_member_flag where moniker=%s and name=%s"
+            dat = (moniker, name)
 
-        if mogrify is True:
-            io.echo(database.mogrifysql(cur, sql, dat), level="debug")
+            if mogrify is True:
+                io.echo(database.mogrifysql(cur, sql, dat), level="debug")
 
-        cur.execute(sql, dat)
+            cur.execute(sql, dat)
 
-        mmf = {}
-        mmf["moniker"] = moniker
-        mmf["name"] = name
-        mmf["value"] = value
+            mmf = {}
+            mmf["moniker"] = moniker
+            mmf["name"] = name
+            mmf["value"] = value
 
-        database.insert(args, "engine.map_member_flag", mmf, returnid=False, conn=conn)
+            database.insert(
+                args,
+                "engine.map_member_flag",
+                mmf,
+                returnid=False,
+                commit=False,
+                conn=conn,
+            )
         return None
 
     if moniker is None:
@@ -556,8 +645,7 @@ def setflag(args, name, value, **kwargs):
     util.logentry(f"setflag({name=}, {value=}, {moniker=})")
 
     try:
-        with database.cursor(conn) as cur:
-            return _work(cur)
+        return _work(conn)
     except Exception:
         io.echo_traceback("bbsengine6.member.setflag.100:")
         return None
@@ -650,14 +738,13 @@ def setflag(args, name, value, **kwargs):
 
 
 def setpassword(args, plaintextpassword: str, moniker: str, **kwargs):
-    def _setpw(conn):
-        with database.cursor(conn=conn) as cur:
-            sql = "update engine.__member set password=crypt(%s, gen_salt('bf')) where moniker=%s"
-            dat = (plaintextpassword, moniker)
-            cur.execute(sql, dat)
-            if cur.rowcount == 0:
-                return None
-            return True
+    def _setpw(cur):
+        sql = "update engine.__member set password=crypt(%s, gen_salt('bf')) where moniker=%s"
+        dat = (plaintextpassword, moniker)
+        cur.execute(sql, dat)
+        if cur.rowcount == 0:
+            return None
+        return True
 
     conn = kwargs.get("conn")
     if conn is None:
@@ -667,8 +754,11 @@ def setpassword(args, plaintextpassword: str, moniker: str, **kwargs):
             return None
 
         with database.connect(args, pool=pool) as conn:
-            return _setpw(conn)
-    return _setpw(conn)
+            with database.cursor(conn) as cur:
+                return _setpw(cur)
+
+    with database.cursor(conn) as cur:
+        return _setpw(cur)
 
 
 def checkpassword(
@@ -772,15 +862,30 @@ def verifyMemberFound(args, name, **kwargs):
 
 
 def insert(args, member, **kwargs):
+    """
+    Insert a new member record.
+
+    Inserts the member into __member table, then inserts any flags via helper function.
+    All operations kept in transaction (commit=False by default).
+
+    Args:
+        args: Application args
+        member: Member dict
+        **kwargs: Optional - table (default "engine.__member"), conn, commit (default False)
+
+    Returns:
+        New moniker on success, False/None on error
+    """
     if member is None:
         io.echo(f"bbsengine6.member.insert.120: no member present", level="warn")
         return None
+
     table = kwargs.get("table", "engine.__member")
+    conn = kwargs.get("conn", None)
 
     cols = copy.copy(member)
-    if "flags" in cols:
-        del cols["flags"]
-        io.echo(f"bbsengine6.insert.160: removed 'flags' from member", level="warn")
+    flags_dict = cols.pop("flags", None)
+
     if "attrs" in cols:
         del cols["attrs"]
         io.echo(f"bbsengine6.insert.140: removed 'attrs' from member")
@@ -789,7 +894,40 @@ def insert(args, member, **kwargs):
         io.echo(f"bbsengine6.insert.200: removed 'id' from member")
 
     io.echo(f"bbsengine6.member.insert.100: {member=}", level="debug")
-    return database.insert(args, table, cols, **kwargs)
+
+    try:
+        # Insert member record (commit=False to keep transaction open)
+        moniker = database.insert(
+            args,
+            table,
+            cols,
+            commit=False,  # Keep transaction open
+            **kwargs,
+        )
+
+        if not moniker:
+            io.echo_traceback("bbsengine6.member.insert.110: database.insert failed")
+            return False
+
+        # Handle flags using helper function
+        if flags_dict and conn is not None:
+            if not _update_member_flags(
+                args, moniker, flags_dict, conn=conn, commit=False
+            ):
+                io.echo_traceback(
+                    "bbsengine6.member.insert.130: _update_member_flags failed"
+                )
+                return False
+
+        # Commit the entire transaction (only if conn was provided)
+        if conn is not None:
+            conn.commit()
+
+        return moniker
+
+    except Exception:
+        io.echo_traceback("bbsengine6.member.insert.150:")
+        return False
 
 
 def count(args, **kwargs):

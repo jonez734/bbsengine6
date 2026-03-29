@@ -53,7 +53,7 @@ def main(args, **kw):
                     f"{{labelcolor}}E-Mail:  {{valuecolor}}{m['email']} {{labelcolor}}",
                     end="",
                 )
-                if member.checkflag("EMAILVERIFIED", moniker=moniker) is True:
+                if member.checkflag(args, "EMAILVERIFIED", moniker=moniker) is True:
                     io.echo(
                         " (verified by {{valuecolor}}{m['verifiedbyid']}{{labelcolor}} on {{valuecolor}}{util.datestamp(m['dateverified'])})"
                     )
@@ -67,11 +67,35 @@ def main(args, **kw):
                     )
                     is True
                 ):
-                    member.setflag(args, "EMAILVERIFIED", True, moniker=moniker)
+                    with database.connect(args, **kw) as txn_conn:
+                        try:
+                            member.setflag(
+                                args,
+                                "EMAILVERIFIED",
+                                True,
+                                moniker=moniker,
+                                conn=txn_conn,
+                            )
+                            txn_conn.commit()
+                        except Exception as e:
+                            io.echo_traceback(f"bbsengine6.console.memberapproval: {e}")
+                            txn_conn.rollback()
                 else:
-                    member.setflag(args, "EMAILVERIFIED", False, moniker=moniker)
-                    m["dateemailverified"] = "now()"
-                    m["emailverifiedbymoniker"] = currrentmoniker
+                    with database.connect(args, **kw) as txn_conn:
+                        try:
+                            member.setflag(
+                                args,
+                                "EMAILVERIFIED",
+                                False,
+                                moniker=moniker,
+                                conn=txn_conn,
+                            )
+                            m["dateemailverified"] = "now()"
+                            m["emailverifiedbymoniker"] = currentmoniker
+                            txn_conn.commit()
+                        except Exception as e:
+                            io.echo_traceback(f"bbsengine6.console.memberapproval: {e}")
+                            txn_conn.rollback()
                 if (
                     io.inputboolean(
                         "{var:promptcolor}approve this member? {var:optioncolor}[Yn]{var:promptcolor}: {var:inputcolor}",
@@ -79,10 +103,26 @@ def main(args, **kw):
                     )
                     is True
                 ):
-                    member.setflag(args, "APPROVED", True, moniker=moniker)
-                    m["approvedbymoniker"] = currentmoniker
-                    m["dateapproved"] = "now()"
-                    member.update(args, m, memberid)
+                    with database.connect(args, **kw) as txn_conn:
+                        try:
+                            member.setflag(
+                                args, "APPROVED", True, moniker=moniker, conn=txn_conn
+                            )
+                            m["approvedbymoniker"] = currentmoniker
+                            m["dateapproved"] = "now()"
+                            member.update(args, m, m["moniker"], conn=txn_conn)
+                            txn_conn.commit()
+                        except Exception as e:
+                            io.echo_traceback(f"bbsengine6.console.memberapproval: {e}")
+                            txn_conn.rollback()
                 else:
-                    member.setflag(args, "APPROVED", False, moniker=moniker)
+                    with database.connect(args, **kw) as txn_conn:
+                        try:
+                            member.setflag(
+                                args, "APPROVED", False, moniker=moniker, conn=txn_conn
+                            )
+                            txn_conn.commit()
+                        except Exception as e:
+                            io.echo_traceback(f"bbsengine6.console.memberapproval: {e}")
+                            txn_conn.rollback()
     return True
