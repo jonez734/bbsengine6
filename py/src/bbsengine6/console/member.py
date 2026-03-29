@@ -249,8 +249,6 @@ def _edit(args, mode, member, **kwargs):
             help=help,
             member=member,
             _member=_member,
-            pool=pool,
-            args=args,
             **kwargs,
         )
         if ch == "M":
@@ -458,7 +456,7 @@ def edit(args, **kwargs):
 
             io.echo(f"bbsengine6.con.member.edit.120: {rec=} {m=}", level="debug")
 
-            _m = _edit(args, "edit", m, conn=conn)
+            _m = _edit(args, "edit", m, conn=conn, **kwargs)
 
             loginid = m["loginid"]
             moniker = m["moniker"]
@@ -479,17 +477,18 @@ def edit(args, **kwargs):
             libmember.update(args, m, moniker, conn=conn, **kwargs)
             libmember.setpassword(args, moniker, password, conn=conn, **kwargs)
 
-    if io.inputboolean(
-        f"{{var:promptcolor}}save changes? {{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
-        "Y",
-    ):
-        io.echo("commiting member.")
-        conn.commit()
-    else:
-        io.echo("changes not saved.")
-        conn.rollback()
+        if io.inputboolean(
+            f"{{var:promptcolor}}save changes? {{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
+            "Y",
+            **kwargs,
+        ):
+            io.echo("commiting member.")
+            conn.commit()
+        else:
+            io.echo("changes not saved.")
+            conn.rollback()
 
-        return True
+            return True
 
 
 def add(args, **kwargs) -> bool:
@@ -591,8 +590,6 @@ def main(args, **kwargs):
             f"{{var:promptcolor}}member:{{var:inputcolor}} ",
             "NAEQX",
             "Q",
-            pool=pool,
-            args=args,
             **kwargs,
         )
         if ch == "E":

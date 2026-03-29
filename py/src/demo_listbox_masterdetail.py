@@ -28,15 +28,17 @@ class PresidentListboxItem(ListboxItem):
     def __init__(self, rec: dict, width: int, height=1):
         super().__init__()
         self.status = ""
-        self.pk = rec['person_key']
+        self.pk = rec["person_key"]
         self.content = f"{rec['name_given']} {rec['name_sur']}".ljust(width - 9, " ")
         self.data = rec
         self.width = width
         self.disabled = False
-##        common.logentry("PresidentListboxItem._init.100: trace", level="debug")
+
+    ##        common.logentry("PresidentListboxItem._init.100: trace", level="debug")
 
     def help(self):
         io.echo(f"this is a help message in a function")
+
 
 #    def display(self, listbox: "Listbox", highlighted: bool):
 #        common.logentry("PresidentListboxItem.display.100: trace", level="debug")

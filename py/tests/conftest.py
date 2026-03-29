@@ -34,9 +34,9 @@ def db_connection():
     logger.info("Connecting to zoid6test database as opencode user...")
     conn = psycopg.connect("dbname=zoid6test user=opencode")
     logger.info("✓ Connected to zoid6test")
-    
+
     yield conn
-    
+
     # Cleanup
     logger.info("Closing database connection...")
     conn.close()
@@ -46,7 +46,7 @@ def db_connection():
 def schema_init(db_connection):
     """
     Initialize notify schema tables.
-    
+
     Only loads 7 notify-specific SQL files:
     - notify.sql
     - notify_recipient.sql
@@ -55,13 +55,13 @@ def schema_init(db_connection):
     - notify_type.sql
     - notify_rate_limit.sql
     - notifyview.sql
-    
+
     Skips: schema, extensions, roles, member, session (already exist)
     """
     logger.info("Initializing notify schema tables...")
-    
+
     sql_files = _get_notify_sql_files()
-    
+
     for filepath in sql_files:
         try:
             sql_content = _read_sql_file(filepath)
@@ -75,11 +75,13 @@ def schema_init(db_connection):
         except Exception as e:
             logger.error(f"  ✗ Failed to load {filepath.name}: {e}")
             db_connection.rollback()
-            raise pytest.fail(f"Schema initialization failed loading {filepath.name}: {e}")
-    
+            raise pytest.fail(
+                f"Schema initialization failed loading {filepath.name}: {e}"
+            )
+
     db_connection.commit()
     logger.info("✓ All notify tables initialized")
-    
+
     yield
 
 
@@ -88,20 +90,20 @@ def create_test_users(db_connection, schema_init):
     """
     Create minimal test users: alice, bob
     (jam already exists in engine.__member)
-    
+
     Required fields: moniker, email
-    
+
     autouse=True: This fixture always runs, ensuring test users exist
     """
     logger.info("Creating test users (alice, bob)...")
-    
+
     # Minimal INSERT: moniker and email (both required)
     sql = """
         INSERT INTO engine.__member (moniker, email) 
         VALUES ('alice', 'alice@test.local'), ('bob', 'bob@test.local')
         ON CONFLICT DO NOTHING
     """
-    
+
     try:
         with db_connection.cursor() as cur:
             cur.execute(sql)
@@ -110,7 +112,7 @@ def create_test_users(db_connection, schema_init):
     except Exception as e:
         logger.error(f"Failed to create test users: {e}")
         raise
-    
+
     yield
 
 
@@ -122,18 +124,18 @@ def test_transaction(db_connection):
     """
     Wrap each test in its own transaction.
     Rolls back after test to keep data clean.
-    
+
     Schema persists (session scope), test data is isolated.
-    
+
     Uses psycopg's built-in autocommit=False (default) behavior.
     Each test's inserts/deletes are rolled back automatically.
     """
     # Ensure we're not in a transaction (clean state)
     # PostgreSQL auto-starts a transaction on first DML
     # Just yield and let test run normally
-    
+
     yield  # Test runs here
-    
+
     # Rollback after test - all inserts/deletes are undone
     # This doesn't affect CREATE TABLE/VIEW/TYPE (DDL) from session fixtures
     try:
@@ -150,54 +152,53 @@ def _get_notify_sql_files() -> list[Path]:
     """
     Return paths to 7 notify SQL files in correct execution order.
     Path is relative to conftest.py location.
-    
+
     Order matters: depends on foreign keys between tables.
     """
     sql_dir = Path(__file__).parent.parent / "src" / "bbsengine6" / "sql"
-    
+
     files = [
-        "notify.sql",                  # Core table: engine.__notify
-        "notify_recipient.sql",        # Depends on: engine.__notify
-        "notify_block.sql",            # Depends on: engine.__member, engine.__notify
-        "notify_group.sql",            # Depends on: engine.__member
-        "notify_type.sql",             # Independent
-        "notify_rate_limit.sql",       # Depends on: engine.__notify_type
-        "notifyview.sql",              # Depends on: all tables above
+        "notify.sql",  # Core table: engine.__notify
+        "notify_recipient.sql",  # Depends on: engine.__notify
+        "notify_block.sql",  # Depends on: engine.__member, engine.__notify
+        "notify_group.sql",  # Depends on: engine.__member
+        "notify_type.sql",  # Independent
+        "notify_rate_limit.sql",  # Depends on: engine.__notify_type
+        "notifyview.sql",  # Depends on: all tables above
     ]
-    
+
     paths = [sql_dir / f for f in files]
-    
+
     # Verify all files exist
     for path in paths:
         if not path.exists():
             raise FileNotFoundError(f"SQL file not found: {path}")
-    
+
     return paths
 
 
 def _read_sql_file(filepath: Path) -> str:
     r"""
     Read SQL file and remove psql metacommands.
-    
+
     Lines starting with backslash (\set, \echo, \i) are psql-only
     metacommands and should be removed before executing with Python.
     """
     with open(filepath) as f:
         lines = f.readlines()
-    
+
     # Keep only actual SQL (remove lines starting with \)
     cleaned = [
-        line for line in lines 
-        if line.strip() and not line.strip().startswith("\\")
+        line for line in lines if line.strip() and not line.strip().startswith("\\")
     ]
-    
+
     return "".join(cleaned)
 
 
 def _execute_sql_file(conn, sql_content: str, filename: str) -> None:
     """
     Execute SQL content.
-    
+
     On "already exists" error: raise (caller handles with logging)
     On other errors: raise immediately
     """

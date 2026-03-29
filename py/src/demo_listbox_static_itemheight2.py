@@ -83,7 +83,7 @@ def main(args):
     for i in range(28):
         nato_code = nato[i % len(nato)]
         content = f"demo item #{i}\n  {nato_code}"
-#        items.append(ListboxItem(content=content, pk=i, data=None, display=custom_display))
+        #        items.append(ListboxItem(content=content, pk=i, data=None, display=custom_display))
         items.append(ListboxItem(content=content, pk=i, data=None))
 
     def custom_e():

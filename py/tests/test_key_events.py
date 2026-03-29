@@ -161,6 +161,7 @@ class TestEventHandler:
 
     def test_create_handler_no_filter(self):
         """Create handler with no filter."""
+
         def callback(event):
             pass
 
@@ -171,6 +172,7 @@ class TestEventHandler:
 
     def test_create_handler_with_filter(self):
         """Create handler with filter function."""
+
         def callback(event):
             pass
 
@@ -182,6 +184,7 @@ class TestEventHandler:
 
     def test_matches_without_filter(self):
         """Handler with no filter matches all events."""
+
         def callback(event):
             pass
 
@@ -191,6 +194,7 @@ class TestEventHandler:
 
     def test_matches_with_filter_true(self):
         """Filter returning True allows event."""
+
         def callback(event):
             pass
 
@@ -203,6 +207,7 @@ class TestEventHandler:
 
     def test_matches_with_filter_false(self):
         """Filter returning False blocks event."""
+
         def callback(event):
             pass
 
@@ -224,6 +229,7 @@ class TestKeyEventBus:
 
     def test_register_handler(self):
         """Register a single handler."""
+
         def callback(event):
             pass
 
@@ -234,6 +240,7 @@ class TestKeyEventBus:
 
     def test_register_multiple_handlers(self):
         """Register multiple handlers."""
+
         def callback(event):
             pass
 
@@ -246,6 +253,7 @@ class TestKeyEventBus:
 
     def test_register_duplicate_name_raises(self):
         """Duplicate name raises ValueError."""
+
         def callback(event):
             pass
 
@@ -255,6 +263,7 @@ class TestKeyEventBus:
 
     def test_unregister_handler(self):
         """Unregister removes handler."""
+
         def callback(event):
             pass
 
@@ -270,6 +279,7 @@ class TestKeyEventBus:
 
     def test_get_handlers(self):
         """Get handlers returns dict snapshot."""
+
         def callback(event):
             pass
 
@@ -514,6 +524,7 @@ class TestPushModel:
 
     def test_handler_exception_logged(self):
         """Handler exception is logged, dispatcher continues."""
+
         def bad_callback(event):
             raise ValueError("Test error")
 
@@ -558,6 +569,7 @@ class TestPushModel:
 
     def test_set_error_handler(self):
         """set_event_error_handler() sets custom handler."""
+
         def custom_handler(exc, event, name):
             pass
 
@@ -701,6 +713,7 @@ class TestThreadSafety:
         def make_callback(key):
             def callback(event):
                 call_counts[key] += 1
+
             return callback
 
         register_key_event_handler("h1", make_callback("h1"))
@@ -769,6 +782,7 @@ class TestTimeout:
 
     def test_callback_timeout_doesnt_block_main(self):
         """Main thread not blocked by timeout."""
+
         def slow_callback(event):
             time.sleep(1.0)
 
@@ -1027,6 +1041,7 @@ class TestEdgeCases:
 
     def test_empty_handler_name(self):
         """Empty string as handler name."""
+
         def callback(event):
             pass
 
@@ -1036,6 +1051,7 @@ class TestEdgeCases:
 
     def test_special_chars_in_handler_name(self):
         """Handler name with special characters."""
+
         def callback(event):
             pass
 
@@ -1046,6 +1062,7 @@ class TestEdgeCases:
 
     def test_very_long_handler_name(self):
         """Very long handler name."""
+
         def callback(event):
             pass
 
@@ -1113,6 +1130,7 @@ class TestBackwardCompatibility:
         """getch() works normally if dispatcher never started."""
         # Just import and check it doesn't crash
         from bbsengine6.io.getch import getch_str
+
         assert getch_str is not None
 
     def test_existing_code_unaffected(self):

@@ -641,16 +641,16 @@ def _update_member_flags(args, moniker, flags_dict, conn, commit=False) -> bool:
 
 def setflag(args, name, value, **kwargs) -> bool:
     """Set a flag value for a member using atomic UPSERT operation.
-    
+
     Uses INSERT ... ON CONFLICT to atomically update or insert flag values.
     This ensures a single database operation without DELETE+INSERT fragility.
-    
+
     Args:
         args: Application args (for debug logging)
         name: Flag name
         value: Flag value (boolean)
         **kwargs: Optional - moniker, mogrify, conn
-    
+
     Returns:
         True on success
         False if member doesn't exist (FK constraint violation)
@@ -680,7 +680,7 @@ def setflag(args, name, value, **kwargs) -> bool:
             commit=False,  # Keep in transaction; caller manages final commit
             conn=conn,
         )
-        
+
         return result
 
     except Exception as e:
@@ -694,7 +694,7 @@ def setflag(args, name, value, **kwargs) -> bool:
                 level="warn",
             )
             return False
-        
+
         # Unexpected error - log and propagate
         io.echo_traceback("bbsengine6.member.setflag.100:")
         raise

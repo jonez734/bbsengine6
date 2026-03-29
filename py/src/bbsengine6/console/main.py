@@ -151,49 +151,49 @@ def main(args, **kwargs):
             else:
                 io.echo("no members, so not starting a session", level="warn")
 
-        done = False
-        while not done:
-            membercount = member.count(args, conn=conn)
-            if membercount > 0:
-                session.updatelastactivity(
-                    args, session.getcurrentsessionid(), conn=conn, **kwargs
+            done = False
+            while not done:
+                membercount = member.count(args, conn=conn)
+                if membercount > 0:
+                    session.updatelastactivity(
+                        args, session.getcurrentsessionid(), conn=conn, **kwargs
+                    )
+                else:
+                    io.echo(f"no session", level="warn")
+
+                util.heading("bbsengine6 console")
+                io.echo(
+                    f"{{f6}}{{var:labelcolor}}database: {{var:valuecolor}}{args.databasename} {{var:labelcolor}}host: {{var:valuecolor}}{args.databasehost}{{var:labelcolor}}:{{var:valuecolor}}{args.databaseport}{{f6}}"
                 )
-            else:
-                io.echo(f"no session", level="warn")
 
-            util.heading("bbsengine6 console")
-            io.echo(
-                f"{{f6}}{{var:labelcolor}}database: {{var:valuecolor}}{args.databasename} {{var:labelcolor}}host: {{var:valuecolor}}{args.databasehost}{{var:labelcolor}}:{{var:valuecolor}}{args.databaseport}{{f6}}"
-            )
-
-            io.echo("{var:optioncolor}[M]{var:labelcolor} Members")
-            io.echo("{var:optioncolor}[S]{var:labelcolor} Sessions")
-            io.echo("{f6}{var:optioncolor}[X]{var:labelcolor} Exit{f6}")
-            ch = io.inputchoice(
-                "{var:promptcolor}console: {var:inputcolor}",
-                "SMXQ",
-                "X",
-                conn=conn,
-                args=args,
-                pool=pool,
-                **kwargs,
-            )
-            if ch == "M":
-                io.echo("Members")
-                lib.runmodule(args, "member", pool=pool, **kwargs)
-                continue
-            elif ch == "S":
-                io.echo("Sessions")
-                lib.runmodule(args, "session", pool=pool, **kwargs)
-                continue
-            elif ch == "A":
-                io.echo("Member Approval")
-                lib.runmodule(args, "memberapproval", **kwargs)
-            elif ch == "Q" or ch == "X":
-                io.echo("Exit")
-                break
-            else:
-                io.echo("{bell}", end="", flush=True)
-                done = True
-                break
+                io.echo("{var:optioncolor}[M]{var:labelcolor} Members")
+                io.echo("{var:optioncolor}[S]{var:labelcolor} Sessions")
+                io.echo("{f6}{var:optioncolor}[X]{var:labelcolor} Exit{f6}")
+                ch = io.inputchoice(
+                    "{var:promptcolor}console: {var:inputcolor}",
+                    "SMXQ",
+                    "X",
+                    conn=conn,
+                    args=args,
+                    pool=pool,
+                    **kwargs,
+                )
+                if ch == "M":
+                    io.echo("Members")
+                    lib.runmodule(args, "member", pool=pool, **kwargs)
+                    continue
+                elif ch == "S":
+                    io.echo("Sessions")
+                    lib.runmodule(args, "session", pool=pool, **kwargs)
+                    continue
+                elif ch == "A":
+                    io.echo("Member Approval")
+                    lib.runmodule(args, "memberapproval", **kwargs)
+                elif ch == "Q" or ch == "X":
+                    io.echo("Exit")
+                    break
+                else:
+                    io.echo("{bell}", end="", flush=True)
+                    done = True
+                    break
         return True

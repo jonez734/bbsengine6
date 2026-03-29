@@ -55,7 +55,11 @@ def main(args):
     items = []
     for i in range(30):
         if i == 5:
-            items.append(ListboxItem(content=f"custom item #{i}", pk=i, data=None, display=custom_display))
+            items.append(
+                ListboxItem(
+                    content=f"custom item #{i}", pk=i, data=None, display=custom_display
+                )
+            )
         else:
             items.append(ListboxItem(content=f"demo item #{i}", pk=i, data=None))
 

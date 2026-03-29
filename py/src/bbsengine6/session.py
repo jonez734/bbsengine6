@@ -70,6 +70,8 @@ def start(args: Namespace, **kwargs: Any) -> bool:
     def _work(conn: Any) -> bool:
         currentsessionid = getcurrentsessionid()
 
+        garbagecollect(args, conn=conn)
+
         if currentsessionid is None:
             io.echo("session.start.100: currentsessionid is None", level="debug")
             session = getmembersession(args, conn=conn)
@@ -91,9 +93,30 @@ def start(args: Namespace, **kwargs: Any) -> bool:
                 return True
             else:
                 io.echo(f"bbsengine6.session.start.140: {session=}", level="debug")
-                currentsessionid = session["id"]
+                if not is_valid(session):
+                    io.echo(
+                        "session.start.145: session expired, will create new session",
+                        level="debug",
+                    )
+                    session = None
+                else:
+                    currentsessionid = session["id"]
+                    setcurrentsessionid(currentsessionid)
+                    conn.commit()
+                    return True
+            if session is None:
+                io.echo("session.start.120: creating new session", level="debug")
+                session = buildsession(args, **kwargs)
+                if session is None:
+                    io.echo("session.start.130: buildsession failed", level="error")
+                    return False
+                mogrify = True if args.debug else False
+                currentsessionid = database.insert(
+                    args, "engine.__session", session, mogrify=mogrify, conn=conn
+                )
                 setcurrentsessionid(currentsessionid)
                 conn.commit()
+                return True
         else:
             io.echo(
                 f"bbsengine6.session.start.160: reading {currentsessionid=}",
