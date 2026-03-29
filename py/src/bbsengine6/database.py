@@ -390,6 +390,114 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
     return True
 
 
+def upsert(args: Any, table: str, items: dict, conflict_columns: list, update_columns: list | None = None, **kwargs) -> bool:
+    """Insert or update a row (UPSERT) - atomic operation.
+
+    Uses PostgreSQL INSERT ... ON CONFLICT ... DO UPDATE for atomic upsert.
+    If row exists (based on conflict_columns), updates specified columns.
+    If row doesn't exist, inserts it.
+
+    Args:
+        args: Application args (for debug logging)
+        table: Table name (schema.table)
+        items: Dict of column:value pairs to insert/update
+        conflict_columns: List of column names that form the conflict key
+                         (e.g., ["moniker", "name"] for unique constraint)
+        update_columns: List of columns to update on conflict.
+                       If None, updates all columns in items except conflict_columns.
+        **kwargs: Optional - mogrify, commit, conn, pool
+
+    Returns:
+        True on success, False on error
+
+    Example:
+        # Upsert a flag: insert if not exists, update value if exists
+        database.upsert(
+            args,
+            "engine.map_member_flag",
+            {"moniker": "jonez", "name": "APPROVED", "value": True},
+            conflict_columns=["moniker", "name"],
+            update_columns=["value"],
+            conn=conn
+        )
+
+    Note:
+        - All columns in items should be valid for the table
+        - conflict_columns must match a unique constraint in the database
+        - Uses EXCLUDED pseudo-table to reference new values during update
+    """
+    mogrify = kwargs.get("mogrify", False)
+    commit = kwargs.get("commit", True)
+    conn = kwargs.get("conn", None)
+
+    if not conflict_columns:
+        io.echo("bbsengine6.database.upsert.100: conflict_columns required", level="error")
+        return False
+
+    # Determine which columns to update on conflict
+    if update_columns is None:
+        # Update all columns except the conflict columns
+        update_columns = [k for k in items.keys() if k not in conflict_columns]
+
+    def _work(conn):
+        with cursor(conn) as cur:
+            # Build column list and values
+            columns = list(items.keys())
+            values = [convert_for_jsonb(items[col]) for col in columns]
+
+            # Build INSERT clause
+            insert_clause = sql.SQL("INSERT INTO ") + _table_identifier(table) + sql.SQL(" (")
+            insert_clause += sql.SQL(", ").join([sql.Identifier(col) for col in columns])
+            insert_clause += sql.SQL(") VALUES (")
+            insert_clause += sql.SQL(", ").join([sql.SQL("%s") for _ in columns])
+            insert_clause += sql.SQL(")")
+
+            # Build ON CONFLICT clause
+            conflict_clause = sql.SQL(" ON CONFLICT (")
+            conflict_clause += sql.SQL(", ").join([sql.Identifier(col) for col in conflict_columns])
+            conflict_clause += sql.SQL(") DO UPDATE SET ")
+
+            # Build UPDATE assignments using EXCLUDED
+            update_assignments = []
+            for col in update_columns:
+                update_assignments.append(
+                    sql.Identifier(col) + sql.SQL(" = EXCLUDED.") + sql.Identifier(col)
+                )
+            conflict_clause += sql.SQL(", ").join(update_assignments)
+
+            # Combine full query
+            upsert_query = insert_clause + conflict_clause
+
+            if mogrify is True:
+                io.echo(
+                    f"bbsengine6.database.upsert.150: {mogrifysql(cur, str(upsert_query), values)}",
+                    level="debug",
+                )
+
+            cur.execute(upsert_query, values)
+
+        if commit is True:
+            conn.commit()
+
+        return True
+
+    if args.debug is True:
+        io.echo(f"bbsengine6.database.upsert.100: table={table}, items={items}, conflict={conflict_columns}", level="debug")
+
+    try:
+        if conn is None:
+            pool = kwargs.get("pool", None)
+            if pool is None:
+                io.echo("bbsengine6.database.upsert.200: conn and pool both None", level="error")
+                return False
+            with connect(args, pool=pool) as conn:
+                return _work(conn)
+        return _work(conn)
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.database.upsert.300: {e}")
+        return False
+
+
 def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
     """Insert a row into a table.
 

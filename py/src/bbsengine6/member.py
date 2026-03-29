@@ -345,16 +345,28 @@ def getcredits(args, membermoniker: str | None = None, **kwargs) -> int | None:
 
 def update(args, member, moniker: str | None = None, **kwargs):
     """
-    Update a member record.
+    Update a member record in a single atomic transaction.
 
-    Handles moniker changes as a special case:
-    - If moniker is being changed, explicitly update all related map_member_flag
-      records BEFORE updating __member (where CASCADE on UPDATE will handle others)
-    - All database operations are kept in a transaction (commit=False by default)
+    Handles moniker changes as a special case with correct ordering:
+    - If moniker is changing AND flags are being updated:
+      1. Update flags FIRST using OLD moniker (guaranteed to exist)
+      2. Update member record (PK changes, CASCADE auto-migrates existing flags)
+    - If moniker is NOT changing but flags are updated:
+      1. Update member record
+      2. Update flags with same moniker
+    - All database operations kept in single transaction (commit=False)
+    - Caller is responsible for final conn.commit() or conn.rollback()
+
+    Why this order matters:
+    - Updating flags first with old moniker avoids FK constraint violations
+    - Existing flags are guaranteed to exist when we update them
+    - After member PK change, CASCADE automatically migrates flag references
+    - Flag value changes applied AFTER migration is complete
+    - Single transaction ensures atomicity - all succeed or all rollback
 
     Args:
         args: Application args
-        member: Member dict with fields to update
+        member: Member dict with fields to update (may include 'flags' key)
         moniker: Old moniker (primary key to match). If None, gets current user.
         **kwargs: Optional - conn (required), commit (default False)
 
@@ -383,19 +395,25 @@ def update(args, member, moniker: str | None = None, **kwargs):
     moniker_is_changing = moniker != new_moniker and new_moniker is not None
 
     try:
-        # If moniker is changing, explicitly update map_member_flag FIRST
-        if moniker_is_changing:
-            with database.cursor(conn) as cur:
-                sql_stmt = sql.SQL(
-                    "UPDATE engine.map_member_flag SET moniker = %s WHERE moniker = %s"
-                )
-                cur.execute(sql_stmt, (new_moniker, moniker))
+        # STEP 1: If moniker is changing AND flags exist, update flags FIRST with OLD moniker
+        # This is critical: existing flags are guaranteed to exist with old moniker
+        # No FK constraint violations possible
+        if moniker_is_changing and flags_dict:
+            if not _update_member_flags(
+                args, moniker, flags_dict, conn=conn, commit=False
+            ):
                 io.echo(
-                    f"bbsengine6.member.update.160: Updated {cur.rowcount} flag records from {moniker} to {new_moniker}",
-                    level="debug",
+                    f"bbsengine6.member.update.160: Failed to update flags for {moniker}",
+                    level="error",
                 )
+                return None
 
-        # Update member record (with updatepk=True to allow moniker change)
+        # STEP 2: Update member record (may include PK change from moniker to new_moniker)
+        # If moniker is changing:
+        #   - PostgreSQL CASCADE will automatically UPDATE map_member_flag.moniker
+        #   - All existing flags migrate from old moniker to new moniker
+        # If moniker is NOT changing:
+        #   - Regular member update, no flag migration needed
         database.update(
             args,
             "engine.__member",
@@ -404,19 +422,24 @@ def update(args, member, moniker: str | None = None, **kwargs):
             primarykey="moniker",
             mogrify=True,
             updatepk=True,  # Allow primary key to be updated
-            commit=False,  # Keep transaction open
+            commit=False,  # Keep in transaction; caller manages final commit
             conn=conn,
         )
 
-        # Handle any flag value changes using new moniker (if changed) or old (if not)
-        flags_moniker = new_moniker if moniker_is_changing else moniker
-        if flags_dict:
-            _update_member_flags(
-                args, flags_moniker, flags_dict, conn=conn, commit=False
-            )
+        # STEP 3: If moniker is NOT changing but flags need updating, do it now
+        # (If moniker WAS changing, we already updated flags in Step 1)
+        if not moniker_is_changing and flags_dict:
+            if not _update_member_flags(
+                args, moniker, flags_dict, conn=conn, commit=False
+            ):
+                io.echo(
+                    f"bbsengine6.member.update.170: Failed to update flags for {moniker}",
+                    level="error",
+                )
+                return None
 
-        # Commit the entire transaction
-        conn.commit()
+        # Note: Caller (not this function) is responsible for final conn.commit()
+        # This keeps the entire member update operation atomic
         return None
 
     except Exception:
@@ -566,12 +589,12 @@ def getflags(args, moniker=None, **kwargs):
         return None
 
 
-def _update_member_flags(args, moniker, flags_dict, conn, commit=False):
+def _update_member_flags(args, moniker, flags_dict, conn, commit=False) -> bool:
     """
     Helper to manage member flags in map_member_flag table.
 
-    Updates or inserts flag values for a member. For each flag in flags_dict,
-    deletes existing entry (if any) and inserts new one.
+    Updates or inserts flag values for a member using atomic UPSERT operations.
+    For each flag in flags_dict, atomically updates if it exists or inserts if not.
 
     Args:
         args: Application args (for debug logging)
@@ -581,10 +604,12 @@ def _update_member_flags(args, moniker, flags_dict, conn, commit=False):
         commit: If True, commits transaction. If False, keeps it open.
 
     Returns:
-        True on success, False on error
+        True on success, False if any flag operation fails (e.g., member doesn't exist)
 
-    Raises:
-        Exception: On database errors (logged before raising)
+    Note:
+        - Each flag update is atomic (UPSERT operation)
+        - If any flag fails, returns False immediately (transaction left intact for rollback)
+        - FK constraint violations (member doesn't exist) return False
     """
     if not flags_dict:
         return True
@@ -595,7 +620,14 @@ def _update_member_flags(args, moniker, flags_dict, conn, commit=False):
                 f"bbsengine6.member._update_member_flags: {name=} {data=}",
                 level="debug",
             )
-            setflag(args, name, data["value"], moniker=moniker, conn=conn)
+            # setflag now returns bool: True on success, False on FK violation
+            success = setflag(args, name, data["value"], moniker=moniker, conn=conn)
+            if not success:
+                io.echo(
+                    f"bbsengine6.member._update_member_flags.100: setflag failed for {name}",
+                    level="error",
+                )
+                return False
 
         if commit is True:
             conn.commit()
@@ -607,48 +639,65 @@ def _update_member_flags(args, moniker, flags_dict, conn, commit=False):
         return False
 
 
-def setflag(args, name, value, **kwargs):
+def setflag(args, name, value, **kwargs) -> bool:
+    """Set a flag value for a member using atomic UPSERT operation.
+    
+    Uses INSERT ... ON CONFLICT to atomically update or insert flag values.
+    This ensures a single database operation without DELETE+INSERT fragility.
+    
+    Args:
+        args: Application args (for debug logging)
+        name: Flag name
+        value: Flag value (boolean)
+        **kwargs: Optional - moniker, mogrify, conn
+    
+    Returns:
+        True on success
+        False if member doesn't exist (FK constraint violation)
+        May raise Exception on unexpected database errors
+    """
     moniker = kwargs.get("moniker", None)
     mogrify = kwargs.get("mogrify", False)
     conn = kwargs.get("conn", None)
 
-    def _work(conn):
-        with database.cursor(conn) as cur:
-            sql = "delete from engine.map_member_flag where moniker=%s and name=%s"
-            dat = (moniker, name)
-
-            if mogrify is True:
-                io.echo(database.mogrifysql(cur, sql, dat), level="debug")
-
-            cur.execute(sql, dat)
-
-            mmf = {}
-            mmf["moniker"] = moniker
-            mmf["name"] = name
-            mmf["value"] = value
-
-            database.insert(
-                args,
-                "engine.map_member_flag",
-                mmf,
-                returnid=False,
-                commit=False,
-                conn=conn,
-            )
-        return None
-
     if moniker is None:
         moniker = getcurrentmoniker(args, conn=conn)
         if moniker is None:
-            return None
+            return False
 
     util.logentry(f"setflag({name=}, {value=}, {moniker=})")
 
     try:
-        return _work(conn)
-    except Exception:
+        # Use generic database.upsert() for atomic operation
+        # This uses INSERT ... ON CONFLICT for atomicity
+        result = database.upsert(
+            args,
+            "engine.map_member_flag",
+            {"moniker": moniker, "name": name, "value": value},
+            conflict_columns=["moniker", "name"],
+            update_columns=["value"],
+            mogrify=mogrify,
+            commit=False,  # Keep in transaction; caller manages final commit
+            conn=conn,
+        )
+        
+        return result
+
+    except Exception as e:
+        # Check if this is a FK constraint violation (member doesn't exist)
+        error_msg = str(e)
+        if "fk_mmf_membermoniker" in error_msg.lower():
+            # Member doesn't exist - this is expected in some cases
+            # Return False so caller can handle gracefully
+            io.echo(
+                f"bbsengine6.member.setflag: FK constraint violated for moniker={moniker}",
+                level="warn",
+            )
+            return False
+        
+        # Unexpected error - log and propagate
         io.echo_traceback("bbsengine6.member.setflag.100:")
-        return None
+        raise
 
 
 # def getflag(args, name, moniker=None, **kwargs):
@@ -866,11 +915,18 @@ def insert(args, member, **kwargs):
     Insert a new member record.
 
     Inserts the member into __member table, then inserts any flags via helper function.
-    All operations kept in transaction (commit=False by default).
+    All operations kept in a single transaction (commit=False by default).
+    Caller is responsible for final conn.commit() or conn.rollback().
+
+    Transaction semantics:
+    1. INSERT into __member (member becomes visible in current transaction)
+    2. For each flag in flags_dict: DELETE + INSERT in map_member_flag
+    3. FK constraints are satisfied because member exists in same transaction
+    4. Caller commits entire operation atomically
 
     Args:
         args: Application args
-        member: Member dict
+        member: Member dict with optional 'flags' key
         **kwargs: Optional - table (default "engine.__member"), conn, commit (default False)
 
     Returns:
@@ -896,12 +952,12 @@ def insert(args, member, **kwargs):
     io.echo(f"bbsengine6.member.insert.100: {member=}", level="debug")
 
     try:
-        # Insert member record (commit=False to keep transaction open)
+        # Insert member record (commit=False to keep in same transaction)
         moniker = database.insert(
             args,
             table,
             cols,
-            commit=False,  # Keep transaction open
+            commit=False,  # Keep in transaction; caller manages final commit
             **kwargs,
         )
 
@@ -909,7 +965,7 @@ def insert(args, member, **kwargs):
             io.echo_traceback("bbsengine6.member.insert.110: database.insert failed")
             return False
 
-        # Handle flags using helper function
+        # Handle flags using helper function (same transaction)
         if flags_dict and conn is not None:
             if not _update_member_flags(
                 args, moniker, flags_dict, conn=conn, commit=False
@@ -918,10 +974,6 @@ def insert(args, member, **kwargs):
                     "bbsengine6.member.insert.130: _update_member_flags failed"
                 )
                 return False
-
-        # Commit the entire transaction (only if conn was provided)
-        if conn is not None:
-            conn.commit()
 
         return moniker
 
