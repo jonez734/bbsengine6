@@ -31,6 +31,7 @@ bbsengine6 is a comprehensive Bulletin Board System (BBS) engine written in Pyth
    - Core Python modules (database, session, member, util, menu, listbox, module system)
    - [util.spec](specs/util.spec) -- General-purpose utilities (display, dates, logging, file ops, passwords)
    - Subpackages (io, console)
+     - **[Console Module Spec](specs/console.spec)** -- Administrative CLI interface for database initialization, member management, and system configuration
    - PHP layer modules
    - JavaScript modules
    - Complete function signatures with brief descriptions
