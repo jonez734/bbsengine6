@@ -8,7 +8,7 @@ PYTHON = python3
 .PHONY: clean build rename-sdist sign release all
 
 build: version
-	VERSION=$(VERSION) python3 -m build --outdir $(OUTDIR)
+	VERSION=$(VERSION) $(PYTHON) -m build --outdir $(OUTDIR)
 
 rename-sdist:
 	@for f in $(OUTDIR)/*.tar.gz; do \
