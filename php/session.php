@@ -20,7 +20,11 @@ function start()
 {
 //  logentry("startsession.50: expire=".var_export(SESSIONCOOKIEEXPIRE, true)." domain=".var_export(SESSIONCOOKIEDOMAIN, true));
   
-  session_set_cookie_params(\config\SESSIONCOOKIEEXPIRE, "/", \config\SESSIONCOOKIEDOMAIN, false, true);
+  // Use defined constants with fallback defaults if not set by config
+  $expire = defined('\config\SESSIONCOOKIEEXPIRE') ? \config\SESSIONCOOKIEEXPIRE : (12*60*60);
+  $domain = defined('\config\SESSIONCOOKIEDOMAIN') ? \config\SESSIONCOOKIEDOMAIN : '';
+  
+  session_set_cookie_params($expire, "/", $domain, false, true);
   session_set_save_handler(
     "\\bbsengine6\\session\\open",
     "\\bbsengine6\\session\\close",
@@ -36,7 +40,8 @@ function start()
   ini_set("session.gc_divisor", 100);
   ini_set("session.serialize_handler", "php_serialize");
 
-  session_name(\config\SESSIONNAME);
+  $sessionname = defined('\config\SESSIONNAME') ? \config\SESSIONNAME : 'PHPSESSID';
+  session_name($sessionname);
   session_start();
   $lifetime = 0;
   setcookie(session_name(),session_id(),time()+$lifetime, false, true);
@@ -301,7 +306,8 @@ function insert($sessionid, $data=[])
       $session = [];
       $session["id"] = $sessionid;
       $session["data"] = \bbsengine6\util\encodejson($data);
-      $session["expiry"] = \date(DATE_RFC822, time() + \config\SESSIONCOOKIEEXPIRE);
+      $cookieExpire = defined('\config\SESSIONCOOKIEEXPIRE') ? \config\SESSIONCOOKIEEXPIRE : (12*60*60);
+      $session["expiry"] = \date(DATE_RFC822, time() + $cookieExpire);
       $session["ipaddress"] = \bbsengine6\util\getremoteaddr() ?? '';
       $session["useragent"] = isset($_SERVER["HTTP_USER_AGENT"]) ? $_SERVER["HTTP_USER_AGENT"] : "";
       $session["moniker"] = \bbsengine6\member\lib\getcurrentmoniker();
