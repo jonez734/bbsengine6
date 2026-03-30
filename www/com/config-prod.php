@@ -80,4 +80,7 @@ define("SESSIONNAME", "bbsenginedotcomsession");
 // @since 20230409
 define("CURRENTPROJECTNAME", "bbsengine6");
 
+define("RECAPTCHASITEKEY", getenv('RECAPTCHA_SITE_KEY') ?: '');
+define("RECAPTCHASECRETKEY", getenv('RECAPTCHA_SECRET_KEY') ?: '');
+
 ?>

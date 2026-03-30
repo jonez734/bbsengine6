@@ -1177,11 +1177,9 @@ function buildcaptchafieldset($form, $sessionVar=null, $options=null)
       ['id' => 'captcha_recaptcha'],
       [
           'label' => 'ReCaptcha',
-          
-          "public-key" => "6Leb_S0qAAAAABOm1eXSHRJn5YIqH_xAqyg7qvKl",
-          "private-key" => "6Leb_S0qAAAAADEtPVFnRQx-0SxcXiG0ykhumsVV",
-// v3         'public-key' => "6Lcq_C0qAAAAANPElHD1x8OsEIunwY73EYnaZa39",
-//            'private-key' => "6Lcq_C0qAAAAANrP5Hqoe1TyV0zsc5nrDQqx5kkp",
+
+          "public-key" => getenv('RECAPTCHA_SITE_KEY') ?: RECAPTCHASITEKEY,
+          "private-key" => getenv('RECAPTCHA_SECRET_KEY') ?: RECAPTCHASECRETKEY,
       ]
     )
 );
