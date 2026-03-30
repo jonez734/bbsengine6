@@ -1,3 +1,10 @@
+"""
+Verify and initialize required database classes (tables/views).
+
+Checks that all necessary table and view definitions exist in the engine schema
+and creates them if needed with appropriate structure and permissions.
+"""
+
 from bbsengine6 import io, database
 
 from . import lib

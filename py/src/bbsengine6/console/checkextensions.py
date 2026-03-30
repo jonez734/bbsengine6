@@ -23,12 +23,7 @@ def access(args, op, **kwargs):
 
 
 def main(args, **kwargs):
-    #    util.heading("extensions")
-    # SELECT * FROM pg_available_extensions WHERE name = 'citext';
-    # SELECT * FROM pg_extension WHERE extname = 'citext';
-    # CREATE EXTENSION IF NOT EXISTS citext;
-    conn = kwargs.pop("conn", None)
-    #    with database.connect(args, **kwargs) as conn:
+    conn = kwargs.get("conn", None)
     with database.cursor(conn, **kwargs) as cur:
         for ext in ("pgcrypto", "ltree", "citext"):
             io.echo(

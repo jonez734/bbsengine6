@@ -36,25 +36,4 @@ def main(args, **kwargs):
             return True
     else:
         io.echo(" ok ", level="ok")
-
-    failcount = 0
-    io.echo(
-        f"{{var:labelcolor}}schema {{var:valuecolor}}engine {{var:labelcolor}}privs: ",
-        end="",
-    )
-    for r in ("web", "term", "sysop"):
-        if (
-            database.manage_schema_priv(args, "grant", "usage", "engine", r, **kwargs)
-            is False
-        ):
-            io.echo(f"fail", level="error")
-            failcount += 1
-        else:
-            io.echo(f" ok ", level="ok")
-
-    if failcount == 0:
-        conn.commit()
         return True
-    else:
-        conn.rollback()
-        return False

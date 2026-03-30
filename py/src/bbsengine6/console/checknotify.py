@@ -1,3 +1,10 @@
+"""
+Verify and initialize notification system schema.
+
+Checks that all notification-related types and classes exist in the database,
+including notification tables, recipient mapping, and notification views.
+"""
+
 from bbsengine6 import io, database
 from bbsengine6.database import classexists, typeexists
 

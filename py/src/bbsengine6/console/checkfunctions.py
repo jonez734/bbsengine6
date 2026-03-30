@@ -23,7 +23,6 @@ def access(args, op, **kwargs) -> bool:
 
 
 def main(args, **kwargs):
-    io.echo(f"con.checkfunctions.100: {kwargs=}", level="debug")
     stage = kwargs.pop("stage", 0)
     conn = kwargs.get("conn", None)
 
@@ -38,7 +37,6 @@ def main(args, **kwargs):
             )
         else:
             funcs = ("engine.getflags", "engine.checkflag")
-        io.echo(f"{stage=} {funcs=}", level="debug")
         for f in funcs:
             io.echo(
                 f"{{var:labelcolor}}function {{var:valuecolor}}{f}{{var:labelcolor}}: {{var:valuecolor}}",

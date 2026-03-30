@@ -21,8 +21,7 @@ def access(args, op, **kwargs):
 
 
 def main(args, **kwargs):
-    roles = ("web", "sysop", "term")  # , "www-data")
-    io.echo(f"con.checkroles.100: {kwargs=}", level="debug")
+    roles = ("web", "sysop", "term")
     for r in roles:
         io.echo(
             f"{{var:labelcolor}}role {{var:valuecolor}}{r!s}{{var:labelcolor}}: ",

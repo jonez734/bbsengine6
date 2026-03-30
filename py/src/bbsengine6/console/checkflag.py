@@ -24,7 +24,7 @@ def access(args, op, **kwargs) -> bool:
 
 def main(args, **kwargs):
     failcount = 0
-    conn = kwargs.pop("conn", None)
+    conn = kwargs.get("conn", None)
     io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}engine.flag: ", end="")
     if database.classexists(args, "engine.flag", conn=conn, **kwargs) is False:
         io.echo("import ", end="")
@@ -56,7 +56,6 @@ def main(args, **kwargs):
     sql = "select count(name) from engine.flag"
     with database.cursor(conn) as cur:
         cur.execute(sql)
-        io.echo(f"con.checkflag.100: {cur.rowcount=}", level="debug")
         if cur.rowcount == 0:
             io.echo("fail")
             failcount += 1

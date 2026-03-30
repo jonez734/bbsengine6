@@ -24,9 +24,7 @@ def access(args, op, **kwargs):
 
 def main(args, **kwargs):
     util.heading("checking for database superuser")
-    #    io.echo(f"con.checksuperuser.100: {kwargs=}", level="debug")
-    currentloginid = util.getcurrentloginid(args)  # "jam"
-    #    conn = kwargs.get("conn", None)
+    currentloginid = util.getcurrentloginid(args)
     if database.rolexists(args, currentloginid, mogrify=True, **kwargs) is False:
         io.echo(
             f"{{var:labelcolor}}role {{var:valuecolor}}{currentloginid}{{var:labelcolor}} does not exist"
