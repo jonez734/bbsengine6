@@ -12,10 +12,27 @@ require_once("engine.php");
 require_once("database.php");
 require_once("libmember.php");
 require_once("util.php");
- /**
- * @since 20111215
- * @access public
+
+/**
+ * Helper function to get the database DSN with fallback
+ * @return string DSN connection string
  */
+function getDSN()
+{
+  // Try config namespace first, then fallback to bare constant
+  if (defined('\config\SYSTEMDSN')) {
+    return \config\SYSTEMDSN;
+  } elseif (defined('\SYSTEMDSN')) {
+    return \SYSTEMDSN;
+  }
+  // Final fallback - return empty string which will cause database error with proper error handling
+  return '';
+}
+
+ /**
+  * @since 20111215
+  * @access public
+  */
 function start()
 {
 //  logentry("startsession.50: expire=".var_export(SESSIONCOOKIEEXPIRE, true)." domain=".var_export(SESSIONCOOKIEDOMAIN, true));
@@ -63,7 +80,7 @@ function end()
 
 function get($sessionid)
 {
-  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(getDSN());
   if (PEAR::isError($dbh))
   {
     \bbsengine6\util\logentry("bbsengine5.getsession.120: " . $dbh->toString());
@@ -134,7 +151,7 @@ function read($sessionid)
 
   $sql = "select * from engine.session where id=:id";
   $dat = ["id" => $sessionid ];
-  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+  $dbh = \bbsengine6\database\connect(getDSN());
   $stmt = $dbh->prepare($sql);
   $stmt->execute($dat);
   if ($stmt->rowcount() === 0)
@@ -162,7 +179,7 @@ function write($sessionid, $data)
   \bbsengine6\util\logentry("bbsengine6.session.write.100: sessionid=$sessionid");
 
   try {
-    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    $dbh = \bbsengine6\database\connect(getDSN());
 
     $moniker = \bbsengine6\member\lib\getcurrentmoniker();
     
@@ -213,7 +230,7 @@ function destroy($sessionid)
 {
   \bbsengine6\util\logentry("_destroy.10: sessionid=".var_export($sessionid, true));
   try {
-    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    $dbh = \bbsengine6\database\connect(getDSN());
     $dbh->beginTransaction();
     $sql = "delete from engine.__session where id=:id";
     $dat = ["id" => $sessionid];
@@ -240,7 +257,7 @@ function destroy($sessionid)
 function garbagecollect($maxlifetime)
 {
   try {
-    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    $dbh = \bbsengine6\database\connect(getDSN());
     $dbh->beginTransaction();
     $sql = "delete from engine.__session where expiry < now()";
     $stmt = $dbh->prepare($sql);
@@ -261,7 +278,7 @@ function validate($sessionid)
   \bbsengine6\util\logentry("bbsengine6.session.validate.100: sessionid=".var_export($sessionid, true));
 
   try {
-    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    $dbh = \bbsengine6\database\connect(getDSN());
     $sql = "select 1 from engine.__session where id=:id and expiry > now()";
     $dat = ["id" => $sessionid];
     $stmt = $dbh->prepare($sql);
@@ -278,7 +295,7 @@ function updatelastactivity($sessionid)
   \bbsengine6\util\logentry("bbsengine6.session.updatelastactivity.100: sessionid=".var_export($sessionid, true));
 
   try {
-    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    $dbh = \bbsengine6\database\connect(getDSN());
     $dbh->beginTransaction();
     $sql = "update engine.__session set lastactivity=:lastactivity where id=:id";
     $dat = ["lastactivity" => "now()", "id" => $sessionid];
@@ -301,7 +318,7 @@ function insert($sessionid, $data=[])
     \bbsengine6\util\logentry("bbsengine6.session.insert.100: sessionid=".var_export($sessionid, true));
 
     try {
-      $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+      $dbh = \bbsengine6\database\connect(getDSN());
 
       $session = [];
       $session["id"] = $sessionid;

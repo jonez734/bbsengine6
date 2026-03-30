@@ -29,6 +29,22 @@ require_once("util.php");
 namespace bbsengine6 {
 
 /**
+ * Helper function to get the database DSN with fallback
+ * @return string DSN connection string
+ */
+function getDSN()
+{
+  // Try config namespace first, then fallback to bare constant
+  if (defined('\config\SYSTEMDSN')) {
+    return \config\SYSTEMDSN;
+  } elseif (defined('\SYSTEMDSN')) {
+    return \SYSTEMDSN;
+  }
+  // Final fallback - return empty string which will cause database error with proper error handling
+  return '';
+}
+
+/**
  * @since 20180804
  * @since 20240807 ported to bbsengine6
  * @param mixed field
@@ -290,7 +306,7 @@ function flag($name, $memberid=0)
  * @since 20221116
  */
 /*
-function getmemberflag($flag, $memberid, $dsn=\config\SYSTEMDSN)
+function getmemberflag($flag, $memberid, $dsn=null)
 {
   //$dbh = \bbsengine6\database\connect($dsn);
   //if (\PEAR::isError($dbh))
@@ -340,7 +356,7 @@ function getfortune($fortuneid)
   
   $sql = "select * from engine.mantra where id=?";
   $dat = [$fortuneid];
-  $pdo = \bbsengine6\database\connect(\config\SYSTEMDSN);
+  $pdo = \bbsengine6\database\connect(getDSN());
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   $res = $stmt->fetch();
@@ -365,7 +381,7 @@ function getfortune($fortuneid)
  * @since 20140512
  * @since 20221116
  */
-function getrandomfortune($dsn=\config\SYSTEMDSN)
+function getrandomfortune($dsn=null)
 {
   $sql = "select id from engine.mantra order by random() limit 1";
   $dat = [];
@@ -465,10 +481,10 @@ function accessfortune($op, $data=null, $memberid=null)
 function getsmarty($options=null)
 {
   $options = [];
-  $options["pluginsdir"] = \SMARTYPLUGINSDIR;
-  $options["templatedir"] = \SMARTYTEMPLATESDIR;
-  $options["compiledir"] = \SMARTYCOMPILEDTEMPLATESDIR;
-  $options["compileid"] = \LOGENTRYPREFIX;
+  $options["pluginsdir"] = defined('\config\SMARTYPLUGINSDIR') ? \config\SMARTYPLUGINSDIR : [];
+  $options["templatedir"] = defined('\config\SMARTYTEMPLATESDIR') ? \config\SMARTYTEMPLATESDIR : [];
+  $options["compiledir"] = defined('\config\SMARTYCOMPILEDTEMPLATESDIR') ? \config\SMARTYCOMPILEDTEMPLATESDIR : null;
+  $options["compileid"] = defined('\config\LOGENTRYPREFIX') ? \config\LOGENTRYPREFIX : 'bbsengine6';
 
   // logentry("getsmarty.100: options=".var_export($options, true));
 
@@ -616,7 +632,7 @@ function buildbreadcrumbs($path)
 {
   util\logentry("buildbreadcrumbs.100: ".var_export($path, true));
 
-  $pdo = \bbsengine6\database\connect(\config\SYSTEMDSN);
+  $pdo = \bbsengine6\database\connect(getDSN());
   $sql = "select * from engine.sig where path @> ? order by path asc";
   $dat = [$path];
   $stmt = $pdo->prepare($sql);
@@ -925,7 +941,7 @@ function getsubsigs($labelpath)
   $sql = "select path from engine.sig where path ~ ?";
   $dat = ["{$labelpath}.*{1}",];
 
-  $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
+  $pdo = \bbsengine6\database\connect(getDSN());
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   if ($stmt->rowCount() === 0)
@@ -951,7 +967,7 @@ function getsig($labelpath, $subsigs=true)
   $sql = "select * from engine.sig where path=:labelpath";
   $dat = ["labelpath" => $labelpath];
 
-  $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
+  $pdo = \bbsengine6\database\connect(getDSN());
 
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);

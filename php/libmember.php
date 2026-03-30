@@ -9,6 +9,22 @@ namespace bbsengine6\member\lib
 {
     \bbsengine6\util\logentry("namespace=".var_export(__NAMESPACE__, true));
 
+    /**
+     * Helper function to get the database DSN with fallback
+     * @return string DSN connection string
+     */
+    function getDSN()
+    {
+      // Try config namespace first, then fallback to bare constant
+      if (defined('\config\SYSTEMDSN')) {
+        return \config\SYSTEMDSN;
+      } elseif (defined('\SYSTEMDSN')) {
+        return \SYSTEMDSN;
+      }
+      // Final fallback - return empty string which will cause database error with proper error handling
+      return '';
+    }
+
     function getcurrentid()
     {
         $res = isset($_SESSION["currentmemberid"]) ? intval($_SESSION["currentmemberid"]) : null;
@@ -40,7 +56,7 @@ namespace bbsengine6\member\lib
       $sql = "select engine.checkflag(:flag, :moniker)";
       $dat = ["flag" => $flag, "moniker" => $moniker];
 
-      $pdo = \bbsengine6\database\connect(\config\SYSTEMDSN);
+      $pdo = \bbsengine6\database\connect(getDSN());
       if (\PEAR::isError($pdo))
       {
         \bbsengine6\util\logentry("libmember.approved.100: " . $pdo->toString());
@@ -56,7 +72,7 @@ namespace bbsengine6\member\lib
     }
 */
 /*
-    function getflag($flag, $memberid, $dsn=\config\SYSTEMDSN)
+    function getflag($flag, $memberid, $dsn=null)
     {
         $sql = <<<SQL
     select 
@@ -95,7 +111,7 @@ SQL;
     {
       $sql = "select engine.getflags(:moniker)";
       $dat = ["moniker" => $moniker];
-      $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
+      $pdo = \bbsengine6\database\connect(getDSN());
       $stmt = $pdo->prepare($sql);
       $stmt->execute($dat);
       return $stmt->fetchAll();
@@ -125,7 +141,7 @@ SQL;
             
       $sql = "select engine.checkflag(:name, :moniker)";
       $dat = ["name" => $name, "moniker" => $moniker];
-      $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
+      $pdo = \bbsengine6\database\connect(getDSN());
       $stmt = $pdo->prepare($sql);
       $stmt->execute($dat);
       if ($stmt->rowCount() == 0)
@@ -156,7 +172,7 @@ SQL;
       $sql = "select 1 from engine.member where moniker ilike ?";
       $dat = array($value);
 
-      $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+      $dbh = \bbsengine6\database\connect(getDSN());
       if (\PEAR::isError($dbh))
       {
         logentry("uniqueusernamecallback.1: " . $res->toString());
@@ -186,7 +202,7 @@ SQL;
 
       $sql = "select * from engine.refcode where code=:refcode";
       $dat = ["refcode" => $value];
-      $dbh = database\connect(\SYSTEMDSN);
+      $dbh = database\connect(getDSN());
       $stmt = $dbh->prepare($sql);
       $stmt->execute($dat);
       if ($stmt->rowCount() == 0)
@@ -253,7 +269,7 @@ SQL;
       $dat = ["moniker" => $moniker, "password" => $password];
 
 //      \bbsengine6\logentry("checkpassword.100: password=".var_export($password, true)." memberid=".var_export($memberid, true));
-      $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
+      $pdo = \bbsengine6\database\connect(getDSN());
       if (\PEAR::isError($pdo))
       {
         \bbsengine6\util\logentry("checkpassword.100: " . $pdo->toString());
@@ -268,7 +284,7 @@ SQL;
     {
       $sql = "update engine.__member set password=crypt(:password, gen_salt('bf')) where moniker=:moniker";
       $dat = ["password" => $plaintext, "moniker" => $moniker];
-      $pdo = \bbsengine6\database\connect(\SYSTEMDSN);
+      $pdo = \bbsengine6\database\connect(getDSN());
       $stmt = $pdo->prepare($sql);
       $stmt->execute($dat);
       if ($stmt->rowCount() == 1)
@@ -291,7 +307,7 @@ SQL;
 /*
       $sql = "update engine.__member set lastlogin=:lastlogin, lastloginfrom=:lastloginfrom where moniker=:moniker";
       $dat = ["lastlogin" => "now()", "lastloginfrom" => $lastloginfrom, "moniker" => $moniker];
-      $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+      $dbh = \bbsengine6\database\connect(getDSN());
       $stmt = $dbh->prepare($sql);
       $stmt->execute($dat);
 
@@ -304,7 +320,7 @@ SQL;
     {
       $sql = "select * from engine.member where moniker=:moniker";
       $dat = ["moniker" => $moniker];
-      $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+      $dbh = \bbsengine6\database\connect(getDSN());
       $stmt = $dbh->prepare($sql);
       $stmt->execute($dat);
       if ($stmt->rowCount() == 0)
@@ -322,7 +338,7 @@ SQL;
       {
         $memberid = getcurrentid();
       }
-      $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+      $dbh = \bbsengine6\database\connect(getDSN());
       $dbh->beginTransaction();
       $sql = "delete from engine.map_member_flag where memberid=:memberid and name=:name";
       $dat = ["name" => $name, "memberid" => $memberid];
