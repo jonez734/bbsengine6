@@ -236,6 +236,43 @@ namespace bbsengine6\util
     return true;
   }
 
+  function isDebugMode(): bool
+  {
+    return getenv('DEBUG') === '1' || ($_SERVER['DEBUG'] ?? '0') === '1';
+  }
+
+  function format_exception(\Throwable $e): string
+  {
+    $trace = $e->getTraceAsString();
+    $prev = $e->getPrevious();
+    while ($prev !== null) {
+      $trace .= "\n\nPrevious: " . $prev->getMessage() . "\n" . $prev->getTraceAsString();
+      $prev = $prev->getPrevious();
+    }
+    return $e->getMessage() . "\n" . $trace;
+  }
+
+  function echo_traceback(string $message, bool $showToUser = null): void
+  {
+    if ($showToUser === null) {
+      $showToUser = isDebugMode();
+    }
+
+    $e = error_get_last();
+    $formatted = '';
+    if ($e !== null) {
+      $formatted = $e['message'] . " in " . $e['file'] . " line " . $e['line'];
+    }
+
+    logentry("ERROR: " . $message . " | Trace: " . $formatted);
+
+    if ($showToUser) {
+      echo "<pre style='background:#fee;border:1px solid red;padding:10px;'>Error: " . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . "\n" . htmlspecialchars($formatted, ENT_QUOTES, 'UTF-8') . "</pre>";
+    } else {
+      echo "An error occurred. Please try again later.";
+    }
+  }
+
 /**
  * safe_path — robust, flexible filesystem path constructor
  *

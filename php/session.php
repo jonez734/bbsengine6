@@ -152,134 +152,50 @@ function read($sessionid)
  * @since 20230402 ported to bbsengine6
  * @access private
  */
-/*
-function _writesession($id, $data)
-{
-//  logentry("_writesession.10: id=".var_export($id, True)." data=".var_export($data, True));
-//  logentry("_writesession.11: session=".var_export($_SESSION, True));
-
-  $dbh = databaseconnect(SYSTEMDSN);
-  if (PEAR::isError($dbh))
-  {
-    logentry("_writesession.14: " . $dbh->toString());
-    return False;
-  }
-  $sql = "select 1 from engine.__session where id=?";
-  $dat = array($id);
-  $res = $dbh->getOne($sql, array("integer"), $dat, array("text"));
-  if (PEAR::isError($res))
-  {
-    logentry("_writesession.16: " . $res->toString());
-    return False;
-  }
-
-  $memberid = getcurrentmemberid();
-
-  if ($res === null)
-  {
-    $expiry = time() + SESSIONCOOKIEEXPIRE;
-
-    $session = array();
-    $session["id"] = $id;
-    $session["data"] = session_encode();
-    $session["expiry"] = date(DATE_RFC822, $expiry);
-    $session["ipaddress"] = $_SERVER["REMOTE_ADDR"];
-    $session["useragent"] = isset($_SERVER["HTTP_USER_AGENT"]) ? $_SERVER["HTTP_USER_AGENT"] : "";
-    $session["memberid"] = $memberid;
-    $session["datecreated"] = "now()";
-
-//    logentry("_writesession.18: new session=".var_export($session, True));
-
-    $res = $dbh->autoExecute("engine.__session", $session, MDB2_AUTOQUERY_INSERT);
-    if (PEAR::isError($res))
-    {
-      logentry("_writesession.20: " . $res->toString());
-      return False;
-    }
-
-  }
-  else
-  {
-    $session = array();
-    $session["data"] = session_encode();
-    $session["memberid"] = $memberid;
-
-//    logentry("_writesession.22: update session=".var_export($session, True)." id=".var_export($id, True));
-    $res = $dbh->autoExecute("engine.__session", $session, MDB2_AUTOQUERY_UPDATE, "id=".$dbh->quote($id, "text"));
-    if (PEAR::isError($res))
-    {
-      logentry("_writesession.24: ".$res->toString());
-      return False;
-    }
-
-  }
-
-  return true;
-}
-*/
-
 function write($sessionid, $data)
 {
-//  logentry("_writesession.10: id=".var_export($id, True)." data=".var_export($data, True));
-//  \bbsengine6\logentry("bbsengine6.session.write.125: session=".var_export($_SESSION, True));
-
-  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
-/*
-  $sql = "select 1 from engine.__session where id=:id";
-  $dat = ["id" => $sessionid];
-  $stmt = $dbh->prepare($sql);
-  $stmt->execute($dat);
-  $rowcount = $stmt->rowcount();
-*/
-//  \bbsengine6\logentry("bbsengine6.session.write.100: sessionid=$sessionid, rowcount=$rowcount");
   \bbsengine6\util\logentry("bbsengine6.session.write.100: sessionid=$sessionid");
 
-  $dbh->beginTransaction();
+  try {
+    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
 
-  $moniker = \bbsengine6\member\lib\getcurrentmoniker();
-  
-  $validsession = validate($sessionid);
-  \bbsengine6\util\logentry("bbsengine6.session.write.120: validsession=".var_export($validsession, true));
-
-  // if there is not a session record in the db, it's a new session, so build a record and insert it
-  if ($validsession === false)
-  {
-    \bbsengine6\util\logentry("bbsengine6.session.write.130: validsession is false");
-    $expiry = time() + \SESSIONCOOKIEEXPIRE;
-    $sessionid = session_create_id();
-    logentry("bbsengine6.session.write.100=$sessionid");
-    insert($sessionid, $_SESSION);
-
-    \bbsengine6\util\logentry("bbsengine6.session.write.100: session=".var_export($session, true));
+    $moniker = \bbsengine6\member\lib\getcurrentmoniker();
     
-//    \bbsengine6\database\insert($dbh, "engine.__session", $session, false, "id", false, false);
-  }
-  else
-  {
-    \bbsengine6\util\logentry("bbsengine6.session.write.140: updating session $sessionid");
+    $validsession = validate($sessionid);
+    \bbsengine6\util\logentry("bbsengine6.session.write.120: validsession=".var_export($validsession, true));
 
-    $session = [];
-    $session["data"] = \bbsengine6\util\encodejson($_SESSION); // session_encode();
-    $session["moniker"] = $moniker;
-    $session["dateupdated"] = "now()";
-    $session["lastactivity"] = "now()";
-    
-    \bbsengine6\database\update($dbh, "engine.__session", $sessionid, $session);
-
-//    logentry("_writesession.22: update session=".var_export($session, True)." id=".var_export($id, True));
-/*    $res = $dbh->autoExecute("engine.__session", $session, MDB2_AUTOQUERY_UPDATE, "id=".$dbh->quote($id, "text"));
-    if (PEAR::isError($res))
+    if ($validsession === false)
     {
-      logentry("_writesession.24: ".$res->toString());
-      return False;
+      \bbsengine6\util\logentry("bbsengine6.session.write.130: validsession is false");
+      $sessionid = session_create_id();
+      logentry("bbsengine6.session.write.140: new sessionid=$sessionid");
+      insert($sessionid, $_SESSION);
     }
-*/
-  }
+    else
+    {
+      \bbsengine6\util\logentry("bbsengine6.session.write.150: updating session $sessionid");
 
-  $dbh->commit();
+      $session = [];
+      $session["data"] = \bbsengine6\util\encodejson($_SESSION);
+      $session["moniker"] = $moniker;
+      $session["dateupdated"] = "now()";
+      $session["lastactivity"] = "now()";
+      
+      $result = \bbsengine6\database\update($dbh, "engine.__session", $sessionid, $session);
+      if ($result === false) {
+        \bbsengine6\util\logentry("bbsengine6.session.write.160: update failed");
+      }
+    }
 
-  return true;
+    return true;
+  } catch (\Throwable $e) {
+    if (isset($dbh) && $dbh->inTransaction()) {
+      $dbh->rollBack();
+    }
+    \bbsengine6\util\echo_traceback("bbsengine6.session.write.200: " . $e->getMessage());
+    return false;
   }
+}
 
 /**
  * custom session handler destroy function
@@ -291,14 +207,22 @@ function write($sessionid, $data)
 function destroy($sessionid)
 {
   \bbsengine6\util\logentry("_destroy.10: sessionid=".var_export($sessionid, true));
-  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
-  $dbh->beginTransaction();
-  $sql = "delete from engine.__session where id=:id";
-  $dat = ["id" => $sessionid];
-  $stmt = $dbh->prepare($sql);
-  $res = $stmt->execute($dat);
-  $dbh->commit();
-  return true;
+  try {
+    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    $dbh->beginTransaction();
+    $sql = "delete from engine.__session where id=:id";
+    $dat = ["id" => $sessionid];
+    $stmt = $dbh->prepare($sql);
+    $stmt->execute($dat);
+    $dbh->commit();
+    return true;
+  } catch (\Throwable $e) {
+    if (isset($dbh) && $dbh->inTransaction()) {
+      $dbh->rollBack();
+    }
+    \bbsengine6\util\echo_traceback("bbsengine6.session.destroy.200: " . $e->getMessage());
+    return false;
+  }
 }
 
 /**
@@ -310,62 +234,89 @@ function destroy($sessionid)
  */
 function garbagecollect($maxlifetime)
 {
-  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
-  $dbh->beginTransaction();
-  $sql = "delete from engine.__session where expiry < now()";
-  $stmt = $dbh->prepare($sql);
-  $stmt->execute();
-  $dbh->commit();
-  return true;
+  try {
+    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    $dbh->beginTransaction();
+    $sql = "delete from engine.__session where expiry < now()";
+    $stmt = $dbh->prepare($sql);
+    $stmt->execute();
+    $dbh->commit();
+    return true;
+  } catch (\Throwable $e) {
+    if (isset($dbh) && $dbh->inTransaction()) {
+      $dbh->rollBack();
+    }
+    \bbsengine6\util\echo_traceback("bbsengine6.session.garbagecollect.200: " . $e->getMessage());
+    return false;
+  }
 }
 
 function validate($sessionid)
 {
   \bbsengine6\util\logentry("bbsengine6.session.validate.100: sessionid=".var_export($sessionid, true));
 
-  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
-  $sql = "select 1 from engine.__session where id=:id and expiry > now()";
-  $dat = ["id" => $sessionid];
-  $stmt = $dbh->prepare($sql);
-  $stmt->execute($dat);
-  return ($stmt->rowcount() == 1) ? true : false;
+  try {
+    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    $sql = "select 1 from engine.__session where id=:id and expiry > now()";
+    $dat = ["id" => $sessionid];
+    $stmt = $dbh->prepare($sql);
+    $stmt->execute($dat);
+    return ($stmt->rowcount() == 1) ? true : false;
+  } catch (\Throwable $e) {
+    \bbsengine6\util\echo_traceback("bbsengine6.session.validate.200: " . $e->getMessage());
+    return false;
+  }
 }
 
 function updatelastactivity($sessionid)
 {
   \bbsengine6\util\logentry("bbsengine6.session.updatelastactivity.100: sessionid=".var_export($sessionid, true));
 
-  $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
-  $dbh->beginTransaction();
-  $sql = "update engine.__session set lastactivity=:lastactivity where id=:id";
-  $dat = ["lastactivity" => "now()", "id" => $sessionid];
-  $stmt = $dbh->prepare($sql);
-  $stmt->execute($dat);
-  $dbh->commit();
-  \bbsengine6\util\logentry("updatelastactivity.100: sessionid=$sessionid");
-  return true;
+  try {
+    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    $dbh->beginTransaction();
+    $sql = "update engine.__session set lastactivity=:lastactivity where id=:id";
+    $dat = ["lastactivity" => "now()", "id" => $sessionid];
+    $stmt = $dbh->prepare($sql);
+    $stmt->execute($dat);
+    $dbh->commit();
+    \bbsengine6\util\logentry("updatelastactivity.100: sessionid=$sessionid");
+    return true;
+  } catch (\Throwable $e) {
+    if (isset($dbh) && $dbh->inTransaction()) {
+      $dbh->rollBack();
+    }
+    \bbsengine6\util\echo_traceback("bbsengine6.session.updatelastactivity.200: " . $e->getMessage());
+    return false;
+  }
 }
 
 function insert($sessionid, $data=[])
 {
     \bbsengine6\util\logentry("bbsengine6.session.insert.100: sessionid=".var_export($sessionid, true));
 
-    $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
+    try {
+      $dbh = \bbsengine6\database\connect(\SYSTEMDSN);
 
-    \bbsengine6\util\logentry("bbsengine6.session.insert.100: sessionid=$sessionid");
-    $session = [];
-    $session["id"] = $sessionid; // session_create_id(); // $sessionid;
-    $session["data"] = \bbsengine6\util\encodejson($data);
-    $session["expiry"] = \date(DATE_RFC822, time() + \SESSIONCOOKIEEXPIRE);
-    $session["ipaddress"] = \bbsengine6\util\getremoteaddr() ?? '';
-    $session["useragent"] = isset($_SERVER["HTTP_USER_AGENT"]) ? $_SERVER["HTTP_USER_AGENT"] : "";
-    $session["moniker"] = \bbsengine6\member\lib\getcurrentmoniker();
-    $session["datecreated"] = "now()";
+      $session = [];
+      $session["id"] = $sessionid;
+      $session["data"] = \bbsengine6\util\encodejson($data);
+      $session["expiry"] = \date(DATE_RFC822, time() + \SESSIONCOOKIEEXPIRE);
+      $session["ipaddress"] = \bbsengine6\util\getremoteaddr() ?? '';
+      $session["useragent"] = isset($_SERVER["HTTP_USER_AGENT"]) ? $_SERVER["HTTP_USER_AGENT"] : "";
+      $session["moniker"] = \bbsengine6\member\lib\getcurrentmoniker();
+      $session["datecreated"] = "now()";
 
-//    \bbsengine6\logentry("bbsengine6.session.insert.100: session=".var_export($session, true));
-    
-    \bbsengine6\database\insert($dbh, "engine.__session", $session, false, "id", false, false);
-    
-    return true;
+      $result = \bbsengine6\database\insert($dbh, "engine.__session", $session, false, "id", false, false);
+      if ($result === false) {
+        \bbsengine6\util\logentry("bbsengine6.session.insert.200: insert failed");
+        return false;
+      }
+      
+      return true;
+    } catch (\Throwable $e) {
+      \bbsengine6\util\echo_traceback("bbsengine6.session.insert.300: " . $e->getMessage());
+      return false;
+    }
 }
 ?>

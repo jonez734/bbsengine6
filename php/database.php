@@ -46,35 +46,6 @@ function connect($dsn)
   $pdocache[$dsn] = $pdo;
   return $pdo;
 }
-/*
-function databaseconnect($dsn)
-{
-  logentry("databaseconnect.100: dsn=".var_export($dsn, true));
-//  $dbh = MDB2::singleton($dsn);
-  $dbh = MDB2::connect($dsn, ["ssl" => true, "debug" => 2]);
-  if (PEAR::isError($dbh))
-  {
-    logentry("databaseconnect.110: " . $dbh->toString());
-    return $dbh;
-  }
-  
-  $res = $dbh->setFetchMode(MDB2_FETCHMODE_ASSOC);
-  if (PEAR::isError($res))
-  {
-    logentry("databaseconnect.112: " . $res->toString());
-    return $res;
-  }
-  
-  $res = $dbh->loadModule("Extended");
-  if (PEAR::isError($res))
-  {
-    logentry("databaseconnect.114: " . $res->toString());
-    return $res;
-  }
-
-  return $dbh;
-}
-*/
 
 function validateColumnName(string $column): bool
 {
@@ -86,12 +57,17 @@ function validateTableName(string $table): bool
   return preg_match('/^[a-zA-Z_][a-zA-Z0-9_.]*$/', $table) === 1;
 }
 
-// def insert(dbh, table:str, dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
 function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $removeprimary=true, $mogrify=false)
 {
+  if (empty($data)) {
+    \bbsengine6\util\logentry("database.insert.100: empty data array");
+    return false;
+  }
+
   if (!validateTableName($tablename))
   {
-    throw new \InvalidArgumentException("Invalid table name: " . $tablename);
+    \bbsengine6\util\echo_traceback("bbsengine6.database.insert.110: Invalid table name: " . $tablename);
+    return false;
   }
 
   $validColumns = [];
@@ -99,7 +75,8 @@ function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $remo
   {
     if (!validateColumnName($col))
     {
-      throw new \InvalidArgumentException("Invalid column name: " . $col);
+      \bbsengine6\util\echo_traceback("bbsengine6.database.insert.115: Invalid column name: " . $col);
+      return false;
     }
     $validColumns[] = $col;
   }
@@ -110,7 +87,6 @@ function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $remo
   }
 
   $sql = "insert into $tablename(".join(", ", $validColumns).")";
-  // values (:data, :foo, :bar)
   $foo = [];
   foreach(array_keys($data) as $k)
   {
@@ -124,25 +100,40 @@ function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $remo
 
   \bbsengine6\util\logentry("database.insert.100: sql=$sql");
 
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute(array_values($data));
-  if ($returnid === true)
-  {
-    return $pdo->lastInsertId();
+  try {
+    $pdo->beginTransaction();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(array_values($data));
+    $pdo->commit();
+    if ($returnid === true)
+    {
+      return $pdo->lastInsertId();
+    }
+    return true;
+  } catch (\Throwable $e) {
+    $pdo->rollBack();
+    \bbsengine6\util\echo_traceback("bbsengine6.database.insert.200: " . $e->getMessage());
+    return false;
   }
-  return;
 }
 
 function update($pdo, $tablename, $key, $data, $primarykey="id", $removeprimary=true, $mogrify=false)
 {
+  if (empty($data)) {
+    \bbsengine6\util\logentry("database.update.100: empty data array");
+    return false;
+  }
+
   if (!validateTableName($tablename))
   {
-    throw new \InvalidArgumentException("Invalid table name: " . $tablename);
+    \bbsengine6\util\echo_traceback("bbsengine6.database.update.110: Invalid table name: " . $tablename);
+    return false;
   }
 
   if (!validateColumnName($primarykey))
   {
-    throw new \InvalidArgumentException("Invalid primary key: " . $primarykey);
+    \bbsengine6\util\echo_traceback("bbsengine6.database.update.115: Invalid primary key: " . $primarykey);
+    return false;
   }
 
   $sql = "update $tablename set ";
@@ -152,7 +143,8 @@ function update($pdo, $tablename, $key, $data, $primarykey="id", $removeprimary=
   {
     if (!validateColumnName($k))
     {
-      throw new \InvalidArgumentException("Invalid column name: " . $k);
+      \bbsengine6\util\echo_traceback("bbsengine6.database.update.120: Invalid column name: " . $k);
+      return false;
     }
     if ($removeprimary === true && $k !== $primarykey)
     {
@@ -162,10 +154,19 @@ function update($pdo, $tablename, $key, $data, $primarykey="id", $removeprimary=
   $sql .= join(", ", $foo);
   $sql .= " where $primarykey=:$primarykey";
   \bbsengine6\util\logentry("bbsengine6.database.update.100: sql=".var_export($sql, true));
-  $stmt = $pdo->prepare($sql);
-  $data[$primarykey] = $key;
-  $stmt->execute($data);
-  return $stmt->rowcount();
+
+  try {
+    $pdo->beginTransaction();
+    $stmt = $pdo->prepare($sql);
+    $data[$primarykey] = $key;
+    $stmt->execute($data);
+    $pdo->commit();
+    return $stmt->rowcount();
+  } catch (\Throwable $e) {
+    $pdo->rollBack();
+    \bbsengine6\util\echo_traceback("bbsengine6.database.update.200: " . $e->getMessage());
+    return false;
+  }
 }
 
 function disconnect($dsn)
