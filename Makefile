@@ -119,4 +119,8 @@ push:
 backup:
 	rsync --recursive --verbose --exclude=.venv . /run/media/jam/AEAB-CF37/projects/$(PROJECT)/
 
-.PHONY: handbook release sql prod www apidocs clean
+log:
+	git log --graph --pretty=format:"%h %ad %s%d [%an]%n%B" --date=short > LOG_FULL.md
+	git log --graph --pretty=format:"%h %ad %s%d [%an]" --date=short > LOG_SUMMARY.md
+
+.PHONY: handbook release sql prod www apidocs clean log
