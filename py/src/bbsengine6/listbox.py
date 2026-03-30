@@ -554,7 +554,7 @@ class Listbox:
         io.echo("{restorecursor}", end="", flush=True)
 
         while True:
-            result = self.onkey(io.getch(self.GETCH_TIMEOUT))
+            result = self.onkey(io.getch(self.GETCH_TIMEOUT, **self.kwargs))
             if isinstance(result, ListboxResult):
                 if result.status == "redraw":
                     self._display()
