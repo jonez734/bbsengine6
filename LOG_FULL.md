@@ -1,4 +1,7 @@
-* 523cda2 2026-03-30 Add Makefile log target to generate LOG_FULL.md and LOG_SUMMARY.md (HEAD -> main, github/main) [J (eff)]
+* f416127 2026-03-30 Group LOG_SUMMARY by date with date headers (HEAD -> main) [J (eff)]
+| Group LOG_SUMMARY by date with date headers
+| 
+* 523cda2 2026-03-30 Add Makefile log target to generate LOG_FULL.md and LOG_SUMMARY.md (github/main) [J (eff)]
 | Add Makefile log target to generate LOG_FULL.md and LOG_SUMMARY.md
 | 
 * 474cbc3 2026-03-30 security: remove hardcoded reCAPTCHA keys, use environment variables instead [J (eff)]

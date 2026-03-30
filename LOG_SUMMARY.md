@@ -1,5 +1,6 @@
 ## 2026-03-30
-  523cda2 Add Makefile log target to generate LOG_FULL.md and LOG_SUMMARY.md (HEAD -> main, github/main) [J (eff)]
+  f416127 Group LOG_SUMMARY by date with date headers (HEAD -> main) [J (eff)]
+  523cda2 Add Makefile log target to generate LOG_FULL.md and LOG_SUMMARY.md (github/main) [J (eff)]
   474cbc3 security: remove hardcoded reCAPTCHA keys, use environment variables instead [J (eff)]
   e05b90a Update bbsengine6: Enable getdate-next dependency and fix Makefile to use PYTHON variable [J (eff)]
 ## 2026-03-29
