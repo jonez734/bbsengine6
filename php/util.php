@@ -118,33 +118,40 @@ namespace bbsengine6\util
   }
 
   // @since 20241030
-  function getremoteaddr()
+  // @since 20251128 security: added IP validation to prevent spoofing
+  function getremoteaddr(bool $allowForwarded = false): ?string
   {
-    $result = "";
-    if (!empty($_SERVER['HTTP_CLIENT_IP']))
+    $result = null;
+
+    if ($allowForwarded)
     {
-      $result = $_SERVER['HTTP_CLIENT_IP'];
+      if (!empty($_SERVER['HTTP_CLIENT_IP']))
+      {
+        $result = trim($_SERVER['HTTP_CLIENT_IP']);
+      }
+      elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR']))
+      {
+        $ipList = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+        $result = trim($ipList[0]);
+      }
     }
-    elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR']))
+
+    if ($result === null)
     {
-      // Handle multiple forwarded IPs
-      $ipList = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
-      $result = trim($ipList[0]);
+      $result = $_SERVER["REMOTE_ADDR"] ?? null;
     }
-    else
+
+    if ($result !== null && filter_var($result, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false)
     {
-      $result = $_SERVER["REMOTE_ADDR"];
+      $result = $_SERVER["REMOTE_ADDR"] ?? null;
     }
 
     return $result;
+  }
 
-/*
-    if (filter_var($result, FILTER_VALIDATE_IP) === true)
-    {
-      return $result;
-    }
-*/
-    return null;
+  function getremoteaddr_allowforwarded(): ?string
+  {
+    return getremoteaddr(true);
   }
 
   function actionlog(string $action, string $note=null, string $moniker=null)
@@ -157,6 +164,75 @@ namespace bbsengine6\util
     $data = ["moniker" => $moniker, "action" => $action, "actiondate" => "now()","remoteaddr" => getremoteaddr(), "note" => $note];
     \bbsengine6\database\insert($pdo, "engine.__actionlog", $data, $returnid=false, $mogrify=true);
 
+    return true;
+  }
+
+  const CSRF_TOKEN_NAME = 'csrf_token';
+  const CSRF_TOKEN_LENGTH = 32;
+
+  function csrfGenerateToken(): string
+  {
+    if (session_status() === PHP_SESSION_NONE)
+    {
+      session_start();
+    }
+
+    if (!isset($_SESSION[CSRF_TOKEN_NAME]))
+    {
+      $_SESSION[CSRF_TOKEN_NAME] = bin2hex(random_bytes(CSRF_TOKEN_LENGTH));
+    }
+
+    return $_SESSION[CSRF_TOKEN_NAME];
+  }
+
+  function csrfGetToken(): string
+  {
+    return csrfGenerateToken();
+  }
+
+  function csrfValidateToken(string $token): bool
+  {
+    if (session_status() === PHP_SESSION_NONE)
+    {
+      session_start();
+    }
+
+    if (!isset($_SESSION[CSRF_TOKEN_NAME]))
+    {
+      return false;
+    }
+
+    $storedToken = $_SESSION[CSRF_TOKEN_NAME];
+    return hash_equals($storedToken, $token);
+  }
+
+  function csrfTokenField(): string
+  {
+    $token = csrfGetToken();
+    return '<input type="hidden" name="' . CSRF_TOKEN_NAME . '" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
+  }
+
+  function csrfCheckRequest(): bool
+  {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST')
+    {
+      $token = $_POST[CSRF_TOKEN_NAME] ?? $_POST['csrf_token'] ?? null;
+      if ($token === null)
+      {
+        logentry("csrfCheckRequest.100: missing token in POST");
+        return false;
+      }
+      return csrfValidateToken($token);
+    }
+    elseif ($_SERVER['REQUEST_METHOD'] === 'GET')
+    {
+      $token = $_GET[CSRF_TOKEN_NAME] ?? $_GET['csrf_token'] ?? null;
+      if ($token === null)
+      {
+        return true;
+      }
+      return csrfValidateToken($token);
+    }
     return true;
   }
 

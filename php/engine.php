@@ -473,6 +473,7 @@ function getsmarty($options=null)
   // logentry("getsmarty.100: options=".var_export($options, true));
 
   $s = new \Smarty();
+  $s->setEscapeHtml(true);
 
 /*
   $currentcart = [];
@@ -650,7 +651,7 @@ function buildsiguri($sigpath)
  */
 function buildsigpath($uri)
 {
- if ($sigpath === null || $sigpath === "")
+ if ($uri === null || $uri === "")
  {
   return "top";
  }
@@ -1096,6 +1097,8 @@ function getquickform($id, $method="post", $attributes="", $tracksubmit=true, $e
   $form->addHidden("mode")->setValue("NEEDINFO");
   $form->addHidden("id")->setValue("NEEDINFO");
   $form->addHidden("memberid")->setValue("NEEDINFO");
+  $csrfToken = \bbsengine6\util\csrfGetToken();
+  $form->addHidden(\bbsengine6\util\CSRF_TOKEN_NAME)->setValue($csrfToken);
 //  $form->addHidden("pageprotocol")->setValue("standard");
   $form->addRecursiveFilter("trim");
 //  $form->addRecursiveFilter("strip_tags");
@@ -1239,6 +1242,12 @@ function handleform($form, $callback)
 
   util\logentry("handleform.100: issubmitted=".var_export($issubmitted, true)." validate=".var_export($validate, true));
   
+  if ($issubmitted === true && !\bbsengine6\util\csrfCheckRequest())
+  {
+    util\logentry("handleform.105: CSRF validation failed");
+    return \PEAR::raiseError("CSRF validation failed (code: handleform.105)");
+  }
+
   if ($issubmitted === true)
   {
     $value = $form->getValue();
@@ -1367,10 +1376,11 @@ function handleform($form, $callback)
 
   function checkpostflag($flagname, $post)
   {
-   if (\array_key_exists($flag, $post->flags) === true)
+   if (isset($post["flags"]) && \array_key_exists($flagname, $post["flags"]) === true)
    {
-    $value = $flags[$flagname];
+    return $post["flags"][$flagname];
    }
+   return null;
   }
 
   function accesspost($op, $post)

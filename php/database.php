@@ -21,9 +21,8 @@ function connect($dsn)
     \PDO::ATTR_EMULATE_PREPARES   => false,
   ];
   
-  $user = "";
-  
-  $pass = "";
+  $user = getenv('DB_USER') ?: '';
+  $pass = getenv('DB_PASS') ?: '';
 
   try {
     $pdo = new \PDO($dsn, $user, $pass, $options);
@@ -77,15 +76,40 @@ function databaseconnect($dsn)
 }
 */
 
+function validateColumnName(string $column): bool
+{
+  return preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/', $column) === 1;
+}
+
+function validateTableName(string $table): bool
+{
+  return preg_match('/^[a-zA-Z_][a-zA-Z0-9_.]*$/', $table) === 1;
+}
+
 // def insert(dbh, table:str, dict, returnid:bool=True, primarykey:str="id", mogrify:bool=False):
 function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $removeprimary=true, $mogrify=false)
 {
+  if (!validateTableName($tablename))
+  {
+    throw new \InvalidArgumentException("Invalid table name: " . $tablename);
+  }
+
+  $validColumns = [];
+  foreach (array_keys($data) as $col)
+  {
+    if (!validateColumnName($col))
+    {
+      throw new \InvalidArgumentException("Invalid column name: " . $col);
+    }
+    $validColumns[] = $col;
+  }
+
   if (array_key_exists($primarykey, $data) === true && $removeprimary == true)
   {
     unset($data[$primarykey]);
   }
 
-  $sql = "insert into $tablename(".join(", ", array_keys($data)).")";
+  $sql = "insert into $tablename(".join(", ", $validColumns).")";
   // values (:data, :foo, :bar)
   $foo = [];
   foreach(array_keys($data) as $k)
@@ -111,18 +135,25 @@ function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $remo
 
 function update($pdo, $tablename, $key, $data, $primarykey="id", $removeprimary=true, $mogrify=false)
 {
-/*
-  if (array_key_exists($primarykey, $data) === true)
+  if (!validateTableName($tablename))
   {
-    unset($data[$primarykey]);
-    \bbsengine6\logentry("bbsengine6.update.100: removed $primarykey");
+    throw new \InvalidArgumentException("Invalid table name: " . $tablename);
   }
-*/
+
+  if (!validateColumnName($primarykey))
+  {
+    throw new \InvalidArgumentException("Invalid primary key: " . $primarykey);
+  }
+
   $sql = "update $tablename set ";
   
   $foo = [];
   foreach (array_keys($data) as $k)
   {
+    if (!validateColumnName($k))
+    {
+      throw new \InvalidArgumentException("Invalid column name: " . $k);
+    }
     if ($removeprimary === true && $k !== $primarykey)
     {
       $foo[] = "$k=:$k";
