@@ -1,22 +1,13 @@
 $(document).ready(function() {
-  var redirectpagecountdownid = null;
-  var counterspan = $("div.redirectpage span.counter");
-  var nounspan = $("div.redirectpage span.noun");
-  var counterval = counterspan.html();
-  
-  var be = getbbsengine();
+  'use strict';
+  let redirectpagecountdownid = null;
+  const counterspan = $("div.redirectpage span.counter");
+  const nounspan = $("div.redirectpage span.noun");
+  let counterval = counterspan.html();
   
   function updatecounter()
   {
-//    be.logentry("updatecounter: "+counterval);
-    if (counterval == 1)
-    {
-      noun = "second";
-    }
-    else
-    {
-      noun = "seconds";
-    }
+    const noun = (counterval == 1) ? "second" : "seconds";
     counterspan.html(counterval);
     nounspan.html(noun);
     if (counterval == 0)

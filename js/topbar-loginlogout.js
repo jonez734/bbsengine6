@@ -1,8 +1,10 @@
 $(document).ready(function() {
+  'use strict';
+  const be = bbsengine();
   if (be !== null)
   {
     be.addinterval(5000, "update topbar.loginlogout", function() {
-      be.updatetopbaritem("topbar.loginlogout", $("div#topbar .loginlogout"), "/engine/bed?req=topbar.loginlogout&callback=?");
+      be.updatetopbaritem("topbar.loginlogout", ".loginlogout");
     });
   }
-}); /* end document.ready() */
+});

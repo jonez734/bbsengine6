@@ -1,11 +1,11 @@
 $(document).ready(function() {
-  let be = bbsengine();
+  'use strict';
+  const be = bbsengine();
 
   if (be !== undefined)
   {
     be.addinterval(5000, "update credit count", function () {
-      be.updatetopbaritem("topbar.credits", ".credits"); // $("div#topbar .credits"), "/engine/bed?req=topbar.credits&callback=?");
+      be.updatetopbaritem("topbar.credits", ".credits");
     });
   }
-  return;
-}); /* end document.ready() */
+});

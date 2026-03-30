@@ -19,16 +19,20 @@ var bbsengine = (function() {
 
             try {
               return new Promise((resolve, reject) => {
-                url = ENGINEURL + "bed?req="+req;
+                const csrfToken = this.getCsrfToken();
+                let url = ENGINEURL + "bed?req="+encodeURIComponent(req);
                 if (justcrc === true) {
                   url += "&justcrc";
+                }
+                if (csrfToken) {
+                  url += "&csrf_token="+encodeURIComponent(csrfToken);
                 }
                 url += "&callback=?";
                 $.ajax({
                   type: "GET",
                   dataType: "jsonp",
-                  url: url, // ENGINEURL + "bed?req="+req+"&callback=?",
-                  error: (xhr, textStatus, errorThrown) => { // function(xhr, textStatus, errorThrown) {
+                  url: url,
+                  error: (xhr, textStatus, errorThrown) => {
                     console.error("bed error: textStatus="+JSON.stringify(textStatus)+" errorThrown="+JSON.stringify(errorThrown));
                     reject(new Error("Bed request failed: " + textStatus));
                   },
@@ -105,20 +109,12 @@ var bbsengine = (function() {
             }
             this.intervals.push([id, interval, func, note]);
             this.logentry("addinterval.110: id="+id+" interval="+interval+" note="+note);
-/*
-            if (this.visibilityhandler === false)
-            {
-  //            instance.logentry("init visibility event handler");
-              this.initvisibilityeventhandler();
-              this.visibilityhandler = true;
-            }
-*/
             return;
           },
           cancelintervals: () => {
             this.logentry("canceling intervals");
-            this.intervals.forEach(function (item/*, index, arr*/) {
-              id = item[0]; // arr[index][0];
+            this.intervals.forEach(function (item) {
+              const id = item[0];
               clearInterval(id);
               instance.logentry("cancelintervals.100: id="+id);
             });
@@ -127,31 +123,29 @@ var bbsengine = (function() {
           restartintervals: () => {
             this.logentry("restarting intervals");
             this.intervals.forEach(function (item, index, arr) {
-              // const oldid = item[0];
               const interval = item[1];
               const func = item[2];
               const note = item[3];
               const id = setInterval(func, interval);
-              this.logentry("id="+id+" interval="+interval+" note="+note);
+              instance.logentry("id="+id+" interval="+interval+" note="+note);
               arr[index][0] = id;
             });
             return;
           },
           updatetopbaritem: async function(req, css="") {
-            selector = $("#topbar "+css);
-            // be.logentry("updatetopbaritem.100: running");
+            const selector = $("#topbar "+css);
             if (selector === undefined || selector.length === 0) {
               this.logentry("updatetopbaritem: selector undefined.");
               return;
             }
 
-            origfragment = selector.clone().wrap("<div>").parent().html();
+            const origfragment = selector.clone().wrap("<div>").parent().html();
             if (origfragment === undefined) {
               this.logentry("updatetopbaritem: origfragment is undefined");
               return;
             }
-            origchecksum = this.checksum(origfragment);
-            response = await this.bedreq(req, justcrc=true);
+            const origchecksum = this.checksum(origfragment);
+            const response = await this.bedreq(req, true);
             if (response === undefined) {
               this.logentry("updatetopbaritem: response to "+JSON.stringify(req)+" is undefined");
               return;
@@ -170,27 +164,32 @@ var bbsengine = (function() {
               return;
             }
             this.logentry("updatetopbaritem: updating "+JSON.stringify(req));
-            // be.logentry("updatetopbaritem: url="+url);
+            const csrfToken = this.getCsrfToken();
+            let ajaxUrl = ENGINEURL + "bed?req="+encodeURIComponent(req)+"&callback=?";
+            if (csrfToken) {
+              ajaxUrl += "&csrf_token="+encodeURIComponent(csrfToken);
+            }
             $.ajax({
               type: "GET",
               dataType: "jsonp",
-              url: ENGINEURL + "bed?req="+req+"&callback=?",
-              error: (xhr, type, exception) => { // function(xhr, type, exception) {
-                var err = "textStatus="+JSON.stringify(xhr) + ' type=' + type + " exception="+JSON.stringify(exception);
+              url: ajaxUrl,
+              error: (xhr, type, exception) => {
+                const err = "textStatus="+JSON.stringify(xhr) + ' type=' + type + " exception="+JSON.stringify(exception);
                 this.logentry("updatetopbaritem: req for "+JSON.stringify(req)+" failed: "+JSON.stringify(err));
                 return false;
-              }, /* end 'error' */
+              },
               success: (data) => {
                   selector.fadeOut({
                     duration: 350,
                     complete: () => {
-                      selector.replaceWith(data.fragment);
+                      const cleanFragment = this.sanitize(data.fragment);
+                      selector.replaceWith(cleanFragment);
                       selector.fadeIn(550);
                     }
                   });
-              }, /* end 'success' */
-            }); /* .ajax */
-          }, /* updatetopbaritem */
+              },
+            });
+          },
 
         // @since 20240919 generated by chatgpt
         checksum: (str) => {
@@ -203,7 +202,20 @@ var bbsengine = (function() {
           }
           crc ^= 0xffffffff;
           return ('00000000' + (crc >>> 0).toString(16)).slice(-8).toUpperCase();
-          // return (crc ^ 0xffffffff) >>> 0;
+        },
+
+        sanitize: (dirty) => {
+          if (typeof DOMPurify !== 'undefined') {
+            return DOMPurify.sanitize(dirty);
+          }
+          if (typeof console === 'object') {
+            console.warn('DOMPurify not loaded - returning raw HTML (XSS risk)');
+          }
+          return dirty;
+        },
+
+        getCsrfToken: () => {
+          return window.CSRF_TOKEN || '';
         },
 
         } // instance of bbsengine
