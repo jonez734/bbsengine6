@@ -312,9 +312,9 @@ Add new console commands by:
 
 ## Related Documentation
 
-- **database.spec** — Database module (connection, CRUD, schema ops)
-- **member.spec** — Member entity module (member operations)
-- **module.spec** — Module framework (module loading and execution)
+- **database.md** — Database module (connection, CRUD, schema ops)
+- **member.md** — Member entity module (member operations)
+- **module.md** — Module framework (module loading and execution)
 
 ---
 
