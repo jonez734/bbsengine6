@@ -1,6 +1,6 @@
 # Console Module Comprehensive Specification
 
-This is the consolidated detailed reference for the bbsengine6 console module. For quick navigation, see the index at `console.spec`.
+This is the consolidated detailed reference for the bbsengine6 console module. For quick navigation, see the index at `console.md`.
 
 ---
 
@@ -971,5 +971,5 @@ def main(args, **kwargs) -> bool:
 
 **End of Comprehensive Specification**
 
-See `console.spec` for quick navigation and section links.
+See `console.md` for quick navigation and section links.
 

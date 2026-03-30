@@ -4,19 +4,19 @@
 
 | Section | Purpose | File |
 |---------|---------|------|
-| **Overview** | File inventory, quick reference | `console/overview.spec` |
-| **Architecture** | Design patterns, execution flow, layering | `console/architecture.spec` |
-| **Core Library** | lib.py module discovery and helpers | `console/core-library.spec` |
-| **Main Console** | __main__.py, main.py, stages, menu | `console/main-console.spec` |
-| **Member Management** | member.py CRUD and editing | `console/member-management.spec` |
-| **Member Approval** | memberapproval.py approval workflow | `console/member-approval.spec` |
-| **Session Management** | session.py display and tracking | `console/session-management.spec` |
-| **Database Checks** | check*.py modules grouped by category | `console/database-checks.spec` |
-| **Notify Module** | notify.py notification system (stub) | `console/notify.spec` |
-| **Email Module** | email.py email configuration (incomplete) | `console/email.spec` |
-| **Data Flows** | Complete workflows with call sequences | `console/data-flows.spec` |
-| **Dependencies** | Import map and relationships | `console/dependencies.spec` |
-| **Comprehensive** | Consolidated detailed reference | `console/comprehensive.spec` |
+| **Overview** | File inventory, quick reference | `console/overview.md` |
+| **Architecture** | Design patterns, execution flow, layering | `console/architecture.md` |
+| **Core Library** | lib.py module discovery and helpers | `console/core-library.md` |
+| **Main Console** | __main__.py, main.py, stages, menu | `console/main-console.md` |
+| **Member Management** | member.py CRUD and editing | `console/member-management.md` |
+| **Member Approval** | memberapproval.py approval workflow | `console/member-approval.md` |
+| **Session Management** | session.py display and tracking | `console/session-management.md` |
+| **Database Checks** | check*.py modules grouped by category | `console/database-checks.md` |
+| **Notify Module** | notify.py notification system (stub) | `console/notify.md` |
+| **Email Module** | email.py email configuration (incomplete) | `console/email.md` |
+| **Data Flows** | Complete workflows with call sequences | `console/data-flows.md` |
+| **Dependencies** | Import map and relationships | `console/dependencies.md` |
+| **Comprehensive** | Consolidated detailed reference | `console/comprehensive.md` |
 
 ---
 
@@ -44,8 +44,8 @@ The **console module** (`bbsengine6/console/`) provides the administrative comma
 
 ### For New Developers
 
-1. Start with **Overview** (`console/overview.spec`) for file inventory and module structure
-2. Read **Architecture** (`console/architecture.spec`) for design patterns and execution flow
+1. Start with **Overview** (`console/overview.md`) for file inventory and module structure
+2. Read **Architecture** (`console/architecture.md`) for design patterns and execution flow
 3. Focus on sections relevant to your task:
    - **Member Management** for user operations
    - **Database Checks** for initialization
@@ -53,14 +53,14 @@ The **console module** (`bbsengine6/console/`) provides the administrative comma
 
 ### For Operations/Deployment
 
-1. **Main Console** (`console/main-console.spec`) — Database setup stages
-2. **Database Checks** (`console/database-checks.spec`) — Verification sequence
-3. **Data Flows** (`console/data-flows.spec`) — Initialization workflow
+1. **Main Console** (`console/main-console.md`) — Database setup stages
+2. **Database Checks** (`console/database-checks.md`) — Verification sequence
+3. **Data Flows** (`console/data-flows.md`) — Initialization workflow
 
 ### For Maintenance/Debugging
 
-1. **Data Flows** (`console/data-flows.spec`) — Call sequences and transaction boundaries
-2. **Dependencies** (`console/dependencies.spec`) — Import relationships
+1. **Data Flows** (`console/data-flows.md`) — Call sequences and transaction boundaries
+2. **Dependencies** (`console/dependencies.md`) — Import relationships
 3. Specific module spec for the component you're debugging
 
 ---
@@ -320,5 +320,5 @@ Add new console commands by:
 
 ## Comprehensive Consolidated Reference
 
-For offline reading or detailed reference, see `console/comprehensive.spec` which consolidates all sections into a single document.
+For offline reading or detailed reference, see `console/comprehensive.md` which consolidates all sections into a single document.
 

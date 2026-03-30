@@ -597,7 +597,7 @@ ALTER TABLE engine.__notify_recipient PARTITION BY RANGE (DATE_TRUNC('month',
 ));
 ```
 
-See `/handbook/specs/database.spec` for partition management procedures.
+See `/handbook/specs/database.md` for partition management procedures.
 
 ## Website Integration
 

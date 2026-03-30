@@ -377,4 +377,4 @@ The `onkey` attribute on `ListboxItem` is a callable taking `item: ListboxItem` 
 - Example uses: 'e' to edit an item, 'd' to delete, 'r' to refresh
 ```
 
-See [BESTPRACTICE.spec](BESTPRACTICE.spec) for additional best practices.
+See [BESTPRACTICE.md](BESTPRACTICE.md) for additional best practices.

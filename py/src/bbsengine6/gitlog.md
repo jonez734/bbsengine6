@@ -2,8 +2,8 @@ commit $(git rev-parse HEAD)
 Author: opencode <opencode@anomaly.co>
 Date:   $(date '+%a %b %d %H:%M:%S %Y %z')
 
-    - bbsengine6/io/__init__.py: export getch from getch module
-    - bbsengine6/io/io_getch.spec: updated to document export
+     - bbsengine6/io/__init__.py: export getch from getch module
+     - bbsengine6/io/io_getch.md: updated to document export
 
 
 Author: Jeff MacDonald <jam@zoidtechnologies.com>

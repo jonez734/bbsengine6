@@ -21,32 +21,32 @@ bbsengine6 is a comprehensive Bulletin Board System (BBS) engine written in Pyth
 
 ## Table of Contents
 
-### 1. [Architecture Overview](specs/architecture.spec)
+### 1. [Architecture Overview](specs/architecture.md)
    - Layered architecture (data, business logic, presentation, modules)
    - Domain-based organization (sessions, members, messaging, module system, I/O)
    - Layer responsibilities and data flow between layers
    - Visual architecture diagrams
 
-### 2. [Module Specifications](specs/modules.spec)
+### 2. [Module Specifications](specs/modules.md)
    - Core Python modules (database, session, member, util, menu, listbox, module system)
-   - [util.spec](specs/util.spec) -- General-purpose utilities (display, dates, logging, file ops, passwords)
+   - [util.md](specs/util.md) -- General-purpose utilities (display, dates, logging, file ops, passwords)
    - Subpackages (io, console)
-     - **[Console Module Spec](specs/console.spec)** -- Administrative CLI interface for database initialization, member management, and system configuration
+      - **[Console Module Spec](specs/console.md)** -- Administrative CLI interface for database initialization, member management, and system configuration
    - PHP layer modules
    - JavaScript modules
    - Complete function signatures with brief descriptions
    - Class and method specifications
 
-### 3. [Data Flows & Workflows](specs/flows.spec)
+### 3. [Data Flows & Workflows](specs/flows.md)
    - High-level workflows:
-     - User login flow
-     - Message posting flow
-     - Navigation/menu flow
-     - Module execution flow
+      - User login flow
+      - Message posting flow
+      - Navigation/menu flow
+      - Module execution flow
    - Detailed sequence flows showing function calls and state changes
    - State transformations at each layer
 
-### 4. [Web Layer Specification](specs/web.spec)
+### 4. [Web Layer Specification](specs/web.md)
    - PHP architecture and bootstrap process
    - HTTP endpoints and their purposes
    - Smarty template integration
@@ -54,14 +54,14 @@ bbsengine6 is a comprehensive Bulletin Board System (BBS) engine written in Pyth
    - Connection between web layer and Python backend
    - Request/response lifecycle
 
-### 5. [Module Dependencies](specs/dependencies.spec)
+### 5. [Module Dependencies](specs/dependencies.md)
    - Complete dependency matrix (which modules depend on which)
    - Dependency rationale (why each dependency exists)
    - Layer-to-layer dependencies
    - Inter-module dependencies
    - External package dependencies
 
-### 6. [Architectural Decisions](specs/decisions.spec)
+### 6. [Architectural Decisions](specs/decisions.md)
    - Design decisions and their rationale
    - Architectural alternatives explored
    - Trade-offs documented
@@ -197,12 +197,12 @@ Database schema checks, member management, configuration validation
 
 ## How to Use This Specification
 
-1. **New to bbsengine6?** Start with [Architecture Overview](specs/architecture.spec)
-2. **Need to understand a module?** Go to [Module Specifications](specs/modules.spec)
-3. **Tracing a workflow?** Check [Data Flows](specs/flows.spec)
-4. **Working with web layer?** See [Web Layer Spec](specs/web.spec)
-5. **Understanding dependencies?** Review [Module Dependencies](specs/dependencies.spec)
-6. **Need design rationale?** Read [Architectural Decisions](specs/decisions.spec)
+1. **New to bbsengine6?** Start with [Architecture Overview](specs/architecture.md)
+2. **Need to understand a module?** Go to [Module Specifications](specs/modules.md)
+3. **Tracing a workflow?** Check [Data Flows](specs/flows.md)
+4. **Working with web layer?** See [Web Layer Spec](specs/web.md)
+5. **Understanding dependencies?** Review [Module Dependencies](specs/dependencies.md)
+6. **Need design rationale?** Read [Architectural Decisions](specs/decisions.md)
 
 ---
 
@@ -218,7 +218,7 @@ bbsengine6/
 │       ├── module.py            # Module/plugin system
 │       ├── menu.py              # Menu widget
 │       ├── listbox.py           # List widget
-│       ├── util.py              # Utilities ([spec](specs/util.spec))
+│       ├── util.py              # Utilities ([spec](specs/util.md))
 │       ├── io/                  # Terminal I/O subpackage
 │       └── console/             # Admin tools
 ├── php/                         # PHP backend
@@ -232,13 +232,13 @@ bbsengine6/
 ├── smarty/                      # Template plugins
 └── handbook/                    # Documentation
     └── specs/                   # Specification files
-        ├── index.spec          # Master spec index
-        ├── architecture.spec
-        ├── modules.spec
-        ├── flows.spec
-        ├── web.spec
-        ├── dependencies.spec
-        └── decisions.spec
+        ├── index.md            # Master spec index
+        ├── architecture.md
+        ├── modules.md
+        ├── flows.md
+        ├── web.md
+        ├── dependencies.md
+        └── decisions.md
 ```
 
 ---
@@ -268,12 +268,12 @@ bbsengine6/
 
 To dive deeper into the system:
 
-1. Read **[architecture.spec](specs/architecture.spec)** for a complete architectural overview
-2. Explore **[modules.spec](specs/modules.spec)** for detailed module APIs, including **[util.spec](specs/util.spec)**
-3. Study **[flows.spec](specs/flows.spec)** to understand critical workflows
-4. Review **[web.spec](specs/web.spec)** for web layer integration
-5. Check **[dependencies.spec](specs/dependencies.spec)** to understand module coupling
-6. Reference **[decisions.spec](specs/decisions.spec)** for design rationale
+1. Read **[architecture.md](specs/architecture.md)** for a complete architectural overview
+2. Explore **[modules.md](specs/modules.md)** for detailed module APIs, including **[util.md](specs/util.md)**
+3. Study **[flows.md](specs/flows.md)** to understand critical workflows
+4. Review **[web.md](specs/web.md)** for web layer integration
+5. Check **[dependencies.md](specs/dependencies.md)** to understand module coupling
+6. Reference **[decisions.md](specs/decisions.md)** for design rationale
 
 ---
 

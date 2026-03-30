@@ -22,7 +22,7 @@ When a user is blocked waiting for input, notifications arrive in the background
 | `NOTIFY_INPUT_INTEGRATION.md` | 8.8 KB | **START HERE** - How notifications work during input |
 | `NOTIFY_DEMOS.md` | 8.1 KB | Demo guide, patterns, and examples |
 | `NOTIFY_TESTING.md` | 6.2 KB | Testing guide and SQL queries |
-| `handbook/specs/notify.spec` | 638 lines | Complete technical specification |
+| `handbook/specs/notify.md` | 638 lines | Complete technical specification |
 
 ### Demo Scripts
 
