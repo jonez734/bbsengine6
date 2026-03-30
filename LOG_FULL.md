@@ -1,4 +1,7 @@
-* 474cbc3 2026-03-30 security: remove hardcoded reCAPTCHA keys, use environment variables instead (HEAD -> main, github/main) [J (eff)]
+* 523cda2 2026-03-30 Add Makefile log target to generate LOG_FULL.md and LOG_SUMMARY.md (HEAD -> main, github/main) [J (eff)]
+| Add Makefile log target to generate LOG_FULL.md and LOG_SUMMARY.md
+| 
+* 474cbc3 2026-03-30 security: remove hardcoded reCAPTCHA keys, use environment variables instead [J (eff)]
 | security: remove hardcoded reCAPTCHA keys, use environment variables instead
 | 
 * e05b90a 2026-03-30 Update bbsengine6: Enable getdate-next dependency and fix Makefile to use PYTHON variable [J (eff)]

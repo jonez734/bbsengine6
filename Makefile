@@ -121,6 +121,6 @@ backup:
 
 log:
 	git log --graph --pretty=format:"%h %ad %s%d [%an]%n%B" --date=short > LOG_FULL.md
-	git log --graph --pretty=format:"%h %ad %s%d [%an]" --date=short > LOG_SUMMARY.md
+	git log --pretty=format:"%ad|%h %s%d [%an]" --date=short | awk -F'|' '{if ($$1!=date) {print "## " $$1; date=$$1} print "  " $$2}' > LOG_SUMMARY.md
 
 .PHONY: handbook release sql prod www apidocs clean log
