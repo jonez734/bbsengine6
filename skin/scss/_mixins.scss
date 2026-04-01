@@ -210,3 +210,13 @@
 //  -o-animation: #{$str};
 //  animation: #{$str};
 }
+
+/// Inverts a color by computing the inverse of its RGB values
+/// @param {Color} $color - The color to invert
+/// @return {Color} - The inverted color
+@function invert($color) {
+  $r: 255 - red($color);
+  $g: 255 - green($color);
+  $b: 255 - blue($color);
+  @return rgb($r, $g, $b);
+}
