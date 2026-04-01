@@ -18,7 +18,10 @@ export RSYNC = rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --times --verbose \
 export VERSION = 6
 
 # @since 20230414
-export SCSSLOADPATH = --load-path $(HOME)/projects/zoidweb6/skin/scss/ # --load-path $(HOME)/projects/bbsengine6/skin/scss/
+export SCSSLOADPATH = --load-path $(PWD)/../zoidweb6/skin/scss/ \
+                     --load-path $(PWD)/skin/scss/ \
+                     --load-path $(PWD)/../zoid6/skin/scss/ \
+                     --load-path $(PWD)/../zoid6/shared/skin/scss/
 export SCSS = sass --line-numbers --stop-on-error --trace --style expanded --sourcemap=none $(SCSSLOADPATH)
 
 export MARDOWNLIBSTAGE = /srv/www/
@@ -111,6 +114,7 @@ engine:
 	-$(MAKE) -C js stage
 	-$(MAKE) -C smarty stage
 	$(RSYNC) $(ENGINESTAGE) $(ENGINEPROD)
+	$(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT)
 
 push:
 	git push -u gitlab
