@@ -6,7 +6,7 @@ all:
 	$(SCSS) $< $@
 
 stage: 
-	$(SCSS) --update --watch .:$(STATICSTAGEDOCROOT)skin/css/
+	$(SCSS) --update .:$(ENGINESTAGEDOCROOT)skin/css/
 
 clean:
 	-rm *~ *.css *.css.map

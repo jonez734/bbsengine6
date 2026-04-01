@@ -105,12 +105,12 @@ wwworg:
 	$(MAKE) -C www org
 
 engine:
+	mkdir -p $(ENGINESTAGE)
 	-$(MAKE) -C php stage
 	-$(MAKE) -C skin stage
 	-$(MAKE) -C js stage
 	-$(MAKE) -C smarty stage
 	$(RSYNC) $(ENGINESTAGE) $(ENGINEPROD)
-	$(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT)
 
 push:
 	git push -u gitlab
