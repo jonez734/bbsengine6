@@ -1,5 +1,5 @@
 {extends file="page.tmpl"}
-<pre>data.delay={$data.delay|var_dump}</pre>
+{* <pre>data.delay={$data.delay|var_dump}</pre> *}
 {if $data.delay === 0}
   {block name="head" append}
     <script src="{$ENGINEURL}js/redirectpage.js" defer></script>

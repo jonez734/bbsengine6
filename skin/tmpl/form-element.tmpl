@@ -12,7 +12,7 @@
   		</fieldset> 
   	</div> {* body *}
 	</div> {* blurb *}
-{elseif $element.type == "checkbox"} {* label goes on right instead of left *}
+{elseif $element.type === "checkbox"} {* label goes on right instead of left *}
 	{if $element.required}<span class="requiredstar">*</span>{/if}
 	<!-- checkbox --><span class="element{if isset($element.error)} error{/if}">{$element.html}</span>
 	{if isset($element.label)}<label for="{$element.id}">{$element.label}</label>{/if}{*</span>*}
