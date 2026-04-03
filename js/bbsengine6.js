@@ -1,198 +1,270 @@
+/**
+ * bbsengine6.js - Core BBS engine module
+ * @description Singleton providing AJAX, CSRF, sanitization, and interval management
+ */
 var bbsengine = (function() {
-    let instance = null; // singleton
-    let intervals = [];
+  /** @type {Object|null} */
+  let instance = null;
+  
+  /** @type {Array} */
+  let intervals = [];
 
-    return function() {
-      if (!instance) {
-        instance = {
-          logentry: function(message) 
-          {
-            if (typeof console == "object")
-            {
-              console.log(message);
-            }
-            return;
-          },
+  /** @type {RegExp} - Whitelist of valid request types */
+  const VALID_REQUESTS = /^(currentmember\.moniker|currentmember\.id|config\.topbarupdateinterval|config\.getengineurl|join|topbar\.credits|topbar\.loginlogout|topbar\.greetings|nav|alert\.list|alert\.count)$/;
 
-          bedreq: async function(req, justcrc=false) {
-            this.logentry("bedreq.100: justcrc="+JSON.stringify(justcrc));
+  /** @type {number} - Minimum interval in milliseconds */
+  const MIN_INTERVAL_MS = 100;
 
-            try {
-              return new Promise((resolve, reject) => {
-                const csrfToken = this.getCsrfToken();
-                let url = ENGINEURL + "bed?req="+encodeURIComponent(req);
-                if (justcrc === true) {
-                  url += "&justcrc";
-                }
-                if (csrfToken) {
-                  url += "&csrf_token="+encodeURIComponent(csrfToken);
-                }
-                url += "&callback=?";
-                $.ajax({
-                  type: "GET",
-                  dataType: "jsonp",
-                  url: url,
-                  error: (xhr, textStatus, errorThrown) => {
-                    console.error("bed error: textStatus="+JSON.stringify(textStatus)+" errorThrown="+JSON.stringify(errorThrown));
-                    reject(new Error("Bed request failed: " + textStatus));
-                  },
-                  success: (data) => {
-                    this.logentry("=== data="+JSON.stringify(data), "data.status="+JSON.stringify(data.status));
-                    resolve(data);
-                  },
-                }); // ajax
-              }); // Promise
-            } catch (error) {
-              if (error instanceof SyntaxError) {
-                console.error("SyntaxError: "+error.message);
-              } else {
-                console.error("someOtherError: "+error.message);
+  return function() {
+    if (!instance) {
+      instance = {
+        /**
+         * @description Log message to console if available
+         * @param {string} message 
+         */
+        logentry: function(message) {
+          if (typeof console === "object") {
+            console.log(message);
+          }
+        },
+
+        /**
+         * @description Make AJAX request to bed endpoint
+         * @param {string} req - Request type (validated against whitelist)
+         * @param {boolean} [justcrc=false] - Return only checksum
+         * @returns {Promise<Object>}
+         * @throws {Error} If request type is invalid or AJAX fails
+         */
+        bedreq: async function(req, justcrc = false) {
+          if (!VALID_REQUESTS.test(req)) {
+            const error = new Error("Invalid request type: " + req);
+            console.error(error.message);
+            throw error;
+          }
+
+          this.logentry("bedreq.100: req=" + req + " justcrc=" + JSON.stringify(justcrc));
+
+          try {
+            return new Promise((resolve, reject) => {
+              const csrfToken = this.getCsrfToken();
+              let url = ENGINEURL + "bed?req=" + encodeURIComponent(req);
+              if (justcrc === true) {
+                url += "&justcrc";
               }
-              throw error; // Re-throw the error for further handling
-            }
-          },
-          // @since 20240915
-          getcurrentmoniker: async function() {
-            const req = "currentmember.moniker";
-            try {
-              const data = await this.bedreq(req);
-              return data[req];
-            } catch(error) {
-              console.log("error fetching "+req+":", error.message);
-              throw error;
-            }
-          }, // getcurrentmoniker
-          getcurrentid: async function() {
-            const req = "currentmember.id";
-            try {
-              const data = await this.bedreq(req);
-              console.log("-- data="+JSON.stringify(data)+" data.currentid="+JSON.stringify(data[req]));
-              return data[req];
-            } catch(error) {
-              console.log("error fetching "+req+":", error.message);
-              throw error;
-            }
+              url += "&callback=?";
 
-          },
-          gettopbarupdateinterval: async function() {
-            const req = "config.topbarupdateinterval";
-            try {
-              const data = await this.bedreq(req);
-              return data[req];
-            } catch(error) {
-              console.log("error fetching "+req+":", error.message);
-              throw error;
-            }
+              const ajaxOptions = {
+                type: "GET",
+                dataType: "jsonp",
+                url: url,
+                error: (xhr, textStatus, errorThrown) => {
+                  console.error("bed error: textStatus=" + JSON.stringify(textStatus) + " errorThrown=" + JSON.stringify(errorThrown));
+                  reject(new Error("Bed request failed: " + textStatus));
+                },
+                success: (data) => {
+                  this.logentry("bedreq.200: data=" + JSON.stringify(data));
+                  resolve(data);
+                },
+              };
 
-          },
-          getengineurl: async function() {
-            const req = "config.getengineurl";
-            try {
-              const data = await this.bedreq(req);
-              return data[req];
-            } catch(error) {
-              console.log("error fetching "+req+": ", error.message);
-              throw error;
-            }
-          },
+              if (csrfToken) {
+                ajaxOptions.beforeSend = function(xhr) {
+                  xhr.setRequestHeader("X-CSRF-Token", csrfToken);
+                };
+              }
 
-          addinterval: function(interval, note, func)
-          {
-            if (interval === null || interval < 100)
-            {
-              this.logentry("addinterval.100: "+note+": invalid interval");
-              return;
-            }
-            let id = setInterval(func, interval);
-            if (!Array.isArray(this.intervals)) {
-              this.intervals = [];
-            }
-            this.intervals.push([id, interval, func, note]);
-            this.logentry("addinterval.110: id="+id+" interval="+interval+" note="+note);
-            return;
-          },
-          cancelintervals: () => {
-            this.logentry("canceling intervals");
-            this.intervals.forEach(function (item) {
-              const id = item[0];
-              clearInterval(id);
-              instance.logentry("cancelintervals.100: id="+id);
+              $.ajax(ajaxOptions);
             });
+          } catch (error) {
+            if (error instanceof SyntaxError) {
+              console.error("SyntaxError: " + error.message);
+            } else {
+              console.error("bedreq error: " + error.message);
+            }
+            throw error;
+          }
+        },
+
+        /**
+         * @description Get current user's moniker
+         * @returns {Promise<string>}
+         */
+        getcurrentmoniker: async function() {
+          const req = "currentmember.moniker";
+          try {
+            const data = await this.bedreq(req);
+            return data[req];
+          } catch (error) {
+            console.error("error fetching " + req + ":", error.message);
+            throw error;
+          }
+        },
+
+        /**
+         * @description Get current user's ID
+         * @returns {Promise<string>}
+         */
+        getcurrentid: async function() {
+          const req = "currentmember.id";
+          try {
+            const data = await this.bedreq(req);
+            this.logentry("getcurrentid.100: data=" + JSON.stringify(data));
+            return data[req];
+          } catch (error) {
+            console.error("error fetching " + req + ":", error.message);
+            throw error;
+          }
+        },
+
+        /**
+         * @description Get topbar update interval from server
+         * @returns {Promise<number>}
+         */
+        gettopbarupdateinterval: async function() {
+          const req = "config.topbarupdateinterval";
+          try {
+            const data = await this.bedreq(req);
+            return data[req];
+          } catch (error) {
+            console.error("error fetching " + req + ":", error.message);
+            throw error;
+          }
+        },
+
+        /**
+         * @description Get engine URL
+         * @returns {Promise<string>}
+         */
+        getengineurl: async function() {
+          const req = "config.getengineurl";
+          try {
+            const data = await this.bedreq(req);
+            return data[req];
+          } catch (error) {
+            console.error("error fetching " + req + ":", error.message);
+            throw error;
+          }
+        },
+
+        /**
+         * @description Add a recurring interval
+         * @param {number} interval - Interval in milliseconds
+         * @param {string} note - Description of interval
+         * @param {Function} func - Callback function
+         */
+        addinterval: function(interval, note, func) {
+          if (interval === null || interval < MIN_INTERVAL_MS) {
+            this.logentry("addinterval.100: " + note + ": invalid interval " + interval);
             return;
-          },
-          restartintervals: () => {
-            this.logentry("restarting intervals");
-            this.intervals.forEach(function (item, index, arr) {
-              const interval = item[1];
-              const func = item[2];
-              const note = item[3];
-              const id = setInterval(func, interval);
-              instance.logentry("id="+id+" interval="+interval+" note="+note);
-              arr[index][0] = id;
-            });
+          }
+          let id = setInterval(func, interval);
+          if (!Array.isArray(this.intervals)) {
+            this.intervals = [];
+          }
+          this.intervals.push([id, interval, func, note]);
+          this.logentry("addinterval.110: id=" + id + " interval=" + interval + " note=" + note);
+        },
+
+        /**
+         * @description Cancel all managed intervals
+         */
+        cancelintervals: function() {
+          this.logentry("cancelintervals.100: canceling " + this.intervals.length + " intervals");
+          this.intervals.forEach(function(item) {
+            const id = item[0];
+            clearInterval(id);
+          });
+          this.intervals = [];
+        },
+
+        /**
+         * @description Restart all previously stored intervals
+         */
+        restartintervals: function() {
+          this.logentry("restartintervals.100: restarting " + this.intervals.length + " intervals");
+          this.intervals.forEach(function(item, index, arr) {
+            const interval = item[1];
+            const func = item[2];
+            const note = item[3];
+            const id = setInterval(func, interval);
+            arr[index][0] = id;
+          });
+        },
+
+        /**
+         * @description Update a topbar item via AJAX
+         * @param {string} req - Request type (validated against whitelist)
+         * @param {string} [css=""] - jQuery selector suffix
+         */
+        updatetopbaritem: async function(req, css = "") {
+          const selector = $("#topbar " + css);
+          if (!selector || selector.length === 0) {
+            this.logentry("updatetopbaritem.100: selector not found for css=" + css);
             return;
-          },
-          updatetopbaritem: async function(req, css="") {
-            const selector = $("#topbar "+css);
-            if (selector === undefined || selector.length === 0) {
-              this.logentry("updatetopbaritem: selector undefined.");
-              return;
-            }
+          }
 
-            const origfragment = selector.clone().wrap("<div>").parent().html();
-            if (origfragment === undefined) {
-              this.logentry("updatetopbaritem: origfragment is undefined");
-              return;
-            }
-            const origchecksum = this.checksum(origfragment);
-            const response = await this.bedreq(req, true);
-            if (response === undefined) {
-              this.logentry("updatetopbaritem: response to "+JSON.stringify(req)+" is undefined");
-              return;
-            }
+          const origfragment = selector.clone().wrap("<div>").parent().html();
+          if (origfragment === undefined) {
+            this.logentry("updatetopbaritem.110: origfragment is undefined");
+            return;
+          }
+          const origchecksum = this.checksum(origfragment);
+          const response = await this.bedreq(req, true);
+          if (response === undefined) {
+            this.logentry("updatetopbaritem.120: response to " + JSON.stringify(req) + " is undefined");
+            return;
+          }
 
-            if (response.checksum === undefined)
-            {
-              this.logentry("updatetopbaritem: response.checksum undefined");
-              return;
-            }
+          if (response.checksum === undefined) {
+            this.logentry("updatetopbaritem.130: response.checksum undefined");
+            return;
+          }
 
-            this.logentry("updatetopbaritem: req="+JSON.stringify(req)+" origchecksum="+JSON.stringify(origchecksum)+" new="+JSON.stringify(response.checksum));
-            if (origchecksum == response.checksum)
-            {
-              this.logentry("updatetopbaritem: old and new match");
-              return;
-            }
-            this.logentry("updatetopbaritem: updating "+JSON.stringify(req));
-            const csrfToken = this.getCsrfToken();
-            let ajaxUrl = ENGINEURL + "bed?req="+encodeURIComponent(req)+"&callback=?";
-            if (csrfToken) {
-              ajaxUrl += "&csrf_token="+encodeURIComponent(csrfToken);
-            }
-            $.ajax({
-              type: "GET",
-              dataType: "jsonp",
-              url: ajaxUrl,
-              error: (xhr, type, exception) => {
-                const err = "textStatus="+JSON.stringify(xhr) + ' type=' + type + " exception="+JSON.stringify(exception);
-                this.logentry("updatetopbaritem: req for "+JSON.stringify(req)+" failed: "+JSON.stringify(err));
-                return false;
-              },
-              success: (data) => {
-                  selector.fadeOut({
-                    duration: 350,
-                    complete: () => {
-                      const cleanFragment = this.sanitize(data.fragment);
-                      selector.replaceWith(cleanFragment);
-                      selector.fadeIn(550);
-                    }
-                  });
-              },
-            });
-          },
+          this.logentry("updatetopbaritem.140: req=" + req + " origchecksum=" + origchecksum + " new=" + response.checksum);
+          if (origchecksum === response.checksum) {
+            this.logentry("updatetopbaritem.150: old and new match, skipping update");
+            return;
+          }
 
-        // @since 20240919 generated by chatgpt
-        checksum: (str) => {
+          this.logentry("updatetopbaritem.160: updating " + req);
+          const csrfToken = this.getCsrfToken();
+          let ajaxUrl = ENGINEURL + "bed?req=" + encodeURIComponent(req) + "&callback=?";
+
+          const ajaxOptions = {
+            type: "GET",
+            dataType: "jsonp",
+            url: ajaxUrl,
+            error: (xhr, type, exception) => {
+              const err = "textStatus=" + JSON.stringify(xhr) + " type=" + type + " exception=" + JSON.stringify(exception);
+              this.logentry("updatetopbaritem.170: req for " + req + " failed: " + err);
+            },
+            success: (data) => {
+              selector.fadeOut({
+                duration: 350,
+                complete: () => {
+                  const cleanFragment = this.sanitize(data.fragment);
+                  selector.replaceWith(cleanFragment);
+                  selector.fadeIn(550);
+                }
+              });
+            },
+          };
+
+          if (csrfToken) {
+            ajaxOptions.beforeSend = function(xhr) {
+              xhr.setRequestHeader("X-CSRF-Token", csrfToken);
+            };
+          }
+
+          $.ajax(ajaxOptions);
+        },
+
+        /**
+         * @description Calculate CRC32 checksum of string
+         * @param {string} str 
+         * @returns {string} - 8-character hex string
+         */
+        checksum: function(str) {
           let crc = 0xffffffff;
           for (let i = 0; i < str.length; i++) {
             crc ^= str.charCodeAt(i);
@@ -201,25 +273,47 @@ var bbsengine = (function() {
             }
           }
           crc ^= 0xffffffff;
-          return ('00000000' + (crc >>> 0).toString(16)).slice(-8).toUpperCase();
+          return ("00000000" + (crc >>> 0).toString(16)).slice(-8).toUpperCase();
         },
 
-        sanitize: (dirty) => {
-          if (typeof DOMPurify !== 'undefined') {
+        /**
+         * @description Sanitize HTML using DOMPurify, fallback to strip tags
+         * @param {string} dirty - Raw HTML string
+         * @returns {string} - Sanitized HTML
+         * @throws {Error} If DOMPurify unavailable and fallback fails
+         */
+        sanitize: function(dirty) {
+          if (typeof DOMPurify !== "undefined") {
             return DOMPurify.sanitize(dirty);
           }
-          if (typeof console === 'object') {
-            console.warn('DOMPurify not loaded - returning raw HTML (XSS risk)');
+          if (typeof console === "object") {
+            console.error("DOMPurify not loaded - falling back to stripTags");
           }
-          return dirty;
+          return stripTags(dirty);
         },
 
-        getCsrfToken: () => {
-          return window.CSRF_TOKEN || '';
+        /**
+         * @description Get CSRF token from window object
+         * @returns {string}
+         */
+        getCsrfToken: function() {
+          return window.CSRF_TOKEN || "";
         },
 
-        } // instance of bbsengine
-    }; // !instance
+      };
+    }
     return instance;
-  }
+  };
 })();
+
+/**
+ * @description Strip all HTML tags (fallback sanitization)
+ * @param {string} str 
+ * @returns {string}
+ */
+function stripTags(str) {
+  if (typeof str !== "string") {
+    return "";
+  }
+  return str.replace(/<[^>]*>/g, "");
+}
