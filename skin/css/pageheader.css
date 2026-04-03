@@ -1,0 +1,38 @@
+header#pageheader {
+  flex: 0 1 auto;
+  border: 0;
+  background-color: #344e41;
+  overflow: hidden;
+  font-family: pageheaderfont;
+  font-size: large;
+  text-align: center;
+}
+header#pageheader .body {
+  -webkit-text-stroke-width: 1px;
+  -webkit-text-stroke-color: black;
+  color: #dad7cd;
+  text-shadow: 4px 3px 3px rgba(0, 0, 0, 0.4);
+}
+header#pageheader .body h1 {
+  font-size: 2.5em;
+}
+header#pageheader .body h2 {
+  font-size: 2.0em;
+}
+header#pageheader .body h2 a {
+  color: green;
+  text-decoration: underline;
+  text-decoration-color: greenyellow;
+}
+header#pageheader .body h2 a:hover {
+  text-decoration-color: #98fb00;
+  background-color: black;
+}
+header#pageheader a {
+  color: white;
+}
+
+@font-face {
+  font-family: pageheaderfont;
+  src: url("/skin/art/BFTinyHand-Regular.otf");
+}

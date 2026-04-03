@@ -1,0 +1,52 @@
+# Handbook/Documentation serving configuration
+# Serve markdown files cleanly through Apache
+
+# Enable mod_rewrite
+RewriteEngine On
+RewriteBase /handbook/
+
+# MIME type for markdown files
+AddType text/markdown .md
+
+# Serve .md files with proper headers
+<FilesMatch "\.md$">
+    Header set Content-Type "text/markdown; charset=utf-8"
+    Header set Content-Disposition "inline"
+</FilesMatch>
+
+# Serve .html files (converted from markdown)
+<FilesMatch "\.html$">
+    Header set Content-Type "text/html; charset=utf-8"
+</FilesMatch>
+
+# Block access to certain patterns
+<FilesMatch "\.(md~|bak|swp|swo)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Directory listing for navigation
+Options +Indexes
+IndexOptions NameWidth=* VersionSort HTMLTable FancyIndexing Charset=UTF-8
+
+# Custom index file order
+DirectoryIndex index.html index.md README.md
+
+# Gzip compression for text files
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/markdown text/plain text/html text/xml application/json
+</IfModule>
+
+# Cache control for static content
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/markdown "access plus 7 days"
+    ExpiresByType text/html "access plus 7 days"
+    ExpiresByType application/json "access plus 1 day"
+</IfModule>
+
+# Prevent access to backup files and hidden files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

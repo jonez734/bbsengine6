@@ -1,0 +1,48 @@
+@import "vars";
+@import "mixins";
+
+// Page header styling - used by asimov, achilles, teos, and other projects
+header#pageheader {
+	flex: 0 1 auto;
+	border: 0;
+	background-color: $pageheader-backgroundcolor;
+	overflow: hidden;
+	font-family: pageheaderfont;
+	font-size: large;
+	text-align: center;
+
+	.body {
+		-webkit-text-stroke-width: 1px;
+		-webkit-text-stroke-color: black;
+		color: $pageheader-textcolor;
+		@include textshadow(4px, 3px, 3px, rgba(0,0,0,0.4));
+
+		h1 {
+			font-size: 2.5em;
+		}
+
+		h2 {
+			font-size: 2.0em;
+
+			a {
+				color: green;
+				text-decoration: underline;
+				text-decoration-color: greenyellow;
+			}
+
+			a:hover {
+				text-decoration-color: darken(greenyellow, 10%);
+				background-color: black;
+			}
+		}
+	}
+
+	a {
+		color: white;
+	}
+}
+
+@font-face {
+	font-family: pageheaderfont;
+	src: url("/skin/art/BFTinyHand-Regular.otf");
+}

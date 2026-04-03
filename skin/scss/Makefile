@@ -1,14 +1,23 @@
-#SCSS = sass --stop-on-error --trace --style expanded --sourcemap=none
-
 all:
 
 .scss.css:
-	$(SCSS) $< $@
+	sass --load-path /home/opencode/data/work/zoid6/shared/skin/scss/ \
+	     --load-path /home/opencode/data/work/bbsengine6/skin/scss/ \
+	     --load-path /home/opencode/data/work/zoid6/scss/ \
+	     --load-path $(CURDIR) \
+	     --sourcemap=none --stop-on-error --trace --style expanded $< $@
 
 stage: 
-	$(SCSS) --update .:$(ENGINESTAGEDOCROOT)skin/css/
+	sass --load-path /home/opencode/data/work/zoid6/shared/skin/scss/ \
+	     --load-path /home/opencode/data/work/bbsengine6/skin/scss/ \
+	     --load-path /home/opencode/data/work/zoid6/scss/ \
+	     --load-path $(CURDIR) \
+	     --sourcemap=none --stop-on-error --trace --style expanded \
+	     --update .:/srv/www/vhosts/zoidtechnologies.com/html/engine/skin/css/
 
 clean:
 	-rm *~ *.css *.css.map
 
 .SUFFIXES: .scss .css
+
+.PHONY: clean stage

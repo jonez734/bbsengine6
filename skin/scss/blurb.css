@@ -1,0 +1,70 @@
+.blurb {
+  background-color: #344e41;
+  color: #dad7cd;
+  margin: 0.5em;
+  border: 0.125em solid #4a4a4a;
+  overflow: hidden;
+  flex: 0;
+  box-shadow: 3px 3px 2px 0px rgba(0, 0, 0, 0.5);
+  text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.4);
+}
+.blurb .header h1, .blurb .header h2, .blurb .header h3 {
+  font-family: serif;
+  margin: 0px;
+  padding: 10px;
+  font-weight: bold;
+  font-size: 1.50em;
+  text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.4);
+  background-image: linear-gradient(to left top, #a3b18a, #9ead84);
+  color: #dad7cd;
+  background-color: #a3b18a;
+}
+.blurb .header h1 a:hover, .blurb .header h2 a:hover, .blurb .header h3 a:hover {
+  color: #a3b18a;
+  background-color: #dad7cd;
+}
+.blurb .header.warning h1 {
+  color: orange;
+}
+.blurb a {
+  color: #dad7cd;
+  text-decoration-color: yellowgreen;
+  text-decoration: underline;
+  transition: all 0.25s;
+}
+.blurb a:hover {
+  color: #3a5a40;
+  background-color: #c5a5bf;
+}
+.blurb .body {
+  color: #dad7cd;
+  background-color: #3a5a40;
+  border: 0;
+  border-top: 0.125em solid #4a4a4a;
+  margin: 0;
+  padding: 0.5em;
+}
+.blurb .body p {
+  font-family: sans-serif;
+  padding: 0.125em;
+  margin: 0.125em;
+}
+.blurb .body a:hover {
+  background-color: #dad7cd;
+  color: #3a5a40;
+}
+.blurb .metadata {
+  font-size: 0.75em;
+  padding: 0.50em;
+  color: #dad7cd;
+  background-color: #3a5a40;
+}
+.blurb .footer {
+  color: #dad7cd;
+  background-color: #3a5a40;
+  border: 0;
+  border-top: 0.125em solid #4a4a4a;
+}
+.blurb.vstretch {
+  flex: 1 0 auto;
+}

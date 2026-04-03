@@ -1,4 +1,8 @@
-{*<pre>uri: {$uri|var_export} title:{$title|var_export}</pre>*}
+{* NOTE: zoid6/shared/skin/tmpl/function.teos.tmpl is BROKEN and should NEVER be used:
+   - Contains uncommented debug code (var_dump)
+   - Has malformed href with debug hyphens
+   - Contains debug markers around title (!!...!!)
+   This bbsengine6 version is production-ready and is the authoritative version. *}
 {if $itemprop === true}
 <a class="tooltip teosfolder" data-contenturl="{$smarty.const.TEOSURL}{$uri}detail?bare" itemprop="url" href="{$smarty.const.TEOSURL}{$uri}"><span itemprop="title">{$title}</span></a>
 {else}

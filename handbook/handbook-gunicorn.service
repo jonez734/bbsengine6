@@ -1,0 +1,54 @@
+[Unit]
+Description=BBSEngine Handbook Gunicorn Application Server
+Documentation=https://gunicorn.org/
+After=network.target
+Wants=handbook-gunicorn.socket
+
+[Service]
+# Service metadata
+Type=notify
+User=www-data
+Group=www-data
+WorkingDirectory=/home/opencode/data/work/bbsengine6/handbook
+
+# Gunicorn startup
+ExecStart=/usr/local/bin/gunicorn \
+    --workers 4 \
+    --worker-class sync \
+    --worker-connections 1000 \
+    --bind unix:/run/handbook.sock \
+    --bind 127.0.0.1:8000 \
+    --timeout 30 \
+    --graceful-timeout 30 \
+    --access-logfile /var/log/handbook-access.log \
+    --access-logformat '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"' \
+    --error-logfile /var/log/handbook-error.log \
+    --log-level info \
+    wsgi:application
+
+# Reload on config change (SIGHUP)
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# Auto-restart on failure
+Restart=on-failure
+RestartSec=5s
+
+# Resource limits
+# Uncomment to limit memory usage
+# MemoryLimit=512M
+
+# Process management
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Service hardening
+PrivateTmp=true
+NoNewPrivileges=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=handbook-gunicorn
+
+[Install]
+WantedBy=multi-user.target
