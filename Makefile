@@ -20,7 +20,6 @@ export VERSION = 6
 # @since 20230414
 export SCSSLOADPATH = --load-path $(PWD)/../zoidweb6/skin/scss/ \
                      --load-path $(PWD)/skin/scss/ \
-                     --load-path $(PWD)/../zoid6/skin/scss/ \
                      --load-path $(PWD)/../zoid6/shared/skin/scss/
 export SCSS = sass --line-numbers --stop-on-error --trace --style expanded --sourcemap=none $(SCSSLOADPATH)
 
