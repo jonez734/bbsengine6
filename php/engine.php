@@ -685,6 +685,13 @@ function buildsigpath($uri)
  */
 function sortchoices($a, $b)
 {
+  $currentsite = getcurrentsite();
+  $aname = isset($a["name"]) ? $a["name"] : null;
+  $bname = isset($b["name"]) ? $b["name"] : null;
+
+  if ($aname === $currentsite && $bname !== $currentsite) return -1;
+  if ($bname === $currentsite && $aname !== $currentsite) return 1;
+
   $foo = isset($a["title"]) ? $a["title"] : null;
   $bar = isset($b["title"]) ? $b["title"] : null;
 
