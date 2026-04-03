@@ -202,7 +202,7 @@ SQL;
 
       $sql = "select * from engine.refcode where code=:refcode";
       $dat = ["refcode" => $value];
-      $dbh = database\connect(getDSN());
+      $dbh = \bbsengine6\database\connect(getDSN());
       $stmt = $dbh->prepare($sql);
       $stmt->execute($dat);
       if ($stmt->rowCount() == 0)

@@ -256,97 +256,9 @@ function getreturntotitle()
  * @return boolean
  * @since 20080324
  * @since 20221116
- */ 
-/*
-function flag($name, $memberid=0)
-{
-  if ($memberid == 0)
-  {
-    $memberid = member\lib\getcurrentid();
-  }
-	
-  $name = strtoupper($name);
-    
-  if ($name == "PUBLIC")
-  {
-    return true;
-  }
-
-  if ($memberid == 0 || is_null($memberid))
-  {
-    return false;
-  }
-	
-  if ($name == "AUTHENTICATED")
-  {
-    return true;
-  }
-    
-  $res = \bbsengine6\member\lib\getflag($name, $memberid);
-  
-  if (is_null($res))
-  {
-    return $res;
-  }
-  
-  if ($res == true)
-  {
-    return true;
-  }
-  
-  return false;
-}
-*/
-/**
- * returns flag value given the flag name and member id.
- *
- * @param string $flag flag name
- * @param integer $id member id
- * @return boolean
- * @since 20221116
  */
-/*
-function getmemberflag($flag, $memberid, $dsn=null)
-{
-  //$dbh = \bbsengine6\database\connect($dsn);
-  //if (\PEAR::isError($dbh))
-  //{
-  //  return $dbh;
-  //}
-  
-  // @since 20130617
-  // thanks to pingwin and teh1ghool on #php (oftc)
 
-//  logentry("getflag.100: flag=".var_export($flag, true)." id=".var_export($id, true));
-
-    $sql = <<<SQL
-select 
-  f.name, 
-  coalesce(mmf.value, f.defaultvalue) as value 
-from engine.flag as f
-left outer join engine.map_member_flag as mmf on (f.name=mmf.name and mmf.memberid=?) 
-where f.name=?;
-SQL;
-
-  $dat = [$memberid, $flag];
-  $pdo = \bbsengine6\database\connect($dsn);
-  $stmt = $pdo->prepare($sql);
-  $stmt->execute($dat);
-
-  $res = $dbh->getRow($sql, null, $dat, array("integer", "text"));
-  if (\PEAR::isError($res))
-  {
-    logentry("bbsengine3.getflag.0: " . $res->toString());
-    return \PEAR::raiseError($res);
-  }
-
-  $res = (isset($res["value"]) && $res["value"] == "t") ? true : false;
-//  logentry("getflag.100: flag=".var_export($flag, true). " memberid=".var_export($memberid, true)." res=".var_export($res, true));
-  return $res;
-}
-*/
-
-/** 
+ /**
  * @since 20140512
  * @since 20221116
  */
@@ -361,6 +273,11 @@ function getfortune($fortuneid)
   $stmt->execute($dat);
   $res = $stmt->fetch();
   
+  if ($res === false)
+  {
+    return null;
+  }
+
   $mantra = [];
   $mantra["description"] = $res["description"];
   $mantra["author"] = $res["author"];

@@ -1,8 +1,5 @@
 <?php
-namespace {
-}
 
-namespace \bbsengine6\sig {
-
+namespace bbsengine6\sig
+{
 }
-?>
