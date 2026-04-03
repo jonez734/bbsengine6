@@ -470,6 +470,7 @@ function getsmarty($options=null)
   $s->assign("currentsite", getcurrentsite());
   $s->assign("currenturi", getcurrenturi());
   $s->assign("currentsig", getcurrentsig());
+  $s->assign("ENGINEURL", defined('\config\ENGINEURL') ? \config\ENGINEURL : (defined('ENGINEURL') ? ENGINEURL : ''));
 //  $s->assign("currentpath", getcurrentpath());
 //  $s->assign("sitevars", getsitevars());
 //  $s->register_modifier('var_export', 'var_export');

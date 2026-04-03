@@ -6,10 +6,10 @@
 {block name="head" append}
 <link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/form.css" media="screen" />
 {*<link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/form-checkbox.css" media="screen" /> *}
-{* <script src="{$smarty.const.ENGINEURL}js/tinymce/tinymce.min.js"></script> *}
+{* <script src="{$ENGINEURL}js/tinymce/tinymce.min.js"></script> *}
 {if $editor == "tinymce"}
 <script src="https://cdn.tiny.cloud/1/m9bmedo0irw2po5k2ansa5o5x0spllvmd6v68mnlz3fv7ixp/tinymce/5/tinymce.min.js" defer></script>
-<script src="{$smarty.const.ENGINEURL}js/inittinymce.js" defer></script>
+<script src="{$ENGINEURL}js/inittinymce.js" defer></script>
 {/if}
 
 {if $form.javascript}

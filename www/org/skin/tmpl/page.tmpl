@@ -24,21 +24,22 @@
 <link rel="stylesheet" type="text/css" href="{$smarty.const.STATICSKINURL}css/poweredby.css" media="screen">
 
 <script defer src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.js"></script>
+<script>var ENGINEURL = "{$ENGINEURL}";</script>
 {*<script defer src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha256-3edrmyuQ0w65f8gfBsqowzjJe2iM6n0nKciPUp8y+7E=" crossorigin="anonymous"></script>*}
-<script defer src="{$smarty.const.ENGINEURL}js/jquery.smoothState.js"></script>
-<script defer src="{$smarty.const.ENGINEURL}js/initsmoothstate.js"></script>
-<script defer src="{$smarty.const.ENGINEURL}js/bbsengine6.js"></script>
-<script defer src="{$smarty.const.ENGINEURL}js/clock.js"></script>
-<script defer src="{$smarty.const.ENGINEURL}js/topbar.js"></script>
+<script defer src="{$ENGINEURL}js/jquery.smoothState.js"></script>
+<script defer src="{$ENGINEURL}js/initsmoothstate.js"></script>
+<script defer src="{$ENGINEURL}js/bbsengine6.js"></script>
+<script defer src="{$ENGINEURL}js/clock.js"></script>
+<script defer src="{$ENGINEURL}js/topbar.js"></script>
 {if $currentmemberid > 0}
-<script defer src="{$smarty.const.ENGINEURL}js/topbar-notify.js"></script>
-<script defer src="{$smarty.const.ENGINEURL}js/topbar-credits.js"></script>
-<script defer src="{$smarty.const.ENGINEURL}js/topbar-loginlogout.js"></script>
-<script defer src="{$smarty.const.ENGINEURL}js/topbar-join.js"></script>
-<script defer src="{$smarty.const.ENGINEURL}js/topbar-greetings.js"></script>
-<script defer src="{$smarty.const.ENGINEURL}js/topbar-nav.js"></script>
+<script defer src="{$ENGINEURL}js/topbar-notify.js"></script>
+<script defer src="{$ENGINEURL}js/topbar-credits.js"></script>
+<script defer src="{$ENGINEURL}js/topbar-loginlogout.js"></script>
+<script defer src="{$ENGINEURL}js/topbar-join.js"></script>
+<script defer src="{$ENGINEURL}js/topbar-greetings.js"></script>
+<script defer src="{$ENGINEURL}js/topbar-nav.js"></script>
 {/if}
-<script defer src="{$smarty.const.ENGINEURL}js/checkcurrentmemberid.js"></script>
+<script defer src="{$ENGINEURL}js/checkcurrentmemberid.js"></script>
 
 {*<script defer src="{$smarty.const.ENGINEURL}js/snowstorm-min.js"></script>*}
 {*<script defer src="{$smarty.const.ENGINEURL}js/initsnow.js"></script>*}

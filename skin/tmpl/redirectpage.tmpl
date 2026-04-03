@@ -2,7 +2,7 @@
 <pre>data.delay={$data.delay|var_dump}</pre>
 {if $data.delay === 0}
   {block name="head" append}
-    <script src="{$smarty.const.ENGINEURL}js/redirectpage.js" defer></script>
+    <script src="{$ENGINEURL}js/redirectpage.js" defer></script>
     <link rel="stylesheet" type="text/css" href="{$smarty.const.SKINURL}css/redirectpage.css" media="screen" />
 {if $data.url !== null}
     <meta http-equiv="refresh" content="{$data.delay};url={$data.url}" /> {* prefer http 301 *}
