@@ -25,7 +25,22 @@ A catch-all module of ~30 utility functions used across the BBS engine. Function
 
 ### Not Thread-Safe
 
-- **`init()`** -- Calls `locale.setlocale()` and `time.tzset()`, which mutate global process state. **Must be called at application startup from the main thread only.** Call once, never from multiple threads.
+- **`init()`** -- Calls `locale.setlocale()` and `time.tzset()`, which mutate global process state. **Must be called at application startup from the main thread only.** Call once, never from multiple threads. Uses the system locale to format dates, times, and numbers according to the user's locale settings.
+
+## Locales
+
+The `init()` function initializes locale settings by calling `locale.setlocale(locale.LC_ALL, "")`, which reads the user's locale from the environment variables (`LC_ALL`, `LC_CTYPE`, or `LANG`). This ensures:
+- Date and time formatting uses locale-specific conventions
+- Number formatting (decimal separators, thousands separators) follows locale conventions
+- String sorting and comparison respects locale rules
+
+**Important**: Locale must be set before any date/time operations that rely on `strftime()` format codes like `%x` (locale-specific date) or `%X` (locale-specific time).
+
+The system must have the appropriate locale packages installed. On Debian/Ubuntu systems, install with:
+```bash
+apt install locales
+dpkg-reconfigure locales
+```
 
 ## Public API
 
