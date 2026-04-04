@@ -743,11 +743,11 @@ def buildargs(
     if defaults is None:
         defaults = {}
     databasename = defaults.get("databasename", "zoid6")
-    databasehost = defaults.get("databasehost", "")
+    databasehost = defaults.get("databasehost", "127.0.0.1")
     databaseport = defaults.get("databaseport", 5432)
     databaseuser = defaults.get("databaseuser", None)
     databasepassword = defaults.get("databasepassword", None)
-    databaseschema = defaults.get("databaseschema", None)
+    databaseschema = defaults.get("databaseschema", "engine")
 
     group = parentparser.add_argument_group(label)
     #    group = argparse.ArgumentParser("database", parents=[parentparser], add_help=False)
