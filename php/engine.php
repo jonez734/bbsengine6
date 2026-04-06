@@ -821,20 +821,36 @@ function normalizeuri($uri)
  * given one or more URIs (the function has a variable number of arguments),
  * compose a proper labelpath, calling normalizelabelpath() at the end.
  *
+ * @param string $teospath Optional base path to strip from URIs (default: "/teos/")
+ * @param string $uri,... One or more URIs to convert to labelpath
  * @since 20240621 copied from bbsengin4
+ * @since 20260405 accept teospath as first argument for flexibility
  */
 function buildlabelpath()
 {
   $argv = func_get_args();
   $argc = func_num_args();
 
-  $teospath = parse_url(\TEOSURL, PHP_URL_PATH);
-  if ($teospath === null)
+  if ($argc === 0)
   {
-      return \PEAR::raiseError("unable to parse url (code: buildlabelpath.100)");
+      return \PEAR::raiseError("buildlabelpath requires at least one URI argument (code: buildlabelpath.050)");
   }
-  $teospath = ltrim($teospath, "/");
-//  logentry("buildlabelpath.120: teospath=".var_export($teospath, True));
+
+  $firstarg = $argv[0];
+  if (strpos($firstarg, "/") === false || strpos($firstarg, ".") === false)
+  {
+      $teospath = ltrim($firstarg, "/");
+      array_shift($argv);
+  }
+  else
+  {
+      $teospath = "teos";
+  }
+
+  if (count($argv) === 0)
+  {
+      return \PEAR::raiseError("buildlabelpath requires at least one URI argument (code: buildlabelpath.060)");
+  }
 
   $foo = [];
 
