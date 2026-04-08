@@ -18,6 +18,7 @@ import psycopg
 from psycopg import sql
 
 from . import database, io
+from .database import getpool
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,6 @@ _queues: Dict[str, UserNotificationQueue] = {}
 _types_lock = threading.Lock()
 _types: Dict[str, Dict[str, Any]] = {}
 _rate_limit_lock = threading.Lock()
-
-# Session-level flag to log pool warning only once
-_pool_warning_logged = False
 
 
 class NotificationUrgency(Enum):
@@ -679,7 +677,7 @@ def get_queue(moniker: str) -> UserNotificationQueue:
         return _queues[moniker]
 
 
-def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int:
+def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int | None:
     """Get total unread notification count for user (queue + database).
 
     Args:
@@ -689,7 +687,7 @@ def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int:
 
     Returns:
         Total unread notification count (queue + database)
-        Returns 0 if database unavailable
+        Returns None if pool unavailable
     """
     if not moniker:
         return 0
@@ -710,16 +708,17 @@ def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int:
             )
             return 0
 
-    # Connection priority: explicit conn > pool > fail
+    # Connection priority: explicit conn > pool > getpool
     db_conn = kwargs.get("conn", None)
     if db_conn is None:
         pool = kwargs.get("pool", None)
         if pool is None:
-            global _pool_warning_logged
-            if not _pool_warning_logged:
-                io.echo(f"bbsengine6.notify.count.100: {pool=}", level="error")
-                _pool_warning_logged = True
-            return 0  # Option B: Strict BC - return 0 if no pool
+            try:
+                args = kwargs.get("args", None)
+                pool = getpool(args)
+            except Exception:
+                io.echo_traceback("bbsengine6.notify.count.100: getpool() failed")
+                return None
 
         # Use database.connect context manager to properly return connection to pool
         args = kwargs.get("args", None)

@@ -331,7 +331,7 @@ def _check_notifications(moniker: str, **kwargs) -> tuple[bool, int]:
         return False, 0
     try:
         count = notify.count(moniker, **kwargs)
-        return count > 0, count
+        return (count or 0) > 0, count or 0
     except Exception:
         echo_traceback("bbsengine6.io.getch.333:")
         return False, 0

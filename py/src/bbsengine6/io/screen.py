@@ -86,7 +86,7 @@ def get_notification_status(**kwargs) -> str:
             return ""
 
         count = notify.count(moniker, **kwargs)
-        if count > 0:
+        if count and count > 0:
             return f"F2: notify ({count})"
     except Exception:
         echo_traceback("bbsengine6.io.screen.91:")
