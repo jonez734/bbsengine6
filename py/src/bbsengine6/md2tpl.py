@@ -22,7 +22,13 @@ def parse_frontmatter(content: str) -> tuple[dict, str]:
         for line in fm_text.split("\n"):
             if ":" in line:
                 key, _, value = line.partition(":")
-                frontmatter[key.strip()] = value.strip()
+                key = key.strip()
+                value = value.strip()
+
+                if key == "sigs" and "," in value:
+                    frontmatter[key] = [v.strip() for v in value.split(",")]
+                else:
+                    frontmatter[key] = value
 
     return frontmatter, body
 
@@ -42,9 +48,16 @@ def convert_to_smarty(
     frontmatter_lines = []
     for key, value in frontmatter.items():
         safe_key = key.replace("-", "_")
-        frontmatter_lines.append(
-            f'{{if isset($meta.{safe_key})}}{{assign var="meta.{safe_key}" value=$meta.{safe_key}}}{{/if}}'
-        )
+
+        if key == "sigs" and isinstance(value, list):
+            sigpath_str = ",".join(value)
+            frontmatter_lines.append(
+                f'{{assign var="meta.sigs" value="{sigpath_str}"}}'
+            )
+        else:
+            frontmatter_lines.append(
+                f'{{if isset($meta.{safe_key})}}{{assign var="meta.{safe_key}" value=$meta.{safe_key}}}{{/if}}'
+            )
 
     frontmatter_assign = "\n".join(frontmatter_lines) if frontmatter_lines else ""
 

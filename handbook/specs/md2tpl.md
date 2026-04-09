@@ -103,6 +103,7 @@ Content here...
 | `description` | `$meta.description` |
 | `author` | `$meta.author` |
 | `date` | `$meta.date` |
+| `sigs` | `$meta.sigs` (comma-separated sig paths for cross-posting) |
 | `layout` | (reserved for future use) |
 | `foo-bar` | `$meta.foo_bar` (hyphens converted to underscores) |
 
