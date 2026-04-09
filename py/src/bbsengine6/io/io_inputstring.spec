@@ -84,7 +84,8 @@ Returns the input string.
 - `mask`: If set, mask input (e.g., `mask="*"` for password)
 - `completer`: Callback for tab completion: `completer(buffer, curpos, **kwargs) -> list[str]`
 - `verify`: Callback for input validation: `verify(args, buffer, **kwargs) -> bool`
-- `args`: Arguments passed to verify callback
+- `args`: Application args namespace (passed to verify callback and completer)
+- `pool`: Database connection pool (passed to completer via kwargs)
 - `noneok`: Allow empty input (default: False)
 - `**kwargs`: Additional arguments are passed to the `completer` callback.
 

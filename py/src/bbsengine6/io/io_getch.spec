@@ -25,7 +25,10 @@ Reads a single keypress and returns a key name or character.
 **Parameters:**
 - `timeout`: Seconds to wait for input (default: 1.0). If 0, returns immediately.
 - `debug`: If True, log unknown escape sequences and return None (default: False)
-- `**kwargs`: Additional arguments (reserved)
+- `**kwargs`: Additional arguments passed to notification handlers:
+  - `args`: Application args namespace (for database connection if pool not provided)
+  - `pool`: Database connection pool (alternative to args)
+  - Other kwargs are passed through to notification checking
 
 **Returns:**
 - Key name string (e.g., `"KEY_UP"`, `"KEY_LEFT"`, `"KEY_ENTER"`)

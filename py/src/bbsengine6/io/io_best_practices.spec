@@ -46,3 +46,32 @@ def my_func(prefix, **kwargs):
 
 inputstring("Prompt: ", completer=Completer(my_func))
 ```
+
+## Passing args to Input Functions
+
+When using `inputchoice`, `inputboolean`, `inputstring`, or other input functions in a module, you must pass `args` (and optionally `pool`) to enable notification checking:
+
+```python
+# Correct - pass args to enable notifications
+ch = io.inputchoice("Select:", "ABC", args=args, **kwargs)
+result = io.inputboolean("Continue?", "Y", args=args)
+text = io.inputstring("Name: ", args=args)
+
+# Incorrect - will cause errors when notifications are checked
+ch = io.inputchoice("Select:", "ABC")
+```
+
+The `args` parameter provides the database connection info needed for `notify.count()` to check for pending notifications. If you have a pool already, you can pass `pool` instead of (or in addition to) `args`.
+
+### Pattern for Module Functions
+
+When wrapping input functions in your own module:
+
+```python
+def my_module_main(args, **kwargs):
+    # Pass args to input functions so notifications work
+    ch = io.inputchoice("Select:", "ABC", args=args, **kwargs)
+    
+    # If you call submodules, pass kwargs through
+    result = other_module.some_function(args, **kwargs)
+```

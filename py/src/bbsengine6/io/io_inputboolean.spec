@@ -23,6 +23,8 @@ Prompts user for a boolean response.
 - `prompt`: Prompt text to display
 - `default`: Default value (default: None)
 - `options`: Options string (default: "YN")
+- `args`: Application args namespace (for database operations in kwargs handlers)
+- `pool`: Database connection pool (alternative to args for direct pool access)
 - `**kwargs`: Passed to `inputchoice`
 
 **Returns:**
@@ -39,4 +41,5 @@ Prompts user for a boolean response.
 ```python
 result = inputboolean("Continue?")  # Returns True/False
 result = inputboolean("Enable?", options="TF")  # Returns True/False
+result = inputboolean("Confirm?", args=args, pool=pool)  # With notifications
 ```

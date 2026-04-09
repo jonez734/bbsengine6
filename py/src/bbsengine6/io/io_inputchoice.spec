@@ -26,7 +26,9 @@ Prompts user for a single character choice.
 - `noneok`: If True, allow empty input to return None (default: False)
 - `help`: Help text or callback (default: None)
 - `rewriteprompt`: If True, rewrite prompt with colored options (default: False)
-- `**kwargs`: Additional arguments
+- `args`: Application args namespace (for database operations in kwargs handlers)
+- `pool`: Database connection pool (alternative to args for direct pool access)
+- `**kwargs`: Additional arguments passed to getch and notification handlers
 
 **Returns:**
 - Selected character (uppercase)
@@ -38,6 +40,7 @@ Prompts user for a single character choice.
 - Options are converted to uppercase for matching
 - Invalid keys trigger bell
 - Help key (?) displays help text/callback then redraws prompt
+- Pass `args` and/or `pool` in kwargs to enable notification checking during input
 
 ## Examples
 
@@ -45,6 +48,7 @@ Prompts user for a single character choice.
 result = inputchoice("Continue?", "YN")  # Returns "Y" or "N"
 result = inputchoice("Select:", "abc", default="a")  # Returns "A", "B", or "C"
 result = inputchoice("Choice?", "YN", noneok=True)  # Returns "Y", "N", or None
+result = inputchoice("Select:", "ABC", args=args, pool=pool)  # With notifications
 ```
 
 ## Key Handling
