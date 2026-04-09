@@ -32,11 +32,13 @@
 \i notifyview.sql
 \i sig.sql
 \i tag.sql
---\i blurb.sql
+\i blurb.sql
+\i blurb_flag.sql
+\i blurb_read.sql
 \i flag.sql
 \i flagdata.sql
---\i tagmap.sql
---\i blurbview.sql
+\i tagmap.sql
+\i blurbview.sql
 
 --\i fortune.sql
 \echo memberview
