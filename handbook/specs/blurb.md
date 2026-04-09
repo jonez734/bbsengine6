@@ -48,6 +48,23 @@ Maps blurbs to flags.
 
 Unique constraint on `(blurbid, name)`.
 
+### Table: `engine.map_member_blurb_read`
+
+Tracks which members have read which blurbs. Used for "unread" indicators and "mark all as read" functionality.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `moniker` | citext | FK to `__member.moniker` |
+| `blurbid` | bigint | FK to `__blurb.id` |
+| `dateread` | timestamptz | Timestamp when the member read the blurb |
+
+**Indexes:**
+- Primary key on `(moniker, blurbid)` - fast "has member read this blurb?"
+- Index on `moniker` - fast "what has this member read?"
+- Index on `blurbid` - fast "who has read this blurb?"
+
+Unique constraint on `(blurbid, name)`.
+
 ### Table: `engine.map_blurb_sig`
 
 Maps blurbs to SIGs (forum sections).
