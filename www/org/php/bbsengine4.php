@@ -959,7 +959,7 @@ function getflag($flag, $memberid)
 select 
   f.name, 
   coalesce(mmf.value, f.defaultvalue) as value 
-from engine.flag as f
+from engine.member_flag as f
 left outer join engine.map_member_flag as mmf on (f.name=mmf.name and mmf.memberid=?) 
 where f.name=?;
 SQL;
@@ -999,7 +999,7 @@ function getflags($memberid)
 select 
   flag.name, 
   coalesce(map_member_flag.value, flag.defaultvalue) as value
-from engine.flag 
+from engine.member_flag 
 left outer join engine.map_member_flag on flag.name = engine.map_member_flag.name and engine.map_member_flag.memberid=?
 SQL;
   $dat = array($memberid);

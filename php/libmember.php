@@ -78,7 +78,7 @@ namespace bbsengine6\member\lib
     select 
       f.name, 
       coalesce(mmf.value, f.defaultvalue) as value 
-    from engine.flag as f
+    from engine.member_flag as f
     left outer join engine.map_member_flag as mmf on (f.name=mmf.name and mmf.memberid=?) 
     where f.name=?;
 SQL;
