@@ -55,7 +55,7 @@
 \i createrol.sql
 \echo get_role_privs
 \i get_role_privs.sql
-\echo checkflag
-\i checkflag.sql
-\echo getflags
-\i getflags.sql
+\echo checkmemberflag
+\i checkmemberflag.sql
+\echo getmemberflags
+\i getmemberflags.sql
