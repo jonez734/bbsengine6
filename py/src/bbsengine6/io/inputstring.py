@@ -274,9 +274,9 @@ def handle_key_enter(
     if not callable(verify):
         return buffer, curpos, scroll_offset, True, True
 
-    # Run verify as: verify(args, buffer, **kwargs)
+    # Run verify as: verify(buffer, **kwargs)
     try:
-        ok = verify(args, buffer, **kwargs)
+        ok = verify(buffer, **kwargs)
     except Exception as e:
         echo_traceback(f"io.inputstring.handle_key_enter.100: {e}]")
         ok = False
@@ -533,12 +533,16 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
     last_matches = []
     tab_count = 0
 
-    (start_row, start_col) = get_cursor_position()
+    cursor_pos = get_cursor_position()
+    if isinstance(cursor_pos, tuple) and len(cursor_pos) == 2:
+        start_row, start_col = int(cursor_pos[0]), int(cursor_pos[1])
+    else:
+        start_row, start_col = 1, 1
 
     echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
     echo(prompt, end="", flush=True)
 
-    prompt_len = rendered_length(prompt)
+    prompt_len: int = int(rendered_length(prompt))
     input_col_start = start_col + prompt_len
 
     def enter_handler(buffer, curpos, scroll_offset, max_width):

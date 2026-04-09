@@ -83,7 +83,7 @@ Returns the input string.
 - `max_width`: Display width for scrolling (default: 80)
 - `mask`: If set, mask input (e.g., `mask="*"` for password)
 - `completer`: Callback for tab completion: `completer(buffer, curpos, **kwargs) -> list[str]`
-- `verify`: Callback for input validation: `verify(args, buffer, **kwargs) -> bool`
+- `verify`: Callback for input validation: `verify(buffer, **kwargs) -> bool`
 - `args`: Application args namespace (passed to verify callback and completer)
 - `pool`: Database connection pool (passed to completer via kwargs)
 - `noneok`: Allow empty input (default: False)
@@ -219,9 +219,11 @@ Returns list of possible completions for the current word.
 The `verify` callback is called when Enter is pressed:
 
 ```python
-def verify(args, buffer, **kwargs) -> bool
+def verify(buffer, **kwargs) -> bool
 ```
 
+- `buffer`: The current input string
+- `kwargs`: Contains `args`, `pool`, and other optional params passed to `inputstring()`
 - Return `True` to accept input
 - Return `False` to reject (bell sounds, input remains)
 - Can raise exception to handle errors
