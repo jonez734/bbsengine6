@@ -4,7 +4,6 @@ create table if not exists engine.__blurb (
     "id" bigserial unique not null primary key,
     "parentid" bigint constraint fk_engine_blurb_parentid references engine.__blurb(id) on update cascade on delete set null,
     "prg" text,
---    "flags" jsonb,
     "attributes" jsonb,
     "datecreated" timestamptz,
     "createdbymoniker" citext constraint fk_engine_blurb_createdbyid references engine.__member(moniker) on update cascade on delete set null,
