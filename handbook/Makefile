@@ -1,13 +1,21 @@
-.PHONY: all clean convert help watch
+.PHONY: all clean convert help watch convert-tmpl
 
 # Default target
-all: convert
+all: convert convert-tmpl
 
 # Convert markdown to HTML
 convert:
 	@echo "Converting markdown files to HTML..."
 	@python3 convert_markdown.py . --recursive
 	@echo "✓ Conversion complete"
+
+# Convert markdown to Smarty templates
+convert-tmpl:
+	@echo "Converting markdown files to Smarty templates..."
+	@find . -name "*.md" -not -name "*.md~" | while read f; do \
+		PYTHONPATH=/home/opencode/data/work/bbsengine6/py/src python3 -m bbsengine6.md2tpl "$$f"; \
+	done
+	@echo "✓ Template conversion complete"
 
 # Clean up generated files and backups
 clean:

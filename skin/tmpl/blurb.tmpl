@@ -1,0 +1,22 @@
+{**
+ * blurb.tmpl
+ * Base template for blurb-style content blocks with header, body, metadata, and footer
+ * Used by md2tpl.py to generate .tmpl files from markdown
+ *}
+<div class="blurb">
+  <div class="header">
+    <h1>{$meta.title}</h1>
+  </div>
+  <div class="body">
+{block name="content"}
+{$content}
+{/block}
+  </div>
+  <div class="metadata">
+    {if isset($meta.date)}<span class="date">{$meta.date}</span>{/if}
+    {if isset($meta.author)}<span class="author">{$meta.author}</span>{/if}
+  </div>
+  <div class="footer">
+{block name="footer"}{/block}
+  </div>
+</div>

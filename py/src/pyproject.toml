@@ -27,6 +27,7 @@ classifiers = [
 dependencies = [
     # "wcwidth",
     "argcomplete",
+    "markdown",
     "psycopg[binary]",
     "psycopg2-binary",
     "psycopg-pool",
