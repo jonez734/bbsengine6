@@ -18,7 +18,7 @@ Base table storing blurb content and metadata.
 |--------|------|-------------|
 | `id` | bigserial | Primary key |
 | `parentid` | bigint | FK to `__blurb.id` (self-referencing, for nesting) |
-| `prg` | text | Reserved for program/handler reference |
+| `kind` | text | Blurb type (e.g., `folder`, `post`, `empyre.player`) |
 | `attributes` | jsonb | Flexible key-value metadata |
 | `datecreated` | timestamptz | Creation timestamp |
 | `createdbymoniker` | citext | Author's member moniker |
@@ -27,15 +27,26 @@ Base table storing blurb content and metadata.
 | `dateapproved` | timestamptz | Approval timestamp (nullable) |
 | `approvedbymoniker` | citext | Approver's member moniker (nullable) |
 
+### Table: `engine.blurb_flag`
+
+Blurb-specific flags (e.g., `sticky`, `frozen`). Separate from member flags.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `name` | citext | Primary key - flag name |
+| `description` | text | Human-readable description |
+
 ### Table: `engine.map_blurb_flag`
 
-Maps blurbs to flags (key-value pairs).
+Maps blurbs to flags.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | `blurbid` | bigint | FK to `__blurb.id` |
-| `name` | text | Flag name (references `engine.flag.name`) |
-| `value` | text | Flag value |
+| `name` | citext | FK to `blurb_flag.name` |
+| `value` | text | Flag value (nullable) |
+
+Unique constraint on `(blurbid, name)`.
 
 ### Table: `engine.map_blurb_sig`
 
