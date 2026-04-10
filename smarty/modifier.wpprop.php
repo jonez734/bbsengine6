@@ -1,8 +1,10 @@
 <?php
 
+// require_once("wp_prop.php");
+
 /**
  * Smarty plugin to evaluate wpprop codes
- * @package bbsengine5
+ * @package bbsengine4
  */
 
 
@@ -12,7 +14,7 @@
  *
  * began Sat Jun 29 13:17:30 CDT 2002 by Chad Hendry.
  *
- * @package bbsengine5
+ * @package bbsengine4
  */
 
 
@@ -33,7 +35,9 @@ function _wp_prop_int_printf($matches, $data)
 {
     $fmt_string = $data;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    $param = htmlentities($param);
+    $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
+    // Escape % to prevent format string attacks
+    $param = str_replace('%', '%%', $param);
     return sprintf($fmt_string, $param);
 }
 /* }}} */
@@ -45,6 +49,9 @@ function _wp_prop_int_printf_with_default($matches, $data)
    $default = $data[1];
 
    $param = strlen($matches[3]) ? $matches[3] : $default;
+   $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
+   // Escape % to prevent format string attacks
+   $param = str_replace('%', '%%', $param);
 
    return sprintf($fmt_string, $param);
 }
@@ -55,7 +62,10 @@ function _wp_prop_int_aolbonics($matches, $data)
 {
     $fmt_string = $data;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    
+    $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
+    // Escape % to prevent format string attacks
+    $param = str_replace('%', '%%', $param);
+
     $buf = sprintf($fmt_string, $param, $param, $param);
     return $buf;
 }
@@ -64,13 +74,18 @@ function _wp_prop_int_aolbonics($matches, $data)
 
 function _wp_prop_int_link($matches, $data)
 {
-    logentry("_wp_prop_int_link.100: matches=".var_export($matches, true)." data=".var_export($data, true));
+//    logentry("wpprop: link");
+
     $fmt_string = $data;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    
+    $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
+    // Escape % to prevent format string attacks
+    $param = str_replace('%', '%%', $param);
+
     $buf = sprintf($fmt_string, $param, $param);
     return $buf;
 }
+
 
 function _wp_prop_int_youtube($matches, $data)
 {
@@ -86,7 +101,9 @@ function _wp_prop_int_youtube($matches, $data)
 
     $fmt_string = $tube;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    
+    // Validate YouTube video ID - alphanumeric, hyphens, underscores only
+    $param = preg_replace('/[^a-zA-Z0-9_-]/', '', $param);
+
     $buf = sprintf($fmt_string, $param, $param);
     return $buf;
 }
@@ -103,187 +120,187 @@ $table = array
 (
    /* {{{ colors of the rainbow
     */
-   'red'     => ['_wp_prop_int_html',
-                      '<span style="color: #FF0000">'],
-   '/red'    => ['_wp_prop_int_html', '</span>'],
-   'orange'  => ['_wp_prop_int_html',
-                      '<span style="color: #FF8000">'],
-   '/orange' => ['_wp_prop_int_html', '</span>'],
-   'yellow'  => ['_wp_prop_int_html',
-                      '<span style="color: #FFFF00">'],
-   '/yellow' => ['_wp_prop_int_html', '</span>'],
-   'green'   => ['_wp_prop_int_html',
-                      '<span style="color: #00FF00">'],
-   '/green'  => ['_wp_prop_int_html', '</span>'],
-   'blue'    => ['_wp_prop_int_html',
-                      '<span style="color: #0000FF">'],
-   '/blue'   => ['_wp_prop_int_html', '</span>'],
-   'purple'  => ['_wp_prop_int_html',
-                      '<span style="color: #FF00FF">'],
-   '/purple' => ['_wp_prop_int_html', '</span>'],
-   'black'   => ['_wp_prop_int_html',
-                      '<span style="color: #000000">'],
-   '/black'  => ['_wp_prop_int_html', '</span>'],
-   'white'   => ['_wp_prop_int_html',
-                      '<span style="color: #FFFFFF">'],
-   '/white'  => ['_wp_prop_int_html', '</span>'],
+   'red'     => array('_wp_prop_int_html',
+                      '<span style="color: #FF0000">'),
+   '/red'    => array('_wp_prop_int_html', '</span>'),
+   'orange'  => array('_wp_prop_int_html',
+                      '<span style="color: #FF8000">'),
+   '/orange' => array('_wp_prop_int_html', '</span>'),
+   'yellow'  => array('_wp_prop_int_html',
+                      '<span style="color: #FFFF00">'),
+   '/yellow' => array('_wp_prop_int_html', '</span>'),
+   'green'   => array('_wp_prop_int_html',
+                      '<span style="color: #00FF00">'),
+   '/green'  => array('_wp_prop_int_html', '</span>'),
+   'blue'    => array('_wp_prop_int_html',
+                      '<span style="color: #0000FF">'),
+   '/blue'   => array('_wp_prop_int_html', '</span>'),
+   'purple'  => array('_wp_prop_int_html',
+                      '<span style="color: #FF00FF">'),
+   '/purple' => array('_wp_prop_int_html', '</span>'),
+   'black'   => array('_wp_prop_int_html',
+                      '<span style="color: #000000">'),
+   '/black'  => array('_wp_prop_int_html', '</span>'),
+   'white'   => array('_wp_prop_int_html',
+                      '<span style="color: #FFFFFF">'),
+   '/white'  => array('_wp_prop_int_html', '</span>'),
    /* }}} */
 
    /* {{{ fonts
     */
-   'f'  => ['_wp_prop_int_printf',
-                 '<span style="font-family: %s">'],
-   '/f' => ['_wp_prop_int_html', '</span>'],
+   'f'  => array('_wp_prop_int_printf',
+                 '<span style="font-family: %s">'),
+   '/f' => array('_wp_prop_int_html', '</span>'),
    /* }}} */
 
    /* {{{ font attributes
     */
-   'b'  => ['_wp_prop_int_html',
-                 '<span style="font-weight: bold">'],
+   'b'  => array('_wp_prop_int_html',
+                 '<span style="font-weight: bold">'),
 
-   'bold' => ['_wp_prop_int_html',
-   				 '<span style="font-weight: bold">'],
+   'bold' => array('_wp_prop_int_html',
+   				 '<span style="font-weight: bold">'),
 
-   '/b' => ['_wp_prop_int_html', '</span>'],
+   '/b' => array('_wp_prop_int_html', '</span>'),
 
-   '/bold' => ['_wp_prop_int_html', '</span>'],
+   '/bold' => array('_wp_prop_int_html', '</span>'),
    
-   'br' => ['_wp_prop_int_html','<br />'],
+   'br' => array('_wp_prop_int_html','<br />'),
 
-   'i'  => ['_wp_prop_int_html',
-                 '<span style="font-style: italic">'],
-   '/i' => ['_wp_prop_int_html', '</span>'],
+   'i'  => array('_wp_prop_int_html',
+                 '<span style="font-style: italic">'),
+   '/i' => array('_wp_prop_int_html', '</span>'),
 
-   'italics' => ['_wp_prop_int_html',
-                 '<span style="font-style: italic">'],
-   '/italics' => ['_wp_prop_int_html', '</span>'],
+   'italics' => array('_wp_prop_int_html',
+                 '<span style="font-style: italic">'),
+   '/italics' => array('_wp_prop_int_html', '</span>'),
 
-   'u'  => ['_wp_prop_int_html',
-                 '<span style="text-decoration: underline">'],
-   '/u' => ['_wp_prop_int_html', '</span>'],
+   'u'  => array('_wp_prop_int_html',
+                 '<span style="text-decoration: underline">'),
+   '/u' => array('_wp_prop_int_html', '</span>'),
 
-   'underline'  => ['_wp_prop_int_html',
-                 '<span style="text-decoration: underline">'],
-   '/underline' => ['_wp_prop_int_html', '</span>'],
+   'underline'  => array('_wp_prop_int_html',
+                 '<span style="text-decoration: underline">'),
+   '/underline' => array('_wp_prop_int_html', '</span>'),
 
-   's'  => ['_wp_prop_int_html',
-                 '<span style="text-decoration: line-through">'],
-   '/s' => ['_wp_prop_int_html', '</span>'],
+   's'  => array('_wp_prop_int_html',
+                 '<span style="text-decoration: line-through">'),
+   '/s' => array('_wp_prop_int_html', '</span>'),
 
-   'strike'  => ['_wp_prop_int_html',
-                 '<span style="text-decoration: line-through">'],
-   '/strike' => ['_wp_prop_int_html', '</span>'],
+   'strike'  => array('_wp_prop_int_html',
+                 '<span style="text-decoration: line-through">'),
+   '/strike' => array('_wp_prop_int_html', '</span>'),
 
    /* }}} */
 
    /* {{{ lists
     */
-   'ol' => ['_wp_prop_int_html', '<ol>'],
-   'ul' => ['_wp_prop_int_html', '<ul>'],
-   'list'  => ['_wp_prop_int_html', '<ul>'],
-   'item'  => ['_wp_prop_int_html', '<li>'],
-   '/item' => ['_wp_prop_int_html', '</li>'],
-   'li' => ['_wp_prop_int_html', '<li>'],
-   '/li'  => ['_wp_prop_int_html', '</li>'],
-   '/list' => ['_wp_prop_int_html', '</ul>'],
-   '/ul' => ['_wp_prop_int_html', '</ul>'],
-   '/ol' => ['_wp_prop_int_html', '</ol>'],
+   'ol' => array('_wp_prop_int_html', '<ol>'),
+   'ul' => array('_wp_prop_int_html', '<ul>'),
+   'list'  => array('_wp_prop_int_html', '<ul>'),
+   'item'  => array('_wp_prop_int_html', '<li>'),
+   '/item' => array('_wp_prop_int_html', '</li>'),
+   'li' => array('_wp_prop_int_html', '<li>'),
+   '/li'  => array('_wp_prop_int_html', '</li>'),
+   '/list' => array('_wp_prop_int_html', '</ul>'),
+   '/ul' => array('_wp_prop_int_html', '</ul>'),
+   '/ol' => array('_wp_prop_int_html', '</ol>'),
    /* }}} */
 
    /* {{{ quotes
     */
-   'blockquote' => ['_wp_prop_int_html', '<blockquote>'],
-   '/blockquote' => ['_wp_prop_int_html', '</blockquote>'],
+   'blockquote' => array('_wp_prop_int_html', '<blockquote>'),
+   '/blockquote' => array('_wp_prop_int_html', '</blockquote>'),
    /* }}} */
 
    /* {{{ formatting
     */
-   'pre' => ['_wp_prop_int_html', '<pre>'],
-   '/pre' => ['_wp_prop_int_html', '</pre>'],
+   'pre' => array('_wp_prop_int_html', '<pre>'),
+   '/pre' => array('_wp_prop_int_html', '</pre>'),
    /* }}} */
 
    /* {{{ links */
-   'link'  => ['_wp_prop_int_link', '<a href="%s" title="%s">'],
-   '/link' => ['_wp_prop_int_html', '</a>'],
+   'link'  => array('_wp_prop_int_link', '<a href="%s" title="%s">'),
+   '/link' => array('_wp_prop_int_html', '</a>'),
    /* }}} */
 
     /* {{{ anchors */
-    'anchor' => ['_wp_prop_int_printf', '<a name="%s"></a>'],
+    'anchor' => array('_wp_prop_int_printf', '<a name="%s"></a>'),
 
    /* {{{ indentation */
-   'indent'  => ['_wp_prop_int_printf_with_default',
-                      ['<div style="margin-left: %s">', '1em'],
-   '/indent' => ['_wp_prop_int_html', '</div>'],
+   'indent'  => array('_wp_prop_int_printf_with_default',
+                      array('<div style="margin-left: %s">', '1em')),
+   '/indent' => array('_wp_prop_int_html', '</div>'),
    /* }}} */
 
    /* {{{ font size */
-   'small'   => ['_wp_prop_int_html',
-                      '<span style="font-size: small">'],
-   '/small'  => ['_wp_prop_int_html', '</span>'],
+   'small'   => array('_wp_prop_int_html',
+                      '<span style="font-size: small">'),
+   '/small'  => array('_wp_prop_int_html', '</span>'),
 
-   'large'   => ['_wp_prop_int_html',
-                      '<span style="font-size: large">'],
-   '/large'  => ['_wp_prop_int_html', '</span>'],
-   'h1' => ['_wp_prop_int_html', '<h1>'],
-   '/h1' => ['_wp_prop_int_html', '</h1>'],
-   'h2' => ['_wp_prop_int_html', '<h2>'],
-   '/h2' => ['_wp_prop_int_html', '</h2>'],
-   'h3' => ['_wp_prop_int_html', '<h3>'],
-   '/h3' => ['_wp_prop_int_html', '</h3>'],
-   'h4' => ['_wp_prop_int_html', '<h4>'],
-   '/h4' => ['_wp_prop_int_html', '</h4>'],
+   'large'   => array('_wp_prop_int_html',
+                      '<span style="font-size: large">'),
+   '/large'  => array('_wp_prop_int_html', '</span>'),
+   'h1' => array('_wp_prop_int_html', '<h1>'),
+   '/h1' => array('_wp_prop_int_html', '</h1>'),
+   'h2' => array('_wp_prop_int_html', '<h2>'),
+   '/h2' => array('_wp_prop_int_html', '</h2>'),
+   'h3' => array('_wp_prop_int_html', '<h3>'),
+   '/h3' => array('_wp_prop_int_html', '</h3>'),
+   'h4' => array('_wp_prop_int_html', '<h4>'),
+   '/h4' => array('_wp_prop_int_html', '</h4>'),
    /* }}} */
 
    /* {{{ images */
 /* FIX: check the MIME-TYPE of the link prior to display of it so we're not vulnerable to
    FIX: xss or goodness-knows-what */
-/*   'image'   => ['_wp_prop_int_printf', '<img src="%s">'], */
+/*   'image'   => array('_wp_prop_int_printf', '<img src="%s">'), */
    /* }}} */
 
    /* {{{ text alignment */
-   'left'     => ['_wp_prop_int_html',
-                       '<div style="text-align: left">'],
-   '/left'    => ['_wp_prop_int_html', '</div>'],
-   'right'    => ['_wp_prop_int_html',
-                       '<div style="text-align: right">'],
-   '/right'   => ['_wp_prop_int_html', '</div>'],
-   'center'   => ['_wp_prop_int_html',
-                       '<div style="text-align: center">'],
-   '/center'  => ['_wp_prop_int_html', '</div>'],
-   'justify'  => ['_wp_prop_int_html',
-                       '<div style="text-align: justify">'],
-   '/justify' => ['_wp_prop_int_html', '</div>'],
+   'left'     => array('_wp_prop_int_html',
+                       '<div style="text-align: left">'),
+   '/left'    => array('_wp_prop_int_html', '</div>'),
+   'right'    => array('_wp_prop_int_html',
+                       '<div style="text-align: right">'),
+   '/right'   => array('_wp_prop_int_html', '</div>'),
+   'center'   => array('_wp_prop_int_html',
+                       '<div style="text-align: center">'),
+   '/center'  => array('_wp_prop_int_html', '</div>'),
+   'justify'  => array('_wp_prop_int_html',
+                       '<div style="text-align: justify">'),
+   '/justify' => array('_wp_prop_int_html', '</div>'),
    /* }}} */
 
    /* {{{ character entities */
-   'mdash'    => ['_wp_prop_int_html', '&mdash;'],
-   'ndash'    => ['_wp_prop_int_html', '&ndash;'],
-   'copy'     => ['_wp_prop_int_html', '&copy;'],
-   'reg'      => ['_wp_prop_int_html', '&reg;'],
-   'trade'    => ['_wp_prop_int_html', '&trade;'],
-   'cent'     => ['_wp_prop_int_html', '&cent;'],
-   'pound'    => ['_wp_prop_int_html', '&pound;'],
-   'yen'      => ['_wp_prop_int_html', '&yen;'],
-   'clubs'    => ['_wp_prop_int_html', '&clubs;'],
-   'hearts'   => ['_wp_prop_int_html', '&hearts;'],
-   'diamonds' => ['_wp_prop_int_html', '&diams;'],
-   'spades'   => ['_wp_prop_int_html', '&spades;'],
-   'deg'      => ['_wp_prop_int_html', '&deg;'],
-   'apos'     => ['_wp_prop_int_html', '&apos;'],
-   'eacute'   => ['_wp_prop_int_html', '&eacute;'],
+   'mdash'    => array('_wp_prop_int_html', '&mdash;'),
+   'ndash'    => array('_wp_prop_int_html', '&ndash;'),
+   'copy'     => array('_wp_prop_int_html', '&copy;'),
+   'reg'      => array('_wp_prop_int_html', '&reg;'),
+   'trade'    => array('_wp_prop_int_html', '&trade;'),
+   'cent'     => array('_wp_prop_int_html', '&cent;'),
+   'pound'    => array('_wp_prop_int_html', '&pound;'),
+   'yen'      => array('_wp_prop_int_html', '&yen;'),
+   'clubs'    => array('_wp_prop_int_html', '&clubs;'),
+   'hearts'   => array('_wp_prop_int_html', '&hearts;'),
+   'diamonds' => array('_wp_prop_int_html', '&diams;'),
+   'spades'   => array('_wp_prop_int_html', '&spades;'),
+   'deg'      => array('_wp_prop_int_html', '&deg;'),
+   'apos'     => array('_wp_prop_int_html', '&apos;'),
+   'eacute'   => array('_wp_prop_int_html', '&eacute;'),
    /* }}} */
 
-   "aolbonics" => ["_wp_prop_int_aolbonics", '<a href="/aolbonics.php?mode=lookup&amp;word=%s" title="lookup %s in glossary">%s</a>'],
-   "glossary" => ["_wp_prop_int_aolbonics", '<a href="/aolbonics.php?mode=lookup&amp;word=%s" title="lookup %s in glossary">%s</a>'],
+   "aolbonics" => array("_wp_prop_int_aolbonics", '<a href="/aolbonics.php?mode=lookup&amp;word=%s" title="lookup %s in glossary">%s</a>'),
+   "glossary" => array("_wp_prop_int_aolbonics", '<a href="/aolbonics.php?mode=lookup&amp;word=%s" title="lookup %s in glossary">%s</a>'),
 
-   'acronym' => ['_wp_prop_int_printf', '<acronym title="%s">'],
-   '/acronym' => ['_wp_prop_int_html', '</acronym>'],
+   'acronym' => array('_wp_prop_int_printf', '<acronym title="%s">'),
+   '/acronym' => array('_wp_prop_int_html', '</acronym>'),
 
-   'p' => ['_wp_prop_int_html', '<p>'],
-   '/p' => ['_wp_prop_int_html', '</p>'],
+   'p' => array('_wp_prop_int_html', '<p>'),
+   '/p' => array('_wp_prop_int_html', '</p>'),
 
-//   "youtube" => ["_wp_prop_int_youtube", '<object width="425" height="355"><param name="movie" value="http://www.youtube.com/v/%s&amp;rel=1"></param><param name="wmode" value="transparent"></param><embed src="http://www.youtube.com/v/%s&amp;rel=1" type="application/x-shockwave-flash" wmode="transparent" width="425" height="355"></embed></object>')
-   "youtube" => ["_wp_prop_int_youtube", '']
+//   "youtube" => array("_wp_prop_int_youtube", '<object width="425" height="355"><param name="movie" value="http://www.youtube.com/v/%s&amp;rel=1"></param><param name="wmode" value="transparent"></param><embed src="http://www.youtube.com/v/%s&amp;rel=1" type="application/x-shockwave-flash" wmode="transparent" width="425" height="355"></embed></object>')
+   "youtube" => array("_wp_prop_int_youtube", ''),
   
 
 );
@@ -300,11 +317,11 @@ $table = array
 
 //   logentry("wpprop: name: [" . $prop_name . "]");
    
-   if (($pos = strrpos($leading_ws, "\r\n")) !== false)
-     $leading_ws = substr_replace($leading_ws, '', $pos, 2);
+if (($pos = strrpos($leading_ws, "\r\n")) !== false)
+      $leading_ws = substr($leading_ws, 0, $pos) . substr($leading_ws, $pos + 2);
 
    if (($pos = strpos($trailing_ws, "\r\n")) !== false)
-     $trailing_ws = substr_replace($trailing_ws, '', $pos, 2);
+      $trailing_ws = substr($trailing_ws, 0, $pos) . substr($trailing_ws, $pos + 2);
 
 //  logentry("wpprop: length of jumptable: " . count($table));
    if (isset($table[$prop_name]))
@@ -338,7 +355,7 @@ function wp_prop_eval($str)
 /* }}} */
 
 /**
- * Smarty wpprop modifier plugin
+ * Smarty cat modifier plugin
  *
  * Type:     modifier<br />
  * Name:     wpprop<br />
@@ -346,6 +363,7 @@ function wp_prop_eval($str)
  * Purpose:  evaluate wpprop codes and return html
  * Input:    string to evaluate
  * Example:  {$var|wpprop}
+ * @author   Jeff MacDonald <jam@zoidtechnologies.com>
  * @version 1.0
  * @param string
  * @return string
