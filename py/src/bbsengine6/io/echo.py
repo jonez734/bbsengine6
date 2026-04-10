@@ -1135,9 +1135,9 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
             with _current_stream_lock:
                 _terminal_state.cursor_col += len(token.text)
             yield token
-            # After newline whitespace, emit indent if set and not already after F6/INDENT
+            # After newline whitespace, emit indent if set (but not after INDENT to avoid duplicates)
             if "\n" in token.value and _terminal_state.indent > 0:
-                if _previous_token.kind not in ("F6", "INDENT"):
+                if _previous_token.kind != "INDENT":
                     global _first_line_after_f6
                     indent_str = _terminal_state.indent_char * _terminal_state.indent
                     indent_token = Token(
