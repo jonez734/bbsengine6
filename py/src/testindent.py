@@ -1,4 +1,13 @@
+import argparse
 from bbsengine6 import io
+import bbsengine6.io.terminal as terminal
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--terminal-width", type=int, default=None, help="Override terminal width")
+args = parser.parse_args()
+
+if args.terminal_width:
+    terminal.columns = lambda: args.terminal_width
 
 io.echo("{reset}")
 
