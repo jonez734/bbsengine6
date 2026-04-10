@@ -19,20 +19,23 @@
  */
 function smarty_modifier_filesize($size)
 {
-  if (is_null($size) || $size === FALSE || $size == 0)
-    return $size;
+  if (!is_numeric($size) || $size == 0) {
+    return '0 B';
+  }
 
-  if ($size > 1024*1024*1024)
-    $size = sprintf("%.1f GB", $size / (1024*1024*1024));
-  if ($size > 1024*1024)
-    $size = sprintf( "%.1f MB", $size / (1024*1024));
-  elseif ($size > 1024)
-    $size = sprintf( "%.1f kB", $size / 1024);
-  elseif ($size < 0)
-    $size = '&nbsp;';
-  else
-    $size = sprintf("%d B", $size);
+  if ($size < 0) {
+    return '&nbsp;';
+  }
 
-  return $size;
+  if ($size >= 1024*1024*1024) {
+    return sprintf("%.1f GB", $size / (1024*1024*1024));
+  }
+  if ($size >= 1024*1024) {
+    return sprintf("%.1f MB", $size / (1024*1024));
+  }
+  if ($size >= 1024) {
+    return sprintf("%.1f kB", $size / 1024);
+  }
+  return sprintf("%d B", $size);
 }
 ?>

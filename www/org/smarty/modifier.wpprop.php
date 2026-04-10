@@ -35,7 +35,9 @@ function _wp_prop_int_printf($matches, $data)
 {
     $fmt_string = $data;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    $param = htmlentities($param);
+    $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
+    // Escape % to prevent format string attacks
+    $param = str_replace('%', '%%', $param);
     return sprintf($fmt_string, $param);
 }
 /* }}} */
@@ -47,6 +49,9 @@ function _wp_prop_int_printf_with_default($matches, $data)
    $default = $data[1];
 
    $param = strlen($matches[3]) ? $matches[3] : $default;
+   $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
+   // Escape % to prevent format string attacks
+   $param = str_replace('%', '%%', $param);
 
    return sprintf($fmt_string, $param);
 }
@@ -57,7 +62,10 @@ function _wp_prop_int_aolbonics($matches, $data)
 {
     $fmt_string = $data;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    
+    $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
+    // Escape % to prevent format string attacks
+    $param = str_replace('%', '%%', $param);
+
     $buf = sprintf($fmt_string, $param, $param, $param);
     return $buf;
 }
@@ -70,7 +78,10 @@ function _wp_prop_int_link($matches, $data)
 
     $fmt_string = $data;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    
+    $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
+    // Escape % to prevent format string attacks
+    $param = str_replace('%', '%%', $param);
+
     $buf = sprintf($fmt_string, $param, $param);
     return $buf;
 }
@@ -90,7 +101,9 @@ function _wp_prop_int_youtube($matches, $data)
 
     $fmt_string = $tube;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    
+    // Validate YouTube video ID - alphanumeric, hyphens, underscores only
+    $param = preg_replace('/[^a-zA-Z0-9_-]/', '', $param);
+
     $buf = sprintf($fmt_string, $param, $param);
     return $buf;
 }
@@ -304,11 +317,11 @@ $table = array
 
 //   logentry("wpprop: name: [" . $prop_name . "]");
    
-   if (($pos = strrpos($leading_ws, "\r\n")) !== false)
-     $leading_ws = substr_replace($leading_ws, '', $pos, 2);
+if (($pos = strrpos($leading_ws, "\r\n")) !== false)
+      $leading_ws = substr($leading_ws, 0, $pos) . substr($leading_ws, $pos + 2);
 
    if (($pos = strpos($trailing_ws, "\r\n")) !== false)
-     $trailing_ws = substr_replace($trailing_ws, '', $pos, 2);
+      $trailing_ws = substr($trailing_ws, 0, $pos) . substr($trailing_ws, $pos + 2);
 
 //  logentry("wpprop: length of jumptable: " . count($table));
    if (isset($table[$prop_name]))

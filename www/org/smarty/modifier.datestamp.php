@@ -28,7 +28,23 @@ require_once("config.php");
  */
 function smarty_modifier_datestamp($string)
 {
-    return strftime(DATEFORMAT, $string);
+    if (!is_numeric($string)) {
+        return '';
+    }
+    $timestamp = (int)$string;
+
+    $map = [
+        '%Y' => 'Y', '%y' => 'y', '%m' => 'm', '%d' => 'd',
+        '%H' => 'H', '%I' => 'h', '%M' => 'i', '%S' => 's',
+        '%p' => 'A', '%Z' => 'T', '%A' => 'l',
+    ];
+
+    $format = DATEFORMAT;
+    foreach ($map as $from => $to) {
+        $format = str_replace($from, $to, $format);
+    }
+
+    return date($format, $timestamp);
 }
 
 ?>

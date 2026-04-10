@@ -27,7 +27,11 @@ function smarty_function_repo($options, Smarty_Internal_Template $template)
   $dbh = \bbsengine6\database\connect(SYSTEMDSN);
 
   $project = isset($options["project"]) ? $options["project"] : null;
-  
+
+  if ($project === null || $project === '') {
+    return "";
+  }
+
   try
   {
     $sql = "select title from repo.project where name=:project";
@@ -37,23 +41,23 @@ function smarty_function_repo($options, Smarty_Internal_Template $template)
   } catch (PDOException $e) {
     return "";
   }
-  
+
   if ($stmt->rowcount() === 0)
   {
     \bbsengine6\logentry("function.repo.104: path ".var_export($project, True)." not found");
     return "REPO.104";
   }
   $res = $stmt->fetch();
-  
+
   $title = isset($res["title"]) ? $res["title"] : $project;
 
-  $href = PROJECTURL.$project;
+  $href = htmlspecialchars(PROJECTURL.$project, ENT_QUOTES, 'UTF-8');
 
   $title = smarty_modifier_escape($title);
   $title = smarty_modifier_wpprop($title);
 
 //  logentry("title=".var_export($title, True));
-  
+
   $repo = "<a class=\"repo\" href=\"{$href}\">{$title}</a>";
   return $repo;
 }

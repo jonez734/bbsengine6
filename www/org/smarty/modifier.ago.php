@@ -24,10 +24,9 @@
  */
 function smarty_modifier_ago($unixtimestamp)
 {
-      $debug = False;
-      $seconds = time() - $unixtimestamp;
+       $seconds = time() - $unixtimestamp;
 
-      $timeStrings = array("a few seconds",            // 0       <- now or future posts :-)
+       $timeStrings = array("a few seconds",            // 0       <- now or future posts :-)
                         "second", "seconds",    // 1,1
                         "minute", "minutes",      // 3,3
                         "hour", "hours",   // 5,5
@@ -51,17 +50,14 @@ function smarty_modifier_ago($unixtimestamp)
             if ( $min < 60) return floor($min+0.5)." ".$timeStrings[4];
             
             $hrs = $min / 60;
-            echo ($debug == true) ? "hours: ".floor($hrs+0.5)."<br />" : '';
             if ( floor($hrs+0.5) < 2) return floor($hrs+0.5)." ".$timeStrings[5];
             if ( $hrs < 24) return floor($hrs+0.5)." ".$timeStrings[6];
-            
+
             $days = $hrs / 24;
-            echo ($debug == true) ? "days: ".floor($days+0.5)."<br />" : '';
             if ( floor($days+0.5) < 2) return floor($days+0.5)." ".$timeStrings[7];
             if ( $days < 7) return floor($days+0.5)." ".$timeStrings[8];
-            
+
             $weeks = $days / 7;
-            echo ($debug == true) ? "weeks: ".floor($weeks+0.5)."<br />" : '';
             if ( floor($weeks+0.5) < 2) return floor($weeks+0.5)." ".$timeStrings[9];
             if ( $weeks < 4) return floor($weeks+0.5)." ".$timeStrings[10];
             

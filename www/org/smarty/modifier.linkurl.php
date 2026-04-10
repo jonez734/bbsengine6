@@ -33,27 +33,39 @@
   * ------------------------------------------------------------- 
   */ 
  
- function smarty_modifier_linkurl($string, $length=50, $link="SIMPLE", $redir="url.php") 
-    { 
+ function smarty_modifier_linkurl($string, $length=50, $link="SIMPLE", $redir="url.php")
+    {
+    // Validate inputs to prevent DoS
+    if (!is_string($string)) {
+        return '';
+    }
+    $length = (int)$length;
+    if ($length < 1) {
+        $length = 1;
+    }
+    if ($length > 5000) {
+        $length = 5000;
+    }
+
     if (!function_exists('kuerzen')) { 
-    function kuerzen($string,$length) 
-       { 
-       $returner = $string; 
-       if (strlen($returner) > $length) 
-          { 
-          $url = preg_match("=[^/]/[^/]=",$returner,$treffer,PREG_OFFSET_CAPTURE); 
-          $cutpos = $treffer[0][1]+2; 
-          $part[0] = substr($returner,0,$cutpos); 
-          $part[1] = substr($returner,$cutpos); 
- 
-          $strlen1 = $cutpos; 
-          if ($strlen1 > $length) return substr($returner,0,$length-3).'...'; 
-          $strlen2 = strlen($part[1]); 
-          $cutpos = $strlen2-($length-3-$strlen1); 
-          $returner = $part[0].'...'.substr($part[1],$cutpos); 
-          } 
-       return $returner; 
-       } 
+function kuerzen($string,$length)
+       {
+       $returner = $string;
+       if (strlen($returner) > $length)
+          {
+          $url = preg_match("=[^/]/[^/]=",$returner,$treffer,PREG_OFFSET_CAPTURE);
+          $cutpos = $treffer[0][1]+2;
+          $part[0] = substr($returner,0,$cutpos);
+          $part[1] = substr($returner,$cutpos);
+
+          $strlen1 = $cutpos;
+          if ($strlen1 > $length) return substr($returner,0,max(0,$length-3)).'...';
+          $strlen2 = strlen($part[1]);
+          $cutpos = max(0,$strlen2-($length-3-$strlen1));
+          $returner = $part[0].'...'.substr($part[1],$cutpos);
+          }
+       return $returner;
+       }
     } 
      
     // strtoupper() casts TRUE to string "1" and FALSE to string '' (empty) 

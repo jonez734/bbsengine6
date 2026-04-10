@@ -23,23 +23,30 @@
  */
 function smarty_modifier_summarize($string, $limit=20)
 {
-  //the default limit is 20 as in the old saying, "describe it in 20 words or less"
   $words = 0;
   $return = "";
-  
-  if ($limit < 1 || !is_int($limit))
-  {
+
+  $limit = (int)$limit;
+  if ($limit < 1) {
+    $limit = 20;
+  }
+
+  if (!is_string($string) || $string === '') {
     return $return;
-  } 
-  
+  }
+
   $word = strtok($string, " \n\t");
+  if ($word === false) {
+    return $return;
+  }
   $return .= $word;
-  
-  //get the first word, initialize strtok
-  while($word && (++$words < $limit)) 
+
+  while($word !== false && (++$words < $limit))
   {
-    // while there's more words to get and we're still under the limit
     $word = strtok(" \n\t");
+    if ($word === false) {
+      break;
+    }
     $return .= " " . $word;
   }
   return $return;
