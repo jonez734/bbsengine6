@@ -1,5 +1,7 @@
 # ZOID6 State-Changing Endpoints CSRF Audit Report
 
+**Date:** March 30, 2026
+
 ## Executive Summary
 This audit identifies all PHP endpoints that handle state-changing operations (POST/PUT/DELETE) in the zoid6 application. The findings show a mixed security posture with some endpoints using the `handleform()` function (which includes CSRF protection) while others use direct `$_REQUEST`/`$_POST` access.
 
