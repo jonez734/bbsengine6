@@ -317,9 +317,10 @@ def _handle_word(token, **kwargs):
             if _terminal_state.wordwrap:
                 if _terminal_state.cursor_col >= width:
                     _terminal_state.cursor_col = 0
-                if _terminal_state.cursor_col + word_len > width - 1:
+                available_width = width - 1 - _terminal_state.indent
+                if _terminal_state.cursor_col + word_len > available_width:
                     emit_f6 = True
-                    _terminal_state.cursor_col = 0
+                    _terminal_state.cursor_col = _terminal_state.indent
 
             _terminal_state.cursor_col += word_len
             emit_token = True
@@ -799,6 +800,7 @@ def parse_command_params(name, params):
 
 def handler_dispatch(token):
     """Yield from the appropriate handler given a token."""
+    global _handle_indent, _handle_f6, _handle_reset, _handle_bel, _handle_cha, _handle_curpos, _handle_cuu, _handle_cud, _handle_cuf, _handle_cub, _handle_decsc, _handle_decrc, _handle_decstbm, _handle_ed, _handle_elo, _handle_slashfgcolor, _handle_slashbgcolor, _handle_slashall, _handle_reset, _handle_acs, _handle_var, _handle_rgb, _handle_decdhl, _handle_literalopen, _handle_literalclose
 
     cmd = token.value.lower()
 
