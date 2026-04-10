@@ -2,15 +2,17 @@
 
 ## Summary
 
-`md2tpl.py` is a build-time tool that converts markdown files with YAML frontmatter into Smarty `.tmpl` templates for use in the BBS engine web interface.
+`md2tpl.py` is a build-time tool that converts markdown files into Smarty `.tmpl` templates for use in the BBS engine web interface.
 
 ## Brief Description
 
-A Python CLI tool that parses markdown files, extracts frontmatter metadata, converts the markdown body to HTML, and outputs Smarty templates that extend `blurb.tmpl`. Designed to mirror the SASS workflow: write content in markdown, build to Smarty templates.
+A Python CLI tool that parses markdown files, optionally extracts frontmatter metadata, converts the markdown body to HTML, and outputs Smarty templates that extend `blurb.tmpl`. Designed to mirror the SASS workflow: write content in markdown, build to Smarty templates.
+
+**Metadata Priority:** In bbsengine6, blurb metadata (title, author, date, sigs, etc.) comes from PostgreSQL. Frontmatter is optional and acts as a **hardcoded override** if you need to hardcode values in the source file rather than pulling from the DB.
 
 ## Use Case
 
-Content authors write documentation in markdown (e.g., handbook pages) with frontmatter for metadata. At build time, `md2tpl` converts these to Smarty templates that can be rendered by the BBS engine's web PHP pages.
+Content authors write documentation in markdown (e.g., handbook pages). At build time, `md2tpl` converts these to Smarty templates that can be rendered by the BBS engine's web PHP pages. The rendered page pulls metadata from the database, not the markdown source.
 
 ## Public API
 
@@ -35,7 +37,19 @@ convert_to_smarty(md_content: str, input_path: Path, output_path: Path, parent_t
 
 ## Input Format
 
-### Markdown with Frontmatter
+### Markdown without Frontmatter (Recommended)
+
+Most blurbs should use this format. Metadata comes from PostgreSQL.
+
+```markdown
+# Heading
+
+Content here with **bold** and [links](http://example.com).
+```
+
+### Markdown with Frontmatter (Optional Override)
+
+Use only when you need to hardcode metadata in the source file instead of pulling from the database (rare).
 
 ```markdown
 ---
@@ -49,17 +63,34 @@ date: 2026-04-08
 Content here with **bold** and [links](http://example.com).
 ```
 
-### Markdown without Frontmatter
-
-```markdown
-# Heading
-
-Content here...
-```
+**When to use frontmatter:**
+- Static pages without a database record
+- Override specific fields for a particular page
+- Most content: **use without frontmatter** - let the DB provide metadata
 
 ## Output Format
 
-### With Frontmatter
+### Without Frontmatter (Recommended)
+
+The template uses Smarty variables that are populated from PostgreSQL at render time.
+
+```smarty
+{***
+ * Generated from page.md
+ * DO NOT EDIT DIRECTLY - Edit source file instead
+ **}
+{extends file="blurb.tmpl"}
+{block name="title"}{$meta.title|default:"page"}{/block}
+{block name="content"}
+<h1>Heading</h1>
+<p>Content here...</p>
+{/block}
+{block name="description"}{$meta.description|default:''}{/block}
+```
+
+### With Frontmatter (Override)
+
+Adds `{if isset($meta.key)}` blocks that override DB values if present in frontmatter. Use sparingly - only when you need hardcoded overrides.
 
 ```smarty
 {***
@@ -75,22 +106,6 @@ Content here...
 {block name="content"}
 <h1>Heading</h1>
 <p>Content here with <strong>bold</strong> and <a href="http://example.com">links</a>.</p>
-{/block}
-{block name="description"}{$meta.description|default:''}{/block}
-```
-
-### Without Frontmatter
-
-```smarty
-{***
- * Generated from page.md
- * DO NOT EDIT DIRECTLY - Edit source file instead
- **}
-{extends file="blurb.tmpl"}
-{block name="title"}{$meta.title|default:"page"}{/block}
-{block name="content"}
-<h1>Heading</h1>
-<p>Content here...</p>
 {/block}
 {block name="description"}{$meta.description|default:''}{/block}
 ```
