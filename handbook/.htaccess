@@ -5,6 +5,9 @@
 RewriteEngine On
 RewriteBase /handbook/
 
+# Rewrite /handbook/current/ to /handbook/6/
+RewriteRule ^current(/.*)?$ 6$1 [L]
+
 # MIME type for markdown files
 AddType text/markdown .md
 

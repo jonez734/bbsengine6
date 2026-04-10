@@ -1,7 +1,32 @@
-.PHONY: all clean convert help watch convert-tmpl
+.PHONY: all clean convert convert-tmpl help watch stage stage-convert
 
 # Default target
-all: convert convert-tmpl
+all: stage-convert
+
+# Stage handbook files to webroot (rsync only, no conversion)
+stage:
+	@echo "Staging handbook files..."
+	@mkdir -p /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/
+	@rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --times --verbose \
+		--recursive --update --checksum \
+		--exclude '*.md' \
+		--exclude '*.pyc' \
+		--exclude '__pycache__' \
+		--exclude '.sass-cache' \
+		--exclude 'Makefile' \
+		--exclude '*.py' \
+		--exclude '.*' \
+		. /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/
+	@echo "✓ Handbook staged to /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/"
+
+# Convert markdown to .txt files and stage (all-in-one)
+stage-convert:
+	@echo "Converting markdown to txt and staging..."
+	@mkdir -p /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/
+	@find . -name "*.md" -not -name "*.md~" | while read f; do \
+		python3 -c "import markdown; content=open('$$f').read(); html=markdown.markdown(content, extensions=['extra','tables','fenced_code','codehilite']); print(html)" > /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/$$(basename $$f .md).txt; \
+	done
+	@echo "✓ Converted and staged to /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/"
 
 # Convert markdown to HTML
 convert:
@@ -42,13 +67,16 @@ install-deps:
 # Display help
 help:
 	@echo "Handbook Makefile targets:"
-	@echo "  make convert      - Convert all markdown files to HTML"
-	@echo "  make clean        - Remove backup files and temporary content"
-	@echo "  make watch        - Watch for changes and auto-convert"
-	@echo "  make install-deps - Install required dependencies"
-	@echo "  make help         - Display this help message"
+	@echo "  make stage          - Stage handbook files to webroot (rsync)"
+	@echo "  make stage-convert - Convert markdown to txt and stage (default)"
+	@echo "  make convert       - Convert markdown files to HTML"
+	@echo "  make clean         - Remove backup files and temp content"
+	@echo "  make watch         - Watch for changes and auto-convert"
+	@echo "  make install-deps  - Install required dependencies"
+	@echo "  make help          - Display this help message"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make                # Convert markdown to HTML"
+	@echo "  make                      # Convert markdown to txt and stage"
+	@echo "  make stage-convert        # Same as default"
+	@echo "  make stage                # Rsync files without conversion"
 	@echo "  python convert_markdown.py <file.md>  # Convert single file"
-	@echo "  python convert_markdown.py .          # Convert all files"
