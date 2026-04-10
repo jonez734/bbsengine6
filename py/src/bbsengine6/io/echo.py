@@ -568,25 +568,19 @@ def _handle_f6(token):
 
     repeat = int(token.args[0]) if token.args else 1
     token.repeat = repeat
-    token.text = "\n"
     token.kind = "F6"
+
+    indent = _terminal_state.indent
+    if indent > 0:
+        indent_text = _terminal_state.indent_char * indent
+        token.text = "\n" + indent_text
+    else:
+        token.text = "\n"
 
     yield token
 
     with _current_stream_lock:
-        _terminal_state.cursor_col = 0
-
-    if _terminal_state.indent > 0:
-        indent_text = _terminal_state.indent_char * _terminal_state.indent
-        yield Token(
-            "INDENT",
-            value=_terminal_state.indent_char,
-            repeat=1,
-            text=indent_text,
-            raw=indent_text,
-        )
-        with _current_stream_lock:
-            _terminal_state.cursor_col = _terminal_state.indent
+        _terminal_state.cursor_col = indent
 
     return
 
@@ -702,7 +696,7 @@ def _handle_reset(token):
         yield from _acs_off()
 
     _terminal_state.indent = 0
-    _terminal_state.indent_char = " "
+    _terminal_state.indent_char = "-"
 
     yield from _handle_slashall(token)
     yield from _handle_decstbm(token)
@@ -766,7 +760,7 @@ def _handle_indent(token):
     if len(token.args) > 1:
         _terminal_state.indent_char = token.args[1]
     else:
-        _terminal_state.indent_char = " "
+        _terminal_state.indent_char = "-"
 
 
 options = {}
