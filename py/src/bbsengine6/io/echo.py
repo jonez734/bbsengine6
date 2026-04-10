@@ -342,7 +342,7 @@ def _handle_word(token, **kwargs):
     # --- emit AFTER lock release ---
 
     if emit_f6:
-        yield from _handle_f6(token)
+        yield from _handle_f6(token, is_wordwrap=True)
 
     if emit_token:
         token.text = token_text
@@ -577,7 +577,7 @@ def _handle_curpos(token):
     yield token
 
 
-def _handle_f6(token):
+def _handle_f6(token, is_wordwrap=False):
     global _cursor_col, _cursor_row, _pending_indent
 
     repeat = int(token.args[0]) if token.args else 1
@@ -587,20 +587,15 @@ def _handle_f6(token):
 
     yield token
 
-    indent = _terminal_state.indent
-    if indent > 0:
-        indent_text = _terminal_state.indent_char * indent
-        yield Token(
-            "INDENT",
-            value=_terminal_state.indent_char,
-            repeat=1,
-            text=indent_text,
-            raw=indent_text,
-        )
-        _pending_indent = False  # Clear - indent was already emitted
+    _pending_indent = False  # Clear any pending indent
 
     with _current_stream_lock:
-        _terminal_state.cursor_col = indent
+        # After word-wrap: start at indent position
+        # After explicit F6: start at 0
+        if is_wordwrap and _terminal_state.indent > 0:
+            _terminal_state.cursor_col = _terminal_state.indent
+        else:
+            _terminal_state.cursor_col = 0
 
     return
 
