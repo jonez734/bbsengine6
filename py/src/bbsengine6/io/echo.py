@@ -577,12 +577,13 @@ def _handle_f6(token):
         _terminal_state.cursor_col = 0
 
     if _terminal_state.indent > 0:
+        indent_text = _terminal_state.indent_char * _terminal_state.indent
         yield Token(
             "INDENT",
-            value=" ",
+            value=_terminal_state.indent_char,
             repeat=1,
-            text=" " * _terminal_state.indent,
-            raw=" " * _terminal_state.indent,
+            text=indent_text,
+            raw=indent_text,
         )
         with _current_stream_lock:
             _terminal_state.cursor_col = _terminal_state.indent
@@ -701,6 +702,7 @@ def _handle_reset(token):
         yield from _acs_off()
 
     _terminal_state.indent = 0
+    _terminal_state.indent_char = " "
 
     yield from _handle_slashall(token)
     yield from _handle_decstbm(token)
@@ -761,6 +763,10 @@ def _handle_indent(token):
     indent = int(token.args[0]) if token.args else 0
     max_indent = terminal.columns()
     _terminal_state.indent = min(indent, max_indent)
+    if len(token.args) > 1:
+        _terminal_state.indent_char = token.args[1]
+    else:
+        _terminal_state.indent_char = " "
 
 
 options = {}
