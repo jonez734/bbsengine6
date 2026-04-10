@@ -31,6 +31,7 @@ from .palette import c64_palette, get_current_palette, get_palette_entry, rgb
 from . import terminal
 
 _previous_token = Token("UNKNOWN")
+_first_line_after_f6 = False  # Don't reduce width on first line after F6
 
 _skin = {
     "theanswer": 42,
@@ -315,12 +316,20 @@ def _handle_word(token, **kwargs):
             word_len = len(token_text)
 
             if _terminal_state.wordwrap:
+                global _first_line_after_f6
                 if _terminal_state.cursor_col >= width:
                     _terminal_state.cursor_col = 0
-                available_width = width - _terminal_state.indent
+                # Use full width on first line after F6, reduce for wrapped lines
+                if _first_line_after_f6:
+                    available_width = width
+                elif _terminal_state.cursor_col > _terminal_state.indent:
+                    available_width = width - _terminal_state.indent
+                else:
+                    available_width = width
                 if _terminal_state.cursor_col + word_len > available_width:
                     emit_f6 = True
                     _terminal_state.cursor_col = _terminal_state.indent
+                    _first_line_after_f6 = False  # After wrapping, use reduced width
 
             _terminal_state.cursor_col += word_len
             emit_token = True
@@ -564,12 +573,15 @@ def _handle_curpos(token):
 
 
 def _handle_f6(token):
-    global _cursor_col, _cursor_row
+    global _cursor_col, _cursor_row, _first_line_after_f6
 
     repeat = int(token.args[0]) if token.args else 1
     token.repeat = repeat
     token.text = "\n"
     token.kind = "F6"
+
+    # Mark that next line is first after F6 (use full width)
+    _first_line_after_f6 = True
 
     yield token
 
@@ -1112,7 +1124,7 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
         if token.kind == "COMMAND":
             yield from _handle_command(token)
         elif token.kind == "WORD":  # in ("WORD", "WHITESPACE"):
-            yield from _handle_word(token)
+            yield from _handle_word(token, width=width)
         ##            word_len = len(token.text)
         ##
         ##           if _wordwrap and _cursor_col + word_len > width - 1:
