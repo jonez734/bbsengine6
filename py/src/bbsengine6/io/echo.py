@@ -1126,6 +1126,18 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
             with _current_stream_lock:
                 _terminal_state.cursor_col += len(token.text)
             yield token
+            # After newline whitespace, emit indent if set and not after F6/INDENT
+            if "\n" in token.value and _terminal_state.indent > 0:
+                if _previous_token.kind not in ("F6", "INDENT"):
+                    indent_text = _terminal_state.indent_char * _terminal_state.indent
+                    yield Token(
+                        "INDENT",
+                        value=_terminal_state.indent_char,
+                        repeat=1,
+                        text=indent_text,
+                        raw=indent_text,
+                    )
+                    _terminal_state.cursor_col = _terminal_state.indent
         elif token.kind == "F6":
             yield token  # Already processed by handler_dispatch path
         elif token.kind == "INDENT":
