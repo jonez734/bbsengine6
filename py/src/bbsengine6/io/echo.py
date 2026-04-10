@@ -317,7 +317,7 @@ def _handle_word(token, **kwargs):
             if _terminal_state.wordwrap:
                 if _terminal_state.cursor_col >= width:
                     _terminal_state.cursor_col = 0
-                available_width = width - 1 - _terminal_state.indent
+                available_width = width - _terminal_state.indent
                 if _terminal_state.cursor_col + word_len > available_width:
                     emit_f6 = True
                     _terminal_state.cursor_col = _terminal_state.indent
