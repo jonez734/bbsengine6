@@ -137,7 +137,7 @@ These endpoints use `handleform()` and have CSRF protection:
 
 ## File Locations
 
-All documents in: `/home/opencode/data/work/`
+All documents in: `bbsengine6/handbook/csrf/`
 
 ### Audit Documents
 - ZOID6_CSRF_AUDIT_REPORT.md
@@ -148,7 +148,7 @@ All documents in: `/home/opencode/data/work/`
 
 ### Source Code Analyzed
 ```
-/home/opencode/data/work/zoid6/
+`zoid6/`
 ├── sites/engine/php/html/
 │   ├── login.php        ✓ Protected
 │   ├── join.php         ✓ Protected

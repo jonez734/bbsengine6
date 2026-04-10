@@ -376,8 +376,8 @@ Once zoid6 is validated, the same CSRF implementation pattern can be applied to 
 
 ## Documentation & References
 
-- CSRF Token Implementation: `/home/opencode/data/work/bbsengine6/php/util.php:170-235`
-- Form Protection: `/home/opencode/data/work/bbsengine6/php/engine.php:1100-1101, 1245-1249`
+- CSRF Token Implementation: `bbsengine6/php/util.php:170-235`
+- Form Protection: `bbsengine6/php/engine.php:1100-1101, 1245-1249`
 - Client-Side Token Handling: `/zoid6/sites/engine/js/js/ping.js` (new implementation)
 
 ---

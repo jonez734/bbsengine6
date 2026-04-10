@@ -132,7 +132,7 @@ These 5 endpoints use `handleform()` and have proper CSRF protection:
 ## Critical Vulnerabilities Quick Reference
 
 ### Gfile.php (Document Management)
-- **Location:** /home/opencode/data/work/zoid6/sites/www/php/gfile.php
+- **Location:** `zoid6/sites/www/php/gfile.php`
 - **Issues:**
   - Line 259: No CSRF check on add()
   - Line 335: No CSRF check on edit()
@@ -142,14 +142,14 @@ These 5 endpoints use `handleform()` and have proper CSRF protection:
 - **Fix Priority:** CRITICAL (Week 1-2)
 
 ### Member.php (Account Management)
-- **Location:** /home/opencode/data/work/zoid6/sites/engine/php/html/member.php
+- **Location:** `zoid6/sites/engine/php/html/member.php`
 - **Issues:**
   - Line 468: delete() uses $_REQUEST["id"] without CSRF token
 - **Impact:** Unauthorized member account deletion
 - **Fix Priority:** CRITICAL (Week 1-2)
 
 ### Notify.php (Notifications)
-- **Location:** /home/opencode/data/work/zoid6/sites/engine/php/html/notify.php
+- **Location:** `zoid6/sites/engine/php/html/notify.php`
 - **Issues:**
   - Line 147: delete() uses $_REQUEST["notifyid"] without CSRF token
   - Line 135: markread() updates without CSRF validation
@@ -158,7 +158,7 @@ These 5 endpoints use `handleform()` and have proper CSRF protection:
 
 ### Missing Handler
 - **Endpoint:** /ping
-- **Expected Location:** /home/opencode/data/work/zoid6/sites/www/php/ping.php
+- **Location:** `zoid6/sites/www/php/ping.php` (CREATED)
 - **Status:** NOT FOUND
 - **Called By:** engine/js/js/ping.js (line 21)
 - **Fix Priority:** MEDIUM (implement handler with CSRF protection)
@@ -205,7 +205,7 @@ Before deploying any fixes, verify:
 
 ## File Locations
 
-All audit documents are in: `/home/opencode/data/work/`
+All audit documents are in: `bbsengine6/handbook/csrf/`
 
 - ZOID6_CSRF_AUDIT_REPORT.md
 - ZOID6_AUDIT_SUMMARY.txt
@@ -213,9 +213,9 @@ All audit documents are in: `/home/opencode/data/work/`
 - ZOID6_AUDIT_INDEX.md (this file)
 
 Source code analyzed:
-- `/home/opencode/data/work/zoid6/sites/engine/php/html/` (7 files)
-- `/home/opencode/data/work/zoid6/sites/www/php/` (9 files)
-- `/home/opencode/data/work/zoid6/sites/engine/js/js/` (JavaScript)
+- `zoid6/sites/engine/php/html/` (7 files)
+- `zoid6/sites/www/php/` (9 files)
+- `zoid6/sites/engine/js/js/` (JavaScript)
 
 ---
 
