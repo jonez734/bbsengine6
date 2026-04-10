@@ -1127,7 +1127,9 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
                 _terminal_state.cursor_col += len(token.text)
             yield token
         elif token.kind == "F6":
-            yield from _handle_f6(token)
+            yield token  # Already processed by handler_dispatch path
+        elif token.kind == "INDENT":
+            yield token  # Already yielded by _handle_f6
         else:
             # unknown token, yield as-is
             yield token
