@@ -579,10 +579,10 @@ def _handle_f6(token):
     if _terminal_state.indent > 0:
         yield Token(
             "INDENT",
-            value="-",
+            value=" ",
             repeat=1,
-            text="-" * _terminal_state.indent,
-            raw="-" * _terminal_state.indent,
+            text=" " * _terminal_state.indent,
+            raw=" " * _terminal_state.indent,
         )
         with _current_stream_lock:
             _terminal_state.cursor_col = _terminal_state.indent
