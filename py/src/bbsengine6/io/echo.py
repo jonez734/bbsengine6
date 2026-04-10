@@ -1139,16 +1139,18 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
             if "\n" in token.value and _terminal_state.indent > 0:
                 if _previous_token.kind not in ("F6", "INDENT"):
                     global _first_line_after_f6
-                    indent_text = _terminal_state.indent_char * _terminal_state.indent
-                    yield Token(
+                    indent_str = _terminal_state.indent_char * _terminal_state.indent
+                    indent_token = Token(
                         "INDENT",
                         value=_terminal_state.indent_char,
                         repeat=1,
-                        text=indent_text,
-                        raw=indent_text,
+                        text=indent_str,
+                        raw=indent_str,
                     )
+                    yield indent_token
                     _terminal_state.cursor_col = _terminal_state.indent
                     _first_line_after_f6 = True  # First line after newline uses full width
+                    _previous_token = indent_token  # Track INDENT so next newline doesn't add again
         elif token.kind == "F6":
             yield token  # Already processed by handler_dispatch path
         elif token.kind == "INDENT":
