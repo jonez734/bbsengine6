@@ -579,7 +579,7 @@ def _handle_f6(token):
         yield Token(
             "INDENT",
             value=_terminal_state.indent_char,
-            repeat=indent,
+            repeat=1,
             text=indent_text,
             raw=indent_text,
         )
