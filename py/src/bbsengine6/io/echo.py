@@ -31,6 +31,7 @@ from .palette import c64_palette, get_current_palette, get_palette_entry, rgb
 from . import terminal
 
 _previous_token = Token("UNKNOWN")
+_pending_indent = False  # Track if indent needs to be output before next content
 
 _skin = {
     "theanswer": 42,
@@ -288,9 +289,22 @@ def to_fullwidth(s: str) -> str:
 # token handlers
 # ----------------------------
 def _handle_word(token, **kwargs):
-    global _terminal_state
+    global _terminal_state, _pending_indent
 
     width = kwargs.get("width", terminal.columns())
+
+    # --- emit pending indent if set ---
+    if _pending_indent:
+        indent_text = _terminal_state.indent_char * _terminal_state.indent
+        yield Token(
+            "INDENT",
+            value=_terminal_state.indent_char,
+            repeat=1,
+            text=indent_text,
+            raw=indent_text,
+        )
+        _terminal_state.cursor_col = _terminal_state.indent
+        _pending_indent = False
 
     # --- normalize token ---
     token.text = token.value
@@ -564,7 +578,7 @@ def _handle_curpos(token):
 
 
 def _handle_f6(token):
-    global _cursor_col, _cursor_row
+    global _cursor_col, _cursor_row, _pending_indent
 
     repeat = int(token.args[0]) if token.args else 1
     token.repeat = repeat
@@ -583,6 +597,7 @@ def _handle_f6(token):
             text=indent_text,
             raw=indent_text,
         )
+        _pending_indent = False  # Clear - indent was already emitted
 
     with _current_stream_lock:
         _terminal_state.cursor_col = indent
@@ -758,7 +773,7 @@ def _handle_literalclose(token):
 
 
 def _handle_indent(token):
-    global _terminal_state
+    global _terminal_state, _pending_indent
     indent = int(token.args[0]) if token.args else 0
     max_indent = terminal.columns()
     _terminal_state.indent = min(indent, max_indent)
@@ -766,6 +781,9 @@ def _handle_indent(token):
         _terminal_state.indent_char = token.args[1]
     else:
         _terminal_state.indent_char = "-"
+    # Mark that indent needs to be output before next content
+    if indent > 0:
+        _pending_indent = True
 
 
 options = {}
