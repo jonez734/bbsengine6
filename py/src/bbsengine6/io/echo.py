@@ -319,13 +319,8 @@ def _handle_word(token, **kwargs):
                 global _first_line_after_f6
                 if _terminal_state.cursor_col >= width:
                     _terminal_state.cursor_col = 0
-                # Use full width on first line after F6, reduce for wrapped lines
-                if _first_line_after_f6:
-                    available_width = width
-                elif _terminal_state.cursor_col > _terminal_state.indent:
-                    available_width = width - _terminal_state.indent
-                else:
-                    available_width = width
+                # Account for indent always (first line gets indent too)
+                available_width = width - _terminal_state.indent
                 if _terminal_state.cursor_col + word_len > available_width:
                     emit_f6 = True
                     _terminal_state.cursor_col = _terminal_state.indent

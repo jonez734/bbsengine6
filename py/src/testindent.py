@@ -8,8 +8,9 @@ args = parser.parse_args()
 
 if args.terminal_width:
     terminal.columns = lambda: args.terminal_width
+    terminal.width = lambda: args.terminal_width
 
-io.echo("{reset}")
+#io.echo("{reset}")
 
 buf = """Lorem ipsum dolor sit amet, consectetur adipiscing elit. Duis mi nibh, feugiat a finibus in, sodales eget lacus. Fusce auctor nisi vitae mollis aliquam. In fringilla felis et nibh volutpat aliquam. In blandit orci in ipsum placerat facilisis quis eu ante. Curabitur tempus ante non nulla fringilla viverra. Aliquam vel feugiat sapien. Duis in varius lorem. Proin mollis vehicula ornare. Donec venenatis, ex ac bibendum ornare, libero nibh efficitur quam, a congue lectus dolor a urna. Praesent porttitor dui sit amet augue ullamcorper, in tempor est vulputate.
 
