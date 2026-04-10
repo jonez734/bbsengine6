@@ -39,9 +39,9 @@ class TestIndent:
         assert _terminal_state.indent_char == "x"
 
     def test_indent_default_char(self):
-        """Test default indent char is dash"""
+        """Test default indent char is space"""
         io.echo("{indent:5}", width=80, flush=False)
-        assert _terminal_state.indent_char == "-"
+        assert _terminal_state.indent_char == " "
 
     def test_indent_with_f6(self):
         """Test indent with F6 - should render without error"""

@@ -24,6 +24,7 @@ from .common import (
     _terminal_state_stack_enabled,
     _current_stream_lock,
     TerminalState,
+    DEFAULT_INDENT_CHAR,
 )
 from .util import logentry
 from .palette import c64_palette, get_current_palette, get_palette_entry, rgb
@@ -774,7 +775,7 @@ def _handle_indent(token):
     if len(token.args) > 1:
         _terminal_state.indent_char = token.args[1]
     else:
-        _terminal_state.indent_char = "-"
+        _terminal_state.indent_char = DEFAULT_INDENT_CHAR
 
 
 options = {}

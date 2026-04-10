@@ -14,6 +14,8 @@ from .const import ESC, CSI
 
 from . import terminal
 
+DEFAULT_INDENT_CHAR = " "
+
 
 @dataclass
 class Token:
@@ -289,7 +291,7 @@ class TerminalState:
     decdhl: bool = False  # double height
     decdwl: bool = False
     indent: int = 0
-    indent_char: str = "-"
+    indent_char: str = DEFAULT_INDENT_CHAR
 
     def __repr__(self):
         return f"TerminalState({self.cursor_row=}, {self.cursor_col=}, {self.wordwrap=}, {self.has_color=}, {self.hidden=}, {self.acs=}, {self.raw=})"
