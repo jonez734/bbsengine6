@@ -58,6 +58,7 @@ echo("{red}Hello {bold}World{/bold}!{/red}")
 | `{/fgcolor}` | Reset foreground color |
 | `{/bgcolor}` | Reset background color |
 | `{/all}` | Reset all attributes |
+| `{reset}` | Reset all attributes (also resets indent to 0) |
 
 ---
 
@@ -119,6 +120,8 @@ Closing syntax: `{/bold}`, `{/italic}`, etc.
 | `{f6:n}` | Print n newlines |
 | `{wait:n}` | Wait n units (for text animation) |
 | `{settitle:text}` | Set terminal title |
+| `{indent:n}` | Indent each line by n spaces (capped to terminal width) |
+| `{indent}` | Reset indent to 0 |
 
 ---
 

@@ -288,6 +288,7 @@ class TerminalState:
     raw: bool = False
     decdhl: bool = False  # double height
     decdwl: bool = False
+    indent: int = 0
 
     def __repr__(self):
         return f"TerminalState({self.cursor_row=}, {self.cursor_col=}, {self.wordwrap=}, {self.has_color=}, {self.hidden=}, {self.acs=}, {self.raw=})"

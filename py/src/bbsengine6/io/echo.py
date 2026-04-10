@@ -144,6 +144,8 @@ _command_handlers = {
     # cursor horizontal absolute @since 20251025
     "cha": r"cha",
     "slashall": r"/all",
+    # indent
+    "indent": r"indent",
 }
 
 _compiled_command_handlers = [
@@ -571,8 +573,19 @@ def _handle_f6(token):
     yield token
 
     with _current_stream_lock:
-        _terminal_state.cursor_col = 0  ### _cursor_col = 0
-    ###    _cursor_row += 1
+        _terminal_state.cursor_col = 0
+
+    if _terminal_state.indent > 0:
+        indent_text = " " * _terminal_state.indent
+        yield Token(
+            "WHITESPACE",
+            value=" ",
+            repeat=_terminal_state.indent,
+            text=indent_text,
+            raw=indent_text,
+        )
+        with _current_stream_lock:
+            _terminal_state.cursor_col = _terminal_state.indent
 
     return
 
@@ -687,6 +700,8 @@ def _handle_reset(token):
     if not _raw:
         yield from _acs_off()
 
+    _terminal_state.indent = 0
+
     yield from _handle_slashall(token)
     yield from _handle_decstbm(token)
     return
@@ -739,6 +754,13 @@ def _handle_literalclose(token):
     token.repeat = 1
     token.text = "}"
     yield token
+
+
+def _handle_indent(token):
+    global _terminal_state
+    indent = int(token.args[0]) if token.args else 0
+    max_indent = terminal.columns()
+    _terminal_state.indent = min(indent, max_indent)
 
 
 options = {}
