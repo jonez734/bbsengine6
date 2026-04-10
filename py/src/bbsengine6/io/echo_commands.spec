@@ -40,7 +40,7 @@ echo("{red}Hello {bold}World{/bold}!{/red}")
 
 | Command | Description |
 |---------|-------------|
-| `{indent:n}` | Indent each line by n characters (default char is `-`, capped to terminal width) |
+| `{indent:n}` | Indent each line by n characters (default char is space, capped to terminal width) |
 | `{indent}` | Reset indent to 0 |
 | `{indent:n:char}` | Indent using custom character `char` |
 
