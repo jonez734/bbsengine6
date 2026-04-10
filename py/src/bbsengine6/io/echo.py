@@ -31,7 +31,6 @@ from .palette import c64_palette, get_current_palette, get_palette_entry, rgb
 from . import terminal
 
 _previous_token = Token("UNKNOWN")
-_pending_indent = False  # Track if indent needs to be output before next content
 
 _skin = {
     "theanswer": 42,
@@ -289,22 +288,9 @@ def to_fullwidth(s: str) -> str:
 # token handlers
 # ----------------------------
 def _handle_word(token, **kwargs):
-    global _terminal_state, _pending_indent
+    global _terminal_state
 
     width = kwargs.get("width", terminal.columns())
-
-    # --- emit pending indent if set ---
-    if _pending_indent:
-        indent_text = _terminal_state.indent_char * _terminal_state.indent
-        yield Token(
-            "INDENT",
-            value=_terminal_state.indent_char,
-            repeat=1,
-            text=indent_text,
-            raw=indent_text,
-        )
-        _terminal_state.cursor_col = _terminal_state.indent
-        _pending_indent = False
 
     # --- normalize token ---
     token.text = token.value
@@ -578,7 +564,7 @@ def _handle_curpos(token):
 
 
 def _handle_f6(token, is_wordwrap=False):
-    global _cursor_col, _cursor_row, _pending_indent
+    global _cursor_col, _cursor_row
 
     repeat = int(token.args[0]) if token.args else 1
     token.repeat = repeat
@@ -587,14 +573,21 @@ def _handle_f6(token, is_wordwrap=False):
 
     yield token
 
-    _pending_indent = False  # Clear any pending indent
-
-    with _current_stream_lock:
-        # After word-wrap: start at indent position
-        # After explicit F6: start at 0
-        if is_wordwrap and _terminal_state.indent > 0:
+    # After word-wrap: emit indent and start at indent position
+    # After explicit F6: start at 0
+    if is_wordwrap and _terminal_state.indent > 0:
+        indent_text = _terminal_state.indent_char * _terminal_state.indent
+        yield Token(
+            "INDENT",
+            value=_terminal_state.indent_char,
+            repeat=1,
+            text=indent_text,
+            raw=indent_text,
+        )
+        with _current_stream_lock:
             _terminal_state.cursor_col = _terminal_state.indent
-        else:
+    else:
+        with _current_stream_lock:
             _terminal_state.cursor_col = 0
 
     return
@@ -768,7 +761,7 @@ def _handle_literalclose(token):
 
 
 def _handle_indent(token):
-    global _terminal_state, _pending_indent
+    global _terminal_state
     indent = int(token.args[0]) if token.args else 0
     max_indent = terminal.columns()
     _terminal_state.indent = min(indent, max_indent)
@@ -776,9 +769,6 @@ def _handle_indent(token):
         _terminal_state.indent_char = token.args[1]
     else:
         _terminal_state.indent_char = "-"
-    # Mark that indent needs to be output before next content
-    if indent > 0:
-        _pending_indent = True
 
 
 options = {}
@@ -1139,18 +1129,6 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
             with _current_stream_lock:
                 _terminal_state.cursor_col += len(token.text)
             yield token
-            # After newline whitespace, emit indent if set and not after F6/INDENT
-            if "\n" in token.value and _terminal_state.indent > 0:
-                if _previous_token.kind not in ("F6", "INDENT"):
-                    indent_text = _terminal_state.indent_char * _terminal_state.indent
-                    yield Token(
-                        "INDENT",
-                        value=_terminal_state.indent_char,
-                        repeat=1,
-                        text=indent_text,
-                        raw=indent_text,
-                    )
-                    _terminal_state.cursor_col = _terminal_state.indent
         elif token.kind == "F6":
             yield token  # Already processed by handler_dispatch path
         elif token.kind == "INDENT":
