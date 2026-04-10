@@ -277,18 +277,31 @@ def printr(ranges):
 
 
 def filedisplay(res, **kw) -> None:
+    import tempfile
+    import os
+
     width = kw["width"] if "width" in kw else None
     indent = kw["indent"] if "indent" in kw else 0
+    more = kw["more"] if "more" in kw else True
 
     if width is None:
         width = io.terminal.width()
 
-    buf = ""
     with res as r:
-        for elle in r:
-            buf += elle
-    io.echo(buf, width=width, indent=indent, wordwrap=True)
-    io.echo("{/all}{f6}")
+        content = r.read()
+
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        page_size = 0 if not more else 20
+        io.echo_file(tmp_path, page_size=page_size, wordwrap=False)
+    finally:
+        os.unlink(tmp_path)
+
+    if not more:
+        io.echo("{/all}{f6}")
 
 
 _dice_rng = random.SystemRandom()

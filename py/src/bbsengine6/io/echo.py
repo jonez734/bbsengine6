@@ -577,13 +577,12 @@ def _handle_f6(token):
         _terminal_state.cursor_col = 0
 
     if _terminal_state.indent > 0:
-        indent_text = " " * _terminal_state.indent
         yield Token(
-            "WHITESPACE",
-            value=" ",
-            repeat=_terminal_state.indent,
-            text=indent_text,
-            raw=indent_text,
+            "INDENT",
+            value="-",
+            repeat=1,
+            text="-" * _terminal_state.indent,
+            raw="-" * _terminal_state.indent,
         )
         with _current_stream_lock:
             _terminal_state.cursor_col = _terminal_state.indent

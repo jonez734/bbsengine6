@@ -1,0 +1,77 @@
+{**
+ * socrates_post.tmpl
+ * Template for displaying Socrates posts
+ * Extends blurb.tmpl and displays post-specific fields
+ *}
+{extends file="blurb.tmpl"}
+
+{block name="header"}
+  {$meta.header|default:"Post"}
+{/block}
+
+{block name="content"}
+  <div class="socrates-post">
+    <div class="post-title">
+      <h2>{$title}</h2>
+    </div>
+    
+    <div class="post-content">
+      {$content}
+    </div>
+    
+    {if $tags|@count > 0}
+    <div class="post-tags">
+      <span class="label">Tags:</span>
+      {foreach from=$tags item=tag}
+        <span class="tag">{$tag}</span>
+      {/foreach}
+    </div>
+    {/if}
+    
+    <div class="post-meta">
+      {if $postedbymoniker}
+        <span class="author">
+          <span class="label">Posted by:</span>
+          <span class="value">{$postedbymoniker}</span>
+        </span>
+      {/if}
+      
+      {if $dateposted}
+        <span class="date-posted">
+          <span class="label">Posted:</span>
+          <span class="value">{$dateposted}</span>
+        </span>
+      {/if}
+      
+      {if $modifiedbymoniker}
+        <span class="modified-by">
+          <span class="label">Modified by:</span>
+          <span class="value">{$modifiedbymoniker}</span>
+        </span>
+      {/if}
+      
+      {if $datemodified}
+        <span class="date-modified">
+          <span class="label">Modified:</span>
+          <span class="value">{$datemodified}</span>
+        </span>
+      {/if}
+      
+      {if $replycount > 0}
+        <span class="reply-count">
+          <span class="label">Replies:</span>
+          <span class="value">{$replycount}</span>
+        </span>
+      {/if}
+    </div>
+    
+    {if $sigs|@count > 0}
+    <div class="post-sigs">
+      <span class="label">In SIGs:</span>
+      {foreach from=$sigs item=sig}
+        <span class="sig">{$sig}</span>
+      {/foreach}
+    </div>
+    {/if}
+  </div>
+{/block}

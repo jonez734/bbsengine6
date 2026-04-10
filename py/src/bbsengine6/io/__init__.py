@@ -2,6 +2,7 @@
 
 from .echo import (
     echo,
+    echo_file,
     echo_traceback,
     rendered_length,
     setvar,
@@ -37,6 +38,7 @@ inputchar = inputchoice
 
 __all__ = [
     "echo",
+    "echo_file",
     "echo_traceback",
     "rendered_length",
     "get_cursor_position",

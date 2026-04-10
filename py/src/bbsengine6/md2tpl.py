@@ -61,7 +61,7 @@ def convert_to_smarty(
 
     frontmatter_assign = "\n".join(frontmatter_lines) if frontmatter_lines else ""
 
-    title_value = f'{{$meta.title|default:"{input_path.stem}"}}'
+    header_value = f'{{$meta.header|default:"{input_path.stem}"}}'
 
     tmpl = f'''{{***
  * Generated from {input_path.name}
@@ -69,11 +69,10 @@ def convert_to_smarty(
  **}}
 {frontmatter_assign}
 {{extends file="{parent_template}"}}
-{{block name="title"}}{title_value}{{/block}}
+{{block name="header"}}{header_value}{{/block}}
 {{block name="content"}}
 {html_body}
 {{/block}}
-{{block name="description"}}{{$meta.description|default:''}}{{/block}}
 '''
     return tmpl
 

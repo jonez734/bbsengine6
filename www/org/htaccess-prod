@@ -22,9 +22,9 @@ RewriteRule ^handbook/current[/]?$ handbook/6/
 RewriteRule ^handbook/([\d]+)/([0-9a-zA-Z-]+).txt$ /handbook.php?mode=chapter&chapter=$2&version=$1 [last]
 RewriteRule ^handbook/([\d]+)[/]?$ /handbook.php?mode=index&version=$1 [last]
 
-RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)\.(md|txt)$ /page.php?version=$1&file=$2.$3 [last]
+# RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)\.(md|txt)$ /page.php?version=$1&file=$2.$3 [last]
 # RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)$ /page.php?version=$1&name=$2 [last]
-RewriteRule ^(v[\d]+)[/]?$ /dir.php?version=$1 [last]
+# RewriteRule ^(v[\d]+)[/]?$ /dir.php?version=$1 [last]
 
 # RewriteRule ^(v[\d])/apidocs/(.*)$ /apidocs.php?version=$1&file=$2 [last]
 

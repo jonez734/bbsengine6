@@ -5,7 +5,9 @@
  *}
 <div class="blurb">
   <div class="header">
-    <h1>{$meta.title}</h1>
+{block name="header"}
+    <h1>{$meta.header}</h1>
+{/block}
   </div>
   <div class="body">
 {block name="content"}
