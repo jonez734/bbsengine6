@@ -1,4 +1,5 @@
 import re
+import threading
 
 from . import terminal
 
@@ -14,6 +15,8 @@ from .common import (
 from .util import logentry
 
 # --- 0. MANDATORY DEFINITIONS & GLOBALS ---
+
+_inputstring_lock = threading.Lock()
 
 
 class Completer:
@@ -101,6 +104,9 @@ class Completer:
 
 
 yank_buffer = []  # Clipboard
+_yank_buffer_lock = threading.Lock()
+
+_key_actions_lock = threading.Lock()
 
 
 def move_cursor(row, col):
@@ -157,12 +163,14 @@ KEY_ACTIONS = {}
 
 
 def add_key_mapping(key_string, action_lambda):
-    KEY_ACTIONS[key_string] = action_lambda
+    with _key_actions_lock:
+        KEY_ACTIONS[key_string] = action_lambda
 
 
 def remove_key_mapping(key_string):
-    if key_string in KEY_ACTIONS:
-        del KEY_ACTIONS[key_string]
+    with _key_actions_lock:
+        if key_string in KEY_ACTIONS:
+            del KEY_ACTIONS[key_string]
 
 
 # --- 2. Helper Functions ---
@@ -205,8 +213,9 @@ def handle_backspace(buffer, curpos, scroll_offset, max_width):
 def handle_cuttobol(buffer, curpos, scroll_offset, max_width):
     global yank_buffer
     cut_text = buffer[:curpos]
-    if cut_text:
-        yank_buffer = [cut_text]
+    with _yank_buffer_lock:
+        if cut_text:
+            yank_buffer = [cut_text]
     buffer = buffer[curpos:]
     return buffer, 0, 0
 
@@ -222,15 +231,17 @@ def handle_cutpreviousword(buffer, curpos, scroll_offset, max_width):
     if word_start == word_end:
         return buffer, curpos, scroll_offset
     cut_text = buffer[word_start:curpos]
-    if cut_text:
-        yank_buffer = [cut_text]
+    with _yank_buffer_lock:
+        if cut_text:
+            yank_buffer = [cut_text]
     buffer = buffer[:word_start] + buffer[curpos:]
     return buffer, word_start, scroll_offset
 
 
 def handle_yank(buffer, curpos, scroll_offset, max_width):
     global yank_buffer
-    yank_text = "\n".join(yank_buffer)
+    with _yank_buffer_lock:
+        yank_text = "\n".join(yank_buffer)
     buffer = buffer[:curpos] + yank_text + buffer[curpos:]
     return buffer, curpos + len(yank_text), scroll_offset
 
@@ -562,7 +573,8 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
             **kwargs,
         )
 
-    KEY_ACTIONS["KEY_ENTER"] = enter_handler
+    with _key_actions_lock:
+        KEY_ACTIONS["KEY_ENTER"] = enter_handler
 
     _current_display_str = None
     done = False
@@ -635,27 +647,28 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
             )
             _current_display_str = None
 
-        elif ch in KEY_ACTIONS:
-            result = KEY_ACTIONS[ch](buffer, curpos, scroll_offset, max_width)
+        with _key_actions_lock:
+            if ch in KEY_ACTIONS:
+                result = KEY_ACTIONS[ch](buffer, curpos, scroll_offset, max_width)
 
-            if ch == "KEY_ENTER":
-                buffer, curpos, scroll_offset, accepted, need_redraw = result
-                if accepted:
-                    return buffer
-                if need_redraw:
-                    _current_display_str = None
-                continue
+                if ch == "KEY_ENTER":
+                    buffer, curpos, scroll_offset, accepted, need_redraw = result
+                    if accepted:
+                        return buffer
+                    if need_redraw:
+                        _current_display_str = None
+                    continue
 
-            buffer, curpos, scroll_offset = result
-            last_matches = []
-            tab_count = 0
-
-        elif len(ch) == 1:
-            if len(buffer) < max_len:
-                buffer = buffer[:curpos] + ch + buffer[curpos:]
-                curpos += 1
-            last_matches = []
-            tab_count = 0
+                buffer, curpos, scroll_offset = result
+                last_matches = []
+                tab_count = 0
+            else:
+                if len(ch) == 1:
+                    if len(buffer) < max_len:
+                        buffer = buffer[:curpos] + ch + buffer[curpos:]
+                        curpos += 1
+                last_matches = []
+                tab_count = 0
 
         if curpos >= scroll_offset + max_width:
             scroll_offset = curpos - max_width + 1

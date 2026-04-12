@@ -40,6 +40,7 @@ except ImportError:
 
 # Track if bell has been emitted this session (emit only once)
 _notified_this_session = False
+_notified_this_session_lock = threading.Lock()
 
 # ============================================================================
 # KEY EVENT SYSTEM - Threading-based async event notification
@@ -340,9 +341,10 @@ def _check_notifications(moniker: str, **kwargs) -> tuple[bool, int]:
 def _emit_notification_bell_once() -> bool:
     """Emit bell once per session when notifications exist."""
     global _notified_this_session
-    if _notified_this_session:
-        return False
-    _notified_this_session = True
+    with _notified_this_session_lock:
+        if _notified_this_session:
+            return False
+        _notified_this_session = True
     echo("{bel}", end="", flush=True)
     return True
 

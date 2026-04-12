@@ -10,6 +10,7 @@
 # text: whatever is to be output by _write_token()
 
 import re
+import threading
 
 from dataclasses import dataclass, field
 
@@ -23,6 +24,8 @@ from .common import (
     _terminal_state_stack,
     _terminal_state_stack_enabled,
     _current_stream_lock,
+    _terminal_state_lock,
+    _terminal_state_stack_lock,
     TerminalState,
     DEFAULT_INDENT_CHAR,
 )
@@ -30,6 +33,9 @@ from .util import logentry
 from .palette import c64_palette, get_current_palette, get_palette_entry, rgb
 
 from . import terminal
+
+_runtime_vars_lock = threading.Lock()
+_emoji_lock = threading.Lock()
 
 _previous_token = Token("UNKNOWN")
 _first_line_after_f6 = False  # Don't reduce width on first line after F6
@@ -92,21 +98,25 @@ _runtime_vars.update(_skin)
 
 def setvar(name, value):
     """Set a runtime variable for use in {var:<name>} or {<name>} commands."""
-    _runtime_vars[name] = value
+    with _runtime_vars_lock:
+        _runtime_vars[name] = value
 
 
 def getvar(name, default=None):
-    return _runtime_vars.get(name, default)
+    with _runtime_vars_lock:
+        return _runtime_vars.get(name, default)
 
 
 def register_emoji(name, value):
     """Register a custom emoji for use with :name: syntax."""
-    _emoji[name] = value
+    with _emoji_lock:
+        _emoji[name] = value
 
 
 def register_emojis(emojis: dict):
     """Register multiple custom emojis at once."""
-    _emoji.update(emojis)
+    with _emoji_lock:
+        _emoji.update(emojis)
 
 
 # ----------------------------
@@ -376,42 +386,45 @@ def _handle_whitespace(token):
 
 
 # DECSC / DECRC operate on software-defined TerminalState.
-# All operations occur under _current_stream_lock to keep
-# terminal output and state synchronized.
+# All operations occur under _terminal_state_lock and _terminal_state_stack_lock
+# to keep terminal output and state synchronized.
 def _handle_decsc(token):
     global _terminal_state_stack, _terminal_state
     cursor_row, cursor_col = get_cursor_position()
-    with _current_stream_lock:
-        if not _terminal_state_stack_enabled and len(_terminal_state_stack) >= 1:
-            _terminal_state_stack.pop()
-        _terminal_state_stack.append(
-            TerminalState(
-                cursor_row=cursor_row,
-                cursor_col=cursor_col,
-                wordwrap=_terminal_state.wordwrap,
-                has_color=_terminal_state.has_color,
-                hidden=_terminal_state.hidden,
+    with _terminal_state_lock:
+        with _terminal_state_stack_lock:
+            if not _terminal_state_stack_enabled and len(_terminal_state_stack) >= 1:
+                _terminal_state_stack.pop()
+            _terminal_state_stack.append(
+                TerminalState(
+                    cursor_row=cursor_row,
+                    cursor_col=cursor_col,
+                    wordwrap=_terminal_state.wordwrap,
+                    has_color=_terminal_state.has_color,
+                    hidden=_terminal_state.hidden,
+                )
             )
-        )
 
 
 def _handle_decrc(token):
     global _terminal_state, _terminal_state_stack
 
-    if not _terminal_state_stack:
-        return  # VT spec: restore is a no-op if nothing saved
+    with _terminal_state_stack_lock:
+        if not _terminal_state_stack:
+            return  # VT spec: restore is a no-op if nothing saved
 
-    if _terminal_state_stack_enabled:
-        state = _terminal_state_stack.pop()  # pop from stack
-    else:
-        state = _terminal_state_stack[-1]  # peek, don't pop
+        if _terminal_state_stack_enabled:
+            state = _terminal_state_stack.pop()  # pop from stack
+        else:
+            state = _terminal_state_stack[-1]  # peek, don't pop
 
     # restore software state
-    _terminal_state.cursor_row = state.cursor_row
-    _terminal_state.cursor_col = state.cursor_col
-    _terminal_state.wordwrap = state.wordwrap
-    _terminal_state.has_color = state.has_color
-    _terminal_state.hidden = state.hidden
+    with _terminal_state_lock:
+        _terminal_state.cursor_row = state.cursor_row
+        _terminal_state.cursor_col = state.cursor_col
+        _terminal_state.wordwrap = state.wordwrap
+        _terminal_state.has_color = state.has_color
+        _terminal_state.hidden = state.hidden
 
     # restore hardware cursor
     yield from _handle_curpos(
@@ -521,7 +534,8 @@ def _handle_acs(token):
 
 def _handle_var(token):
     var_name = token.args[0] if token.args else token.value
-    var_val = _runtime_vars.get(var_name, "")
+    with _runtime_vars_lock:
+        var_val = _runtime_vars.get(var_name, "")
     # recursively tokenize the value of the variable
     for t in tokenize(var_val):
         yield t
@@ -710,8 +724,9 @@ def _handle_reset(token):
     if not _raw:
         yield from _acs_off()
 
-    _terminal_state.indent = 0
-    _terminal_state.indent_char = "-"
+    with _terminal_state_lock:
+        _terminal_state.indent = 0
+        _terminal_state.indent_char = "-"
 
     yield from _handle_slashall(token)
     yield from _handle_decstbm(token)
@@ -771,11 +786,12 @@ def _handle_indent(token):
     global _terminal_state
     indent = int(token.args[0]) if token.args else 0
     max_indent = terminal.columns()
-    _terminal_state.indent = min(indent, max_indent)
-    if len(token.args) > 1:
-        _terminal_state.indent_char = token.args[1]
-    else:
-        _terminal_state.indent_char = DEFAULT_INDENT_CHAR
+    with _terminal_state_lock:
+        _terminal_state.indent = min(indent, max_indent)
+        if len(token.args) > 1:
+            _terminal_state.indent_char = token.args[1]
+        else:
+            _terminal_state.indent_char = DEFAULT_INDENT_CHAR
 
 
 options = {}
@@ -1069,12 +1085,13 @@ def _handle_attr(token: Token):
 
 
 def _handle_decdhl(token):
-    if token.value.startswith("/"):
-        _terminal_state.decdhl = False
-        token.text = f"{ESC}[5m"  # DECSWL - single-width single-height
-    else:
-        _terminal_state.decdhl = True
-        token.text = f"{ESC}[6m"  # DECDWL - double-width
+    with _terminal_state_lock:
+        if token.value.startswith("/"):
+            _terminal_state.decdhl = False
+            token.text = f"{ESC}[5m"  # DECSWL - single-width single-height
+        else:
+            _terminal_state.decdhl = True
+            token.text = f"{ESC}[6m"  # DECDWL - double-width
     yield token
 
 

@@ -52,16 +52,19 @@ _current_input_stream = sys.stdin
 _current_output_stream = sys.stdout
 
 _current_stream_lock = threading.Lock()
+_terminal_state_lock = threading.Lock()
 
 
 def set_output_stream(stream):
     global _current_output_stream
-    _current_output_stream = stream
+    with _current_stream_lock:
+        _current_output_stream = stream
 
 
 def set_input_stream(stream):
     global _current_input_stream
-    _current_input_stream = stream
+    with _current_stream_lock:
+        _current_input_stream = stream
 
 
 _input_queue = collections.deque()
@@ -303,4 +306,18 @@ _terminal_state = TerminalState(
 _terminal_state_stack = []
 _terminal_state_stack_enabled = False
 
+_terminal_state_lock = threading.Lock()
+_terminal_state_stack_lock = threading.Lock()
+
 _input_dirty = False
+
+
+def get_terminal_state():
+    with _terminal_state_lock:
+        return _terminal_state
+
+
+def set_terminal_state(state: TerminalState):
+    global _terminal_state
+    with _terminal_state_lock:
+        _terminal_state = state
