@@ -68,11 +68,13 @@ def set_input_stream(stream):
 
 
 _input_queue = collections.deque()
+_input_queue_lock = threading.Lock()
 
 
 def _read_current_input_stream(size: int = 1) -> str:
-    if _input_queue:
-        return _input_queue.popleft()
+    with _input_queue_lock:
+        if _input_queue:
+            return _input_queue.popleft()
     return _current_input_stream.read(size)
 
 
@@ -182,8 +184,9 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
                     # Remove the matched DSR from buf and push the rest back into the queue
                     start, end = match.span()
                     leftover = buffer[:start] + buffer[end:]
-                    _input_queue.clear()
-                    _input_queue.extend(leftover)
+                    with _input_queue_lock:
+                        _input_queue.clear()
+                        _input_queue.extend(leftover)
                     return (row, col)
 
                 # Step 2c: check for timeout
@@ -272,7 +275,12 @@ def drain_stream_to_queue(stream, queue):
                 ch = stream.read(1)
                 if not ch:
                     break  # EOF or no more data
-                queue.append(ch)
+                # Lock for _input_queue, otherwise assume caller handles it
+                if queue is _input_queue:
+                    with _input_queue_lock:
+                        queue.append(ch)
+                else:
+                    queue.append(ch)
             except BlockingIOError:
                 break  # would block → stop
     finally:

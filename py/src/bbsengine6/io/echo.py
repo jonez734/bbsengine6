@@ -830,7 +830,32 @@ def parse_command_params(name, params):
 
 def handler_dispatch(token):
     """Yield from the appropriate handler given a token."""
-    global _handle_indent, _handle_f6, _handle_reset, _handle_bel, _handle_cha, _handle_curpos, _handle_cuu, _handle_cud, _handle_cuf, _handle_cub, _handle_decsc, _handle_decrc, _handle_decstbm, _handle_ed, _handle_elo, _handle_slashfgcolor, _handle_slashbgcolor, _handle_slashall, _handle_reset, _handle_acs, _handle_var, _handle_rgb, _handle_decdhl, _handle_literalopen, _handle_literalclose
+    global \
+        _handle_indent, \
+        _handle_f6, \
+        _handle_reset, \
+        _handle_bel, \
+        _handle_cha, \
+        _handle_curpos, \
+        _handle_cuu, \
+        _handle_cud, \
+        _handle_cuf, \
+        _handle_cub, \
+        _handle_decsc, \
+        _handle_decrc, \
+        _handle_decstbm, \
+        _handle_ed, \
+        _handle_elo, \
+        _handle_slashfgcolor, \
+        _handle_slashbgcolor, \
+        _handle_slashall, \
+        _handle_reset, \
+        _handle_acs, \
+        _handle_var, \
+        _handle_rgb, \
+        _handle_decdhl, \
+        _handle_literalopen, \
+        _handle_literalclose
 
     cmd = token.value.lower()
 
@@ -1167,8 +1192,12 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
                     )
                     yield indent_token
                     _terminal_state.cursor_col = _terminal_state.indent
-                    _first_line_after_f6 = True  # First line after newline uses full width
-                    _previous_token = indent_token  # Track INDENT so next newline doesn't add again
+                    _first_line_after_f6 = (
+                        True  # First line after newline uses full width
+                    )
+                    _previous_token = (
+                        indent_token  # Track INDENT so next newline doesn't add again
+                    )
         elif token.kind == "F6":
             yield token  # Already processed by handler_dispatch path
         elif token.kind == "INDENT":
