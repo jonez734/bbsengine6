@@ -1022,10 +1022,12 @@ def createschema(args: Any, name: str, **kwargs: Any) -> bool:
 
     # Connect to the database using args
     def _work(conn):
-        stmt = sql.SQL(f"CREATE SCHEMA {sql.Identifier(name)}")
+        stmt = sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(name))
         io.echo(f"bbsengine6.database.createschema.260: {stmt=}", level="debug")
         with cursor(conn) as cur:
             cur.execute(stmt)
+        conn.commit()
+        return True
 
     try:
         io.echo(f"bbsengine6.database.createschema.220: {kwargs=}", level="debug")
