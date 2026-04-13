@@ -119,7 +119,8 @@ def oxfordcomma(seq, conjunction: str = "and") -> Optional[str]:
     if seq is None:
         return None
 
-    seq = [str(s) for s in seq]
+    seq = [str(s) if s is not None else repr(s) for s in seq]
+    seq = [s for s in seq if s != "None"]
 
     if len(seq) == 0:
         return ""
@@ -307,7 +308,7 @@ def filedisplay(res, **kw) -> None:
 _dice_rng = random.SystemRandom()
 
 
-def diceroll(sides: int = 6, count: int = 1, mode: str = "single"):
+def diceroll(sides: int = 6, count: int = 1, mode: str = "single") -> int:
     if mode == "single":
         return _dice_rng.randint(1, sides)
 

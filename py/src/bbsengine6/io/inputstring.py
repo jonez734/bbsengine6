@@ -285,9 +285,9 @@ def handle_key_enter(
     if not callable(verify):
         return buffer, curpos, scroll_offset, True, True
 
-    # Run verify as: verify(buffer, **kwargs)
+    # Run verify as: verify(args, buffer, **kwargs)
     try:
-        ok = verify(buffer, **kwargs)
+        ok = verify(args, buffer, **kwargs)
     except Exception as e:
         echo_traceback(f"io.inputstring.handle_key_enter.100: {e}]")
         ok = False
