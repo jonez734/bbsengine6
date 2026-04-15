@@ -42,7 +42,7 @@ def convert_for_jsonb(v: Any) -> Any:
     import datetime
 
     if isinstance(v, type):
-        io.echo(f"convert_for_jsonb: converting type {v}", level="debug")
+##        io.echo(f"convert_for_jsonb: converting type {v}", level="debug")
         return str(v)
     if isinstance(v, Jsonb):
         return v
@@ -53,9 +53,9 @@ def convert_for_jsonb(v: Any) -> Any:
     elif isinstance(v, (list, tuple)):
         return Jsonb([convert_for_jsonb(item) for item in v])
     if v is not None and not isinstance(v, (str, int, float, bool)):
-        io.echo(
-            f"convert_for_jsonb: converting {type(v).__name__} to str", level="debug"
-        )
+##        io.echo(
+##            f"convert_for_jsonb: converting {type(v).__name__} to str", level="debug"
+##        )
         return str(v)
     return v
 
@@ -539,7 +539,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
 
     #  cur = kwargs.get("cur", None)
 
-    io.echo(f"bbsengine6.database.insert.100: {items=}", level="debug")
+##    io.echo(f"bbsengine6.database.insert.100: {items=}", level="debug")
 
     if items is None:
         io.echo("bbsengine6.database.insert.120: no columns specified", level="error")
