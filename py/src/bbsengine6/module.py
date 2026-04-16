@@ -213,6 +213,38 @@ def _stub_version(args: argparse.Namespace, /, **kwargs: dict) -> str:
     pass
 
 
+OP_TO_STUB = {
+    "run": _stub_main,
+    "init": _stub_init,
+    "buildargs": _stub_buildargs,
+    "access": _stub_access,
+    "version": _stub_version,
+}
+
+
+# @since 20260415
+def get_op(module_ref: Union[str, ModuleType], op: str, args: Any = None) -> Callable | None:
+    """
+    Get an optional operation function if present and matches expected signature.
+    Returns None if op not in map or function missing/invalid.
+
+    Args:
+        module_ref: Module name (str) or module object
+        op: Operation name (e.g., "run", "init", "turn")
+        args: argparse.Namespace or None
+
+    Returns:
+        Callable or None
+    """
+    m = get(module_ref, args)
+    stub = OP_TO_STUB.get(op)
+    if stub is None:
+        return None
+    if check_func(m, op, stub, silent=True):
+        return getattr(m, op)
+    return None
+
+
 # --- Logic and Validation ---
 
 
