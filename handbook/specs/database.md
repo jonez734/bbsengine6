@@ -243,6 +243,41 @@ resultiter(cur: Any, arraysize: int = 1000, filterfunc: callable = None, **kwarg
 ```
 Iterator for memory-efficient result fetching.
 
+---
+
+```python
+query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL
+```
+Build a parameterized SQL query from readable string.
+
+**Purpose:** Allows natural-reading SQL like `SELECT * FROM $murdermotel.player WHERE moniker = :moniker` instead of verbose `sql.SQL("...") + sql.Identifier("...")` chains.
+
+**Security:** Table/column names use `sql.Identifier()` for SQL injection protection. Values use parameterized placeholders.
+
+**Syntax:**
+- `$schema.table` or `$table` - identifiers (becomes `sql.Identifier()`)
+- `$1, $2` - positional placeholders (passed through to psycopg)
+- `:name` - named placeholders (converted to `%(name)s` for psycopg)
+
+**Args:**
+- `sql_template` - SQL string with `$identifiers` and placeholders
+- `*params` - Positional values for `$1, $2` placeholders
+- `**kwargs` - Named values for `:name` placeholders
+
+**Returns:** `sql.SQL` (Composed) object ready for `cursor.execute()`
+
+**Examples:**
+```python
+# Named placeholders (:name)
+cur.execute(database.query("SELECT * FROM $murdermotel.player WHERE moniker = :moniker", moniker="test"))
+
+# Positional placeholders ($1, $2)
+cur.execute(database.query("SELECT * FROM $murdermotel.player WHERE moniker = $1", "test"))
+
+# JOINs
+cur.execute(database.query("SELECT * FROM $murdermotel.player p JOIN $murdermotel.room r ON p.room_id = r.id WHERE p.moniker = :moniker", moniker="test"))
+```
+
 ### Utility Functions
 
 ```python

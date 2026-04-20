@@ -95,6 +95,75 @@ def _table_identifier(table: str):
     return sql.Identifier(table)
 
 
+def query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL:
+    """Build a parameterized SQL query from readable string.
+
+    Allows readable SQL like:
+        cur.execute(database.query("SELECT * FROM $murdermotel.player WHERE moniker = :moniker", moniker=moniker))
+
+    Security: Table/column names use sql.Identifier(), values use parameterized placeholders.
+
+    Args:
+        sql_template: SQL with $schema.table identifiers and :name or $1 placeholders
+        *params: Values for positional placeholders ($1, $2...)
+        **kwargs: Values for named placeholders (:name)
+
+    Returns:
+        sql.SQL object ready for cursor.execute()
+
+    Example:
+        cur.execute(database.query("SELECT * FROM $murdermotel.player WHERE moniker = $1", moniker))
+        cur.execute(database.query("SELECT * FROM $murdermotel.player WHERE moniker = :moniker", moniker=moniker))
+        cur.execute(database.query("SELECT * FROM $murdermotel.player p JOIN $murdermotel.room r ON p.room_id = r.id WHERE p.moniker = :moniker", moniker=moniker))
+    """
+    import re
+
+    identifier_pattern = r"\$([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)"
+    named_placeholder_pattern = r":([a-zA-Z_][a-zA-Z0-9_]*)"
+
+    parts = []
+    last_end = 0
+    named_params = kwargs
+
+    def replace_named(s: str) -> str:
+        def replacer(match: re.Match) -> str:
+            name = match.group(1)
+            if name in named_params:
+                return f"%({name})s"
+            return match.group(0)
+
+        return re.sub(named_placeholder_pattern, replacer, s)
+
+    for match in re.finditer(identifier_pattern, sql_template):
+        before = sql_template[last_end : match.start()]
+        if before:
+            processed = replace_named(before)
+            parts.append(sql.SQL(processed))
+
+        identifier = match.group(1)
+        if "." in identifier:
+            schema, table_name = identifier.split(".", 1)
+            parts.append(sql.Identifier(schema, table_name))
+        else:
+            parts.append(sql.Identifier(identifier))
+        last_end = match.end()
+
+    if last_end < len(sql_template):
+        remaining = sql_template[last_end:]
+        processed = replace_named(remaining)
+        if processed:
+            parts.append(sql.SQL(processed))
+
+    if not parts:
+        return sql.SQL(sql_template)
+
+    result = parts[0]
+    for part in parts[1:]:
+        result = result + part
+
+    return result
+
+
 def getoid(args: Any, typ: str, cur: Any = None) -> int | None:
     """Get the OID for a PostgreSQL type.
 

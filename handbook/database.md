@@ -20,3 +20,4 @@ database
 - createextension()
 - importsql()
 - functionexists()
+- query()
