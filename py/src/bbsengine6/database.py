@@ -42,7 +42,7 @@ def convert_for_jsonb(v: Any) -> Any:
     import datetime
 
     if isinstance(v, type):
-##        io.echo(f"convert_for_jsonb: converting type {v}", level="debug")
+        ##        io.echo(f"convert_for_jsonb: converting type {v}", level="debug")
         return str(v)
     if isinstance(v, Jsonb):
         return v
@@ -53,9 +53,9 @@ def convert_for_jsonb(v: Any) -> Any:
     elif isinstance(v, (list, tuple)):
         return Jsonb([convert_for_jsonb(item) for item in v])
     if v is not None and not isinstance(v, (str, int, float, bool)):
-##        io.echo(
-##            f"convert_for_jsonb: converting {type(v).__name__} to str", level="debug"
-##        )
+        ##        io.echo(
+        ##            f"convert_for_jsonb: converting {type(v).__name__} to str", level="debug"
+        ##        )
         return str(v)
     return v
 
@@ -133,7 +133,9 @@ def query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL:
 
         # Handle both named (:name) and positional ($N) placeholders
         # Combined pattern has groups: (1=:name_name, 2=$N_N)
-        combined_pattern = f"{named_placeholder_pattern}|{positional_placeholder_pattern}"
+        combined_pattern = (
+            f"{named_placeholder_pattern}|{positional_placeholder_pattern}"
+        )
         for match in re.finditer(combined_pattern, s):
             if match.start() > pos:
                 result.append(sql.SQL(s[pos : match.start()]))
@@ -537,6 +539,28 @@ def upsert(
         # Update all columns except the conflict columns
         update_columns = [k for k in items.keys() if k not in conflict_columns]
 
+    def _build_conflict_clause() -> sql.Composable:
+        """Build the ON CONFLICT clause."""
+        conflict_clause = sql.SQL(" ON CONFLICT (")
+        conflict_clause += sql.SQL(", ").join(
+            [sql.Identifier(col) for col in conflict_columns]
+        )
+
+        if update_columns:
+            # Build UPDATE assignments using EXCLUDED
+            conflict_clause += sql.SQL(") DO UPDATE SET ")
+            update_assignments = []
+            for col in update_columns:
+                update_assignments.append(
+                    sql.Identifier(col) + sql.SQL(" = EXCLUDED.") + sql.Identifier(col)
+                )
+            conflict_clause += sql.SQL(", ").join(update_assignments)
+        else:
+            # No columns to update - use DO NOTHING
+            conflict_clause += sql.SQL(") DO NOTHING")
+
+        return conflict_clause
+
     def _work(conn):
         with cursor(conn) as cur:
             # Build column list and values
@@ -555,19 +579,7 @@ def upsert(
             insert_clause += sql.SQL(")")
 
             # Build ON CONFLICT clause
-            conflict_clause = sql.SQL(" ON CONFLICT (")
-            conflict_clause += sql.SQL(", ").join(
-                [sql.Identifier(col) for col in conflict_columns]
-            )
-            conflict_clause += sql.SQL(") DO UPDATE SET ")
-
-            # Build UPDATE assignments using EXCLUDED
-            update_assignments = []
-            for col in update_columns:
-                update_assignments.append(
-                    sql.Identifier(col) + sql.SQL(" = EXCLUDED.") + sql.Identifier(col)
-                )
-            conflict_clause += sql.SQL(", ").join(update_assignments)
+            conflict_clause = _build_conflict_clause()
 
             # Combine full query
             upsert_query = insert_clause + conflict_clause
@@ -628,7 +640,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
 
     #  cur = kwargs.get("cur", None)
 
-##    io.echo(f"bbsengine6.database.insert.100: {items=}", level="debug")
+    ##    io.echo(f"bbsengine6.database.insert.100: {items=}", level="debug")
 
     if items is None:
         io.echo("bbsengine6.database.insert.120: no columns specified", level="error")
