@@ -80,6 +80,21 @@ def execute(cur: Any, query: Any, *params: Any) -> Any:
     return cur.execute(query, converted)
 
 
+def executemany(cur: Any, operation: str, seq_of_params: list) -> None:
+    """Execute operation against all parameter sequences with auto-conversion.
+
+    Auto-converts params through convert_for_jsonb() for consistency with execute().
+
+    Args:
+        cur: Database cursor
+        operation: SQL operation to execute
+        seq_of_params: Sequence of parameter tuples/lists
+    """
+    for params in seq_of_params:
+        converted = [convert_for_jsonb(p) for p in params]
+        cur.execute(operation, converted)
+
+
 def _table_identifier(table: str):
     """Create proper SQL identifier for schema-qualified table names.
 
@@ -358,7 +373,12 @@ def transaction(conn: Any, **kwargs: Any) -> Any:
 
 @contextmanager
 def connect(
-    args: Any, pool: Any = None, *, auto_commit: bool = True, **kwargs: Any
+    args: Any,
+    pool: Any = None,
+    *,
+    auto_commit: bool = True,
+    wrapper: bool = False,
+    **kwargs: Any,
 ) -> Generator[Any, None, None]:
     """Context manager that safely gets a connection and returns it to the pool.
 
@@ -367,10 +387,11 @@ def connect(
       pool: ConnectionPool instance
       auto_commit: If True (default), commits before returning connection to pool.
                    Set to False for multi-statement transactions.
+      wrapper: If True, yields DatabaseConnection wrapper with method-style API.
       **kwargs: Additional arguments
 
     Yields:
-      Connection from pool
+      Connection from pool (raw or DatabaseConnection wrapper if wrapper=True)
     """
     if args and args.debug is True:
         io.echo(f"bbsengine6.database.connect.100: {args=}", level="debug")
@@ -393,7 +414,10 @@ def connect(
         raise
 
     try:
-        yield conn
+        if wrapper:
+            yield DatabaseConnection(conn, pool)
+        else:
+            yield conn
     finally:
         if auto_commit:
             conn.commit()
@@ -1226,6 +1250,102 @@ def cursor(conn: Any, row_factory: Any = dict_row, **kwargs: Any) -> Any:
       Cursor instance
     """
     return conn.cursor(row_factory=row_factory)
+
+
+class DatabaseCursor:
+    """Wrapper around psycopg Cursor with auto-conversion and DB-API methods."""
+
+    def __init__(self, cursor: Any, connection: Any = None):
+        self._cursor = cursor
+        self._connection = connection
+
+    @property
+    def description(self) -> Any:
+        return self._cursor.description
+
+    @property
+    def rowcount(self) -> int:
+        return self._cursor.rowcount
+
+    @property
+    def arraysize(self) -> int:
+        return self._cursor.arraysize
+
+    @arraysize.setter
+    def arraysize(self, value: int) -> None:
+        self._cursor.arraysize = value
+
+    @property
+    def rownumber(self) -> int | None:
+        return self._cursor.rownumber
+
+    @property
+    def connection(self) -> Any:
+        return self._connection
+
+    def execute(self, operation: str, params: Any = None) -> None:
+        if params:
+            converted = [convert_for_jsonb(p) for p in params]
+            self._cursor.execute(operation, converted)
+        else:
+            self._cursor.execute(operation)
+
+    def executemany(self, operation: str, seq_of_params: list) -> None:
+        for params in seq_of_params:
+            converted = [convert_for_jsonb(p) for p in params]
+            self._cursor.execute(operation, converted)
+
+    def fetchone(self) -> Any:
+        return self._cursor.fetchone()
+
+    def fetchmany(self, size: int = None) -> Any:
+        if size is None:
+            return self._cursor.fetchmany()
+        return self._cursor.fetchmany(size)
+
+    def fetchall(self) -> Any:
+        return self._cursor.fetchall()
+
+    def scroll(self, value: int, mode: str = "relative") -> None:
+        self._cursor.scroll(value, mode)
+
+    def nextset(self) -> bool | None:
+        return self._cursor.nextset()
+
+    def close(self) -> None:
+        self._cursor.close()
+
+    def __iter__(self):
+        return iter(self._cursor)
+
+
+class DatabaseConnection:
+    """Wrapper around psycopg Connection providing DB-API compatible method interface."""
+
+    def __init__(self, conn: Any, pool: Any = None):
+        self._conn = conn
+        self._pool = pool
+
+    def cursor(self, row_factory: Any = dict_row) -> DatabaseCursor:
+        return DatabaseCursor(self._conn.cursor(row_factory=row_factory), self)
+
+    def commit(self) -> None:
+        self._conn.commit()
+
+    def rollback(self) -> None:
+        self._conn.rollback()
+
+    def close(self) -> None:
+        if self._pool:
+            self._pool.putconn(self._conn)
+
+    @property
+    def autocommit(self) -> bool:
+        return self._conn.autocommit
+
+    @autocommit.setter
+    def autocommit(self, value: bool) -> None:
+        self._conn.autocommit = value
 
 
 def extensionavailable(args: Any, ext: str, **kwargs: Any) -> bool:

@@ -37,18 +37,32 @@ Create connection pool with DSN from args.
 
 ```python
 @contextmanager
-connect(args: Any, pool: Any = None, **kwargs: Any)
+connect(args: Any, pool: Any = None, *, auto_commit: bool = True, wrapper: bool = False, **kwargs: Any)
 ```
 Context manager that gets a connection from the passed `pool` using `pool.getconn()`
 and returns it via `pool.putconn()` on exit. Raises `ValueError` if `pool is None`.
 The `readonly` kwarg is stripped from kwargs (not supported by psycopg_pool). 
 
+**Parameters:**
+- `args` - Application args (optional, used for debug logging only)
+- `pool` - ConnectionPool instance
+- `auto_commit` (default: `True`) - Commit before returning connection to pool
+- `wrapper` (default: `False`) - If `True`, yield DatabaseConnection wrapper with method-style API
+
 **Note:** `args` parameter is optional and only used for debug logging. Can be `None` without affecting core functionality.
 
-Use:
+Use (original):
 ```python
 with database.connect(args, pool=pool) as conn:
     database.cursor(conn)  # or pass conn to other database functions
+```
+
+Use (with wrapper):
+```python
+with database.connect(args, pool=pool, wrapper=True) as conn:
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM foo")
+    conn.commit()
 ```
 
 ---
@@ -232,6 +246,22 @@ Create extension with error handling for permission/file issues.
 ### SQL Execution
 
 ```python
+execute(cur: Any, query: Any, *params: Any) -> Any
+```
+Execute query with auto-converted params for safe JSONB encoding. Use this instead of
+direct `cur.execute()` when params may contain dicts, lists, datetime objects, or type objects.
+
+---
+
+```python
+executemany(cur: Any, operation: str, seq_of_params: list) -> None
+```
+Execute operation against all parameter sequences with auto-conversion through `convert_for_jsonb()`.
+Consistent with `execute()` in handling complex types.
+
+---
+
+```python
 importsql(args: Any, filename: str, **kwargs: Any) -> bool
 ```
 Load and execute SQL file. Kwargs: `package` (for SQL directory), `conn`, `pool`.
@@ -328,3 +358,140 @@ Add database arguments to argparse parser. Note: `defaults` uses `None` default 
 ## Known Issues / TODOs
 
 1. `mogrify` kwargs in several functions are reserved for future debug logging use
+
+---
+
+## DB-API 2.0 Compatible Wrapper Classes
+
+The module provides optional wrapper classes that expose a method-style API compatible with Python's DB-API 2.0 specification (PEP 249).
+
+### DatabaseConnection
+
+```python
+class DatabaseConnection:
+    """Wrapper around psycopg Connection providing DB-API compatible method interface."""
+```
+
+A context manager that wraps a psycopg connection with method-style API.
+
+**Properties:**
+- `autocommit` (get/set) - Connection autocommit mode
+
+**Methods:**
+
+```python
+cursor(row_factory: Any = dict_row) -> DatabaseCursor
+```
+Return a new cursor using this connection.
+
+```python
+commit() -> None
+```
+Commit pending transaction.
+
+```python
+rollback() -> None
+```
+Roll back current transaction.
+
+```python
+close() -> None
+```
+Return connection to the pool.
+
+**Access to raw connection:**
+- `_conn` - The underlying psycopg connection object for advanced use
+
+---
+
+### DatabaseCursor
+
+```python
+class DatabaseCursor:
+    """Wrapper around psycopg Cursor with auto-conversion and DB-API methods."""
+```
+
+Wraps a psycopg cursor with auto-conversion for JSONB and DB-API compatible methods.
+
+**Properties:**
+
+- `description` - Result set column metadata (read-only)
+- `rowcount` - Number of rows affected by last execute (read-only)
+- `arraysize` - Number of rows to fetch with fetchmany (read/write)
+- `rownumber` - Current 0-based index in result set (DB-API extension, read-only)
+- `connection` - Reference to parent DatabaseConnection
+
+**Methods:**
+
+```python
+execute(operation: str, params: Any = None) -> None
+```
+Execute operation with auto-conversion of params through `convert_for_jsonb()`.
+
+```python
+executemany(operation: str, seq_of_params: list) -> None
+```
+Execute operation against all parameter sequences with auto-conversion.
+
+```python
+fetchone() -> Any
+```
+Fetch next row.
+
+```python
+fetchmany(size: int = None) -> Any
+```
+Fetch next set of rows. Defaults to arraysize if size not specified.
+
+```python
+fetchall() -> Any
+```
+Fetch all remaining rows.
+
+```python
+scroll(value: int, mode: str = "relative") -> None
+```
+Scroll cursor in result set (DB-API extension). Modes: `"relative"` (default) or `"absolute"`.
+
+```python
+nextset() -> bool | None
+```
+Advance to next result set (optional DB-API).
+
+```python
+close() -> None
+```
+Close cursor.
+
+```python
+__iter__()
+```
+Make cursor iterable.
+
+**Access to raw cursor:**
+- `_cursor` - The underlying psycopg cursor object for advanced use
+
+---
+
+### Using Wrapper Classes
+
+```python
+# With wrapper=True, connect() yields DatabaseConnection
+with database.connect(args, pool=pool, wrapper=True) as conn:
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM foo WHERE id = %s", (1,))
+    row = cur.fetchone()
+    
+    # DB-API extensions
+    cur.scroll(0, mode='absolute')  # reposition to start
+    cur.rownumber  # current position
+    
+    # Commit via connection method
+    conn.commit()
+
+# Or use raw psycopg connection via _conn
+with database.connect(args, pool=pool, wrapper=True) as conn:
+    raw_conn = conn._conn  # access psycopg connection directly
+```
+
+**Note:** The wrapper API coexists with the function-based API. Set `wrapper=False` (default) to use the original behavior.
