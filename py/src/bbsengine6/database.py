@@ -99,7 +99,7 @@ def query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL:
     """Build a parameterized SQL query from readable string.
 
     Allows readable SQL like:
-        cur.execute(database.query("SELECT * FROM $murdermotel.player WHERE moniker = :moniker", moniker=moniker))
+        cur.execute(database.query("SELECT * FROM $engine.member WHERE moniker = :moniker", moniker=moniker))
 
     Security: Table/column names use sql.Identifier(), values use parameterized placeholders.
 
@@ -112,9 +112,9 @@ def query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL:
         sql.SQL object ready for cursor.execute()
 
     Example:
-        cur.execute(database.query("SELECT * FROM $murdermotel.player WHERE moniker = $1", moniker))
-        cur.execute(database.query("SELECT * FROM $murdermotel.player WHERE moniker = :moniker", moniker=moniker))
-        cur.execute(database.query("SELECT * FROM $murdermotel.player p JOIN $murdermotel.room r ON p.room_id = r.id WHERE p.moniker = :moniker", moniker=moniker))
+        cur.execute(database.query("SELECT * FROM $engine.member WHERE moniker = $1", moniker))
+        cur.execute(database.query("SELECT * FROM $engine.member WHERE moniker = :moniker", moniker=moniker))
+        cur.execute(database.query("SELECT * FROM $engine.member p JOIN $engine.room r ON p.room_id = r.id WHERE p.moniker = :moniker", moniker=moniker))
     """
     import re
 
