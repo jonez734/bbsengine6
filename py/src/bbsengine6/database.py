@@ -101,10 +101,10 @@ def query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL:
     Allows readable SQL like:
         cur.execute(database.query("SELECT * FROM $engine.member WHERE moniker = :moniker", moniker=moniker))
 
-    Security: Table/column names use sql.Identifier(), values use parameterized placeholders.
+    Security: Table/column names use sql.Identifier(), values are interpolated using sql.Literal().
 
     Args:
-        sql_template: SQL with $schema.table identifiers and :name or $1 placeholders
+        sql_template: SQL with $schema.table identifiers and :name placeholders
         *params: Values for positional placeholders ($1, $2...)
         **kwargs: Values for named placeholders (:name)
 
@@ -120,25 +120,47 @@ def query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL:
 
     identifier_pattern = r"\$([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)"
     named_placeholder_pattern = r":([a-zA-Z_][a-zA-Z0-9_]*)"
+    positional_placeholder_pattern = r"\$(\d+)"
 
     parts = []
     last_end = 0
     named_params = kwargs
+    positional_params = params
 
-    def replace_named(s: str) -> str:
-        def replacer(match: re.Match) -> str:
-            name = match.group(1)
-            if name in named_params:
-                return f"%({name})s"
-            return match.group(0)
+    def process_text(s: str) -> list:
+        result = []
+        pos = 0
 
-        return re.sub(named_placeholder_pattern, replacer, s)
+        # Handle both named (:name) and positional ($N) placeholders
+        # Combined pattern has groups: (1=:name_name, 2=$N_N)
+        combined_pattern = f"{named_placeholder_pattern}|{positional_placeholder_pattern}"
+        for match in re.finditer(combined_pattern, s):
+            if match.start() > pos:
+                result.append(sql.SQL(s[pos : match.start()]))
+
+            # Check which pattern matched
+            if match.lastindex == 1:  # named placeholder (:name)
+                name = match.group(1)
+                if name in named_params:
+                    result.append(sql.Literal(named_params[name]))
+                else:
+                    result.append(sql.SQL(match.group(0)))
+            elif match.lastindex == 2:  # positional placeholder ($N)
+                idx = int(match.group(2))
+                if 0 < idx <= len(positional_params):
+                    result.append(sql.Literal(positional_params[idx - 1]))
+                else:
+                    result.append(sql.SQL(match.group(0)))
+
+            pos = match.end()
+        if pos < len(s):
+            result.append(sql.SQL(s[pos:]))
+        return result
 
     for match in re.finditer(identifier_pattern, sql_template):
         before = sql_template[last_end : match.start()]
         if before:
-            processed = replace_named(before)
-            parts.append(sql.SQL(processed))
+            parts.extend(process_text(before))
 
         identifier = match.group(1)
         if "." in identifier:
@@ -150,9 +172,7 @@ def query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL:
 
     if last_end < len(sql_template):
         remaining = sql_template[last_end:]
-        processed = replace_named(remaining)
-        if processed:
-            parts.append(sql.SQL(processed))
+        parts.extend(process_text(remaining))
 
     if not parts:
         return sql.SQL(sql_template)
