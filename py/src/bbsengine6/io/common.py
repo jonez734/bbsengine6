@@ -314,7 +314,6 @@ _terminal_state = TerminalState(
 _terminal_state_stack = []
 _terminal_state_stack_enabled = False
 
-_terminal_state_lock = threading.Lock()
 _terminal_state_stack_lock = threading.Lock()
 
 _input_dirty = False
