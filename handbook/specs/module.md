@@ -53,6 +53,14 @@ Returns `True` on success, `False` on any failure. Returns `None` on exception.
 ---
 
 ```python
+def is_importable(modulepath: str) -> bool
+```
+
+Check if a module can be imported without side effects. Uses `importlib.import_module()` and captures the return value to verify the module loads successfully. Returns `True` if importable, `False` otherwise. Does not add the module to `sys.modules`.
+
+---
+
+```python
 def load(args: object, modulepath: str) -> types.ModuleType
 ```
 
