@@ -104,6 +104,15 @@ def load(args: object, modulepath: str) -> ModuleType:
 
 def _check_func_return(func_ann, stub_ann):
     """Check return type compatibility with Optional[T] == Union[T, None] support."""
+    # DEBUG using io.echo like the rest of the game
+    try:
+        io.echo(f"DEBUG _check_func_return: func_ann={func_ann!r} type={type(func_ann)} id={id(func_ann)}")
+        io.echo(f"DEBUG _check_func_return: stub_ann={stub_ann!r} type={type(stub_ann)} id={id(stub_ann)}")
+        io.echo(f"DEBUG _check_func_return: == result: {func_ann == stub_ann}")
+        io.echo(f"DEBUG _check_func_return: is result: {func_ann is stub_ann}")
+    except Exception:
+        pass
+
     if stub_ann is inspect._empty:
         return True
 
@@ -112,6 +121,15 @@ def _check_func_return(func_ann, stub_ann):
 
     if func_ann == stub_ann:
         return True
+
+    # Try identity check as fallback for basic types like bool, int, str
+    if func_ann is stub_ann:
+        return True
+
+    # Handle string annotations (PEP 563) - both must be strings to compare
+    if isinstance(stub_ann, str) and isinstance(func_ann, str):
+        if stub_ann == func_ann:
+            return True
 
     from typing import get_origin, get_args, Union
 
