@@ -102,7 +102,7 @@ def load(args: object, modulepath: str) -> ModuleType:
 # @since 20260428
 def is_importable(modulepath: str) -> bool:
     """
-    Check if a module is importable without importing it into sys.modules.
+    Check if a module is importable.
 
     Args:
         modulepath: Full module path (e.g., "zoidoffice.project")
@@ -111,7 +111,7 @@ def is_importable(modulepath: str) -> bool:
         True if the module can be imported, False otherwise
     """
     try:
-        importlib.import_module(modulepath)
+        _ = importlib.import_module(modulepath)
         return True
     except Exception:
         return False
