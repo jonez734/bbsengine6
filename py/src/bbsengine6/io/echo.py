@@ -14,7 +14,7 @@ import threading
 
 from dataclasses import dataclass, field
 
-from .const import CSI, BEL, ESC, ECHO_END, OSC
+from .const import CSI, BEL, ESC, ECHO_END
 
 from .common import (
     Token,

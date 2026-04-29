@@ -259,7 +259,9 @@ OP_TO_STUB = {
 
 
 # @since 20260415
-def get_op(module_ref: Union[str, ModuleType], op: str, args: Any = None) -> Callable | None:
+def get_op(
+    module_ref: Union[str, ModuleType], op: str, args: Any = None
+) -> Callable | None:
     """
     Get an optional operation function if present and matches expected signature.
     Returns None if op not in map or function missing/invalid.

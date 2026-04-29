@@ -26,7 +26,7 @@ def inputinteger(
         #    echo("inputinteger.100: plain int, not a list", level="debug")
         try:
             res = int(buf)
-        except:
+        except ValueError:
             return
         else:
             return res

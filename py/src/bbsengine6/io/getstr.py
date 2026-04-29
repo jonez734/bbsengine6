@@ -23,7 +23,6 @@ def getstr(prompt: str = "") -> str:
     def draw_line():
         """Redraw the buffer and insert/overwrite indicator with proper cursor positioning."""
         mode = "[INS]" if insert_mode else "[OVR]"
-        total_len = len(buf) + len(mode)  # full string length including indicator
 
         # Move to start of input
         echo("{decrc}", end="", flush=True)

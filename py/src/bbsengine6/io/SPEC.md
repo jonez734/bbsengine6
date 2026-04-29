@@ -13,7 +13,6 @@ io/
 ├── terminal.py              # Terminal size utilities
 ├── common.py                # Token and I/O primitives
 ├── echo.py                  # Main echo function with formatting
-├── output.py                # Output stream handling
 ├── palette.py               # Color palettes
 ├── util.py                  # Logging utilities
 ├── keymap.py                # Key mappings
@@ -21,12 +20,15 @@ io/
 ├── screen.py                # Screen utilities
 ├── getch.py                 # Character input
 ├── getstr.py                # String input
-├── input.py                 # Input handling
+├── input.py                 # [DEPRECATED] Input handling - use inputstring.py
 ├── inputstring.py           # String input
 ├── inputinteger.py          # Integer input
 ├── inputboolean.py          # Boolean input
 └── inputchoice.py           # Choice input
 ```
+
+> **Note:** `output.py` was removed. Use `echo.py` instead.
+> **Note:** `input.py` is deprecated. Use `inputstring.py` instead.
 
 ## Module Specifications
 
@@ -108,6 +110,8 @@ The echo function supports these formatting commands:
 
 ### output.py
 
+> **DEPRECATED:** This module was removed. Use `echo.py` instead.
+
 Output stream handling:
 
 | Function | Signature | Description |
@@ -145,6 +149,8 @@ String input with editing:
 | `getline` | `(prompt='')` | Simple line input |
 
 ### input.py
+
+> **DEPRECATED:** Use `inputstring.py` instead. This module is not used.
 
 General input handling:
 

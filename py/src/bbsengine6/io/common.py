@@ -147,10 +147,8 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 
     if mode == "curpos":
         code = "6"
-        term = "R"
     elif mode == "status":
         code = "5"
-        term = "n"
     else:
         raise ValueError
 

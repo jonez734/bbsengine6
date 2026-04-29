@@ -41,11 +41,13 @@ def setcurrentsessionid(sessionid: str | int | bool | None) -> None:
 def is_valid(session: dict | None) -> bool:
     if session is None:
         return False
+    if not isinstance(session, dict):
+        return False
     expiry = session.get("expiry")
     if expiry is None:
         return False
     if isinstance(expiry, str):
-        return True
+        return False
     return expiry > datetime.now(timezone.utc)
 
 
@@ -93,22 +95,24 @@ def start(args: Namespace, **kwargs: Any) -> bool:
                 return True
             else:
                 io.echo(f"bbsengine6.session.start.140: {session=}", level="debug")
-                if not is_valid(session):
+                if not isinstance(session, dict):
+                    io.echo(
+                        "session.start.142: session is not a valid dict", level="error"
+                    )
+                elif not is_valid(session):
                     io.echo(
                         "session.start.145: session expired, will create new session",
                         level="debug",
                     )
-                    session = None
                 else:
                     currentsessionid = session["id"]
                     setcurrentsessionid(currentsessionid)
                     conn.commit()
                     return True
-            if session is None:
-                io.echo("session.start.120: creating new session", level="debug")
+                io.echo("session.start.150: creating new session", level="debug")
                 session = buildsession(args, **kwargs)
                 if session is None:
-                    io.echo("session.start.130: buildsession failed", level="error")
+                    io.echo("session.start.160: buildsession failed", level="error")
                     return False
                 mogrify = True if args.debug else False
                 currentsessionid = database.insert(
@@ -297,13 +301,12 @@ def write(
         io.echo("session.write.110: session expired or invalid", level="error")
         return False
 
-    session["dateupdated"] = "now()"
-    session["lastactivity"] = "now()"
-
-    _session = copy.copy(session)
+    _session = copy.deepcopy(session)
+    _session["dateupdated"] = "now()"
+    _session["lastactivity"] = "now()"
 
     if args.debug is True:
-        io.echo(f"bbsengine6.session.write.100: {session=}", level="debug")
+        io.echo(f"bbsengine6.session.write.100: {_session=}", level="debug")
 
     if "data" in _session and isinstance(_session["data"], dict):
         _session["data"] = database.Jsonb(_session["data"])
@@ -363,7 +366,7 @@ def get(
     args: Namespace,
     name: str,
     default: Any = None,
-    memberid: int | None = None,
+    memberid: str | None = None,
     **kwargs: Any,
 ) -> Any:
     session = getmembersession(args, memberid, **kwargs)
@@ -372,6 +375,10 @@ def get(
 
     if session is False or session is None:
         io.echo("session does not exist", level="error")
+        return False
+
+    if not isinstance(session, dict):
+        io.echo("session.get.105: session is not a valid dict", level="error")
         return False
 
     if not is_valid(session):
@@ -389,7 +396,7 @@ def set(
     name: str,
     value: Any,
     sessionid: str | None = None,
-    memberid: int | None = None,
+    memberid: str | None = None,
     reset: bool = False,
     mogrify: bool = True,
     **kwargs: Any,

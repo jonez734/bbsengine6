@@ -1,4 +1,13 @@
-# DEPRECATED: Use inputstring.py instead. This module is not used.
+# DEPRECATED: Use bbsengine6.io.inputstring instead. This module is not used.
+# @since 20260429
+import warnings
+
+warnings.warn(
+    "bbsengine6.io.input is deprecated. Use bbsengine6.io.inputstring instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import os
 import tty
 import time

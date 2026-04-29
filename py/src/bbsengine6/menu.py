@@ -104,9 +104,9 @@ class Menu(object):
 
         maxlen = 0
         for i in self.items:
-            l = len(i.label)
-            if l > maxlen:
-                maxlen = l
+            label_len = len(i.label)
+            if label_len > maxlen:
+                maxlen = label_len
 
         io.echo(
             "{/all}{f6} {var:engine.menu.cursorcolor}{var:engine.menu.color}%s{/all}"
@@ -140,7 +140,6 @@ class Menu(object):
             screen.setarea(f"{self.pos=} {len(self.items)} {self.currentitem=}")
 
         options = ""
-        status = ""
         num = 0
         for item in self.items:
             if item.result is False:
@@ -195,7 +194,6 @@ class Menu(object):
         )
         ##    ttyio.echo(f"{{f6}} {prompt}{{savecursor}}{{cha}}{{cursorright:4}}{{cursorup:{4+self.numitems}}}{{var:engine.menu.cursorcolor}}{self.items[self.pos].key}{{cursorleft}}", end="", flush=True)
 
-        res = None
         self.pos = 0
         self.oldpos = 0
 

@@ -178,6 +178,16 @@ def getcurrentmoniker(args, **kwargs):
     return _work(conn)
 
 
+def clear_current_moniker_cache() -> None:
+    """Clear the thread-local moniker cache.
+
+    Call this after a member updates their own moniker to ensure
+    subsequent calls to getcurrentmoniker() fetch fresh data.
+    """
+    if hasattr(_threadlocal, "moniker"):
+        del _threadlocal.moniker
+
+
 def notifycount(args, **kwargs) -> int | None:
     """Get total unread notification count for current user.
 
@@ -233,6 +243,16 @@ def getcurrentid(args, **kwargs):
     else:
         with database.cursor(conn) as cur:
             return _work(cur)
+
+
+def clear_current_id_cache() -> None:
+    """Clear the thread-local member ID cache.
+
+    Call this after a member updates their own ID to ensure
+    subsequent calls to getcurrentid() fetch fresh data.
+    """
+    if hasattr(_threadlocal, "id"):
+        del _threadlocal.id
 
 
 # @since 20170303
@@ -384,10 +404,11 @@ def update(args, member, moniker: str | None = None, **kwargs):
             io.echo("bbsengine.member.update.150: moniker is None", level="error")
             return None
 
-    if "password" in member:
-        del member["password"]
+    member_copy = copy.copy(member)
+    if "password" in member_copy:
+        del member_copy["password"]
 
-    rec = buildrec(member)
+    rec = buildrec(member_copy)
     flags_dict = rec.pop("flags", None)
 
     # Detect if moniker is changing
@@ -440,6 +461,12 @@ def update(args, member, moniker: str | None = None, **kwargs):
 
         # Note: Caller (not this function) is responsible for final conn.commit()
         # This keeps the entire member update operation atomic
+
+        # Clear thread-local caches if updating current user
+        if moniker == getcurrentmoniker(args, conn=conn):
+            clear_current_moniker_cache()
+            clear_current_id_cache()
+
         return None
 
     except Exception:

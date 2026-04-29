@@ -1,5 +1,6 @@
 import copy
 from contextlib import contextmanager
+import threading
 from typing import Any, Generator, Iterator
 
 import argparse
@@ -324,6 +325,7 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
 
 
 _pool_cache: dict = {}
+_pool_cache_lock = threading.Lock()
 
 
 def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
@@ -338,23 +340,25 @@ def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
     """
     dsn = make_dsn(args, **kwargs)
 
-    if dsn not in _pool_cache or _pool_cache[dsn].closed:
-        _pool_cache[dsn] = ConnectionPool(
-            dsn, min_size=10, max_size=100, timeout=5, open=True
-        )
+    with _pool_cache_lock:
+        if dsn not in _pool_cache or _pool_cache[dsn].closed:
+            _pool_cache[dsn] = ConnectionPool(
+                dsn, min_size=10, max_size=100, timeout=5, open=True
+            )
 
-    return _pool_cache[dsn]
+        return _pool_cache[dsn]
 
 
 def reset_pool_cache() -> None:
     """Reset the pool cache. Call this in tests."""
     global _pool_cache
-    for pool in _pool_cache.values():
-        try:
-            pool.close()
-        except Exception:
-            io.echo_traceback("bbsengine6.database.234:")
-    _pool_cache = {}
+    with _pool_cache_lock:
+        for pool in _pool_cache.values():
+            try:
+                pool.close()
+            except Exception:
+                io.echo_traceback("bbsengine6.database.234:")
+        _pool_cache = {}
 
 
 def transaction(conn: Any, **kwargs: Any) -> Any:
@@ -670,13 +674,14 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
         io.echo("bbsengine6.database.insert.120: no columns specified", level="error")
         return None
 
-    columns = items.keys()
+    items_copy = copy.copy(items)
+    columns = items_copy.keys()
     if args.debug is True:
         io.echo(f"bbsengine6.database.insert.140: {columns=}", level="debug")
 
-    for k in list(items.keys()):
+    for k in list(items_copy.keys()):
         if k == "datecreatedepoch":
-            del items[k]
+            del items_copy[k]
 
     query = sql.SQL("insert into ") + _table_identifier(table) + sql.SQL("(")
     query = query + sql.SQL(", ").join([sql.Identifier(c) for c in columns])
@@ -688,7 +693,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
     query = query + sql.SQL(", ").join([sql.SQL(p) for p in params])
     query = query + sql.SQL(")")
 
-    dat = [convert_for_jsonb(v) for v in items.values()]
+    dat = [convert_for_jsonb(v) for v in items_copy.values()]
     if returnid is True:
         query = (
             query

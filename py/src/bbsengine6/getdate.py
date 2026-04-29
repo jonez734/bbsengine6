@@ -7,7 +7,9 @@ import dateutil.tz
 
 from bbsengine6 import io
 
-add_default_tz = lambda x, tzinfo: x.replace(tzinfo=x.tzinfo or tzinfo)
+
+def add_default_tz(x, tzinfo):
+    return x.replace(tzinfo=x.tzinfo or tzinfo)
 
 
 # @since 20231203 merged from getdate3

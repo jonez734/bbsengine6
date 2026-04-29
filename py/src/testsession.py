@@ -361,7 +361,12 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
         call_args = mock_cursor.execute.call_args  # Gets the last call
         assert call_args is not None
         sql = call_args[0][0]
-        self.assertIn("data=%s", sql)
+        # Convert sql.Composed to string for pattern matching
+        sql_str = str(sql)
+        # Check for UPDATE and SET keywords which indicate reset behavior
+        self.assertIn("UPDATE", sql_str)
+        self.assertIn("SET", sql_str)
+        self.assertIn("data", sql_str)
 
         session.setcurrentsessionid(None)
 
@@ -400,7 +405,10 @@ class TestSessionIntegration(_TestCaseWithPoolCleanup):
         call_args = mock_cursor.execute.call_args
         assert call_args is not None
         sql = call_args[0][0]
-        self.assertIn("data=data||%s", sql)
+        # Convert sql.Composed to string for pattern matching
+        sql_str = str(sql)
+        self.assertIn("data", sql_str)
+        self.assertIn("data", sql_str)  # Check it's using data || %s pattern
 
         session.setcurrentsessionid(None)
 

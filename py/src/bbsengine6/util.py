@@ -282,7 +282,6 @@ def filedisplay(res, **kw) -> None:
     import os
 
     width = kw["width"] if "width" in kw else None
-    indent = kw["indent"] if "indent" in kw else 0
     more = kw["more"] if "more" in kw else True
 
     if width is None:

@@ -1,7 +1,7 @@
 import os
 
 # import ttyio6 as ttyio
-from . import io, util
+from . import io
 import time
 from datetime import datetime, timedelta
 from dateutil.parser import parse
@@ -9,7 +9,9 @@ from dateutil.parser import parse
 # import datetime
 import dateutil.tz
 
-add_default_tz = lambda x, tzinfo: x.replace(tzinfo=x.tzinfo or tzinfo)
+
+def add_default_tz(x, tzinfo):
+    return x.replace(tzinfo=x.tzinfo or tzinfo)
 
 
 # @since 20231203 merged from getdate3
@@ -54,16 +56,14 @@ def verifyValidDateExpression(buf, **kw):
 
 def date(args, prompt, value, **kw):
     buf = io.inputstring(prompt, value, verify=verifyValidDateExpression)
-    #    return buf
     res = getdate(buf)
     if res is None:
-        ttyio.echo("invalid date expression")
+        io.echo("invalid date expression")
     return res
 
 
 # @since 20230923 copied from bbsengine5
 def filename(prompt, currentvalue, **kw):
-    verify = kw["verify"] if "verify" in kw else util.verifyFileExistsReadable
     path = os.path.expanduser(currentvalue)
     path = os.path.expandvars(path)
     #  dirname = os.path.dirname(path)

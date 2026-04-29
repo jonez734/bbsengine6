@@ -1,4 +1,13 @@
-# DEPRECATED: This module is not used. Use echo.py instead.
+# DEPRECATED: This module is not used. Use bbsengine6.io.echo instead.
+# @since 20260429
+import warnings
+
+warnings.warn(
+    "bbsengine6.io.output is deprecated. Use bbsengine6.io.echo instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import re
 import time
 
@@ -412,7 +421,7 @@ def echo(buf: str = "", **kw):
 
         for token in interpret(tokenize(buf, exclude=exclude)):
             # for token in interpret(buf, **kw):
-            if type(token) == Token:
+            if isinstance(token, Token):
                 if token.kind == "WHITESPACE":
                     pos += wcswidth(token.value)
                     print(token.value, end="", flush=True)
