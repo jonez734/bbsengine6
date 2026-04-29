@@ -16,6 +16,7 @@ Function-scoped fixtures (autouse):
 
 import pytest
 import psycopg
+import getpass
 from pathlib import Path
 import logging
 
@@ -25,14 +26,35 @@ logger = logging.getLogger(__name__)
 # ===== Session-Scoped Fixtures =====
 
 
+def pytest_collection_modifyitems(config, items):
+    """Skip session fixtures for tests marked with @pytest.mark.unit"""
+    needs_db = True
+    for item in items:
+        if item.get_closest_marker("unit"):
+            needs_db = False
+            break
+
+    if not needs_db:
+        skip_db = pytest.mark.skip(reason="Unit test - no database required")
+        for item in items:
+            if not item.get_closest_marker("unit"):
+                item.add_marker(skip_db)
+
+
 @pytest.fixture(scope="session")
-def db_connection():
+def db_connection(request):
     """
     Connect to zoid6test database as opencode user.
     Connection persists for entire test session.
+    Skipped for tests marked with @pytest.mark.unit
     """
-    logger.info("Connecting to zoid6test database as opencode user...")
-    conn = psycopg.connect("dbname=zoid6test user=opencode")
+    if request.node.get_closest_marker("unit"):
+        logger.info("Skipping database connection for unit tests")
+        pytest.skip("Unit test - no database required")
+
+    user = getpass.getuser()
+    logger.info(f"Connecting to zoid6test database as {user}...")
+    conn = psycopg.connect(f"dbname=zoid6test user={user}")
     logger.info("✓ Connected to zoid6test")
 
     yield conn
@@ -43,7 +65,7 @@ def db_connection():
 
 
 @pytest.fixture(scope="session")
-def schema_init(db_connection):
+def schema_init(db_connection, request):
     """
     Initialize notify schema tables.
 
@@ -72,6 +94,10 @@ def schema_init(db_connection):
             # Reset transaction state (PostgreSQL requires this after duplicate error)
             db_connection.rollback()
             logger.info(f"  ⊘ {filepath.name} already exists, skipping")
+        except psycopg.errors.InsufficientPrivilege:
+            # Permission error - skip this file
+            db_connection.rollback()
+            logger.warning(f"  ⊘ {filepath.name} - insufficient privileges, skipping")
         except Exception as e:
             logger.error(f"  ✗ Failed to load {filepath.name}: {e}")
             db_connection.rollback()
@@ -86,7 +112,7 @@ def schema_init(db_connection):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def create_test_users(db_connection, schema_init):
+def create_test_users(request, db_connection, schema_init):
     """
     Create minimal test users: alice, bob
     (jam already exists in engine.__member)
@@ -94,7 +120,13 @@ def create_test_users(db_connection, schema_init):
     Required fields: moniker, email
 
     autouse=True: This fixture always runs, ensuring test users exist
+    Skipped for tests marked with @pytest.mark.unit
     """
+    # Skip database setup for unit tests
+    if request.node.get_closest_marker("unit"):
+        logger.info("Skipping database fixtures for unit tests")
+        return
+
     logger.info("Creating test users (alice, bob)...")
 
     # Minimal INSERT: moniker and email (both required)

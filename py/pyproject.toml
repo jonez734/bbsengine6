@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bbsengine6"
+dynamic = ["version"]
+requires-python = ">=3.9,<3.13"
+
+[tool.setuptools.dynamic]
+version = {version = "9.0.0"}
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: marks tests as unit tests (no database required)",
+]

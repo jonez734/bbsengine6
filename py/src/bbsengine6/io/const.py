@@ -2,6 +2,7 @@ ESC = "\x1b"  # \x9b
 CSI = f"{ESC}["
 OSC = f"{ESC}]"
 BEL = "\007"
+ST = f"{ESC}\\"  # String Terminator (ECMA-48)
 ETX = "\x03"  # ctrl-c
 EOF = "\x04"  # ctrl-d
 

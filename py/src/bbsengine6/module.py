@@ -123,13 +123,13 @@ def is_importable(modulepath: str) -> bool:
 def _check_func_return(func_ann, stub_ann):
     """Check return type compatibility with Optional[T] == Union[T, None] support."""
     # DEBUG using io.echo like the rest of the game
-    try:
-        io.echo(f"DEBUG _check_func_return: func_ann={func_ann!r} type={type(func_ann)} id={id(func_ann)}")
-        io.echo(f"DEBUG _check_func_return: stub_ann={stub_ann!r} type={type(stub_ann)} id={id(stub_ann)}")
-        io.echo(f"DEBUG _check_func_return: == result: {func_ann == stub_ann}")
-        io.echo(f"DEBUG _check_func_return: is result: {func_ann is stub_ann}")
-    except Exception:
-        pass
+    # try:
+    #     io.echo(f"DEBUG _check_func_return: func_ann={func_ann!r} type={type(func_ann)} id={id(func_ann)}")
+    #     io.echo(f"DEBUG _check_func_return: stub_ann={stub_ann!r} type={type(stub_ann)} id={id(stub_ann)}")
+    #     io.echo(f"DEBUG _check_func_return: == result: {func_ann == stub_ann}")
+    #     io.echo(f"DEBUG _check_func_return: is result: {func_ann is stub_ann}")
+    # except Exception:
+    #     pass
 
     if stub_ann is inspect._empty:
         return True
