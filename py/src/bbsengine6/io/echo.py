@@ -702,6 +702,7 @@ def _handle_decstbm(token):
     token.text = f"{CSI}{t};{b}r"
     yield token
 
+
 def _handle_slashall(token):
     token.kind = "COLOR"
     token.repeat = 1
@@ -716,9 +717,7 @@ def _handle_reset(token):
     if not _raw:
         yield from _acs_off()
 
-    with _terminal_state_lock:
-        _terminal_state.indent = 0
-        _terminal_state.indent_char = "-"
+    yield Token("INDENT", value=0, repeat=1, text="", raw="")
 
     yield from _handle_slashall(token)
     yield from _handle_decstbm(token)
@@ -1193,7 +1192,11 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
         elif token.kind == "F6":
             yield token  # Already processed by handler_dispatch path
         elif token.kind == "INDENT":
-            yield token  # Already yielded by _handle_f6
+            if token.value == 0:
+                with _terminal_state_lock:
+                    _terminal_state.indent = 0
+                    _terminal_state.indent_char = DEFAULT_INDENT_CHAR
+            yield token
         else:
             # unknown token, yield as-is
             yield token
