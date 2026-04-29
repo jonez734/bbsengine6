@@ -702,14 +702,6 @@ def _handle_decstbm(token):
     token.text = f"{CSI}{t};{b}r"
     yield token
 
-    ##    logentry(f"asimov.io.echo._handle_decstbm.100: {t=} {b=} {token.text=}", level="debug")
-    ##    return
-
-    token.repeat = 1
-    token.text = f"{OSC}0;{' '.join(token.args)}{BEL}"
-    yield token
-
-
 def _handle_slashall(token):
     token.kind = "COLOR"
     token.repeat = 1
