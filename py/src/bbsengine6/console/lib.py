@@ -117,6 +117,12 @@ def buildargs(args=None, **kwargs):
     parser = argparse.ArgumentParser("con")
     parser.add_argument("--verbose", action="store_true", dest="verbose")
     parser.add_argument("--debug", action="store_true", dest="debug")
+    parser.add_argument(
+        "--require-registration",
+        action="store_true",
+        dest="require_registration",
+        help="Require modules to be registered via ModuleRegistry",
+    )
 
     defaults = {
         "databasename": "zoid6",

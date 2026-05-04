@@ -128,6 +128,11 @@ def main(args, **kwargs):
     parser = buildargs(args)
     args = parser.parse_args()
 
+    if args.require_registration is True:
+        from bbsengine6.module import set_require_registration
+        set_require_registration(True)
+        io.echo("registration enforcement enabled", level="info")
+
     io.echo(f"bbsengine.con.main.400: {kwargs=}", level="debug")
 
     util.heading("engine checks")
