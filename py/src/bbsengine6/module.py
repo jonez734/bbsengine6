@@ -118,110 +118,182 @@ def is_importable(modulepath: str) -> bool:
         return False
 
 
-# --- Module Registry (Functional, Thread-Safe) ---
+# --- Module Registry (Pure Functional) ---
+#
+# Design principles:
+# - State encapsulated in a closure, not global variables
+# - All registry functions are pure-ish (same inputs -> same outputs, except logging)
+# - Thread-safety via a single lock object
+# - No classes - just functions and dataclasses for data
+
+from dataclasses import dataclass, field
+from typing import Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class ModuleAPI:
-    """API version and callable functions registered by a module."""
+    """Immutable API container - registered module's version and callable functions."""
     version: str
     apis: dict[str, Callable]
     module_path: str
 
 
-# Global variables for module registry
-_module_registry: dict[str, ModuleAPI] = {}
-_require_registration: bool = False
-_registry_lock = threading.RLock()
+@dataclass
+class RegistryState:
+    """Mutable state for the registry - wrapped in a closure for encapsulation."""
+    modules: dict[str, ModuleAPI] = field(default_factory=dict)
+    require_registration: bool = False
 
 
+def _create_registry() -> tuple[
+    Callable[[str, str, str, dict], None],
+    Callable[[str], None],
+    Callable[[str], bool],
+    Callable[[str], Optional[ModuleAPI]],
+    Callable[[str, str], Optional[Callable]],
+    Callable[[bool], None],
+    Callable[[], bool],
+    Callable[[], list[str]]
+]:
+    """Create a thread-safe registry closure with all operations.
+    
+    Returns 8 operation functions in order:
+    (register, unregister, is_registered, get_module, get_module_api, 
+     set_require, get_require, get_all_names)
+    """
+    state = RegistryState()
+    lock = threading.RLock()
+    
+    def register(name: str, module_path: str, version: str, apis: dict[str, Callable]) -> None:
+        with lock:
+            state.modules[name] = ModuleAPI(
+                version=version,
+                apis=apis,
+                module_path=module_path,
+            )
+        io.echo(f"registered module: {name} v{version}", level="debug")
+    
+    def unregister(name: str) -> None:
+        with lock:
+            state.modules.pop(name, None)
+    
+    def is_registered(name: str) -> bool:
+        with lock:
+            return name in state.modules
+    
+    def get_module(name: str) -> Optional[ModuleAPI]:
+        with lock:
+            return state.modules.get(name)
+    
+    def get_module_api(name: str, api_name: str) -> Optional[Callable]:
+        with lock:
+            module = state.modules.get(name)
+            if module:
+                return module.apis.get(api_name)
+            return None
+    
+    def set_require_registration(required: bool) -> None:
+        with lock:
+            state.require_registration = required
+    
+    def get_require_registration() -> bool:
+        with lock:
+            return state.require_registration
+    
+    def get_all_names() -> list[str]:
+        with lock:
+            return list(state.modules.keys())
+    
+    return (
+        register, unregister, is_registered, get_module, 
+        get_module_api, set_require_registration, get_require_registration, get_all_names
+    )
+
+
+# Default registry instance - used throughout bbsengine6
+(_register_module, _unregister_module, _is_module_registered, 
+ _get_module, _get_module_api, _set_require_registration, 
+ _get_require_registration, _get_all_module_names) = _create_registry()
+
+
+# Convenience aliases matching the old function names
 def register_module(name: str, module_path: str, version: str, apis: dict[str, Callable]) -> None:
     """Register a module with its API. Thread-safe."""
-    global _module_registry
-    with _registry_lock:
-        _module_registry[name] = ModuleAPI(
-            version=version,
-            apis=apis,
-            module_path=module_path,
-        )
-    io.echo(f"registered module: {name} v{version}", level="debug")
+    _register_module(name, module_path, version, apis)
 
 
 def unregister_module(name: str) -> None:
     """Remove module registration. Thread-safe."""
-    global _module_registry
-    with _registry_lock:
-        _module_registry.pop(name, None)
+    _unregister_module(name)
 
 
 def is_module_registered(name: str) -> bool:
     """Check if module is registered. Thread-safe."""
-    with _registry_lock:
-        return name in _module_registry
+    return _is_module_registered(name)
 
 
-def get_module(name: str) -> ModuleAPI | None:
+def get_module(name: str) -> Optional[ModuleAPI]:
     """Get registered module API. Thread-safe."""
-    with _registry_lock:
-        return _module_registry.get(name)
+    return _get_module(name)
 
 
-def get_module_api(name: str, api_name: str) -> Callable | None:
+def get_module_api(name: str, api_name: str) -> Optional[Callable]:
     """Get a specific API function from a registered module. Thread-safe."""
-    with _registry_lock:
-        module = _module_registry.get(name)
-        if module is not None:
-            return module.apis.get(api_name)
-        return None
+    return _get_module_api(name, api_name)
 
 
 def set_require_registration(required: bool) -> None:
     """Set flag to require module registration in module.check()."""
-    global _require_registration
-    _require_registration = required
+    _set_require_registration(required)
 
 
 def get_require_registration() -> bool:
     """Get the current require_registration flag."""
-    global _require_registration
-    return _require_registration
+    return _get_require_registration()
 
 
-# Backwards compatibility class - wraps the functional approach
+def get_all_modules() -> list[str]:
+    """Get names of all registered modules."""
+    return _get_all_module_names()
+
+
+# Backwards compatibility - thin wrapper class that delegates to functions
 class ModuleRegistry:
     """Central registry for BBS modules - tied to module system.
     
     Modules register themselves via explicit init() call.
     Other modules can discover registered modules and access their APIs.
     
-    This class provides backwards compatibility - delegates to global functions.
+    Delegates to functional implementations for actual operations.
     """
     
-    _registered: dict = {}  # Not used, kept for class attribute compatibility
-    
-    @classmethod
-    def set_require_registration(cls, required: bool) -> None:
-        set_require_registration(required)
-    
-    @classmethod
-    def register(cls, name: str, module_path: str, version: str, apis: dict[str, Callable]) -> None:
+    @staticmethod
+    def register(name: str, module_path: str, version: str, apis: dict[str, Callable]) -> None:
         register_module(name, module_path, version, apis)
     
-    @classmethod
-    def is_registered(cls, name: str) -> bool:
-        return is_module_registered(name)
-    
-    @classmethod
-    def get(cls, name: str) -> ModuleAPI | None:
-        return get_module(name)
-    
-    @classmethod
-    def unregister(cls, name: str) -> None:
+    @staticmethod
+    def unregister(name: str) -> None:
         unregister_module(name)
     
-    @classmethod
-    def get_api(cls, name: str, api_name: str) -> Callable | None:
+    @staticmethod
+    def is_registered(name: str) -> bool:
+        return is_module_registered(name)
+    
+    @staticmethod
+    def get(name: str) -> Optional[ModuleAPI]:
+        return get_module(name)
+    
+    @staticmethod
+    def get_api(name: str, api_name: str) -> Optional[Callable]:
         return get_module_api(name, api_name)
+    
+    @staticmethod
+    def set_require_registration(required: bool) -> None:
+        set_require_registration(required)
+    
+    @staticmethod
+    def get_all() -> list[str]:
+        return get_all_modules()
 
 
 # --- Signature Validation ---
