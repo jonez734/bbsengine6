@@ -1,57 +1,10 @@
+// pageheader.scss
+// bbsengine6 version - imports from zoid6/shared with est2002 disabled
+
 @import "vars";
 @import "mixins";
 @import "fonts";
 
-// Page header styling - used by bbsengine6 projects
-header#pageheader {
-	flex: 0 1 auto;
-	border: 0;
-	background-color: $pageheader-backgroundcolor;
-	overflow: hidden;
-//	font-family: pageheaderfont;
-	font-size: large;
-	text-align: center;
+$pageheader-enable-est2002: false;
 
-/*
-	.est2002 {
-		font-family: estfont;
-	}
-
-*/
-	.body {
-		-webkit-text-stroke-width: 1px;
-		-webkit-text-stroke-color: black;
-		color: $pageheader-textcolor;
-		@include textshadow(4px, 3px, 3px, rgba(0,0,0,0.4));
-
-		h1 {
-			font-size: 2.5em;
-		}
-
-		h2 {
-			font-size: 2.0em;
-
-			a {
-				color: green;
-				text-decoration: underline;
-				text-decoration-color: greenyellow;
-			}
-
-			a:hover {
-				text-decoration-color: darken(greenyellow, 10%);
-				background-color: black;
-			}
-		}
-	}
-
-	a {
-		color: white;
-	}
-}
-
-/*
-@font-face {
-	font-family: pageheaderfont;
-	src: url("/shared/skin/fonts/BFTinyHand-Regular.otf");
-}
-*/
+@import "pageheader-core";
