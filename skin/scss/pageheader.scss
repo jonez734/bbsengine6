@@ -1,16 +1,23 @@
 @import "vars";
 @import "mixins";
+@import "fonts";
 
-// Page header styling - used by asimov, achilles, teos, and other projects
+// Page header styling - used by bbsengine6 projects
 header#pageheader {
 	flex: 0 1 auto;
 	border: 0;
 	background-color: $pageheader-backgroundcolor;
 	overflow: hidden;
-	font-family: pageheaderfont;
+//	font-family: pageheaderfont;
 	font-size: large;
 	text-align: center;
 
+/*
+	.est2002 {
+		font-family: estfont;
+	}
+
+*/
 	.body {
 		-webkit-text-stroke-width: 1px;
 		-webkit-text-stroke-color: black;
@@ -42,7 +49,9 @@ header#pageheader {
 	}
 }
 
+/*
 @font-face {
 	font-family: pageheaderfont;
-	src: url("/skin/art/BFTinyHand-Regular.otf");
+	src: url("/shared/skin/fonts/BFTinyHand-Regular.otf");
 }
+*/
