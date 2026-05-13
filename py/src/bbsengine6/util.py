@@ -1,4 +1,5 @@
 # util - general-purpose utilities for the BBS engine
+# pyright: ignore[import-not-found, reportMissingTypeHints]
 
 import logging
 import logging.handlers
@@ -9,7 +10,7 @@ import threading
 from datetime import datetime
 from typing import Optional
 
-from . import database, input, io
+from . import database, input, io  # type: ignore
 
 LOGGER_NAME = "bbsengine6"
 
@@ -29,13 +30,13 @@ def _get_default_handler() -> logging.handlers.SysLogHandler:
 
 def hr(acs: bool = True, width: Optional[int] = None, end: str = "\n") -> bool:
     if width is None:
-        width = io.terminal.width() - 2
+        width = io.terminal.width() - 2  # type: ignore
     io.echo(f" {{boxcolor}}{{hline:{width}}}{{/all}}", end=end)
     return True
 
 
 def heading(title: str, **kwargs) -> None:
-    width = io.terminal.width() - 4
+    width = io.terminal.width() - 4  # type: ignore
     w = width - len(title)
     if w % 2 == 0:
         repeat = w // 2
@@ -98,7 +99,7 @@ def datestamp(
     tzset()
 
     if isinstance(t, (int, float)):
-        t = datetime.fromtimestamp(t, tzinfo=tzlocal())
+        t = datetime.fromtimestamp(t, tzinfo=tzlocal())  # type: ignore
     elif t is None:
         t = datetime.now(tzlocal())
     elif isinstance(t, str):
@@ -285,7 +286,7 @@ def filedisplay(res, **kw) -> None:
     more = kw["more"] if "more" in kw else True
 
     if width is None:
-        width = io.terminal.width()
+        width = io.terminal.width()  # type: ignore
 
     with res as r:
         content = r.read()
@@ -307,7 +308,7 @@ def filedisplay(res, **kw) -> None:
 _dice_rng = random.SystemRandom()
 
 
-def diceroll(sides: int = 6, count: int = 1, mode: str = "single") -> int:
+def diceroll(sides: int = 6, count: int = 1, mode: str = "single") -> int | float | list[int] | None:  # type: ignore
     if mode == "single":
         return _dice_rng.randint(1, sides)
 
@@ -516,7 +517,7 @@ def load_sql(args, resource_name: str, *, package: Optional[str] = None) -> str:
         from importlib.resources import files
     except ImportError:
         try:
-            from importlib_resources import files
+            from importlib_resources import files  # type: ignore
         except ImportError:
             raise ImportError(
                 "load_sql requires 'importlib.resources' (Python 3.9+) or 'importlib_resources'"

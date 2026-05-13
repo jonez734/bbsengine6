@@ -424,8 +424,8 @@ def _stub_main(args: argparse.Namespace, /, **kwargs: dict) -> bool | None:
     pass
 
 
-def _stub_version(args: argparse.Namespace, /, **kwargs: dict) -> str:
-    pass
+def _stub_version(args: argparse.Namespace, /, **kwargs: dict) -> str | None:
+    return None
 
 
 OP_TO_STUB = {
@@ -602,7 +602,7 @@ def check(args, modulename, op="run", **kwargs):
 def runcallback(
     args: object, callback: Union[Callable, str], optional: bool = False, **kwargs
 ):
-    debug = args.debug if args is not None else True
+    debug = getattr(args, "debug", False) if args is not None else True
 
     if callback is None:
         if debug is True:
@@ -612,7 +612,12 @@ def runcallback(
     if callable(callback) is True:
         if debug is True:
             io.echo("runcallback.160: callback is callable", level="debug")
-        return callback(args, **kwargs)
+        cb: Callable = callback  # type: ignore[assignment]
+        return cb(args, **kwargs)
+
+    if not isinstance(callback, str):
+        io.echo(f"runcallback.150: callback is not str or callable: {type(callback)=}", level="error")
+        return None
 
     parts = callback.split(".")
     modpath = ".".join(parts[:-1]) if len(parts) > 1 else parts[0]
@@ -695,7 +700,7 @@ def run(args, modulename, **kwargs):
                 # Auto-generate help from module docstring
                 fallback_parser = _create_help_from_docstring(m)
                 if fallback_parser:
-                    fallback_parser.print_help()
+                    fallback_parser.print_help()  # type: ignore
                 else:
                     io.echo(
                         f"Help for {modulename}: No documentation available",

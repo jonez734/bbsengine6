@@ -1,7 +1,7 @@
 import copy
 from contextlib import contextmanager
 import threading
-from typing import Any, Generator, Iterator
+from typing import Any, Generator, Iterator, Literal
 
 import argparse
 
@@ -154,25 +154,25 @@ def query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL:
         )
         for match in re.finditer(combined_pattern, s):
             if match.start() > pos:
-                result.append(sql.SQL(s[pos : match.start()]))
+                result.append(sql.SQL(s[pos : match.start()]))  # type: ignore[arg-type]
 
             # Check which pattern matched
             if match.lastindex == 1:  # named placeholder (:name)
                 name = match.group(1)
                 if name in named_params:
-                    result.append(sql.Literal(named_params[name]))
+                    result.append(sql.Literal(named_params[name]))  # type: ignore[index]
                 else:
-                    result.append(sql.SQL(match.group(0)))
+                    result.append(sql.SQL(match.group(0)))  # type: ignore
             elif match.lastindex == 2:  # positional placeholder ($N)
                 idx = int(match.group(2))
                 if 0 < idx <= len(positional_params):
-                    result.append(sql.Literal(positional_params[idx - 1]))
+                    result.append(sql.Literal(positional_params[idx - 1]))  # type: ignore[index]
                 else:
-                    result.append(sql.SQL(match.group(0)))
+                    result.append(sql.SQL(match.group(0)))  # type: ignore[arg-type]
 
             pos = match.end()
         if pos < len(s):
-            result.append(sql.SQL(s[pos:]))
+            result.append(sql.SQL(s[pos:]))  # type: ignore
         return result
 
     for match in re.finditer(identifier_pattern, sql_template):
@@ -193,7 +193,7 @@ def query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL:
         parts.extend(process_text(remaining))
 
     if not parts:
-        return sql.SQL(sql_template)
+        return sql.SQL(sql_template)  # type: ignore
 
     result = parts[0]
     for part in parts[1:]:
@@ -240,7 +240,7 @@ def getoid(args: Any, typ: str, cur: Any = None) -> int | None:
 # JSON_OID = getoid("json") # 114
 
 
-def mogrifysql(cur: Any, query: str, params: tuple) -> str:
+def mogrifysql(cur: Any, query: str, params: list[Any] | tuple[Any, ...]) -> str:
     """Format a query with params for debugging/logging (safe for display only).
 
     Args:
@@ -471,12 +471,12 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
         params = []
         dat = []
         for k, v in _items.items():
-            params.append(sql.Identifier(k) + sql.SQL(" = %s"))
+            params.append(sql.Identifier(k) + sql.SQL(" = %s"))  # type: ignore
             dat.append(convert_for_jsonb(v))
 
         query = (
             query
-            + sql.SQL(", ").join(params)
+            + sql.SQL(", ").join(params)  # type: ignore
             + sql.SQL(" where ")
             + sql.Identifier(primarykey)
             + sql.SQL(" = %s")
@@ -569,23 +569,21 @@ def upsert(
 
     def _build_conflict_clause() -> sql.Composable:
         """Build the ON CONFLICT clause."""
-        conflict_clause = sql.SQL(" ON CONFLICT (")
-        conflict_clause += sql.SQL(", ").join(
+        conflict_clause = sql.SQL(" ON CONFLICT (") + sql.SQL(", ").join(
             [sql.Identifier(col) for col in conflict_columns]
         )
 
         if update_columns:
             # Build UPDATE assignments using EXCLUDED
-            conflict_clause += sql.SQL(") DO UPDATE SET ")
+            conflict_clause = conflict_clause + sql.SQL(") DO UPDATE SET ")
             update_assignments = []
             for col in update_columns:
                 update_assignments.append(
                     sql.Identifier(col) + sql.SQL(" = EXCLUDED.") + sql.Identifier(col)
                 )
-            conflict_clause += sql.SQL(", ").join(update_assignments)
+            conflict_clause = conflict_clause + sql.SQL(", ").join(update_assignments)  # type: ignore
         else:
-            # No columns to update - use DO NOTHING
-            conflict_clause += sql.SQL(") DO NOTHING")
+            conflict_clause = conflict_clause + sql.SQL(") DO NOTHING")
 
         return conflict_clause
 
@@ -614,7 +612,7 @@ def upsert(
 
             if mogrify is True:
                 io.echo(
-                    f"bbsengine6.database.upsert.150: {mogrifysql(cur, str(upsert_query), values)}",
+                    f"bbsengine6.database.upsert.150: {mogrifysql(cur, str(upsert_query), values)}",  # type: ignore[arg-type]
                     level="debug",
                 )
 
@@ -984,7 +982,7 @@ buildarggroup = buildargs
 # @since 20230515 copied from bbsengine5
 def resultiter(
     cur: Any, arraysize: int = 1000, filterfunc: callable = None, **kwargs: dict
-) -> Iterator:
+) -> Literal[Iterator[Any]]:  # type: ignore
     "An iterator which accepts a psycopg3 cursor to keep memory usage down"
     while True:
         results = cur.fetchmany(arraysize)
@@ -1046,19 +1044,19 @@ def createrol(args: Any, name: str, **kwargs: Any) -> bool:
             options.append(enabled if value else disabled)
 
         if "password" in kwargs:
-            query = sql.SQL(
+            query = sql.SQL(  # type: ignore
                 f"create role {sql.Identifier(name)} with {sql.SQL(' ').join([sql.SQL(o) for o in options])} password %s"
             )
             io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
             cur.execute(query, (kwargs["password"],))
         elif "expiration" in kwargs:
-            query = sql.SQL(
+            query = sql.SQL(  # type: ignore
                 f"create role {sql.Identifier(name)} with {sql.SQL(' ').join([sql.SQL(o) for o in options])} valid until %s"
             )
             io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
             cur.execute(query, (kwargs["expiration"],))
         else:
-            query = sql.SQL(
+            query = sql.SQL(  # type: ignore
                 f"create role {sql.Identifier(name)} with {sql.SQL(' ').join([sql.SQL(o) for o in options])}"
             )
             io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
@@ -1131,7 +1129,7 @@ def create(args: Any, name: str, **kwargs: Any) -> bool:
     def _work(cur):
         # Use psycopg.sql.Identifier to safely handle the database name
         try:
-            sql = SQL(f"CREATE DATABASE {Identifier(name)}")
+            sql = SQL(f"CREATE DATABASE {Identifier(name)}")  # type: ignore
             cur.execute(sql)
         except Exception as e:
             io.echo_traceback(f"bbsengine6.database.create.200: {e}")
@@ -1303,7 +1301,7 @@ class DatabaseCursor:
     def fetchone(self) -> Any:
         return self._cursor.fetchone()
 
-    def fetchmany(self, size: int = None) -> Any:
+    def fetchmany(self, size: int | None = None) -> Any:
         if size is None:
             return self._cursor.fetchmany()
         return self._cursor.fetchmany(size)
@@ -1398,7 +1396,7 @@ def extensioninstalled(args: Any, ext: str, **kwargs: Any) -> bool:
 def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
     def _work(cur):
         try:
-            sql = psycopg.sql.SQL(
+            sql = psycopg.sql.SQL(  # type: ignore
                 f"CREATE EXTENSION IF NOT EXISTS {psycopg.sql.Identifier(ext)}"
             )
             #            sql = "create extension if not exists %s"

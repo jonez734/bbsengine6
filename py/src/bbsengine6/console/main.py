@@ -1,6 +1,6 @@
 import psycopg
 
-from bbsengine6 import session, util, io, database, member
+from bbsengine6 import session, util, io, database, member  # type: ignore
 # import bbsengine6 as bbsengine
 
 from . import lib
@@ -149,7 +149,7 @@ def main(args, **kwargs):
         with database.connect(args, pool=pool) as conn:
             io.echo(f"con.main.main.120: {pool=} {conn=}", level="debug")
             conn.autocommit = False
-            if member.count(args, conn=conn) > 0:
+            if member.count(args, conn=conn) is not None and member.count(args, conn=conn) > 0:  # type: ignore
                 if session.start(args, conn=conn, **kwargs) is False:
                     io.echo(f"con.main.140: did not start session", level="error")
                     return False
@@ -159,10 +159,10 @@ def main(args, **kwargs):
             done = False
             while not done:
                 membercount = member.count(args, conn=conn)
-                if membercount > 0:
-                    session.updatelastactivity(
-                        args, session.getcurrentsessionid(), conn=conn, **kwargs
-                    )
+                if membercount is not None and membercount > 0:
+                    sessionid = session.getcurrentsessionid()  # type: ignore
+                    if sessionid is not None:
+                        session.updatelastactivity(args, sessionid, conn=conn, **kwargs)  # type: ignore
                 else:
                     io.echo(f"no session", level="warn")
 

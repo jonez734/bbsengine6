@@ -1,7 +1,7 @@
 from math import ceil
 from typing import Any, Callable, List, NamedTuple, Optional
 
-from . import io
+from . import io  # type: ignore
 from .io.echo import rendered_length
 
 
@@ -85,7 +85,7 @@ class Listbox:
         self._hotkey_map: dict[str, ListboxItem] = {}
         self._build_hotkey_map()
 
-        self.terminalwidth = io.terminal.width()
+        self.terminalwidth = io.terminal.width()  # type: ignore
         self.contentwidth = (
             self.terminalwidth - self.BORDER_WIDTH_LEFT - self.BORDER_WIDTH_RIGHT
         )
