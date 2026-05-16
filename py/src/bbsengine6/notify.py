@@ -719,7 +719,10 @@ def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int | None:
         if pool is None:
             try:
                 args = kwargs.get("args", None)
-                pool = getpool(args)
+                if args is None:
+                    pool = getpool(args, dbname="zoid6", host="127.0.0.1", port=5432)
+                else:
+                    pool = getpool(args)
             except Exception:
                 io.echo_traceback("bbsengine6.notify.count.100: getpool() failed")
                 return None
