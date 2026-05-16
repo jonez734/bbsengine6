@@ -293,20 +293,13 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
 
     Returns:
       DSN string like 'dbname=test user=admin'
+
+    Raises:
+      ValueError: If args is None and required database parameters are not provided via kwargs.
     """
     components = []
 
-    try:
-        defaults = {
-            "dbname": args.databasename,
-            "user": args.databaseuser,
-            "password": args.databasepassword,
-            "host": args.databasehost,
-            "port": args.databaseport,
-            "autocommit": False,
-        }
-    except AttributeError:
-        io.echo_traceback("bbsengine6.database.make_dsn.100:")
+    if args is None:
         defaults = {
             "dbname": None,
             "user": None,
@@ -315,6 +308,31 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
             "port": 5432,
             "autocommit": False,
         }
+        if not any(kwargs.get(k) for k in ("dbname", "user", "password", "host")):
+            raise ValueError(
+                "make_dsn: args is None and no database parameters provided via kwargs. "
+                "Cannot build DSN."
+            )
+    else:
+        try:
+            defaults = {
+                "dbname": args.databasename,
+                "user": args.databaseuser,
+                "password": args.databasepassword,
+                "host": args.databasehost,
+                "port": args.databaseport,
+                "autocommit": False,
+            }
+        except AttributeError:
+            io.echo_traceback("bbsengine6.database.make_dsn.100:")
+            defaults = {
+                "dbname": None,
+                "user": None,
+                "password": None,
+                "host": None,
+                "port": 5432,
+                "autocommit": False,
+            }
 
     for k in ("dbname", "user", "password", "host", "port"):
         v = kwargs.get(k, defaults.get(k))
