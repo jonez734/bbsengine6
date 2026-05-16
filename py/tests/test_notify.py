@@ -402,14 +402,24 @@ class TestValidateMoniker:
         assert _validate_moniker("a-b-c")
         assert _validate_moniker("A")
         assert _validate_moniker("Z")
+        # Special characters now allowed
+        assert _validate_moniker("JAM!")  # Exclamation
+        assert _validate_moniker("user@host")  # @ symbol
+        assert _validate_moniker("test#123")  # Hash
+        assert _validate_moniker("price$100")  # Dollar
+        assert _validate_moniker("item%off")  # Percent
+        assert _validate_moniker("x^2")  # Caret
+        assert _validate_moniker("a&b")  # Ampersand
+        assert _validate_moniker("test*")  # Asterisk
+        assert _validate_moniker("par(en")  # Parens
+        assert _validate_moniker("close)par")  # Parens
 
     def test_invalid_moniker_format(self):
         assert not _validate_moniker("")
         assert not _validate_moniker(None)
         assert not _validate_moniker("A" * 256)  # > 255 chars
         assert not _validate_moniker("invalid name")  # Space
-        assert not _validate_moniker("invalid@user")  # @ symbol
-        assert not _validate_moniker("user.name")  # Dot
+        assert not _validate_moniker("user.name")  # Dot (not in pattern)
         assert not _validate_moniker(123)  # Not a string
 
 

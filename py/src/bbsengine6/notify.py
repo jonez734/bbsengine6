@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 # This allows tests to use a different database (e.g., zoid6test) than production (bbsengine6)
 _DEFAULT_DBNAME = os.environ.get("BBSENGINE6_DBNAME", "bbsengine6")
 
+# Validates monikers: alphanumeric, underscore, hyphen, and common special chars
+# Alternative: r"^[a-zA-Z0-9_\-!@#$%^&*() ]+$"  # Allow all printable (more permissive)
+_MONIKER_PATTERN = r"^[a-zA-Z0-9_!@#$%^&*()-]+$"
+
 
 def _table_identifier(table: str) -> sql.Identifier:
     """Create proper SQL identifier for schema-qualified table names.
@@ -136,7 +140,7 @@ def _validate_moniker(moniker: str, cur: Optional[Any] = None) -> bool:
         return False
     if len(moniker) > 255:
         return False
-    if not re.match(r"^[a-zA-Z0-9_-]+$", moniker):
+    if not re.match(_MONIKER_PATTERN, moniker):
         return False
 
     # If no cursor provided, we assume valid (for testing)
