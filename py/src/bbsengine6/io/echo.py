@@ -1420,8 +1420,23 @@ def echo_template(name: str, **vars) -> None:
         name: Template filename (e.g., "menu.tpl")
         **vars: Variables to substitute in template
 
+    Keyword Args:
+        page_size: If > 0, pause every N lines with "More?" prompt (like echo_file)
+
     Example:
         >>> echo_template("menu.tpl", title="Main Menu", item1="Files", item2="Mail")
+        >>> echo_template("long.tpl", page_size=20, ...)  # with paging
     """
+    page_size = vars.pop("page_size", 0)
     template = load_template(name, **vars)
-    echo(template)
+
+    if page_size > 0:
+        lines = template.split("\n")
+        line_count = 0
+        for line in lines:
+            echo(line)
+            line_count += 1
+            if line_count % page_size == 0:
+                input("More?")
+    else:
+        echo(template)
