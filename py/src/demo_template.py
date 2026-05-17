@@ -47,20 +47,20 @@ def demo_variable_substitution():
     print("DEMO: Variable Substitution")
     print("=" * 60)
 
-    # Simple substitution
+    # Simple substitution - use io.echo() to process {var:xxx} commands
     result = io.load_template("menu.tpl", title="Main Menu", item1="Files", item2="Mail")
-    print("\n--- menu.tpl with variables ---")
-    print(result)
+    print("\n--- menu.tpl with variables (via io.echo()) ---")
+    io.echo(result)
 
     # Form template
     result = io.load_template("form.tpl", title="User Profile", label="Username", value="alice")
-    print("\n--- form.tpl with variables ---")
-    print(result)
+    print("\n--- form.tpl with variables (via io.echo()) ---")
+    io.echo(result)
 
     # Confirm template
     result = io.load_template("confirm.tpl", title="Delete", message="Delete this file?")
-    print("\n--- confirm.tpl with variables ---")
-    print(result)
+    print("\n--- confirm.tpl with variables (via io.echo()) ---")
+    io.echo(result)
 
 
 def demo_echo_template():
@@ -116,10 +116,12 @@ def demo_preserves_runtime_vars():
     print("DEMO: Runtime Variables Preserved")
     print("=" * 60)
 
-    print("\n--- Runtime variables like {var:titlecolor} are preserved ---")
+    print("\n--- Template raw (before io.echo processes {var:xxx}) ---")
     result = io.load_template("menu.tpl", title="Test")
-    # Show that {var:xxx} syntax is preserved for io.echo to process
-    print(result[:100] + "...")
+    print(result[:80] + "...")
+
+    print("\n--- Template after io.echo() processes {var:xxx} commands ---")
+    io.echo(result)
 
 
 def main():
