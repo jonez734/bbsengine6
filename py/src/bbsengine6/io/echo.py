@@ -9,6 +9,7 @@
 # raw: original matched string
 # text: whatever is to be output by _write_token()
 
+import os
 import re
 import threading
 
@@ -1346,3 +1347,81 @@ def echo_traceback(
 
     # Single call to echo
     echo(traceback_string, level=None)
+
+
+def _get_template_dirs() -> list:
+    """Get list of template directories to search, in priority order."""
+    dirs = []
+
+    site_template_dir = getvar("template_dir")
+    if site_template_dir:
+        dirs.append(site_template_dir)
+
+    builtin_tpl_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tpl")
+    if os.path.isdir(builtin_tpl_dir):
+        dirs.append(builtin_tpl_dir)
+
+    return dirs
+
+
+def _load_template(name: str) -> str:
+    """Load template file from search paths.
+
+    Searches in order:
+    1. Site-specific template_dir (if configured)
+    2. Built-in bbsengine6/tpl/ directory
+
+    Args:
+        name: Template filename (e.g., "menu.tpl")
+
+    Returns:
+        Template content as string
+
+    Raises:
+        FileNotFoundError: If template not found in any search path
+    """
+    dirs = _get_template_dirs()
+
+    for d in dirs:
+        filepath = os.path.join(d, name)
+        if os.path.isfile(filepath):
+            with open(filepath, "r") as f:
+                return f.read()
+
+    raise FileNotFoundError(f"Template '{name}' not found in {dirs}")
+
+
+def load_template(name: str, **vars) -> str:
+    """Load template and substitute variables.
+
+    Args:
+        name: Template filename (e.g., "menu.tpl")
+        **vars: Variables to substitute in template
+
+    Returns:
+        Rendered template string with variables replaced
+
+    Example:
+        >>> template = load_template("menu.tpl", title="Main Menu", item1="Files")
+        >>> echo(template)
+    """
+    content = _load_template(name)
+
+    for key, value in vars.items():
+        content = content.replace(f"{{{key}}}", str(value))
+
+    return content
+
+
+def echo_template(name: str, **vars) -> None:
+    """Load template, substitute variables, and output.
+
+    Args:
+        name: Template filename (e.g., "menu.tpl")
+        **vars: Variables to substitute in template
+
+    Example:
+        >>> echo_template("menu.tpl", title="Main Menu", item1="Files", item2="Mail")
+    """
+    template = load_template(name, **vars)
+    echo(template)

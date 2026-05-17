@@ -1,7 +1,46 @@
-from . import terminal
+import warnings
+
+# Import and expose functions from submodules
+# Suppress deprecation warnings during import
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+    from .echo import (
+        echo,
+        echo_file,
+        echo_traceback,
+        rendered_length,
+        get_cursor_position,
+    )
+    from .echo import register_emoji, register_emojis, setvar, getvar
+    from .echo import load_template, echo_template
+
+    from .inputstring import inputstring
+    from .inputinteger import inputinteger
+    from .inputboolean import inputboolean
+    from .inputchoice import inputchoice
+
+    inputchar = inputchoice  # alias
+
+    from .getch import getch_str as getch
+
+
+# For backwards compatibility, also expose as module attributes via __getattr__
+def __getattr__(name):
+    if name == "terminal":
+        from . import terminal
+
+        return terminal
+    if name == "const":
+        from . import const
+
+        return const
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "terminal",
+    "const",
     "echo",
     "echo_file",
     "echo_traceback",
@@ -11,25 +50,12 @@ __all__ = [
     "getvar",
     "register_emoji",
     "register_emojis",
+    "load_template",
+    "echo_template",
     "inputstring",
     "inputinteger",
     "inputboolean",
     "inputchoice",
     "inputchar",
     "getch",
-    "KeyEvent",
-    "EventHandler",
-    "register_key_event_handler",
-    "unregister_key_event_handler",
-    "get_registered_handlers",
-    "start_event_dispatcher",
-    "stop_event_dispatcher",
-    "is_event_dispatcher_running",
-    "set_event_dispatcher_timeout",
-    "get_event_queue",
-    "is_event_queue_empty",
-    "clear_event_queue",
-    "set_event_error_handler",
-    "get_key_event_history",
-    "clear_key_event_history",
 ]

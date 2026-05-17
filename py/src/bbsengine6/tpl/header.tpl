@@ -1,0 +1,1 @@
+{var:titlecolor}{acs:vline} {title} {acs:vline}{var:normalcolor}
