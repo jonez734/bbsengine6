@@ -1414,29 +1414,39 @@ def load_template(name: str, **vars) -> str:
 
 
 def echo_template(name: str, **vars) -> None:
-    """Load template, substitute variables, and output.
+    """Load template, substitute variables, and output using echo_file().
 
     Args:
         name: Template filename (e.g., "menu.tpl")
         **vars: Variables to substitute in template
 
     Keyword Args:
-        page_size: If > 0, pause every N lines with "More?" prompt (like echo_file)
+        page_size: If > 0, pause every N lines with "More?" prompt (default: 0, no paging)
+        raw: If True, output raw text without interpreting {var:xxx} commands
+        wordwrap: Enable/disable word wrapping (default: True)
 
     Example:
         >>> echo_template("menu.tpl", title="Main Menu", item1="Files", item2="Mail")
-        >>> echo_template("long.tpl", page_size=20, ...)  # with paging
+        >>> echo_template("long.tpl", page_size=20)  # with paging
     """
+    import tempfile
+    import os
+
     page_size = vars.pop("page_size", 0)
+    raw = vars.pop("raw", False)
+    wordwrap = vars.pop("wordwrap", True)
+
     template = load_template(name, **vars)
 
     if page_size > 0:
-        lines = template.split("\n")
-        line_count = 0
-        for line in lines:
-            echo(line)
-            line_count += 1
-            if line_count % page_size == 0:
-                input("More?")
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".tpl", delete=False
+        ) as tmp:
+            tmp.write(template)
+            tmp_path = tmp.name
+        try:
+            echo_file(tmp_path, page_size=page_size, raw=raw, wordwrap=wordwrap, end="")
+        finally:
+            os.unlink(tmp_path)
     else:
-        echo(template)
+        echo(template, raw=raw, wordwrap=wordwrap)
