@@ -1,5 +1,7 @@
 # NotifyD with getch() - No Daemon Required
 
+**See Also**: [BBSENGINE6_NOTIFYD_ARCHITECTURE.md](../../BBSENGINE6_NOTIFYD_ARCHITECTURE.md#model-2-getch-integration-recommended-for-bbs) for full architecture details
+
 ## Overview
 
 NotifyD can work **without a background daemon** by leveraging bbsengine6's existing `getch()` notification system. This is ideal for a BBS where users are actively at the terminal - notifications are checked during normal keyboard input.

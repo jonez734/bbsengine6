@@ -1,5 +1,7 @@
 # NotifyD Multi-User Guide
 
+**See Also**: [BBSENGINE6_NOTIFYD_DEPLOYMENT.md](../../BBSENGINE6_NOTIFYD_DEPLOYMENT.md#multi-user-considerations) for comprehensive deployment guidance
+
 ## Current Design: Single System Daemon
 
 NotifyD is designed as a **single system-wide daemon** that runs as the `bbsengine6` system user. It is **not a multi-user system** in the sense that each bbsengine6 application user gets their own daemon instance.

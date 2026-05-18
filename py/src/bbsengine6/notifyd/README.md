@@ -1,6 +1,13 @@
 # NotifyD - IMAP/Event Notification Daemon for bbsengine6
 
+**Note**: Comprehensive specification documents are available in the bbsengine6 project directory:
+- See [BBSENGINE6_NOTIFYD_OVERVIEW.md](../../BBSENGINE6_NOTIFYD_OVERVIEW.md) for full specification  
+- See [BBSENGINE6_NOTIFYD_DEPLOYMENT.md](../../BBSENGINE6_NOTIFYD_DEPLOYMENT.md) for deployment options
+- See [BBSENGINE6_NOTIFYD_ARCHITECTURE.md](../../BBSENGINE6_NOTIFYD_ARCHITECTURE.md) for architecture details
+
 A robust daemon that monitors email servers and application events, routing all notifications through the `bbsengine6.notify` infrastructure. Supports IMAP monitoring with RFC822 parsing, configurable event listeners, and persistent notification history.
+
+**Status**: NOT YET IMPLEMENTED
 
 ## Features
 

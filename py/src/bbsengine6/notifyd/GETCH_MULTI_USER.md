@@ -1,5 +1,7 @@
 # getch() Integration: Multi-Member Per Machine Support
 
+**See Also**: [BBSENGINE6_NOTIFYD_DEPLOYMENT.md](../../BBSENGINE6_NOTIFYD_DEPLOYMENT.md) for complete deployment models
+
 ## Short Answer
 
 **YES! getch() integration DOES allow for proper multi-member per machine notifications.**
