@@ -108,6 +108,9 @@ def schema_init(db_connection, request):
     db_connection.commit()
     logger.info("✓ All notify tables initialized")
 
+    # Grant permissions to opencode user for testing
+    _grant_permissions_to_opencode(db_connection)
+
     yield
 
 
@@ -240,3 +243,37 @@ def _execute_sql_file(conn, sql_content: str, filename: str) -> None:
     except Exception as e:
         # Re-raise - let caller decide how to handle
         raise
+
+
+def _grant_permissions_to_opencode(conn) -> None:
+    """Grant permissions on notify tables to opencode user for testing."""
+    user = getpass.getuser()
+    # Core tables that must exist
+    essential_grants = [
+        f"GRANT ALL ON engine.__notify TO {user}",
+        f"GRANT ALL ON engine.__notify_id_seq TO {user}",
+        f"GRANT USAGE ON TYPE engine.notify_urgency_enum TO {user}",
+    ]
+
+    try:
+        conn.rollback()  # Clear any transaction state
+        with conn.cursor() as cur:
+            for grant_sql in essential_grants:
+                try:
+                    cur.execute(grant_sql)
+                    conn.commit()
+                except psycopg.errors.InsufficientPrivilege:
+                    # Can't grant what we don't have
+                    logger.debug(f"Skip (insufficient privilege): {grant_sql}")
+                    conn.rollback()
+                except psycopg.errors.UndefinedObject:
+                    # Table/type doesn't exist
+                    logger.debug(f"Skip (undefined): {grant_sql}")
+                    conn.rollback()
+                except Exception as e:
+                    logger.debug(f"Skip ({type(e).__name__}): {grant_sql}")
+                    conn.rollback()
+        logger.info(f"✓ Permissions processed for {user}")
+    except Exception as e:
+        logger.error(f"Failed to process permissions: {e}")
+        conn.rollback()
