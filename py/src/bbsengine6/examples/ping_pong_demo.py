@@ -9,8 +9,9 @@ import signal
 import sys
 import threading
 import time
+from collections import deque
 from datetime import datetime
-from typing import List
+from typing import Deque, List, Union
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -25,9 +26,18 @@ except ImportError as e:
     print("Make sure bbsengine6 is installed and in your Python path")
     sys.exit(1)
 
-# Constants
-MAX_ROUNDS = 5
-GETCH_TIMEOUT = 2.0
+# Configuration - customize game behavior
+class Config:
+    """Configuration settings for ping/pong demo."""
+    MAX_ROUNDS = 5
+    GETCH_TIMEOUT = 2.0
+    MESSAGE_LOG_SIZE = 100  # Maximum number of messages to keep in memory
+    THREAD_TIMEOUT = 10.0  # Maximum time to wait for thread shutdown
+
+
+# Constants (legacy aliases for backward compatibility)
+MAX_ROUNDS = Config.MAX_ROUNDS
+GETCH_TIMEOUT = Config.GETCH_TIMEOUT
 
 # Thread-safe synchronization primitives
 exit_event = threading.Event()  # Thread-safe flag for graceful shutdown
@@ -81,7 +91,7 @@ def clear_screen() -> None:
 
 
 def display_menu(
-    moniker: str, round_num: int, status: str, message_log: List[str]
+    moniker: str, round_num: int, status: str, message_log: Union[List[str], Deque[str]]
 ) -> None:
     """Display the game menu and message log (with output synchronization)."""
     with output_lock:
@@ -98,7 +108,9 @@ def display_menu(
 
         with message_log_lock:
             if message_log:
-                for msg in message_log[-8:]:  # Show last 8 messages
+                # Show last 8 messages (works with both list and deque)
+                log_items = list(message_log)[-8:]
+                for msg in log_items:
                     print(f"  {msg}")
             else:
                 print("  [Awaiting first message...]")
@@ -184,7 +196,7 @@ def send_ping(from_moniker: str, round_num: int) -> bool:
         return False
 
 
-def check_and_display_queue(moniker: str, message_log: List[str]) -> None:
+def check_and_display_queue(moniker: str, message_log: Union[List[str], Deque[str]]) -> None:
     """Check and display all pending notifications (with output synchronization)."""
     try:
         queue = notify.get_queue(moniker)
@@ -232,7 +244,8 @@ def player_loop(moniker: str) -> None:
     # Set thread-local moniker (simulates logged-in member)
     _threadlocal.moniker = moniker
 
-    message_log = []
+    # Use deque with max size for automatic log rotation
+    message_log = deque(maxlen=Config.MESSAGE_LOG_SIZE)
 
     try:
         with output_lock:
