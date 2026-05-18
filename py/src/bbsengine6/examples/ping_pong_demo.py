@@ -30,21 +30,29 @@ PLAYERS = {"alice": None, "bob": None}
 
 
 def setup_notifications() -> bool:
-    """Register notification types for the demo."""
+    """Register notification types for the demo.
+
+    Note: This demo uses the in-memory notification queue system.
+    The notification types are registered locally without requiring a database.
+    """
     try:
-        notify.register_type(
-            "ping-message",
-            default_urgency=NotificationUrgency.ROUTINE,
-            max_per_hour=100,
-            persist_by_default=False,
-        )
-        notify.register_type(
-            "pong-message",
-            default_urgency=NotificationUrgency.ROUTINE,
-            max_per_hour=100,
-            persist_by_default=False,
-        )
-        print("✓ Notification types registered")
+        # Register types without requiring database connection
+        # For demo purposes, we'll use the _types dict directly
+        from bbsengine6.notify import _types, _types_lock
+
+        with _types_lock:
+            _types["ping_message"] = {
+                "default_urgency": NotificationUrgency.ROUTINE,
+                "max_per_hour": 100,
+                "persist_by_default": False,
+            }
+            _types["pong_message"] = {
+                "default_urgency": NotificationUrgency.ROUTINE,
+                "max_per_hour": 100,
+                "persist_by_default": False,
+            }
+
+        print("✓ Notification types registered (in-memory)")
         return True
     except Exception as e:
         print(f"❌ Failed to register notifications: {e}")
@@ -93,7 +101,11 @@ def display_menu(
 
 
 def send_ping(from_moniker: str, round_num: int) -> bool:
-    """Send a ping/pong notification with comprehensive error handling."""
+    """Send a ping/pong notification with comprehensive error handling.
+
+    This demo version uses the in-memory notification queue directly
+    without requiring a database connection.
+    """
     to_moniker = "bob" if from_moniker == "alice" else "alice"
 
     try:
@@ -109,24 +121,36 @@ def send_ping(from_moniker: str, round_num: int) -> bool:
             input("Press Enter to continue...")
             return False
 
-        # Determine message type
-        msg_type = "pong-message" if from_moniker == "bob" else "ping-message"
+        # Determine message type and word
+        msg_type = "pong_message" if from_moniker == "bob" else "ping_message"
         msg_word = "PONG" if from_moniker == "bob" else "PING"
+        msg_text = f"{msg_word} #{round_num} from {from_moniker}"
 
-        # Try to send
+        # Create a simple notification object for demo purposes
         try:
-            notify.send(
+            from dataclasses import dataclass
+
+            @dataclass
+            class SimpleNotification:
+                """Minimal notification for demo purposes."""
+
+                message: str
+                urgency: str
+                timestamp: str
+                notification_type: str
+                sender_moniker: str
+
+            notification = SimpleNotification(
+                message=msg_text,
+                urgency="ROUTINE",
+                timestamp=datetime.now().isoformat(),
                 notification_type=msg_type,
-                recipients=[to_moniker],
-                template="default",  # Use default template
-                template_vars={
-                    "from": from_moniker,
-                    "round": round_num,
-                    "message": f"{msg_word} #{round_num} from {from_moniker}",
-                    "timestamp": datetime.now().isoformat(),
-                },
-                urgency=NotificationUrgency.ROUTINE,
+                sender_moniker=from_moniker,
             )
+
+            # Add to recipient's queue directly
+            recipient_queue.put(notification)
+
             print(f"✓ Sent {msg_word} #{round_num} to {to_moniker}")
             time.sleep(0.5)
             return True
@@ -189,6 +213,7 @@ def check_and_display_queue(moniker: str, message_log: List[str]) -> None:
 
 def player_loop(moniker: str) -> None:
     """Main game loop for a player (alice or bob)."""
+    global DEMO_EXITING  # noqa: PLW0603
     # Set thread-local moniker (simulates logged-in member)
     _threadlocal.moniker = moniker
 
@@ -216,7 +241,6 @@ def player_loop(moniker: str) -> None:
 
                 # ESC - exit immediately (both players)
                 if key == "\x1b":  # ESC character
-                    global DEMO_EXITING  # noqa: PLW0603
                     DEMO_EXITING = True
                     print(f"\n✓ {moniker.upper()}: ESC pressed - exiting demo")
                     time.sleep(0.5)
