@@ -256,7 +256,9 @@ class MessageHandler:
                                 "ROUTINE",
                             ),
                         )
-                        notify_id = cur.fetchone()[0]
+                        result_row = cur.fetchone()
+                        # bbsengine6 cursor returns dict-like rows, access by column name
+                        notify_id = result_row["id"] if isinstance(result_row, dict) else result_row[0]
 
                         # Insert recipient entry
                         cur.execute(
