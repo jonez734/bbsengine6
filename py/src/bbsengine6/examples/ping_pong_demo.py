@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from bbsengine6 import notify
+    from bbsengine6.io.echo import echo
     from bbsengine6.io.getch import getch_str
     from bbsengine6.member import _threadlocal
     from bbsengine6.notify import Notification, NotificationUrgency
@@ -77,19 +78,19 @@ def setup_notifications() -> bool:
             }
 
         with output_lock:
-            print("✓ Notification types registered (in-memory)")
+            echo("✓ Notification types registered (in-memory)")
         return True
     except (AttributeError, KeyError, TypeError) as e:
         # AttributeError: _types or _types_lock don't exist
         # KeyError: Error accessing notification type dictionary
         # TypeError: Type mismatch in registration
         with output_lock:
-            print(f"❌ Failed to register notifications: {e}")
+            echo(f"❌ Failed to register notifications: {e}")
         return False
     except ImportError as e:
         # Missing notify module or dependencies
         with output_lock:
-            print(f"❌ Failed to import notify module: {e}")
+            echo(f"❌ Failed to import notify module: {e}")
         return False
 
 
@@ -104,26 +105,26 @@ def display_menu(
     """Display the game menu and message log (with output synchronization)."""
     with output_lock:
         clear_screen()
-        print("═" * 60)
-        print(f"    PING-PONG DEMO (Moniker: {moniker.upper()})")
-        print("═" * 60)
-        print(f"Round: {round_num}/{MAX_ROUNDS} | Status: {status}")
-        print()
-        print("(P)ing / (C)heck / (Q)uit / [ESC] to exit")
-        print()
-        print("─" * 60)
-        print("MESSAGE LOG:")
+        echo("═" * 60)
+        echo(f"    PING-PONG DEMO (Moniker: {moniker.upper()})")
+        echo("═" * 60)
+        echo(f"Round: {round_num}/{MAX_ROUNDS} | Status: {status}")
+        echo()
+        echo("(P)ing / (C)heck / (Q)uit / [ESC] to exit")
+        echo()
+        echo("─" * 60)
+        echo("MESSAGE LOG:")
 
         with message_log_lock:
             if message_log:
                 # Show last 8 messages (works with both list and deque)
                 log_items = list(message_log)[-8:]
                 for msg in log_items:
-                    print(f"  {msg}")
+                    echo(f"  {msg}")
             else:
-                print("  [Awaiting first message...]")
+                echo("  [Awaiting first message...]")
 
-        print("─" * 60)
+        echo("─" * 60)
 
         # Show queue status
         try:
@@ -131,13 +132,13 @@ def display_menu(
             if queue:
                 all_notifs = queue.get_all()
                 count = len(all_notifs)
-                print(f"Queue Status: {count} pending notification(s)")
+                echo(f"Queue Status: {count} pending notification(s)")
             else:
-                print("Queue Status: Not initialized")
+                echo("Queue Status: Not initialized")
         except Exception as e:
-            print(f"Queue Status: Error - {e}")
+            echo(f"Queue Status: Error - {e}")
 
-        print("═" * 60)
+        echo("═" * 60)
 
 
 def _sanitize_text(text: str) -> str:
@@ -160,15 +161,15 @@ def send_ping(from_moniker: str, round_num: int) -> bool:
     """Send a ping/pong notification with comprehensive error handling."""
     to_moniker = "bob" if from_moniker == "alice" else "alice"
 
-    try:
-        # Determine message type and word
-        msg_type = "pong_message" if from_moniker == "bob" else "ping_message"
-        msg_word = "PONG" if from_moniker == "bob" else "PING"
-        # Sanitize moniker to prevent terminal control character injection
-        safe_moniker = _sanitize_text(from_moniker)
-        msg_text = f"{msg_word} #{round_num + 1} from {safe_moniker}"
+    # Determine message type and word
+    msg_type = "pong_message" if from_moniker == "bob" else "ping_message"
+    msg_word = "PONG" if from_moniker == "bob" else "PING"
+    # Sanitize moniker to prevent terminal control character injection
+    safe_moniker = _sanitize_text(from_moniker)
+    msg_text = f"{msg_word} #{round_num + 1} from {safe_moniker}"
 
-        # Create a proper Notification object for the demo
+    # Create a proper Notification object for the demo
+    try:
         notification = Notification(
             id=round_num,
             notification_type=msg_type,
@@ -183,42 +184,44 @@ def send_ping(from_moniker: str, round_num: int) -> bool:
             urgency=NotificationUrgency.ROUTINE,
             timestamp=time.time(),
         )
-
-        # Try to add to recipient's queue (atomic operation)
-        # This approach avoids race condition of check-then-use
-        try:
-            recipient_queue = notify.get_queue(to_moniker)
-            if recipient_queue is None:
-                raise RuntimeError(f"{to_moniker} is not logged in")
-            recipient_queue.put(notification)
-
-            with output_lock:
-                print(f"✓ Sent {msg_word} #{round_num + 1} to {to_moniker}")
-            time.sleep(0.5)
-            return True
-
-        except (RuntimeError, AttributeError, TypeError) as e:
-            error_str = str(e).lower()
-            with output_lock:
-                print(f"❌ ERROR: Failed to send to {to_moniker}: {e}")
-
-                if "not logged in" in error_str:
-                    print(f"   → {to_moniker} is not currently available")
-                elif "rate limit" in error_str:
-                    print("   → You've sent too many messages too quickly")
-                    print("   → Please wait a moment before sending again")
-                elif "blocked" in error_str:
-                    print(f"   → {to_moniker} has blocked your messages")
-                elif "not registered" in error_str:
-                    print(f"   → Notification type not registered")
-
-                input("Press Enter to continue...")
-            return False
-
     except Exception as e:
+        # Catch any unexpected exceptions from Notification creation
         with output_lock:
-            print(f"❌ Unexpected error: {e}")
-            input("Press Enter to continue...")
+            echo(f"❌ Unexpected error creating notification: {e}")
+            echo("Press Enter to continue...")
+            input()
+        return False
+
+    # Try to add to recipient's queue (atomic operation)
+    # This approach avoids race condition of check-then-use
+    try:
+        recipient_queue = notify.get_queue(to_moniker)
+        if recipient_queue is None:
+            raise RuntimeError(f"{to_moniker} is not logged in")
+        recipient_queue.put(notification)
+
+        with output_lock:
+            echo(f"✓ Sent {msg_word} #{round_num + 1} to {to_moniker}")
+        time.sleep(0.5)
+        return True
+
+    except (RuntimeError, AttributeError, TypeError) as e:
+        error_str = str(e).lower()
+        with output_lock:
+            echo(f"❌ ERROR: Failed to send to {to_moniker}: {e}")
+
+            if "not logged in" in error_str:
+                echo(f"   → {to_moniker} is not currently available")
+            elif "rate limit" in error_str:
+                echo("   → You've sent too many messages too quickly")
+                echo("   → Please wait a moment before sending again")
+            elif "blocked" in error_str:
+                echo(f"   → {to_moniker} has blocked your messages")
+            elif "not registered" in error_str:
+                echo(f"   → Notification type not registered")
+
+            echo("Press Enter to continue...")
+            input()
         return False
 
 
@@ -238,41 +241,44 @@ def check_and_display_queue(moniker: str, message_log: Union[List[str], Deque[st
         queue = notify.get_queue(moniker)
         if queue is None:
             with output_lock:
-                print(f"❌ Queue not found for {moniker}")
-                input("Press Enter to continue...")
+                echo(f"❌ Queue not found for {moniker}")
+                echo("Press Enter to continue...")
+                input()
             return
 
         all_notifs = queue.get_all()
 
         if not all_notifs:
             with output_lock:
-                print(f"✓ No pending notifications for {moniker}")
+                echo(f"✓ No pending notifications for {moniker}")
             time.sleep(1)
             return
 
         with output_lock:
-            print(f"\n─── Pending Notifications for {moniker} ───")
+            echo(f"\n─── Pending Notifications for {moniker} ───")
             for notif in all_notifs:
                 try:
                     msg = getattr(notif, "message", None) or "No message"
                     urgency = getattr(notif, "urgency", None) or "ROUTINE"
                     timestamp = getattr(notif, "timestamp", None) or "unknown"
-                    print(f"[{urgency:8}] {timestamp} | {msg}")
+                    echo(f"[{urgency:8}] {timestamp} | {msg}")
 
                     with message_log_lock:
                         message_log.append(
                             f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
                         )
                 except AttributeError as e:
-                    print(f"⚠ Malformed notification: {e}")
+                    echo(f"⚠ Malformed notification: {e}")
 
-            print("──────────────────────────────────────────")
-            input("Press Enter to continue...")
+            echo("──────────────────────────────────────────")
+            echo("Press Enter to continue...")
+            input()
 
     except Exception as e:
         with output_lock:
-            print(f"❌ ERROR checking queue: {e}")
-            input("Press Enter to continue...")
+            echo(f"❌ ERROR checking queue: {e}")
+            echo("Press Enter to continue...")
+            input()
 
 
 def player_loop(moniker: str) -> None:
@@ -285,7 +291,7 @@ def player_loop(moniker: str) -> None:
 
     try:
         with output_lock:
-            print(f"\n✓ {moniker.upper()} initialized (moniker={moniker})")
+            echo(f"\n✓ {moniker.upper()} initialized (moniker={moniker})")
         time.sleep(1)
 
         while True:
@@ -321,14 +327,14 @@ def player_loop(moniker: str) -> None:
                 if key_upper == "KEY_ESC":
                     exit_event.set()
                     with output_lock:
-                        print(f"\n✓ {moniker.upper()}: ESC pressed - exiting demo")
+                        echo(f"\n✓ {moniker.upper()}: ESC pressed - exiting demo")
                     time.sleep(0.5)
                     break
 
                 # Q - quit local player
                 elif key_upper == "Q":
                     with output_lock:
-                        print(f"\n✓ {moniker.upper()}: Quit")
+                        echo(f"\n✓ {moniker.upper()}: Quit")
                     time.sleep(0.5)
                     break
 
@@ -352,12 +358,12 @@ def player_loop(moniker: str) -> None:
 
             except KeyboardInterrupt:
                 with output_lock:
-                    print(f"\n⚠ {moniker.upper()}: Interrupted")
+                    echo(f"\n⚠ {moniker.upper()}: Interrupted")
                 exit_event.set()
                 break
             except Exception as e:
                 with output_lock:
-                    print(f"❌ {moniker.upper()}: Error processing input: {e}")
+                    echo(f"❌ {moniker.upper()}: Error processing input: {e}")
                 time.sleep(0.5)
                 continue
 
@@ -366,28 +372,28 @@ def player_loop(moniker: str) -> None:
             final_round = shared_rounds[moniker]
         if final_round >= MAX_ROUNDS and not exit_event.is_set():
             with output_lock:
-                print(f"\n✓ {moniker.upper()}: Completed {MAX_ROUNDS} rounds!")
+                echo(f"\n✓ {moniker.upper()}: Completed {MAX_ROUNDS} rounds!")
             time.sleep(1)
 
     except Exception as e:
         with output_lock:
-            print(f"❌ {moniker.upper()}: Unexpected error: {e}")
+            echo(f"❌ {moniker.upper()}: Unexpected error: {e}")
     finally:
         with output_lock:
-            print(f"\n✓ {moniker.upper()}'s game ended")
+            echo(f"\n✓ {moniker.upper()}'s game ended")
 
 
 def signal_handler(signum: int, frame) -> None:
     """Handle SIGINT (CTRL+C) gracefully."""
     with output_lock:
-        print("\n\n⚠ Received interrupt signal - initiating graceful shutdown...")
+        echo("\n\n⚠ Received interrupt signal - initiating graceful shutdown...")
     exit_event.set()
 
 
 def cleanup_threads() -> None:
     """Cleanup function called on exit."""
     with output_lock:
-        print("\n✓ Cleanup: Waiting for threads to finish...")
+        echo("\n✓ Cleanup: Waiting for threads to finish...")
 
     # Set exit event in case it wasn't already set
     exit_event.set()
@@ -397,11 +403,11 @@ def cleanup_threads() -> None:
         for thread in active_threads:
             if thread.is_alive():
                 with output_lock:
-                    print(f"✓ Cleanup: Waiting for {thread.name}... (max {Config.THREAD_TIMEOUT}s)")
+                    echo(f"✓ Cleanup: Waiting for {thread.name}... (max {Config.THREAD_TIMEOUT}s)")
                 thread.join(timeout=Config.THREAD_TIMEOUT)
                 if thread.is_alive():
                     with output_lock:
-                        print(f"⚠ Cleanup: {thread.name} did not exit cleanly")
+                        echo(f"⚠ Cleanup: {thread.name} did not exit cleanly")
 
 
 def main() -> int:
@@ -413,31 +419,32 @@ def main() -> int:
     atexit.register(cleanup_threads)
 
     with output_lock:
-        print("\n╔════════════════════════════════════════════════════════════╗")
-        print("║  BBSENGINE6 PING-PONG DEMO                                 ║")
-        print("║  Demonstrates getch() idle loop notification detection      ║")
-        print("║  with multi-member per-machine support                      ║")
-        print("╚════════════════════════════════════════════════════════════╝\n")
+        echo("\n╔════════════════════════════════════════════════════════════╗")
+        echo("║  BBSENGINE6 PING-PONG DEMO                                 ║")
+        echo("║  Demonstrates getch() idle loop notification detection      ║")
+        echo("║  with multi-member per-machine support                      ║")
+        echo("╚════════════════════════════════════════════════════════════╝\n")
 
-        print("This demo shows:")
-        print("  • Two concurrent players (alice and bob) on same machine")
-        print("  • Thread-local moniker isolation for per-member queues")
-        print("  • getch() integration for automatic notification detection")
-        print("  • Bell emission when notifications arrive")
-        print("  • Comprehensive error handling for failure scenarios")
-        print("\nFor full documentation, see: README_PING_PONG.md\n")
+        echo("This demo shows:")
+        echo("  • Two concurrent players (alice and bob) on same machine")
+        echo("  • Thread-local moniker isolation for per-member queues")
+        echo("  • getch() integration for automatic notification detection")
+        echo("  • Bell emission when notifications arrive")
+        echo("  • Comprehensive error handling for failure scenarios")
+        echo("\nFor full documentation, see: README_PING_PONG.md\n")
 
-        input("Press Enter to start...")
+        echo("Press Enter to start...")
+        input()
 
     # Setup notification types
     if not setup_notifications():
         with output_lock:
-            print("\nFailed to setup notifications. Exiting.")
+            echo("\nFailed to setup notifications. Exiting.")
         return 1
 
     with output_lock:
-        print("\nStarting two concurrent player threads...")
-        print("(Run this script in two separate terminals for full interactivity)")
+        echo("\nStarting two concurrent player threads...")
+        echo("(Run this script in two separate terminals for full interactivity)")
     time.sleep(1)
 
     # Create threads for alice and bob
@@ -459,7 +466,7 @@ def main() -> int:
 
         # Wait for both threads to complete
         with output_lock:
-            print(f"✓ Waiting for player threads (max {Config.THREAD_TIMEOUT}s)...")
+            echo(f"✓ Waiting for player threads (max {Config.THREAD_TIMEOUT}s)...")
 
         alice_thread.join(timeout=Config.THREAD_TIMEOUT)
         bob_thread.join(timeout=Config.THREAD_TIMEOUT)
@@ -467,12 +474,12 @@ def main() -> int:
         # Check if threads are still alive
         if alice_thread.is_alive() or bob_thread.is_alive():
             with output_lock:
-                print("⚠ Warning: Some threads did not exit cleanly")
+                echo("⚠ Warning: Some threads did not exit cleanly")
             return 1
 
     except KeyboardInterrupt:
         with output_lock:
-            print("\n\n⚠ Demo interrupted - cleaning up...")
+            echo("\n\n⚠ Demo interrupted - cleaning up...")
         exit_event.set()
         alice_thread.join(timeout=Config.THREAD_TIMEOUT)
         bob_thread.join(timeout=Config.THREAD_TIMEOUT)
@@ -480,22 +487,22 @@ def main() -> int:
 
     except Exception as e:
         with output_lock:
-            print(f"\n❌ Error running demo: {e}")
+            echo(f"\n❌ Error running demo: {e}")
         return 1
 
     with output_lock:
-        print("\n╔════════════════════════════════════════════════════════════╗")
-        print("║  Demo Complete!                                            ║")
-        print("║                                                            ║")
-        print("║  You've seen:                                              ║")
-        print("║    ✓ getch() notification checking                         ║")
-        print("║    ✓ Thread-local member isolation                         ║")
-        print("║    ✓ Per-member notification queues                        ║")
-        print("║    ✓ Multi-user concurrent messaging                       ║")
-        print("║    ✓ Error handling for edge cases                         ║")
-        print("║                                                            ║")
-        print("║  See README_PING_PONG.md for more information              ║")
-        print("╚════════════════════════════════════════════════════════════╝\n")
+        echo("\n╔════════════════════════════════════════════════════════════╗")
+        echo("║  Demo Complete!                                            ║")
+        echo("║                                                            ║")
+        echo("║  You've seen:                                              ║")
+        echo("║    ✓ getch() notification checking                         ║")
+        echo("║    ✓ Thread-local member isolation                         ║")
+        echo("║    ✓ Per-member notification queues                        ║")
+        echo("║    ✓ Multi-user concurrent messaging                       ║")
+        echo("║    ✓ Error handling for edge cases                         ║")
+        echo("║                                                            ║")
+        echo("║  See README_PING_PONG.md for more information              ║")
+        echo("╚════════════════════════════════════════════════════════════╝\n")
 
     return 0
 
