@@ -599,6 +599,7 @@ def getch_str(
                 # --- INITIAL READ SETUP ---
                 # Poll for input with short intervals to allow notification updates
                 poll_interval = 0.1  # Check notifications every 100ms
+                sleep_time = 0.01   # Sleep 10ms between checks to avoid busy-wait
                 elapsed = 0.0
                 ready = []
                 
@@ -614,6 +615,8 @@ def getch_str(
                             has_notifications, _ = _check_notifications(moniker, **kwargs)
                             if has_notifications:
                                 _update_bottombar_on_notification()
+                        # Sleep briefly to avoid busy-waiting
+                        time.sleep(sleep_time)
                         elapsed += wait_time
                     else:
                         break
