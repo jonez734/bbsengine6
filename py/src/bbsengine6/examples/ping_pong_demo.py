@@ -79,9 +79,17 @@ def setup_notifications() -> bool:
         with output_lock:
             print("✓ Notification types registered (in-memory)")
         return True
-    except Exception as e:
+    except (AttributeError, KeyError, TypeError) as e:
+        # AttributeError: _types or _types_lock don't exist
+        # KeyError: Error accessing notification type dictionary
+        # TypeError: Type mismatch in registration
         with output_lock:
             print(f"❌ Failed to register notifications: {e}")
+        return False
+    except ImportError as e:
+        # Missing notify module or dependencies
+        with output_lock:
+            print(f"❌ Failed to import notify module: {e}")
         return False
 
 
