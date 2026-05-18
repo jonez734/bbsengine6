@@ -237,10 +237,11 @@ def player_loop(moniker: str) -> None:
                     continue
 
                 # Normalize key input
-                key_lower = key.lower()
+                key_lower = key.lower() if isinstance(key, str) else ""
 
                 # ESC - exit immediately (both players)
-                if key == "\x1b":  # ESC character
+                # getch_str() returns "KEY_ESC" for the escape key
+                if key == "KEY_ESC" or key == "\x1b":
                     DEMO_EXITING = True
                     print(f"\n✓ {moniker.upper()}: ESC pressed - exiting demo")
                     time.sleep(0.5)
