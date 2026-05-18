@@ -1,0 +1,65 @@
+{
+  "imap_servers": [
+    {
+      "name": "Gmail",
+      "host": "imap.gmail.com",
+      "port": 993,
+      "ssl": true,
+      "username": "user@gmail.com",
+      "password": "${GMAIL_PASSWORD}",
+      "mailboxes": ["INBOX", "Priority Mail"],
+      "poll_interval": 60,
+      "timeout": 30
+    },
+    {
+      "name": "Corporate",
+      "host": "imap.company.com",
+      "port": 993,
+      "ssl": true,
+      "username": "user@company.com",
+      "password": "keyring.get_password('notifyd', 'Corporate:user@company.com')",
+      "mailboxes": ["INBOX", "Alerts", "Engineering"],
+      "poll_interval": 120,
+      "timeout": 30
+    },
+    {
+      "name": "Support",
+      "host": "mail.support.example.com",
+      "port": 993,
+      "ssl": true,
+      "username": "support@example.com",
+      "password": "${SUPPORT_EMAIL_PASSWORD}",
+      "mailboxes": ["INBOX"],
+      "poll_interval": 30,
+      "timeout": 30
+    }
+  ],
+  "event_listeners": {
+    "user-login": {
+      "recipients": ["admin@example.com", "security@example.com"],
+      "template": "user-login.tmpl",
+      "urgency": "high"
+    },
+    "user-logout": {
+      "recipients": ["admin@example.com"],
+      "template": "user-logout.tmpl",
+      "urgency": "medium"
+    },
+    "security-alert": {
+      "recipients": ["security-team@example.com"],
+      "template": "security-alert.tmpl",
+      "urgency": "critical"
+    },
+    "system-maintenance": {
+      "recipients": ["ops@example.com", "admin@example.com"],
+      "template": "maintenance.tmpl",
+      "urgency": "high"
+    }
+  },
+  "notification_settings": {
+    "enabled": true,
+    "log_history": true,
+    "max_history_days": 90,
+    "on_error": "log"
+  }
+}

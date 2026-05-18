@@ -1,0 +1,25 @@
+{
+  "imap_servers": [
+    {
+      "name": "Gmail",
+      "host": "imap.gmail.com",
+      "port": 993,
+      "ssl": true,
+      "username": "user@gmail.com",
+      "password": "${GMAIL_PASSWORD}",
+      "mailboxes": ["INBOX"],
+      "poll_interval": 60
+    }
+  ],
+  "event_listeners": {
+    "user-login": {
+      "recipients": ["admin@example.com"],
+      "template": "user-login.tmpl",
+      "urgency": "high"
+    }
+  },
+  "notification_settings": {
+    "enabled": true,
+    "log_history": true
+  }
+}
