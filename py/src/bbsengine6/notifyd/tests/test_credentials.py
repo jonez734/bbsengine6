@@ -41,40 +41,44 @@ class TestGetPasswordFromEnv:
 class TestGetPasswordFromKeyring:
     """Test retrieving passwords from keyring"""
 
-    @mock.patch("bbsengine6.notifyd.credentials.keyring.get_password")
-    def test_get_password_from_keyring(self, mock_get):
+    def test_get_password_from_keyring(self):
         """Test getting password from keyring"""
-        mock_get.return_value = "keyring_secret"
-        
         # Clear env var so it uses keyring
         if "GMAIL_PASSWORD" in os.environ:
             del os.environ["GMAIL_PASSWORD"]
         
-        password = get_password(
-            "Gmail",
-            "user@gmail.com",
-            storage="keyring",
-            keyring_service="notifyd",
-        )
-        assert password == "keyring_secret"
-        mock_get.assert_called_once_with("notifyd", "Gmail:user@gmail.com")
-
-    @mock.patch("bbsengine6.notifyd.credentials.keyring.get_password")
-    def test_keyring_not_available(self, mock_get):
-        """Test graceful fallback when keyring not available"""
-        mock_get.side_effect = ImportError("keyring not installed")
+        import sys
+        mock_keyring = mock.MagicMock()
+        mock_keyring.get_password.return_value = "keyring_secret"
         
-        if "GMAIL_PASSWORD" in os.environ:
-            del os.environ["GMAIL_PASSWORD"]
-        
-        # Should raise since no other source
-        with pytest.raises(CredentialError):
-            get_password(
+        with mock.patch.dict(sys.modules, {"keyring": mock_keyring}):
+            password = get_password(
                 "Gmail",
                 "user@gmail.com",
                 storage="keyring",
-                prompt_on_missing=False,
+                keyring_service="notifyd",
             )
+            assert password == "keyring_secret"
+            mock_keyring.get_password.assert_called_once_with("notifyd", "Gmail:user@gmail.com")
+
+    def test_keyring_not_available(self):
+        """Test graceful fallback when keyring not available"""
+        if "GMAIL_PASSWORD" in os.environ:
+            del os.environ["GMAIL_PASSWORD"]
+        
+        import sys
+        mock_keyring = mock.MagicMock()
+        mock_keyring.get_password.side_effect = Exception("keyring error")
+        
+        with mock.patch.dict(sys.modules, {"keyring": mock_keyring}):
+            # Should raise since no other source
+            with pytest.raises(CredentialError):
+                get_password(
+                    "Gmail",
+                    "user@gmail.com",
+                    storage="keyring",
+                    prompt_on_missing=False,
+                )
 
 
 class TestGetPasswordFromPrompt:
@@ -121,8 +125,11 @@ class TestHybridPasswordRetrieval:
         """Test that hybrid strategy tries env var first"""
         os.environ["MYSERVER_PASSWORD"] = "env_secret"
         
-        with mock.patch("bbsengine6.notifyd.credentials.keyring.get_password") as mock_keyring:
-            with mock.patch("bbsengine6.notifyd.credentials.getpass.getpass") as mock_prompt:
+        import sys
+        mock_keyring = mock.MagicMock()
+        
+        with mock.patch.dict(sys.modules, {"keyring": mock_keyring}):
+            with mock.patch("getpass.getpass") as mock_prompt:
                 password = get_password(
                     "myserver",
                     "user@example.com",
@@ -132,76 +139,90 @@ class TestHybridPasswordRetrieval:
                 
                 assert password == "env_secret"
                 # Other sources should not be tried
-                mock_keyring.assert_not_called()
+                mock_keyring.get_password.assert_not_called()
                 mock_prompt.assert_not_called()
 
-    @mock.patch("bbsengine6.notifyd.credentials.keyring.get_password")
-    def test_hybrid_falls_back_to_keyring(self, mock_keyring):
+    def test_hybrid_falls_back_to_keyring(self):
         """Test that hybrid strategy falls back to keyring"""
-        mock_keyring.return_value = "keyring_secret"
-        
         # Clear env var
         if "MYSERVER_PASSWORD" in os.environ:
             del os.environ["MYSERVER_PASSWORD"]
         
-        with mock.patch("bbsengine6.notifyd.credentials.getpass.getpass") as mock_prompt:
-            password = get_password(
-                "myserver",
-                "user@example.com",
-                storage="hybrid",
-                prompt_on_missing=False,
-            )
-            
-            assert password == "keyring_secret"
-            # Prompt should not be called since keyring provided password
-            mock_prompt.assert_not_called()
+        import sys
+        mock_keyring = mock.MagicMock()
+        mock_keyring.get_password.return_value = "keyring_secret"
+        
+        with mock.patch.dict(sys.modules, {"keyring": mock_keyring}):
+            with mock.patch("getpass.getpass") as mock_prompt:
+                password = get_password(
+                    "myserver",
+                    "user@example.com",
+                    storage="hybrid",
+                    prompt_on_missing=False,
+                )
+                
+                assert password == "keyring_secret"
+                # Prompt should not be called since keyring provided password
+                mock_prompt.assert_not_called()
 
-    @mock.patch("bbsengine6.notifyd.credentials.keyring.get_password")
-    @mock.patch("bbsengine6.notifyd.credentials.getpass.getpass")
-    def test_hybrid_falls_back_to_prompt(self, mock_prompt, mock_keyring):
+    def test_hybrid_falls_back_to_prompt(self):
         """Test that hybrid strategy falls back to prompt"""
-        mock_keyring.return_value = None  # Keyring has no password
-        mock_prompt.return_value = "prompted_secret"
-        
         # Clear env var
         if "MYSERVER_PASSWORD" in os.environ:
             del os.environ["MYSERVER_PASSWORD"]
         
-        password = get_password(
-            "myserver",
-            "user@example.com",
-            storage="hybrid",
-            prompt_on_missing=True,
-        )
+        import sys
+        mock_keyring = mock.MagicMock()
+        mock_keyring.get_password.return_value = None  # Keyring has no password
         
-        assert password == "prompted_secret"
-        mock_keyring.assert_called_once()
-        mock_prompt.assert_called_once()
+        with mock.patch.dict(sys.modules, {"keyring": mock_keyring}):
+            with mock.patch("getpass.getpass") as mock_prompt:
+                mock_prompt.return_value = "prompted_secret"
+                
+                password = get_password(
+                    "myserver",
+                    "user@example.com",
+                    storage="hybrid",
+                    prompt_on_missing=True,
+                )
+                
+                assert password == "prompted_secret"
+                mock_keyring.get_password.assert_called_once()
+                mock_prompt.assert_called_once()
 
 
 class TestStorePassword:
     """Test storing passwords in keyring"""
 
-    @mock.patch("bbsengine6.notifyd.credentials.keyring.set_password")
-    def test_store_password_success(self, mock_set):
+    def test_store_password_success(self):
         """Test successfully storing password in keyring"""
-        result = store_password("Gmail", "user@gmail.com", "secret")
+        import sys
+        mock_keyring = mock.MagicMock()
         
-        assert result is True
-        mock_set.assert_called_once_with("notifyd", "Gmail:user@gmail.com", "secret")
+        with mock.patch.dict(sys.modules, {"keyring": mock_keyring}):
+            result = store_password("Gmail", "user@gmail.com", "secret")
+            
+            assert result is True
+            mock_keyring.set_password.assert_called_once_with("notifyd", "Gmail:user@gmail.com", "secret")
 
-    @mock.patch("bbsengine6.notifyd.credentials.keyring.set_password")
-    def test_store_password_failure(self, mock_set):
+    def test_store_password_failure(self):
         """Test handling keyring store failure"""
-        mock_set.side_effect = Exception("Keyring error")
+        import sys
+        mock_keyring = mock.MagicMock()
+        mock_keyring.set_password.side_effect = Exception("Keyring error")
         
-        result = store_password("Gmail", "user@gmail.com", "secret")
-        
-        assert result is False
+        with mock.patch.dict(sys.modules, {"keyring": mock_keyring}):
+            result = store_password("Gmail", "user@gmail.com", "secret")
+            
+            assert result is False
 
     def test_store_password_keyring_unavailable(self):
         """Test graceful handling when keyring not available"""
-        with mock.patch("bbsengine6.notifyd.credentials.keyring", None):
+        import sys
+        mock_keyring = mock.MagicMock()
+        mock_keyring.set_password.side_effect = ImportError("keyring not available")
+        
+        with mock.patch.dict(sys.modules, {"keyring": mock_keyring}):
             result = store_password("Gmail", "user@gmail.com", "secret")
             # Should return False when keyring not available
             assert result is False
@@ -232,10 +253,12 @@ class TestPasswordErrors:
         if "MYSERVER_PASSWORD" in os.environ:
             del os.environ["MYSERVER_PASSWORD"]
         
-        with mock.patch("bbsengine6.notifyd.credentials.keyring.get_password") as mock_keyring:
-            mock_keyring.return_value = None
-            
-            with mock.patch("bbsengine6.notifyd.credentials.getpass.getpass") as mock_prompt:
+        import sys
+        mock_keyring = mock.MagicMock()
+        mock_keyring.get_password.return_value = None
+        
+        with mock.patch.dict(sys.modules, {"keyring": mock_keyring}):
+            with mock.patch("getpass.getpass") as mock_prompt:
                 mock_prompt.return_value = ""  # Empty password
                 
                 with pytest.raises(CredentialError):
