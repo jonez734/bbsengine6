@@ -361,8 +361,8 @@ def cleanup_threads() -> None:
         for thread in active_threads:
             if thread.is_alive():
                 with output_lock:
-                    print(f"✓ Cleanup: Waiting for {thread.name}... (max 10s)")
-                thread.join(timeout=10.0)
+                    print(f"✓ Cleanup: Waiting for {thread.name}... (max {Config.THREAD_TIMEOUT}s)")
+                thread.join(timeout=Config.THREAD_TIMEOUT)
                 if thread.is_alive():
                     with output_lock:
                         print(f"⚠ Cleanup: {thread.name} did not exit cleanly")
@@ -421,12 +421,12 @@ def main() -> int:
         alice_thread.start()
         bob_thread.start()
 
-        # Wait for both threads to complete (with 10s timeout as per requirements)
+        # Wait for both threads to complete
         with output_lock:
-            print("✓ Waiting for player threads (max 10s)...")
+            print(f"✓ Waiting for player threads (max {Config.THREAD_TIMEOUT}s)...")
 
-        alice_thread.join(timeout=10.0)
-        bob_thread.join(timeout=10.0)
+        alice_thread.join(timeout=Config.THREAD_TIMEOUT)
+        bob_thread.join(timeout=Config.THREAD_TIMEOUT)
 
         # Check if threads are still alive
         if alice_thread.is_alive() or bob_thread.is_alive():
@@ -438,8 +438,8 @@ def main() -> int:
         with output_lock:
             print("\n\n⚠ Demo interrupted - cleaning up...")
         exit_event.set()
-        alice_thread.join(timeout=10.0)
-        bob_thread.join(timeout=10.0)
+        alice_thread.join(timeout=Config.THREAD_TIMEOUT)
+        bob_thread.join(timeout=Config.THREAD_TIMEOUT)
         return 130
 
     except Exception as e:
