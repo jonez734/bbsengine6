@@ -17,9 +17,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
     from bbsengine6 import notify
-    from bbsengine6.io import getch
+    from bbsengine6.io.getch import getch_str
     from bbsengine6.member import _threadlocal
-    from bbsengine6.notify import NotificationUrgency
+    from bbsengine6.notify import Notification, NotificationUrgency
 except ImportError as e:
     print(f"Error: Failed to import bbsengine6 modules: {e}")
     print("Make sure bbsengine6 is installed and in your Python path")
@@ -140,26 +140,21 @@ def send_ping(from_moniker: str, round_num: int) -> bool:
         msg_word = "PONG" if from_moniker == "bob" else "PING"
         msg_text = f"{msg_word} #{round_num} from {from_moniker}"
 
-        # Create a simple notification object for demo purposes
+        # Create a proper Notification object for the demo
         try:
-            from dataclasses import dataclass
-
-            @dataclass
-            class SimpleNotification:
-                """Minimal notification for demo purposes."""
-
-                message: str
-                urgency: str
-                timestamp: str
-                notification_type: str
-                sender_moniker: str
-
-            notification = SimpleNotification(
-                message=msg_text,
-                urgency="ROUTINE",
-                timestamp=datetime.now().isoformat(),
+            notification = Notification(
+                id=round_num,
                 notification_type=msg_type,
+                recipients=[to_moniker],
+                recipients_ok=[to_moniker],
+                recipients_failed=[],
                 sender_moniker=from_moniker,
+                template="default",
+                template_vars={},
+                message=msg_text,
+                data={},
+                urgency=NotificationUrgency.ROUTINE,
+                timestamp=time.time(),
             )
 
             # Add to recipient's queue directly
@@ -255,7 +250,7 @@ def player_loop(moniker: str) -> None:
 
             try:
                 # getch() automatically checks notifications and emits bell
-                key = getch.getch_str(timeout=GETCH_TIMEOUT)
+                key = getch_str(timeout=GETCH_TIMEOUT)
 
                 # Check for exit signal between iterations
                 if exit_event.is_set():
