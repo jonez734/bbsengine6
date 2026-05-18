@@ -33,10 +33,14 @@ GETCH_TIMEOUT = 2.0
 exit_event = threading.Event()  # Thread-safe flag for graceful shutdown
 output_lock = threading.Lock()  # Synchronize print statements
 message_log_lock = threading.Lock()  # Synchronize message_log access
+round_counter_lock = threading.Lock()  # Synchronize round counter across threads
 
 # Track active threads for cleanup
 active_threads = []
 active_threads_lock = threading.Lock()
+
+# Shared round counter across all players
+shared_rounds = {"alice": 0, "bob": 0}
 
 
 def setup_notifications() -> bool:
@@ -236,7 +240,6 @@ def player_loop(moniker: str) -> None:
     # Set thread-local moniker (simulates logged-in member)
     _threadlocal.moniker = moniker
 
-    round_num = 0
     message_log = []
 
     try:
@@ -244,7 +247,16 @@ def player_loop(moniker: str) -> None:
             print(f"\n✓ {moniker.upper()} initialized (moniker={moniker})")
         time.sleep(1)
 
-        while round_num < MAX_ROUNDS and not exit_event.is_set():
+        while True:
+            # Get current round number atomically
+            with round_counter_lock:
+                round_num = shared_rounds[moniker]
+                if round_num >= MAX_ROUNDS:
+                    break
+            
+            if exit_event.is_set():
+                break
+
             status = "Waiting for input or notification... (Press F2 to check)"
             display_menu(moniker, round_num, status, message_log)
 
@@ -282,11 +294,12 @@ def player_loop(moniker: str) -> None:
                 # P - send ping/pong
                 elif key_upper == "P":
                     if send_ping(moniker, round_num):
-                        round_num += 1
+                        with round_counter_lock:
+                            shared_rounds[moniker] += 1
                         msg_word = "PONG" if moniker == "bob" else "PING"
                         with message_log_lock:
                             message_log.append(
-                                f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Sent {msg_word} #{round_num}"
+                                f"[{datetime.now().strftime('%H:%M:%S')}] ✓ Sent {msg_word} #{round_num + 1}"
                             )
 
                 # C - check and display notifications
@@ -308,7 +321,9 @@ def player_loop(moniker: str) -> None:
                 continue
 
         # End of rounds
-        if round_num >= MAX_ROUNDS and not exit_event.is_set():
+        with round_counter_lock:
+            final_round = shared_rounds[moniker]
+        if final_round >= MAX_ROUNDS and not exit_event.is_set():
             with output_lock:
                 print(f"\n✓ {moniker.upper()}: Completed {MAX_ROUNDS} rounds!")
             time.sleep(1)
