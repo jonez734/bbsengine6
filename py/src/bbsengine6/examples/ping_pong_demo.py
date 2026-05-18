@@ -3,6 +3,7 @@
 # Interactive ping/pong message exchange demo using getch() idle loop notification detection
 # Thread-safe implementation with proper synchronization and graceful shutdown
 
+import argparse
 import atexit
 import os
 import signal
@@ -11,7 +12,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime
-from typing import Deque, List, Union
+from typing import Deque, List, Optional, Union
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -410,8 +411,15 @@ def cleanup_threads() -> None:
                         echo(f"⚠ Cleanup: {thread.name} did not exit cleanly")
 
 
-def main() -> int:
-    """Main entry point."""
+def run_single_player(moniker: str) -> int:
+    """Run the demo as a single player (designed for separate terminal instances).
+    
+    Args:
+        moniker: Player name (any custom username)
+    
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
     # Register signal handler for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -420,7 +428,94 @@ def main() -> int:
 
     with output_lock:
         echo("\n╔════════════════════════════════════════════════════════════╗")
-        echo("║  BBSENGINE6 PING-PONG DEMO                                 ║")
+        echo("║  BBSENGINE6 PING-PONG DEMO - SINGLE PLAYER                 ║")
+        echo("║  Player: " + moniker.upper().ljust(45) + "║")
+        echo("║  Run in separate terminals with different --user names      ║")
+        echo("╚════════════════════════════════════════════════════════════╝\n")
+
+        echo("This instance is running as: {level.ok}" + moniker.upper() + "{/all}\n")
+        echo("To play with another player:")
+        echo("  • In another terminal, run:")
+        echo(f"    python -m bbsengine6.examples.ping_pong_demo --user <other_player>\n")
+        echo("For full documentation, see: README_PING_PONG.md\n")
+
+        echo("Press Enter to start...")
+        input()
+
+    # Setup notification types
+    if not setup_notifications():
+        with output_lock:
+            echo("\nFailed to setup notifications. Exiting.")
+        return 1
+
+    # Create a single player thread
+    player_thread = threading.Thread(
+        target=player_loop, args=(moniker,), daemon=False, name=moniker.capitalize()
+    )
+
+    # Track active threads
+    with active_threads_lock:
+        active_threads.append(player_thread)
+
+    try:
+        player_thread.start()
+
+        # Wait for thread to complete
+        with output_lock:
+            echo(f"✓ {moniker.upper()} game started (max {Config.THREAD_TIMEOUT}s)...\n")
+
+        player_thread.join(timeout=Config.THREAD_TIMEOUT)
+
+        # Check if thread is still alive
+        if player_thread.is_alive():
+            with output_lock:
+                echo("⚠ Warning: Player thread did not exit cleanly")
+            return 1
+
+    except KeyboardInterrupt:
+        with output_lock:
+            echo("\n\n⚠ Demo interrupted - cleaning up...")
+        exit_event.set()
+        player_thread.join(timeout=Config.THREAD_TIMEOUT)
+        return 130
+
+    except Exception as e:
+        with output_lock:
+            echo(f"\n❌ Error running demo: {e}")
+        return 1
+
+    with output_lock:
+        echo("\n╔════════════════════════════════════════════════════════════╗")
+        echo("║  Demo Complete!                                            ║")
+        echo("║                                                            ║")
+        echo("║  You've seen:                                              ║")
+        echo("║    ✓ getch() notification checking                         ║")
+        echo("║    ✓ Thread-local member isolation                         ║")
+        echo("║    ✓ Per-member notification queues                        ║")
+        echo("║    ✓ Multi-user concurrent messaging                       ║")
+        echo("║    ✓ Error handling for edge cases                         ║")
+        echo("║                                                            ║")
+        echo("║  See README_PING_PONG.md for more information              ║")
+        echo("╚════════════════════════════════════════════════════════════╝\n")
+
+    return 0
+
+
+def run_two_players() -> int:
+    """Run the demo with two built-in players (alice and bob) in same terminal.
+    
+    Returns:
+        Exit code (0 for success, non-zero for failure)
+    """
+    # Register signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # Register cleanup function to run on exit
+    atexit.register(cleanup_threads)
+
+    with output_lock:
+        echo("\n╔════════════════════════════════════════════════════════════╗")
+        echo("║  BBSENGINE6 PING-PONG DEMO - TWO PLAYERS                   ║")
         echo("║  Demonstrates getch() idle loop notification detection      ║")
         echo("║  with multi-member per-machine support                      ║")
         echo("╚════════════════════════════════════════════════════════════╝\n")
@@ -505,6 +600,50 @@ def main() -> int:
         echo("╚════════════════════════════════════════════════════════════╝\n")
 
     return 0
+
+
+def main() -> int:
+    """Main entry point with argument parsing."""
+    parser = argparse.ArgumentParser(
+        description="BBSENGINE6 Ping-Pong Demo - Interactive messaging system",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Run default two-player demo (alice and bob)
+  python -m bbsengine6.examples.ping_pong_demo
+
+  # Run as alice in one terminal
+  python -m bbsengine6.examples.ping_pong_demo --user alice
+
+  # Run as bob in another terminal
+  python -m bbsengine6.examples.ping_pong_demo --user bob
+
+  # Run as custom player name
+  python -m bbsengine6.examples.ping_pong_demo --user charlie
+        """,
+    )
+    parser.add_argument(
+        "--user",
+        type=str,
+        default=None,
+        help="Player name (use different names in separate terminals to play together)",
+        metavar="NAME",
+    )
+
+    args = parser.parse_args()
+
+    # If user specified, run single-player mode
+    if args.user:
+        # Validate moniker
+        if not args.user or len(args.user) > 255:
+            with output_lock:
+                echo(f"❌ Invalid user name: {args.user}")
+                echo("   User name must be 1-255 characters")
+            return 1
+        return run_single_player(args.user)
+    else:
+        # Default: run two-player mode
+        return run_two_players()
 
 
 if __name__ == "__main__":
