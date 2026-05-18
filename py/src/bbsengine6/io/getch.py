@@ -22,6 +22,7 @@ from .echo import echo, echo_traceback
 from .util import logentry
 from .keymap import KEY_MAP
 from .const import ESC, ETX, EOF
+from . import screen
 
 # Notification support (with graceful fallback)
 try:
@@ -41,6 +42,10 @@ except ImportError:
 # Track if bell has been emitted this session (emit only once)
 _notified_this_session = False
 _notified_this_session_lock = threading.Lock()
+
+# Track if bottom bar has been updated this session (update only once)
+_bottombar_updated_this_session = False
+_bottombar_update_lock = threading.Lock()
 
 # ============================================================================
 # KEY EVENT SYSTEM - Threading-based async event notification
@@ -349,6 +354,29 @@ def _emit_notification_bell_once() -> bool:
     return True
 
 
+def _update_bottombar_on_notification() -> bool:
+    """Update bottom bar once per session to show notification status.
+    
+    Returns True if update was performed, False if already updated this session.
+    """
+    global _bottombar_updated_this_session
+    with _bottombar_update_lock:
+        if _bottombar_updated_this_session:
+            return False
+        _bottombar_updated_this_session = True
+    
+    try:
+        # Only attempt to update bottom bar if it won't cause errors in non-TTY contexts
+        screen.setbottombar("", screen.get_notification_status)
+        return True
+    except (OSError, termios.error):
+        # Silently ignore errors in non-TTY contexts (e.g., testing, piped I/O)
+        return False
+    except Exception:
+        echo_traceback("bbsengine6.io.getch._update_bottombar_on_notification:")
+        return False
+
+
 def _get_urgency_color(urgency) -> str:
     """Get color code for urgency level using echo var."""
     from bbsengine6.notify import NotificationUrgency
@@ -538,6 +566,7 @@ def getch_str(
         has_notifications, notification_count = _check_notifications(moniker, **kwargs)
         if has_notifications:
             _emit_notification_bell_once()
+            _update_bottombar_on_notification()
 
     with _current_stream_lock:
         if _input_queue:
@@ -546,8 +575,9 @@ def getch_str(
             # Check if result is F2
             if result == "KEY_F2" and moniker:
                 _show_pending_notifications(moniker)
-                # Reset bell flag for next batch of notifications
+                # Reset flags for next batch of notifications
                 _notified_this_session = False
+                _bottombar_updated_this_session = False
                 return None  # Don't propagate F2 to caller
             return result
         else:
@@ -584,8 +614,9 @@ def getch_str(
                 # Check if result is F2
                 if result == "KEY_F2" and moniker:
                     _show_pending_notifications(moniker)
-                    # Reset bell flag for next batch of notifications
+                    # Reset flags for next batch of notifications
                     _notified_this_session = False
+                    _bottombar_updated_this_session = False
                     return None  # Don't propagate F2 to caller
                 return result
 
