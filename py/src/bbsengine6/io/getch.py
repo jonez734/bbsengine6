@@ -597,12 +597,29 @@ def getch_str(
                 tty.setraw(fd)
 
                 # --- INITIAL READ SETUP ---
-                # Use select to wait for the first byte with the specified timeout
-                # select() will block until data is available or the timeout is reached.
-                ready, _, _ = select.select([_current_input_stream], [], [], timeout)
-
-                if timeout is not None and not ready:
-                    # Timeout occurred before the first character was available
+                # Poll for input with short intervals to allow notification updates
+                poll_interval = 0.1  # Check notifications every 100ms
+                elapsed = 0.0
+                ready = []
+                
+                while not ready and (timeout is None or elapsed < timeout):
+                    wait_time = timeout - elapsed if timeout else poll_interval
+                    wait_time = min(poll_interval, wait_time) if timeout else poll_interval
+                    
+                    ready, _, _ = select.select([_current_input_stream], [], [], wait_time)
+                    
+                    if not ready:
+                        # No input yet - update bottom bar if notifications pending
+                        if check_notifications and moniker and _has_notify_module:
+                            has_notifications, _ = _check_notifications(moniker, **kwargs)
+                            if has_notifications:
+                                _update_bottombar_on_notification()
+                        elapsed += wait_time
+                    else:
+                        break
+                
+                if not ready:
+                    # Timeout occurred without any input
                     return None
 
                 # 2. Set Non-Blocking I/O
