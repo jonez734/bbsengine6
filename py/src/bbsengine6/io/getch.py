@@ -366,14 +366,19 @@ def _update_bottombar_on_notification() -> bool:
         _bottombar_updated_this_session = True
     
     try:
-        # Only attempt to update bottom bar if it won't cause errors in non-TTY contexts
-        screen.setbottombar("", screen.get_notification_status)
+        # Get notification status string (e.g., "F2: notify (3)")
+        notification_status = screen.get_notification_status()
+        if notification_status:
+            # Try to use setbottombar if screen is initialized
+            try:
+                screen.setbottombar("", notification_status)
+            except (OSError, termios.error):
+                # If setbottombar fails (screen.init not called), try direct output
+                # This provides a fallback for non-screen-initialized contexts
+                echo(f"{{bel}}[{notification_status}]", flush=True, end="")
         return True
-    except (OSError, termios.error):
-        # Silently ignore errors in non-TTY contexts (e.g., testing, piped I/O)
-        return False
     except Exception:
-        echo_traceback("bbsengine6.io.getch._update_bottombar_on_notification:")
+        # Silently handle all other errors to avoid crashing getch
         return False
 
 
