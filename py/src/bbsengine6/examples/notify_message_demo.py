@@ -198,9 +198,11 @@ class MessageHandler:
         self,
         config: DemoConfig,
         args: Optional[Any] = None,
+        pool: Optional[Any] = None,
     ):
         self.config = config
         self.args = args
+        self.pool = pool
         self.notification_queue = UserNotificationQueue()
         self.message_history: deque = deque(maxlen=config.max_messages)
         self.stats = {"sent": 0, "received": 0, "errors": 0}
@@ -237,42 +239,43 @@ class MessageHandler:
             rendered = TemplateEngine.render(self.config.template, variables)
 
             # Send via database notify system or demo queue
-            if self.args:
-                with database.transaction(self.args):
-                    with database.cursor(self.args) as cur:
-                        # Insert into engine.__notify
-                        cur.execute(
-                            """
-                            INSERT INTO engine.__notify
-                            (notification_type, template, rendered_message, sender_moniker, urgency)
-                            VALUES (%s, %s, %s, %s, %s)
-                            RETURNING id
-                            """,
-                            (
-                                "demo-message",
-                                self.config.template,
-                                rendered,
-                                self.config.moniker,
-                                "ROUTINE",
-                            ),
-                        )
-                        result_row = cur.fetchone()
-                        # bbsengine6 cursor returns dict-like rows, access by column name
-                        notify_id = (
-                            result_row["id"]
-                            if isinstance(result_row, dict)
-                            else result_row[0]
-                        )
+            if self.args and self.pool:
+                with database.connect(self.args, pool=self.pool) as conn:
+                    with database.transaction(conn):
+                        with database.cursor(conn) as cur:
+                            # Insert into engine.__notify
+                            cur.execute(
+                                """
+                                INSERT INTO engine.__notify
+                                (notification_type, template, rendered_message, sender_moniker, urgency)
+                                VALUES (%s, %s, %s, %s, %s)
+                                RETURNING id
+                                """,
+                                (
+                                    "demo-message",
+                                    self.config.template,
+                                    rendered,
+                                    self.config.moniker,
+                                    "ROUTINE",
+                                ),
+                            )
+                            result_row = cur.fetchone()
+                            # bbsengine6 cursor returns dict-like rows, access by column name
+                            notify_id = (
+                                result_row["id"]
+                                if isinstance(result_row, dict)
+                                else result_row[0]
+                            )
 
-                        # Insert recipient entry
-                        cur.execute(
-                            """
-                            INSERT INTO engine.__notify_recipient
-                            (notify_id, recipient_moniker)
-                            VALUES (%s, %s)
-                            """,
-                            (notify_id, recipient),
-                        )
+                            # Insert recipient entry
+                            cur.execute(
+                                """
+                                INSERT INTO engine.__notify_recipient
+                                (notify_id, recipient_moniker)
+                                VALUES (%s, %s)
+                                """,
+                                (notify_id, recipient),
+                            )
             else:
                 # Demo mode: use in-memory queue
                 with MessageHandler._queues_lock:
@@ -307,44 +310,49 @@ class MessageHandler:
         messages = []
 
         try:
-            if self.args:
-                with database.transaction(self.args):
-                    with database.cursor(self.args) as cur:
-                        # Query unread messages for this user
-                        cur.execute(
-                            """
-                            SELECT n.id, n.rendered_message, n.sender_moniker, n.datecreated
-                            FROM engine.__notify n
-                            JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
-                            WHERE nr.recipient_moniker = %s
-                            AND nr.read_at IS NULL
-                            AND n.notification_type = 'demo-message'
-                            ORDER BY n.datecreated ASC
-                            """,
-                            (self.config.moniker,),
-                        )
-
-                        for row in cur.fetchall():
-                            notify_id, rendered, sender, created = row
-                            messages.append(
-                                {
-                                    "direction": "in",
-                                    "timestamp": created,
-                                    "sender": sender,
-                                    "message": rendered,
-                                    "notify_id": notify_id,
-                                }
-                            )
-
-                            # Mark as read
+            if self.args and self.pool:
+                with database.connect(self.args, pool=self.pool) as conn:
+                    with database.transaction(conn):
+                        with database.cursor(conn) as cur:
+                            # Query unread messages for this user
                             cur.execute(
                                 """
-                                UPDATE engine.__notify_recipient
-                                SET read_at = NOW()
-                                WHERE notify_id = %s AND recipient_moniker = %s
+                                SELECT n.id, n.rendered_message, n.sender_moniker, n.datecreated
+                                FROM engine.__notify n
+                                JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
+                                WHERE nr.recipient_moniker = %s
+                                AND nr.read_at IS NULL
+                                AND n.notification_type = 'demo-message'
+                                ORDER BY n.datecreated ASC
                                 """,
-                                (notify_id, self.config.moniker),
+                                (self.config.moniker,),
                             )
+
+                            for row in cur.fetchall():
+                                # cursor returns dict-like rows by default
+                                notify_id = row["id"] if isinstance(row, dict) else row[0]
+                                rendered = row["rendered_message"] if isinstance(row, dict) else row[1]
+                                sender = row["sender_moniker"] if isinstance(row, dict) else row[2]
+                                created = row["datecreated"] if isinstance(row, dict) else row[3]
+                                messages.append(
+                                    {
+                                        "direction": "in",
+                                        "timestamp": created,
+                                        "sender": sender,
+                                        "message": rendered,
+                                        "notify_id": notify_id,
+                                    }
+                                )
+
+                                # Mark as read
+                                cur.execute(
+                                    """
+                                    UPDATE engine.__notify_recipient
+                                    SET read_at = NOW()
+                                    WHERE notify_id = %s AND recipient_moniker = %s
+                                    """,
+                                    (notify_id, self.config.moniker),
+                                )
             else:
                 # Demo mode: check in-memory queue
                 with MessageHandler._queues_lock:
@@ -388,7 +396,15 @@ class NotifyMessageDemo:
         self.config = config
         self.config.validate()
         self.args = args
-        self.handler = MessageHandler(config, args)
+        # Get pool if database is configured
+        self.pool = None
+        if args and hasattr(args, 'databasename') and args.databasename:
+            try:
+                self.pool = database.getpool(args, dbname=args.databasename)
+            except Exception:
+                # If pool initialization fails, continue in demo mode
+                self.pool = None
+        self.handler = MessageHandler(config, args, pool=self.pool)
 
     def run_interactive(self) -> None:
         """Run interactive message prompt for this user."""
@@ -521,6 +537,11 @@ def main():
         "--no-echo",
         action="store_true",
         help="Disable echo command processing",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
     )
 
     # Add database arguments (--databasename, --databasehost, --databaseport, etc.)
