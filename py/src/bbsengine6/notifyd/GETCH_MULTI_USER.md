@@ -1,17 +1,17 @@
-# getch() Integration: Multi-User Per Machine Support
+# getch() Integration: Multi-Member Per Machine Support
 
 ## Short Answer
 
-**YES! getch() integration DOES allow for proper multi-user per machine notifications.**
+**YES! getch() integration DOES allow for proper multi-member per machine notifications.**
 
-This is actually **better than the daemon model** for multi-user scenarios because it's inherently user-aware.
+This is actually **better than the daemon model** for multi-member scenarios because it's inherently member-aware.
 
 ## How It Works
 
 ### The Architecture
 
 ```
-User 1 (moniker="john")
+Member 1 (moniker="john")
   ↓
 getch() calls during keyboard input
   ↓
@@ -19,7 +19,7 @@ Gets notifications from john's queue
   ↓
 Displays ONLY john's notifications
   
-User 2 (moniker="jane")
+Member 2 (moniker="jane")
   ↓
 getch() calls during keyboard input
   ↓
@@ -30,70 +30,72 @@ Displays ONLY jane's notifications
 
 ### Key Components
 
-**1. User Identity (moniker)**
+**1. Member Identity (moniker)**
 ```python
 # From bbsengine6/member.py _threadlocal
-moniker = getattr(_threadlocal, "moniker", None)  # Username of current user
+from bbsengine6.member import _threadlocal
 
-# Each user gets their own isolated notifications
+moniker = getattr(_threadlocal, "moniker", None)  # Moniker of current member
+
+# Each member gets their own isolated notifications
 ```
 
-**2. Per-User Notification Queue**
+**2. Per-Member Notification Queue**
 ```python
 # From bbsengine6/notify.py
 _queues = {}  # Dict[moniker, UserNotificationQueue]
 
 def get_queue(moniker: str) -> UserNotificationQueue:
-    """Get the in-memory notification queue for this specific user."""
+    """Get the in-memory notification queue for this specific member."""
     with _queues_lock:
         if moniker not in _queues:
             _queues[moniker] = UserNotificationQueue()
         return _queues[moniker]
 ```
 
-**3. User-Specific getch() Checks**
+**3. Member-Specific getch() Checks**
 ```python
 # From bbsengine6/io/getch.py line 533-540
-moniker = getattr(_threadlocal, "moniker", None)  # Get CURRENT user
+moniker = getattr(_threadlocal, "moniker", None)  # Get CURRENT member
 
 if check_notifications and moniker and _has_notify_module:
-    # Count notifications for THIS user only
+    # Count notifications for THIS member only
     has_notifications = notify.count(moniker)
     if has_notifications:
         _emit_notification_bell_once()
 ```
 
-**4. User-Specific Display**
+**4. Member-Specific Display**
 ```python
 # From bbsengine6/io/getch.py line 547-548
 if result == "KEY_F2" and moniker:
-    # Show notifications for THIS user only
+    # Show notifications for THIS member only
     _show_pending_notifications(moniker)
 ```
 
-## Multi-User Scenario Example
+## Multi-Member Scenario Example
 
-### Setup: Three Users on Same Machine
+### Setup: Three Members on Same Machine
 
-**User 1 (john)**
+**Member 1 (john)**
 ```bash
 # Logs in from terminal 1
 ssh bbs@host
-(enters username: john)
+(enters moniker: john)
 ```
 
-**User 2 (jane)**
+**Member 2 (jane)**
 ```bash
 # Logs in from terminal 2
 ssh bbs@host
-(enters username: jane)
+(enters moniker: jane)
 ```
 
-**User 3 (admin)**
+**Member 3 (admin)**
 ```bash
 # Logs in from terminal 3
 ssh bbs@host
-(enters username: admin)
+(enters moniker: admin)
 ```
 
 ### Notifications Fire From Events
@@ -101,18 +103,20 @@ ssh bbs@host
 ```python
 # In bbsengine6 code
 import bbsengine6.notifyd as notifyd
+from bbsengine6.member import _threadlocal
 from datetime import datetime
 
-def on_user_login(user):
-    # Fire event with user context
-    notifyd.fire_event("user-login", {
-        "username": user.moniker,
+def on_member_login(member):
+    # Fire event with member context
+    moniker = getattr(_threadlocal, "moniker", None)
+    notifyd.fire_event("member-login", {
+        "moniker": moniker,
         "ip_address": request.remote_addr,
         "timestamp": datetime.now().isoformat(),
     })
 ```
 
-### Each User Sees Only Their Notifications
+### Each Member Sees Only Their Notifications
 
 **Terminal 1 (john)**
 ```
@@ -147,36 +151,37 @@ admin's menu...
 
 ### Key Points
 
-✅ Each user's `getch()` call checks **ONLY their own queue**
-✅ Notifications are **isolated per user**
-✅ User identity comes from `_threadlocal.moniker` (thread-local storage)
-✅ No cross-user notification leakage
+✅ Each member's `getch()` call checks **ONLY their own queue**
+✅ Notifications are **isolated per member**
+✅ Member identity comes from `_threadlocal.moniker` (thread-local storage)
+✅ No cross-member notification leakage
 ✅ Built-in to bbsengine6 architecture
 
-## How to Use: Multi-User with getch()
+## How to Use: Multi-Member with getch()
 
-### 1. Fire Events with User Context
+### 1. Fire Events with Member Context
 
-Always include the user context when firing events:
+Always include the member context when firing events:
 
 ```python
-# bbsengine6/auth.py
+# bbsengine6/login.py
 import bbsengine6.notifyd as notifyd
 from datetime import datetime
 from bbsengine6.member import _threadlocal
 
-def on_user_login(user, request):
+def on_member_login(member, request):
     # Login logic...
     
-    # Fire event - user context already in _threadlocal.moniker
-    notifyd.fire_event("user-login", {
-        "username": user.moniker,
+    # Fire event - member context already in _threadlocal.moniker
+    moniker = getattr(_threadlocal, "moniker", None)
+    notifyd.fire_event("member-login", {
+        "moniker": moniker,
         "ip_address": request.remote_addr,
         "timestamp": datetime.now().isoformat(),
     })
 ```
 
-### 2. Route to User's Queue
+### 2. Route to Member's Queue
 
 In your notification dispatcher:
 
@@ -186,7 +191,7 @@ import bbsengine6.notify as notify
 from bbsengine6.member import _threadlocal
 
 def fire_event(event_name: str, variables: dict) -> None:
-    """Fire an event - automatically routes to current user's queue."""
+    """Fire an event - automatically routes to current member's queue."""
     
     cfg = get_config()
     listeners = cfg.get("event_listeners", {})
@@ -198,9 +203,9 @@ def fire_event(event_name: str, variables: dict) -> None:
     current_moniker = getattr(_threadlocal, "moniker", None)
     
     if not current_moniker:
-        return  # No user context
+        return  # No member context
     
-    # Send to THIS user's queue
+    # Send to THIS member's queue
     notify.notify(
         moniker=current_moniker,
         recipients=listener_config.get("recipients", []),
@@ -212,7 +217,7 @@ def fire_event(event_name: str, variables: dict) -> None:
     )
 ```
 
-### 3. getch() Displays User-Specific Notifications
+### 3. getch() Displays Member-Specific Notifications
 
 No changes needed - getch() already does this:
 
@@ -222,25 +227,25 @@ from bbsengine6.io import getch
 
 while True:
     key = getch.getch_str(timeout=1.0)
-    # Automatically checks/displays current user's notifications
-    # Bell emits only for THAT user
-    # F2 shows only THAT user's notifications
+    # Automatically checks/displays current member's notifications
+    # Bell emits only for THAT member
+    # F2 shows only THAT member's notifications
 ```
 
-## Configuration: Multi-User Setup
+## Configuration: Multi-Member Setup
 
-### Minimal Config (Same for All Users)
+### Minimal Config (Same for All Members)
 
 ```json
 {
   "event_listeners": {
-    "user-login": {
+    "member-login": {
       "recipients": ["john", "jane", "admin"],
-      "template": "user-login.tmpl",
+      "template": "member-login.tmpl",
       "urgency": "high"
     },
     "message-received": {
-      "recipients": ["user"],
+      "recipients": ["member"],
       "template": "message.tmpl",
       "urgency": "high"
     }
@@ -252,20 +257,20 @@ while True:
 }
 ```
 
-**Note**: "user" in recipients means "the user who triggered the event" (their moniker)
+**Note**: "member" in recipients means "the member who triggered the event" (their moniker)
 
-### Advanced: Different Events for Different Users
+### Advanced: Different Events for Different Members
 
 ```json
 {
   "event_listeners": {
-    "admin-action": {
-      "recipients": ["admin", "audit-team"],
-      "template": "admin-action.tmpl",
+    "sysop-action": {
+      "recipients": ["sysop", "audit-log"],
+      "template": "sysop-action.tmpl",
       "urgency": "high"
     },
-    "user-message": {
-      "recipients": ["user"],  # Notifies the recipient user
+    "member-message": {
+      "recipients": ["member"],  # Notifies the recipient member
       "template": "message.tmpl",
       "urgency": "medium"
     }
@@ -273,34 +278,36 @@ while True:
 }
 ```
 
-## Implementation Example: Multi-User BBS
+## Implementation Example: Multi-Member BBS
 
-### 1. User Login
+### 1. Member Login
 
 ```python
-# bbsengine6/auth.py
+# bbsengine6/login.py
 import bbsengine6.notifyd as notifyd
+from bbsengine6.member import _threadlocal
 from datetime import datetime
 
-def handle_user_login(username, password, request):
-    user = verify_login(username, password)
+def handle_member_login(moniker, password, request):
+    member = verify_login(moniker, password)
     
-    if not user:
+    if not member:
         # Fire failed login event
         notifyd.fire_event("login-failed", {
-            "username": username,
+            "moniker": moniker,
             "ip_address": request.remote_addr,
         })
         raise AuthenticationError()
     
-    # Fire successful login - goes to user's queue
-    notifyd.fire_event("user-login", {
-        "username": user.moniker,
+    # Fire successful login - goes to member's queue
+    current_moniker = getattr(_threadlocal, "moniker", None)
+    notifyd.fire_event("member-login", {
+        "moniker": current_moniker,
         "ip_address": request.remote_addr,
         "timestamp": datetime.now().isoformat(),
     })
     
-    return user
+    return member
 ```
 
 ### 2. Message Notification
@@ -308,39 +315,43 @@ def handle_user_login(username, password, request):
 ```python
 # bbsengine6/messages.py
 import bbsengine6.notifyd as notifyd
+from bbsengine6.member import _threadlocal
 
-def send_message(from_user, to_user, text):
+def send_message(to_moniker, text):
     # Save message...
+    from_moniker = getattr(_threadlocal, "moniker", None)
     msg = Message.create(
-        from_moniker=from_user.moniker,
-        to_moniker=to_user.moniker,
+        from_moniker=from_moniker,
+        to_moniker=to_moniker,
         text=text
     )
     
     # Notify recipient - goes to THEIR queue
     notifyd.fire_event("message-received", {
-        "from_user": from_user.moniker,
+        "from_moniker": from_moniker,
         "message_preview": text[:50],
         "timestamp": datetime.now().isoformat(),
     })
 ```
 
-### 3. Admin Actions
+### 3. Sysop Actions
 
 ```python
-# bbsengine6/admin.py
+# bbsengine6/sysop.py
 import bbsengine6.notifyd as notifyd
+from bbsengine6.member import _threadlocal
 
-def delete_post(admin_user, post_id):
+def delete_post(post_id):
     post = Post.get(post_id)
     
     # Delete...
     post.delete()
     
-    # Notify admin and audit log
-    notifyd.fire_event("admin-action", {
+    # Notify sysop and audit log
+    sysop_moniker = getattr(_threadlocal, "moniker", None)
+    notifyd.fire_event("sysop-action", {
         "action": "delete_post",
-        "admin": admin_user.moniker,
+        "sysop": sysop_moniker,
         "post_id": post_id,
         "timestamp": datetime.now().isoformat(),
     })
@@ -357,10 +368,10 @@ def main_loop():
         display_menu()
         
         # getch() automatically:
-        # 1. Gets current user's moniker from _threadlocal
-        # 2. Checks THAT user's notification queue
-        # 3. Emits bell only if THAT user has notifications
-        # 4. Shows F2 option for THAT user's notifications
+        # 1. Gets current member's moniker from _threadlocal
+        # 2. Checks THAT member's notification queue
+        # 3. Emits bell only if THAT member has notifications
+        # 4. Shows F2 option for THAT member's notifications
         key = getch.getch_str(timeout=1.0)
         
         if key == "Q":
@@ -369,52 +380,52 @@ def main_loop():
         process_key(key)
 ```
 
-## Comparison: Daemon vs getch() for Multi-User
+## Comparison: Daemon vs getch() for Multi-Member
 
 | Feature | Daemon Model | getch() Model |
 |---------|--------------|---------------|
-| **Multi-user support** | ❌ Limited (shared config) | ✅ Full (per-user queues) |
-| **User isolation** | ❌ No | ✅ Yes |
-| **Notifications per user** | ❌ Global queue | ✅ Per-user queue |
-| **Privacy** | ❌ Users can see others' notifications | ✅ Only your own |
+| **Multi-member support** | ❌ Limited (shared config) | ✅ Full (per-member queues) |
+| **Member isolation** | ❌ No | ✅ Yes |
+| **Notifications per member** | ❌ Global queue | ✅ Per-member queue |
+| **Privacy** | ❌ Members can see others' notifications | ✅ Only their own |
 | **Thread-local integration** | ❌ No | ✅ Yes |
-| **Concurrent users** | ⚠️ Works but messy | ✅ Clean design |
+| **Concurrent members** | ⚠️ Works but messy | ✅ Clean design |
 | **Implementation** | Complex | Simple |
 | **Code changes needed** | Medium | Minimal |
 
-## Recommended Architecture: Multi-User BBS
+## Recommended Architecture: Multi-Member BBS
 
 ### Use getch() Integration Because:
 
-1. **✅ Built-in user isolation** - Each user gets their own queue
+1. **✅ Built-in member isolation** - Each member gets their own queue
 2. **✅ Thread-local integration** - Moniker from `_threadlocal.moniker`
 3. **✅ Simple deployment** - No daemon needed
-4. **✅ Scales to multiple users** - Each user's getch() checks their queue
-5. **✅ Event-driven** - Fire events with user context
-6. **✅ Privacy-respecting** - Users only see their notifications
+4. **✅ Scales to multiple members** - Each member's getch() checks their queue
+5. **✅ Event-driven** - Fire events with member context
+6. **✅ Privacy-respecting** - Members only see their notifications
 7. **✅ BBS-friendly** - Notifications during keyboard I/O
 
 ### Architecture Diagram
 
 ```
-User 1 Session          User 2 Session          User 3 Session
+Member 1 Session        Member 2 Session        Member 3 Session
     │                       │                       │
     └──→ getch() ─→ Check moniker "john"           │
          bell if john's queue has notifications    │
          │                                          │
-         └──→ User 2 getch() ─→ Check moniker "jane"
+         └──→ Member 2 getch() ─→ Check moniker "jane"
               bell if jane's queue has notifications
               │
-              └──→ User 3 getch() ─→ Check moniker "admin"
+              └──→ Member 3 getch() ─→ Check moniker "admin"
                    bell if admin's queue has notifications
 
-Shared config.json (same for all users)
-Separate notification queues per user
+Shared config.json (same for all members)
+Separate notification queues per member
 ```
 
-## Migration: Daemon → getch() for Multi-User
+## Migration: Daemon → getch() for Multi-Member
 
-If you're currently trying to use daemon for multi-user:
+If you're currently trying to use daemon for multi-member:
 
 ### Step 1: Remove Daemon
 
@@ -427,10 +438,12 @@ sudo systemctl disable notifyd
 
 ```python
 # Instead of manually polling or starting daemon:
-# Just fire events with user context
+# Just fire events with member context
+
+from bbsengine6.member import _threadlocal
 
 notifyd.fire_event("event-name", {
-    "username": current_user.moniker,  # Include moniker
+    "moniker": getattr(_threadlocal, "moniker", None),  # Include moniker
     "data": "..."
 })
 ```
@@ -445,15 +458,15 @@ key = getch.getch_str(timeout=1.0)
 
 ## Summary
 
-**getch() integration is superior for multi-user per machine because:**
+**getch() integration is superior for multi-member per machine because:**
 
-1. User identity is automatically from `_threadlocal.moniker`
-2. bbsengine6.notify already has per-user queues
-3. getch() already filters by current user
+1. Member identity is automatically from `_threadlocal.moniker`
+2. bbsengine6.notify already has per-member queues
+3. getch() already filters by current member
 4. Built-in privacy/isolation
 5. No daemon overhead
-6. Scales elegantly to multiple concurrent users
+6. Scales elegantly to multiple concurrent members
 
-**This is the recommended approach for bbsengine6 BBS multi-user support.**
+**This is the recommended approach for bbsengine6 BBS multi-member support.**
 
 See [GETCH_INTEGRATION.md](GETCH_INTEGRATION.md) for implementation details.

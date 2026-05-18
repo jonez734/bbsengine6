@@ -550,16 +550,18 @@ ruff format src/bbsengine6/notifyd/
 ruff check src/bbsengine6/notifyd/ --fix
 ```
 
-## Multi-User Scenarios
+## Multi-Member Scenarios
 
-NotifyD is a **system-wide daemon** designed for single or multiple recipients, not per-user instances. See [MULTI_USER_GUIDE.md](MULTI_USER_GUIDE.md) for:
+**For BBS multi-member support**: Use [getch() integration](GETCH_INTEGRATION.md) with [multi-member guide](GETCH_MULTI_USER.md) for:
 
-- Current limitations (single daemon instance)
-- What works (multiple email accounts, multiple recipients)
-- Workaround patterns (include user context, event namespacing)
-- Future enhancement options
+- ✅ Native per-member notification isolation
+- ✅ Thread-local member identity from `_threadlocal.moniker`
+- ✅ Automatic notification filtering per member
+- ✅ No daemon needed
 
-**Quick Summary**: Use event data to include user context and filter notifications by recipient in your application code.
+**For daemon-based notifications**: See [MULTI_USER_GUIDE.md](MULTI_USER_GUIDE.md) for limitations and workaround patterns.
+
+**Recommended**: Use getch() integration for multi-member BBS systems - it's inherently multi-member aware.
 
 ## Related Documentation
 
