@@ -1,5 +1,5 @@
 PROJECT = bbsengine6
-OUTDIR = /srv/repo/$(PROJECT)/
+OUTDIR = dist/ # /srv/repo/$(PROJECT)/
 VERSION = $(shell date +%Y%m%d%H%M)
 
 PYTHON = python3

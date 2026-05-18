@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -25,8 +27,20 @@ def ensure_schema(pool: Any) -> None:
     Raises:
         StorageError: If schema creation fails
     """
-    # Placeholder - will read from SQL files
-    pass
+    try:
+        # Read SQL schema file
+        schema_file = Path(__file__).parent / "sql" / "001_notifyd_schema.sql"
+        sql = schema_file.read_text()
+        
+        # Execute schema SQL
+        with pool.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql)
+            conn.commit()
+        
+        logger.debug("Database schema initialized")
+    except Exception as e:
+        raise StorageError(f"Failed to initialize schema: {e}") from e
 
 
 def get_last_uid(pool: Any, server: str, mailbox: str) -> int:
@@ -44,8 +58,20 @@ def get_last_uid(pool: Any, server: str, mailbox: str) -> int:
     Raises:
         StorageError: If query fails
     """
-    # Placeholder
-    return 0
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT max_uid FROM notifyd_imap_state
+                    WHERE server = %s AND mailbox = %s
+                    """,
+                    (server, mailbox),
+                )
+                row = cursor.fetchone()
+                return row[0] if row else 0
+    except Exception as e:
+        raise StorageError(f"Failed to get last UID: {e}") from e
 
 
 def set_last_uid(pool: Any, server: str, mailbox: str, uid: int) -> None:
@@ -61,8 +87,23 @@ def set_last_uid(pool: Any, server: str, mailbox: str, uid: int) -> None:
     Raises:
         StorageError: If update fails
     """
-    # Placeholder
-    pass
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO notifyd_imap_state (server, mailbox, max_uid)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (server, mailbox)
+                    DO UPDATE SET max_uid = %s, updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (server, mailbox, uid, uid),
+                )
+            conn.commit()
+        
+        logger.debug(f"Updated UID for {server}/{mailbox} to {uid}")
+    except Exception as e:
+        raise StorageError(f"Failed to set last UID: {e}") from e
 
 
 def record_notification(
@@ -92,8 +133,33 @@ def record_notification(
     Raises:
         StorageError: If insert fails
     """
-    # Placeholder
-    return 0
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO notifyd_history 
+                    (notification_type, recipients, notification_id, data, status, error_message)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        notification_type,
+                        recipients,
+                        notification_id,
+                        json.dumps(template_vars),
+                        status,
+                        error_message,
+                    ),
+                )
+                row = cursor.fetchone()
+                record_id = row[0] if row else 0
+            conn.commit()
+        
+        logger.debug(f"Recorded notification {record_id} ({notification_type})")
+        return record_id
+    except Exception as e:
+        raise StorageError(f"Failed to record notification: {e}") from e
 
 
 def get_notification_history(
@@ -115,5 +181,53 @@ def get_notification_history(
     Raises:
         StorageError: If query fails
     """
-    # Placeholder
-    return []
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cursor:
+                if notification_type:
+                    cursor.execute(
+                        """
+                        SELECT id, notification_type, recipients, sent_at, 
+                               notification_id, data, status, error_message
+                        FROM notifyd_history
+                        WHERE notification_type = %s
+                        ORDER BY sent_at DESC
+                        LIMIT %s
+                        """,
+                        (notification_type, limit),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT id, notification_type, recipients, sent_at,
+                               notification_id, data, status, error_message
+                        FROM notifyd_history
+                        ORDER BY sent_at DESC
+                        LIMIT %s
+                        """,
+                        (limit,),
+                    )
+                
+                rows = cursor.fetchall()
+                
+                records = []
+                for row in rows:
+                    try:
+                        data = json.loads(row[5]) if row[5] else {}
+                    except (json.JSONDecodeError, TypeError):
+                        data = {}
+                    
+                    records.append({
+                        "id": row[0],
+                        "notification_type": row[1],
+                        "recipients": row[2],
+                        "sent_at": row[3],
+                        "notification_id": row[4],
+                        "data": data,
+                        "status": row[6],
+                        "error_message": row[7],
+                    })
+                
+                return records
+    except Exception as e:
+        raise StorageError(f"Failed to get notification history: {e}") from e
