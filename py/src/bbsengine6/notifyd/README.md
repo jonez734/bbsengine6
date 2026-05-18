@@ -550,12 +550,24 @@ ruff format src/bbsengine6/notifyd/
 ruff check src/bbsengine6/notifyd/ --fix
 ```
 
+## Multi-User Scenarios
+
+NotifyD is a **system-wide daemon** designed for single or multiple recipients, not per-user instances. See [MULTI_USER_GUIDE.md](MULTI_USER_GUIDE.md) for:
+
+- Current limitations (single daemon instance)
+- What works (multiple email accounts, multiple recipients)
+- Workaround patterns (include user context, event namespacing)
+- Future enhancement options
+
+**Quick Summary**: Use event data to include user context and filter notifications by recipient in your application code.
+
 ## Related Documentation
 
 - [bbsengine6 Database](../database.py) - Connection pooling and queries
 - [bbsengine6 Notify](../notify.py) - Notification infrastructure
 - [NOTIFYD_SPEC.md](../../NOTIFYD_SPEC.md) - Full specification and design
 - [NOTIFYD_IMPLEMENTATION_CHECKLIST.md](../../NOTIFYD_IMPLEMENTATION_CHECKLIST.md) - Implementation details
+- [MULTI_USER_GUIDE.md](MULTI_USER_GUIDE.md) - Multi-user limitations and workarounds
 
 ## License
 
