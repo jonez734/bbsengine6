@@ -197,7 +197,17 @@ def send_ping(from_moniker: str, round_num: int) -> bool:
 
 
 def check_and_display_queue(moniker: str, message_log: Union[List[str], Deque[str]]) -> None:
-    """Check and display all pending notifications (with output synchronization)."""
+    """Check and display all pending notifications (with output synchronization).
+    
+    WARNING: This operation is DESTRUCTIVE - all retrieved notifications are removed
+    from the queue. Messages cannot be retrieved again unless the sender resends them.
+    This is intentional design: checking queue consumes messages automatically.
+    See README_PING_PONG.md for behavior documentation.
+    
+    Args:
+        moniker: Member whose queue to check
+        message_log: Shared message log to append notifications to
+    """
     try:
         queue = notify.get_queue(moniker)
         if queue is None:
