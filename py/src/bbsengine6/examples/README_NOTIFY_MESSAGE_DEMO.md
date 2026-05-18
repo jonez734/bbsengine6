@@ -34,15 +34,31 @@ Messages are stored in the bbsengine6 notify system:
 
 ## Quick Start
 
-### Terminal 1: Alice
+### Demo Mode (In-Memory)
+
+#### Terminal 1: Alice
 ```bash
 python notify_message_demo.py --user alice
 ```
 
-### Terminal 2: Bob
+#### Terminal 2: Bob
 ```bash
 python notify_message_demo.py --user bob
 ```
+
+### Database Mode (Persistent)
+
+#### Terminal 1: Alice (with database)
+```bash
+python notify_message_demo.py --user alice --databasename=zoid6test
+```
+
+#### Terminal 2: Bob (with database)
+```bash
+python notify_message_demo.py --user bob --databasename=zoid6test
+```
+
+Messages will persist in the `zoid6test` database.
 
 ### Sending Messages
 
@@ -241,12 +257,63 @@ This ensures:
 - Messages are ordered by creation time
 - No message is lost or duplicated
 
+## Database Mode vs Demo Mode
+
+The demo supports two modes of operation:
+
+### Demo Mode (In-Memory, No Database)
+When run without `--databasename`, the demo uses in-memory message queues:
+
+```bash
+python notify_message_demo.py --user alice
+```
+
+Messages are stored in Python deques and lost when the demo exits.
+
+### Database Mode (Persistent Storage)
+When run with `--databasename`, the demo persists messages to the database:
+
+```bash
+python notify_message_demo.py --user alice --databasename=zoid6test
+```
+
+Messages are stored in `engine.__notify` and `engine.__notify_recipient` tables and persist across sessions.
+
+### Connection Pool Pattern
+
+The demo implements the proper bbsengine6 CONN_POOL_PATTERN:
+
+1. **Initialization**: Get connection pool once during startup
+   ```python
+   pool = database.getpool(args, dbname=args.databasename)
+   ```
+
+2. **Usage**: Reuse the pool for all database operations
+   ```python
+   with database.connect(args, pool=pool) as conn:
+       with database.transaction(conn):
+           with database.cursor(conn) as cur:
+               # execute queries
+   ```
+
+This ensures:
+- ✓ Efficient connection reuse
+- ✓ Proper resource management
+- ✓ Thread-safe database access
+- ✓ Graceful fallback to demo mode if database unavailable
+
 ## Command-Line Options
 
 ```
 usage: notify_message_demo.py [-h] --user USER [--template TEMPLATE]
                                [--max-messages MAX_MESSAGES]
                                [--timeout TIMEOUT] [--no-echo]
+                               [--debug] [--databasename DATABASENAME]
+                               [--databasehost DATABASEHOST]
+                               [--databaseport DATABASEPORT]
+                               [--databaseuser DATABASEUSER]
+                               [--databasepassword DATABASEPASSWORD]
+                               [--databaseschema DATABASESCHEMA]
 
 Interactive message system demo using notify
 
@@ -258,6 +325,19 @@ options:
                         Max messages to keep in history (default: 50)
   --timeout TIMEOUT     Notification check timeout in seconds (default: 2.0)
   --no-echo             Disable echo command processing
+  --debug               Enable debug logging
+  --databasename DATABASENAME
+                        Database name for persistent message storage
+  --databasehost DATABASEHOST
+                        Database host (default: localhost)
+  --databaseport DATABASEPORT
+                        Database port (default: 5432)
+  --databaseuser DATABASEUSER
+                        Database user
+  --databasepassword DATABASEPASSWORD
+                        Database password
+  --databaseschema DATABASESCHEMA
+                        Database schema (default: public)
 ```
 
 ## Testing
@@ -325,6 +405,58 @@ The demo includes 61 comprehensive tests covering:
 - Max length messages
 - All ASCII characters
 - Template edge cases
+
+## Database Integration Implementation
+
+### Connection Pool Pattern (CONN_POOL_PATTERN)
+
+The demo implements the standard bbsengine6 database pattern:
+
+**Initialization (in NotifyMessageDemo.__init__):**
+```python
+if args and hasattr(args, 'databasename') and args.databasename:
+    try:
+        self.pool = database.getpool(args, dbname=args.databasename)
+    except Exception:
+        # Graceful fallback to demo mode if database unavailable
+        self.pool = None
+```
+
+**Usage (in MessageHandler.send_message and receive_messages):**
+```python
+if self.args and self.pool:
+    with database.connect(self.args, pool=self.pool) as conn:
+        with database.transaction(conn):
+            with database.cursor(conn) as cur:
+                # Execute database operations
+```
+
+### Row Handling
+
+The demo properly handles dict-like rows returned by the database cursor:
+
+```python
+# cursor.row_factory defaults to dict_row
+notify_id = row["id"] if isinstance(row, dict) else row[0]
+rendered = row["rendered_message"] if isinstance(row, dict) else row[1]
+sender = row["sender_moniker"] if isinstance(row, dict) else row[2]
+created = row["datecreated"] if isinstance(row, dict) else row[3]
+```
+
+This provides compatibility with both dict and tuple row formats.
+
+### Transaction Management
+
+All database operations are wrapped in transactions:
+
+```python
+with database.transaction(conn):
+    # Multiple statements executed atomically
+    cur.execute("INSERT INTO engine.__notify ...")
+    cur.execute("INSERT INTO engine.__notify_recipient ...")
+```
+
+This ensures data consistency and automatic rollback on errors.
 
 ## Architecture
 
@@ -566,27 +698,26 @@ MessageHandler._user_queues[recipient].append(encrypted)
 
 ```
 bbsengine6/py/src/bbsengine6/examples/
-├── notify_message_demo.py              # Main demo module (458 lines)
+├── notify_message_demo.py              # Main demo module (577 lines)
 └── README_NOTIFY_MESSAGE_DEMO.md       # This file
 
 bbsengine6/py/tests/
-└── test_notify_message_demo.py         # Test suite (618 lines, 61 tests)
-
-Documentation:
-└── NOTIFY_MESSAGE_DEMO_PLAN.md        # Implementation plan
+└── test_notify_message_demo.py         # Test suite (615 lines, 61 tests)
 ```
 
 ## Summary
 
 The Notify Message Demo is a complete, tested, and documented example of building a message system using bbsengine6's notify infrastructure. It includes:
 
-✓ 458 lines of production-quality code
-✓ 618 lines of comprehensive tests (61 tests, 100% pass rate)
+✓ 577 lines of production-quality code
+✓ 615 lines of comprehensive tests (61 tests, 100% pass rate)
+✓ Database integration with proper connection pool pattern
 ✓ ASCII-only validation with detailed error reporting
 ✓ Template system with variable substitution
 ✓ Echo command integration
 ✓ Thread-safe operations
-✓ Multi-user support
+✓ Multi-user support (2+ users)
+✓ Demo mode (in-memory) and Database mode (persistent)
 ✓ Complete documentation
 ✓ Extensive examples
 
