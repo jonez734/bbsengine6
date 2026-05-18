@@ -140,6 +140,22 @@ def display_menu(
         print("═" * 60)
 
 
+def _sanitize_text(text: str) -> str:
+    """Remove terminal control characters from text for safe display.
+    
+    This prevents terminal escape sequences or control characters from
+    breaking the UI or causing unexpected behavior. Uses aggressive
+    filtering to keep only printable ASCII characters and basic whitespace.
+    
+    Args:
+        text: Input text potentially containing control characters
+        
+    Returns:
+        Sanitized text with only safe, printable characters
+    """
+    return ''.join(c for c in text if c.isprintable() or c in '\t ')
+
+
 def send_ping(from_moniker: str, round_num: int) -> bool:
     """Send a ping/pong notification with comprehensive error handling."""
     to_moniker = "bob" if from_moniker == "alice" else "alice"
@@ -148,7 +164,9 @@ def send_ping(from_moniker: str, round_num: int) -> bool:
         # Determine message type and word
         msg_type = "pong_message" if from_moniker == "bob" else "ping_message"
         msg_word = "PONG" if from_moniker == "bob" else "PING"
-        msg_text = f"{msg_word} #{round_num + 1} from {from_moniker}"
+        # Sanitize moniker to prevent terminal control character injection
+        safe_moniker = _sanitize_text(from_moniker)
+        msg_text = f"{msg_word} #{round_num + 1} from {safe_moniker}"
 
         # Create a proper Notification object for the demo
         notification = Notification(
