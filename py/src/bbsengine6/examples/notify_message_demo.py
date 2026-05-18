@@ -258,7 +258,11 @@ class MessageHandler:
                         )
                         result_row = cur.fetchone()
                         # bbsengine6 cursor returns dict-like rows, access by column name
-                        notify_id = result_row["id"] if isinstance(result_row, dict) else result_row[0]
+                        notify_id = (
+                            result_row["id"]
+                            if isinstance(result_row, dict)
+                            else result_row[0]
+                        )
 
                         # Insert recipient entry
                         cur.execute(
@@ -519,6 +523,9 @@ def main():
         help="Disable echo command processing",
     )
 
+    # Add database arguments (--databasename, --databasehost, --databaseport, etc.)
+    database.buildargs(parser)
+
     args = parser.parse_args()
 
     try:
@@ -530,7 +537,11 @@ def main():
             enable_echo_commands=not args.no_echo,
         )
 
-        demo = NotifyMessageDemo(config, None)
+        # Use args as database connection parameters if database name was specified
+        # Otherwise use None for demo mode (in-memory queues)
+        db_args = args if args.databasename else None
+
+        demo = NotifyMessageDemo(config, db_args)
         demo.run_interactive()
 
     except ValueError as e:
