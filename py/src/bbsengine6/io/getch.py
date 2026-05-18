@@ -372,10 +372,12 @@ def _update_bottombar_on_notification() -> bool:
             # Try to use setbottombar if screen is initialized
             try:
                 screen.setbottombar("", notification_status)
+                return True
             except (OSError, termios.error):
-                # If setbottombar fails (screen.init not called), try direct output
-                # This provides a fallback for non-screen-initialized contexts
-                echo(f"{{bel}}[{notification_status}]", flush=True, end="")
+                # If setbottombar fails (screen.init not called), fallback to echo
+                # Output with newline so it's visible
+                echo(f"\n[{notification_status}]", flush=True)
+                return True
         return True
     except Exception:
         # Silently handle all other errors to avoid crashing getch
