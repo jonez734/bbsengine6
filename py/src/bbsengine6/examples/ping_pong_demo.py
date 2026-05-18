@@ -125,56 +125,48 @@ def send_ping(from_moniker: str, round_num: int) -> bool:
     to_moniker = "bob" if from_moniker == "alice" else "alice"
 
     try:
-        # Check if recipient queue exists (is logged in)
-        try:
-            recipient_queue = notify.get_queue(to_moniker)
-            if recipient_queue is None:
-                with output_lock:
-                    print(f"❌ ERROR: {to_moniker} is not logged in")
-                    input("Press Enter to continue...")
-                return False
-        except Exception as e:
-            with output_lock:
-                print(f"❌ ERROR: Cannot access {to_moniker}'s queue: {e}")
-                input("Press Enter to continue...")
-            return False
-
         # Determine message type and word
         msg_type = "pong_message" if from_moniker == "bob" else "ping_message"
         msg_word = "PONG" if from_moniker == "bob" else "PING"
-        msg_text = f"{msg_word} #{round_num} from {from_moniker}"
+        msg_text = f"{msg_word} #{round_num + 1} from {from_moniker}"
 
         # Create a proper Notification object for the demo
-        try:
-            notification = Notification(
-                id=round_num,
-                notification_type=msg_type,
-                recipients=[to_moniker],
-                recipients_ok=[to_moniker],
-                recipients_failed=[],
-                sender_moniker=from_moniker,
-                template="default",
-                template_vars={},
-                message=msg_text,
-                data={},
-                urgency=NotificationUrgency.ROUTINE,
-                timestamp=time.time(),
-            )
+        notification = Notification(
+            id=round_num,
+            notification_type=msg_type,
+            recipients=[to_moniker],
+            recipients_ok=[to_moniker],
+            recipients_failed=[],
+            sender_moniker=from_moniker,
+            template="default",
+            template_vars={},
+            message=msg_text,
+            data={},
+            urgency=NotificationUrgency.ROUTINE,
+            timestamp=time.time(),
+        )
 
-            # Add to recipient's queue directly
+        # Try to add to recipient's queue (atomic operation)
+        # This approach avoids race condition of check-then-use
+        try:
+            recipient_queue = notify.get_queue(to_moniker)
+            if recipient_queue is None:
+                raise RuntimeError(f"{to_moniker} is not logged in")
             recipient_queue.put(notification)
 
             with output_lock:
-                print(f"✓ Sent {msg_word} #{round_num} to {to_moniker}")
+                print(f"✓ Sent {msg_word} #{round_num + 1} to {to_moniker}")
             time.sleep(0.5)
             return True
 
-        except Exception as e:
+        except (RuntimeError, AttributeError, TypeError) as e:
             error_str = str(e).lower()
             with output_lock:
-                print(f"❌ ERROR: Failed to send: {e}")
+                print(f"❌ ERROR: Failed to send to {to_moniker}: {e}")
 
-                if "rate limit" in error_str:
+                if "not logged in" in error_str:
+                    print(f"   → {to_moniker} is not currently available")
+                elif "rate limit" in error_str:
                     print("   → You've sent too many messages too quickly")
                     print("   → Please wait a moment before sending again")
                 elif "blocked" in error_str:
