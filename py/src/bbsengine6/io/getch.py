@@ -626,57 +626,72 @@ def getch_str(
             _emit_notification_bell_once()
             _update_bottombar_on_notification()
 
+    # Check input queue with proper locking to avoid race conditions
+    with _input_queue_lock:
+        if _input_queue:
+            char = _input_queue.popleft()
+            result = _proc_char(char, debug=debug, fire_events=fire_events)
+            return result
+
+    # No queued input, do blocking read
+    fd = _current_input_stream.fileno()
+    old_settings = None
+    old_flags = None
+    
     with _current_stream_lock:
-        # Check input queue with proper locking to avoid race conditions
-        with _input_queue_lock:
-            if _input_queue:
-                char = _input_queue.popleft()
-                result = _proc_char(char, debug=debug, fire_events=fire_events)
-                return result
-
-        # No queued input, do blocking read
-        fd = _current_input_stream.fileno()
+        # Get terminal settings before entering try block
         old_settings = termios.tcgetattr(fd)
-        old_flags = None
-
         try:
             # 1. Set Terminal to Raw Mode
             tty.setraw(fd)
+        except:
+            # If setraw fails, at least restore settings
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            raise
 
-            # 2. Wait for input using wall-clock timeout for accuracy
-            start_time = time.time()
-            poll_interval = 0.1  # Check notifications every 100ms
-            ready = []
+    try:
+        # 2. Wait for input using wall-clock timeout for accuracy
+        # NOTE: Lock is NOT held during select() - this allows inputstring to redraw
+        # while we're waiting for input. We don't need the lock here since we're just
+        # waiting for I/O, not actually reading the terminal.
+        start_time = time.time()
+        poll_interval = 0.1  # Check notifications every 100ms
+        ready = []
 
-            while True:
-                # Calculate elapsed time and remaining timeout
-                elapsed = time.time() - start_time
-                if timeout is not None and elapsed >= timeout:
-                    return None  # Timeout reached
+        while True:
+            # Calculate elapsed time and remaining timeout
+            elapsed = time.time() - start_time
+            if timeout is not None and elapsed >= timeout:
+                # Timeout - restore settings and return
+                with _current_stream_lock:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                return None
 
-                # Calculate timeout for select
-                if timeout is None:
-                    select_timeout = poll_interval
-                else:
-                    remaining = timeout - elapsed
-                    select_timeout = (
-                        min(poll_interval, remaining) if remaining > 0 else 0
-                    )
-
-                # Wait for input with calculated timeout
-                ready, _, _ = select.select(
-                    [_current_input_stream], [], [], select_timeout
+            # Calculate timeout for select
+            if timeout is None:
+                select_timeout = poll_interval
+            else:
+                remaining = timeout - elapsed
+                select_timeout = (
+                    min(poll_interval, remaining) if remaining > 0 else 0
                 )
 
-                if ready:
-                    break
+            # Wait for input with calculated timeout (LOCK NOT HELD)
+            ready, _, _ = select.select(
+                [_current_input_stream], [], [], select_timeout
+            )
 
-            # No input yet - check for notification updates during idle
-            if check_notifications and moniker and _has_notify_module:
-                has_notifications, _ = _check_notifications(moniker, **kwargs)
-                if has_notifications:
-                    _update_bottombar_on_notification()
+            if ready:
+                break
 
+        # Input is available - check for notifications if enabled
+        if check_notifications and moniker and _has_notify_module:
+            has_notifications, _ = _check_notifications(moniker, **kwargs)
+            if has_notifications:
+                _update_bottombar_on_notification()
+
+        # Acquire lock only for reading and processing the character
+        with _current_stream_lock:
             # 3. Set Non-Blocking I/O for escape sequence reading
             old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
             fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
@@ -685,15 +700,30 @@ def getch_str(
                 # Attempt to read a single byte
                 char = _read_current_input_stream()
             except BlockingIOError:
-                # If nothing is available, return None immediately
+                # If nothing is available, return None
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
                 return None
 
+            # Process the character
             result = _proc_char(char, debug=debug, fire_events=fire_events)
+            
+            # Restore flags before releasing lock
+            if old_flags is not None:
+                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+            
+            # Restore terminal settings
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            
             return result
 
-        finally:
-            # 4. Restore Terminal Settings (CRUCIAL!)
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            # Restore old flags (blocking I/O)
-            if old_flags:
-                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+    except:
+        # If any error occurs, restore terminal settings before re-raising
+        if old_settings is not None:
+            with _current_stream_lock:
+                try:
+                    if old_flags is not None:
+                        fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                except:
+                    pass
+        raise

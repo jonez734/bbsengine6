@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
@@ -429,22 +430,11 @@ class NotifyMessageDemo:
         print(f"  q                   - Quit")
         print(f"{'=' * 60}\n")
 
-        # Check for new messages before each prompt
-        def display_pending_messages() -> None:
-            """Display any pending messages."""
-            messages = self.handler.receive_messages()
-            for msg in messages:
-                print(f"\n[RECEIVED] {msg['message']}")
-
         try:
             while True:
-                # Check for incoming messages before prompting
-                display_pending_messages()
-
-                # Get user input using inputstring which auto-checks notifications
+                # Get user input - minimal overhead, no message checking during input
                 user_input = inputstring(
                     f"{self.config.moniker}> ",
-                    args=self.args,
                 ).strip()
 
                 if not user_input:
