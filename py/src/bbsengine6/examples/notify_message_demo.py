@@ -14,7 +14,6 @@ from typing import Any, Dict, Optional
 
 from bbsengine6 import database
 from bbsengine6.io.echo import echo
-from bbsengine6.io.getch import getch_str
 from bbsengine6.io.inputstring import inputstring
 from bbsengine6.io import screen
 from bbsengine6.notify import UserNotificationQueue
@@ -477,7 +476,9 @@ class NotifyMessageDemo:
         # Display header
         display_header(self.config.moniker, self.config.template)
 
-        def handle_f2(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> tuple:
+        def handle_f2(
+            buffer: str, curpos: int, scroll_offset: int, max_width: int
+        ) -> tuple:
             """F2 handler: Display unread messages."""
             # Note: This is called during input, so we just return unchanged buffer
             # The actual message display happens in the main loop after inputstring returns
@@ -511,7 +512,7 @@ Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
                 user_input = inputstring(
                     prompt=f"{self.config.moniker}> ",
                     history=True,  # Enable UP/DOWN command history
-                    pagesize=10,   # Jump 10 chars with PAGE UP/DOWN
+                    pagesize=10,  # Jump 10 chars with PAGE UP/DOWN
                     beep_on_error=True,  # Beep on DELETE at end
                     f1_help=get_help_text,  # F1 shows help
                     function_key_handlers={
