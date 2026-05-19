@@ -693,21 +693,21 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
         display_str = buffer[scroll_offset : scroll_offset + max_width]
 
         if _current_display_str != display_str:
-            # Group all echo calls under a single lock to reduce contention with getch()
-            with _current_stream_lock:
-                echo(
-                    f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}",
-                    end="",
-                    flush=True,
-                )
+            # Don't hold lock - echo() manages its own locking internally
+            # Holding the lock here would deadlock when echo() tries to acquire it again
+            echo(
+                f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}",
+                end="",
+                flush=True,
+            )
 
-                echo(f"{{curpos:{start_row},{input_col_start}}}", end="")
-                if mask is not None:
-                    echo(mask * len(display_str), end="", flush=True)
-                else:
-                    echo(display_str, end="", flush=True, raw=True)
+            echo(f"{{curpos:{start_row},{input_col_start}}}", end="")
+            if mask is not None:
+                echo(mask * len(display_str), end="", flush=True)
+            else:
+                echo(display_str, end="", flush=True, raw=True)
 
-                _current_display_str = display_str
+            _current_display_str = display_str
 
         cursor_display_col = input_col_start + (curpos - scroll_offset)
         # Position cursor BEFORE getch() without holding lock during the call
