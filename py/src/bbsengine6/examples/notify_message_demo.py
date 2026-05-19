@@ -508,11 +508,12 @@ Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
                 unread_count = self._get_unread_count()
                 update_status_display(unread_count)
 
-                # Use new inputstring() with history and function key support
+                # Use new inputstring() with function key support
+                # Note: history=False for now (InputHistory needs integration work)
                 user_input = inputstring(
                     f"{self.config.moniker}> ",  # prompt (positional)
                     "",  # oldvalue (positional)
-                    history=True,  # Enable UP/DOWN command history
+                    history=False,  # TODO: Enable once InputHistory is fully integrated
                     pagesize=10,  # Jump 10 chars with PAGE UP/DOWN
                     beep_on_error=True,  # Beep on DELETE at end
                     f1_help=get_help_text,  # F1 shows help
