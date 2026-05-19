@@ -771,27 +771,31 @@ def main():
         pass
 
     try:
-        config = DemoConfig(
-            moniker=args.user,
-            template=args.template,
-            max_messages=args.max_messages,
-            check_timeout=args.timeout,
-            enable_echo_commands=not args.no_echo,
-        )
+        try:
+            config = DemoConfig(
+                moniker=args.user,
+                template=args.template,
+                max_messages=args.max_messages,
+                check_timeout=args.timeout,
+                enable_echo_commands=not args.no_echo,
+            )
 
-        # Use args as database connection parameters if database name was specified
-        # Otherwise use None for demo mode (in-memory queues)
-        db_args = args if args.databasename else None
+            # Use args as database connection parameters if database name was specified
+            # Otherwise use None for demo mode (in-memory queues)
+            db_args = args if args.databasename else None
 
-        demo = NotifyMessageDemo(config, db_args)
-        demo.run_interactive()
+            demo = NotifyMessageDemo(config, db_args)
+            demo.run_interactive()
 
-    except ValueError as e:
-        echo(f"Configuration error: {e}", level="error")
-        sys.exit(1)
-    except Exception as e:
-        echo(f"Error: {e}", level="error")
-        sys.exit(1)
+        except ValueError as e:
+            echo(f"Configuration error: {e}", level="error")
+            sys.exit(1)
+        except Exception as e:
+            echo(f"Error: {e}", level="error")
+            sys.exit(1)
+    finally:
+        # Reset terminal to clean state: save cursor, reset, restore cursor
+        echo("{decsc}{reset}{decrc}")
 
 
 if __name__ == "__main__":
