@@ -596,6 +596,13 @@ def getch_str(
                 # 1. Set Terminal to Raw/Cbreak Mode
                 tty.setraw(fd)
 
+                # DEBUG: Initialize screen and set bottom bar before input loop
+                try:
+                    screen.init()
+                    screen.setbottombar("", screen.get_notification_status)
+                except Exception:
+                    pass  # Silently ignore if screen can't be initialized
+
                 # --- INITIAL READ SETUP ---
                 # Poll for input with short intervals to allow notification updates
                 poll_interval = 0.1  # Check notifications every 100ms
