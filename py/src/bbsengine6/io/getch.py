@@ -369,15 +369,19 @@ def _update_bottombar_on_notification() -> bool:
         # Get notification status string (e.g., "F2: notify (3)")
         notification_status = screen.get_notification_status()
         if notification_status:
-            # Use echo_commands to position cursor and display notification
-            from . import terminal
-            last_line = terminal.lines()
-            echo(
-                f"{{savecursor}}{{bottombarcolor}}{{curpos:{last_line},0}}[{notification_status}]{{/all}}{{restorecursor}}",
-                end="",
-                flush=True,
-                wordwrap=False
-            )
+            # Try to use echo_commands to position cursor and display notification
+            try:
+                from . import terminal
+                last_line = terminal.lines()
+                echo(
+                    f"{{savecursor}}{{bottombarcolor}}{{curpos:{last_line},0}}[{notification_status}]{{/all}}{{restorecursor}}",
+                    end="",
+                    flush=True,
+                    wordwrap=False
+                )
+            except Exception:
+                # Fallback: output with newline if curpos fails
+                echo(f"\n[{notification_status}]", flush=True)
         return True
     except Exception:
         # Silently handle all other errors to avoid crashing getch
