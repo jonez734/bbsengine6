@@ -417,7 +417,12 @@ def _get_urgency_color(urgency) -> str:
 
 
 def _show_pending_notifications(moniker: str) -> None:
-    """Display pending notifications for user."""
+    """Display pending notifications for user.
+
+    This function displays notifications and returns immediately.
+    It does NOT wait for user input—that is the caller's responsibility.
+    This avoids recursive calls and keeps input handling simple.
+    """
     if not _has_notify_module:
         echo("{var:normalcolor}Notifications unavailable.{/all}")
         return
@@ -445,9 +450,7 @@ def _show_pending_notifications(moniker: str) -> None:
             echo(f"{n.message}")
             echo("{var:normalcolor}" + "─" * 40 + "{/all}")
 
-        echo("{var:normalcolor}Press any key to dismiss...{/all}")
-        # Wait for keypress to dismiss by calling getch_str recursively
-        getch_str(timeout=1.0)
+        echo("{var:normalcolor}Press any key to continue...{/all}")
 
     except Exception as e:
         echo(f"{{var:normalcolor}}Error displaying notifications: {e}{{/all}}")
