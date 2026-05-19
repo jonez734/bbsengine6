@@ -122,23 +122,29 @@ class KeyEventBus:
 
 
 class EventDispatcher:
-    """Manages background thread and event dispatch."""
+    """Manages background thread and event dispatch using condition variable for efficient waits.
+
+    The dispatcher uses threading.Condition for proper synchronization instead of busy-wait:
+    - Main thread signals condition when events are queued
+    - Dispatcher thread waits on condition (sleeps until notified or timeout)
+    - No busy-looping or wasted CPU cycles
+    """
 
     def __init__(self, bus: KeyEventBus):
         self.bus = bus
         self._queue: deque = deque()
+        self._condition = threading.Condition(threading.Lock())
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._use_timeout = False
         self._timeout_sec = 0.1
-        self._lock = threading.Lock()
 
     def start(self, use_timeout: bool = False, timeout_sec: float = 0.1) -> None:
         """Start the dispatcher background thread."""
         if self.is_running():
             raise RuntimeError("Event dispatcher already running")
 
-        with self._lock:
+        with self._condition:
             self._use_timeout = use_timeout
             self._timeout_sec = timeout_sec
             self._stop_event.clear()
@@ -153,6 +159,8 @@ class EventDispatcher:
             raise RuntimeError("Event dispatcher not running")
 
         self._stop_event.set()
+        with self._condition:
+            self._condition.notify_all()  # Wake thread if waiting
         if self._thread:
             self._thread.join(timeout=wait_timeout)
             self._thread = None
@@ -162,8 +170,10 @@ class EventDispatcher:
         return self._thread is not None and self._thread.is_alive()
 
     def push_event(self, event: KeyEvent) -> None:
-        """Enqueue event for dispatch."""
-        self._queue.append(event)
+        """Enqueue event for dispatch and signal dispatcher thread."""
+        with self._condition:
+            self._queue.append(event)
+            self._condition.notify()  # Wake dispatcher thread
         _event_queue.put(event)  # Also push to public queue
         self.bus.add_to_history(event)
 
@@ -171,27 +181,32 @@ class EventDispatcher:
         """Change timeout settings at runtime."""
         if not self.is_running():
             raise RuntimeError("Event dispatcher not running")
-        with self._lock:
+        with self._condition:
             self._use_timeout = use_timeout
             self._timeout_sec = timeout_sec
 
     def _run(self) -> None:
-        """Background thread main loop."""
+        """Background thread main loop using condition variable for efficient waits."""
         while not self._stop_event.is_set():
-            try:
-                event = self._queue.popleft()
-            except IndexError:
-                time.sleep(0.001)  # Small sleep to avoid busy loop
-                continue
+            with self._condition:
+                # Wait for event or timeout (predicate: queue is not empty)
+                while len(self._queue) == 0 and not self._stop_event.is_set():
+                    self._condition.wait(timeout=0.1)
 
-            # Fire all matching handlers
+                # Check again after wakeup
+                if len(self._queue) == 0:
+                    continue
+
+                event = self._queue.popleft()
+
+            # Fire all matching handlers (outside lock)
             for handler in self.bus.get_handlers().values():
                 if handler.matches(event):
                     self._fire_callback(handler, event)
 
     def _fire_callback(self, handler: EventHandler, event: KeyEvent) -> None:
         """Fire callback with optional timeout."""
-        with self._lock:
+        with self._condition:
             use_timeout = self._use_timeout
             timeout_sec = self._timeout_sec
 
