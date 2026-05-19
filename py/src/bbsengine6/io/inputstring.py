@@ -710,12 +710,12 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
                 _current_display_str = display_str
 
         cursor_display_col = input_col_start + (curpos - scroll_offset)
-        with _current_stream_lock:
-            echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
-            _terminal_state.cursor_row = start_row
-            _terminal_state.cursor_col = cursor_display_col
+        # Position cursor BEFORE getch() without holding lock during the call
+        echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
+        # Update terminal state (local tracking, doesn't need lock)
+        _terminal_state.cursor_row = start_row
+        _terminal_state.cursor_col = cursor_display_col
         
-        # NOTE: Lock must be released before getch() call
         ch = getch(
             timeout=INPUTSTRING_GETCH_TIMEOUT,
             fire_events=False,

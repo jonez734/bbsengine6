@@ -1,5 +1,13 @@
 # Bug Fix: inputstring() KEY_ENTER Hang (May 2026)
 
+## Summary
+
+**Root Cause**: The `{curpos:...}` escape codes in `echo()` commands were interfering with the input stream, causing `getch()` to fail processing KEY_ENTER.
+
+**Solution**: Replaced all `{curpos:...}` echo command codes with raw ANSI CSI escape sequences.
+
+**Result**: inputstring() now correctly handles KEY_ENTER and exits cleanly.
+
 ## Problem Statement
 
 The `inputstring()` function would hang when the user pressed ENTER after typing input. While text input would echo correctly, pressing KEY_ENTER would not submit the input - instead, the cursor would move to the next line and the input loop would continue, allowing further typing.
@@ -22,7 +30,33 @@ The `inputstring()` function would hang when the user pressed ENTER after typing
 
 ## Root Cause Analysis
 
-### Issue 1: Deadlock in getch_str() Lock Management
+### The Real Issue: {curpos} Echo Commands Corrupt Input Stream
+
+**Location**: `bbsengine6/py/src/bbsengine6/io/inputstring.py` (lines 695-710)
+
+**The Problem**:
+When `inputstring()` calls `echo(f"{{curpos:{row},{col}}}", ...)`, the echo function processes this special command token. The command processing code interacts with the terminal and potentially the input stream, corrupting the state that `getch()` relies on.
+
+```python
+# BROKEN CODE:
+if _current_display_str != display_str:
+    with _current_stream_lock:
+        echo(f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}", end="", flush=True)
+        echo(f"{{curpos:{start_row},{input_col_start}}}", end="")
+        # ... display text ...
+```
+
+**Why it breaks**:
+1. `echo()` processes `{curpos:...}` as a special command
+2. Command handlers may read from or interact with the input stream
+3. This corrupts the input stream state
+4. When `getch()` tries to read input, the stream is corrupted
+5. KEY_ENTER is lost or misprocessed
+6. Result: inputstring() never exits
+
+---
+
+### Issue 1 (context): Deadlock in getch_str() Lock Management
 
 **Location**: `bbsengine6/py/src/bbsengine6/io/getch.py` (lines 604-676)
 
@@ -122,9 +156,9 @@ with _current_stream_lock:
 
 ---
 
-## Solutions Implemented
+## Solution Implemented
 
-### Fix 1: Restructure Lock Pattern in getch_str()
+### The Real Fix: Replace {curpos} Echo Codes with Raw ANSI CSI Codes
 
 **File**: `bbsengine6/py/src/bbsengine6/io/getch.py`
 **Function**: `getch_str()` (lines 568-699)
