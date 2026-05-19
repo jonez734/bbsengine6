@@ -1,11 +1,18 @@
 import inspect
 import re
 import threading
-from typing import Any, Callable, Optional, Tuple, List, Union
+from collections import deque
+from typing import Any, Callable, Optional, Tuple, List, Union, Deque
 
 from . import terminal
 
-from .const import INPUTSTRING_GETCH_TIMEOUT
+from .const import (
+    INPUTSTRING_GETCH_TIMEOUT,
+    INPUTSTRING_DEFAULT_HISTORY_SIZE,
+    INPUTSTRING_DEFAULT_PAGESIZE,
+    INPUTSTRING_INSERT_MODE_INDICATOR,
+    INPUTSTRING_OVERWRITE_MODE_INDICATOR,
+)
 from .echo import echo, rendered_length, echo_traceback
 from .getch import getch_str as getch
 from .common import (
@@ -27,6 +34,103 @@ _WORD_CHAR_PATTERN = re.compile(r"\w")
 # Regular handlers return (buffer, curpos, scroll_offset)
 # Enter handler returns (buffer, curpos, scroll_offset, accepted, need_redraw)
 KeyHandler = Callable[[str, int, int, int], Union[Tuple[str, int, int], Tuple[str, int, int, bool, bool]]]
+
+
+class InputHistory:
+    """Thread-safe input history management matching GNU readline behavior.
+
+    Features:
+    - Bounded circular buffer (default 500 entries)
+    - No duplicate filtering (shell/app handles this)
+    - No persistence (in-memory only)
+    - UP/DOWN arrow navigation with position tracking
+
+    Thread safety: All public methods protected by internal lock.
+
+    Example:
+        history = InputHistory(maxsize=500)
+        history.add_entry("some command")
+        prev = history.get_previous()  # Navigate UP
+        next_val = history.get_next()  # Navigate DOWN
+    """
+
+    def __init__(self, maxsize: int = INPUTSTRING_DEFAULT_HISTORY_SIZE):
+        """Initialize bounded history with max size.
+
+        Args:
+            maxsize: Maximum number of entries to keep (default 500, matches GNU readline)
+        """
+        self._history: Deque[str] = deque(maxlen=maxsize)
+        self._current_index: int = -1  # -1 = at end (new input position)
+        self._lock = threading.Lock()
+
+    def add_entry(self, text: str) -> None:
+        """Add entry to history. Auto-evicts oldest if at maxsize.
+
+        GNU readline always adds entries (no dedup), shell/app handles HISTCONTROL filtering.
+        """
+        with self._lock:
+            # GNU readline always adds (no dedup), shell handles this
+            if text:  # Don't add empty entries
+                self._history.append(text)
+            # Reset position to "end" for next navigation
+            self._current_index = -1
+
+    def get_previous(self) -> Optional[str]:
+        """Navigate to previous entry (UP arrow).
+
+        Returns:
+            History entry or None if at oldest entry.
+        """
+        with self._lock:
+            if not self._history:
+                return None
+
+            # First UP from end (-1) goes to last entry
+            if self._current_index == -1:
+                self._current_index = len(self._history) - 1
+            # Further UPs go backward
+            elif self._current_index > 0:
+                self._current_index -= 1
+            else:
+                # Already at oldest, stay there
+                return self._history[0]
+
+            return self._history[self._current_index]
+
+    def get_next(self) -> Optional[str]:
+        """Navigate to next entry (DOWN arrow).
+
+        Returns:
+            History entry or None if at newest/end.
+        """
+        with self._lock:
+            if not self._history or self._current_index == -1:
+                return None
+
+            if self._current_index < len(self._history) - 1:
+                self._current_index += 1
+                return self._history[self._current_index]
+            else:
+                # At newest, DOWN goes to "end" (new input)
+                self._current_index = -1
+                return None
+
+    def reset_position(self) -> None:
+        """Reset to end of history (called when user types new text)."""
+        with self._lock:
+            self._current_index = -1
+
+    def get_all(self) -> List[str]:
+        """Return copy of all history entries (for debugging/export)."""
+        with self._lock:
+            return list(self._history)
+
+    def clear(self) -> None:
+        """Clear all history entries and reset position."""
+        with self._lock:
+            self._history.clear()
+            self._current_index = -1
 
 
 class Completer:
