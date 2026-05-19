@@ -33,7 +33,9 @@ _WORD_CHAR_PATTERN = re.compile(r"\w")
 # Type alias for key handler functions
 # Regular handlers return (buffer, curpos, scroll_offset)
 # Enter handler returns (buffer, curpos, scroll_offset, accepted, need_redraw)
-KeyHandler = Callable[[str, int, int, int], Union[Tuple[str, int, int], Tuple[str, int, int, bool, bool]]]
+KeyHandler = Callable[
+    [str, int, int, int], Union[Tuple[str, int, int], Tuple[str, int, int, bool, bool]]
+]
 
 
 class InputHistory:
@@ -155,7 +157,11 @@ class Completer:
         inputstring("Prompt: ", completer=completer)
     """
 
-    def __init__(self, get_matches: Optional[Callable[[str], Optional[List[str]]]] = None, **kwargs):
+    def __init__(
+        self,
+        get_matches: Optional[Callable[[str], Optional[List[str]]]] = None,
+        **kwargs,
+    ):
         """Initialize with optional get_matches function and kwargs.
 
         Args:
@@ -348,7 +354,9 @@ def remove_key_mapping(key_string: str) -> None:
 # --- 2. Helper Functions ---
 
 
-def handle_left(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+def handle_left(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
     """Move cursor left one position. Beeps if already at start."""
     if curpos > 0:
         curpos -= 1
@@ -357,7 +365,9 @@ def handle_left(buffer: str, curpos: int, scroll_offset: int, max_width: int) ->
     return buffer, curpos, scroll_offset
 
 
-def handle_right(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+def handle_right(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
     """Move cursor right one position. Beeps if already at end."""
     if curpos < len(buffer):
         curpos += 1
@@ -366,18 +376,24 @@ def handle_right(buffer: str, curpos: int, scroll_offset: int, max_width: int) -
     return buffer, curpos, scroll_offset
 
 
-def handle_home(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+def handle_home(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
     """Jump cursor to beginning of line."""
     return buffer, 0, 0
 
 
-def handle_end(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+def handle_end(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
     """Jump cursor to end of line."""
     curpos = len(buffer)
     return buffer, curpos, scroll_offset
 
 
-def handle_backspace(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+def handle_backspace(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
     """Delete character before cursor. Beeps if already at start."""
     if curpos > 0:
         buffer = buffer[: curpos - 1] + buffer[curpos:]
@@ -387,7 +403,9 @@ def handle_backspace(buffer: str, curpos: int, scroll_offset: int, max_width: in
     return buffer, curpos, scroll_offset
 
 
-def handle_cuttobol(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+def handle_cuttobol(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
     """Cut from beginning of line to cursor and store in yank buffer."""
     global yank_buffer
     cut_text = buffer[:curpos]
@@ -398,7 +416,9 @@ def handle_cuttobol(buffer: str, curpos: int, scroll_offset: int, max_width: int
     return buffer, 0, 0
 
 
-def handle_cutpreviousword(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+def handle_cutpreviousword(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
     r"""Cut the previous word from buffer and store in yank buffer.
 
     Uses \w word boundary matching (consistent with get_current_word).
@@ -420,7 +440,9 @@ def handle_cutpreviousword(buffer: str, curpos: int, scroll_offset: int, max_wid
     return buffer, word_start, scroll_offset
 
 
-def handle_yank(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+def handle_yank(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
     """Paste yank buffer contents at cursor position.
 
     Note: Pasting may cause buffer to exceed max_len - validation happens in main loop.
@@ -432,7 +454,9 @@ def handle_yank(buffer: str, curpos: int, scroll_offset: int, max_width: int) ->
     return buffer, curpos + len(yank_text), scroll_offset
 
 
-def handle_help(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+def handle_help(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
     """Help stub handler - will be enhanced in Phase 3."""
     logentry("handle_help.100: trace")
     return buffer, curpos, scroll_offset
@@ -746,9 +770,9 @@ def redraw_line(
     insert_mode: bool = True,
 ) -> None:
     """Clear and redraw the input line at the specified position.
-    
+
     Handles both regular and masked (password) input display.
-    
+
     Args:
         insert_mode: If False, shows [OVR] indicator; if True, shows [INS].
     """
@@ -758,7 +782,7 @@ def redraw_line(
         mode_indicator = f" {INPUTSTRING_INSERT_MODE_INDICATOR}"
     else:
         mode_indicator = f" {INPUTSTRING_OVERWRITE_MODE_INDICATOR}"
-    
+
     full_prompt = prompt + mode_indicator
 
     input_col_start = start_col + rendered_length(full_prompt)
@@ -843,9 +867,15 @@ add_key_mapping("KEY_F6", lambda b, c, s, m: handle_function_key("KEY_F6", b, c,
 add_key_mapping("KEY_F7", lambda b, c, s, m: handle_function_key("KEY_F7", b, c, s, m))
 add_key_mapping("KEY_F8", lambda b, c, s, m: handle_function_key("KEY_F8", b, c, s, m))
 add_key_mapping("KEY_F9", lambda b, c, s, m: handle_function_key("KEY_F9", b, c, s, m))
-add_key_mapping("KEY_F10", lambda b, c, s, m: handle_function_key("KEY_F10", b, c, s, m))
-add_key_mapping("KEY_F11", lambda b, c, s, m: handle_function_key("KEY_F11", b, c, s, m))
-add_key_mapping("KEY_F12", lambda b, c, s, m: handle_function_key("KEY_F12", b, c, s, m))
+add_key_mapping(
+    "KEY_F10", lambda b, c, s, m: handle_function_key("KEY_F10", b, c, s, m)
+)
+add_key_mapping(
+    "KEY_F11", lambda b, c, s, m: handle_function_key("KEY_F11", b, c, s, m)
+)
+add_key_mapping(
+    "KEY_F12", lambda b, c, s, m: handle_function_key("KEY_F12", b, c, s, m)
+)
 
 # --- 6. MAIN INPUT FUNCTION ---
 
@@ -859,7 +889,7 @@ def inputstring(
     beep_on_error: bool = True,
     f1_help: Union[str, Callable[[], str], None] = None,
     function_key_handlers: Optional[dict] = None,
-    **kwargs
+    **kwargs,
 ) -> str:
     """Read a line of text from the terminal with full line editing support.
 
@@ -886,7 +916,7 @@ def inputstring(
             Example:
                 def handle_f2(buffer, curpos, scroll_offset, max_width):
                     return buffer, curpos, scroll_offset
-                
+
                 inputstring(
                     function_key_handlers={
                         "KEY_F2": handle_f2,
@@ -945,10 +975,10 @@ def inputstring(
     Example:
         # Basic usage (unchanged from original)
         name = inputstring("Enter name: ")
-        
+
         # With history
         command = inputstring("$ ", history=True)
-        
+
         # With F1 help
         value = inputstring(
             "Enter value: ",
@@ -970,19 +1000,21 @@ def inputstring(
     # NEW: Initialize history if enabled
     _history = None
     if history:
-        _history = InputHistory(maxsize=kwargs.pop("history_maxsize", INPUTSTRING_DEFAULT_HISTORY_SIZE))
-    
+        _history = InputHistory(
+            maxsize=kwargs.pop("history_maxsize", INPUTSTRING_DEFAULT_HISTORY_SIZE)
+        )
+
     # NEW: Initialize insert mode tracking
     _insert_mode = True  # Start in insert mode
-    
+
     # NEW: Pass function key handlers and other options to kwargs for use in handlers
-    kwargs['_history'] = _history
-    kwargs['_history_enabled'] = history
-    kwargs['_insert_mode'] = _insert_mode
-    kwargs['_function_key_callbacks'] = function_key_handlers or {}
-    kwargs['f1_help'] = f1_help
-    kwargs['pagesize'] = pagesize
-    kwargs['beep_on_error'] = beep_on_error
+    kwargs["_history"] = _history
+    kwargs["_history_enabled"] = history
+    kwargs["_insert_mode"] = _insert_mode
+    kwargs["_function_key_callbacks"] = function_key_handlers or {}
+    kwargs["f1_help"] = f1_help
+    kwargs["pagesize"] = pagesize
+    kwargs["beep_on_error"] = beep_on_error
 
     buffer = oldvalue if oldvalue is not None else ""
     curpos = len(buffer)
@@ -1128,7 +1160,7 @@ def inputstring(
         # Update terminal state (local tracking, doesn't need lock)
         _terminal_state.cursor_row = start_row
         _terminal_state.cursor_col = cursor_display_col
-        
+
         ch = getch(
             timeout=INPUTSTRING_GETCH_TIMEOUT,
             fire_events=False,
@@ -1161,13 +1193,13 @@ def inputstring(
                 result = KEY_ACTIONS[ch](buffer, curpos, scroll_offset, max_width)
 
                 if ch == "KEY_ENTER":
-                     # Enter handler returns 5-tuple; other handlers return 3-tuple
-                     buffer, curpos, scroll_offset, accepted, need_redraw = result  # type: ignore[assignment]
-                     if accepted:
-                         # NEW: Add non-empty input to history (if enabled)
-                         if _history and buffer and buffer.strip():
-                             _history.add_entry(buffer)
-                         return buffer
+                    # Enter handler returns 5-tuple; other handlers return 3-tuple
+                    buffer, curpos, scroll_offset, accepted, need_redraw = result  # type: ignore[assignment]
+                    if accepted:
+                        # NEW: Add non-empty input to history (if enabled)
+                        if _history and buffer and buffer.strip():
+                            _history.add_entry(buffer)
+                        return buffer
                     if need_redraw:
                         _current_display_str = None
                     continue
@@ -1176,22 +1208,22 @@ def inputstring(
                 last_matches = []
                 tab_count = 0
             else:
-                 if len(ch) == 1:
-                     if len(buffer) < max_len or _insert_mode is False:
-                         # NEW: Support insert/overwrite modes
-                         if _insert_mode:
-                             # INSERT MODE: Insert character, shift rest right
-                             buffer = buffer[:curpos] + ch + buffer[curpos:]
-                         else:
-                             # OVERWRITE MODE: Replace character at cursor
-                             if curpos < len(buffer):
-                                 buffer = buffer[:curpos] + ch + buffer[curpos + 1 :]
-                             else:
-                                 # At end of buffer in overwrite mode, append
-                                 buffer = buffer + ch
-                         curpos += 1
-                 last_matches = []
-                 tab_count = 0
+                if len(ch) == 1:
+                    if len(buffer) < max_len or _insert_mode is False:
+                        # NEW: Support insert/overwrite modes
+                        if _insert_mode:
+                            # INSERT MODE: Insert character, shift rest right
+                            buffer = buffer[:curpos] + ch + buffer[curpos:]
+                        else:
+                            # OVERWRITE MODE: Replace character at cursor
+                            if curpos < len(buffer):
+                                buffer = buffer[:curpos] + ch + buffer[curpos + 1 :]
+                            else:
+                                # At end of buffer in overwrite mode, append
+                                buffer = buffer + ch
+                        curpos += 1
+                last_matches = []
+                tab_count = 0
 
         scroll_offset = adjust_scroll_offset(curpos, scroll_offset, max_width)
 
