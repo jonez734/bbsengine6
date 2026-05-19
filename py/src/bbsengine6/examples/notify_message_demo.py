@@ -655,11 +655,20 @@ class NotifyMessageDemo:
     def _check_and_display_messages(self) -> None:
         """Retrieve and display any unread messages."""
         messages = self.handler.receive_messages()
-        if messages:
-            for msg in messages:
-                # Display in chronological order
-                # Note: msg['message'] is already the rendered message containing sender
-                echo(f"[RECEIVED] {msg['message']}")
+
+        # Always show message count summary
+        message_count = len(messages)
+        if message_count == 0:
+            echo("\n--- No unread messages ---\n")
+        elif message_count == 1:
+            echo("\n--- 1 unread message ---\n")
+        else:
+            echo(f"\n--- {message_count} unread messages ---\n")
+
+        # Display each message in chronological order
+        for msg in messages:
+            # Note: msg['message'] is already the rendered message containing sender
+            echo(f"[RECEIVED] {msg['message']}")
 
     def _show_help(self) -> None:
         """Display help information."""
