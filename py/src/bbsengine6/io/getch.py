@@ -369,13 +369,15 @@ def _update_bottombar_on_notification() -> bool:
         # Get notification status string (e.g., "F2: notify (3)")
         notification_status = screen.get_notification_status()
         if notification_status:
-            # Direct output to stdout using raw escape codes
-            # Save cursor, move to last line, display notification, restore cursor
-            import sys
+            # Use echo_commands to position cursor and display notification
             from . import terminal
             last_line = terminal.lines()
-            sys.stdout.write(f"\x1b[s\x1b[{last_line};0H[{notification_status}]\x1b[u")
-            sys.stdout.flush()
+            echo(
+                f"{{savecursor}}{{bottombarcolor}}{{curpos:{last_line},0}}[{notification_status}]{{/all}}{{restorecursor}}",
+                end="",
+                flush=True,
+                wordwrap=False
+            )
         return True
     except Exception:
         # Silently handle all other errors to avoid crashing getch
