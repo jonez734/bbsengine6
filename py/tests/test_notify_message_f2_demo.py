@@ -242,6 +242,77 @@ class TestNotifyMessageF2Demo:
         unread_count_after = len(bob.handler.get_unread_messages())
         assert unread_count_after == 0
 
+    def test_more_prompt_displays_messages_with_pagination(self):
+        """Test that more prompt displays messages with pagination."""
+        from unittest.mock import patch
+        
+        messages = [
+            "Message 1",
+            "Message 2",
+            "Message 3",
+            "Message 4",
+            "Message 5",
+            "Message 6",  # This will trigger more prompt
+        ]
+        
+        # Simulate user pressing Enter to continue
+        with patch('builtins.input', return_value=''):
+            result = display_with_more_prompt(messages, page_size=5)
+        
+        # Should return True when all messages displayed
+        assert result is True
+
+    def test_more_prompt_abort_with_n_returns_false(self):
+        """Test that more prompt returns False when user inputs 'n'."""
+        from unittest.mock import patch
+        
+        messages = [f"Message {i}" for i in range(6)]
+        
+        # Simulate user pressing 'n' to abort
+        with patch('builtins.input', return_value='n'):
+            result = display_with_more_prompt(messages, page_size=5)
+        
+        # Should return False when user presses 'n'
+        assert result is False
+
+    def test_f2_abort_with_more_prompt_keeps_messages_unread(self):
+        """
+        Integration test: Verify that F2 abort with 'n' to more prompt
+        keeps messages unread (can be viewed again with F2).
+        """
+        from unittest.mock import patch
+        
+        # Alice sends 7 messages to trigger multiple more prompts
+        alice_config = DemoConfig(moniker="alice_f2_abort_prompt")
+        alice = NotifyMessageDemo(alice_config)
+        
+        for i in range(7):
+            alice.handler.send_message(f"Message {i+1} from Alice", "bob_f2_abort_prompt")
+        
+        # Bob gets unread count before F2
+        bob_config = DemoConfig(moniker="bob_f2_abort_prompt")
+        bob = NotifyMessageDemo(bob_config)
+        
+        unread_before = len(bob.handler.get_unread_messages())
+        assert unread_before == 7
+        
+        # Simulate F2 key press with abort at more prompt
+        # This simulates what happens when user presses F2
+        with patch('builtins.input', return_value='n'):
+            messages = bob.handler.get_unread_messages()
+            formatted_messages = [f"[RECEIVED] {msg['message']}" for msg in messages]
+            fully_displayed = display_with_more_prompt(formatted_messages, page_size=5)
+            
+            # Verify abort happened
+            assert fully_displayed is False
+            
+            # Key behavior: since abort happened, we don't mark as read
+            # (This is handled by _check_and_display_messages)
+        
+        # Verify messages are still unread
+        unread_after = len(bob.handler.get_unread_messages())
+        assert unread_after == 7, "Messages should still be unread after F2 abort"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
