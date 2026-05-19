@@ -1161,10 +1161,13 @@ def inputstring(
                 result = KEY_ACTIONS[ch](buffer, curpos, scroll_offset, max_width)
 
                 if ch == "KEY_ENTER":
-                    # Enter handler returns 5-tuple; other handlers return 3-tuple
-                    buffer, curpos, scroll_offset, accepted, need_redraw = result  # type: ignore[assignment]
-                    if accepted:
-                        return buffer
+                     # Enter handler returns 5-tuple; other handlers return 3-tuple
+                     buffer, curpos, scroll_offset, accepted, need_redraw = result  # type: ignore[assignment]
+                     if accepted:
+                         # NEW: Add non-empty input to history (if enabled)
+                         if _history and buffer and buffer.strip():
+                             _history.add_entry(buffer)
+                         return buffer
                     if need_redraw:
                         _current_display_str = None
                     continue
