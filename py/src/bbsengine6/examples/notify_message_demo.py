@@ -456,6 +456,7 @@ class NotifyMessageDemo:
         except KeyboardInterrupt:
             print("\n\nShutting down...")
         except EOFError:
+            print("\n\nEnd of input - exiting...")
             pass
         finally:
             self._show_stats()
