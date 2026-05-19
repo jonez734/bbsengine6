@@ -369,15 +369,13 @@ def _update_bottombar_on_notification() -> bool:
         # Get notification status string (e.g., "F2: notify (3)")
         notification_status = screen.get_notification_status()
         if notification_status:
-            # Try to use setbottombar if screen is initialized
-            try:
-                screen.setbottombar("", notification_status)
-                return True
-            except (OSError, termios.error):
-                # If setbottombar fails (screen.init not called), fallback to echo
-                # Output with newline so it's visible
-                echo(f"\n[{notification_status}]", flush=True)
-                return True
+            # Direct output to stdout using raw escape codes
+            # Save cursor, move to last line, display notification, restore cursor
+            import sys
+            from . import terminal
+            last_line = terminal.lines()
+            sys.stdout.write(f"\x1b[s\x1b[{last_line};0H[{notification_status}]\x1b[u")
+            sys.stdout.flush()
         return True
     except Exception:
         # Silently handle all other errors to avoid crashing getch
@@ -595,13 +593,6 @@ def getch_str(
             try:
                 # 1. Set Terminal to Raw/Cbreak Mode
                 tty.setraw(fd)
-
-                # DEBUG: Initialize screen and set bottom bar before input loop
-                try:
-                    screen.init()
-                    screen.setbottombar("", screen.get_notification_status)
-                except Exception:
-                    pass  # Silently ignore if screen can't be initialized
 
                 # --- INITIAL READ SETUP ---
                 # Poll for input with short intervals to allow notification updates
