@@ -693,26 +693,29 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
         display_str = buffer[scroll_offset : scroll_offset + max_width]
 
         if _current_display_str != display_str:
-            # Use raw ANSI codes instead of {curpos:...} to avoid interfering with getch()
-            import sys
-            # Clear the line and move cursor to input start position
-            sys.stdout.write(f"\033[{start_row};{input_col_start}H")  # Move cursor
-            sys.stdout.write(f"{' ' * max_width}")  # Clear line
-            sys.stdout.write(f"\033[{start_row};{input_col_start}H")  # Move back
-            
-            if mask is not None:
-                sys.stdout.write(mask * len(display_str))
-            else:
-                sys.stdout.write(display_str)
-            sys.stdout.flush()
+            # Group all echo calls under a single lock to reduce contention with getch()
+            with _current_stream_lock:
+                echo(
+                    f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}",
+                    end="",
+                    flush=True,
+                )
 
-            _current_display_str = display_str
+                echo(f"{{curpos:{start_row},{input_col_start}}}", end="")
+                if mask is not None:
+                    echo(mask * len(display_str), end="", flush=True)
+                else:
+                    echo(display_str, end="", flush=True, raw=True)
+
+                _current_display_str = display_str
 
         cursor_display_col = input_col_start + (curpos - scroll_offset)
-        # NOTE: Do NOT call echo right before getch() - it interferes with input
-        # The cursor position will be set on the next iteration if needed
-        # echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
-
+        with _current_stream_lock:
+            echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
+            _terminal_state.cursor_row = start_row
+            _terminal_state.cursor_col = cursor_display_col
+        
+        # NOTE: Lock must be released before getch() call
         ch = getch(
             timeout=INPUTSTRING_GETCH_TIMEOUT,
             fire_events=False,
