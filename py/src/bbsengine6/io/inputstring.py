@@ -1007,6 +1007,14 @@ def inputstring(
     # NEW: Initialize insert mode tracking
     _insert_mode = True  # Start in insert mode
 
+    # NEW: Remove new parameters from kwargs before passing to handlers
+    # These are handled separately and shouldn't be passed to verify() or other handlers
+    kwargs.pop("history", None)
+    kwargs.pop("pagesize", None)
+    kwargs.pop("beep_on_error", None)
+    kwargs.pop("f1_help", None)
+    kwargs.pop("function_key_handlers", None)
+
     # NEW: Pass function key handlers and other options to kwargs for use in handlers
     kwargs["_history"] = _history
     kwargs["_history_enabled"] = history

@@ -510,7 +510,8 @@ Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
 
                 # Use new inputstring() with history and function key support
                 user_input = inputstring(
-                    prompt=f"{self.config.moniker}> ",
+                    f"{self.config.moniker}> ",  # prompt (positional)
+                    "",  # oldvalue (positional)
                     history=True,  # Enable UP/DOWN command history
                     pagesize=10,  # Jump 10 chars with PAGE UP/DOWN
                     beep_on_error=True,  # Beep on DELETE at end
