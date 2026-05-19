@@ -1,4 +1,20 @@
-# util - general-purpose utilities for the BBS engine
+# util.py
+# General-purpose utilities for the BBS engine
+#
+# This module provides utility functions for logging, terminal output, data parsing,
+# file operations, and other common BBS operations. Functions are organized by category:
+# - Terminal/Output: hr(), heading(), strip_ansi()
+# - Text Utilities: pluralize(), oxfordcomma(), datestamp(), timedeltastr()
+# - Range Parsing: expandrange(), collapserange(), rangestr()
+# - Input: inputpassword()
+# - File/Directory Verification: verifyDirExistsWritable(), verifyFileExistsReadable(),
+#   verifyFileExistsReadableWritable()
+# - System: getremoteaddr(), getcurrentloginid(), init()
+# - Logging: logentry()
+# - Other: diceroll(), checksum(), tobool(), ltree_to_path(), chop_last_element(),
+#   get_safe_path(), load_sql(), serialize_datetimes(), getencryptedpassword(),
+#   filedisplay()
+#
 # pyright: ignore[import-not-found, reportMissingTypeHints]
 
 import logging
@@ -8,17 +24,36 @@ import random
 import re
 import threading
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from . import database, input, io  # type: ignore
 
 LOGGER_NAME = "bbsengine6"
+
+# Terminal display constants
+HR_WIDTH_OFFSET = 2  # Reduction from terminal width for hr() function
+HEADING_WIDTH_OFFSET = 4  # Reduction from terminal width for heading()
+HEADING_PADDING_ODD_ADJUSTMENT = 2  # Padding adjustment for odd-length titles
+PAGINATION_PAGE_SIZE = 20  # Lines per page in filedisplay() with more=True
+
+# Range constants
+RANGE_COLLAPSE_MIN_LENGTH = 2  # Minimum consecutive numbers to form a range (not collapse to singles)
+
+# CRC32 checksum constants
+CRC32_INIT = 0xFFFFFFFF  # Initial CRC value
+CRC32_POLY = 0xEDB88320  # CRC32 polynomial
+CRC32_XOROUT = 0xFFFFFFFF  # Final CRC XOR value
 
 _log_lock = threading.Lock()
 _default_handler: Optional[logging.handlers.SysLogHandler] = None
 
 
 def _get_default_handler() -> logging.handlers.SysLogHandler:
+    """Get or create the default syslog handler for BBS engine logging.
+
+    Returns:
+        A SysLogHandler configured with standard BBS engine format.
+    """
     global _default_handler
     if _default_handler is None:
         _default_handler = logging.handlers.SysLogHandler(address="/dev/log")
@@ -29,22 +64,52 @@ def _get_default_handler() -> logging.handlers.SysLogHandler:
 
 
 def hr(acs: bool = True, width: Optional[int] = None, end: str = "\n") -> bool:
+    """Display a horizontal rule using box-drawing characters.
+
+    Args:
+        acs: Use ASCII-compatible characters (currently unused, for future compatibility).
+        width: Width of the horizontal rule in characters. If None, uses terminal width minus HR_WIDTH_OFFSET.
+        end: String to output after the rule (default: newline).
+
+    Returns:
+        Always returns True.
+
+    Example:
+        >>> hr()  # Outputs horizontal line at terminal width
+        >>> hr(width=40)  # Outputs 40-character horizontal line
+    """
     if width is None:
-        width = io.terminal.width() - 2  # type: ignore
+        width = io.terminal.width() - HR_WIDTH_OFFSET  # type: ignore
     io.echo(f" {{boxcolor}}{{hline:{width}}}{{/all}}", end=end)
     return True
 
 
 def heading(title: str, **kwargs) -> None:
-    width = io.terminal.width() - 4  # type: ignore
+    """Display a centered heading with box-drawing borders.
+
+    Creates a box with the title centered inside using terminal width.
+    The heading uses box-drawing characters and BBS color tags.
+
+    Args:
+        title: The heading text to display (will be centered).
+        **kwargs: Additional keyword arguments (unused, for future compatibility).
+
+    Example:
+        >>> heading("Main Menu")
+        # Displays:
+        # ┌────────────────────────┐
+        # │      Main Menu         │
+        # └────────────────────────┘
+    """
+    width = io.terminal.width() - HEADING_WIDTH_OFFSET  # type: ignore
     w = width - len(title)
     if w % 2 == 0:
         repeat = w // 2
         leftpadding = " " * repeat
         rightpadding = " " * repeat
     else:
-        repeat = (w - 2) // 2
-        leftpadding = " " * (repeat + 2)
+        repeat = (w - HEADING_PADDING_ODD_ADJUSTMENT) // 2
+        leftpadding = " " * (repeat + HEADING_PADDING_ODD_ADJUSTMENT)
         rightpadding = " " * (repeat + 1)
 
     io.echo(
@@ -73,6 +138,31 @@ def pluralize(
     determiner: str = "a",
     **kw,
 ) -> str:
+    """Generate a grammatically correct singular or plural phrase.
+
+    Args:
+        amount: The quantity to base pluralization on. If 0 or None, returns plural form.
+        singular: The singular form of the word (default: "singular").
+        plural: The plural form of the word (default: "plural").
+        quantity: If True, include the quantity in the output (default: True).
+        emoji: Optional emoji to prepend to the output.
+        determiner: Article to use with singular form, e.g., "a", "an" (default: "a").
+                   Set to "" to use quantity number instead.
+        **kw: Additional keyword arguments (unused, for future compatibility).
+
+    Returns:
+        A grammatically correct phrase.
+
+    Examples:
+        >>> pluralize(0, "apple", "apples")
+        'no apples'
+        >>> pluralize(1, "apple", "apples")
+        'a apple'
+        >>> pluralize(5, "apple", "apples")
+        '5 apples'
+        >>> pluralize(1, "apple", "apples", determiner="an")
+        'an apple'
+    """
     if amount is None or amount == 0:
         if quantity is True:
             return f"no {emoji}{plural}"
@@ -93,6 +183,28 @@ def pluralize(
 def datestamp(
     t: Optional[object] = None, format: str = "%Y-%m-%d %I:%M%P %Z (%a)"
 ) -> str:
+    """Convert a datetime value to a formatted string representation.
+
+    Args:
+        t: The time value to format. Can be:
+           - None: uses current time
+           - int/float: treated as Unix timestamp
+           - str: parsed via input.getdate()
+           - datetime: used as-is
+        format: strftime format string (default: "%Y-%m-%d %I:%M%P %Z (%a)").
+
+    Returns:
+        Formatted datetime string.
+
+    Raises:
+        AssertionError: If t is not a recognized type.
+
+    Examples:
+        >>> datestamp()  # Current time
+        '2026-05-19 02:30PM EDT (Mon)'
+        >>> datestamp(0)  # Unix epoch
+        '1970-01-01 08:00PM EST (Thu)'
+    """
     from dateutil.tz import tzlocal
     from time import tzset
 
@@ -112,6 +224,19 @@ def datestamp(
 
 
 def inputpassword(prompt: str = "password: ", mask: str = "X", **kwargs) -> str:
+    """Prompt user for password input with character masking.
+
+    Args:
+        prompt: The prompt text to display (default: "password: ").
+        mask: Character to display instead of actual input (default: "X").
+        **kwargs: Additional arguments passed to io.inputstring().
+
+    Returns:
+        The entered password as a string.
+
+    Example:
+        >>> pwd = inputpassword("Enter your password: ")
+    """
     return io.inputstring(prompt, "", mask=mask, **kwargs)
 
 
@@ -142,6 +267,22 @@ def logentry(
     formatter: Optional[logging.Formatter] = None,
     logger_name: str = LOGGER_NAME,
 ) -> None:
+    """Log a message to the BBS engine logger.
+
+    Thread-safe logging function that manages handler registration and log level mapping.
+
+    Args:
+        message: The message to log.
+        level: Log level as int (logging.DEBUG, etc.) or string ("debug", "info", "warn",
+               "warning", "error", "critical"). Default: logging.INFO.
+        handler: Custom logging handler. If None, uses default syslog handler.
+        formatter: Custom log formatter. If None, uses handler's formatter.
+        logger_name: Name of the logger to use (default: "bbsengine6").
+
+    Example:
+        >>> logentry("User logged in", level="info")
+        >>> logentry("Database error", level=logging.ERROR)
+    """
     h = handler or _get_default_handler()
     f = formatter or h.formatter
     h.setFormatter(f)
@@ -202,7 +343,7 @@ def collapserange(lst: list) -> list:
         while i < lenlst - 1 and sorted_lst[i] + 1 == sorted_lst[i + 1]:
             i += 1
         hi = sorted_lst[i]
-        if hi - low >= 2:
+        if hi - low >= RANGE_COLLAPSE_MIN_LENGTH:
             result.append((low, hi))
         elif hi - low == 1:
             result.append((low,))
@@ -270,15 +411,58 @@ def expandrange(txt: str) -> list:
     return sorted(set(elle))
 
 
-def rangestr(ranges):
+def rangestr(ranges: list) -> str:
+    """Convert range tuples to a formatted range string.
+
+    Converts output from collapserange() into a comma-separated string format
+    like "1-5,7,10".
+
+    Args:
+        ranges: List of range tuples (1-tuples and 2-tuples) as from collapserange().
+
+    Returns:
+        Formatted range string (e.g., "1-5,7,10").
+
+    Example:
+        >>> rangestr([(1, 5), (7,), (10,)])
+        '1-5,7,10'
+    """
     return ",".join(("%i-%i" % r if len(r) == 2 else "%i" % r) for r in ranges)
 
 
-def printr(ranges):
+def printr(ranges: list) -> None:
+    """Print a formatted range string to stdout.
+
+    Converts ranges to a comma-separated string format and prints it.
+
+    Args:
+        ranges: List of range tuples as returned by collapserange().
+
+    Example:
+        >>> printr([(1, 5), (7,), (10,)])
+        1-5,7,10
+    """
     print(rangestr(ranges))
 
 
-def filedisplay(res, **kw) -> None:
+def filedisplay(res: Any, **kw: Any) -> None:
+    """Display file content with optional pagination.
+
+    Writes content from a file-like object to a temporary file, then displays it
+    using io.echo_file() with optional "more" style pagination.
+
+    Args:
+        res: A file-like object (context manager) with read() method.
+        **kw: Keyword arguments:
+              - 'width': Display width in characters (default: terminal width)
+              - 'more': If True, enable pagination with 20-line pages (default: True)
+
+    Example:
+        >>> with open("readme.txt") as f:
+        ...     filedisplay(f)
+        >>> with open("readme.txt") as f:
+        ...     filedisplay(f, more=False)  # Display without pagination
+    """
     import tempfile
     import os
 
@@ -296,7 +480,7 @@ def filedisplay(res, **kw) -> None:
         tmp_path = tmp.name
 
     try:
-        page_size = 0 if not more else 20
+        page_size = 0 if not more else PAGINATION_PAGE_SIZE
         io.echo_file(tmp_path, page_size=page_size, wordwrap=False)
     finally:
         os.unlink(tmp_path)
@@ -309,6 +493,36 @@ _dice_rng = random.SystemRandom()
 
 
 def diceroll(sides: int = 6, count: int = 1, mode: str = "single") -> int | float | list[int] | None:  # type: ignore
+    """Roll one or more dice and return results based on specified mode.
+
+    Uses cryptographically secure random number generator.
+
+    Args:
+        sides: Number of sides per die (default: 6).
+        count: Number of dice to roll (default: 1).
+        mode: How to return results (default: "single"):
+              - "single": Return a single roll (ignores count)
+              - "list": Return list of all rolls
+              - "average": Return average of rolls as float
+              - "median": Return median of rolls as int
+              - Other: Returns None
+
+    Returns:
+        Based on mode:
+        - "single": int from 1 to sides
+        - "list": list of ints
+        - "average": float
+        - "median": int
+        - Unknown mode: None
+
+    Example:
+        >>> diceroll()  # Roll 1d6
+        4
+        >>> diceroll(6, 3, "list")  # Roll 3d6
+        [2, 5, 1]
+        >>> diceroll(20, 4, "median")  # Roll 4d20, return median
+        12
+    """
     if mode == "single":
         return _dice_rng.randint(1, sides)
 
@@ -331,6 +545,22 @@ def diceroll(sides: int = 6, count: int = 1, mode: str = "single") -> int | floa
 
 
 def verifyDirExistsWritable(dirname: str, **kw) -> bool:
+    """Verify that a directory exists and is writable.
+
+    Expands user (~) and environment variables in the path.
+    Outputs error messages via io.echo() for user feedback.
+
+    Args:
+        dirname: Directory path to verify (supports ~ and $VAR expansion).
+        **kw: Additional keyword arguments (unused, for future compatibility).
+
+    Returns:
+        True if directory exists and is writable, False otherwise.
+
+    Example:
+        >>> verifyDirExistsWritable("~/documents")
+        True
+    """
     dirname = os.path.expanduser(dirname)
     dirname = os.path.expandvars(dirname)
     io.echo(f"verifyDirExistsWritable.100: {dirname=}", level="debug")
@@ -351,6 +581,22 @@ def verifyDirExistsWritable(dirname: str, **kw) -> bool:
 
 
 def verifyFileExistsReadable(filename: str, **kw) -> bool:
+    """Verify that a file exists and is readable.
+
+    Expands user (~) and environment variables in the path.
+    Optional debug output when args.debug is True.
+
+    Args:
+        filename: File path to verify (supports ~ and $VAR expansion).
+        **kw: Keyword arguments including optional 'args' object with 'debug' attribute.
+
+    Returns:
+        True if file exists and is readable, False otherwise.
+
+    Example:
+        >>> verifyFileExistsReadable("~/.bashrc")
+        True
+    """
     args = kw.get("args")
 
     filename = os.path.expanduser(filename)
@@ -360,7 +606,24 @@ def verifyFileExistsReadable(filename: str, **kw) -> bool:
     return os.path.exists(filename) and os.access(filename, os.R_OK)
 
 
-def verifyFileExistsReadableWritable(filename, **kw):
+def verifyFileExistsReadableWritable(filename: str, **kw) -> bool:
+    """Verify that a file exists and is readable and writable.
+
+    Expands user (~) and environment variables in the path.
+    Outputs error messages via io.echo() for user feedback.
+    Optional debug output when args.debug is True.
+
+    Args:
+        filename: File path to verify (supports ~ and $VAR expansion).
+        **kw: Keyword arguments including optional 'args' object with 'debug' attribute.
+
+    Returns:
+        True if file exists and is both readable and writable, False otherwise.
+
+    Example:
+        >>> verifyFileExistsReadableWritable("~/config.txt")
+        True
+    """
     args = kw.get("args")
 
     filename = os.path.expanduser(filename)
@@ -385,7 +648,7 @@ def verifyFileExistsReadableWritable(filename, **kw):
     return True
 
 
-def timedeltastr(delta):
+def timedeltastr(delta: Any) -> str:
     """Convert a timedelta object to a human-readable duration string.
 
     Args:
@@ -395,7 +658,8 @@ def timedeltastr(delta):
         A formatted string like "02d03h15m30s" (only non-zero units included)
 
     Example:
-        >>> td = datetime.timedelta(days=2, hours=3, minutes=15, seconds=30)
+        >>> from datetime import timedelta
+        >>> td = timedelta(days=2, hours=3, minutes=15, seconds=30)
         >>> timedeltastr(td)
         '02d03h15m30s'
     """
@@ -421,6 +685,25 @@ def timedeltastr(delta):
 
 
 def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
+    """Encrypt a plaintext password using the database crypt() function.
+
+    Executes a PostgreSQL crypt() function call with MD5 salt generation.
+
+    Args:
+        args: Arguments object containing database connection configuration.
+        plaintextpassword: The plaintext password to encrypt.
+
+    Returns:
+        The encrypted password string, or None if the database query fails.
+
+    Note:
+        This function requires PostgreSQL with the pgcrypto extension installed.
+        MD5 hashing is provided for legacy compatibility but stronger algorithms
+        like bcrypt are recommended for new systems.
+
+    Example:
+        >>> encrypted = getencryptedpassword(args, "mypassword")
+    """
     io.echo(f"getencryptedpassword.100: {plaintextpassword=}", level="debug")
     sql = "select crypt(%s, gen_salt('md5'))"
     dat = (plaintextpassword,)
@@ -435,6 +718,18 @@ def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
 
 
 def init(args=None, **kw) -> None:
+    """Initialize locale and timezone settings for the BBS engine.
+
+    Sets the locale to the system default and initializes timezone information.
+    Should be called once at application startup.
+
+    Args:
+        args: Arguments object (currently unused, for future compatibility).
+        **kw: Additional keyword arguments (unused, for future compatibility).
+
+    Example:
+        >>> init()  # Call at application startup
+    """
     import locale
     import time
 
@@ -443,16 +738,47 @@ def init(args=None, **kw) -> None:
 
 
 def checksum(data: bytes) -> str:
-    crc = 0xFFFFFFFF
+    """Calculate a CRC32 checksum for binary data.
+
+    Computes a CRC32 checksum using standard CRC32 polynomial.
+
+    Args:
+        data: Binary data to checksum.
+
+    Returns:
+        Checksum as an 8-character hexadecimal string.
+
+    Example:
+        >>> checksum(b"hello")
+        'D4A4DCA6'
+    """
+    crc = CRC32_INIT
     for byte in data:
         crc ^= byte
         for _ in range(8):
-            crc = (crc >> 1) ^ (0xEDB88320 if (crc & 1) else 0)
-    crc ^= 0xFFFFFFFF
+            crc = (crc >> 1) ^ (CRC32_POLY if (crc & 1) else 0)
+    crc ^= CRC32_XOROUT
     return f"{crc:08X}"
 
 
 def ltree_to_path(ltree: str) -> str:
+    """Convert a PostgreSQL ltree string to a forward-slash delimited path.
+
+    An ltree is a dot-separated hierarchical label format used in PostgreSQL.
+    If the first label is "top", it is removed (as it's the implicit root).
+
+    Args:
+        ltree: A dot-separated ltree string (e.g., "top.users.admin").
+
+    Returns:
+        A forward-slash delimited path (e.g., "users/admin").
+
+    Example:
+        >>> ltree_to_path("top.users.admin")
+        'users/admin'
+        >>> ltree_to_path("users.admin")
+        'users/admin'
+    """
     labels = ltree.split(".")
 
     if labels[0] == "top":
@@ -462,12 +788,51 @@ def ltree_to_path(ltree: str) -> str:
 
 
 def chop_last_element(ltree: str) -> str:
+    """Remove the last element from a dot-separated ltree string.
+
+    Useful for navigating to parent nodes in an ltree hierarchy.
+
+    Args:
+        ltree: A dot-separated ltree string (e.g., "top.users.admin").
+
+    Returns:
+        The ltree with the last element removed (e.g., "top.users").
+
+    Example:
+        >>> chop_last_element("top.users.admin")
+        'top.users'
+    """
     labels = ltree.split(".")
     labels.pop()
     return ".".join(labels)
 
 
 def tobool(value) -> bool:
+    """Convert a value to a boolean.
+
+    Supports Python boolean values and string representations of True/False.
+
+    Args:
+        value: Value to convert. Recognized True values:
+               - Boolean True
+               - Strings "true" or "t" (case-insensitive)
+               Everything else is False.
+
+    Returns:
+        Boolean value.
+
+    Example:
+        >>> tobool(True)
+        True
+        >>> tobool("true")
+        True
+        >>> tobool("t")
+        True
+        >>> tobool(0)
+        False
+        >>> tobool("false")
+        False
+    """
     if value is True:
         return True
     if isinstance(value, str) and value.lower() in ("true", "t"):
@@ -476,6 +841,18 @@ def tobool(value) -> bool:
 
 
 def getremoteaddr() -> Optional[str]:
+    """Get the remote client IP address from SSH connection environment.
+
+    Extracts the client IP from the SSH_CONNECTION environment variable.
+    This function is designed for SSH-based BBS connections.
+
+    Returns:
+        The remote client IP address, or None if not in an SSH session.
+
+    Example:
+        >>> getremoteaddr()  # When accessed via SSH
+        '192.168.1.100'
+    """
     val = os.environ.get("SSH_CONNECTION")
     if val is not None:
         return val.split()[0]
@@ -483,6 +860,21 @@ def getremoteaddr() -> Optional[str]:
 
 
 def getcurrentloginid(args, **kwargs) -> str:
+    """Get the current logged-in user's login ID.
+
+    Retrieves the login name of the user running the current process.
+
+    Args:
+        args: Arguments object (currently unused, for future compatibility).
+        **kwargs: Additional keyword arguments (unused, for future compatibility).
+
+    Returns:
+        The current login ID.
+
+    Example:
+        >>> getcurrentloginid(args)
+        'bbsadmin'
+    """
     return os.getlogin()
 
 
@@ -543,7 +935,24 @@ def load_sql(args, resource_name: str, *, package: Optional[str] = None) -> str:
     return files(resolved_package).joinpath(resource_name).read_text(encoding="utf-8")
 
 
-def serialize_datetimes(data):
+def serialize_datetimes(data: dict) -> dict:
+    """Convert datetime values to ISO format strings in a nested dictionary.
+
+    Recursively searches a dictionary for "value" keys and converts any
+    datetime objects found to ISO 8601 string format.
+
+    Args:
+        data: Dictionary with structure {key: {"value": obj, ...}, ...}.
+
+    Returns:
+        Dictionary with same structure but datetime values converted to ISO strings.
+
+    Example:
+        >>> from datetime import datetime
+        >>> dt = datetime(2026, 5, 19, 14, 30, 0)
+        >>> serialize_datetimes({"timestamp": {"value": dt}})
+        {'timestamp': {'value': '2026-05-19T14:30:00'}}
+    """
     result = {}
     for key, subdict in data.items():
         val = subdict.get("value")
