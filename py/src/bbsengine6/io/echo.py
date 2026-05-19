@@ -1,7 +1,45 @@
+# echo.py
+# Advanced terminal output system with rich text formatting, command parsing, and terminal state management
+
+"""
+bbsengine6.io.echo - Terminal output with inline command processing.
+
+This module provides rich text formatting for terminal output via the echo() function and related
+utilities. It supports:
+
+- Inline command syntax: {color}, {bold}, {f6} (newline), {indent:n}, {rgb:#RRGGBB}
+- Variable substitution: {var:name}
+- Emoji support: :smile:, :fire:, etc.
+- ACS (Alternate Character Set) box drawing: {ulcorner}, {hline}, {vline}, etc.
+- Terminal state management: cursor position, word wrapping, indentation
+- Template loading and rendering
+- Thread-safe output to configurable streams
+
+Token Processing Flow:
+1. tokenize() - Parse input text into Token objects (WORD, WHITESPACE, COMMAND, EMOJI, etc.)
+2. echo_iter() - Process tokens through type-specific handlers
+3. Handler functions - Convert commands to ANSI escape sequences or output
+4. _write_token() - Write final tokens to output stream
+
+Architecture:
+- Token-based: All text is converted to Token objects with metadata
+- Generator-based: Uses yield for memory efficiency on large texts
+- State-managed: Maintains terminal state (colors, positions, wrapping) in TerminalState
+- Thread-safe: Uses locks for shared global state (_raw, _runtime_vars, _emoji, output stream)
+
+Key globals:
+- _raw: Whether to output raw text without command processing
+- _runtime_vars: User-defined variables for substitution
+- _emoji: Custom emoji registry
+- _terminal_state: Current terminal state (from common.py)
+- _state_lock: Protects _raw, _previous_token, _first_line_after_f6
+"""
+
 # ----------------------------
 # Token definition
 # ----------------------------
 
+# Token attributes:
 # kind: WORD, WHITESPACE, F6, COMMAND, ACS, COLOR
 # value: string content or command name
 # args: positional args (list)
@@ -293,6 +331,12 @@ def to_fullwidth(s: str) -> str:
 # token handlers
 # ----------------------------
 def _handle_word(token, **kwargs):
+    """
+    Process a WORD token: handle word wrapping and cursor column tracking.
+    
+    Emits an F6 (newline) if word would exceed available width.
+    Updates cursor position in terminal state.
+    """
     global _terminal_state, _raw
 
     width = kwargs.get("width", terminal.columns())
@@ -495,7 +539,13 @@ def _acs_off():
 
 
 def _handle_acs(token):
-    global _terminal_state  ### _cursor_col
+    """
+    Process ACS (Alternate Character Set) command for box drawing.
+    
+    Converts ACS character names (e.g., 'ulcorner', 'hline') to DEC graphics characters.
+    Emits ACS_ON before output and tracks cursor position.
+    """
+    global _terminal_state
 
     if token.value == "acs":
         if not token.args:
@@ -877,13 +927,15 @@ def _handle_unicode(token):
 
 def _handle_command(token, **kwargs):  # palette=None, vars=None):
     """
-    Processes a single command token and yields one or more Tokens.
+    Process a COMMAND token by routing to appropriate handler.
+
+    Handles colors, variables, attributes, ACS characters, emojis, and special commands.
+    This is the main dispatcher for all command processing.
 
     Args:
         token: Token of kind COMMAND from tokenize()
-        _runtime_vars: optional dict of runtime variables
     Yields:
-        Token instances (WORD, WHITESPACE, F6, etc.)
+        Processed tokens with text set to ANSI sequences or output
     """
     # command name is lowercase
     cmd = token.value.lower()
