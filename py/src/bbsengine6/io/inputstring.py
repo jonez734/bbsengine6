@@ -810,7 +810,30 @@ add_key_mapping("KEY_BACKSPACE", handle_backspace)
 add_key_mapping("KEY_CUTTOBOL", handle_cuttobol)
 add_key_mapping("KEY_CTRL_W", handle_cutpreviousword)
 add_key_mapping("KEY_YANK", handle_yank)
+
+# NEW: History navigation (Phase 4)
+add_key_mapping("KEY_UP", handle_history_previous)
+add_key_mapping("KEY_DOWN", handle_history_next)
+
+# NEW: Additional editing keys (Phase 4)
+add_key_mapping("KEY_DELETE", handle_delete)
+add_key_mapping("KEY_INSERT", handle_insert_toggle)
+add_key_mapping("KEY_PAGEUP", handle_pageup)
+add_key_mapping("KEY_PAGEDOWN", handle_pagedown)
+
+# Function keys (Phase 4)
 add_key_mapping("KEY_F1", handle_help)
+add_key_mapping("KEY_F2", lambda b, c, s, m: handle_function_key("KEY_F2", b, c, s, m))
+add_key_mapping("KEY_F3", lambda b, c, s, m: handle_function_key("KEY_F3", b, c, s, m))
+add_key_mapping("KEY_F4", lambda b, c, s, m: handle_function_key("KEY_F4", b, c, s, m))
+add_key_mapping("KEY_F5", lambda b, c, s, m: handle_function_key("KEY_F5", b, c, s, m))
+add_key_mapping("KEY_F6", lambda b, c, s, m: handle_function_key("KEY_F6", b, c, s, m))
+add_key_mapping("KEY_F7", lambda b, c, s, m: handle_function_key("KEY_F7", b, c, s, m))
+add_key_mapping("KEY_F8", lambda b, c, s, m: handle_function_key("KEY_F8", b, c, s, m))
+add_key_mapping("KEY_F9", lambda b, c, s, m: handle_function_key("KEY_F9", b, c, s, m))
+add_key_mapping("KEY_F10", lambda b, c, s, m: handle_function_key("KEY_F10", b, c, s, m))
+add_key_mapping("KEY_F11", lambda b, c, s, m: handle_function_key("KEY_F11", b, c, s, m))
+add_key_mapping("KEY_F12", lambda b, c, s, m: handle_function_key("KEY_F12", b, c, s, m))
 
 # --- 6. MAIN INPUT FUNCTION ---
 
