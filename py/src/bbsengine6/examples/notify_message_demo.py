@@ -316,69 +316,62 @@ class MessageHandler:
                 self.stats["errors"] += 1
             raise
 
-    def receive_messages(self) -> list[dict]:
-        """Check for and return new messages from database or demo queue."""
+    def get_unread_messages(self) -> list[dict]:
+        """Get unread messages WITHOUT marking them as read.
+        
+        Returns:
+            List of unread messages with notify_id for database mode.
+        """
         messages = []
 
         try:
             if self.args and self.pool:
                 with database.connect(self.args, pool=self.pool) as conn:
-                    with database.transaction(conn):
-                        with database.cursor(conn) as cur:
-                            # Query unread messages for this user
-                            cur.execute(
-                                """
-                                SELECT n.id, n.rendered_message, n.sender_moniker, n.datecreated
-                                FROM engine.__notify n
-                                JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
-                                WHERE nr.recipient_moniker = %s
-                                AND nr.read_at IS NULL
-                                AND n.notification_type = 'demo-message'
-                                ORDER BY n.datecreated ASC
-                                """,
-                                (self.config.moniker,),
+                    with database.cursor(conn) as cur:
+                        # Query unread messages for this user
+                        cur.execute(
+                            """
+                            SELECT n.id, n.rendered_message, n.sender_moniker, n.datecreated
+                            FROM engine.__notify n
+                            JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
+                            WHERE nr.recipient_moniker = %s
+                            AND nr.read_at IS NULL
+                            AND n.notification_type = 'demo-message'
+                            ORDER BY n.datecreated ASC
+                            """,
+                            (self.config.moniker,),
+                        )
+
+                        for row in cur.fetchall():
+                            # cursor returns dict-like rows by default
+                            # Use .get() with safe fallback to handle missing keys
+                            if isinstance(row, dict):
+                                notify_id = row.get("id")
+                                rendered = row.get("rendered_message")
+                                sender = row.get("sender_moniker")
+                                created = row.get("datecreated")
+                            else:
+                                notify_id = row[0]
+                                rendered = row[1]
+                                sender = row[2]
+                                created = row[3]
+
+                            messages.append(
+                                {
+                                    "direction": "in",
+                                    "timestamp": created,
+                                    "sender": sender,
+                                    "message": rendered,
+                                    "notify_id": notify_id,
+                                }
                             )
-
-                            for row in cur.fetchall():
-                                # cursor returns dict-like rows by default
-                                # Use .get() with safe fallback to handle missing keys
-                                if isinstance(row, dict):
-                                    notify_id = row.get("id")
-                                    rendered = row.get("rendered_message")
-                                    sender = row.get("sender_moniker")
-                                    created = row.get("datecreated")
-                                else:
-                                    notify_id = row[0]
-                                    rendered = row[1]
-                                    sender = row[2]
-                                    created = row[3]
-
-                                messages.append(
-                                    {
-                                        "direction": "in",
-                                        "timestamp": created,
-                                        "sender": sender,
-                                        "message": rendered,
-                                        "notify_id": notify_id,
-                                    }
-                                )
-
-                                # Mark as read
-                                cur.execute(
-                                    """
-                                    UPDATE engine.__notify_recipient
-                                    SET read_at = NOW()
-                                    WHERE notify_id = %s AND recipient_moniker = %s
-                                    """,
-                                    (notify_id, self.config.moniker),
-                                )
             else:
-                # Demo mode: check in-memory queue
+                # Demo mode: check in-memory queue (without removing)
                 with MessageHandler._queues_lock:
                     queue = MessageHandler._demo_queues.get(self.config.moniker)
                     if queue:
-                        while queue:
-                            msg = queue.popleft()
+                        # Create a copy of the queue without removing items
+                        for msg in queue:
                             messages.append(
                                 {
                                     "direction": "in",
@@ -388,12 +381,69 @@ class MessageHandler:
                                 }
                             )
 
-            with self._lock:
-                self.stats["received"] += len(messages)
-                self.message_history.extend(messages)
+        except Exception as e:
+            echo(f"Error getting unread messages: {e}", level="error")
+
+        return messages
+
+    def mark_messages_as_read(self, message_ids: list) -> None:
+        """Mark specific messages as read in the database.
+        
+        Args:
+            message_ids: List of notify_ids to mark as read (or count for demo mode)
+        """
+        if not message_ids:
+            return
+
+        try:
+            if self.args and self.pool:
+                with database.connect(self.args, pool=self.pool) as conn:
+                    with database.transaction(conn):
+                        with database.cursor(conn) as cur:
+                            for notify_id in message_ids:
+                                if notify_id is not None:
+                                    cur.execute(
+                                        """
+                                        UPDATE engine.__notify_recipient
+                                        SET read_at = NOW()
+                                        WHERE notify_id = %s AND recipient_moniker = %s
+                                        """,
+                                        (notify_id, self.config.moniker),
+                                    )
+            else:
+                # Demo mode: remove messages from queue
+                with MessageHandler._queues_lock:
+                    queue = MessageHandler._demo_queues.get(self.config.moniker)
+                    if queue and message_ids:
+                        # Remove the first N messages (in demo mode, message_ids contains counts)
+                        num_to_remove = message_ids[0] if isinstance(message_ids[0], int) else 0
+                        for _ in range(num_to_remove):
+                            if queue:
+                                queue.popleft()
 
         except Exception as e:
-            echo(f"Error receiving messages: {e}", level="error")
+            echo(f"Error marking messages as read: {e}", level="error")
+
+    def receive_messages(self) -> list[dict]:
+        """Check for and return new messages, marking them as read.
+        
+        DEPRECATED: This method marks all messages as read immediately.
+        Use get_unread_messages() and mark_messages_as_read() instead
+        for more control over when messages are marked as read.
+        """
+        messages = self.get_unread_messages()
+
+        # Collect notify_ids for database mode or count for demo mode
+        if self.args and self.pool:
+            message_ids = [msg.get("notify_id") for msg in messages]
+        else:
+            message_ids = [len(messages)] if messages else []
+
+        self.mark_messages_as_read(message_ids)
+
+        with self._lock:
+            self.stats["received"] += len(messages)
+            self.message_history.extend(messages)
 
         return messages
 
@@ -445,6 +495,40 @@ def update_status_display(unread_count: int) -> None:
         from bbsengine6.io.echo import echo_traceback
 
         echo_traceback(f"update_status_display() failed: {e}")
+
+
+def display_with_more_prompt(messages: list[str], page_size: int = 5) -> bool:
+    """Display messages with a 'more' prompt allowing abort with 'n'.
+
+    Args:
+        messages: List of message strings to display
+        page_size: Number of messages to show per page (default: 5)
+
+    Returns:
+        True if all messages were displayed, False if user aborted with 'n'
+    """
+    if not messages:
+        return True
+
+    total_messages = len(messages)
+    for i, message in enumerate(messages):
+        echo(message)
+
+        # Show more prompt after page_size messages, or at end if fewer messages remain
+        messages_shown = i + 1
+        messages_remaining = total_messages - messages_shown
+
+        if messages_shown % page_size == 0 and messages_remaining > 0:
+            try:
+                response = input(f"More? ({messages_remaining} remaining, n to abort): ").lower().strip()
+                if response == "n":
+                    echo("\n--- Aborted ---\n")
+                    return False
+            except (EOFError, KeyboardInterrupt):
+                echo("\n--- Aborted ---\n")
+                return False
+
+    return True
 
 
 class NotifyMessageDemo:
@@ -602,22 +686,45 @@ Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
         return ""
 
     def _check_and_display_messages(self) -> None:
-        """Retrieve and display any unread messages."""
-        messages = self.handler.receive_messages()
+        """Retrieve and display any unread messages with more prompt.
+        
+        Only marks messages as read if the full list is displayed.
+        If user aborts with 'n', messages remain unread.
+        """
+        messages = self.handler.get_unread_messages()
 
         # Always show message count summary
         message_count = len(messages)
         if message_count == 0:
             echo("\n--- No unread messages ---\n")
-        elif message_count == 1:
+            return
+
+        if message_count == 1:
             echo("\n--- 1 unread message ---\n")
         else:
             echo(f"\n--- {message_count} unread messages ---\n")
 
-        # Display each message in chronological order
-        for msg in messages:
-            # Note: msg['message'] is already the rendered message containing sender
-            echo(f"[RECEIVED] {msg['message']}")
+        # Prepare formatted message list
+        formatted_messages = [
+            f"[RECEIVED] {msg['message']}" for msg in messages
+        ]
+
+        # Display messages with more prompt (5 messages per page)
+        fully_displayed = display_with_more_prompt(formatted_messages, page_size=5)
+
+        # Only mark as read if fully displayed
+        if fully_displayed:
+            if self.handler.args and self.handler.pool:
+                # Database mode: mark specific messages as read
+                message_ids = [msg.get("notify_id") for msg in messages]
+                self.handler.mark_messages_as_read(message_ids)
+            else:
+                # Demo mode: mark all messages as read (remove from queue)
+                self.handler.mark_messages_as_read([len(messages)])
+
+            with self.handler._lock:
+                self.handler.stats["received"] += len(messages)
+                self.handler.message_history.extend(messages)
 
     def _show_help(self) -> None:
         """Display help information."""

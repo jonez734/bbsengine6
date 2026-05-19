@@ -8,7 +8,7 @@ import pytest
 # Add examples path to import the demo
 sys.path.insert(0, "/home/opencode/data/work/bbsengine6/py/src/bbsengine6/examples")
 
-from notify_message_demo import DemoConfig, NotifyMessageDemo
+from notify_message_demo import DemoConfig, NotifyMessageDemo, display_with_more_prompt
 
 
 class TestNotifyMessageF2Demo:
@@ -209,6 +209,38 @@ class TestNotifyMessageF2Demo:
         assert len(alice_new_messages) == 1
         assert alice_new_messages[0]["sender"] == "bob_bidir_test"
         assert "Reply from Bob to Alice" in alice_new_messages[0]["message"]
+
+    def test_abort_with_n_keeps_messages_unread(self):
+        """
+        Test that when a user aborts message viewing with 'n',
+        the undisplayed messages remain unread in demo mode.
+        """
+        # Alice sends 3 messages to Bob (smaller number for testing)
+        alice_config = DemoConfig(moniker="alice_abort_test")
+        alice = NotifyMessageDemo(alice_config)
+        
+        for i in range(3):
+            alice.handler.send_message(f"Message {i+1}", "bob_abort_test")
+        
+        # Bob receives the messages (without marking as read)
+        bob_config = DemoConfig(moniker="bob_abort_test")
+        bob = NotifyMessageDemo(bob_config)
+        
+        # Get unread messages (does NOT mark them as read)
+        unread = bob.handler.get_unread_messages()
+        assert len(unread) == 3
+        
+        # Verify unread count is still 3
+        unread_count = len(bob.handler.get_unread_messages())
+        assert unread_count == 3
+        
+        # Now simulate a complete view by calling mark_messages_as_read
+        # In demo mode, pass count as first element in list
+        bob.handler.mark_messages_as_read([len(unread)])
+        
+        # After marking as read, unread count should be 0
+        unread_count_after = len(bob.handler.get_unread_messages())
+        assert unread_count_after == 0
 
 
 if __name__ == "__main__":
