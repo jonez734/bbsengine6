@@ -1161,8 +1161,18 @@ def inputstring(
                 tab_count = 0
             else:
                  if len(ch) == 1:
-                     if len(buffer) < max_len:
-                         buffer = buffer[:curpos] + ch + buffer[curpos:]
+                     if len(buffer) < max_len or _insert_mode is False:
+                         # NEW: Support insert/overwrite modes
+                         if _insert_mode:
+                             # INSERT MODE: Insert character, shift rest right
+                             buffer = buffer[:curpos] + ch + buffer[curpos:]
+                         else:
+                             # OVERWRITE MODE: Replace character at cursor
+                             if curpos < len(buffer):
+                                 buffer = buffer[:curpos] + ch + buffer[curpos + 1 :]
+                             else:
+                                 # At end of buffer in overwrite mode, append
+                                 buffer = buffer + ch
                          curpos += 1
                  last_matches = []
                  tab_count = 0
