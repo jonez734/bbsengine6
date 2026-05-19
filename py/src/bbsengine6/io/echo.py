@@ -182,10 +182,6 @@ _emoji_re = re.compile(r":(?P<name>[\w _-]+):", re.IGNORECASE)
 # ----------------------------
 
 command_aliases = {}
-##command_aliases = {
-##    "cls": "{erasedisplay}{home}",
-##    "reset": "{/reset}",
-##}
 
 
 # ----------------------------
@@ -216,7 +212,6 @@ def tokenize(text, **kwargs):
                 text=None,  # to be filled by handler
                 raw=m.group(0),
             )
-            ##            print(f"tokenize.100: {tok=}")
             yield from _handle_whitespace(token)
             pos = m.end()
             continue
@@ -238,8 +233,6 @@ def tokenize(text, **kwargs):
             params = m.group("params") or ""
             args, kwargs = parse_command_params(name, params)
 
-            ##            print(f"tokenize.200: {name=} {args=} {m.group(0)=}")
-
             tok = Token(
                 kind="COMMAND",
                 value=name,
@@ -250,10 +243,6 @@ def tokenize(text, **kwargs):
             yield from _handle_command(tok)
             pos += m.end()
             continue
-
-        #        m = re.match(_compiled_command_handlers[1], m.group("name").lower())
-        #        if m:
-        #            tok = Token(_compiled_command_handler[0], raw=m.group(0))
 
         m = re.match(_emoji_re, text[pos:])
         if m:
@@ -295,7 +284,6 @@ def to_fullwidth(s: str) -> str:
             result.append(chr(code - 0x21 + 0xFF01))
         else:
             result.append(c)
-    ##    print(f"{result=}")
     return "".join(result)
 
 
@@ -379,13 +367,6 @@ def _handle_whitespace(token):
             raw=ch,
         )
         i += repeat
-
-
-###_wordwrap = True
-###_color = True
-###_acs = False
-###_raw = False
-###_term_width = None
 
 
 # DECSC / DECRC operate on software-defined TerminalState.
@@ -725,14 +706,6 @@ def _handle_reset(token):
 
     yield from _handle_slashall(token)
     yield from _handle_decstbm(token)
-    return
-
-    ##  if mode == "all":
-    ##    logentry(f"echo._handle_reset.100: {mode=}", level="debug")
-    ##    token.args = ()
-    ##    yield from _handle_decstbm(token)
-
-    return
 
 
 def _handle_unknown(token):
@@ -878,18 +851,7 @@ def _handle_bel(token):
 
 
 _unicode = {
-    ##    "ulcorner":    "\u250C", # ┌
-    ##    "urcorner":    "\u2510", # ┐
-    ##    "llcorner":    "\u2514", # └
-    ##    "lrcorner":    "\u2518", # ┘
-    ##    "hline":       "\u2500", # ─
-    ##    "vline":       "\u2502", # │
-    ##    "ttee":        "\u252C", # ┬
-    ##    "btee":        "\u2534", # ┴
-    ##    "ltee":        "\u251C", # ├
-    ##    "rtee":        "\u2524", # ┤
-    ##    "cross":       "\u253C", # ┼
-    "dblhline": "\u2550",  # ═
+     "dblhline": "\u2550",  # ═
     "dblvline": "\u2551",  # ║
     "dblul": "\u2554",  # ╔
     "dblur": "\u2557",  # ╗
@@ -1149,18 +1111,7 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
             yield from _handle_command(token)
         elif token.kind == "WORD":  # in ("WORD", "WHITESPACE"):
             yield from _handle_word(token, width=width)
-        ##            word_len = len(token.text)
-        ##
-        ##           if _wordwrap and _cursor_col + word_len > width - 1:
-        ##                # insert hard newline before this word/space
-        ##                yield Token("F6", raw="{f6}", text="\n")
-        ##                _cursor_col = 0
-        ##
-        ##            _cursor_col += word_len
-        ##            yield token
         elif token.kind == "WHITESPACE":
-            ##            if _previous_token.kind == "F6" and token.text == " ":
-            ##                continue
             with _current_stream_lock:
                 _terminal_state.cursor_col += len(token.text)
             yield token
