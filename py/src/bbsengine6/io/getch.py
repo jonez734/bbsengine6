@@ -606,17 +606,22 @@ def getch_str(
             char = _input_queue.popleft()
             result = _proc_char(char, debug=debug, fire_events=fire_events)
             return result
-
+        
         # Get file descriptor and settings while holding lock
         fd = _current_input_stream.fileno()
         old_settings = termios.tcgetattr(fd)
-        old_flags = None
 
-    try:
-        # 1. Set Terminal to Raw Mode
-        with _current_stream_lock:
+    # Set terminal to raw mode while holding lock briefly
+    with _current_stream_lock:
+        try:
             tty.setraw(fd)
+        except Exception:
+            # If setraw fails, restore settings and re-raise
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            raise
 
+    old_flags = None
+    try:
         # 2. Wait for input using wall-clock timeout for accuracy
         # Lock is released during select() to allow other threads (like echo) to proceed
         start_time = time.time()
@@ -627,7 +632,10 @@ def getch_str(
             # Calculate elapsed time and remaining timeout
             elapsed = time.time() - start_time
             if timeout is not None and elapsed >= timeout:
-                return None  # Timeout reached
+                # Timeout reached - restore and return
+                with _current_stream_lock:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                return None
 
             # Calculate timeout for select
             if timeout is None:
@@ -652,8 +660,9 @@ def getch_str(
                 if has_notifications:
                     _update_bottombar_on_notification()
 
-        # 3. Set Non-Blocking I/O for escape sequence reading
+        # Input is available - acquire lock for reading and processing
         with _current_stream_lock:
+            # 3. Set Non-Blocking I/O for escape sequence reading
             old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
             fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
 
@@ -661,16 +670,30 @@ def getch_str(
                 # Attempt to read a single byte
                 char = _read_current_input_stream()
             except BlockingIOError:
-                # If nothing is available, return None immediately
+                # If nothing is available, restore and return None
+                if old_flags is not None:
+                    fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
                 return None
 
+            # Process the character
             result = _proc_char(char, debug=debug, fire_events=fire_events)
+
+            # Restore flags and terminal settings before releasing lock
+            if old_flags is not None:
+                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
             return result
 
-    finally:
-        # 4. Restore Terminal Settings (CRUCIAL!)
-        with _current_stream_lock:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            # Restore old flags (blocking I/O)
-            if old_flags:
-                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+    except Exception:
+        # If any error occurs, restore terminal settings
+        if old_settings is not None:
+            with _current_stream_lock:
+                try:
+                    if old_flags is not None:
+                        fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                except Exception:
+                    pass
+        raise
