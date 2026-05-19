@@ -15,3 +15,9 @@ ECHO_END = "\n"
 
 # Input timeout for interactive string editing (in seconds)
 INPUTSTRING_GETCH_TIMEOUT = 0.015
+
+# Command history defaults (matches GNU readline)
+INPUTSTRING_DEFAULT_HISTORY_SIZE = 500          # GNU readline default
+INPUTSTRING_DEFAULT_PAGESIZE = 10               # Characters to jump per page
+INPUTSTRING_INSERT_MODE_INDICATOR = "[INS]"    # Shown when in insert mode
+INPUTSTRING_OVERWRITE_MODE_INDICATOR = "[OVR]" # Shown when in overwrite mode
