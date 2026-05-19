@@ -433,8 +433,101 @@ def handle_yank(buffer: str, curpos: int, scroll_offset: int, max_width: int) ->
 
 
 def handle_help(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
-    """Help stub handler."""
+    """Help stub handler - will be enhanced in Phase 3."""
     logentry("handle_help.100: trace")
+    return buffer, curpos, scroll_offset
+
+
+# --- NEW HANDLERS (Phase 3) ---
+
+
+def handle_history_previous(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
+    """Navigate to previous command in history (UP arrow)."""
+    # Will be properly implemented to use InputHistory in the main loop
+    # For now, just pass through (no-op until enabled)
+    return buffer, curpos, scroll_offset
+
+
+def handle_history_next(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
+    """Navigate to next command in history (DOWN arrow)."""
+    # Will be properly implemented to use InputHistory in the main loop
+    # For now, just pass through (no-op until enabled)
+    return buffer, curpos, scroll_offset
+
+
+def handle_delete(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
+    """Delete character at cursor position (DELETE key).
+
+    Gracefully no-ops if at or past end of buffer.
+    """
+    if curpos >= len(buffer):
+        # At or past end - beep
+        echo("{bell}", end="", flush=True)
+        return buffer, curpos, scroll_offset
+
+    # Delete character at cursor
+    new_buffer = buffer[:curpos] + buffer[curpos + 1 :]
+    return new_buffer, curpos, scroll_offset
+
+
+def handle_insert_toggle(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
+    """Toggle between insert and overwrite mode (INSERT key).
+
+    Stores mode in a context variable that will be passed via kwargs.
+    """
+    # Mode state is managed in the main input loop via kwargs
+    # This handler just signals that a redraw is needed
+    return buffer, curpos, scroll_offset
+
+
+def handle_pageup(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
+    """Jump cursor backwards by pagesize (PAGE UP key)."""
+    # Default pagesize of 10 - will be configurable via kwargs in main loop
+    pagesize = 10
+    new_curpos = max(0, curpos - pagesize)
+    # Adjust scroll offset to keep cursor visible
+    if new_curpos < scroll_offset:
+        new_scroll = new_curpos
+    else:
+        new_scroll = scroll_offset
+    return buffer, new_curpos, new_scroll
+
+
+def handle_pagedown(
+    buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
+    """Jump cursor forwards by pagesize (PAGE DOWN key)."""
+    # Default pagesize of 10 - will be configurable via kwargs in main loop
+    pagesize = 10
+    new_curpos = min(len(buffer), curpos + pagesize)
+    # Adjust scroll offset to keep cursor visible
+    if new_curpos >= scroll_offset + max_width:
+        new_scroll = new_curpos - max_width + 1
+    else:
+        new_scroll = scroll_offset
+    return buffer, new_curpos, new_scroll
+
+
+def handle_function_key(
+    key_name: str, buffer: str, curpos: int, scroll_offset: int, max_width: int
+) -> Tuple[str, int, int]:
+    """Dispatch function keys (F1-F12) to handlers or custom callbacks.
+
+    F1: Special handling for help display (inline below input)
+    F2-F12: Dispatch to function_key_handlers dict if provided
+    """
+    # This will be called from lambda wrappers in KEY_ACTIONS
+    # Actual implementation deferred to main loop where kwargs are available
     return buffer, curpos, scroll_offset
 
 
