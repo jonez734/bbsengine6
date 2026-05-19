@@ -7,13 +7,24 @@
 # - Text Utilities: pluralize(), oxfordcomma(), datestamp(), timedeltastr()
 # - Range Parsing: expandrange(), collapserange(), rangestr()
 # - Input: inputpassword()
-# - File/Directory Verification: verifyDirExistsWritable(), verifyFileExistsReadable(),
-#   verifyFileExistsReadableWritable()
+# - File/Directory Verification: verify_dir_exists_writable(),
+#   verify_file_exists_readable(), verify_file_exists_readable_writable()
+#   (deprecated camelCase aliases available for BC)
 # - System: getremoteaddr(), getcurrentloginid(), init()
 # - Logging: logentry()
 # - Other: diceroll(), checksum(), tobool(), ltree_to_path(), chop_last_element(),
 #   get_safe_path(), load_sql(), serialize_datetimes(), getencryptedpassword(),
 #   filedisplay()
+#
+# ERROR HANDLING PATTERNS:
+# - User-facing errors: Functions like verify_*() use io.echo(..., level="error")
+#   to output errors directly to the user and return False on failure
+# - Validation errors: Functions like expandrange(), collapserange() raise
+#   ValueError or TypeError for invalid input
+# - Data transformation: Functions like datestamp(), timedeltastr() may raise
+#   AssertionError or other exceptions if given unexpected types
+# - Database operations: Functions like getencryptedpassword() return None on
+#   database failures
 #
 # pyright: ignore[import-not-found, reportMissingTypeHints]
 
@@ -23,6 +34,7 @@ import os
 import random
 import re
 import threading
+import warnings
 from datetime import datetime
 from typing import Any, Optional
 
@@ -241,7 +253,32 @@ def inputpassword(prompt: str = "password: ", mask: str = "X", **kwargs) -> str:
 
 
 def oxfordcomma(seq, conjunction: str = "and") -> Optional[str]:
-    """Return a grammatically correct human readable string (with an Oxford comma)."""
+    """Return a grammatically correct human readable string (with an Oxford comma).
+
+    Joins a sequence of items with proper grammar and color markup for BBS display.
+    Handles two items (no Oxford comma needed) and three+ items (with Oxford comma).
+
+    The returned string includes BBS color template variables:
+    - {var:sepcolor}: Color for separators and commas
+    - {var:valuecolor}: Color for item values
+
+    These variables must be defined in the template/display context where the
+    result is rendered.
+
+    Args:
+        seq: Sequence of items to join. Items are converted to strings.
+             If None, returns None. Non-None items are included.
+        conjunction: Word to use before the last item (default: "and").
+
+    Returns:
+        Color-tagged string joining items grammatically, or None if seq is None.
+
+    Example:
+        >>> oxfordcomma(["apples", "oranges"])
+        '{var:valuecolor}apples{var:sepcolor} and {var:valuecolor}oranges'
+        >>> oxfordcomma(["apples", "oranges", "bananas"])
+        '{var:valuecolor}apples{var:sepcolor}, {var:valuecolor}oranges{var:sepcolor}, and {var:valuecolor}bananas'
+    """
     if seq is None:
         return None
 
@@ -312,10 +349,31 @@ def logentry(
 
 
 def collapserange(lst: list) -> list:
-    """Yield 2-tuple ranges or 1-tuple single elements from list of ints.
+    """Collapse consecutive integers into range tuples for compact representation.
 
-    Accepts str or list input. Strings are parsed via expandrange.
-    Input is automatically sorted. Negative numbers are not allowed.
+    Converts a list of integers into compact range format. Consecutive numbers
+    are grouped into 2-tuples (low, high), isolated numbers are 1-tuples (num,).
+    Accepts str or list input. Strings are parsed via expandrange().
+    Input is automatically sorted.
+
+    Args:
+        lst: List of integers or string range expression (e.g., "1-5,7,10").
+
+    Returns:
+        List of tuples:
+        - (low, high): Range of consecutive numbers (2+ consecutive)
+        - (num,): Single number or isolated pair
+        Example: [1, 2, 3, 5, 6, 8] becomes [(1, 3), (5,), (6,), (8,)]
+
+    Raises:
+        TypeError: If input is not str or list.
+        ValueError: If any element is not an integer, is negative, or is bool.
+
+    Example:
+        >>> collapserange([1, 2, 3, 5, 6, 8])
+        [(1, 3), (5,), (6,), (8,)]
+        >>> collapserange("1-5,7,10")
+        [(1, 5), (7,), (10,)]
     """
     if isinstance(lst, str):
         lst = expandrange(lst)
@@ -358,9 +416,29 @@ def collapserange(lst: list) -> list:
 def expandrange(txt: str) -> list:
     """Parse a range expression string into a sorted list of unique integers.
 
-    Accepts str or list input. Handles ranges like "1-5" and "1,3-5,7".
-    Reversed ranges (e.g., "5-1") are automatically corrected to "1-5".
-    Negative numbers are not allowed.
+    Converts compact range notation into explicit integer lists. Handles:
+    - Single numbers: "3" -> [3]
+    - Ranges: "1-5" -> [1, 2, 3, 4, 5]
+    - Multiple ranges: "1,3-5,7" -> [1, 3, 4, 5, 7]
+    - Reversed ranges: "5-1" -> [1, 2, 3, 4, 5]
+
+    Args:
+        txt: Range expression string or list of integers.
+
+    Returns:
+        Sorted list of unique integers with all ranges expanded.
+
+    Raises:
+        TypeError: If input is not str or list.
+        ValueError: If format is invalid (non-numeric, negative, etc.).
+
+    Example:
+        >>> expandrange("1-5")
+        [1, 2, 3, 4, 5]
+        >>> expandrange("1,3-5,7")
+        [1, 3, 4, 5, 7]
+        >>> expandrange([1, 1, 2, 3])
+        [1, 2, 3]
     """
     if isinstance(txt, list):
         txt = ",".join(str(x) for x in txt)
@@ -544,7 +622,7 @@ def diceroll(sides: int = 6, count: int = 1, mode: str = "single") -> int | floa
     return None
 
 
-def verifyDirExistsWritable(dirname: str, **kw) -> bool:
+def verify_dir_exists_writable(dirname: str, **kw) -> bool:
     """Verify that a directory exists and is writable.
 
     Expands user (~) and environment variables in the path.
@@ -558,12 +636,12 @@ def verifyDirExistsWritable(dirname: str, **kw) -> bool:
         True if directory exists and is writable, False otherwise.
 
     Example:
-        >>> verifyDirExistsWritable("~/documents")
+        >>> verify_dir_exists_writable("~/documents")
         True
     """
     dirname = os.path.expanduser(dirname)
     dirname = os.path.expandvars(dirname)
-    io.echo(f"verifyDirExistsWritable.100: {dirname=}", level="debug")
+    io.echo(f"verify_dir_exists_writable.100: {dirname=}", level="debug")
 
     if not os.path.exists(dirname):
         io.echo(f"{dirname!r} does not exist", level="error")
@@ -580,7 +658,21 @@ def verifyDirExistsWritable(dirname: str, **kw) -> bool:
     return True
 
 
-def verifyFileExistsReadable(filename: str, **kw) -> bool:
+def verifyDirExistsWritable(dirname: str, **kw) -> bool:
+    """Deprecated: Use verify_dir_exists_writable() instead.
+
+    .. deprecated:: 9.1.0
+        Use verify_dir_exists_writable() instead.
+    """
+    warnings.warn(
+        "verifyDirExistsWritable() is deprecated, use verify_dir_exists_writable() instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return verify_dir_exists_writable(dirname, **kw)
+
+
+def verify_file_exists_readable(filename: str, **kw) -> bool:
     """Verify that a file exists and is readable.
 
     Expands user (~) and environment variables in the path.
@@ -594,7 +686,7 @@ def verifyFileExistsReadable(filename: str, **kw) -> bool:
         True if file exists and is readable, False otherwise.
 
     Example:
-        >>> verifyFileExistsReadable("~/.bashrc")
+        >>> verify_file_exists_readable("~/.bashrc")
         True
     """
     args = kw.get("args")
@@ -606,7 +698,21 @@ def verifyFileExistsReadable(filename: str, **kw) -> bool:
     return os.path.exists(filename) and os.access(filename, os.R_OK)
 
 
-def verifyFileExistsReadableWritable(filename: str, **kw) -> bool:
+def verifyFileExistsReadable(filename: str, **kw) -> bool:
+    """Deprecated: Use verify_file_exists_readable() instead.
+
+    .. deprecated:: 9.1.0
+        Use verify_file_exists_readable() instead.
+    """
+    warnings.warn(
+        "verifyFileExistsReadable() is deprecated, use verify_file_exists_readable() instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return verify_file_exists_readable(filename, **kw)
+
+
+def verify_file_exists_readable_writable(filename: str, **kw) -> bool:
     """Verify that a file exists and is readable and writable.
 
     Expands user (~) and environment variables in the path.
@@ -621,7 +727,7 @@ def verifyFileExistsReadableWritable(filename: str, **kw) -> bool:
         True if file exists and is both readable and writable, False otherwise.
 
     Example:
-        >>> verifyFileExistsReadableWritable("~/config.txt")
+        >>> verify_file_exists_readable_writable("~/config.txt")
         True
     """
     args = kw.get("args")
@@ -630,7 +736,7 @@ def verifyFileExistsReadableWritable(filename: str, **kw) -> bool:
     filename = os.path.expandvars(filename)
     if args is not None and args.debug is True:
         io.echo(
-            f"bbsengine6.util.verifyFileExistsReadableWritable.100: {args=} {filename=}"
+            f"bbsengine6.util.verify_file_exists_readable_writable.100: {args=} {filename=}"
         )
 
     if not os.path.exists(filename):
@@ -646,6 +752,20 @@ def verifyFileExistsReadableWritable(filename: str, **kw) -> bool:
         return False
 
     return True
+
+
+def verifyFileExistsReadableWritable(filename: str, **kw) -> bool:
+    """Deprecated: Use verify_file_exists_readable_writable() instead.
+
+    .. deprecated:: 9.1.0
+        Use verify_file_exists_readable_writable() instead.
+    """
+    warnings.warn(
+        "verifyFileExistsReadableWritable() is deprecated, use verify_file_exists_readable_writable() instead",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return verify_file_exists_readable_writable(filename, **kw)
 
 
 def timedeltastr(delta: Any) -> str:
