@@ -5,15 +5,17 @@ import argparse
 import re
 import subprocess
 import sys
+import termios
 import threading
-import time
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Optional
 
 from bbsengine6 import database
-from bbsengine6.io.inputstring import inputstring
+from bbsengine6.io.echo import echo
+from bbsengine6.io.getch import getch_str
+from bbsengine6.io import screen
 from bbsengine6.notify import UserNotificationQueue
 
 
@@ -169,6 +171,7 @@ class DemoConfig:
     urgency: str = "ROUTINE"
     enable_echo_commands: bool = True
     rate_limit: int = 100  # messages per hour
+    clear_prompt_on_timeout: bool = False  # False=keep visible, True=clear
 
     def validate(self) -> None:
         """Validate configuration."""
@@ -186,6 +189,9 @@ class DemoConfig:
 
         if self.rate_limit < 1:
             raise ValueError(f"rate_limit must be >= 1, got {self.rate_limit}")
+
+        if not isinstance(self.clear_prompt_on_timeout, bool):
+            raise ValueError("clear_prompt_on_timeout must be boolean")
 
 
 class MessageHandler:
@@ -266,9 +272,11 @@ class MessageHandler:
                                 notify_id = result_row.get("id")
                             else:
                                 notify_id = result_row[0] if result_row else None
-                            
+
                             if not notify_id:
-                                raise ValueError("Failed to get notify_id from database insert")
+                                raise ValueError(
+                                    "Failed to get notify_id from database insert"
+                                )
 
                             # Insert recipient entry
                             cur.execute(
@@ -344,7 +352,7 @@ class MessageHandler:
                                     rendered = row[1]
                                     sender = row[2]
                                     created = row[3]
-                                
+
                                 messages.append(
                                     {
                                         "direction": "in",
@@ -385,7 +393,7 @@ class MessageHandler:
                 self.message_history.extend(messages)
 
         except Exception as e:
-            print(f"Error receiving messages: {e}", file=sys.stderr)
+            echo(f"Error receiving messages: {e}", level="error")
 
         return messages
 
@@ -400,6 +408,86 @@ class MessageHandler:
             return list(self.message_history)
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Functional Helpers for Interactive Loop
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+
+def display_header(moniker: str, template: str) -> None:
+    """Display startup header information."""
+    echo(f"\n{'=' * 60}")
+    echo(f"Notify Message Demo - User: {moniker}")
+    echo(f"{'=' * 60}")
+    echo(f"Template: {template}")
+    echo(f"\nCommands:")
+    echo(f"  @<user> <message>  - Send message to user")
+    echo(f"  echo <text>         - Use echo command in message")
+    echo(f"  ?                   - Show this help")
+    echo(f"  q                   - Quit")
+    echo(f"  F2                  - View unread messages")
+    echo(f"{'=' * 60}\n")
+
+
+def show_prompt(moniker: str, buffer: str) -> None:
+    """Display the prompt line with current buffer."""
+    prompt = f"{moniker}> {buffer}"
+    print(prompt, end="", flush=True)
+
+
+def clear_prompt() -> None:
+    """Clear the current prompt line."""
+    print("\r" + " " * 100 + "\r", end="", flush=True)
+
+
+def update_status_display(unread_count: int) -> None:
+    """Update bottom status bar with message count.
+
+    Args:
+        unread_count: Number of unread messages (0 or more)
+    """
+    try:
+        if unread_count > 0:
+            status = f"F2: Messages ({unread_count})"
+        else:
+            status = ""
+
+        screen.setbottombar("", status)
+    except Exception as e:
+        from bbsengine6.io.echo import echo_traceback
+
+        echo_traceback(f"update_status_display() failed: {e}")
+
+
+def handle_character_input(key: str, buffer: str) -> str:
+    """Handle individual character input.
+
+    Args:
+        key: The keystroke from getch_str()
+        buffer: Current input buffer
+
+    Returns:
+        Updated buffer after handling the key
+    """
+    if key == "KEY_BACKSPACE":
+        # Handle backspace
+        if buffer:
+            buffer = buffer[:-1]
+        sys.stdout.write("\b \b")
+        sys.stdout.flush()  # Direct terminal output for interactive response
+
+    elif key == "KEY_ESC":
+        # Escape key - clear buffer
+        buffer = ""
+
+    elif key and len(key) == 1 and AsciiValidator.is_valid_char(key):
+        # Regular character
+        buffer += key
+        sys.stdout.write(key)
+        sys.stdout.flush()  # Direct terminal output for interactive response
+
+    return buffer
+
+
 class NotifyMessageDemo:
     """Main demo runner for two-user interactive messaging."""
 
@@ -409,7 +497,7 @@ class NotifyMessageDemo:
         self.args = args
         # Get pool if database is configured
         self.pool = None
-        if args and hasattr(args, 'databasename') and args.databasename:
+        if args and hasattr(args, "databasename") and args.databasename:
             try:
                 self.pool = database.getpool(args, dbname=args.databasename)
             except Exception:
@@ -418,48 +506,160 @@ class NotifyMessageDemo:
         self.handler = MessageHandler(config, args, pool=self.pool)
 
     def run_interactive(self) -> None:
-        """Run interactive message prompt for this user."""
-        print(f"\n{'=' * 60}")
-        print(f"Notify Message Demo - User: {self.config.moniker}")
-        print(f"{'=' * 60}")
-        print(f"Template: {self.config.template}")
-        print(f"\nCommands:")
-        print(f"  @<user> <message>  - Send message to user")
-        print(f"  echo <text>         - Use echo command in message")
-        print(f"  ?                   - Show this help")
-        print(f"  q                   - Quit")
-        print(f"{'=' * 60}\n")
+        """Run interactive message prompt with F2 notifications.
+
+        Architecture (4-step loop):
+        1. Update status bar (check unread count)
+        2. Show prompt
+        3. Wait for input (with timeout)
+        4. Handle the key (or timeout)
+        """
+        # Display header
+        display_header(self.config.moniker, self.config.template)
+
+        buffer = ""
+        previous_prompt = ""  # Cache for prompt redraw optimization
 
         try:
             while True:
-                # Get user input - minimal overhead, no message checking during input
-                user_input = inputstring(
-                    f"{self.config.moniker}> ",
-                ).strip()
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                # STEP 1: Update status bar (idle loop work)
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                unread_count = self._get_unread_count()
+                update_status_display(unread_count)
 
-                if not user_input:
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                # STEP 2: Show prompt (optimized: only redraw if changed)
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                current_prompt = f"{self.config.moniker}> {buffer}"
+                if current_prompt != previous_prompt:
+                    clear_prompt()
+                    show_prompt(self.config.moniker, buffer)
+                    previous_prompt = current_prompt
+
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                # STEP 3: Wait for input (with timeout)
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                key = getch_str(timeout=self.handler.config.check_timeout)
+
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                # STEP 4: Handle the key (or timeout)
+                # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                # STEP 4a: Handle timeout (no input for check_timeout seconds)
+                if key is None:
+                    if self.config.clear_prompt_on_timeout:
+                        # Option 2: Clear completely, start fresh on next loop
+                        clear_prompt()
+                        previous_prompt = ""
+                    # Option 1: Keep prompt visible - don't clear, status bar updates on next loop
                     continue
 
-                if user_input.lower() in ("q", "quit"):
-                    break
-
-                if user_input == "?":
-                    self._show_help()
+                # STEP 4b: Handle F2 - display unread messages
+                if key == "KEY_F2":
+                    clear_prompt()
+                    previous_prompt = ""  # Reset cache
+                    self._check_and_display_messages()
+                    buffer = ""
                     continue
 
-                # Parse message
-                try:
-                    self._process_input(user_input)
-                except ValueError as e:
-                    print(f"Error: {e}")
+                # STEP 4c: Handle ENTER - process command
+                if key == "KEY_ENTER":
+                    clear_prompt()
+                    previous_prompt = ""  # Reset cache
+                    echo()  # New line after prompt
+                    user_input = buffer.strip()
+                    buffer = ""
+
+                    if not user_input:
+                        continue
+
+                    if user_input.lower() in ("q", "quit"):
+                        break
+
+                    if user_input == "?":
+                        self._show_help()
+                        continue
+
+                    try:
+                        self._process_input(user_input)
+                    except ValueError as e:
+                        echo(f"Error: {e}", level="error")
+
+                    continue
+
+                # STEP 4d: Handle other keys (characters, backspace, etc.)
+                buffer = handle_character_input(key, buffer)
 
         except KeyboardInterrupt:
-            print("\n\nShutting down...")
+            echo("\n\nShutting down...")
         except EOFError:
-            print("\n\nEnd of input - exiting...")
-            pass
+            echo("\n\nEnd of input - exiting...")
         finally:
             self._show_stats()
+
+    def _get_unread_count(self) -> int:
+        """Query database/queue for unread message count WITHOUT marking as read."""
+        try:
+            if self.handler.args and self.handler.pool:
+                # Database mode: count unread messages
+                with database.connect(
+                    self.handler.args, pool=self.handler.pool
+                ) as conn:
+                    with database.cursor(conn) as cur:
+                        cur.execute(
+                            """
+                            SELECT COUNT(*) AS count
+                            FROM engine.__notify n
+                            JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
+                            WHERE nr.recipient_moniker = %s
+                            AND nr.read_at IS NULL
+                            AND n.notification_type = 'demo-message'
+                            """,
+                            (self.handler.config.moniker,),
+                        )
+                        result = cur.fetchone()
+                        if result is None:
+                            return 0
+
+                        # bbsengine6 cursor returns dict-like rows by default
+                        # Use .get() with safe fallback to handle both formats
+                        if isinstance(result, dict):
+                            return result.get("count", 0)
+                        else:
+                            return result[0]
+            else:
+                # Demo mode: count messages in queue
+                with MessageHandler._queues_lock:
+                    queue = MessageHandler._demo_queues.get(self.handler.config.moniker)
+                    return len(queue) if queue else 0
+        except Exception as e:
+            from bbsengine6.io.echo import echo_traceback
+
+            echo_traceback(f"_get_unread_count() failed: {e}")
+            return 0
+
+    def _get_status_bar(self, **kwargs) -> str:
+        """Generate status bar text showing unread message count.
+
+        DEPRECATED: This method is no longer called by the main loop. Instead,
+        the loop calls update_status_display() directly with the unread count.
+
+        Kept for backwards compatibility in case external code calls it.
+        """
+        unread = self._get_unread_count()
+        if unread > 0:
+            return f"F2: Messages ({unread})"
+        return ""
+
+    def _check_and_display_messages(self) -> None:
+        """Retrieve and display any unread messages."""
+        messages = self.handler.receive_messages()
+        if messages:
+            for msg in messages:
+                # Display in chronological order
+                # Note: msg['message'] is already the rendered message containing sender
+                echo(f"[RECEIVED] {msg['message']}")
 
     def _show_help(self) -> None:
         """Display help information."""
@@ -471,17 +671,18 @@ Commands:
   ?                   - Show this help
   q/quit              - Quit
   stats               - Show message statistics
+  F2                  - View unread messages
 
 Template: {self.config.template}
 Moniker: {self.config.moniker}
 Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
 
 Examples:
-  @alice Hello there!
-  @bob echo "Test message"
-  @alice !echo "Current time"
+   @alice Hello there!
+   @bob echo "Test message"
+   @alice !echo "Current time"
 """
-        print(help_text)
+        echo(help_text)
 
     def _process_input(self, user_input: str) -> None:
         """Process user input."""
@@ -495,7 +696,7 @@ Examples:
             message = parts[1]
 
             self.handler.send_message(message, recipient)
-            print(f"[SENT to {recipient}] {message}")
+            echo(f"[SENT to {recipient}] {message}")
 
         elif user_input == "stats":
             self._show_stats()
@@ -506,13 +707,13 @@ Examples:
     def _show_stats(self) -> None:
         """Display message statistics."""
         stats = self.handler.get_stats()
-        print(f"\n{'=' * 60}")
-        print(f"Message Statistics - {self.config.moniker}")
-        print(f"{'=' * 60}")
-        print(f"Sent:     {stats['sent']}")
-        print(f"Received: {stats['received']}")
-        print(f"Errors:   {stats['errors']}")
-        print(f"{'=' * 60}\n")
+        echo(f"\n{'=' * 60}")
+        echo(f"Message Statistics - {self.config.moniker}")
+        echo(f"{'=' * 60}")
+        echo(f"Sent:     {stats['sent']}")
+        echo(f"Received: {stats['received']}")
+        echo(f"Errors:   {stats['errors']}")
+        echo(f"{'=' * 60}\n")
 
 
 def main():
@@ -550,6 +751,16 @@ def main():
 
     args = parser.parse_args()
 
+    # Initialize screen for bottom bar support (prevents scrolling)
+    try:
+        screen.init()
+    except (OSError, termios.error):
+        # Silently ignore if not a TTY (e.g., in tests or piped input)
+        pass
+    except Exception:
+        # Silently continue on other errors
+        pass
+
     try:
         config = DemoConfig(
             moniker=args.user,
@@ -567,10 +778,10 @@ def main():
         demo.run_interactive()
 
     except ValueError as e:
-        print(f"Configuration error: {e}", file=sys.stderr)
+        echo(f"Configuration error: {e}", level="error")
         sys.exit(1)
     except Exception as e:
-        print(f"Error: {e}", file=sys.stderr)
+        echo(f"Error: {e}", level="error")
         sys.exit(1)
 
 
