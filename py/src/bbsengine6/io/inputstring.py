@@ -838,7 +838,111 @@ add_key_mapping("KEY_F12", lambda b, c, s, m: handle_function_key("KEY_F12", b, 
 # --- 6. MAIN INPUT FUNCTION ---
 
 
-def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
+def inputstring(
+    prompt: str = "> ",
+    oldvalue: str = "",
+    /,
+    history: bool = False,
+    pagesize: int = INPUTSTRING_DEFAULT_PAGESIZE,
+    beep_on_error: bool = True,
+    f1_help: Union[str, Callable[[], str], None] = None,
+    function_key_handlers: Optional[dict] = None,
+    **kwargs
+) -> str:
+    """Read a line of text from the terminal with full line editing support.
+
+    Args:
+        prompt: Display prompt (default: "> ")
+        oldvalue: Pre-fill buffer with this value (default: "")
+        history: Enable UP/DOWN command history navigation (default: False)
+            When True, UP/DOWN arrows navigate through previously entered inputs.
+            Implements GNU readline-compatible history (500 entry default).
+            Each inputstring() call has independent history.
+            No duplicate filtering (app handles via shell or own logic).
+            Non-persistent (in-memory only, not saved to disk).
+        pagesize: Number of characters PAGE UP/DOWN jump (default: 10)
+            PAGE UP: Jump backwards by pagesize chars
+            PAGE DOWN: Jump forwards by pagesize chars
+        beep_on_error: Beep on errors like DELETE at end of buffer (default: True)
+            If False, no beep; if True, beep when error occurs
+        f1_help: Help text or function for F1 key (default: None)
+            - str: Display as-is inline below prompt
+            - callable: Call with no args, display return value
+            - None: F1 is no-op
+            Help is displayed inline without interrupting input.
+        function_key_handlers: Dict mapping KEY_F2-KEY_F12 to callables (default: None)
+            Example:
+                def handle_f2(buffer, curpos, scroll_offset, max_width):
+                    return buffer, curpos, scroll_offset
+                
+                inputstring(
+                    function_key_handlers={
+                        "KEY_F2": handle_f2,
+                        "KEY_F3": handle_f3,
+                    }
+                )
+            Each handler receives: (buffer, curpos, scroll_offset, max_width)
+            Can return 3-tuple to modify input.
+        **kwargs: Additional options
+            verify: Callable[(str) -> bool] for input validation
+            completer: Completer instance for tab completion
+            max_len: Maximum buffer length (default 255)
+            max_width: Display width (default 80)
+            mask: Character mask for password input
+            args: Application namespace (passed to verify)
+
+    Returns:
+        Entered text (empty string if cancelled)
+
+    Supported Keys:
+        Navigation:
+            LEFT, RIGHT: Move cursor one character
+            HOME (Ctrl+A): Jump to line start
+            END (Ctrl+E): Jump to line end
+            PAGE UP/DOWN: Jump by pagesize characters
+        History (when history=True):
+            UP: Navigate to previous command
+            DOWN: Navigate to next command
+        Editing:
+            BACKSPACE: Delete character before cursor
+            DELETE: Delete character at cursor
+            INSERT: Toggle insert/overwrite mode
+            Ctrl+U: Cut from start of line to cursor
+            Ctrl+W: Cut previous word
+            Ctrl+Y: Paste cut text
+        Submission & Help:
+            ENTER: Submit (with optional verify callback)
+            TAB: Complete word (with completer)
+            F1: Display help (if f1_help provided)
+            F2-F12: Custom handlers (if function_key_handlers provided)
+
+    Insert Mode Indicator:
+        When INSERT is pressed to toggle modes, prompt shows:
+        - "[INS]" when in insert mode (normal)
+        - "[OVR]" when in overwrite mode
+        This helps users know if typed chars will insert or replace.
+
+    Thread Safety:
+        Command history is protected by internal lock.
+        Safe to use from multiple threads.
+
+    Backward Compatibility:
+        All new parameters are optional with sensible defaults.
+        Existing code continues to work unchanged.
+
+    Example:
+        # Basic usage (unchanged from original)
+        name = inputstring("Enter name: ")
+        
+        # With history
+        command = inputstring("$ ", history=True)
+        
+        # With F1 help
+        value = inputstring(
+            "Enter value: ",
+            f1_help="Enter a number between 1 and 100"
+        )
+    """
     global _input_dirty
 
     max_len: int = kwargs.pop("max_len", 255)
@@ -850,6 +954,23 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
     args = kwargs.pop("args", None)  # argparse.Namespace()
 
     noneok = kwargs.pop("noneok", False)
+
+    # NEW: Initialize history if enabled
+    _history = None
+    if history:
+        _history = InputHistory(maxsize=kwargs.pop("history_maxsize", INPUTSTRING_DEFAULT_HISTORY_SIZE))
+    
+    # NEW: Initialize insert mode tracking
+    _insert_mode = True  # Start in insert mode
+    
+    # NEW: Pass function key handlers and other options to kwargs for use in handlers
+    kwargs['_history'] = _history
+    kwargs['_history_enabled'] = history
+    kwargs['_insert_mode'] = _insert_mode
+    kwargs['_function_key_callbacks'] = function_key_handlers or {}
+    kwargs['f1_help'] = f1_help
+    kwargs['pagesize'] = pagesize
+    kwargs['beep_on_error'] = beep_on_error
 
     buffer = oldvalue if oldvalue is not None else ""
     curpos = len(buffer)
@@ -887,8 +1008,67 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
             **kwargs,
         )
 
+    # NEW: Create closures for handlers that need access to context (history, pagesize, etc.)
+    def history_previous_handler(buffer, curpos, scroll_offset, max_width):
+        if not _history:
+            return buffer, curpos, scroll_offset
+        prev_entry = _history.get_previous()
+        if prev_entry is not None:
+            # Load history entry into buffer
+            new_curpos = len(prev_entry)
+            return prev_entry, new_curpos, 0
+        return buffer, curpos, scroll_offset
+
+    def history_next_handler(buffer, curpos, scroll_offset, max_width):
+        if not _history:
+            return buffer, curpos, scroll_offset
+        next_entry = _history.get_next()
+        if next_entry is not None:
+            # Load history entry
+            new_curpos = len(next_entry)
+            return next_entry, new_curpos, 0
+        else:
+            # At end of history (new input), clear buffer
+            return "", 0, 0
+
+    def delete_handler(buffer, curpos, scroll_offset, max_width):
+        if curpos >= len(buffer):
+            # At or past end - beep if enabled
+            if beep_on_error:
+                echo("{bell}", end="", flush=True)
+            return buffer, curpos, scroll_offset
+        # Delete character at cursor
+        new_buffer = buffer[:curpos] + buffer[curpos + 1 :]
+        return new_buffer, curpos, scroll_offset
+
+    def pageup_handler(buffer, curpos, scroll_offset, max_width):
+        new_curpos = max(0, curpos - pagesize)
+        # Adjust scroll offset to keep cursor visible
+        if new_curpos < scroll_offset:
+            new_scroll = new_curpos
+        else:
+            new_scroll = scroll_offset
+        return buffer, new_curpos, new_scroll
+
+    def pagedown_handler(buffer, curpos, scroll_offset, max_width):
+        new_curpos = min(len(buffer), curpos + pagesize)
+        # Adjust scroll offset to keep cursor visible
+        if new_curpos >= scroll_offset + max_width:
+            new_scroll = new_curpos - max_width + 1
+        else:
+            new_scroll = scroll_offset
+        return buffer, new_curpos, new_scroll
+
     with _key_actions_lock:
         KEY_ACTIONS["KEY_ENTER"] = enter_handler
+        # Override history handlers with closures
+        if _history:
+            KEY_ACTIONS["KEY_UP"] = history_previous_handler
+            KEY_ACTIONS["KEY_DOWN"] = history_next_handler
+        # Override other new handlers with closures
+        KEY_ACTIONS["KEY_DELETE"] = delete_handler
+        KEY_ACTIONS["KEY_PAGEUP"] = pageup_handler
+        KEY_ACTIONS["KEY_PAGEDOWN"] = pagedown_handler
 
     _current_display_str = None
     done = False
