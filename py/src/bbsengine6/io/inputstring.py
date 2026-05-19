@@ -714,7 +714,8 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
             echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
             _terminal_state.cursor_row = start_row
             _terminal_state.cursor_col = cursor_display_col
-
+        
+        # NOTE: Lock must be released before getch() call
         ch = getch(
             timeout=INPUTSTRING_GETCH_TIMEOUT,
             fire_events=False,
