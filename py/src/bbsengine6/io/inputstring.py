@@ -1,6 +1,7 @@
 import inspect
 import re
 import threading
+from typing import Any, Callable, Optional, Tuple, List, Union
 
 from . import terminal
 
@@ -21,6 +22,11 @@ _inputstring_lock = threading.Lock()
 
 # Compiled regex pattern for word character matching (\w includes letters, digits, underscore)
 _WORD_CHAR_PATTERN = re.compile(r"\w")
+
+# Type alias for key handler functions
+# Regular handlers return (buffer, curpos, scroll_offset)
+# Enter handler returns (buffer, curpos, scroll_offset, accepted, need_redraw)
+KeyHandler = Callable[[str, int, int, int], Union[Tuple[str, int, int], Tuple[str, int, int, bool, bool]]]
 
 
 class Completer:
@@ -45,7 +51,7 @@ class Completer:
         inputstring("Prompt: ", completer=completer)
     """
 
-    def __init__(self, get_matches=None, **kwargs):
+    def __init__(self, get_matches: Optional[Callable[[str], Optional[List[str]]]] = None, **kwargs):
         """Initialize with optional get_matches function and kwargs.
 
         Args:
@@ -56,9 +62,9 @@ class Completer:
         if get_matches is not None:
             self._get_matches_func = get_matches
         # Store kwargs for use by get_matches in subclass
-        self.kwargs = kwargs
+        self.kwargs: dict = kwargs
 
-    def get_matches(self, prefix, **kwargs):
+    def get_matches(self, prefix: str, **kwargs) -> Optional[List[str]]:
         """Override this in subclass or pass function to constructor.
 
         Args:
@@ -96,7 +102,7 @@ class Completer:
             return self._get_matches_func(prefix, **filtered_kwargs)
         return None
 
-    def __call__(self, buffer, **kwargs):
+    def __call__(self, buffer: str, **kwargs) -> List[str]:
         """Called by inputstring to get completions.
 
         Args:
@@ -104,7 +110,7 @@ class Completer:
             **kwargs: Additional parameters passed to get_matches (including curpos)
 
         Returns:
-            List of matching strings
+            List of matching strings (never None, returns [] if no matches)
         """
         curpos = kwargs.get("curpos", len(buffer))
         prefix, word_start, word_end = get_current_word(buffer, curpos)
@@ -121,7 +127,7 @@ _yank_buffer_lock = threading.Lock()
 _key_actions_lock = threading.Lock()
 
 
-def move_cursor(row, col):
+def move_cursor(row: int, col: int) -> None:
     """Move cursor to absolute terminal position (1-indexed).
 
     Args:
@@ -131,7 +137,7 @@ def move_cursor(row, col):
     echo(f"{{curpos:{row},{col}}}", end="", flush=True)
 
 
-def get_current_word(buffer, curpos):
+def get_current_word(buffer: str, curpos: int) -> Tuple[str, int, int]:
     r"""Returns (prefix, word_start_index, word_end_index).
 
     Finds the word at the current cursor position and returns:
@@ -157,7 +163,7 @@ def get_current_word(buffer, curpos):
     return prefix, word_start, word_end
 
 
-def common_prefix(matches):
+def common_prefix(matches: List[str]) -> str:
     """Find the common prefix of a list of strings.
 
     Args:
@@ -186,7 +192,7 @@ def common_prefix(matches):
     return matches[0][:min_len]
 
 
-def adjust_scroll_offset(curpos, scroll_offset, max_width):
+def adjust_scroll_offset(curpos: int, scroll_offset: int, max_width: int) -> int:
     """Adjust scroll offset to keep cursor visible.
 
     Ensures the cursor at position `curpos` remains visible in a display window
@@ -210,15 +216,26 @@ def adjust_scroll_offset(curpos, scroll_offset, max_width):
 
 
 # --- 1. Global Key Actions Dictionary ---
-KEY_ACTIONS = {}
+KEY_ACTIONS: dict[str, KeyHandler] = {}
 
 
-def add_key_mapping(key_string, action_lambda):
+def add_key_mapping(key_string: str, action_lambda: KeyHandler) -> None:
+    """Register a key handler function.
+
+    Args:
+        key_string: Key name (e.g., 'KEY_LEFT', 'KEY_ENTER')
+        action_lambda: Handler function with signature (buffer, curpos, scroll_offset, max_width) -> tuple
+    """
     with _key_actions_lock:
         KEY_ACTIONS[key_string] = action_lambda
 
 
-def remove_key_mapping(key_string):
+def remove_key_mapping(key_string: str) -> None:
+    """Unregister a key handler function.
+
+    Args:
+        key_string: Key name to remove
+    """
     with _key_actions_lock:
         if key_string in KEY_ACTIONS:
             del KEY_ACTIONS[key_string]
@@ -227,7 +244,7 @@ def remove_key_mapping(key_string):
 # --- 2. Helper Functions ---
 
 
-def handle_left(buffer, curpos, scroll_offset, max_width):
+def handle_left(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
     """Move cursor left one position. Beeps if already at start."""
     if curpos > 0:
         curpos -= 1
@@ -236,7 +253,7 @@ def handle_left(buffer, curpos, scroll_offset, max_width):
     return buffer, curpos, scroll_offset
 
 
-def handle_right(buffer, curpos, scroll_offset, max_width):
+def handle_right(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
     """Move cursor right one position. Beeps if already at end."""
     if curpos < len(buffer):
         curpos += 1
@@ -245,18 +262,18 @@ def handle_right(buffer, curpos, scroll_offset, max_width):
     return buffer, curpos, scroll_offset
 
 
-def handle_home(buffer, curpos, scroll_offset, max_width):
+def handle_home(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
     """Jump cursor to beginning of line."""
     return buffer, 0, 0
 
 
-def handle_end(buffer, curpos, scroll_offset, max_width):
+def handle_end(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
     """Jump cursor to end of line."""
     curpos = len(buffer)
     return buffer, curpos, scroll_offset
 
 
-def handle_backspace(buffer, curpos, scroll_offset, max_width):
+def handle_backspace(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
     """Delete character before cursor. Beeps if already at start."""
     if curpos > 0:
         buffer = buffer[: curpos - 1] + buffer[curpos:]
@@ -266,7 +283,7 @@ def handle_backspace(buffer, curpos, scroll_offset, max_width):
     return buffer, curpos, scroll_offset
 
 
-def handle_cuttobol(buffer, curpos, scroll_offset, max_width):
+def handle_cuttobol(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
     """Cut from beginning of line to cursor and store in yank buffer."""
     global yank_buffer
     cut_text = buffer[:curpos]
@@ -277,7 +294,7 @@ def handle_cuttobol(buffer, curpos, scroll_offset, max_width):
     return buffer, 0, 0
 
 
-def handle_cutpreviousword(buffer, curpos, scroll_offset, max_width):
+def handle_cutpreviousword(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
     r"""Cut the previous word from buffer and store in yank buffer.
 
     Uses \w word boundary matching (consistent with get_current_word).
@@ -299,7 +316,7 @@ def handle_cutpreviousword(buffer, curpos, scroll_offset, max_width):
     return buffer, word_start, scroll_offset
 
 
-def handle_yank(buffer, curpos, scroll_offset, max_width):
+def handle_yank(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
     """Paste yank buffer contents at cursor position.
 
     Note: Pasting may cause buffer to exceed max_len - validation happens in main loop.
@@ -311,7 +328,8 @@ def handle_yank(buffer, curpos, scroll_offset, max_width):
     return buffer, curpos + len(yank_text), scroll_offset
 
 
-def handle_help(buffer, curpos, scroll_offset, max_width):
+def handle_help(buffer: str, curpos: int, scroll_offset: int, max_width: int) -> Tuple[str, int, int]:
+    """Help stub handler."""
     logentry("handle_help.100: trace")
     return buffer, curpos, scroll_offset
 
@@ -320,21 +338,21 @@ def handle_help(buffer, curpos, scroll_offset, max_width):
 
 
 def handle_key_enter(
-    buffer,
-    curpos,
-    scroll_offset,
-    max_width,
+    buffer: str,
+    curpos: int,
+    scroll_offset: int,
+    max_width: int,
     *,
-    verify,
-    args,
-    prompt,
-    mask,
-    start_row,
-    start_col,
-    input_col_start,
-    noneok,
-    **kwargs,
-):
+    verify: Optional[Callable[[str], bool]],
+    args: Optional[Any],
+    prompt: str,
+    mask: Optional[str],
+    start_row: int,
+    start_col: int,
+    input_col_start: int,
+    noneok: bool,
+    **kwargs: Any,
+) -> Tuple[str, int, int, bool, bool]:
     """Process Enter key with optional verification.
 
     Returns (buffer, curpos, scroll_offset, accepted, need_redraw)
@@ -519,16 +537,20 @@ def handle_tab_manager(
 
 
 def redraw_line(
-    prompt,
-    buffer,
-    max_len,
-    start_row,
-    start_col,
-    curpos,
-    scroll_offset,
-    max_width,
-    mask=None,
-):
+    prompt: str,
+    buffer: str,
+    max_len: int,
+    start_row: int,
+    start_col: int,
+    curpos: int,
+    scroll_offset: int,
+    max_width: int,
+    mask: Optional[str] = None,
+) -> None:
+    """Clear and redraw the input line at the specified position.
+    
+    Handles both regular and masked (password) input display.
+    """
 
     input_col_start = start_col + rendered_length(prompt)
 
@@ -550,7 +572,7 @@ def redraw_line(
     )
 
 
-def print_matches(matches):
+def print_matches(matches: List[str]) -> int:
     """Print tab completion matches in columns.
 
     Args:
@@ -724,14 +746,15 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
                 result = KEY_ACTIONS[ch](buffer, curpos, scroll_offset, max_width)
 
                 if ch == "KEY_ENTER":
-                    buffer, curpos, scroll_offset, accepted, need_redraw = result
+                    # Enter handler returns 5-tuple; other handlers return 3-tuple
+                    buffer, curpos, scroll_offset, accepted, need_redraw = result  # type: ignore[assignment]
                     if accepted:
                         return buffer
                     if need_redraw:
                         _current_display_str = None
                     continue
 
-                buffer, curpos, scroll_offset = result
+                buffer, curpos, scroll_offset = result  # type: ignore[assignment]
                 last_matches = []
                 tab_count = 0
             else:
