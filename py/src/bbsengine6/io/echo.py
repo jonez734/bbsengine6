@@ -1324,12 +1324,29 @@ def _load_template(name: str) -> str:
 
     Raises:
         FileNotFoundError: If template not found in any search path
+        ValueError: If name contains path traversal attempts
     """
+    import pathlib
+
     dirs = _get_template_dirs()
 
+    # Prevent path traversal attacks by validating the template name
+    template_name = pathlib.Path(name)
+    if template_name.is_absolute() or ".." in template_name.parts:
+        raise ValueError(f"Invalid template name: {name} (contains path traversal)")
+
     for d in dirs:
-        filepath = os.path.join(d, name)
-        if os.path.isfile(filepath):
+        dir_path = pathlib.Path(d).resolve()
+        filepath = (dir_path / name).resolve()
+
+        # Verify resolved path is within the template directory
+        try:
+            filepath.relative_to(dir_path)
+        except ValueError:
+            # Path is outside directory, skip it
+            continue
+
+        if filepath.is_file():
             with open(filepath, "r") as f:
                 return f.read()
 
