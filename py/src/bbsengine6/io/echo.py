@@ -12,6 +12,7 @@
 import os
 import re
 import threading
+from typing import Optional, Any, Dict, List, Tuple, Generator
 
 from dataclasses import dataclass, field
 
@@ -99,24 +100,25 @@ _runtime_vars.update({"home": "{curpos:1,1}"})
 _runtime_vars.update(_skin)
 
 
-def setvar(name, value):
+def setvar(name: str, value: Any) -> None:
     """Set a runtime variable for use in {var:<name>} or {<name>} commands."""
     with _runtime_vars_lock:
         _runtime_vars[name] = value
 
 
-def getvar(name, default=None):
+def getvar(name: str, default: Any = None) -> Any:
+    """Get a runtime variable by name, returning default if not found."""
     with _runtime_vars_lock:
         return _runtime_vars.get(name, default)
 
 
-def register_emoji(name, value):
+def register_emoji(name: str, value: str) -> None:
     """Register a custom emoji for use with :name: syntax."""
     with _emoji_lock:
         _emoji[name] = value
 
 
-def register_emojis(emojis: dict):
+def register_emojis(emojis: Dict[str, str]) -> None:
     """Register multiple custom emojis at once."""
     with _emoji_lock:
         _emoji.update(emojis)
@@ -187,13 +189,13 @@ command_aliases = {}
 # ----------------------------
 # Tokenizer
 # ----------------------------
-def tokenize(text, **kwargs):
+def tokenize(text: Optional[str], **kwargs) -> Generator[Token, None, None]:
     """Yields Token(kind, value, args, kwargs, raw)"""
 
     if text is None:
         return
 
-    if type(text) is not str:
+    if not isinstance(text, str):
         logentry(
             f"bbsengine.io.echo.tokenize.100: warning: text is not str", level="warn"
         )
@@ -762,25 +764,27 @@ def _handle_indent(token):
             _terminal_state.indent_char = DEFAULT_INDENT_CHAR
 
 
-options = {}
+options: Dict[str, Any] = {}
 
 
-def setoption(opt: str, value):
+def setoption(opt: str, value: Any) -> Any:
+    """Set a global option."""
     global options
     options[opt] = value
     return value
 
 
-def getoption(opt: str, default=None):
+def getoption(opt: str, default: Any = None) -> Any:
+    """Get a global option, returning default if not found."""
     global options
-
     return options[opt] if opt in options else default
 
 
 PARAM_SPLIT_RE = re.compile(r"[:,]")
 
 
-def parse_command_params(name, params):
+def parse_command_params(name: str, params: str) -> Tuple[List[str], Dict[str, str]]:
+    """Parse command parameters into positional and keyword arguments."""
     args = []  # [name,]
     kwargs = {}
     if not params:
@@ -1089,7 +1093,14 @@ def _write_token(token: Token, flush: bool = True, stream=None):
 # ----------------------------
 # echo_iter(), echo(), and echo_file()
 # ----------------------------
-def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=False):
+def echo_iter(
+    text: str,
+    width: Optional[int] = None,
+    wordwrap: bool = True,
+    palette: Optional[Dict] = None,
+    vars: Optional[Dict] = None,
+    raw: bool = False,
+) -> Generator[Token, None, None]:
     """
     Generator that yields tokens for rendering.
     Handles WORD, WHITESPACE, F6 (hard newline), attributes, and commands.
@@ -1150,7 +1161,7 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
         _previous_token = token
 
 
-def echo(text="", *, flush: bool = True, end=ECHO_END, **kwargs):
+def echo(text: str = "", *, flush: bool = True, end: Optional[str] = ECHO_END, **kwargs) -> Optional[str]:
     """
     Print text to stdout, interpreting inline commands unless raw=True.
     width: override detected terminal width if not None
@@ -1199,7 +1210,8 @@ def echo(text="", *, flush: bool = True, end=ECHO_END, **kwargs):
         return logentry(text, level=level)
 
 
-def echo_file(filepath, page_size=20, raw=False, wordwrap=True, end=""):
+def echo_file(filepath: str, page_size: int = 20, raw: bool = False, wordwrap: bool = True, end: str = "") -> None:
+    """Echo contents of a file with optional paging."""
     with open(filepath, "r") as f:
         line_count = 0
         for line in f:
@@ -1210,7 +1222,7 @@ def echo_file(filepath, page_size=20, raw=False, wordwrap=True, end=""):
 
 
 # @since 20251212
-def rendered_length(text, **kwargs):
+def rendered_length(text: str, **kwargs) -> int:
     """
     Calculates the length of the text as it would be rendered, ignoring
     control sequences, commands, and variable/color expansions.
