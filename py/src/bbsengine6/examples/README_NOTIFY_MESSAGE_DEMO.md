@@ -226,11 +226,81 @@ Errors:   1
 ============================================================
 ```
 
-## How Message Reception Works
+## Offline Message Delivery
 
-When a user receives a message:
+**NEW FEATURE**: Messages sent to offline users are now automatically delivered when they come back online!
 
-1. **Query**: Every 2 seconds (configurable `--timeout`), demo queries the database:
+### How It Works
+
+1. **Idle Loop** (Every 2 seconds during user input):
+   - Status bar shows `F2: Messages (N)` if unread messages exist
+   - Messages are NOT automatically displayed (non-intrusive)
+   - User can continue working without interruption
+
+2. **User Presses F2**:
+   - All unread messages are fetched and displayed
+   - Format: `[RECEIVED] sender: message`
+   - Messages appear in chronological order (oldest first)
+   - Each message marked as read after display
+   - Status bar updates to show current unread count
+
+3. **Message Persistence**:
+   - Messages stored in `engine.__notify` table
+   - Recipient entry created in `engine.__notify_recipient`
+   - `read_at` field tracks which messages have been read
+   - Messages persist indefinitely for audit history
+
+### Example: Offline Delivery
+
+```
+Terminal 1 (Alice):
+alice> @bob Hello! I'm sending you a message
+[SENT to bob] Hello! I'm sending you a message
+
+[Bob's terminal is closed/offline]
+
+Terminal 2 (Bob - comes back online):
+bob> [status bar shows: F2: Messages (1)]
+
+[Bob presses F2]
+[RECEIVED] alice: Hello! I'm sending you a message
+bob> [status bar shows: F2: Messages (0)]
+```
+
+### Configuration: Prompt Behavior on Timeout
+
+You can control what happens when the idle timer expires (no input for 2 seconds):
+
+**Keep prompt visible (default)**:
+```bash
+python notify_message_demo.py --user bob
+# Prompt stays on screen, status bar updates silently
+```
+
+**Clear prompt and show fresh one**:
+```bash
+# Edit config or add command-line flag when implemented
+clear_prompt_on_timeout: true
+```
+
+### How Message Reception Works
+
+When checking for unread messages:
+
+1. **Status Check** (Every 2 seconds):
+   - Count unread messages via SQL query:
+   ```sql
+   SELECT COUNT(*)
+   FROM engine.__notify n
+   JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
+   WHERE nr.recipient_moniker = 'bob'
+   AND nr.read_at IS NULL
+   AND n.notification_type = 'demo-message'
+   ```
+   - Update bottom status bar with count
+
+2. **Fetch on F2** (User presses F2 key):
+   - Retrieve all unread messages:
    ```sql
    SELECT n.id, n.rendered_message, n.sender_moniker, n.datecreated
    FROM engine.__notify n
@@ -241,9 +311,9 @@ When a user receives a message:
    ORDER BY n.datecreated ASC
    ```
 
-2. **Display**: Unread messages are shown to the user in the terminal
-
-3. **Mark as Read**: After displaying, each message is marked as read:
+3. **Display & Mark Read**:
+   - Display each message to user
+   - Mark each as read:
    ```sql
    UPDATE engine.__notify_recipient
    SET read_at = NOW()
@@ -252,7 +322,8 @@ When a user receives a message:
 
 This ensures:
 - Messages persist in the database
-- Multiple clients can receive the same message
+- Multiple offline messages accumulate
+- User can retrieve them all when coming online
 - Read status is tracked
 - Messages are ordered by creation time
 - No message is lost or duplicated
@@ -308,6 +379,7 @@ This ensures:
 usage: notify_message_demo.py [-h] --user USER [--template TEMPLATE]
                                [--max-messages MAX_MESSAGES]
                                [--timeout TIMEOUT] [--no-echo]
+                               [--clear-prompt-on-timeout]
                                [--debug] [--databasename DATABASENAME]
                                [--databasehost DATABASEHOST]
                                [--databaseport DATABASEPORT]
@@ -325,6 +397,8 @@ options:
                         Max messages to keep in history (default: 50)
   --timeout TIMEOUT     Notification check timeout in seconds (default: 2.0)
   --no-echo             Disable echo command processing
+  --clear-prompt-on-timeout
+                        Clear prompt on timeout instead of keeping it visible
   --debug               Enable debug logging
   --databasename DATABASENAME
                         Database name for persistent message storage
@@ -581,13 +655,23 @@ Error: Usage: @<user> <message>
 
 ## Implementation Notes
 
-### Why Print Statements?
+### Output Handling with io.echo()
 
-The demo uses direct print statements for output rather than logging, to:
+The demo uses `bbsengine6.io.echo()` for standard output to:
+- Follow bbsengine6 conventions for output handling
+- Support proper styling and formatting of messages
+- Provide clear error messages with `level="error"`
+- Work reliably across different terminal types
+
+For interactive terminal control (real-time character echoing during prompt), the demo uses direct `sys.stdout.write()/flush()` to:
+- Provide immediate visual feedback for backspace and typed characters
 - Keep the prompt interactive and responsive
-- Clearly distinguish user input from system messages
-- Work in multi-terminal scenarios
-- Provide immediate visual feedback
+- Ensure characters appear as soon as they're typed
+
+Screen initialization with `screen.init()` ensures:
+- The terminal's top/bottom margins are properly configured
+- The status bar (bottom bar) remains fixed without scrolling
+- Interactive input works correctly with full-screen management
 
 ### Message Queue Design
 
@@ -604,6 +688,129 @@ The demo enforces printable ASCII only (0x20-0x7E) to:
 - Prevent terminal escape sequence injection
 - Keep validation simple and focused
 - Work on any terminal (Windows, Linux, Mac)
+
+## Architecture
+
+### 4-Step Interactive Loop
+
+The demo uses a functional, non-blocking architecture for the interactive prompt:
+
+```
+STEP 1: Update status bar
+├─ Query unread message count
+└─ Display "F2: Messages (N)" if count > 0
+
+STEP 2: Show prompt
+├─ Display: "alice> current_buffer"
+└─ Show cursor at end of buffer
+
+STEP 3: Wait for input
+├─ Use getch_str() with configurable timeout (default 2.0s)
+├─ Check notifications every 100ms
+└─ Return None on timeout, key on user input
+
+STEP 4: Handle the key
+├─ STEP 4a: Timeout (key is None)
+│  └─ Clear prompt, loop back to STEP 1
+├─ STEP 4b: F2 key pressed
+│  ├─ Fetch and display all unread messages
+│  ├─ Mark messages as read
+│  └─ Loop back to STEP 1
+├─ STEP 4c: Enter key pressed
+│  ├─ Process command
+│  └─ Loop back to STEP 1
+└─ STEP 4d: Other keys
+   ├─ Accumulate character in buffer
+   └─ Loop back to STEP 2 (skip status update)
+```
+
+### Functional Helpers
+
+The demo uses pure functions for interactive loop operations (prefer functional over OOP):
+
+| Function | Purpose |
+|----------|---------|
+| `display_header()` | Show startup information |
+| `show_prompt()` | Display prompt with current buffer |
+| `clear_prompt()` | Clean up prompt line |
+| `update_status_display()` | Update bottom status bar |
+| `handle_character_input()` | Process keystroke and update buffer |
+
+These functions are stateless and easily testable.
+
+### Output Functions
+
+The demo uses bbsengine6's output infrastructure:
+
+**io.echo()** - For standard output messages:
+```python
+from bbsengine6.io.echo import echo
+
+# Regular messages
+echo(f"[SENT to {recipient}] {message}")
+
+# Error messages with appropriate level
+echo(f"Error: {e}", level="error")
+
+# Help text and statistics
+echo(help_text)
+```
+
+Benefits of using `io.echo()`:
+- Follows bbsengine6 conventions
+- Supports consistent message styling
+- Properly handles terminal output across platforms
+- Integrates with bbsengine6's logging/output system
+
+**sys.stdout.write()/flush()** - For interactive terminal control:
+```python
+import sys
+
+# Real-time character echo during prompt
+sys.stdout.write(key)
+sys.stdout.flush()
+
+# Immediate backspace feedback
+sys.stdout.write("\b \b")
+sys.stdout.flush()
+```
+
+Used only for:
+- Typing characters in the prompt (immediate visual feedback)
+- Backspace character erasure
+- Cursor positioning
+- Direct terminal control requiring immediate flushing
+
+**screen.init()** - For terminal management:
+```python
+from bbsengine6.io import screen
+
+try:
+    screen.init()  # Initialize screen margins and management
+except (OSError, termios.error):
+    pass  # Non-TTY environment (tests, piped input)
+```
+
+Ensures:
+- Top and bottom screen margins are properly configured
+- Status bar stays fixed at the bottom without scrolling
+- Interactive loop works with full-screen management
+
+### Class Responsibilities
+
+The `NotifyMessageDemo` class handles:
+- Configuration management (`DemoConfig`)
+- User authentication and initialization
+- Message handler creation
+- Interactive loop orchestration
+- Command processing (`_process_input()`)
+- Statistics tracking
+
+The `MessageHandler` class handles:
+- Database/queue connection management
+- Message sending with validation
+- Message reception and parsing
+- Statistics tracking
 
 ## Extending the Demo
 
