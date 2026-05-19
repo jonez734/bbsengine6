@@ -743,16 +743,28 @@ def redraw_line(
     scroll_offset: int,
     max_width: int,
     mask: Optional[str] = None,
+    insert_mode: bool = True,
 ) -> None:
     """Clear and redraw the input line at the specified position.
     
     Handles both regular and masked (password) input display.
+    
+    Args:
+        insert_mode: If False, shows [OVR] indicator; if True, shows [INS].
     """
+    # NEW: Add mode indicator to prompt
+    mode_indicator = ""
+    if insert_mode:
+        mode_indicator = f" {INPUTSTRING_INSERT_MODE_INDICATOR}"
+    else:
+        mode_indicator = f" {INPUTSTRING_OVERWRITE_MODE_INDICATOR}"
+    
+    full_prompt = prompt + mode_indicator
 
-    input_col_start = start_col + rendered_length(prompt)
+    input_col_start = start_col + rendered_length(full_prompt)
 
     echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
-    echo(prompt, end="", flush=True)
+    echo(full_prompt, end="", flush=True)
     echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
 
     display_str = buffer[scroll_offset : scroll_offset + max_width]
@@ -1086,6 +1098,7 @@ def inputstring(
                     scroll_offset=scroll_offset,
                     max_width=max_width,
                     mask=mask,
+                    insert_mode=_insert_mode,
                 )
                 _input_dirty = False
                 _current_display_str = None
