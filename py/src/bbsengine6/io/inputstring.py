@@ -1,3 +1,4 @@
+import inspect
 import re
 import threading
 
@@ -17,6 +18,9 @@ from .util import logentry
 # --- 0. MANDATORY DEFINITIONS & GLOBALS ---
 
 _inputstring_lock = threading.Lock()
+
+# Compiled regex pattern for word character matching (\w includes letters, digits, underscore)
+_WORD_CHAR_PATTERN = re.compile(r"\w")
 
 
 class Completer:
@@ -62,17 +66,24 @@ class Completer:
             **kwargs: Additional parameters (e.g., conn, pool) passed from inputstring.
 
         Returns:
-            List of matching strings.
+            List of matching strings, or None if no matches.
         """
         # Merge stored kwargs with call-time kwargs (call-time takes precedence)
         merged_kwargs = {**self.kwargs, **kwargs}
 
         # Check for stored function first
         if hasattr(self, "_get_matches_func") and self._get_matches_func is not None:
-            # Check if the function accepts kwargs, if not, filter them out
-            import inspect
+            if not callable(self._get_matches_func):
+                return None
 
-            sig = inspect.signature(self._get_matches_func)
+            try:
+                sig = inspect.signature(self._get_matches_func)
+            except (ValueError, TypeError):
+                # If signature inspection fails, try calling with all kwargs
+                try:
+                    return self._get_matches_func(prefix, **merged_kwargs)
+                except TypeError:
+                    return None
 
             # If function has **kwargs, pass everything
             if any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values()):
@@ -114,23 +125,25 @@ def move_cursor(row, col):
 
 
 def get_current_word(buffer, curpos):
-    """Returns (prefix, word_start_index, word_end_index).
+    r"""Returns (prefix, word_start_index, word_end_index).
 
     Finds the word at the current cursor position and returns:
     - prefix: text before the word
     - word_start: starting index of the word
     - word_end: ending index of the word
+
+    Words are defined as \w+ sequences (alphanumeric and underscore).
     """
     if curpos > len(buffer):
         curpos = len(buffer)
 
-    # Find word boundaries (words are \w+ sequences)
+    # Find word boundaries (words are \w+ sequences: letters, digits, underscore)
     word_end = curpos
-    while word_end < len(buffer) and buffer[word_end].isalnum():
+    while word_end < len(buffer) and _WORD_CHAR_PATTERN.match(buffer[word_end]):
         word_end += 1
 
     word_start = curpos
-    while word_start > 0 and buffer[word_start - 1].isalnum():
+    while word_start > 0 and _WORD_CHAR_PATTERN.match(buffer[word_start - 1]):
         word_start -= 1
 
     prefix = buffer[:word_start]
@@ -138,6 +151,14 @@ def get_current_word(buffer, curpos):
 
 
 def common_prefix(matches):
+    """Find the common prefix of a list of strings.
+
+    Args:
+        matches: List of strings.
+
+    Returns:
+        The common prefix string, or empty string if no common prefix.
+    """
     if not matches:
         return ""
     if len(matches) == 1:
@@ -270,26 +291,29 @@ def handle_key_enter(
     noneok,
     **kwargs,
 ):
-    """
+    """Process Enter key with optional verification.
+
     Returns (buffer, curpos, scroll_offset, accepted, need_redraw)
+
+    Args:
+        verify: Optional callable that validates input. Signature: verify(buffer, **kwargs) -> bool
+        args: Application namespace (passed to verify via kwargs if needed)
+        **kwargs: Additional parameters passed to verify
     """
-
-    #    if (buffer is None or buffer == ""):
-    #        if noneok is False:
-    #            echo("{BEL}", end="", flush=True)
-    #            return None, curpos, scroll_offset, True, False
-
     echo("{f6}", end="", flush=True)
 
     # No verify → accept immediately
     if not callable(verify):
         return buffer, curpos, scroll_offset, True, True
 
-    # Run verify as: verify(args, buffer, **kwargs)
+    # Run verify with buffer and kwargs (pass args through kwargs if provided)
     try:
-        ok = verify(args, buffer, **kwargs)
+        verify_kwargs = dict(kwargs)
+        if args is not None:
+            verify_kwargs["args"] = args
+        ok = verify(buffer, **verify_kwargs)
     except Exception as e:
-        echo_traceback(f"io.inputstring.handle_key_enter.100: {e}]")
+        echo_traceback(f"io.inputstring.handle_key_enter.100: {e}")
         ok = False
 
     if ok:
@@ -493,7 +517,21 @@ def redraw_line(
 
 
 def print_matches(matches):
+    """Print tab completion matches in columns.
+
+    Args:
+        matches: List of match strings to display.
+
+    Returns:
+        Number of lines printed. Returns 0 if matches is empty or terminal has no width.
+    """
+    if not matches:
+        return 0
+
     cols = terminal.columns()
+    if cols <= 0:
+        return 0
+
     longest = max(len(m) for m in matches) + 2
     per_line = max(1, cols // longest)
 
