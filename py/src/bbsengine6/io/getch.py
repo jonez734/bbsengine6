@@ -606,66 +606,71 @@ def getch_str(
             char = _input_queue.popleft()
             result = _proc_char(char, debug=debug, fire_events=fire_events)
             return result
-        else:
-            fd = _current_input_stream.fileno()
-            old_settings = termios.tcgetattr(fd)
-            old_flags = None
+
+        # Get file descriptor and settings while holding lock
+        fd = _current_input_stream.fileno()
+        old_settings = termios.tcgetattr(fd)
+        old_flags = None
+
+    try:
+        # 1. Set Terminal to Raw Mode
+        with _current_stream_lock:
+            tty.setraw(fd)
+
+        # 2. Wait for input using wall-clock timeout for accuracy
+        # Lock is released during select() to allow other threads (like echo) to proceed
+        start_time = time.time()
+        poll_interval = 0.1  # Check notifications every 100ms
+        ready = []
+
+        while True:
+            # Calculate elapsed time and remaining timeout
+            elapsed = time.time() - start_time
+            if timeout is not None and elapsed >= timeout:
+                return None  # Timeout reached
+
+            # Calculate timeout for select
+            if timeout is None:
+                select_timeout = poll_interval
+            else:
+                remaining = timeout - elapsed
+                select_timeout = (
+                    min(poll_interval, remaining) if remaining > 0 else 0
+                )
+
+            # Wait for input with calculated timeout (LOCK RELEASED HERE)
+            ready, _, _ = select.select(
+                [_current_input_stream], [], [], select_timeout
+            )
+
+            if ready:
+                break
+
+            # No input yet - check for notification updates during idle
+            if check_notifications and moniker and _has_notify_module:
+                has_notifications, _ = _check_notifications(moniker, **kwargs)
+                if has_notifications:
+                    _update_bottombar_on_notification()
+
+        # 3. Set Non-Blocking I/O for escape sequence reading
+        with _current_stream_lock:
+            old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
 
             try:
-                # 1. Set Terminal to Raw Mode
-                tty.setraw(fd)
+                # Attempt to read a single byte
+                char = _read_current_input_stream()
+            except BlockingIOError:
+                # If nothing is available, return None immediately
+                return None
 
-                # 2. Wait for input using wall-clock timeout for accuracy
-                start_time = time.time()
-                poll_interval = 0.1  # Check notifications every 100ms
-                ready = []
+            result = _proc_char(char, debug=debug, fire_events=fire_events)
+            return result
 
-                while True:
-                    # Calculate elapsed time and remaining timeout
-                    elapsed = time.time() - start_time
-                    if timeout is not None and elapsed >= timeout:
-                        return None  # Timeout reached
-
-                    # Calculate timeout for select
-                    if timeout is None:
-                        select_timeout = poll_interval
-                    else:
-                        remaining = timeout - elapsed
-                        select_timeout = (
-                            min(poll_interval, remaining) if remaining > 0 else 0
-                        )
-
-                    # Wait for input with calculated timeout
-                    ready, _, _ = select.select(
-                        [_current_input_stream], [], [], select_timeout
-                    )
-
-                    if ready:
-                        break
-
-                    # No input yet - check for notification updates during idle
-                    if check_notifications and moniker and _has_notify_module:
-                        has_notifications, _ = _check_notifications(moniker, **kwargs)
-                        if has_notifications:
-                            _update_bottombar_on_notification()
-
-                # 3. Set Non-Blocking I/O for escape sequence reading
-                old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
-
-                try:
-                    # Attempt to read a single byte
-                    char = _read_current_input_stream()
-                except BlockingIOError:
-                    # If nothing is available, return None immediately
-                    return None
-
-                result = _proc_char(char, debug=debug, fire_events=fire_events)
-                return result
-
-            finally:
-                # 4. Restore Terminal Settings (CRUCIAL!)
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                # Restore old flags (blocking I/O)
-                if old_flags:
-                    fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+    finally:
+        # 4. Restore Terminal Settings (CRUCIAL!)
+        with _current_stream_lock:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            # Restore old flags (blocking I/O)
+            if old_flags:
+                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
