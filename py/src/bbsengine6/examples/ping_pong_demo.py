@@ -21,6 +21,7 @@ try:
     from bbsengine6 import notify
     from bbsengine6.io.echo import echo
     from bbsengine6.io.getch import getch_str
+    from bbsengine6.io import screen
     from bbsengine6.member import _threadlocal
     from bbsengine6.notify import Notification, NotificationUrgency
 except ImportError as e:
@@ -106,6 +107,14 @@ def display_menu(
     """Display the game menu and message log (with output synchronization)."""
     with output_lock:
         clear_screen()
+        
+        # Initialize screen and set bottom bar with notification status
+        try:
+            screen.init()
+            screen.setbottombar("", screen.get_notification_status)
+        except Exception:
+            pass  # Silently continue if screen initialization fails
+        
         echo("═" * 60)
         echo(f"    PING-PONG DEMO (Moniker: {moniker.upper()})")
         echo("═" * 60)
@@ -140,6 +149,12 @@ def display_menu(
             echo(f"Queue Status: Error - {e}")
 
         echo("═" * 60)
+        
+        # Re-set bottom bar after displaying menu content
+        try:
+            screen.setbottombar("", screen.get_notification_status)
+        except Exception:
+            pass  # Silently continue if bottom bar fails
 
 
 def _sanitize_text(text: str) -> str:
