@@ -716,14 +716,17 @@ def getch_str(
             
             return result
 
-    except:
+    except Exception:
         # If any error occurs, restore terminal settings before re-raising
+        # Note: Don't re-acquire the lock here - if we're in an exception from 
+        # inside the 'with _current_stream_lock:' block, the lock will be released
+        # automatically by the context manager. If the exception happened before
+        # acquiring the lock, we can safely restore without the lock.
         if old_settings is not None:
-            with _current_stream_lock:
-                try:
-                    if old_flags is not None:
-                        fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                except:
-                    pass
+            try:
+                if old_flags is not None:
+                    fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            except:
+                pass
         raise
