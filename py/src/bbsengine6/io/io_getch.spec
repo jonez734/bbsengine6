@@ -201,3 +201,15 @@ Processes a single character and returns the appropriate key name.
 - Module-level documentation of threading model
 - Enhanced docstrings for getch_str() and _proc_char()
 - Better comments for escape sequence parsing
+
+### Phase 8: Lock Management Improvements (May 2026)
+- Fixed critical deadlock in getch_str() where lock was held during select()
+- Lock is now released during select() to allow other threads (like echo) to proceed
+- Lock is only held for:
+  1. Checking input queue
+  2. Getting file descriptor and terminal settings
+  3. Setting terminal raw mode
+  4. Reading character from input stream
+  5. Restoring terminal settings in finally block
+- This fix resolves hang when inputstring() calls echo() during getch() wait
+- Result: KEY_ENTER and other keys now properly handled in inputstring()

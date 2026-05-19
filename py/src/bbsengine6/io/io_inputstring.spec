@@ -244,7 +244,22 @@ The main loop manages display:
 - Input scrolls horizontally when `curpos >= scroll_offset + max_width`
 - Scroll offset adjusts to keep cursor visible
 
+## Recent Fixes (May 2026)
+
+### Lock Contention with getch()
+- **Problem**: Lock was acquired immediately before `getch()` call, causing contention
+- **Solution**: Removed unnecessary lock acquisition right before `getch()`
+- **Result**: `getch()` can now properly manage locks without external interference
+
+### Cursor Positioning Echo Codes
+- **Problem**: `{curpos:...}` escape codes in echo() were interfering with getch() input processing
+- **Solution**: Replaced `{curpos:...}` echo calls with raw ANSI escape sequences (CSI codes)
+- **Benefit**: Avoids echo's command processing which was consuming input or corrupting terminal state
+- **Result**: KEY_ENTER and all key processing now works correctly in inputstring()
+
 ## Known Issues / TODOs
 
 1. ~~`get_current_word()` is a stub~~ - now properly finds word at cursor position using alphanumeric boundaries
 2. ~~Some echo calls use inconsistent escaping~~ (FIXED - standardized to `"{command}"` for static commands)
+3. ~~Lock contention between inputstring() and getch()~~ (FIXED - removed unnecessary lock acquisition)
+4. ~~Cursor positioning interfering with input~~ (FIXED - use raw ANSI codes instead of echo commands)
