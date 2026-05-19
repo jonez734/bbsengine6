@@ -186,6 +186,29 @@ def common_prefix(matches):
     return matches[0][:min_len]
 
 
+def adjust_scroll_offset(curpos, scroll_offset, max_width):
+    """Adjust scroll offset to keep cursor visible.
+
+    Ensures the cursor at position `curpos` remains visible in a display window
+    of width `max_width` starting at `scroll_offset`.
+
+    Args:
+        curpos: Current cursor position in buffer
+        scroll_offset: Current start of visible window
+        max_width: Width of display window
+
+    Returns:
+        Adjusted scroll_offset (guaranteed >= 0)
+    """
+    if curpos >= scroll_offset + max_width:
+        scroll_offset = curpos - max_width + 1
+    elif curpos < scroll_offset:
+        scroll_offset = curpos
+    if scroll_offset < 0:
+        scroll_offset = 0
+    return scroll_offset
+
+
 # --- 1. Global Key Actions Dictionary ---
 KEY_ACTIONS = {}
 
@@ -431,12 +454,7 @@ def handle_tab_manager(
         buffer = buffer[:word_start] + word + buffer[word_end:]
         curpos = word_start + len(word)
 
-        if curpos >= scroll_offset + max_width:
-            scroll_offset = curpos - max_width + 1
-        elif curpos < scroll_offset:
-            scroll_offset = curpos
-        if scroll_offset < 0:
-            scroll_offset = 0
+        scroll_offset = adjust_scroll_offset(curpos, scroll_offset, max_width)
 
         redraw_line(
             prompt,
@@ -481,12 +499,7 @@ def handle_tab_manager(
         buffer = buffer[:word_start] + lcp + buffer[word_end:]
         curpos = word_start + len(lcp)
 
-        if curpos >= scroll_offset + max_width:
-            scroll_offset = curpos - max_width + 1
-        elif curpos < scroll_offset:
-            scroll_offset = curpos
-        if scroll_offset < 0:
-            scroll_offset = 0
+        scroll_offset = adjust_scroll_offset(curpos, scroll_offset, max_width)
 
         redraw_line(
             prompt,
@@ -722,18 +735,13 @@ def inputstring(prompt: str = "> ", oldvalue: str = "", /, **kwargs) -> str:
                 last_matches = []
                 tab_count = 0
             else:
-                if len(ch) == 1:
-                    if len(buffer) < max_len:
-                        buffer = buffer[:curpos] + ch + buffer[curpos:]
-                        curpos += 1
-                last_matches = []
-                tab_count = 0
+                 if len(ch) == 1:
+                     if len(buffer) < max_len:
+                         buffer = buffer[:curpos] + ch + buffer[curpos:]
+                         curpos += 1
+                 last_matches = []
+                 tab_count = 0
 
-        if curpos >= scroll_offset + max_width:
-            scroll_offset = curpos - max_width + 1
-        elif curpos < scroll_offset:
-            scroll_offset = curpos
-        if scroll_offset < 0:
-            scroll_offset = 0
+        scroll_offset = adjust_scroll_offset(curpos, scroll_offset, max_width)
 
     return buffer
