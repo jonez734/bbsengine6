@@ -112,8 +112,8 @@ def display_menu(
         try:
             screen.init()
             screen.setbottombar("", screen.get_notification_status)
-        except Exception:
-            pass  # Silently continue if screen initialization fails
+        except Exception as e:
+            echo(f"DEBUG: screen.init() failed: {e}", level="debug")
         
         echo("═" * 60)
         echo(f"    PING-PONG DEMO (Moniker: {moniker.upper()})")
@@ -153,8 +153,8 @@ def display_menu(
         # Re-set bottom bar after displaying menu content
         try:
             screen.setbottombar("", screen.get_notification_status)
-        except Exception:
-            pass  # Silently continue if bottom bar fails
+        except Exception as e:
+            echo(f"DEBUG: setbottombar() failed: {e}", level="debug")
 
 
 def _sanitize_text(text: str) -> str:
