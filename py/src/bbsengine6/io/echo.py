@@ -37,7 +37,9 @@ from . import terminal
 
 _runtime_vars_lock = threading.Lock()
 _emoji_lock = threading.Lock()
+_state_lock = threading.Lock()  # Protects: _raw, _previous_token, _first_line_after_f6
 
+_raw = False  # Global state - whether to output raw (without command processing)
 _previous_token = Token("UNKNOWN")
 _first_line_after_f6 = False  # Don't reduce width on first line after F6
 
@@ -357,7 +359,7 @@ def _handle_whitespace(token):
     For example, a run of 3 newlines becomes:
         Token(kind="WHITESPACE", value="\n", repeat=3, text="\n\n\n")
     """
-    global _acs, _raw
+    global _raw
 
     if not _raw:
         yield from _acs_off()
@@ -917,8 +919,6 @@ def _handle_command(token, **kwargs):  # palette=None, vars=None):
     Yields:
         Token instances (WORD, WHITESPACE, F6, etc.)
     """
-    global _acs
-
     # command name is lowercase
     cmd = token.value.lower()
 
@@ -1132,7 +1132,7 @@ def echo_iter(text, width=None, wordwrap=True, palette=None, vars=None, raw=Fals
     Generator that yields tokens for rendering.
     Handles WORD, WHITESPACE, F6 (hard newline), attributes, and commands.
     """
-    global _runtime_vars, _cursor_col, _raw, _wordwrap, _previous_token
+    global _runtime_vars, _raw, _previous_token
 
     _raw = raw
     _terminal_state.wordwrap = wordwrap
@@ -1207,7 +1207,7 @@ def echo(text="", *, flush: bool = True, end=ECHO_END, **kwargs):
     raw: if True, commands are treated as literal text
     flush: if True, flush after writing
     """
-    global _raw, _cursor_col, _acs, _cursor_row
+    global _raw
 
     _raw = kwargs.get("raw", False)
 
