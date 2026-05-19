@@ -114,13 +114,20 @@ class Completer:
         return result if result is not None else []
 
 
-yank_buffer = []  # Clipboard
+# Clipboard buffer for cut/yank operations. MUST be accessed only within _yank_buffer_lock.
+yank_buffer = []
 _yank_buffer_lock = threading.Lock()
 
 _key_actions_lock = threading.Lock()
 
 
 def move_cursor(row, col):
+    """Move cursor to absolute terminal position (1-indexed).
+
+    Args:
+        row: Terminal row (1-indexed)
+        col: Terminal column (1-indexed)
+    """
     echo(f"{{curpos:{row},{col}}}", end="", flush=True)
 
 
@@ -198,6 +205,7 @@ def remove_key_mapping(key_string):
 
 
 def handle_left(buffer, curpos, scroll_offset, max_width):
+    """Move cursor left one position. Beeps if already at start."""
     if curpos > 0:
         curpos -= 1
     else:
@@ -206,6 +214,7 @@ def handle_left(buffer, curpos, scroll_offset, max_width):
 
 
 def handle_right(buffer, curpos, scroll_offset, max_width):
+    """Move cursor right one position. Beeps if already at end."""
     if curpos < len(buffer):
         curpos += 1
     else:
@@ -214,15 +223,18 @@ def handle_right(buffer, curpos, scroll_offset, max_width):
 
 
 def handle_home(buffer, curpos, scroll_offset, max_width):
+    """Jump cursor to beginning of line."""
     return buffer, 0, 0
 
 
 def handle_end(buffer, curpos, scroll_offset, max_width):
+    """Jump cursor to end of line."""
     curpos = len(buffer)
     return buffer, curpos, scroll_offset
 
 
 def handle_backspace(buffer, curpos, scroll_offset, max_width):
+    """Delete character before cursor. Beeps if already at start."""
     if curpos > 0:
         buffer = buffer[: curpos - 1] + buffer[curpos:]
         curpos -= 1
@@ -232,6 +244,7 @@ def handle_backspace(buffer, curpos, scroll_offset, max_width):
 
 
 def handle_cuttobol(buffer, curpos, scroll_offset, max_width):
+    """Cut from beginning of line to cursor and store in yank buffer."""
     global yank_buffer
     cut_text = buffer[:curpos]
     with _yank_buffer_lock:
@@ -242,12 +255,16 @@ def handle_cuttobol(buffer, curpos, scroll_offset, max_width):
 
 
 def handle_cutpreviousword(buffer, curpos, scroll_offset, max_width):
+    r"""Cut the previous word from buffer and store in yank buffer.
+
+    Uses \w word boundary matching (consistent with get_current_word).
+    """
     global yank_buffer
     word_end = curpos
-    while word_end > 0 and not re.match(r"\w", buffer[word_end - 1]):
+    while word_end > 0 and not _WORD_CHAR_PATTERN.match(buffer[word_end - 1]):
         word_end -= 1
     word_start = word_end
-    while word_start > 0 and re.match(r"\w", buffer[word_start - 1]):
+    while word_start > 0 and _WORD_CHAR_PATTERN.match(buffer[word_start - 1]):
         word_start -= 1
     if word_start == word_end:
         return buffer, curpos, scroll_offset
@@ -260,6 +277,10 @@ def handle_cutpreviousword(buffer, curpos, scroll_offset, max_width):
 
 
 def handle_yank(buffer, curpos, scroll_offset, max_width):
+    """Paste yank buffer contents at cursor position.
+
+    Note: Pasting may cause buffer to exceed max_len - validation happens in main loop.
+    """
     global yank_buffer
     with _yank_buffer_lock:
         yank_text = "\n".join(yank_buffer)
