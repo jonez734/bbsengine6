@@ -8,6 +8,7 @@ import atexit
 import os
 import signal
 import sys
+import termios
 import threading
 import time
 from collections import deque
@@ -108,12 +109,11 @@ def display_menu(
     with output_lock:
         clear_screen()
         
-        # Initialize screen and set bottom bar with notification status
+        # Set bottom bar with notification status
         try:
-            screen.init()
             screen.setbottombar("", screen.get_notification_status)
-        except Exception as e:
-            echo(f"DEBUG: screen.init() failed: {e}", level="debug")
+        except Exception:
+            pass  # Silently continue if bottom bar fails
         
         echo("═" * 60)
         echo(f"    PING-PONG DEMO (Moniker: {moniker.upper()})")
@@ -153,8 +153,8 @@ def display_menu(
         # Re-set bottom bar after displaying menu content
         try:
             screen.setbottombar("", screen.get_notification_status)
-        except Exception as e:
-            echo(f"DEBUG: setbottombar() failed: {e}", level="debug")
+        except Exception:
+            pass  # Silently continue if bottom bar fails
 
 
 def _sanitize_text(text: str) -> str:
@@ -646,6 +646,16 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    # Initialize screen for bottom bar support
+    try:
+        screen.init()
+    except (OSError, termios.error):
+        # Silently ignore if not a TTY (e.g., in tests or piped input)
+        pass
+    except Exception:
+        # Silently continue on other errors
+        pass
 
     # If user specified, run single-player mode
     if args.user:
