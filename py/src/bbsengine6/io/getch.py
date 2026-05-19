@@ -1,19 +1,3 @@
-# getch.py
-# Low-level keyboard input and event handling for terminal applications.
-#
-# This module provides:
-# 1. getch_str() - Non-blocking character read with timeout
-# 2. Escape sequence processing for function keys (F1-F12, arrows, etc.)
-# 3. Threading-based event system for keyboard input monitoring
-#
-# Threading Model:
-#   - Main thread: Reads characters, fires events to dispatcher, returns immediately
-#   - Dispatcher thread: Processes events and invokes registered handlers asynchronously
-#
-# Timeout Accuracy:
-#   - Wall-clock time (time.time()) ensures precision
-#   - Poll interval (100ms) for notification checks during idle waits
-
 import os
 import tty
 import select
@@ -32,7 +16,6 @@ from .common import (
     _current_input_stream,
     _current_stream_lock,
     _input_queue,
-    _input_queue_lock,
     _read_current_input_stream,
 )
 from .echo import echo, echo_traceback
@@ -388,7 +371,7 @@ def _emit_notification_bell_once() -> bool:
 
 def _update_bottombar_on_notification() -> bool:
     """Update bottom bar once per session to show notification status.
-
+    
     Returns True if update was performed, False if already updated this session.
     """
     global _bottombar_updated_this_session
@@ -396,7 +379,7 @@ def _update_bottombar_on_notification() -> bool:
         if _bottombar_updated_this_session:
             return False
         _bottombar_updated_this_session = True
-
+    
     try:
         # Get notification status string (e.g., "F2: notify (3)")
         notification_status = screen.get_notification_status()
@@ -404,13 +387,12 @@ def _update_bottombar_on_notification() -> bool:
             # Try to use echo_commands to position cursor and display notification
             try:
                 from . import terminal
-
                 last_line = terminal.lines()
                 echo(
                     f"{{savecursor}}{{bottombarcolor}}{{curpos:{last_line},0}}[{notification_status}]{{/all}}{{restorecursor}}",
                     end="",
                     flush=True,
-                    wordwrap=False,
+                    wordwrap=False
                 )
             except Exception:
                 # Fallback: output with newline if curpos fails
@@ -485,25 +467,15 @@ def _show_pending_notifications(moniker: str) -> None:
 
 
 def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str | None:
-    """Process character and optionally fire events to dispatcher.
-
-    This function:
-    1. Fires a "raw" event before processing (if events enabled)
-    2. Processes the character (escape sequences, control keys, regular chars)
-    3. Fires a "processed" event after conversion (if events enabled)
+    """Process character and optionally fire events.
 
     Args:
         char: Raw character to process
-        debug: If True, log unknown escape sequences and return None
+        debug: If True, log unknown escape sequences
         fire_events: If True and dispatcher running, fire key events
 
     Returns:
-        Processed key name (e.g., 'a', 'KEY_UP', 'KEY_ENTER') or None if unknown and debug=True
-
-    Event Flow:
-        - Raw event: KeyEvent(raw_char=char, processed_key=None, stage='raw')
-        - Processing: Handle escapes, control codes, etc.
-        - Processed event: KeyEvent(raw_char=char, processed_key=result, stage='processed')
+        Processed key name or character, or None for unknown sequences when debug=True
     """
     # Fire raw event before processing
     if fire_events and _event_dispatcher.is_running():
@@ -526,35 +498,39 @@ def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str 
         raise KeyboardInterrupt
     elif char == EOF:  # Ctrl+D (EOF)
         raise EOFError
-    elif char == "\x05":  # Ctrl+E (EOL)
+    elif char == "\x05":  # ctrl-e (EOL)
         processed = "KEY_CTRL_E"
     elif char in ("\x7f", "\x08"):
         processed = "KEY_BACKSPACE"
     elif char == "\r":
         processed = "KEY_ENTER"
-    elif char == "\x15":  # Ctrl+U
+    elif char == "\x15":  # ctrl-u
         processed = "KEY_CUTTOBOL"
     elif char == "\t":
         processed = "KEY_TAB"
-    # Handle Escape Sequences and Plain ESC
-    elif char == ESC:
+    # 4. Handle Escape Sequences and Plain ESC
+    elif char == ESC:  # ESCAPE
         sequence = char
-        # Try to read up to 10 more bytes to form complete escape sequence.
-        # Stop when BlockingIOError (no more data) or 10 bytes collected.
-        # This handles: ESC followed by nothing (plain ESC), or multi-byte codes like ESC[A.
+        # Read subsequent bytes without blocking to check for a sequence
+        # Wait a short period, then check up to a maximum number of bytes (e.g., 10)
+
+        # The critical logic: read more bytes *until* BlockingIOError *or* 10 bytes read
         for _ in range(10):
             try:
+                # Reading one byte at a time is safest for sequential parsing
                 next_char = _read_current_input_stream()
                 sequence += next_char
             except BlockingIOError:
-                break  # No more bytes available, sequence complete
+                break  # Sequence transmission stopped
 
-        # Check for plain ESC (no additional bytes)
+        # A. Check for plain ESC
         if len(sequence) == 1:
-            processed = "KEY_ESC"
+            processed = (
+                "KEY_ESC"  # Plain ESC key was pressed (as no other bytes followed)
+            )
         else:
-            # Try to match against known escape sequences.
-            # Sort by length (longest first) to match complete sequences correctly.
+            # B. Check for known escape sequences
+            # Sort keys by length descending to match longest possible sequence first
             found = False
             for code, name in sorted(
                 KEY_MAP.items(), key=lambda item: len(item[0]), reverse=True
@@ -564,15 +540,14 @@ def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str 
                     found = True
                     break
 
-            # Unknown escape sequence
+            # C. Unknown escape sequence
             if not found:
                 if debug:
                     logentry(f"unknown escape sequence: {sequence!r}")
                     processed = None
                 else:
-                    # Return raw sequence if not in debug mode
                     processed = sequence
-    # Regular character (letter, digit, symbol, etc.)
+    # 5. Return a regular character
     else:
         processed = char
 
@@ -626,107 +601,71 @@ def getch_str(
             _emit_notification_bell_once()
             _update_bottombar_on_notification()
 
-    # Check input queue with proper locking to avoid race conditions
-    with _input_queue_lock:
+    with _current_stream_lock:
         if _input_queue:
             char = _input_queue.popleft()
             result = _proc_char(char, debug=debug, fire_events=fire_events)
             return result
-
-    # No queued input, do blocking read
-    fd = _current_input_stream.fileno()
-    old_settings = None
-    old_flags = None
-    
-    with _current_stream_lock:
-        # Get terminal settings before entering try block
-        old_settings = termios.tcgetattr(fd)
-        try:
-            # 1. Set Terminal to Raw Mode
-            tty.setraw(fd)
-        except:
-            # If setraw fails, at least restore settings
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            raise
-
-    try:
-        # 2. Wait for input using wall-clock timeout for accuracy
-        # NOTE: Lock is NOT held during select() - this allows inputstring to redraw
-        # while we're waiting for input. We don't need the lock here since we're just
-        # waiting for I/O, not actually reading the terminal.
-        start_time = time.time()
-        poll_interval = 0.1  # Check notifications every 100ms
-        ready = []
-
-        while True:
-            # Calculate elapsed time and remaining timeout
-            elapsed = time.time() - start_time
-            if timeout is not None and elapsed >= timeout:
-                # Timeout - restore settings and return
-                with _current_stream_lock:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                return None
-
-            # Calculate timeout for select
-            if timeout is None:
-                select_timeout = poll_interval
-            else:
-                remaining = timeout - elapsed
-                select_timeout = (
-                    min(poll_interval, remaining) if remaining > 0 else 0
-                )
-
-            # Wait for input with calculated timeout (LOCK NOT HELD)
-            ready, _, _ = select.select(
-                [_current_input_stream], [], [], select_timeout
-            )
-
-            if ready:
-                break
-
-        # Input is available - check for notifications if enabled
-        if check_notifications and moniker and _has_notify_module:
-            has_notifications, _ = _check_notifications(moniker, **kwargs)
-            if has_notifications:
-                _update_bottombar_on_notification()
-
-        # Acquire lock only for reading and processing the character
-        with _current_stream_lock:
-            # 3. Set Non-Blocking I/O for escape sequence reading
-            old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-            fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
+        else:
+            fd = _current_input_stream.fileno()
+            old_settings = termios.tcgetattr(fd)
+            old_flags = None
 
             try:
-                # Attempt to read a single byte
-                char = _read_current_input_stream()
-            except BlockingIOError:
-                # If nothing is available, return None
+                # 1. Set Terminal to Raw Mode
+                tty.setraw(fd)
+
+                # 2. Wait for input using wall-clock timeout for accuracy
+                start_time = time.time()
+                poll_interval = 0.1  # Check notifications every 100ms
+                ready = []
+
+                while True:
+                    # Calculate elapsed time and remaining timeout
+                    elapsed = time.time() - start_time
+                    if timeout is not None and elapsed >= timeout:
+                        return None  # Timeout reached
+
+                    # Calculate timeout for select
+                    if timeout is None:
+                        select_timeout = poll_interval
+                    else:
+                        remaining = timeout - elapsed
+                        select_timeout = (
+                            min(poll_interval, remaining) if remaining > 0 else 0
+                        )
+
+                    # Wait for input with calculated timeout
+                    ready, _, _ = select.select(
+                        [_current_input_stream], [], [], select_timeout
+                    )
+
+                    if ready:
+                        break
+
+                    # No input yet - check for notification updates during idle
+                    if check_notifications and moniker and _has_notify_module:
+                        has_notifications, _ = _check_notifications(moniker, **kwargs)
+                        if has_notifications:
+                            _update_bottombar_on_notification()
+
+                # 3. Set Non-Blocking I/O for escape sequence reading
+                old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
+
+                try:
+                    # Attempt to read a single byte
+                    char = _read_current_input_stream()
+                except BlockingIOError:
+                    # If nothing is available, return None immediately
+                    return None
+
+                result = _proc_char(char, debug=debug, fire_events=fire_events)
+                return result
+
+            finally:
+                # 4. Restore Terminal Settings (CRUCIAL!)
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                return None
-
-            # Process the character
-            result = _proc_char(char, debug=debug, fire_events=fire_events)
-            
-            # Restore flags before releasing lock
-            if old_flags is not None:
-                fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
-            
-            # Restore terminal settings
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            
-            return result
-
-    except Exception:
-        # If any error occurs, restore terminal settings before re-raising
-        # Note: Don't re-acquire the lock here - if we're in an exception from 
-        # inside the 'with _current_stream_lock:' block, the lock will be released
-        # automatically by the context manager. If the exception happened before
-        # acquiring the lock, we can safely restore without the lock.
-        if old_settings is not None:
-            try:
-                if old_flags is not None:
+                # Restore old flags (blocking I/O)
+                if old_flags:
                     fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
-                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-            except:
-                pass
-        raise
