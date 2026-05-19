@@ -609,12 +609,11 @@ def _handle_curpos(token):
     y = max(1, y)
     x = max(1, x)
 
-    # update terminal state FIRST, under lock
-    with _current_stream_lock:
-        _terminal_state.cursor_row = y
-        _terminal_state.cursor_col = x
+    # update terminal state - no lock needed (local tracking only)
+    _terminal_state.cursor_row = y
+    _terminal_state.cursor_col = x
 
-    # emit escape AFTER lock is released
+    # emit escape
     token.text = f"{CSI}{y};{x}H"
     yield token
 
@@ -642,11 +641,11 @@ def _handle_f6(token):
             text=indent_text,
             raw=indent_text,
         )
-        with _current_stream_lock:
-            _terminal_state.cursor_col = _terminal_state.indent
+        # No lock needed - just updating local state tracking
+        _terminal_state.cursor_col = _terminal_state.indent
     else:
-        with _current_stream_lock:
-            _terminal_state.cursor_col = 0
+        # No lock needed - just updating local state tracking
+        _terminal_state.cursor_col = 0
 
     return
 
