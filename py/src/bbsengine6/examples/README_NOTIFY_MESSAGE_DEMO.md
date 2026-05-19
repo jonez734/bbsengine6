@@ -812,6 +812,37 @@ The `MessageHandler` class handles:
 - Message reception and parsing
 - Statistics tracking
 
+### Terminal Cleanup
+
+The demo ensures clean terminal state on exit using a try/finally block in `main()`:
+
+```python
+try:
+    try:
+        config = DemoConfig(...)
+        demo = NotifyMessageDemo(config, db_args)
+        demo.run_interactive()
+    except ValueError as e:
+        echo(f"Configuration error: {e}", level="error")
+        sys.exit(1)
+finally:
+    # Reset terminal to clean state
+    echo("{decsc}{reset}{decrc}")
+```
+
+The finally block executes in all exit scenarios:
+- **Normal exit**: User presses 'q' to quit
+- **Error exit**: Configuration or runtime error occurs
+- **Interrupt exit**: User presses Ctrl+C
+- **Exception exit**: Unexpected error during demo
+
+Terminal escape sequences used:
+- `{decsc}` - Save cursor position (DEC Save Cursor)
+- `{reset}` - Reset terminal to default state
+- `{decrc}` - Restore cursor position (DEC Restore Cursor)
+
+This pattern ensures the terminal is left in a clean state, with the cursor position restored, regardless of how the program exits.
+
 ## Extending the Demo
 
 ### Add More Users
