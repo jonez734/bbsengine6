@@ -1,3 +1,19 @@
+# getch.py
+# Low-level keyboard input and event handling for terminal applications.
+#
+# This module provides:
+# 1. getch_str() - Non-blocking character read with timeout
+# 2. Escape sequence processing for function keys (F1-F12, arrows, etc.)
+# 3. Threading-based event system for keyboard input monitoring
+#
+# Threading Model:
+#   - Main thread: Reads characters, fires events to dispatcher, returns immediately
+#   - Dispatcher thread: Processes events and invokes registered handlers asynchronously
+#
+# Timeout Accuracy:
+#   - Wall-clock time (time.time()) ensures precision
+#   - Poll interval (100ms) for notification checks during idle waits
+
 import os
 import tty
 import select
@@ -467,15 +483,25 @@ def _show_pending_notifications(moniker: str) -> None:
 
 
 def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str | None:
-    """Process character and optionally fire events.
+    """Process character and optionally fire events to dispatcher.
+
+    This function:
+    1. Fires a "raw" event before processing (if events enabled)
+    2. Processes the character (escape sequences, control keys, regular chars)
+    3. Fires a "processed" event after conversion (if events enabled)
 
     Args:
         char: Raw character to process
-        debug: If True, log unknown escape sequences
+        debug: If True, log unknown escape sequences and return None
         fire_events: If True and dispatcher running, fire key events
 
     Returns:
-        Processed key name or character, or None for unknown sequences when debug=True
+        Processed key name (e.g., 'a', 'KEY_UP', 'KEY_ENTER') or None if unknown and debug=True
+
+    Event Flow:
+        - Raw event: KeyEvent(raw_char=char, processed_key=None, stage='raw')
+        - Processing: Handle escapes, control codes, etc.
+        - Processed event: KeyEvent(raw_char=char, processed_key=result, stage='processed')
     """
     # Fire raw event before processing
     if fire_events and _event_dispatcher.is_running():
@@ -498,39 +524,35 @@ def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str 
         raise KeyboardInterrupt
     elif char == EOF:  # Ctrl+D (EOF)
         raise EOFError
-    elif char == "\x05":  # ctrl-e (EOL)
+    elif char == "\x05":  # Ctrl+E (EOL)
         processed = "KEY_CTRL_E"
     elif char in ("\x7f", "\x08"):
         processed = "KEY_BACKSPACE"
     elif char == "\r":
         processed = "KEY_ENTER"
-    elif char == "\x15":  # ctrl-u
+    elif char == "\x15":  # Ctrl+U
         processed = "KEY_CUTTOBOL"
     elif char == "\t":
         processed = "KEY_TAB"
-    # 4. Handle Escape Sequences and Plain ESC
-    elif char == ESC:  # ESCAPE
+    # Handle Escape Sequences and Plain ESC
+    elif char == ESC:
         sequence = char
-        # Read subsequent bytes without blocking to check for a sequence
-        # Wait a short period, then check up to a maximum number of bytes (e.g., 10)
-
-        # The critical logic: read more bytes *until* BlockingIOError *or* 10 bytes read
+        # Try to read up to 10 more bytes to form complete escape sequence.
+        # Stop when BlockingIOError (no more data) or 10 bytes collected.
+        # This handles: ESC followed by nothing (plain ESC), or multi-byte codes like ESC[A.
         for _ in range(10):
             try:
-                # Reading one byte at a time is safest for sequential parsing
                 next_char = _read_current_input_stream()
                 sequence += next_char
             except BlockingIOError:
-                break  # Sequence transmission stopped
+                break  # No more bytes available, sequence complete
 
-        # A. Check for plain ESC
+        # Check for plain ESC (no additional bytes)
         if len(sequence) == 1:
-            processed = (
-                "KEY_ESC"  # Plain ESC key was pressed (as no other bytes followed)
-            )
+            processed = "KEY_ESC"
         else:
-            # B. Check for known escape sequences
-            # Sort keys by length descending to match longest possible sequence first
+            # Try to match against known escape sequences.
+            # Sort by length (longest first) to match complete sequences correctly.
             found = False
             for code, name in sorted(
                 KEY_MAP.items(), key=lambda item: len(item[0]), reverse=True
@@ -540,14 +562,15 @@ def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str 
                     found = True
                     break
 
-            # C. Unknown escape sequence
+            # Unknown escape sequence
             if not found:
                 if debug:
                     logentry(f"unknown escape sequence: {sequence!r}")
                     processed = None
                 else:
+                    # Return raw sequence if not in debug mode
                     processed = sequence
-    # 5. Return a regular character
+    # Regular character (letter, digit, symbol, etc.)
     else:
         processed = char
 
