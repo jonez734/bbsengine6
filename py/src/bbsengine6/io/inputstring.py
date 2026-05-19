@@ -1111,6 +1111,26 @@ def inputstring(
             new_scroll = scroll_offset
         return buffer, new_curpos, new_scroll
 
+    # NEW: Create closures for function key handlers (F2-F12)
+    _function_key_callbacks = function_key_handlers or {}
+
+    def make_function_key_handler(key_name: str):
+        """Factory to create closures for F2-F12 handlers."""
+
+        def function_key_handler(
+            buffer: str, curpos: int, scroll_offset: int, max_width: int
+        ) -> Tuple[str, int, int]:
+            if key_name in _function_key_callbacks:
+                handler = _function_key_callbacks[key_name]
+                # Call the custom handler
+                result = handler(buffer, curpos, scroll_offset, max_width)
+                if result is not None:
+                    return result
+            # If no custom handler or handler returns None, return unchanged state
+            return buffer, curpos, scroll_offset
+
+        return function_key_handler
+
     with _key_actions_lock:
         KEY_ACTIONS["KEY_ENTER"] = enter_handler
         # Override history handlers with closures
@@ -1121,6 +1141,10 @@ def inputstring(
         KEY_ACTIONS["KEY_DELETE"] = delete_handler
         KEY_ACTIONS["KEY_PAGEUP"] = pageup_handler
         KEY_ACTIONS["KEY_PAGEDOWN"] = pagedown_handler
+        # NEW: Override function key handlers with closures
+        for key_num in range(2, 13):  # F2 through F12
+            key_name = f"KEY_F{key_num}"
+            KEY_ACTIONS[key_name] = make_function_key_handler(key_name)
 
     _current_display_str = None
     done = False

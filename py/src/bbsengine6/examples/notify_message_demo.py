@@ -480,9 +480,9 @@ class NotifyMessageDemo:
             buffer: str, curpos: int, scroll_offset: int, max_width: int
         ) -> tuple:
             """F2 handler: Display unread messages."""
-            # Note: This is called during input, so we just return unchanged buffer
-            # The actual message display happens in the main loop after inputstring returns
-            # We'll use a flag to signal that F2 was pressed
+            # Display messages directly when F2 is pressed
+            self._check_and_display_messages()
+            # Return unchanged buffer - user can continue editing
             return buffer, curpos, scroll_offset
 
         def get_help_text() -> str:
@@ -533,12 +533,6 @@ Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
 
                 if user_input == "?":
                     self._show_help()
-                    continue
-
-                # Check for F2 - display messages
-                # (In a real implementation, you'd use a callback mechanism)
-                if user_input == "__F2__":  # Sentinel value from F2 handler
-                    self._check_and_display_messages()
                     continue
 
                 try:
