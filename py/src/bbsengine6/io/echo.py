@@ -301,7 +301,7 @@ def to_fullwidth(s: str) -> str:
 # token handlers
 # ----------------------------
 def _handle_word(token, **kwargs):
-    global _terminal_state
+    global _terminal_state, _raw
 
     width = kwargs.get("width", terminal.columns())
 
@@ -513,6 +513,8 @@ def _handle_acs(token):
     global _terminal_state  ### _cursor_col
 
     if token.value == "acs":
+        if not token.args:
+            raise ValueError("ACS command requires a character name")
         name = token.args[0]
         repeat = int(token.args[1]) if len(token.args) > 1 else 1
     else:
@@ -556,7 +558,6 @@ def _handle_rgb(token):
         return
 
     raise ValueError("Argument Error")
-    return
 
 
 def _handle_curpos(token):
@@ -952,12 +953,6 @@ def _handle_command(token, **kwargs):  # palette=None, vars=None):
     yield from handler_dispatch(token)
     return
 
-    # CHA
-    if cmd == "cha":
-        col = int(token.args[0]) if token.args else 1
-        yield Token("CHA", args=(col,))
-        return
-
 
 _emoji = {
     "grin": "\U0001f600",  # 😀 @since 20260221
@@ -1033,13 +1028,12 @@ _emoji = {
     "maint": "\U0001f6e0",  # 🛠 @since 20230827 for empyre, murdermotel
     "axe": "\U0001fa93",  # 🪓 @since 20230827 for murdermotel
     "zap": "\U000026a1",  # ⚡ @since 20240422 for weather
-    "palmtree": "\U0001f334",  # 🌴 @since 20260221
-    "evergreentree": "\U0001f332",  # 🌲 @since 20260221
-    "tophat": "\U0001f3a9",  # 🎩 @since 20260221
-    "magicwand": "\U0001fa84",  # 🪄 @since 20260221
-    "mercenary": "\U0001f977",  # 🦷 @since 20260221
-    "checkmark": "\U00002714",  # ✅ @since 20260221
-    "crossmark": "\U00002718",  # ❌ @since 20260221
+     "palmtree": "\U0001f334",  # 🌴 @since 20260221
+     "evergreentree": "\U0001f332",  # 🌲 @since 20260221
+     "tophat": "\U0001f3a9",  # 🎩 @since 20260221
+     "magicwand": "\U0001fa84",  # 🪄 @since 20260221
+     "checkmark": "\U00002714",  # ✅ @since 20260221
+     "crossmark": "\U00002718",  # ❌ @since 20260221
 }
 
 
@@ -1125,7 +1119,7 @@ def _write_token(token: Token, flush: bool = True, stream=None):
     if not _raw:
         text = str(token.text) * repeat
     else:
-        text = (str(token.raw) or str(text)) * repeat
+        text = (str(token.raw) or str(token.text)) * repeat
     write_current_output_stream(text, flush=flush)
     return
 
