@@ -572,14 +572,18 @@ def getch_str(
     """Reads a single keypress without blocking and handles control/extended keys.
 
     Args:
-        timeout: Seconds to wait for input (default: 1.0)
+        timeout: Seconds to wait for input (default: 1.0). Uses wall-clock time for accuracy.
         debug: If True, log unknown escape sequences and return None
         fire_events: If True, fire key events if dispatcher is running
         check_notifications: If True, check for notifications and emit bell (default: True)
 
-    Special behavior:
-        - Emits {bel} once when pending notifications are detected
-        - F2 key displays pending notifications (returns None to consume key)
+    Returns:
+        Processed key name (e.g., 'a', 'KEY_UP', 'KEY_ENTER'), or None on timeout.
+        Note: F2 key returns "KEY_F2" (caller can handle notifications if desired).
+
+    Timeout Accuracy:
+        Timeout is measured using wall-clock time (time.time()) to ensure precision.
+        The function checks for notifications every 100ms during idle waits.
     """
     global _notified_this_session
 
@@ -598,13 +602,6 @@ def getch_str(
         if _input_queue:
             char = _input_queue.popleft()
             result = _proc_char(char, debug=debug, fire_events=fire_events)
-            # Check if result is F2
-            if result == "KEY_F2" and moniker:
-                _show_pending_notifications(moniker)
-                # Reset flags for next batch of notifications
-                _notified_this_session = False
-                _bottombar_updated_this_session = False
-                return None  # Don't propagate F2 to caller
             return result
         else:
             fd = _current_input_stream.fileno()
@@ -612,40 +609,44 @@ def getch_str(
             old_flags = None
 
             try:
-                # 1. Set Terminal to Raw/Cbreak Mode
+                # 1. Set Terminal to Raw Mode
                 tty.setraw(fd)
 
-                # --- INITIAL READ SETUP ---
-                # Poll for input with short intervals to allow notification updates
+                # 2. Wait for input using wall-clock timeout for accuracy
+                start_time = time.time()
                 poll_interval = 0.1  # Check notifications every 100ms
-                sleep_time = 0.01   # Sleep 10ms between checks to avoid busy-wait
-                elapsed = 0.0
                 ready = []
-                
-                while not ready and (timeout is None or elapsed < timeout):
-                    wait_time = timeout - elapsed if timeout else poll_interval
-                    wait_time = min(poll_interval, wait_time) if timeout else poll_interval
-                    
-                    ready, _, _ = select.select([_current_input_stream], [], [], wait_time)
-                    
-                    if not ready:
-                        # No input yet - update bottom bar if notifications pending
-                        if check_notifications and moniker and _has_notify_module:
-                            has_notifications, _ = _check_notifications(moniker, **kwargs)
-                            if has_notifications:
-                                _update_bottombar_on_notification()
-                        # Sleep briefly to avoid busy-waiting
-                        time.sleep(sleep_time)
-                        elapsed += wait_time
-                    else:
-                        break
-                
-                if not ready:
-                    # Timeout occurred without any input
-                    return None
 
-                # 2. Set Non-Blocking I/O
-                # Save old flags and set O_NONBLOCK flag on the file descriptor
+                while True:
+                    # Calculate elapsed time and remaining timeout
+                    elapsed = time.time() - start_time
+                    if timeout is not None and elapsed >= timeout:
+                        return None  # Timeout reached
+
+                    # Calculate timeout for select
+                    if timeout is None:
+                        select_timeout = poll_interval
+                    else:
+                        remaining = timeout - elapsed
+                        select_timeout = (
+                            min(poll_interval, remaining) if remaining > 0 else 0
+                        )
+
+                    # Wait for input with calculated timeout
+                    ready, _, _ = select.select(
+                        [_current_input_stream], [], [], select_timeout
+                    )
+
+                    if ready:
+                        break
+
+                    # No input yet - check for notification updates during idle
+                    if check_notifications and moniker and _has_notify_module:
+                        has_notifications, _ = _check_notifications(moniker, **kwargs)
+                        if has_notifications:
+                            _update_bottombar_on_notification()
+
+                # 3. Set Non-Blocking I/O for escape sequence reading
                 old_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
                 fcntl.fcntl(fd, fcntl.F_SETFL, old_flags | os.O_NONBLOCK)
 
@@ -657,18 +658,11 @@ def getch_str(
                     return None
 
                 result = _proc_char(char, debug=debug, fire_events=fire_events)
-                # Check if result is F2
-                if result == "KEY_F2" and moniker:
-                    _show_pending_notifications(moniker)
-                    # Reset flags for next batch of notifications
-                    _notified_this_session = False
-                    _bottombar_updated_this_session = False
-                    return None  # Don't propagate F2 to caller
                 return result
 
             finally:
-                # 6. Restore Terminal Settings (CRUCIAL!)
+                # 4. Restore Terminal Settings (CRUCIAL!)
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                # Restore old flags (blocking?)
+                # Restore old flags (blocking I/O)
                 if old_flags:
                     fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
