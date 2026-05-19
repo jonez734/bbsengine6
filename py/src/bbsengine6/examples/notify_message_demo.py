@@ -261,11 +261,13 @@ class MessageHandler:
                             )
                             result_row = cur.fetchone()
                             # bbsengine6 cursor returns dict-like rows, access by column name
-                            notify_id = (
-                                result_row["id"]
-                                if isinstance(result_row, dict)
-                                else result_row[0]
-                            )
+                            if isinstance(result_row, dict):
+                                notify_id = result_row.get("id")
+                            else:
+                                notify_id = result_row[0] if result_row else None
+                            
+                            if not notify_id:
+                                raise ValueError("Failed to get notify_id from database insert")
 
                             # Insert recipient entry
                             cur.execute(
@@ -330,10 +332,18 @@ class MessageHandler:
 
                             for row in cur.fetchall():
                                 # cursor returns dict-like rows by default
-                                notify_id = row["id"] if isinstance(row, dict) else row[0]
-                                rendered = row["rendered_message"] if isinstance(row, dict) else row[1]
-                                sender = row["sender_moniker"] if isinstance(row, dict) else row[2]
-                                created = row["datecreated"] if isinstance(row, dict) else row[3]
+                                # Use .get() with safe fallback to handle missing keys
+                                if isinstance(row, dict):
+                                    notify_id = row.get("id")
+                                    rendered = row.get("rendered_message")
+                                    sender = row.get("sender_moniker")
+                                    created = row.get("datecreated")
+                                else:
+                                    notify_id = row[0]
+                                    rendered = row[1]
+                                    sender = row[2]
+                                    created = row[3]
+                                
                                 messages.append(
                                     {
                                         "direction": "in",
