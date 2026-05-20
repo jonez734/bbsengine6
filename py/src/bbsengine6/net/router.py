@@ -1,12 +1,13 @@
-# internet/router.py
-# Routing logic for internet addresses with machine registry.
+# bbsengine6/net/router.py
+# Routing logic for internet addresses (notifications) and frame addresses
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .address import AddressParser
+from .frame_address import FrameAddress, FrameAddressParser, ParseResult
 from .registry import MachineRegistry, get_registry
 from .transport import WebSocketTransport
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class InternetRouter:
-    """Route notifications between local and remote machines."""
+    """Route notifications and frames between local and remote machines."""
 
     def __init__(
         self,
@@ -29,41 +30,58 @@ class InternetRouter:
             registry: MachineRegistry for remote machine configs
         """
         self.parser = AddressParser(local_machine)
+        self.frame_parser = FrameAddressParser()
         self.transport = WebSocketTransport()
         self.local_machine = local_machine
         self.registry = registry or get_registry()
 
     def route(
         self, addresses: List[str]
-    ) -> Tuple[List[str], Dict[str, List[str]], Dict[str, str]]:
+    ) -> Tuple[List[str], Dict[str, List[str]], Dict[str, FrameAddress], Dict[str, str]]:
         """
-        Route a list of addresses into local and remote recipients.
+        Route a list of addresses into local, remote, and frame recipients.
 
         Args:
-            addresses: List of recipient addresses (mixed local and remote)
+            addresses: List of recipient addresses (mixed notification and frame)
 
         Returns:
-            (local_recipients, remote_recipients_by_machine, errors) tuple
-            - local_recipients: List of local monikers
-            - remote_recipients_by_machine: Dict[machine] -> List[recipients]
+            (local_recipients, remote_recipients_by_machine, frame_addresses, errors) tuple
+            - local_recipients: List of local notification monikers
+            - remote_recipients_by_machine: Dict[machine] -> List[recipients] for notifications
+            - frame_addresses: Dict[address_str] -> FrameAddress for frame transmission
             - errors: Dict[address] -> error message
         """
-        result = self.parser.parse_list(addresses)
-
         local_recipients = []
         remote_by_machine: Dict[str, List[str]] = {}
+        frame_addresses: Dict[str, FrameAddress] = {}
+        errors: Dict[str, str] = {}
 
-        # Sort parsed addresses
-        for addr in result.valid:
-            if addr.is_local():
-                local_recipients.append(addr.user)
+        for address in addresses:
+            # Try to parse as frame address first (tcp://, udp://, etc.)
+            frame_result = self.frame_parser.parse(address)
+            
+            if frame_result.success:
+                # It's a frame address
+                frame_addresses[address] = frame_result.value
             else:
-                machine = addr.machine
-                if machine not in remote_by_machine:
-                    remote_by_machine[machine] = []
-                remote_by_machine[machine].append(addr.user)
+                # Try as notification address (SMTP-like)
+                notif_result = self.parser.parse(address)
+                
+                if address in notif_result.invalid:
+                    # Both parse attempts failed
+                    errors[address] = f"Invalid address (frame: {frame_result.error}, notification: {notif_result.invalid.get(address, 'unknown')})"
+                else:
+                    # Successfully parsed as notification address
+                    for addr in notif_result.valid:
+                        if addr.is_local():
+                            local_recipients.append(addr.user)
+                        else:
+                            machine = addr.machine
+                            if machine not in remote_by_machine:
+                                remote_by_machine[machine] = []
+                            remote_by_machine[machine].append(addr.user)
 
-        return local_recipients, remote_by_machine, result.invalid
+        return local_recipients, remote_by_machine, frame_addresses, errors
 
     def get_machine_config(self, machine_name: str) -> Optional[Any]:
         """
@@ -97,6 +115,26 @@ class InternetRouter:
             return config.host, config.port, config.auth_token
         return None, None, None
 
+    def classify_address(self, address: str) -> str:
+        """
+        Classify an address as 'frame', 'notification', or 'invalid'.
+
+        Args:
+            address: Address string to classify
+
+        Returns:
+            One of: 'frame', 'notification', 'invalid'
+        """
+        frame_result = self.frame_parser.parse(address)
+        if frame_result.success:
+            return "frame"
+
+        notif_result = self.parser.parse(address)
+        if address not in notif_result.invalid:
+            return "notification"
+
+        return "invalid"
+
 
 # Module-level defaults
 _default_router: Optional[InternetRouter] = None
@@ -114,6 +152,11 @@ def get_router(
 
 def route_recipients(
     addresses: List[str], local_machine: str = "local"
-) -> Tuple[List[str], Dict[str, List[str]], Dict[str, str]]:
-    """Route recipients into local and remote groups."""
+) -> Tuple[List[str], Dict[str, List[str]], Dict[str, FrameAddress], Dict[str, str]]:
+    """
+    Route recipients into local, remote, and frame groups.
+    
+    Returns:
+        (local_recipients, remote_by_machine, frame_addresses, errors) tuple
+    """
     return get_router(local_machine).route(addresses)
