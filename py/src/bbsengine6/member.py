@@ -969,6 +969,9 @@ def moniker_exists(args, moniker: str, **kwargs) -> bool | None:
     if not moniker or not isinstance(moniker, str):
         raise ValueError("Invalid moniker: must be non-empty string")
 
+    if moniker.startswith("@"):
+        raise ValueError("Invalid moniker: cannot start with '@'")
+
     if len(moniker) > 50:
         raise ValueError(f"Invalid moniker: exceeds 50 characters ({len(moniker)})")
 
