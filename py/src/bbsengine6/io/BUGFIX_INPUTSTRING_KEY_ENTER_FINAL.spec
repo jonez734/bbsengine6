@@ -146,7 +146,20 @@ Different locks used for other purposes:
 - `getch()` needs clean lock acquisition without prior contention
 - Solution: Move echo() outside the lock, let both functions manage locks independently
 
-## Commits Summary
+## Subsequent Fixes (May 19, 2026 - Afternoon)
+
+After the above fix, additional race condition bugs were discovered and fixed:
+
+| Hash | Message |
+|------|---------|
+| `c7cd601` | **Fix: Add lock to {curpos} echo command to prevent race conditions** |
+| `0b650f6` | **Fix: Add lock to _terminal_state updates in inputstring() function** |
+
+**Context**: While the morning fix (ca1f097) removed the lock to prevent contention, it inadvertently introduced new race conditions where `_terminal_state` was being modified without synchronization. The afternoon fixes add proper `_terminal_state_lock` protection to these operations.
+
+See `BUGFIX_TERMINAL_STATE_LOCKING.spec` for detailed analysis of these race condition fixes.
+
+## Complete Commits Summary
 
 | Hash | Message |
 |------|---------|
@@ -154,7 +167,9 @@ Different locks used for other purposes:
 | `e22531b` | Improve getch_str() lock handling to match proven approach |
 | `8e78454` | Fix inputstring() lock contention with getch() |
 | `ca1f097` | Fix inputstring() hang by removing lock around echo before getch() |
-| `2ed1362` | **Fix inputstring KEY_ENTER hang: remove unnecessary lock from echo command handlers** (FINAL FIX) |
+| `2ed1362` | Fix inputstring KEY_ENTER hang: remove unnecessary lock from echo command handlers (FINAL FIX) |
+| `c7cd601` | Fix: Add lock to {curpos} echo command to prevent race conditions |
+| `0b650f6` | Fix: Add lock to _terminal_state updates in inputstring() function |
 
 ## Verification
 
