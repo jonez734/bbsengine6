@@ -1078,3 +1078,145 @@ def count(args, **kwargs):
     except Exception:
         io.echo_traceback("bbsengine6.member.count.100:")
         return None
+
+
+def group_exists(args, group_name: str, **kwargs) -> bool | None:
+    """Check if a group exists in the database.
+
+    Validates group name format and checks existence in engine.__notify_group.
+
+    Args:
+        args: Application args
+        group_name: Group name to validate (case-sensitive)
+        **kwargs: Optional - pool, conn
+
+    Returns:
+        bool: True if group exists, False if not, None on error
+
+    Raises:
+        ValueError: If group_name format is invalid
+            - Empty or None
+            - Exceeds 100 characters
+            - Contains non-ASCII characters
+            - Contains non-printable characters
+
+    Examples:
+        >>> group_exists(args, "ops", pool=pool)
+        True
+        >>> group_exists(args, "nonexistent", pool=pool)
+        False
+    """
+    # Validate group name format
+    if not group_name or not isinstance(group_name, str):
+        raise ValueError("Invalid group name: must be non-empty string")
+
+    if len(group_name) > 100:
+        raise ValueError(
+            f"Invalid group name: exceeds 100 characters ({len(group_name)})"
+        )
+
+    # Validate printable ASCII only (0x20 to 0x7E)
+    for i, char in enumerate(group_name):
+        code = ord(char)
+        # Printable ASCII range: 0x20 (space) to 0x7E (tilde)
+        if code < 0x20 or code > 0x7E:
+            raise ValueError(
+                f"Invalid group name: contains non-printable character at position {i}: "
+                f"{repr(char)} (0x{code:02x}). Only ASCII (0x20-0x7E) allowed."
+            )
+
+    # Check existence
+    conn = kwargs.get("conn", None)
+    if conn is None:
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            io.echo("bbsengine6.member.group_exists.100: pool=None", level="error")
+            return None
+        conn = database.connect(args, pool=pool)
+
+    try:
+        with database.cursor(conn) as cur:
+            sql = "SELECT 1 FROM engine.__notify_group WHERE group_name=%s LIMIT 1"
+            dat = (group_name,)
+            cur.execute(sql, dat)
+            return cur.rowcount > 0
+    except Exception:
+        io.echo_traceback("bbsengine6.member.group_exists.100:")
+        return None
+
+
+def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
+    """Get all member monikers in a group.
+
+    Retrieves all members of a notification group from engine.__notify_group.
+
+    Args:
+        args: Application args
+        group_name: Name of the group
+        **kwargs: Optional - pool, conn
+
+    Returns:
+        list[str]: List of member monikers in the group (empty list if no members)
+        None: On error
+
+    Raises:
+        ValueError: If group_name format is invalid (same checks as group_exists)
+
+    Examples:
+        >>> get_group_members(args, "ops", pool=pool)
+        ["alice", "bob", "charlie"]
+        >>> get_group_members(args, "ops", pool=pool)
+        []  # Empty group
+    """
+    # Validate group name (reuse validation from group_exists)
+    if not group_name or not isinstance(group_name, str):
+        raise ValueError("Invalid group name: must be non-empty string")
+
+    if len(group_name) > 100:
+        raise ValueError(
+            f"Invalid group name: exceeds 100 characters ({len(group_name)})"
+        )
+
+    # Validate printable ASCII only
+    for i, char in enumerate(group_name):
+        code = ord(char)
+        if code < 0x20 or code > 0x7E:
+            raise ValueError(
+                f"Invalid group name: contains non-printable character at position {i}: "
+                f"{repr(char)} (0x{code:02x}). Only ASCII (0x20-0x7E) allowed."
+            )
+
+    # Get group members
+    conn = kwargs.get("conn", None)
+    if conn is None:
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            io.echo("bbsengine6.member.get_group_members.100: pool=None", level="error")
+            return None
+        conn = database.connect(args, pool=pool)
+
+    try:
+        with database.cursor(conn) as cur:
+            sql = (
+                "SELECT member_moniker FROM engine.__notify_group "
+                "WHERE group_name=%s ORDER BY member_moniker"
+            )
+            dat = (group_name,)
+            cur.execute(sql, dat)
+
+            if cur.rowcount == 0:
+                return []
+
+            members = []
+            for row in cur.fetchall():
+                if isinstance(row, dict):
+                    member_moniker = row.get("member_moniker")
+                else:
+                    member_moniker = row[0]
+                if member_moniker:
+                    members.append(member_moniker)
+
+            return members
+    except Exception:
+        io.echo_traceback("bbsengine6.member.get_group_members.100:")
+        return None

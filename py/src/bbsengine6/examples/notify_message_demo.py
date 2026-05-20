@@ -527,6 +527,58 @@ class MessageHandler:
         with self._lock:
             return list(self.message_history)
 
+    def resolve_recipient(self, recipient: str) -> list[str]:
+        """Resolve recipient name to list of monikers.
+
+        Handles both individual monikers and group names:
+        - Individual: "alice" → ["alice"]
+        - Group: "ops" → ["alice", "bob", "charlie"]
+
+        In demo mode (no database), only returns the recipient as-is.
+        In database mode, checks if recipient is a group and expands members.
+
+        Args:
+            recipient: Moniker or group name to resolve
+
+        Returns:
+            list[str]: List of member monikers to send to
+
+        Raises:
+            ValueError: If recipient not found (in database mode)
+        """
+        # Demo mode: return recipient as-is
+        if not self.args or not self.pool:
+            return [recipient]
+
+        # Database mode: try to expand as group first
+        try:
+            # Check if it's a group
+            is_group = member.group_exists(self.args, recipient, pool=self.pool)
+            if is_group:
+                # Get all members of the group
+                members = member.get_group_members(self.args, recipient, pool=self.pool)
+                if members is not None and len(members) > 0:
+                    return members
+                else:
+                    # Empty group
+                    raise ValueError(f"group {recipient} is empty")
+
+            # Not a group, check if it's a valid moniker
+            if not member.moniker_exists(self.args, recipient, pool=self.pool):
+                raise ValueError(f"member {recipient} not found")
+
+            return [recipient]
+
+        except ValueError:
+            # Re-raise validation/not found errors
+            raise
+        except Exception as e:
+            # Log unexpected errors but don't crash
+            from bbsengine6.io.echo import echo_traceback
+
+            echo_traceback(f"Error resolving recipient {recipient}: {e}")
+            raise ValueError(f"Error resolving recipient {recipient}")
+
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Functional Helpers for Interactive Loop
@@ -540,7 +592,8 @@ def display_header(moniker: str, template: str) -> None:
     echo(f"{'=' * 60}")
     echo(f"Template: {template}")
     echo(f"\nCommands:")
-    echo(f"  @<user> <message>  - Send message to user")
+    echo(f"  @<user> <message>   - Send message to user")
+    echo(f"  @<group> <message>  - Send message to all in group")
     echo(f"  echo <text>         - Use echo command in message")
     echo(f"  ?                   - Show this help")
     echo(f"  q                   - Quit")
@@ -910,7 +963,8 @@ Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
         """Display help information."""
         help_text = f"""
 Commands:
-  @<user> <message>  - Send message to user
+  @<user> <message>   - Send message to user
+  @<group> <message>  - Send message to all in group
   echo <text>         - Use echo command in message
   !echo <text>        - Alternative echo syntax
   ?                   - Show this help
@@ -924,25 +978,36 @@ Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
 
 Examples:
    @alice Hello there!
-   @bob echo "Test message"
-   @alice !echo "Current time"
+   @ops echo "Ops team alert"
+   @bob !echo "Current time"
 """
         echo(help_text)
 
     def _process_input(self, user_input: str) -> None:
         """Process user input."""
         if user_input.startswith("@"):
-            # Send message
+            # Send message to user or group
             parts = user_input.split(None, 1)
             if len(parts) < 2:
-                raise ValueError("Usage: @<user> <message>")
+                raise ValueError("Usage: @<user|group> <message>")
 
-            recipient = parts[0][1:]  # Remove @
+            recipient_input = parts[0][1:]  # Remove @
             message = parts[1]
 
-            self.handler.send_message(message, recipient)
+            # Resolve recipient (could be user or group)
+            recipients = self.handler.resolve_recipient(recipient_input)
+
+            # Send to each resolved recipient
+            for recipient in recipients:
+                self.handler.send_message(message, recipient)
+
             timestamp_str = TimestampFormatter.format_compact(datetime.now())
-            echo(f"[{timestamp_str}] [SENT to {recipient}] {message}")
+            if len(recipients) == 1:
+                echo(f"[{timestamp_str}] [SENT to {recipient_input}] {message}")
+            else:
+                echo(
+                    f"[{timestamp_str}] [SENT to {recipient_input} ({len(recipients)} members)] {message}"
+                )
 
         elif user_input == "stats":
             self._show_stats()
