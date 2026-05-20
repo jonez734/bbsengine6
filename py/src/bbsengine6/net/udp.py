@@ -150,7 +150,7 @@ class UDPSender:
     def send_frame(
         self,
         frame: Union[bytes, Frame, NumpyFrame, object],
-        frame_id: Optional[int] = None,
+        frame_id: int,
         prev_frame: Optional[Union[bytes, Frame, NumpyFrame, object]] = None,
         cols: int = 0,
         rows: int = 0,

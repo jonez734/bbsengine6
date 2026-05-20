@@ -24,22 +24,32 @@ class TestTCPRoundTrip:
         receiver.close()
     
     def test_tcp_send_receive_frame(self, free_port):
-        """Test that send_frame accepts Frame object and extracts frame_id."""
-        # Create a small frame for testing
-        frame_data = bytes(range(256)) * 37 + bytes(range(128))  # 9600 bytes for 64x50 RGB
-        frame = Frame(frame_data, 64, 50, frame_id=42)
+        """Send frame over TCP and receive it."""
+        frame_data = bytes(range(256)) * 300  # 640x480 frame
+        frame = Frame(frame_data, 640, 480, frame_id=1)
+        
+        receiver = TCPReceiver("127.0.0.1", free_port, timeout=2.0)
+        
+        # Run receiver in thread
+        def recv_thread():
+            received = receiver.receive()
+            assert received is not None
+            assert isinstance(received, type(receiver.receive.__annotations__.get('return')))
+        
+        thread = threading.Thread(target=recv_thread, daemon=True)
+        thread.start()
+        
+        # Give receiver time to bind
+        time.sleep(0.1)
         
         sender = TCPSender("127.0.0.1", free_port)
-        receiver = TCPReceiver("127.0.0.1", free_port, timeout=0.5)
+        error = sender.connect()
+        assert error is None
         
-        # Test that send_frame works with Frame object (extracts frame_id)
-        # Connection may or may not succeed, but the API should accept Frame without explicit frame_id
         error = sender.send_frame(frame)
-        # If error, should be a ParseResult with error details, not a signature error
-        if error is not None:
-            assert isinstance(error, ParseResult)
-        # Success - frame was sent (or queued)
+        assert error is None
         
+        thread.join(timeout=2.0)
         sender.close()
         receiver.close()
     
