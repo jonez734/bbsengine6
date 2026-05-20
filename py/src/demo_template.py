@@ -48,17 +48,23 @@ def demo_variable_substitution():
     print("=" * 60)
 
     # Simple substitution - use io.echo() to process {var:xxx} commands
-    result = io.load_template("menu.tpl", title="Main Menu", item1="Files", item2="Mail")
+    result = io.load_template(
+        "menu.tpl", title="Main Menu", item1="Files", item2="Mail"
+    )
     print("\n--- menu.tpl with variables (via io.echo()) ---")
     io.echo(result)
 
     # Form template
-    result = io.load_template("form.tpl", title="User Profile", label="Username", value="alice")
+    result = io.load_template(
+        "form.tpl", title="User Profile", label="Username", value="alice"
+    )
     print("\n--- form.tpl with variables (via io.echo()) ---")
     io.echo(result)
 
     # Confirm template
-    result = io.load_template("confirm.tpl", title="Delete", message="Delete this file?")
+    result = io.load_template(
+        "confirm.tpl", title="Delete", message="Delete this file?"
+    )
     print("\n--- confirm.tpl with variables (via io.echo()) ---")
     io.echo(result)
 
@@ -77,7 +83,9 @@ def demo_echo_template():
     io.echo_template("list.tpl", title="Your Files", item="document.pdf")
 
     print()
-    io.echo_template("menu.tpl", title="Main Menu", item1="Read Mail", item2="Write Mail")
+    io.echo_template(
+        "menu.tpl", title="Main Menu", item1="Read Mail", item2="Write Mail"
+    )
 
 
 def demo_site_template_override():
@@ -103,7 +111,9 @@ Option 2: {item2}
         io.setvar("template_dir", tmpdir)
 
         print(f"\n--- Using custom template from {tmpdir} ---")
-        result = io.load_template("menu.tpl", title="Custom Title", item1="Option A", item2="Option B")
+        result = io.load_template(
+            "menu.tpl", title="Custom Title", item1="Option A", item2="Option B"
+        )
         print(result)
 
         # Clean up

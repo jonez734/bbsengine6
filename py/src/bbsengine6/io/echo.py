@@ -333,7 +333,7 @@ def to_fullwidth(s: str) -> str:
 def _handle_word(token, **kwargs):
     """
     Process a WORD token: handle word wrapping and cursor column tracking.
-    
+
     Emits an F6 (newline) if word would exceed available width.
     Updates cursor position in terminal state.
     """
@@ -541,7 +541,7 @@ def _acs_off():
 def _handle_acs(token):
     """
     Process ACS (Alternate Character Set) command for box drawing.
-    
+
     Converts ACS character names (e.g., 'ulcorner', 'hline') to DEC graphics characters.
     Emits ACS_ON before output and tracks cursor position.
     """
@@ -609,9 +609,10 @@ def _handle_curpos(token):
     y = max(1, y)
     x = max(1, x)
 
-    # update terminal state - no lock needed (local tracking only)
-    _terminal_state.cursor_row = y
-    _terminal_state.cursor_col = x
+    # update terminal state under lock to prevent race conditions
+    with _terminal_state_lock:
+        _terminal_state.cursor_row = y
+        _terminal_state.cursor_col = x
 
     # emit escape
     token.text = f"{CSI}{y};{x}H"
@@ -904,7 +905,7 @@ def _handle_bel(token):
 
 
 _unicode = {
-     "dblhline": "\u2550",  # ═
+    "dblhline": "\u2550",  # ═
     "dblvline": "\u2551",  # ║
     "dblul": "\u2554",  # ╔
     "dblur": "\u2557",  # ╗
@@ -1045,12 +1046,12 @@ _emoji = {
     "maint": "\U0001f6e0",  # 🛠 @since 20230827 for empyre, murdermotel
     "axe": "\U0001fa93",  # 🪓 @since 20230827 for murdermotel
     "zap": "\U000026a1",  # ⚡ @since 20240422 for weather
-     "palmtree": "\U0001f334",  # 🌴 @since 20260221
-     "evergreentree": "\U0001f332",  # 🌲 @since 20260221
-     "tophat": "\U0001f3a9",  # 🎩 @since 20260221
-     "magicwand": "\U0001fa84",  # 🪄 @since 20260221
-     "checkmark": "\U00002714",  # ✅ @since 20260221
-     "crossmark": "\U00002718",  # ❌ @since 20260221
+    "palmtree": "\U0001f334",  # 🌴 @since 20260221
+    "evergreentree": "\U0001f332",  # 🌲 @since 20260221
+    "tophat": "\U0001f3a9",  # 🎩 @since 20260221
+    "magicwand": "\U0001fa84",  # 🪄 @since 20260221
+    "checkmark": "\U00002714",  # ✅ @since 20260221
+    "crossmark": "\U00002718",  # ❌ @since 20260221
 }
 
 
@@ -1212,7 +1213,9 @@ def echo_iter(
         _previous_token = token
 
 
-def echo(text: str = "", *, flush: bool = True, end: Optional[str] = ECHO_END, **kwargs) -> Optional[str]:
+def echo(
+    text: str = "", *, flush: bool = True, end: Optional[str] = ECHO_END, **kwargs
+) -> Optional[str]:
     """
     Print text to stdout, interpreting inline commands unless raw=True.
     width: override detected terminal width if not None
@@ -1261,7 +1264,13 @@ def echo(text: str = "", *, flush: bool = True, end: Optional[str] = ECHO_END, *
         return logentry(text, level=level)
 
 
-def echo_file(filepath: str, page_size: int = 20, raw: bool = False, wordwrap: bool = True, end: str = "") -> None:
+def echo_file(
+    filepath: str,
+    page_size: int = 20,
+    raw: bool = False,
+    wordwrap: bool = True,
+    end: str = "",
+) -> None:
     """Echo contents of a file with optional paging."""
     with open(filepath, "r") as f:
         line_count = 0
@@ -1464,9 +1473,7 @@ def echo_template(name: str, **vars) -> None:
     template = load_template(name, **vars)
 
     if page_size > 0:
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".tpl", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".tpl", delete=False) as tmp:
             tmp.write(template)
             tmp_path = tmp.name
         try:

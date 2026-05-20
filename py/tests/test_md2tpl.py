@@ -108,7 +108,7 @@ class TestConvertToSmarty:
         result = convert_to_smarty(content, input_path, output_path)
 
         assert "{extends file=" in result
-        assert "{block name=\"content\"}" in result
+        assert '{block name="content"}' in result
         assert "<h1>Hello</h1>" in result
         assert "{$meta.title|default:" in result
 
@@ -125,9 +125,9 @@ author: John
 
         result = convert_to_smarty(content, input_path, output_path)
 
-        assert '{if isset($meta.title)}' in result
+        assert "{if isset($meta.title)}" in result
         assert '{assign var="meta.title" value=$meta.title}' in result
-        assert '{if isset($meta.author)}' in result
+        assert "{if isset($meta.author)}" in result
 
     def test_sigs_comma_joined_in_output(self):
         """sigs as list joined to comma-separated string."""
@@ -159,7 +159,9 @@ sigs: top.foo, top.bar
         input_path = Path("test.md")
         output_path = Path("test.tmpl")
 
-        result = convert_to_smarty(content, input_path, output_path, parent_template="custom.tpl")
+        result = convert_to_smarty(
+            content, input_path, output_path, parent_template="custom.tpl"
+        )
 
         assert '{extends file="custom.tpl"}' in result
 

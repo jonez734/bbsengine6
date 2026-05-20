@@ -23,7 +23,7 @@ class TestCommandLineArguments(unittest.TestCase):
 
     def test_default_mode_no_args(self):
         """Test that default (no args) triggers two-player mode."""
-        with patch('sys.argv', ['ping_pong_demo.py']):
+        with patch("sys.argv", ["ping_pong_demo.py"]):
             # Parse args without running main
             parser = self._create_parser()
             args = parser.parse_args([])
@@ -31,45 +31,46 @@ class TestCommandLineArguments(unittest.TestCase):
 
     def test_user_arg_alice(self):
         """Test --user alice argument."""
-        with patch('sys.argv', ['ping_pong_demo.py', '--user', 'alice']):
+        with patch("sys.argv", ["ping_pong_demo.py", "--user", "alice"]):
             parser = self._create_parser()
-            args = parser.parse_args(['--user', 'alice'])
-            self.assertEqual(args.user, 'alice')
+            args = parser.parse_args(["--user", "alice"])
+            self.assertEqual(args.user, "alice")
 
     def test_user_arg_bob(self):
         """Test --user bob argument."""
-        with patch('sys.argv', ['ping_pong_demo.py', '--user', 'bob']):
+        with patch("sys.argv", ["ping_pong_demo.py", "--user", "bob"]):
             parser = self._create_parser()
-            args = parser.parse_args(['--user', 'bob'])
-            self.assertEqual(args.user, 'bob')
+            args = parser.parse_args(["--user", "bob"])
+            self.assertEqual(args.user, "bob")
 
     def test_user_arg_custom_name(self):
         """Test --user with custom player name."""
-        with patch('sys.argv', ['ping_pong_demo.py', '--user', 'charlie']):
+        with patch("sys.argv", ["ping_pong_demo.py", "--user", "charlie"]):
             parser = self._create_parser()
-            args = parser.parse_args(['--user', 'charlie'])
-            self.assertEqual(args.user, 'charlie')
+            args = parser.parse_args(["--user", "charlie"])
+            self.assertEqual(args.user, "charlie")
 
     def test_user_arg_with_numbers(self):
         """Test --user with alphanumeric name."""
-        with patch('sys.argv', ['ping_pong_demo.py', '--user', 'player123']):
+        with patch("sys.argv", ["ping_pong_demo.py", "--user", "player123"]):
             parser = self._create_parser()
-            args = parser.parse_args(['--user', 'player123'])
-            self.assertEqual(args.user, 'player123')
+            args = parser.parse_args(["--user", "player123"])
+            self.assertEqual(args.user, "player123")
 
     def test_help_argument(self):
         """Test --help argument displays usage."""
-        with patch('sys.argv', ['ping_pong_demo.py', '--help']):
+        with patch("sys.argv", ["ping_pong_demo.py", "--help"]):
             parser = self._create_parser()
             # Help should contain the --user argument
             help_text = parser.format_help()
-            self.assertIn('--user', help_text)
-            self.assertIn('player name', help_text.lower())
+            self.assertIn("--user", help_text)
+            self.assertIn("player name", help_text.lower())
 
     @staticmethod
     def _create_parser():
         """Create argument parser matching main()."""
         import argparse
+
         parser = argparse.ArgumentParser(
             description="BBSENGINE6 Ping-Pong Demo - Interactive messaging system",
             formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -95,28 +96,28 @@ class TestInvalidInput(unittest.TestCase):
 
     def test_empty_user_name(self):
         """Test that empty user name is rejected."""
-        with patch('sys.argv', ['ping_pong_demo.py', '--user', '']):
+        with patch("sys.argv", ["ping_pong_demo.py", "--user", ""]):
             parser = self._create_parser()
-            args = parser.parse_args(['--user', ''])
+            args = parser.parse_args(["--user", ""])
             # Empty string should be treated as invalid
-            self.assertEqual(args.user, '')
+            self.assertEqual(args.user, "")
 
     def test_user_name_too_long(self):
         """Test that user names exceeding 255 characters are rejected."""
-        long_name = 'a' * 256
-        with patch('sys.argv', ['ping_pong_demo.py', '--user', long_name]):
+        long_name = "a" * 256
+        with patch("sys.argv", ["ping_pong_demo.py", "--user", long_name]):
             parser = self._create_parser()
-            args = parser.parse_args(['--user', long_name])
+            args = parser.parse_args(["--user", long_name])
             # Parser accepts it, but main() should reject it
             self.assertEqual(args.user, long_name)
             self.assertGreater(len(args.user), 255)
 
     def test_user_name_max_length(self):
         """Test that user names of exactly 255 characters are accepted."""
-        max_name = 'a' * 255
-        with patch('sys.argv', ['ping_pong_demo.py', '--user', max_name]):
+        max_name = "a" * 255
+        with patch("sys.argv", ["ping_pong_demo.py", "--user", max_name]):
             parser = self._create_parser()
-            args = parser.parse_args(['--user', max_name])
+            args = parser.parse_args(["--user", max_name])
             self.assertEqual(args.user, max_name)
             self.assertEqual(len(args.user), 255)
 
@@ -124,6 +125,7 @@ class TestInvalidInput(unittest.TestCase):
     def _create_parser():
         """Create argument parser."""
         import argparse
+
         parser = argparse.ArgumentParser()
         parser.add_argument("--user", type=str, default=None, metavar="NAME")
         return parser
@@ -136,6 +138,7 @@ class TestNotificationSetup(unittest.TestCase):
         """Reset state before each test."""
         # Clear notification types
         from bbsengine6.notify import _types, _types_lock
+
         with _types_lock:
             _types.clear()
 
@@ -146,6 +149,7 @@ class TestNotificationSetup(unittest.TestCase):
 
         # Verify types were registered
         from bbsengine6.notify import _types
+
         self.assertIn("ping_message", _types)
         self.assertIn("pong_message", _types)
 
@@ -154,6 +158,7 @@ class TestNotificationSetup(unittest.TestCase):
         ping_pong_demo.setup_notifications()
 
         from bbsengine6.notify import _types
+
         ping_config = _types.get("ping_message", {})
         self.assertIsNotNone(ping_config)
         self.assertEqual(ping_config.get("max_per_hour"), 100)
@@ -164,6 +169,7 @@ class TestNotificationSetup(unittest.TestCase):
         ping_pong_demo.setup_notifications()
 
         from bbsengine6.notify import _types
+
         pong_config = _types.get("pong_message", {})
         self.assertIsNotNone(pong_config)
         self.assertEqual(pong_config.get("max_per_hour"), 100)
@@ -176,8 +182,8 @@ class TestMessageSanitization(unittest.TestCase):
     def test_sanitize_text_removes_control_chars(self):
         """Test that _sanitize_text removes control characters."""
         result = ping_pong_demo._sanitize_text("hello\x1b[31mworld")
-        self.assertNotIn('\x1b', result)
-        self.assertIn('hello', result)
+        self.assertNotIn("\x1b", result)
+        self.assertIn("hello", result)
 
     def test_sanitize_text_keeps_printable(self):
         """Test that _sanitize_text preserves printable characters."""
@@ -189,14 +195,14 @@ class TestMessageSanitization(unittest.TestCase):
         """Test that _sanitize_text preserves tabs and spaces."""
         text = "hello\t\tworld  test"
         result = ping_pong_demo._sanitize_text(text)
-        self.assertIn('\t', result)
-        self.assertIn(' ', result)
+        self.assertIn("\t", result)
+        self.assertIn(" ", result)
 
     def test_sanitize_text_removes_newline(self):
         """Test that _sanitize_text removes newlines."""
         text = "hello\nworld"
         result = ping_pong_demo._sanitize_text(text)
-        self.assertNotIn('\n', result)
+        self.assertNotIn("\n", result)
 
     def test_sanitize_text_empty_string(self):
         """Test sanitization of empty string."""
@@ -231,7 +237,9 @@ class TestConfigurationClass(unittest.TestCase):
     def test_legacy_aliases(self):
         """Test that legacy aliases still work."""
         self.assertEqual(ping_pong_demo.MAX_ROUNDS, ping_pong_demo.Config.MAX_ROUNDS)
-        self.assertEqual(ping_pong_demo.GETCH_TIMEOUT, ping_pong_demo.Config.GETCH_TIMEOUT)
+        self.assertEqual(
+            ping_pong_demo.GETCH_TIMEOUT, ping_pong_demo.Config.GETCH_TIMEOUT
+        )
 
 
 class TestSharedRoundCounter(unittest.TestCase):
@@ -265,6 +273,7 @@ class TestSharedRoundCounter(unittest.TestCase):
 
     def test_shared_rounds_concurrent_increment(self):
         """Test concurrent increments are atomic."""
+
         def increment_player(player, count):
             for _ in range(count):
                 with ping_pong_demo.round_counter_lock:
@@ -289,12 +298,14 @@ class TestMessageLogRotation(unittest.TestCase):
     def test_message_log_is_deque(self):
         """Test that message_log uses deque for rotation."""
         from collections import deque
+
         log = deque(maxlen=ping_pong_demo.Config.MESSAGE_LOG_SIZE)
         self.assertIsInstance(log, deque)
 
     def test_message_log_auto_rotation(self):
         """Test that message log auto-rotates at maxlen."""
         from collections import deque
+
         log = deque(maxlen=5)
 
         # Add 7 items (exceeds maxlen)
@@ -303,17 +314,21 @@ class TestMessageLogRotation(unittest.TestCase):
 
         # Should only have last 5
         self.assertEqual(len(log), 5)
-        self.assertEqual(list(log), ["message 2", "message 3", "message 4", "message 5", "message 6"])
+        self.assertEqual(
+            list(log), ["message 2", "message 3", "message 4", "message 5", "message 6"]
+        )
 
     def test_message_log_size_default(self):
         """Test that default message log size is 100."""
         from collections import deque
+
         log = deque(maxlen=ping_pong_demo.Config.MESSAGE_LOG_SIZE)
         self.assertEqual(log.maxlen, 100)
 
     def test_message_log_bounded_memory(self):
         """Test that message log won't exceed memory bounds."""
         from collections import deque
+
         log = deque(maxlen=100)
 
         # Add 1000 items
@@ -336,10 +351,12 @@ class TestQueueOperations(unittest.TestCase):
     def test_get_queue_creates_queue_on_demand(self):
         """Test that get_queue creates queue on demand."""
         from bbsengine6 import notify
+
         queue = notify.get_queue("newuser")
         # get_queue creates queue on demand, returns UserNotificationQueue
         self.assertIsNotNone(queue)
         from bbsengine6.notify import UserNotificationQueue
+
         self.assertIsInstance(queue, UserNotificationQueue)
 
     def test_queue_put_operation(self):
@@ -442,7 +459,9 @@ class TestThreadSafety(unittest.TestCase):
                 time.sleep(0.001)
                 results.append(value)
 
-        threads = [threading.Thread(target=critical_section, args=(i,)) for i in range(10)]
+        threads = [
+            threading.Thread(target=critical_section, args=(i,)) for i in range(10)
+        ]
 
         for t in threads:
             t.start()
@@ -495,7 +514,7 @@ class TestRobustnessImprovements(unittest.TestCase):
 
     def test_config_class_exists(self):
         """Test that Config class exists for centralized configuration."""
-        self.assertTrue(hasattr(ping_pong_demo, 'Config'))
+        self.assertTrue(hasattr(ping_pong_demo, "Config"))
 
     def test_sanitize_text_function_exists(self):
         """Test that _sanitize_text function exists."""
@@ -503,21 +522,21 @@ class TestRobustnessImprovements(unittest.TestCase):
 
     def test_round_counter_lock_exists(self):
         """Test that round_counter_lock exists for atomicity."""
-        self.assertTrue(hasattr(ping_pong_demo, 'round_counter_lock'))
+        self.assertTrue(hasattr(ping_pong_demo, "round_counter_lock"))
 
     def test_shared_rounds_dict_exists(self):
         """Test that shared_rounds dict exists."""
-        self.assertTrue(hasattr(ping_pong_demo, 'shared_rounds'))
+        self.assertTrue(hasattr(ping_pong_demo, "shared_rounds"))
         self.assertIsInstance(ping_pong_demo.shared_rounds, dict)
 
     def test_message_log_lock_exists(self):
         """Test that message_log_lock exists."""
-        self.assertTrue(hasattr(ping_pong_demo, 'message_log_lock'))
+        self.assertTrue(hasattr(ping_pong_demo, "message_log_lock"))
 
     def test_echo_imported(self):
         """Test that echo is imported instead of print."""
         # Check that echo function is imported
-        self.assertTrue(hasattr(ping_pong_demo, 'echo'))
+        self.assertTrue(hasattr(ping_pong_demo, "echo"))
 
 
 def run_integration_tests():
@@ -547,7 +566,7 @@ def run_integration_tests():
 
 if __name__ == "__main__":
     # Run unit tests
-    unittest.main(argv=[''], exit=False, verbosity=2)
+    unittest.main(argv=[""], exit=False, verbosity=2)
 
     # Print integration test guidance
     run_integration_tests()

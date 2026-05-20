@@ -31,14 +31,14 @@ class TestEnsureSchema:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         storage.ensure_schema(mock_pool)
-        
+
         # Verify schema SQL was executed
         mock_cursor.execute.assert_called_once()
         mock_conn.commit.assert_called_once()
@@ -47,13 +47,13 @@ class TestEnsureSchema:
         """Schema creation fails"""
         mock_pool = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(
             side_effect=Exception("Database error")
         )
-        
+
         with pytest.raises(storage.StorageError):
             storage.ensure_schema(mock_pool)
 
@@ -66,16 +66,16 @@ class TestGetLastUid:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchone.return_value = (42,)
-        
+
         result = storage.get_last_uid(mock_pool, "Gmail", "INBOX")
-        
+
         assert result == 42
         mock_cursor.execute.assert_called_once()
         # Verify correct SQL was executed
@@ -87,16 +87,16 @@ class TestGetLastUid:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchone.return_value = None
-        
+
         result = storage.get_last_uid(mock_pool, "Gmail", "INBOX")
-        
+
         assert result == 0
 
     def test_get_last_uid_query_fails(self):
@@ -104,13 +104,13 @@ class TestGetLastUid:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(
             side_effect=Exception("Query failed")
         )
-        
+
         with pytest.raises(storage.StorageError):
             storage.get_last_uid(mock_pool, "Gmail", "INBOX")
 
@@ -123,14 +123,14 @@ class TestSetLastUid:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         storage.set_last_uid(mock_pool, "Gmail", "INBOX", 100)
-        
+
         mock_cursor.execute.assert_called_once()
         mock_conn.commit.assert_called_once()
 
@@ -139,14 +139,14 @@ class TestSetLastUid:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         storage.set_last_uid(mock_pool, "Gmail", "INBOX", 200)
-        
+
         # Verify SQL contains ON CONFLICT
         call_args = mock_cursor.execute.call_args
         assert "ON CONFLICT" in str(call_args[0][0])
@@ -156,13 +156,13 @@ class TestSetLastUid:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(
             side_effect=Exception("Update failed")
         )
-        
+
         with pytest.raises(storage.StorageError):
             storage.set_last_uid(mock_pool, "Gmail", "INBOX", 100)
 
@@ -175,14 +175,14 @@ class TestRecordNotification:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchone.return_value = (999,)
-        
+
         result = storage.record_notification(
             mock_pool,
             "imap.message",
@@ -191,7 +191,7 @@ class TestRecordNotification:
             notification_id=42,
             status="sent",
         )
-        
+
         assert result == 999
         mock_cursor.execute.assert_called_once()
         mock_conn.commit.assert_called_once()
@@ -201,14 +201,14 @@ class TestRecordNotification:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchone.return_value = (123,)
-        
+
         result = storage.record_notification(
             mock_pool,
             "imap.message",
@@ -217,7 +217,7 @@ class TestRecordNotification:
             status="failed",
             error_message="IMAP connection timeout",
         )
-        
+
         assert result == 123
 
     def test_record_notification_returns_zero_on_empty_response(self):
@@ -225,21 +225,21 @@ class TestRecordNotification:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchone.return_value = None
-        
+
         result = storage.record_notification(
             mock_pool,
             "test.event",
             ["user1"],
             {},
         )
-        
+
         assert result == 0
 
     def test_record_notification_query_fails(self):
@@ -247,13 +247,13 @@ class TestRecordNotification:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(
             side_effect=Exception("Insert failed")
         )
-        
+
         with pytest.raises(storage.StorageError):
             storage.record_notification(
                 mock_pool,
@@ -271,20 +271,38 @@ class TestGetNotificationHistory:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         # Mock two notification records
         mock_cursor.fetchall.return_value = [
-            (1, "imap.message", ["user1"], "2026-05-18 10:00:00", 42, '{"subject": "Test"}', "sent", None),
-            (2, "user.login", ["user2"], "2026-05-18 10:01:00", 43, '{"username": "user2"}', "sent", None),
+            (
+                1,
+                "imap.message",
+                ["user1"],
+                "2026-05-18 10:00:00",
+                42,
+                '{"subject": "Test"}',
+                "sent",
+                None,
+            ),
+            (
+                2,
+                "user.login",
+                ["user2"],
+                "2026-05-18 10:01:00",
+                43,
+                '{"username": "user2"}',
+                "sent",
+                None,
+            ),
         ]
-        
+
         result = storage.get_notification_history(mock_pool, limit=100)
-        
+
         assert len(result) == 2
         assert result[0]["id"] == 1
         assert result[0]["notification_type"] == "imap.message"
@@ -297,22 +315,31 @@ class TestGetNotificationHistory:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchall.return_value = [
-            (1, "imap.message", ["user1"], "2026-05-18 10:00:00", 42, '{"subject": "Test"}', "sent", None),
+            (
+                1,
+                "imap.message",
+                ["user1"],
+                "2026-05-18 10:00:00",
+                42,
+                '{"subject": "Test"}',
+                "sent",
+                None,
+            ),
         ]
-        
+
         result = storage.get_notification_history(
             mock_pool,
             limit=50,
             notification_type="imap.message",
         )
-        
+
         assert len(result) == 1
         assert result[0]["notification_type"] == "imap.message"
 
@@ -321,16 +348,16 @@ class TestGetNotificationHistory:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchall.return_value = []
-        
+
         result = storage.get_notification_history(mock_pool)
-        
+
         assert result == []
 
     def test_get_notification_history_parses_json(self):
@@ -338,18 +365,27 @@ class TestGetNotificationHistory:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchall.return_value = [
-            (1, "test.event", ["u1"], "2026-05-18 10:00:00", None, '{"key": "value"}', "sent", None),
+            (
+                1,
+                "test.event",
+                ["u1"],
+                "2026-05-18 10:00:00",
+                None,
+                '{"key": "value"}',
+                "sent",
+                None,
+            ),
         ]
-        
+
         result = storage.get_notification_history(mock_pool)
-        
+
         assert result[0]["data"] == {"key": "value"}
 
     def test_get_notification_history_invalid_json(self):
@@ -357,18 +393,27 @@ class TestGetNotificationHistory:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchall.return_value = [
-            (1, "test.event", ["u1"], "2026-05-18 10:00:00", None, "invalid json", "sent", None),
+            (
+                1,
+                "test.event",
+                ["u1"],
+                "2026-05-18 10:00:00",
+                None,
+                "invalid json",
+                "sent",
+                None,
+            ),
         ]
-        
+
         result = storage.get_notification_history(mock_pool)
-        
+
         assert result[0]["data"] == {}
 
     def test_get_notification_history_null_json(self):
@@ -376,18 +421,18 @@ class TestGetNotificationHistory:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchall.return_value = [
             (1, "test.event", ["u1"], "2026-05-18 10:00:00", None, None, "sent", None),
         ]
-        
+
         result = storage.get_notification_history(mock_pool)
-        
+
         assert result[0]["data"] == {}
 
     def test_get_notification_history_query_fails(self):
@@ -395,13 +440,13 @@ class TestGetNotificationHistory:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(
             side_effect=Exception("Query failed")
         )
-        
+
         with pytest.raises(storage.StorageError):
             storage.get_notification_history(mock_pool)
 
@@ -414,18 +459,18 @@ class TestStorageIntegration:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         storage.ensure_schema(mock_pool)
-        
+
         # Verify SQL was executed (captured call args)
         assert mock_cursor.execute.call_count == 1
         sql_executed = mock_cursor.execute.call_args[0][0]
-        
+
         # Verify SQL contains expected table definitions
         assert "notifyd_imap_state" in sql_executed
         assert "notifyd_history" in sql_executed
@@ -436,21 +481,21 @@ class TestStorageIntegration:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchone.return_value = (42,)
-        
+
         result = storage.get_last_uid(mock_pool, "Gmail", "INBOX")
-        
+
         # Verify correct SQL and parameters were used
         call_args = mock_cursor.execute.call_args
         sql = call_args[0][0]
         params = call_args[0][1]
-        
+
         assert "notifyd_imap_state" in sql
         assert "max_uid" in sql
         assert "server = %s AND mailbox = %s" in sql
@@ -462,19 +507,19 @@ class TestStorageIntegration:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         storage.set_last_uid(mock_pool, "Gmail", "INBOX", 100)
-        
+
         # Verify upsert SQL
         call_args = mock_cursor.execute.call_args
         sql = call_args[0][0]
         params = call_args[0][1]
-        
+
         assert "INSERT INTO notifyd_imap_state" in sql
         assert "ON CONFLICT" in sql
         assert "DO UPDATE" in sql
@@ -482,7 +527,7 @@ class TestStorageIntegration:
         assert params[1] == "INBOX"
         assert params[2] == 100
         assert params[3] == 100  # Updated value
-        
+
         # Verify commit was called
         mock_conn.commit.assert_called_once()
 
@@ -491,16 +536,16 @@ class TestStorageIntegration:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchone.return_value = (999,)
-        
+
         template_vars = {"subject": "Test", "from": "sender@example.com"}
-        
+
         result = storage.record_notification(
             mock_pool,
             "imap.message",
@@ -509,22 +554,22 @@ class TestStorageIntegration:
             notification_id=42,
             status="sent",
         )
-        
+
         # Verify INSERT SQL
         call_args = mock_cursor.execute.call_args
         sql = call_args[0][0]
         params = call_args[0][1]
-        
+
         assert "INSERT INTO notifyd_history" in sql
         assert params[0] == "imap.message"
         assert params[1] == ["user1", "user2"]
         assert params[2] == 42
-        
+
         # Verify JSON serialization
         json_data = json.loads(params[3])
         assert json_data == template_vars
         assert params[4] == "sent"
-        
+
         # Verify return value
         assert result == 999
         mock_conn.commit.assert_called_once()
@@ -534,29 +579,38 @@ class TestStorageIntegration:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchall.return_value = [
-            (1, "imap.message", ["user1"], "2026-05-18 10:00:00", 42, '{"subject": "Test"}', "sent", None),
+            (
+                1,
+                "imap.message",
+                ["user1"],
+                "2026-05-18 10:00:00",
+                42,
+                '{"subject": "Test"}',
+                "sent",
+                None,
+            ),
         ]
-        
+
         result = storage.get_notification_history(mock_pool, limit=100)
-        
+
         # Verify SELECT SQL (no filter)
         call_args = mock_cursor.execute.call_args
         sql = call_args[0][0]
         params = call_args[0][1]
-        
+
         assert "SELECT id, notification_type" in sql
         assert "FROM notifyd_history" in sql
         assert "WHERE notification_type" not in sql
         assert "ORDER BY sent_at DESC" in sql
         assert params == (100,)
-        
+
         assert len(result) == 1
         assert result[0]["id"] == 1
 
@@ -565,31 +619,40 @@ class TestStorageIntegration:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchall.return_value = [
-            (1, "imap.message", ["user1"], "2026-05-18 10:00:00", 42, '{"subject": "Test"}', "sent", None),
+            (
+                1,
+                "imap.message",
+                ["user1"],
+                "2026-05-18 10:00:00",
+                42,
+                '{"subject": "Test"}',
+                "sent",
+                None,
+            ),
         ]
-        
+
         result = storage.get_notification_history(
             mock_pool,
             limit=50,
             notification_type="imap.message",
         )
-        
+
         # Verify SELECT with WHERE clause
         call_args = mock_cursor.execute.call_args
         sql = call_args[0][0]
         params = call_args[0][1]
-        
+
         assert "WHERE notification_type = %s" in sql
         assert params[0] == "imap.message"
         assert params[1] == 50
-        
+
         assert len(result) == 1
 
     def test_get_notification_history_json_deserialization(self):
@@ -597,20 +660,20 @@ class TestStorageIntegration:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         # Simulate database returning JSON and other columns
         test_data = {
             "subject": "Test Email",
             "from": "sender@example.com",
             "body": "Email body text",
-            "timestamp": "2026-05-18T10:00:00Z"
+            "timestamp": "2026-05-18T10:00:00Z",
         }
-        
+
         mock_cursor.fetchall.return_value = [
             (
                 1,
@@ -620,12 +683,12 @@ class TestStorageIntegration:
                 42,
                 json.dumps(test_data),  # Simulate JSONB from database
                 "sent",
-                None
+                None,
             ),
         ]
-        
+
         result = storage.get_notification_history(mock_pool)
-        
+
         # Verify JSON was properly deserialized
         assert len(result) == 1
         record = result[0]
@@ -642,22 +705,22 @@ class TestStorageIntegration:
         mock_pool = MagicMock()
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        
+
         # Setup context manager chains
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=None)
-        
+
         mock_cursor.fetchone.return_value = (50,)
-        
+
         # Call storage function
         storage.get_last_uid(mock_pool, "Test", "INBOX")
-        
+
         # Verify connection lifecycle
         mock_pool.connection.assert_called_once()
         mock_conn.cursor.assert_called_once()
-        
+
         # Verify context managers were entered/exited
         mock_pool.connection.return_value.__enter__.assert_called_once()
         mock_pool.connection.return_value.__exit__.assert_called_once()
@@ -668,10 +731,10 @@ class TestStorageIntegration:
         """Storage raises StorageError when connection fails"""
         mock_pool = MagicMock()
         mock_pool.connection.side_effect = Exception("Connection refused")
-        
+
         with pytest.raises(storage.StorageError) as exc_info:
             storage.get_last_uid(mock_pool, "Test", "INBOX")
-        
+
         assert "Failed to get last UID" in str(exc_info.value)
 
     def test_storage_error_on_query_failure(self):
@@ -679,16 +742,16 @@ class TestStorageIntegration:
         mock_pool = MagicMock()
         mock_cursor = MagicMock()
         mock_conn = MagicMock()
-        
+
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
         mock_pool.connection.return_value.__exit__ = MagicMock(return_value=None)
         mock_conn.cursor.return_value.__enter__ = MagicMock(
             side_effect=Exception("Query syntax error")
         )
-        
+
         with pytest.raises(storage.StorageError) as exc_info:
             storage.set_last_uid(mock_pool, "Test", "INBOX", 100)
-        
+
         assert "Failed to set last UID" in str(exc_info.value)
 
 

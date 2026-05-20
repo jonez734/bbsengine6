@@ -18,7 +18,9 @@ from bbsengine6.examples.notify_message_demo import (
 class TestNotifyMessageDemoDatabase:
     """Integration tests verifying database writes for notify_message_demo."""
 
-    def test_send_message_inserts_into_notify_table(self, db_connection, schema_init, create_test_users):
+    def test_send_message_inserts_into_notify_table(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify that sending a message inserts a row into engine.__notify."""
         # Setup
         config = DemoConfig(moniker="alice")
@@ -46,7 +48,9 @@ class TestNotifyMessageDemoDatabase:
         assert "Hello bob" in rendered_message
         assert sender == "alice"
 
-    def test_send_message_inserts_recipient_entry(self, db_connection, schema_init, create_test_users):
+    def test_send_message_inserts_recipient_entry(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify that recipient is tracked in engine.__notify_recipient."""
         # Setup
         config = DemoConfig(moniker="alice")
@@ -73,7 +77,9 @@ class TestNotifyMessageDemoDatabase:
         assert recipient == "bob"
         assert notify_id is not None
 
-    def test_bidirectional_messaging_persists_to_database(self, db_connection, schema_init, create_test_users):
+    def test_bidirectional_messaging_persists_to_database(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify alice->bob and bob->alice both persist correctly."""
         # Setup
         config_alice = DemoConfig(moniker="alice")
@@ -102,7 +108,9 @@ class TestNotifyMessageDemoDatabase:
         assert alice_count >= 1, "No messages from alice found in database"
         assert bob_count >= 1, "No messages from bob found in database"
 
-    def test_template_rendering_persists_correctly(self, db_connection, schema_init, create_test_users):
+    def test_template_rendering_persists_correctly(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify that template rendering produces correct rendered_message in DB."""
         # Setup: custom template
         custom_template = "[{sender}]: {message}"
@@ -131,7 +139,9 @@ class TestNotifyMessageDemoDatabase:
         assert "test content" in rendered
         assert "[alice]:" in rendered
 
-    def test_multiple_messages_create_separate_entries(self, db_connection, schema_init, create_test_users):
+    def test_multiple_messages_create_separate_entries(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify that each message creates a separate database entry."""
         # Setup
         config = DemoConfig(moniker="alice")
@@ -156,7 +166,9 @@ class TestNotifyMessageDemoDatabase:
 
         assert count >= 3, f"Expected at least 3 messages, found {count}"
 
-    def test_message_urgency_defaults_to_routine(self, db_connection, schema_init, create_test_users):
+    def test_message_urgency_defaults_to_routine(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify that messages default to ROUTINE urgency level."""
         # Setup
         config = DemoConfig(moniker="alice")
@@ -181,7 +193,9 @@ class TestNotifyMessageDemoDatabase:
         assert row is not None
         assert row[0] == "ROUTINE"
 
-    def test_timestamp_recorded_on_insert(self, db_connection, schema_init, create_test_users):
+    def test_timestamp_recorded_on_insert(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify that datecreated timestamp is automatically set."""
         # Setup
         config = DemoConfig(moniker="alice")
@@ -206,7 +220,9 @@ class TestNotifyMessageDemoDatabase:
         assert row is not None
         assert row[0] is not None
 
-    def test_multiple_recipients_create_recipient_entries(self, db_connection, schema_init, create_test_users):
+    def test_multiple_recipients_create_recipient_entries(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify that sending messages creates recipient entries."""
         # Setup
         config_alice = DemoConfig(moniker="alice")
@@ -228,7 +244,9 @@ class TestNotifyMessageDemoDatabase:
 
         assert recipient_count >= 1, "Should have at least 1 recipient entry for bob"
 
-    def test_stats_match_database_counts(self, db_connection, schema_init, create_test_users):
+    def test_stats_match_database_counts(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify that handler statistics match actual database counts."""
         # Setup
         config = DemoConfig(moniker="alice")
@@ -254,10 +272,14 @@ class TestNotifyMessageDemoDatabase:
             )
             db_count = cur.fetchone()[0]
 
-        assert stats["sent"] >= 3, f"Handler shows {stats['sent']} sent, expected at least 3"
+        assert stats["sent"] >= 3, (
+            f"Handler shows {stats['sent']} sent, expected at least 3"
+        )
         assert db_count >= 3, f"Database has {db_count} records, expected at least 3"
 
-    def test_template_stored_in_database(self, db_connection, schema_init, create_test_users):
+    def test_template_stored_in_database(
+        self, db_connection, schema_init, create_test_users
+    ):
         """Verify that the template itself is stored in engine.__notify.template."""
         # Setup
         custom_template = "CUSTOM: {sender} says {message}"

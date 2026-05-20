@@ -55,7 +55,9 @@ class TestMemberUpdateMonikerParameter:
                 mock_db_update.assert_called_once()
                 call_args = mock_db_update.call_args
                 # The second positional arg should be table name, third is moniker (pk)
-                assert call_args[0][2] == "testuser", "moniker should be passed as third parameter"
+                assert call_args[0][2] == "testuser", (
+                    "moniker should be passed as third parameter"
+                )
 
     def test_member_update_with_moniker_processes_flags(self):
         """member.update() should process flags from member dict when moniker is correct."""
@@ -77,13 +79,17 @@ class TestMemberUpdateMonikerParameter:
         with patch("bbsengine6.member.database.update"):
             with patch("bbsengine6.member.database.cursor") as mock_cursor_ctx:
                 with patch("bbsengine6.member.setflag") as mock_setflag:
-                    mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
+                    mock_cursor_ctx.return_value.__enter__ = Mock(
+                        return_value=mock_cursor
+                    )
                     mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
                     libmember.update(args, member_dict, "testuser", conn=mock_conn)
 
                     # Verify setflag was called for each flag
-                    assert mock_setflag.call_count == 2, "setflag should be called for each flag"
+                    assert mock_setflag.call_count == 2, (
+                        "setflag should be called for each flag"
+                    )
 
     def test_member_update_passes_conn_to_setflag(self):
         """member.update() should pass conn parameter to setflag() for transaction consistency."""
@@ -101,7 +107,9 @@ class TestMemberUpdateMonikerParameter:
         with patch("bbsengine6.member.database.update"):
             with patch("bbsengine6.member.database.cursor") as mock_cursor_ctx:
                 with patch("bbsengine6.member.setflag") as mock_setflag:
-                    mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
+                    mock_cursor_ctx.return_value.__enter__ = Mock(
+                        return_value=mock_cursor
+                    )
                     mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
                     libmember.update(args, member_dict, "testuser", conn=mock_conn)
@@ -109,8 +117,12 @@ class TestMemberUpdateMonikerParameter:
                     # Verify setflag was called with conn parameter
                     mock_setflag.assert_called()
                     call_kwargs = mock_setflag.call_args[1]
-                    assert "conn" in call_kwargs, "conn parameter should be passed to setflag()"
-                    assert call_kwargs["conn"] == mock_conn, "same connection should be passed"
+                    assert "conn" in call_kwargs, (
+                        "conn parameter should be passed to setflag()"
+                    )
+                    assert call_kwargs["conn"] == mock_conn, (
+                        "same connection should be passed"
+                    )
 
 
 class TestSetflagTransactionConsistency:
@@ -132,7 +144,9 @@ class TestSetflagTransactionConsistency:
                 mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
                 mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
-                libmember.setflag(args, "APPROVED", True, moniker="testuser", conn=mock_conn)
+                libmember.setflag(
+                    args, "APPROVED", True, moniker="testuser", conn=mock_conn
+                )
 
                 # Verify cursor context manager was called (using provided conn)
                 mock_cursor_ctx.assert_called_with(mock_conn)
@@ -149,7 +163,9 @@ class TestSetflagTransactionConsistency:
             with patch("bbsengine6.member.util.logentry"):
                 mock_upsert.return_value = True  # upsert returns True on success
 
-                result = libmember.setflag(args, "APPROVED", True, moniker="testuser", conn=mock_conn)
+                result = libmember.setflag(
+                    args, "APPROVED", True, moniker="testuser", conn=mock_conn
+                )
 
                 # Verify setflag returns bool (True on success)
                 assert result is True
@@ -157,12 +173,16 @@ class TestSetflagTransactionConsistency:
                 # Verify database.upsert() was called with correct parameters
                 mock_upsert.assert_called_once()
                 call_args = mock_upsert.call_args
-                
+
                 # Check positional args
                 assert call_args[0][0] == args  # args
                 assert call_args[0][1] == "engine.map_member_flag"  # table
-                assert call_args[0][2] == {"moniker": "testuser", "name": "APPROVED", "value": True}  # items
-                
+                assert call_args[0][2] == {
+                    "moniker": "testuser",
+                    "name": "APPROVED",
+                    "value": True,
+                }  # items
+
                 # Check kwargs
                 assert call_args[1]["conflict_columns"] == ["moniker", "name"]
                 assert call_args[1]["update_columns"] == ["value"]
@@ -179,7 +199,9 @@ class TestSetflagTransactionConsistency:
                 with patch("bbsengine6.member.database.insert"):
                     with patch("bbsengine6.member.util.logentry"):
                         mock_getcurrent.return_value = "currentuser"
-                        mock_cursor_ctx.return_value.__enter__ = Mock(return_value=MagicMock())
+                        mock_cursor_ctx.return_value.__enter__ = Mock(
+                            return_value=MagicMock()
+                        )
                         mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
                         # Call without moniker or conn
@@ -218,7 +240,9 @@ class TestMemberApprovalWorkflow:
                     m = member_data.copy()
 
                     # Set approval flag
-                    libmember.setflag(args, "APPROVED", True, moniker=moniker, conn=mock_conn)
+                    libmember.setflag(
+                        args, "APPROVED", True, moniker=moniker, conn=mock_conn
+                    )
 
                     # Update member with approval metadata
                     m["approvedbymoniker"] = "sysop_user"
@@ -230,7 +254,9 @@ class TestMemberApprovalWorkflow:
                     # Verify update was called with moniker string
                     mock_update.assert_called_once()
                     call_args = mock_update.call_args[0]
-                    assert call_args[2] == "jonez", "Should pass moniker string, not memberid"
+                    assert call_args[2] == "jonez", (
+                        "Should pass moniker string, not memberid"
+                    )
 
     def test_member_approval_with_email_verification_and_flag_sets(self):
         """Complete workflow: email verification flag + approval flag + member update."""
@@ -259,7 +285,9 @@ class TestMemberApprovalWorkflow:
                 assert mock_setflag.call_count == 1
 
                 # Step 2: Set approval flag
-                libmember.setflag(args, "APPROVED", True, moniker=moniker, conn=mock_conn)
+                libmember.setflag(
+                    args, "APPROVED", True, moniker=moniker, conn=mock_conn
+                )
                 assert mock_setflag.call_count == 2
 
                 # Step 3: Update member record with approval metadata
@@ -274,7 +302,9 @@ class TestMemberApprovalWorkflow:
 
                 mock_update.assert_called_once()
                 update_call_args = mock_update.call_args[0]
-                assert update_call_args[2] == moniker, "update should receive moniker string"
+                assert update_call_args[2] == moniker, (
+                    "update should receive moniker string"
+                )
 
 
 class TestForeignKeyConstraintPrevention:
@@ -304,7 +334,12 @@ class TestForeignKeyConstraintPrevention:
         with patch("bbsengine6.member.database.update") as mock_db_update:
             with patch("bbsengine6.member.database.cursor"):
                 with patch("bbsengine6.member.setflag"):
-                    libmember.update(args, {"moniker": moniker_string}, moniker_string, conn=mock_conn)
+                    libmember.update(
+                        args,
+                        {"moniker": moniker_string},
+                        moniker_string,
+                        conn=mock_conn,
+                    )
 
                     # Verify the correct parameter was used
                     call_args = mock_db_update.call_args[0]
@@ -323,10 +358,14 @@ class TestForeignKeyConstraintPrevention:
             with patch("bbsengine6.member.database.insert"):
                 with patch("bbsengine6.member.util.logentry"):
                     # Configure mock cursor
-                    mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
+                    mock_cursor_ctx.return_value.__enter__ = Mock(
+                        return_value=mock_cursor
+                    )
                     mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
-                    libmember.setflag(args, "APPROVED", True, moniker="jonez", conn=mock_conn)
+                    libmember.setflag(
+                        args, "APPROVED", True, moniker="jonez", conn=mock_conn
+                    )
 
                     # Verify DELETE and INSERT happen in same transaction context
                     # (same cursor/connection, no separate transaction)
@@ -354,7 +393,9 @@ class TestDataConsistency:
         with patch("bbsengine6.member.database.update"):
             with patch("bbsengine6.member.database.cursor") as mock_cursor_ctx:
                 with patch("bbsengine6.member.setflag"):
-                    mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
+                    mock_cursor_ctx.return_value.__enter__ = Mock(
+                        return_value=mock_cursor
+                    )
                     mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
                     # Should not raise any errors
@@ -413,7 +454,7 @@ class TestMonikerChange:
 
     def test_moniker_change_with_flags(self):
         """Test moniker change with flag value updates.
-        
+
         When moniker changes, flags should be updated FIRST using OLD moniker,
         then member is updated (CASCADE handles migration), then we're done.
         """
@@ -437,7 +478,9 @@ class TestMonikerChange:
                 with patch("bbsengine6.member.setflag") as mock_setflag:
                     # Make setflag return True (success)
                     mock_setflag.return_value = True
-                    mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
+                    mock_cursor_ctx.return_value.__enter__ = Mock(
+                        return_value=mock_cursor
+                    )
                     mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
                     # Update member, changing moniker from 'olduser' to 'jonez'
@@ -459,7 +502,7 @@ class TestMonikerChange:
 
     def test_moniker_change_cascade_flow(self):
         """Test that moniker change with CASCADE works correctly.
-        
+
         Flow:
         1. setflag() called with OLD moniker (flags definitely exist)
         2. database.update() updates member moniker (CASCADE migrates flags)
@@ -482,7 +525,9 @@ class TestMonikerChange:
             with patch("bbsengine6.member.database.cursor") as mock_cursor_ctx:
                 with patch("bbsengine6.member.setflag") as mock_setflag:
                     mock_setflag.return_value = True  # setflag returns bool now
-                    mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
+                    mock_cursor_ctx.return_value.__enter__ = Mock(
+                        return_value=mock_cursor
+                    )
                     mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
                     libmember.update(args, member_dict, "oldname", conn=mock_conn)
@@ -518,7 +563,9 @@ class TestMonikerChange:
         with patch("bbsengine6.member.database.update") as mock_db_update:
             with patch("bbsengine6.member.database.cursor") as mock_cursor_ctx:
                 with patch("bbsengine6.member.setflag") as mock_setflag:
-                    mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
+                    mock_cursor_ctx.return_value.__enter__ = Mock(
+                        return_value=mock_cursor
+                    )
                     mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
                     # Update member WITHOUT changing moniker
@@ -534,7 +581,7 @@ class TestMonikerChange:
 
     def test_moniker_change_with_multiple_flags(self):
         """Test moniker change with multiple flag updates (the real-world scenario).
-        
+
         This tests the journal scenario: changing moniker with 5 flags all at once.
         Flags should be updated with OLD moniker first, then member update handles CASCADE.
         """
@@ -559,7 +606,9 @@ class TestMonikerChange:
             with patch("bbsengine6.member.database.cursor") as mock_cursor_ctx:
                 with patch("bbsengine6.member.setflag") as mock_setflag:
                     mock_setflag.return_value = True  # setflag returns bool now
-                    mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
+                    mock_cursor_ctx.return_value.__enter__ = Mock(
+                        return_value=mock_cursor
+                    )
                     mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
 
                     # Update member changing moniker with 5 flag changes

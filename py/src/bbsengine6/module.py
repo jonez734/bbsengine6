@@ -133,6 +133,7 @@ from typing import Optional
 @dataclass(frozen=True)
 class ModuleAPI:
     """Immutable API container - registered module's version and callable functions."""
+
     version: str
     apis: dict[str, Callable]
     module_path: str
@@ -141,6 +142,7 @@ class ModuleAPI:
 @dataclass
 class RegistryState:
     """Mutable state for the registry - wrapped in a closure for encapsulation."""
+
     modules: dict[str, ModuleAPI] = field(default_factory=dict)
     require_registration: bool = False
 
@@ -153,18 +155,20 @@ def _create_registry() -> tuple[
     Callable[[str, str], Optional[Callable]],
     Callable[[bool], None],
     Callable[[], bool],
-    Callable[[], list[str]]
+    Callable[[], list[str]],
 ]:
     """Create a thread-safe registry closure with all operations.
-    
+
     Returns 8 operation functions in order:
-    (register, unregister, is_registered, get_module, get_module_api, 
+    (register, unregister, is_registered, get_module, get_module_api,
      set_require, get_require, get_all_names)
     """
     state = RegistryState()
     lock = threading.RLock()
-    
-    def register(name: str, module_path: str, version: str, apis: dict[str, Callable]) -> None:
+
+    def register(
+        name: str, module_path: str, version: str, apis: dict[str, Callable]
+    ) -> None:
         with lock:
             state.modules[name] = ModuleAPI(
                 version=version,
@@ -172,52 +176,67 @@ def _create_registry() -> tuple[
                 module_path=module_path,
             )
         io.echo(f"registered module: {name} v{version}", level="debug")
-    
+
     def unregister(name: str) -> None:
         with lock:
             state.modules.pop(name, None)
-    
+
     def is_registered(name: str) -> bool:
         with lock:
             return name in state.modules
-    
+
     def get_module(name: str) -> Optional[ModuleAPI]:
         with lock:
             return state.modules.get(name)
-    
+
     def get_module_api(name: str, api_name: str) -> Optional[Callable]:
         with lock:
             module = state.modules.get(name)
             if module:
                 return module.apis.get(api_name)
             return None
-    
+
     def set_require_registration(required: bool) -> None:
         with lock:
             state.require_registration = required
-    
+
     def get_require_registration() -> bool:
         with lock:
             return state.require_registration
-    
+
     def get_all_names() -> list[str]:
         with lock:
             return list(state.modules.keys())
-    
+
     return (
-        register, unregister, is_registered, get_module, 
-        get_module_api, set_require_registration, get_require_registration, get_all_names
+        register,
+        unregister,
+        is_registered,
+        get_module,
+        get_module_api,
+        set_require_registration,
+        get_require_registration,
+        get_all_names,
     )
 
 
 # Default registry instance - used throughout bbsengine6
-(_register_module, _unregister_module, _is_module_registered, 
- _get_module, _get_module_api, _set_require_registration, 
- _get_require_registration, _get_all_module_names) = _create_registry()
+(
+    _register_module,
+    _unregister_module,
+    _is_module_registered,
+    _get_module,
+    _get_module_api,
+    _set_require_registration,
+    _get_require_registration,
+    _get_all_module_names,
+) = _create_registry()
 
 
 # Convenience aliases matching the old function names
-def register_module(name: str, module_path: str, version: str, apis: dict[str, Callable]) -> None:
+def register_module(
+    name: str, module_path: str, version: str, apis: dict[str, Callable]
+) -> None:
     """Register a module with its API. Thread-safe."""
     _register_module(name, module_path, version, apis)
 
@@ -260,37 +279,39 @@ def get_all_modules() -> list[str]:
 # Backwards compatibility - thin wrapper class that delegates to functions
 class ModuleRegistry:
     """Central registry for BBS modules - tied to module system.
-    
+
     Modules register themselves via explicit init() call.
     Other modules can discover registered modules and access their APIs.
-    
+
     Delegates to functional implementations for actual operations.
     """
-    
+
     @staticmethod
-    def register(name: str, module_path: str, version: str, apis: dict[str, Callable]) -> None:
+    def register(
+        name: str, module_path: str, version: str, apis: dict[str, Callable]
+    ) -> None:
         register_module(name, module_path, version, apis)
-    
+
     @staticmethod
     def unregister(name: str) -> None:
         unregister_module(name)
-    
+
     @staticmethod
     def is_registered(name: str) -> bool:
         return is_module_registered(name)
-    
+
     @staticmethod
     def get(name: str) -> Optional[ModuleAPI]:
         return get_module(name)
-    
+
     @staticmethod
     def get_api(name: str, api_name: str) -> Optional[Callable]:
         return get_module_api(name, api_name)
-    
+
     @staticmethod
     def set_require_registration(required: bool) -> None:
         set_require_registration(required)
-    
+
     @staticmethod
     def get_all() -> list[str]:
         return get_all_modules()
@@ -493,7 +514,10 @@ def check(args, modulename, op="run", **kwargs):
     # --- Registration Check ---
     if get_require_registration() is True:
         if not is_module_registered(modulename):
-            io.echo(f"module {modulename} is not registered (required by config)", level="error")
+            io.echo(
+                f"module {modulename} is not registered (required by config)",
+                level="error",
+            )
             return False
         io.echo(f"module.check: {modulename} is registered", level="debug")
 
@@ -616,7 +640,10 @@ def runcallback(
         return cb(args, **kwargs)
 
     if not isinstance(callback, str):
-        io.echo(f"runcallback.150: callback is not str or callable: {type(callback)=}", level="error")
+        io.echo(
+            f"runcallback.150: callback is not str or callable: {type(callback)=}",
+            level="error",
+        )
         return None
 
     parts = callback.split(".")

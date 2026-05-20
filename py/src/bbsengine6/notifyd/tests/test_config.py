@@ -286,7 +286,7 @@ class TestEnvVarSubstitution:
         """Test that missing env var raises ConfigError"""
         if "NONEXISTENT_VAR_12345" in os.environ:
             del os.environ["NONEXISTENT_VAR_12345"]
-        
+
         with pytest.raises(ConfigError, match="not found"):
             _substitute_env_vars("${NONEXISTENT_VAR_12345}")
 
@@ -347,13 +347,11 @@ class TestConfigLoading:
             },
             "events": {"enable_custom_hooks": True},
         }
-        
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(config_data, f)
             f.flush()
-            
+
             try:
                 config = load_config(f.name)
                 assert config["imap_servers"][0]["name"] == "Gmail"
@@ -364,7 +362,7 @@ class TestConfigLoading:
     def test_load_config_with_env_var_substitution(self):
         """Test loading config with environment variable substitution"""
         os.environ["TEST_PASSWORD"] = "secret123"
-        
+
         config_data = {
             "logging": {"level": "INFO"},
             "database": {"use_bbsengine6_db": True},
@@ -381,13 +379,11 @@ class TestConfigLoading:
             },
             "events": {"enable_custom_hooks": True},
         }
-        
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(config_data, f)
             f.flush()
-            
+
             try:
                 config = load_config(f.name)
                 assert config["imap_servers"][0]["password"] == "secret123"
@@ -401,12 +397,10 @@ class TestConfigLoading:
 
     def test_load_invalid_json(self):
         """Test loading invalid JSON"""
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             f.write("{invalid json")
             f.flush()
-            
+
             try:
                 with pytest.raises(ConfigError, match="Invalid JSON"):
                     load_config(f.name)
@@ -430,17 +424,15 @@ class TestConfigLoading:
             },
             "events": {"enable_custom_hooks": True},
         }
-        
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(config_data, f)
             f.flush()
-            
+
             old_env = os.environ.get("NOTIFYD_CONFIG")
             try:
                 os.environ["NOTIFYD_CONFIG"] = f.name
-                
+
                 config = load_config()  # No path argument
                 assert config["imap_servers"][0]["name"] == "Gmail"
             finally:
@@ -505,18 +497,16 @@ class TestConfigLoading:
                 },
             },
         }
-        
+
         os.environ["IMAP_PASSWORD"] = "test_password"
-        
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(config_data, f)
             f.flush()
-            
+
             try:
                 config = load_config(f.name)
-                
+
                 # Verify all sections loaded
                 assert config["logging"]["level"] == "DEBUG"
                 assert config["database"]["dbname"] == "bbsengine6"
@@ -557,13 +547,11 @@ class TestConfigExamples:
             },
             "events": {"enable_custom_hooks": True},
         }
-        
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(config_data, f)
             f.flush()
-            
+
             try:
                 config = load_config(f.name)
                 assert len(config["imap_servers"]) == 2
@@ -590,13 +578,11 @@ class TestConfigExamples:
             },
             "events": {"enable_custom_hooks": True},
         }
-        
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(config_data, f)
             f.flush()
-            
+
             try:
                 config = load_config(f.name)
                 assert not config["imap_servers"][0]["enabled"]
@@ -624,13 +610,11 @@ class TestNotifydConfigClass:
             },
             "events": {"enable_custom_hooks": True},
         }
-        
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             json.dump(config_data, f)
             f.flush()
-            
+
             try:
                 config = NotifydConfig.load(f.name)
                 assert config["logging"]["level"] == "INFO"

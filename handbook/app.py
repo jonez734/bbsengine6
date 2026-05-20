@@ -277,17 +277,17 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 """
 
 app = Flask(__name__)
-app.config['JSON_SORT_KEYS'] = False
+app.config["JSON_SORT_KEYS"] = False
 
 
 def get_markdown_extensions():
     """Get configured markdown extensions."""
     return [
-        'toc',
-        'tables',
-        'fenced_code',
-        'codehilite',
-        'extra',
+        "toc",
+        "tables",
+        "fenced_code",
+        "codehilite",
+        "extra",
     ]
 
 
@@ -300,25 +300,27 @@ def convert_markdown(content: str) -> str:
 
 def get_markdown_title(content: str) -> str:
     """Extract title from markdown content (first H1 heading)."""
-    for line in content.split('\n'):
+    for line in content.split("\n"):
         line = line.strip()
-        if line.startswith('# '):
+        if line.startswith("# "):
             return line[2:].strip()
-    return 'Documentation'
+    return "Documentation"
 
 
 def get_breadcrumb(path: str) -> tuple:
     """Generate breadcrumb navigation."""
-    parts = [p for p in path.split('/') if p]
-    breadcrumb = [('Handbook', '/handbook/')]
+    parts = [p for p in path.split("/") if p]
+    breadcrumb = [("Handbook", "/handbook/")]
 
-    current_path = '/handbook'
+    current_path = "/handbook"
     for part in parts[:-1]:
-        current_path += f'/{part}'
-        breadcrumb.append((part.replace('-', ' ').title(), current_path + '/'))
+        current_path += f"/{part}"
+        breadcrumb.append((part.replace("-", " ").title(), current_path + "/"))
 
     if parts and parts[-1]:
-        breadcrumb.append((parts[-1].replace('-', ' ').replace('.md', '').title(), None))
+        breadcrumb.append(
+            (parts[-1].replace("-", " ").replace(".md", "").title(), None)
+        )
 
     return breadcrumb
 
@@ -333,7 +335,7 @@ def render_breadcrumb(breadcrumb: list) -> str:
             html_parts.append(escape(label))
 
         if i < len(breadcrumb) - 1:
-            html_parts.append('<span>/</span>')
+            html_parts.append("<span>/</span>")
 
     return f'<div class="breadcrumb">{"".join(html_parts)}</div>'
 
@@ -343,69 +345,71 @@ def list_directory(directory: Path) -> str:
     try:
         items = sorted(directory.iterdir())
     except PermissionError:
-        return '<p>Permission denied</p>'
+        return "<p>Permission denied</p>"
 
     html = '<div class="directory-index"><h2>Contents</h2><ul class="file-list">'
 
     # Parent directory link
     if directory != HANDBOOK_DIR:
         parent = directory.parent.relative_to(HANDBOOK_DIR)
-        parent_url = f'/handbook/{parent}/' if str(parent) != '.' else '/handbook/'
-        html += f'<li><span class="file-icon">📁</span><a href="{parent_url}">..</a></li>'
+        parent_url = f"/handbook/{parent}/" if str(parent) != "." else "/handbook/"
+        html += (
+            f'<li><span class="file-icon">📁</span><a href="{parent_url}">..</a></li>'
+        )
 
     # List items
     for item in items:
         # Skip hidden files and backups
-        if item.name.startswith('.') or item.name.endswith(('~', '.bak', '.swp')):
+        if item.name.startswith(".") or item.name.endswith(("~", ".bak", ".swp")):
             continue
 
         relative = item.relative_to(HANDBOOK_DIR)
-        item_url = f'/handbook/{relative}/'
+        item_url = f"/handbook/{relative}/"
 
         if item.is_dir():
-            icon = '📁'
+            icon = "📁"
             label = item.name
-        elif item.suffix == '.md':
-            icon = '📄'
+        elif item.suffix == ".md":
+            icon = "📄"
             label = item.stem
         else:
-            icon = '📎'
+            icon = "📎"
             label = item.name
 
         html += f'<li><span class="file-icon">{icon}</span><a href="{item_url}">{escape(label)}</a></li>'
 
-    html += '</ul></div>'
+    html += "</ul></div>"
     return html
 
 
-@app.route('/handbook/')
+@app.route("/handbook/")
 def index():
     """Serve handbook index."""
-    return serve_markdown('index.md')
+    return serve_markdown("index.md")
 
 
-@app.route('/handbook/<path:path>')
+@app.route("/handbook/<path:path>")
 def serve_file(path: str):
     """
     Serve markdown or other files from handbook directory.
     Handles both /path/to/file and /path/to/file.md
     """
     # Remove trailing slash
-    path = path.rstrip('/')
+    path = path.rstrip("/")
 
     # Try to find the file
     file_path = HANDBOOK_DIR / path
 
     # Check for markdown file without extension
     if not file_path.exists() and not file_path.suffix:
-        markdown_path = HANDBOOK_DIR / f'{path}.md'
+        markdown_path = HANDBOOK_DIR / f"{path}.md"
         if markdown_path.exists():
-            return serve_markdown(f'{path}.md')
+            return serve_markdown(f"{path}.md")
 
     # Check if it's a directory
     if file_path.is_dir():
         # Try index.md in directory
-        index_path = file_path / 'index.md'
+        index_path = file_path / "index.md"
         if index_path.exists():
             return serve_markdown(str(index_path.relative_to(HANDBOOK_DIR)))
 
@@ -413,7 +417,7 @@ def serve_file(path: str):
         breadcrumb = get_breadcrumb(path)
         breadcrumb_html = render_breadcrumb(breadcrumb)
         content = list_directory(file_path)
-        title = path.split('/')[-1].replace('-', ' ').title() or 'Handbook'
+        title = path.split("/")[-1].replace("-", " ").title() or "Handbook"
 
         return render_template_string(
             HTML_TEMPLATE,
@@ -423,16 +427,16 @@ def serve_file(path: str):
         )
 
     # Serve markdown file
-    if file_path.suffix == '.md':
+    if file_path.suffix == ".md":
         return serve_markdown(path)
 
     # Serve other files (CSS, images, etc.)
     if file_path.exists() and file_path.is_file():
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             mime_type, _ = mimetypes.guess_type(str(file_path))
             response = app.make_response(f.read())
             if mime_type:
-                response.headers['Content-Type'] = mime_type
+                response.headers["Content-Type"] = mime_type
             return response
 
     abort(404)
@@ -448,11 +452,11 @@ def serve_markdown(file_path: str) -> str:
     if not full_path.is_file():
         abort(404)
 
-    if not str(full_path.relative_to(HANDBOOK_DIR)).startswith('..'):
+    if not str(full_path.relative_to(HANDBOOK_DIR)).startswith(".."):
         abort(403)  # Directory traversal attempt
 
     try:
-        with open(full_path, 'r', encoding='utf-8') as f:
+        with open(full_path, "r", encoding="utf-8") as f:
             content = f.read()
     except (IOError, UnicodeDecodeError):
         abort(500)
@@ -537,7 +541,7 @@ def server_error(error):
     """), 500
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Development server (not for production!)
     print("Development server running on http://localhost:5000/handbook/")
-    app.run(debug=True, host='localhost', port=5000)
+    app.run(debug=True, host="localhost", port=5000)

@@ -240,4 +240,3 @@ def _execute_sql_file(conn, sql_content: str, filename: str) -> None:
     except Exception as e:
         # Re-raise - let caller decide how to handle
         raise
-

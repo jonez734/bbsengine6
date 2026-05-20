@@ -9,11 +9,11 @@ import termios
 import threading
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from bbsengine6 import database
-from bbsengine6.io.echo import echo
+from bbsengine6.io.echo import echo, echo_traceback
 from bbsengine6.io.inputstring import inputstring
 from bbsengine6.io import screen
 from bbsengine6.notify import UserNotificationQueue
@@ -158,6 +158,68 @@ class EchoProcessor:
             raise ValueError("Echo command timed out")
         except Exception as e:
             raise ValueError(f"Echo command failed: {e}")
+
+
+class TimestampFormatter:
+    """Formats timestamps in compact format with timezone information."""
+
+    @staticmethod
+    def format_compact(dt: Any) -> str:
+        """Format datetime as compact timestamp with timezone.
+
+        Args:
+            dt: datetime object (aware or naive), string, or None
+
+        Returns:
+            Compact formatted string like "2024-05-19 14:30:45 UTC" or "14:30:45 UTC" if today
+        """
+        if dt is None:
+            return "N/A"
+
+        # Handle string timestamps (from database)
+        if isinstance(dt, str):
+            try:
+                # Try ISO format first (from database)
+                if "T" in dt:
+                    dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+                else:
+                    # Try standard datetime string
+                    dt = datetime.fromisoformat(dt)
+            except (ValueError, AttributeError):
+                return dt  # Return as-is if parsing fails
+
+        if not isinstance(dt, datetime):
+            return str(dt)
+
+        # Get timezone info
+        if dt.tzinfo is None:
+            # Assume UTC if naive
+            tz_str = "UTC"
+        else:
+            # Get timezone name or offset
+            tz_name = dt.tzname()
+            if tz_name and len(tz_name) <= 4:
+                # Use timezone name if short (e.g., UTC, PST, EST)
+                tz_str = tz_name
+            else:
+                # Use UTC offset format (e.g., +00:00)
+                offset = dt.strftime("%z")
+                if offset:
+                    # Format as +HH:MM
+                    tz_str = f"UTC{offset[:3]}:{offset[3:]}"
+                else:
+                    tz_str = "UTC"
+
+        # Check if timestamp is today
+        today = datetime.now(tz=dt.tzinfo if dt.tzinfo else timezone.utc).date()
+        msg_date = dt.date()
+
+        if msg_date == today:
+            # Today: show only time
+            return f"{dt.strftime('%H:%M:%S')} {tz_str}"
+        else:
+            # Different day: show full date and time
+            return f"{dt.strftime('%Y-%m-%d %H:%M:%S')} {tz_str}"
 
 
 @dataclass
@@ -318,7 +380,7 @@ class MessageHandler:
 
     def get_unread_messages(self) -> list[dict]:
         """Get unread messages WITHOUT marking them as read.
-        
+
         Returns:
             List of unread messages with notify_id for database mode.
         """
@@ -388,7 +450,7 @@ class MessageHandler:
 
     def mark_messages_as_read(self, message_ids: list) -> None:
         """Mark specific messages as read in the database.
-        
+
         Args:
             message_ids: List of notify_ids to mark as read (or count for demo mode)
         """
@@ -416,7 +478,9 @@ class MessageHandler:
                     queue = MessageHandler._demo_queues.get(self.config.moniker)
                     if queue and message_ids:
                         # Remove the first N messages (in demo mode, message_ids contains counts)
-                        num_to_remove = message_ids[0] if isinstance(message_ids[0], int) else 0
+                        num_to_remove = (
+                            message_ids[0] if isinstance(message_ids[0], int) else 0
+                        )
                         for _ in range(num_to_remove):
                             if queue:
                                 queue.popleft()
@@ -426,7 +490,7 @@ class MessageHandler:
 
     def receive_messages(self) -> list[dict]:
         """Check for and return new messages, marking them as read.
-        
+
         DEPRECATED: This method marks all messages as read immediately.
         Use get_unread_messages() and mark_messages_as_read() instead
         for more control over when messages are marked as read.
@@ -497,12 +561,24 @@ def update_status_display(unread_count: int) -> None:
         echo_traceback(f"update_status_display() failed: {e}")
 
 
-def display_with_more_prompt(messages: list[str], page_size: int = 5) -> bool:
+def display_with_more_prompt(
+    messages: list[str],
+    page_size: int = 5,
+    on_page_displayed=None,
+) -> bool:
     """Display messages with a 'more' prompt allowing abort with 'n'.
+
+    Supports page-wise marking of items as read by calling a callback
+    function after each complete page is displayed.
 
     Args:
         messages: List of message strings to display
         page_size: Number of messages to show per page (default: 5)
+        on_page_displayed: Optional callable(page_number, messages_in_page, total_displayed)
+            Called after each page is fully displayed (before more prompt).
+            page_number: 1-indexed page number
+            messages_in_page: List of message objects for this page (from original messages list)
+            total_displayed: Total messages displayed so far
 
     Returns:
         True if all messages were displayed, False if user aborted with 'n'
@@ -518,15 +594,75 @@ def display_with_more_prompt(messages: list[str], page_size: int = 5) -> bool:
         messages_shown = i + 1
         messages_remaining = total_messages - messages_shown
 
+        # After each complete page, call the callback to mark that page as read
+        if messages_shown % page_size == 0:
+            # Calculate which messages are in this page
+            page_start = messages_shown - page_size
+            page_end = messages_shown
+            if on_page_displayed is not None:
+                page_num = messages_shown // page_size
+                try:
+                    on_page_displayed(page_num, page_start, page_end, messages_shown)
+                except Exception as e:
+                    # Log but don't crash if callback fails
+                    from bbsengine6.io.echo import echo_traceback
+
+                    echo_traceback(f"on_page_displayed callback error: {e}")
+
         if messages_shown % page_size == 0 and messages_remaining > 0:
             try:
-                response = input(f"More? ({messages_remaining} remaining, n to abort): ").lower().strip()
+                # Try to use inputstring() for proper status bar updates
+                # Falls back to input() if in non-TTY environment (tests, pipes)
+                try:
+                    response = (
+                        inputstring(
+                            f"More? ({messages_remaining} remaining, n to abort): ",
+                            oldvalue="",
+                            max_len=1,
+                        )
+                        .lower()
+                        .strip()
+                    )
+                except Exception as e:
+                    # Fall back to input() if inputstring fails (non-TTY, test environment)
+                    # This catches: termios.error, OSError, IOError, UnsupportedOperation, etc.
+                    is_tty_error = (
+                        isinstance(e, termios.error)
+                        or "fileno" in str(e)
+                        or "TTY" in str(e)
+                        or "ioctl" in str(e)
+                        or "pseudofile" in str(e)
+                        or isinstance(e, (OSError, IOError))
+                    )
+                    if is_tty_error:
+                        response = (
+                            input(
+                                f"More? ({messages_remaining} remaining, n to abort): "
+                            )
+                            .lower()
+                            .strip()
+                        )
+                    else:
+                        raise
+
                 if response == "n":
                     echo("\n--- Aborted ---\n")
                     return False
             except (EOFError, KeyboardInterrupt):
                 echo("\n--- Aborted ---\n")
                 return False
+
+    # After all messages displayed (last page might be incomplete)
+    # Mark any remaining messages from the last incomplete page
+    last_page_start = (total_messages // page_size) * page_size
+    if last_page_start < total_messages and on_page_displayed is not None:
+        page_num = (total_messages // page_size) + 1
+        try:
+            on_page_displayed(page_num, last_page_start, total_messages, total_messages)
+        except Exception as e:
+            from bbsengine6.io.echo import echo_traceback
+
+            echo_traceback(f"on_page_displayed callback error on last page: {e}")
 
     return True
 
@@ -542,9 +678,25 @@ class NotifyMessageDemo:
         self.pool = None
         if args and hasattr(args, "databasename") and args.databasename:
             try:
-                self.pool = database.getpool(args, dbname=args.databasename)
-            except Exception:
-                # If pool initialization fails, continue in demo mode
+                # Create a pool to the system database to check if target exists
+                system_pool = database.getpool(args, dbname="postgres")
+
+                # Check if database exists before attempting to connect
+                if not database.exists(args, args.databasename, pool=system_pool):
+                    echo(
+                        f"Error: Database '{args.databasename}' does not exist. "
+                        f"Falling back to demo mode (in-memory queues).",
+                        level="error",
+                    )
+                else:
+                    # Database exists, create pool to target database
+                    self.pool = database.getpool(args, dbname=args.databasename)
+            except Exception as e:
+                echo(
+                    f"Error checking/connecting to database: {e}. "
+                    f"Falling back to demo mode (in-memory queues).",
+                    level="error",
+                )
                 self.pool = None
         self.handler = MessageHandler(config, args, pool=self.pool)
 
@@ -687,9 +839,9 @@ Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
 
     def _check_and_display_messages(self) -> None:
         """Retrieve and display any unread messages with more prompt.
-        
-        Only marks messages as read if the full list is displayed.
-        If user aborts with 'n', messages remain unread.
+
+        Messages are marked as read page-by-page as they're displayed.
+        If user aborts with 'n', only displayed pages are marked as read.
         """
         messages = self.handler.get_unread_messages()
 
@@ -704,27 +856,50 @@ Echo commands: {"enabled" if self.config.enable_echo_commands else "disabled"}
         else:
             echo(f"\n--- {message_count} unread messages ---\n")
 
-        # Prepare formatted message list
-        formatted_messages = [
-            f"[RECEIVED] {msg['message']}" for msg in messages
-        ]
+        # Prepare formatted message list with timestamps
+        formatted_messages = []
+        for msg in messages:
+            timestamp_str = TimestampFormatter.format_compact(msg.get("timestamp"))
+            formatted_messages.append(f"[{timestamp_str}] {msg['message']}")
+
+        # Callback to mark pages as read as they're displayed
+        def mark_page_as_read(page_num, page_start, page_end, total_displayed):
+            """Mark messages in displayed page as read.
+
+            Args:
+                page_num: 1-indexed page number
+                page_start: 0-indexed start of page in messages list
+                page_end: 0-indexed exclusive end of page
+                total_displayed: Total messages displayed so far
+            """
+            page_messages = messages[page_start:page_end]
+            if not page_messages:
+                return
+
+            try:
+                if self.handler.args and self.handler.pool:
+                    # Database mode: mark specific messages as read
+                    message_ids = [
+                        msg.get("notify_id")
+                        for msg in page_messages
+                        if msg.get("notify_id")
+                    ]
+                    if message_ids:
+                        self.handler.mark_messages_as_read(message_ids)
+                else:
+                    # Demo mode: mark messages as read (remove from queue)
+                    self.handler.mark_messages_as_read([len(page_messages)])
+
+                with self.handler._lock:
+                    self.handler.stats["received"] += len(page_messages)
+                    self.handler.message_history.extend(page_messages)
+            except Exception as e:
+                echo_traceback(f"Error marking page {page_num} as read: {e}")
 
         # Display messages with more prompt (5 messages per page)
-        fully_displayed = display_with_more_prompt(formatted_messages, page_size=5)
-
-        # Only mark as read if fully displayed
-        if fully_displayed:
-            if self.handler.args and self.handler.pool:
-                # Database mode: mark specific messages as read
-                message_ids = [msg.get("notify_id") for msg in messages]
-                self.handler.mark_messages_as_read(message_ids)
-            else:
-                # Demo mode: mark all messages as read (remove from queue)
-                self.handler.mark_messages_as_read([len(messages)])
-
-            with self.handler._lock:
-                self.handler.stats["received"] += len(messages)
-                self.handler.message_history.extend(messages)
+        display_with_more_prompt(
+            formatted_messages, page_size=5, on_page_displayed=mark_page_as_read
+        )
 
     def _show_help(self) -> None:
         """Display help information."""
@@ -761,7 +936,8 @@ Examples:
             message = parts[1]
 
             self.handler.send_message(message, recipient)
-            echo(f"[SENT to {recipient}] {message}")
+            timestamp_str = TimestampFormatter.format_compact(datetime.now())
+            echo(f"[{timestamp_str}] [SENT to {recipient}] {message}")
 
         elif user_input == "stats":
             self._show_stats()

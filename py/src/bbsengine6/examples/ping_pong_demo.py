@@ -30,9 +30,11 @@ except ImportError as e:
     print("Make sure bbsengine6 is installed and in your Python path")
     sys.exit(1)
 
+
 # Configuration - customize game behavior
 class Config:
     """Configuration settings for ping/pong demo."""
+
     MAX_ROUNDS = 5
     GETCH_TIMEOUT = 2.0
     MESSAGE_LOG_SIZE = 100  # Maximum number of messages to keep in memory
@@ -108,13 +110,13 @@ def display_menu(
     """Display the game menu and message log (with output synchronization)."""
     with output_lock:
         clear_screen()
-        
+
         # Set bottom bar with notification status
         try:
             screen.setbottombar("", screen.get_notification_status)
         except Exception:
             pass  # Silently continue if bottom bar fails
-        
+
         echo("═" * 60)
         echo(f"    PING-PONG DEMO (Moniker: {moniker.upper()})")
         echo("═" * 60)
@@ -149,7 +151,7 @@ def display_menu(
             echo(f"Queue Status: Error - {e}")
 
         echo("═" * 60)
-        
+
         # Re-set bottom bar after displaying menu content
         try:
             screen.setbottombar("", screen.get_notification_status)
@@ -159,18 +161,18 @@ def display_menu(
 
 def _sanitize_text(text: str) -> str:
     """Remove terminal control characters from text for safe display.
-    
+
     This prevents terminal escape sequences or control characters from
     breaking the UI or causing unexpected behavior. Uses aggressive
     filtering to keep only printable ASCII characters and basic whitespace.
-    
+
     Args:
         text: Input text potentially containing control characters
-        
+
     Returns:
         Sanitized text with only safe, printable characters
     """
-    return ''.join(c for c in text if c.isprintable() or c in '\t ')
+    return "".join(c for c in text if c.isprintable() or c in "\t ")
 
 
 def send_ping(from_moniker: str, round_num: int) -> bool:
@@ -241,14 +243,16 @@ def send_ping(from_moniker: str, round_num: int) -> bool:
         return False
 
 
-def check_and_display_queue(moniker: str, message_log: Union[List[str], Deque[str]]) -> None:
+def check_and_display_queue(
+    moniker: str, message_log: Union[List[str], Deque[str]]
+) -> None:
     """Check and display all pending notifications (with output synchronization).
-    
+
     WARNING: This operation is DESTRUCTIVE - all retrieved notifications are removed
     from the queue. Messages cannot be retrieved again unless the sender resends them.
     This is intentional design: checking queue consumes messages automatically.
     See README_PING_PONG.md for behavior documentation.
-    
+
     Args:
         moniker: Member whose queue to check
         message_log: Shared message log to append notifications to
@@ -316,7 +320,7 @@ def player_loop(moniker: str) -> None:
                 round_num = shared_rounds[moniker]
                 if round_num >= MAX_ROUNDS:
                     break
-            
+
             if exit_event.is_set():
                 break
 
@@ -419,7 +423,9 @@ def cleanup_threads() -> None:
         for thread in active_threads:
             if thread.is_alive():
                 with output_lock:
-                    echo(f"✓ Cleanup: Waiting for {thread.name}... (max {Config.THREAD_TIMEOUT}s)")
+                    echo(
+                        f"✓ Cleanup: Waiting for {thread.name}... (max {Config.THREAD_TIMEOUT}s)"
+                    )
                 thread.join(timeout=Config.THREAD_TIMEOUT)
                 if thread.is_alive():
                     with output_lock:
@@ -428,10 +434,10 @@ def cleanup_threads() -> None:
 
 def run_single_player(moniker: str) -> int:
     """Run the demo as a single player (designed for separate terminal instances).
-    
+
     Args:
         moniker: Player name (any custom username)
-    
+
     Returns:
         Exit code (0 for success, non-zero for failure)
     """
@@ -451,7 +457,9 @@ def run_single_player(moniker: str) -> int:
         echo("This instance is running as: {level.ok}" + moniker.upper() + "{/all}\n")
         echo("To play with another player:")
         echo("  • In another terminal, run:")
-        echo(f"    python -m bbsengine6.examples.ping_pong_demo --user <other_player>\n")
+        echo(
+            f"    python -m bbsengine6.examples.ping_pong_demo --user <other_player>\n"
+        )
         echo("For full documentation, see: README_PING_PONG.md\n")
 
         echo("Press Enter to start...")
@@ -477,7 +485,9 @@ def run_single_player(moniker: str) -> int:
 
         # Wait for thread to complete
         with output_lock:
-            echo(f"✓ {moniker.upper()} game started (max {Config.THREAD_TIMEOUT}s)...\n")
+            echo(
+                f"✓ {moniker.upper()} game started (max {Config.THREAD_TIMEOUT}s)...\n"
+            )
 
         player_thread.join(timeout=Config.THREAD_TIMEOUT)
 
@@ -518,7 +528,7 @@ def run_single_player(moniker: str) -> int:
 
 def run_two_players() -> int:
     """Run the demo with two built-in players (alice and bob) in same terminal.
-    
+
     Returns:
         Exit code (0 for success, non-zero for failure)
     """

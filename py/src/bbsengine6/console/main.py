@@ -130,6 +130,7 @@ def main(args, **kwargs):
 
     if args.require_registration is True:
         from bbsengine6.module import set_require_registration
+
         set_require_registration(True)
         io.echo("registration enforcement enabled", level="info")
 
@@ -149,7 +150,10 @@ def main(args, **kwargs):
         with database.connect(args, pool=pool) as conn:
             io.echo(f"con.main.main.120: {pool=} {conn=}", level="debug")
             conn.autocommit = False
-            if member.count(args, conn=conn) is not None and member.count(args, conn=conn) > 0:  # type: ignore
+            if (
+                member.count(args, conn=conn) is not None
+                and member.count(args, conn=conn) > 0
+            ):  # type: ignore
                 if session.start(args, conn=conn, **kwargs) is False:
                     io.echo(f"con.main.140: did not start session", level="error")
                     return False

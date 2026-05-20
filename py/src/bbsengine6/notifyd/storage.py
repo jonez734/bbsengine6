@@ -20,10 +20,10 @@ class StorageError(Exception):
 def ensure_schema(pool: Any) -> None:
     """
     Initialize database schema if not exists.
-    
+
     Args:
         pool: PostgreSQL connection pool from bbsengine6.database.getpool()
-    
+
     Raises:
         StorageError: If schema creation fails
     """
@@ -31,13 +31,13 @@ def ensure_schema(pool: Any) -> None:
         # Read SQL schema file
         schema_file = Path(__file__).parent / "sql" / "001_notifyd_schema.sql"
         sql = schema_file.read_text()
-        
+
         # Execute schema SQL
         with pool.connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(sql)
             conn.commit()
-        
+
         logger.debug("Database schema initialized")
     except Exception as e:
         raise StorageError(f"Failed to initialize schema: {e}") from e
@@ -46,15 +46,15 @@ def ensure_schema(pool: Any) -> None:
 def get_last_uid(pool: Any, server: str, mailbox: str) -> int:
     """
     Get last processed email UID for a server/mailbox.
-    
+
     Args:
         pool: PostgreSQL connection pool
         server: Server name ("Gmail", etc.)
         mailbox: Mailbox name ("INBOX", etc.)
-    
+
     Returns:
         Last processed UID (0 if none)
-    
+
     Raises:
         StorageError: If query fails
     """
@@ -77,13 +77,13 @@ def get_last_uid(pool: Any, server: str, mailbox: str) -> int:
 def set_last_uid(pool: Any, server: str, mailbox: str, uid: int) -> None:
     """
     Update last processed UID for a server/mailbox.
-    
+
     Args:
         pool: PostgreSQL connection pool
         server: Server name
         mailbox: Mailbox name
         uid: New maximum UID processed
-    
+
     Raises:
         StorageError: If update fails
     """
@@ -100,7 +100,7 @@ def set_last_uid(pool: Any, server: str, mailbox: str, uid: int) -> None:
                     (server, mailbox, uid, uid),
                 )
             conn.commit()
-        
+
         logger.debug(f"Updated UID for {server}/{mailbox} to {uid}")
     except Exception as e:
         raise StorageError(f"Failed to set last UID: {e}") from e
@@ -117,7 +117,7 @@ def record_notification(
 ) -> int:
     """
     Record sent notification in history.
-    
+
     Args:
         pool: PostgreSQL connection pool
         notification_type: Type (e.g., "imap.message", "user.login")
@@ -126,10 +126,10 @@ def record_notification(
         notification_id: Return value from notify.send()
         status: "sent" | "failed" | "pending"
         error_message: Error details if status="failed"
-    
+
     Returns:
         ID of inserted notification record
-    
+
     Raises:
         StorageError: If insert fails
     """
@@ -155,7 +155,7 @@ def record_notification(
                 row = cursor.fetchone()
                 record_id = row[0] if row else 0
             conn.commit()
-        
+
         logger.debug(f"Recorded notification {record_id} ({notification_type})")
         return record_id
     except Exception as e:
@@ -169,15 +169,15 @@ def get_notification_history(
 ) -> List[Dict[str, Any]]:
     """
     Get recent notifications sent by notifyd.
-    
+
     Args:
         pool: PostgreSQL connection pool
         limit: Maximum number of records to return
         notification_type: Optional filter by type
-    
+
     Returns:
         List of notification history records
-    
+
     Raises:
         StorageError: If query fails
     """
@@ -207,27 +207,29 @@ def get_notification_history(
                         """,
                         (limit,),
                     )
-                
+
                 rows = cursor.fetchall()
-                
+
                 records = []
                 for row in rows:
                     try:
                         data = json.loads(row[5]) if row[5] else {}
                     except (json.JSONDecodeError, TypeError):
                         data = {}
-                    
-                    records.append({
-                        "id": row[0],
-                        "notification_type": row[1],
-                        "recipients": row[2],
-                        "sent_at": row[3],
-                        "notification_id": row[4],
-                        "data": data,
-                        "status": row[6],
-                        "error_message": row[7],
-                    })
-                
+
+                    records.append(
+                        {
+                            "id": row[0],
+                            "notification_type": row[1],
+                            "recipients": row[2],
+                            "sent_at": row[3],
+                            "notification_id": row[4],
+                            "data": data,
+                            "status": row[6],
+                            "error_message": row[7],
+                        }
+                    )
+
                 return records
     except Exception as e:
         raise StorageError(f"Failed to get notification history: {e}") from e

@@ -125,8 +125,12 @@ class TestRenderedLength(unittest.TestCase):
 
     def test_repeated_whitespace(self):
         """rendered_length() should count visible whitespace (not newlines)"""
-        self.assertEqual(self.rendered_length("Hello   World"), 13)  # 3 spaces = 13 total
-        self.assertEqual(self.rendered_length("Hello\nWorld"), 10)  # newline not counted
+        self.assertEqual(
+            self.rendered_length("Hello   World"), 13
+        )  # 3 spaces = 13 total
+        self.assertEqual(
+            self.rendered_length("Hello\nWorld"), 10
+        )  # newline not counted
         self.assertEqual(self.rendered_length("Hello\tWorld"), 11)  # tab = 1 char
 
 

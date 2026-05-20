@@ -49,7 +49,9 @@ HEADING_PADDING_ODD_ADJUSTMENT = 2  # Padding adjustment for odd-length titles
 PAGINATION_PAGE_SIZE = 20  # Lines per page in filedisplay() with more=True
 
 # Range constants
-RANGE_COLLAPSE_MIN_LENGTH = 2  # Minimum consecutive numbers to form a range (not collapse to singles)
+RANGE_COLLAPSE_MIN_LENGTH = (
+    2  # Minimum consecutive numbers to form a range (not collapse to singles)
+)
 
 # CRC32 checksum constants
 CRC32_INIT = 0xFFFFFFFF  # Initial CRC value
@@ -570,7 +572,9 @@ def filedisplay(res: Any, **kw: Any) -> None:
 _dice_rng = random.SystemRandom()
 
 
-def diceroll(sides: int = 6, count: int = 1, mode: str = "single") -> int | float | list[int] | None:  # type: ignore
+def diceroll(
+    sides: int = 6, count: int = 1, mode: str = "single"
+) -> int | float | list[int] | None:  # type: ignore
     """Roll one or more dice and return results based on specified mode.
 
     Uses cryptographically secure random number generator.

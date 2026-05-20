@@ -21,8 +21,12 @@ class TestTerminalTitle:
         try:
             terminal.title("test title")
             output = captured.getvalue()
-            assert "\x1b\\" in output, f"Expected ST (ESC\\) in output, got: {repr(output)}"
-            assert "\x07" not in output, f"BEL should not be in output, got: {repr(output)}"
+            assert "\x1b\\" in output, (
+                f"Expected ST (ESC\\) in output, got: {repr(output)}"
+            )
+            assert "\x07" not in output, (
+                f"BEL should not be in output, got: {repr(output)}"
+            )
         finally:
             common.set_output_stream(old_stream)
 

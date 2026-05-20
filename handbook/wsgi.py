@@ -13,5 +13,5 @@ sys.path.insert(0, str(handbook_dir))
 from app import app as application
 
 # For debugging
-if __name__ == '__main__':
+if __name__ == "__main__":
     application.run()

@@ -371,7 +371,7 @@ def _emit_notification_bell_once() -> bool:
 
 def _update_bottombar_on_notification() -> bool:
     """Update bottom bar once per session to show notification status.
-    
+
     Returns True if update was performed, False if already updated this session.
     """
     global _bottombar_updated_this_session
@@ -379,7 +379,7 @@ def _update_bottombar_on_notification() -> bool:
         if _bottombar_updated_this_session:
             return False
         _bottombar_updated_this_session = True
-    
+
     try:
         # Get notification status string (e.g., "F2: notify (3)")
         notification_status = screen.get_notification_status()
@@ -387,12 +387,13 @@ def _update_bottombar_on_notification() -> bool:
             # Try to use echo_commands to position cursor and display notification
             try:
                 from . import terminal
+
                 last_line = terminal.lines()
                 echo(
                     f"{{savecursor}}{{bottombarcolor}}{{curpos:{last_line},0}}[{notification_status}]{{/all}}{{restorecursor}}",
                     end="",
                     flush=True,
-                    wordwrap=False
+                    wordwrap=False,
                 )
             except Exception:
                 # Fallback: output with newline if curpos fails
@@ -606,7 +607,7 @@ def getch_str(
             char = _input_queue.popleft()
             result = _proc_char(char, debug=debug, fire_events=fire_events)
             return result
-        
+
         # Get file descriptor and settings while holding lock
         fd = _current_input_stream.fileno()
         old_settings = termios.tcgetattr(fd)
@@ -642,14 +643,10 @@ def getch_str(
                 select_timeout = poll_interval
             else:
                 remaining = timeout - elapsed
-                select_timeout = (
-                    min(poll_interval, remaining) if remaining > 0 else 0
-                )
+                select_timeout = min(poll_interval, remaining) if remaining > 0 else 0
 
             # Wait for input with calculated timeout (LOCK RELEASED HERE)
-            ready, _, _ = select.select(
-                [_current_input_stream], [], [], select_timeout
-            )
+            ready, _, _ = select.select([_current_input_stream], [], [], select_timeout)
 
             if ready:
                 break
