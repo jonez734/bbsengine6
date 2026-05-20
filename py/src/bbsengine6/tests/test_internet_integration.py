@@ -65,9 +65,11 @@ class TestNotifyIntegration:
         assert result["summary"] == (1, 0)
 
     def test_send_remote_only(self):
-        """Test sending to remote recipients only."""
+        """Test sending to remote recipients only (not configured)."""
         mock_notify = MockNotifyModule()
-        integration = NotifyIntegration("local", mock_notify)
+        mock_registry = MagicMock()
+        mock_registry.get.return_value = None
+        integration = NotifyIntegration("local", mock_notify, mock_registry)
 
         result = integration.send(
             notification_type="test",
@@ -77,15 +79,16 @@ class TestNotifyIntegration:
 
         assert result["local"] is None
         assert "machine1" in result["remote"]
-        assert result["remote"]["machine1"] == (
-            False,
-            "Remote delivery not yet implemented",
-        )
+        # Should fail because machine1 is not in registry
+        assert result["remote"]["machine1"][0] is False
+        assert "not configured" in result["remote"]["machine1"][1]
 
     def test_send_mixed_recipients(self):
         """Test sending to mixed local and remote recipients."""
         mock_notify = MockNotifyModule()
-        integration = NotifyIntegration("local", mock_notify)
+        mock_registry = MagicMock()
+        mock_registry.get.return_value = None
+        integration = NotifyIntegration("local", mock_notify, mock_registry)
 
         result = integration.send(
             notification_type="test",
@@ -105,7 +108,9 @@ class TestNotifyIntegration:
     def test_send_with_errors(self):
         """Test sending with invalid addresses."""
         mock_notify = MockNotifyModule()
-        integration = NotifyIntegration("local", mock_notify)
+        mock_registry = MagicMock()
+        mock_registry.get.return_value = None
+        integration = NotifyIntegration("local", mock_notify, mock_registry)
 
         result = integration.send(
             notification_type="test",
@@ -124,7 +129,6 @@ class TestNotifyIntegration:
     def test_send_no_notify_module(self):
         """Test sending when notify module is unavailable."""
         integration = NotifyIntegration("local", None)
-        # Override to ensure it's None
         integration.notify_module = None
 
         result = integration.send(
@@ -147,7 +151,7 @@ class TestNotifyIntegration:
     def test_can_send_to_without_module_local_only(self):
         """Test can_send_to without module, local recipients."""
         integration = NotifyIntegration("local", None)
-        integration.notify_module = None  # Ensure it's None
+        integration.notify_module = None
 
         # Should return False when trying to send to local without module
         assert not integration.can_send_to(["alice@local"])
@@ -155,7 +159,7 @@ class TestNotifyIntegration:
     def test_can_send_to_without_module_remote_only(self):
         """Test can_send_to without module, remote recipients."""
         integration = NotifyIntegration("local", None)
-        integration.notify_module = None  # Ensure it's None
+        integration.notify_module = None
 
         # Should return True when only sending remote (no notify needed)
         assert integration.can_send_to(["bob@machine1"])
@@ -163,7 +167,7 @@ class TestNotifyIntegration:
     def test_can_send_to_mixed_without_module(self):
         """Test can_send_to with mixed recipients but no module."""
         integration = NotifyIntegration("local", None)
-        integration.notify_module = None  # Ensure it's None
+        integration.notify_module = None
 
         # Should return False because there are local recipients
         assert not integration.can_send_to(["alice@local", "bob@machine1"])

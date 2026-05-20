@@ -9,8 +9,10 @@ from .address import (
     is_internet_address,
     parse_address,
 )
-from .router import InternetRouter, route_recipients
-from .transport import WebSocketTransport
+from .integration import NotifyIntegration, get_integration, send_with_internet
+from .registry import MachineConfig, MachineRegistry, get_registry
+from .router import InternetRouter, get_router, route_recipients
+from .transport import WebSocketProtocol, WebSocketTransport
 
 __all__ = [
     "AddressParser",
@@ -19,7 +21,15 @@ __all__ = [
     "ParseResult",
     "InternetRouter",
     "WebSocketTransport",
+    "WebSocketProtocol",
+    "NotifyIntegration",
+    "MachineConfig",
+    "MachineRegistry",
     "is_internet_address",
     "parse_address",
     "route_recipients",
+    "get_integration",
+    "send_with_internet",
+    "get_router",
+    "get_registry",
 ]

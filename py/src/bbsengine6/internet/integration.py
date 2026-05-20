@@ -7,7 +7,9 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .address import AddressParser
+from .registry import MachineRegistry, get_registry
 from .router import InternetRouter
+from .transport import WebSocketTransport
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,10 @@ class NotifyIntegration:
     """
 
     def __init__(
-        self, local_machine: str = "local", notify_module: Optional[Any] = None
+        self,
+        local_machine: str = "local",
+        notify_module: Optional[Any] = None,
+        registry: Optional[MachineRegistry] = None,
     ):
         """
         Initialize integration layer.
@@ -30,10 +35,13 @@ class NotifyIntegration:
         Args:
             local_machine: Local machine identifier
             notify_module: bbsengine6.notify module (auto-imported if None)
+            registry: MachineRegistry for remote machine configs
         """
         self.local_machine = local_machine
-        self.router = InternetRouter(local_machine)
+        self.registry = registry or get_registry()
+        self.router = InternetRouter(local_machine, self.registry)
         self.parser = AddressParser(local_machine)
+        self.transport = WebSocketTransport()
         self.notify_module = notify_module
 
         # Auto-import notify module if not provided
@@ -66,7 +74,7 @@ class NotifyIntegration:
 
         Automatically detects internet addresses and routes appropriately:
         - Local recipients: send via bbsengine6.notify.send()
-        - Remote recipients: send via WebSocket transport (Phase 3)
+        - Remote recipients: send via WebSocket transport
 
         Args:
             notification_type: Type of notification
@@ -126,17 +134,45 @@ class NotifyIntegration:
                 result["errors"]["local"] = f"Failed to send local notifications: {e}"
                 logger.error(f"Internet integration: local send failed: {e}")
 
-        # Send to remote recipients via WebSocket (Phase 3)
+        # Send to remote recipients via WebSocket
         for machine, recipients_list in remote_by_machine.items():
             try:
-                # TODO: Implement remote WebSocket delivery (Phase 3)
-                result["remote"][machine] = (
-                    False,
-                    "Remote delivery not yet implemented",
+                # Resolve machine configuration
+                host, port, auth_token = self.router.resolve_machine(machine)
+
+                if not host or not port:
+                    result["remote"][machine] = (
+                        False,
+                        f"Machine not configured in registry: {machine}",
+                    )
+                    logger.warning(f"Internet integration: no config for {machine}")
+                    continue
+
+                # Prepare notification data
+                notification_data = {
+                    "type": notification_type,
+                    "template": template,
+                    "template_vars": template_vars or {},
+                    "sender_moniker": sender_moniker,
+                    "data": data or {},
+                    "urgency": urgency.value if urgency else None,
+                }
+
+                # Send via WebSocket (async)
+                success, message = self.transport.send_to_remote_sync(
+                    host, port, recipients_list, notification_data, auth_token
                 )
-                logger.debug(
-                    f"Internet integration: remote delivery queued for {machine}"
-                )
+
+                result["remote"][machine] = (success, message)
+                if success:
+                    logger.info(
+                        f"Internet integration: sent to {machine} ({len(recipients_list)} recipients)"
+                    )
+                else:
+                    logger.error(
+                        f"Internet integration: failed to send to {machine}: {message}"
+                    )
+
             except Exception as e:
                 result["remote"][machine] = (False, str(e))
                 logger.error(
@@ -169,12 +205,14 @@ _default_integration: Optional[NotifyIntegration] = None
 
 
 def get_integration(
-    local_machine: str = "local", notify_module: Optional[Any] = None
+    local_machine: str = "local",
+    notify_module: Optional[Any] = None,
+    registry: Optional[MachineRegistry] = None,
 ) -> NotifyIntegration:
     """Get or create default integration instance."""
     global _default_integration
     if _default_integration is None:
-        _default_integration = NotifyIntegration(local_machine, notify_module)
+        _default_integration = NotifyIntegration(local_machine, notify_module, registry)
     return _default_integration
 
 

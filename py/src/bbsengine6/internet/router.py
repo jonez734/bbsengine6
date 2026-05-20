@@ -1,27 +1,37 @@
 # internet/router.py
-# Routing logic for internet addresses.
+# Routing logic for internet addresses with machine registry.
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+import logging
+from typing import Any, Dict, List, Optional, Tuple
 
 from .address import AddressParser
+from .registry import MachineRegistry, get_registry
 from .transport import WebSocketTransport
+
+logger = logging.getLogger(__name__)
 
 
 class InternetRouter:
     """Route notifications between local and remote machines."""
 
-    def __init__(self, local_machine: str = "local"):
+    def __init__(
+        self,
+        local_machine: str = "local",
+        registry: Optional[MachineRegistry] = None,
+    ):
         """
         Initialize router.
 
         Args:
             local_machine: Local machine identifier
+            registry: MachineRegistry for remote machine configs
         """
         self.parser = AddressParser(local_machine)
         self.transport = WebSocketTransport()
         self.local_machine = local_machine
+        self.registry = registry or get_registry()
 
     def route(
         self, addresses: List[str]
@@ -55,16 +65,50 @@ class InternetRouter:
 
         return local_recipients, remote_by_machine, result.invalid
 
+    def get_machine_config(self, machine_name: str) -> Optional[Any]:
+        """
+        Get configuration for a remote machine.
+
+        Args:
+            machine_name: Machine identifier
+
+        Returns:
+            MachineConfig if found, None otherwise
+        """
+        config = self.registry.get(machine_name)
+        if not config:
+            logger.warning(f"No registry entry for machine: {machine_name}")
+        return config
+
+    def resolve_machine(
+        self, machine_name: str
+    ) -> Tuple[Optional[str], Optional[int], Optional[str]]:
+        """
+        Resolve machine name to connection details.
+
+        Args:
+            machine_name: Machine identifier
+
+        Returns:
+            (host, port, auth_token) tuple or (None, None, None) if not found
+        """
+        config = self.get_machine_config(machine_name)
+        if config:
+            return config.host, config.port, config.auth_token
+        return None, None, None
+
 
 # Module-level defaults
 _default_router: Optional[InternetRouter] = None
 
 
-def get_router(local_machine: str = "local") -> InternetRouter:
+def get_router(
+    local_machine: str = "local", registry: Optional[MachineRegistry] = None
+) -> InternetRouter:
     """Get or create default internet router."""
     global _default_router
     if _default_router is None:
-        _default_router = InternetRouter(local_machine)
+        _default_router = InternetRouter(local_machine, registry)
     return _default_router
 
 
