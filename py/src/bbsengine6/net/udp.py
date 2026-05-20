@@ -1,5 +1,5 @@
 # bbsengine6/net/udp.py
-# UDP sender/receiver classes with frame transmission support (no numpy)
+# UDP sender/receiver classes with frame transmission support
 
 import logging
 import socket
@@ -27,9 +27,17 @@ from .frame import (
     decode_frame_packet,
     FRAME_PACKET_HEADER_SIZE,
 )
+from .frame_types import Frame, NumpyFrame
 from .frame_address import FrameAddress, FrameAddressParser, ParseResult
 from .conf import BUFFER_SIZE
 
+# Optional numpy support
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+    np = None
 
 UDP_MAX_PAYLOAD = 65507 - 28 - FRAME_PACKET_HEADER_SIZE
 
@@ -40,18 +48,6 @@ def _calc_optimal_blocks_per_packet(block_w: int, block_h: int, compress: bool) 
     if compress:
         block_size = max(block_size // 10, 100)
     return max(1, UDP_MAX_PAYLOAD // block_size)
-
-
-def _detect_delta(frame, prev_frame) -> bool:
-    """
-    Detect if frame differs from previous frame.
-    Simple byte-level comparison (no numpy).
-    """
-    if prev_frame is None:
-        return False
-    if not isinstance(frame, bytes) or not isinstance(prev_frame, bytes):
-        return True
-    return frame != prev_frame
 
 
 class UDPSender:
@@ -74,7 +70,7 @@ class UDPSender:
         self.addr = None
         self.blocking = blocking
         self.sock: Optional[socket.socket] = None
-        self.prev_frame = None
+        self.prev_frame: Optional[Union[Frame, NumpyFrame]] = None
         self.error: Optional[ParseResult] = None
         self.address: Optional[FrameAddress] = None
         
@@ -153,9 +149,9 @@ class UDPSender:
     
     def send_frame(
         self,
-        frame: bytes,
+        frame: Union[bytes, Frame, NumpyFrame, object],
         frame_id: int,
-        prev_frame: Optional[bytes] = None,
+        prev_frame: Optional[Union[bytes, Frame, NumpyFrame, object]] = None,
         cols: int = 0,
         rows: int = 0,
         compress: bool = False,
@@ -171,25 +167,43 @@ class UDPSender:
             return ParseResult(False, error="Socket not initialized", code="NO_SOCKET")
         
         try:
-            # Estimate frame dimensions from bytes
-            if isinstance(frame, bytes):
-                frame_size = len(frame)
-                if frame_size == 6220800:
-                    width, height = 1920, 1080
-                elif frame_size == 921600:
-                    width, height = 640, 480
-                elif frame_size == 230400:
-                    width, height = 320, 240
-                else:
-                    pixels = frame_size // 3
-                    width = int(math.sqrt(pixels))
-                    height = pixels // width
+            # Normalize to Frame object
+            if isinstance(frame, (Frame, NumpyFrame)):
+                frame_obj = frame
             else:
-                return ParseResult(False, error="Frame must be bytes", code="INVALID_FRAME")
+                if isinstance(frame, bytes):
+                    frame_size = len(frame)
+                    if frame_size == 6220800:
+                        width, height = 1920, 1080
+                    elif frame_size == 921600:
+                        width, height = 640, 480
+                    elif frame_size == 230400:
+                        width, height = 320, 240
+                    else:
+                        pixels = frame_size // 3
+                        width = int(math.sqrt(pixels))
+                        height = pixels // width
+                    frame_obj = Frame(frame, width, height, frame_id)
+                else:
+                    # Assume numpy array
+                    frame_obj = NumpyFrame(frame, frame_id)
+            
+            width, height = frame_obj.width, frame_obj.height
+            frame_bytes = frame_obj.to_bytes()
             
             # Determine delta mode
             if is_delta is None:
-                is_delta = not full_frame and prev_frame is not None and _detect_delta(frame, prev_frame)
+                is_delta = not full_frame and prev_frame is not None
+                if is_delta and prev_frame is not None:
+                    if isinstance(prev_frame, (Frame, NumpyFrame)):
+                        prev_obj = prev_frame
+                    else:
+                        prev_obj = NumpyFrame(prev_frame) if hasattr(prev_frame, 'shape') else None
+                    
+                    if prev_obj:
+                        is_delta = frame_obj.to_bytes() != prev_obj.to_bytes()
+                    else:
+                        is_delta = False
             
             # Calculate grid
             if cols <= 0 or rows <= 0:
@@ -209,10 +223,8 @@ class UDPSender:
             if auto_batch:
                 blocks_per_packet = _calc_optimal_blocks_per_packet(block_w, block_h, compress)
             
-            # Build blocks
             block_ids = list(range(total_blocks))
             
-            # Send blocks in batches
             for i in range(0, len(block_ids), blocks_per_packet):
                 batch_ids = block_ids[i : i + blocks_per_packet]
                 blocks = []
@@ -233,7 +245,7 @@ class UDPSender:
                     for y in range(y0, y1):
                         start = y * bytes_per_row + x0 * 3
                         end = start + block_w_actual * 3
-                        block_data += frame[start:end]
+                        block_data += frame_bytes[start:end]
                     
                     if compress:
                         block_data = zlib.compress(block_data)
@@ -260,7 +272,7 @@ class UDPSender:
                 encoded = encode_frame_packet(packet)
                 self.sock.sendto(encoded, self.addr)
             
-            self.prev_frame = frame
+            self.prev_frame = frame_obj
             return None
         
         except Exception as e:
@@ -335,12 +347,11 @@ class UDPReceiver:
         
         self.frames: Dict[int, Dict[int, bytes]] = defaultdict(dict)
         self.frame_meta: Dict[int, Dict] = {}
-        self.prev_frame: Optional[bytes] = None
+        self.prev_frame: Optional[Union[Frame, NumpyFrame]] = None
         self.prev_frame_meta: Dict = {}
         self.last_displayed_frame_id = -1
         self.running = False
         
-        # Validate arguments
         result = self._validate_and_normalize_args(host_or_dsn, port, dsn, address)
         if not result.success:
             self.error = result
@@ -366,7 +377,6 @@ class UDPReceiver:
         ])
         
         if arg_count == 0:
-            # Default: listen on all interfaces, port specified in address
             return ParseResult(True, value=None)
         
         if address is not None:
@@ -465,7 +475,7 @@ class UDPReceiver:
         
         return None
     
-    def _handle_frame_packet(self, data: bytes) -> Optional[bytes]:
+    def _handle_frame_packet(self, data: bytes) -> Optional[Union[Frame, NumpyFrame]]:
         """Handle an incoming frame packet and reassemble if complete."""
         try:
             packet = decode_frame_packet(data)
@@ -525,8 +535,11 @@ class UDPReceiver:
         
         return None
     
-    def _reassemble_frame(self, frame_id: int) -> Optional[bytes]:
-        """Reassemble a complete frame from chunks (returns bytes)."""
+    def _reassemble_frame(self, frame_id: int) -> Optional[Union[Frame, NumpyFrame]]:
+        """
+        Reassemble a complete frame from chunks.
+        Returns NumpyFrame if numpy available, Frame otherwise.
+        """
         if frame_id not in self.frames:
             return None
         
@@ -541,16 +554,90 @@ class UDPReceiver:
         
         blocks = self.frames[frame_id]
         
-        # Create frame as bytes
+        # Use numpy if available
+        if HAS_NUMPY:
+            return self._reassemble_frame_numpy(frame_id, meta, blocks)
+        else:
+            return self._reassemble_frame_bytes(frame_id, meta, blocks)
+    
+    def _reassemble_frame_numpy(self, frame_id: int, meta: Dict, blocks: Dict[int, bytes]) -> Optional[NumpyFrame]:
+        """Reassemble frame using numpy."""
+        cols = meta["cols"]
+        block_w = meta["block_w"]
+        block_h = meta["block_h"]
+        width = meta["width"]
+        height = meta["height"]
+        total_blocks = meta["total_blocks"]
+        is_delta = meta["is_delta"]
+        
+        if is_delta and self.prev_frame is not None and isinstance(self.prev_frame, NumpyFrame):
+            if self.prev_frame.width == width and self.prev_frame.height == height:
+                full_frame = self.prev_frame.data.copy()
+            else:
+                full_frame = np.zeros((height, width, 3), dtype=np.uint8)
+        else:
+            full_frame = np.zeros((height, width, 3), dtype=np.uint8)
+        
+        for block_id, block_data in blocks.items():
+            if block_id >= total_blocks:
+                logging.warning(f"Skipping block {block_id}: exceeds total_blocks")
+                continue
+            
+            row = block_id // cols
+            col = block_id % cols
+            x = col * block_w
+            y = row * block_h
+            
+            actual_block_w = min(block_w, width - x)
+            actual_block_h = min(block_h, height - y)
+            
+            if actual_block_h <= 0 or actual_block_w <= 0:
+                logging.warning(f"Skipping block {block_id}: invalid dimensions")
+                continue
+            
+            try:
+                block_img = np.frombuffer(block_data, dtype=np.uint8).reshape(
+                    (actual_block_h, actual_block_w, 3)
+                )
+                full_frame[y : y + actual_block_h, x : x + actual_block_w] = block_img
+            except ValueError as e:
+                logging.warning(f"Skipping block {block_id}: reshape failed: {e}")
+                continue
+        
+        del self.frames[frame_id]
+        self.frame_meta.pop(frame_id, None)
+        
+        frame_obj = NumpyFrame(full_frame.copy(), frame_id)
+        self.prev_frame = frame_obj
+        self.prev_frame_meta = meta
+        
+        if self.frame_received_callback:
+            self.frame_received_callback(frame_obj, frame_id)
+        
+        return frame_obj
+    
+    def _reassemble_frame_bytes(self, frame_id: int, meta: Dict, blocks: Dict[int, bytes]) -> Optional[Frame]:
+        """Reassemble frame as bytes."""
+        cols = meta["cols"]
+        block_w = meta["block_w"]
+        block_h = meta["block_h"]
+        width = meta["width"]
+        height = meta["height"]
+        total_blocks = meta["total_blocks"]
+        is_delta = meta["is_delta"]
+        
         bytes_per_row = width * 3
-        if is_delta and self.prev_frame is not None and len(self.prev_frame) == height * bytes_per_row:
-            full_frame_bytes = bytearray(self.prev_frame)
+        if is_delta and self.prev_frame is not None and isinstance(self.prev_frame, Frame):
+            if len(self.prev_frame.data) == height * bytes_per_row:
+                full_frame_bytes = bytearray(self.prev_frame.data)
+            else:
+                full_frame_bytes = bytearray(height * bytes_per_row)
         else:
             full_frame_bytes = bytearray(height * bytes_per_row)
         
         for block_id, block_data in blocks.items():
             if block_id >= total_blocks:
-                logging.warning(f"Skipping block {block_id}: exceeds total_blocks {total_blocks}")
+                logging.warning(f"Skipping block {block_id}: exceeds total_blocks")
                 continue
             
             row = block_id // cols
@@ -578,13 +665,14 @@ class UDPReceiver:
         del self.frames[frame_id]
         self.frame_meta.pop(frame_id, None)
         
-        self.prev_frame = bytes(full_frame_bytes)
+        frame_obj = Frame(bytes(full_frame_bytes), width, height, frame_id)
+        self.prev_frame = frame_obj
         self.prev_frame_meta = meta
         
         if self.frame_received_callback:
-            self.frame_received_callback(self.prev_frame, frame_id)
+            self.frame_received_callback(frame_obj, frame_id)
         
-        return self.prev_frame
+        return frame_obj
     
     def send_pong(self, timestamp: float = 0.0):
         """Send a PONG response."""
@@ -592,7 +680,6 @@ class UDPReceiver:
             return
         ts = timestamp if timestamp != 0.0 else time.time()
         data = encode_packet(PACKET_TYPE_PONG, timestamp=ts)
-        # Send back to broadcast address (not ideal, but simple)
         self.sock.sendto(data, ("255.255.255.255", self.address.port if self.address else 4200))
     
     def close(self):

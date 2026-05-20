@@ -14,6 +14,7 @@ from .frame import (
     encode_frame_packet,
     FRAME_PACKET_HEADER_SIZE,
 )
+from .frame_types import Frame, NumpyFrame, frame_from_any
 from .frame_address import FrameAddress, FrameAddressParser, ParseResult
 
 
@@ -24,18 +25,6 @@ def _calc_optimal_blocks_per_packet(block_w: int, block_h: int, compress: bool) 
     if compress:
         block_size = max(block_size // 10, 100)
     return max(1, TCP_MAX_PAYLOAD // block_size)
-
-
-def _detect_delta(frame, prev_frame) -> bool:
-    """
-    Detect if frame differs from previous frame.
-    Simple byte-level comparison (no numpy).
-    """
-    if prev_frame is None:
-        return False
-    if not isinstance(frame, bytes) or not isinstance(prev_frame, bytes):
-        return True
-    return frame != prev_frame
 
 
 class TCPSender:
@@ -64,7 +53,7 @@ class TCPSender:
         self.address: Optional[FrameAddress] = None
         self.error: Optional[ParseResult] = None
         self.sock: Optional[socket.socket] = None
-        self.prev_frame = None
+        self.prev_frame: Optional[Union[Frame, NumpyFrame]] = None
         
         # Validate and normalize arguments
         result = self._validate_and_normalize_args(host_or_dsn, port, dsn, address)
@@ -172,9 +161,9 @@ class TCPSender:
     
     def send_frame(
         self,
-        frame: bytes,
+        frame: Union[bytes, Frame, NumpyFrame, object],
         frame_id: int,
-        prev_frame: Optional[bytes] = None,
+        prev_frame: Optional[Union[bytes, Frame, NumpyFrame, object]] = None,
         cols: int = 0,
         rows: int = 0,
         compress: bool = False,
@@ -186,7 +175,7 @@ class TCPSender:
         Send frame. Returns error if not successful.
         
         Args:
-            frame: Raw frame bytes
+            frame: Raw bytes, Frame, NumpyFrame, or numpy array
             frame_id: Unique frame identifier
             prev_frame: Previous frame for delta detection
             cols, rows: Grid dimensions (auto-calculated if not provided)
@@ -204,31 +193,45 @@ class TCPSender:
                 return conn_error
         
         try:
-            # Assume frame is bytes with dimensions encoded somehow
-            # For now, use a simple heuristic
-            if isinstance(frame, bytes):
-                frame_size = len(frame)
-                # Common sizes: 1920x1080x3 = 6220800 bytes
-                # 640x480x3 = 921600 bytes
-                # 320x240x3 = 230400 bytes
-                if frame_size == 6220800:
-                    width, height = 1920, 1080
-                elif frame_size == 921600:
-                    width, height = 640, 480
-                elif frame_size == 230400:
-                    width, height = 320, 240
-                else:
-                    # Try to estimate
-                    pixels = frame_size // 3
-                    width = int(math.sqrt(pixels))
-                    height = pixels // width
+            # Normalize to Frame object
+            if isinstance(frame, (Frame, NumpyFrame)):
+                frame_obj = frame
             else:
-                # Assume tuple/list of (width, height) appended or dict
-                raise ValueError("Frame must be bytes for now")
+                # Try to create Frame from bytes or numpy
+                if isinstance(frame, bytes):
+                    frame_size = len(frame)
+                    if frame_size == 6220800:
+                        width, height = 1920, 1080
+                    elif frame_size == 921600:
+                        width, height = 640, 480
+                    elif frame_size == 230400:
+                        width, height = 320, 240
+                    else:
+                        pixels = frame_size // 3
+                        width = int(math.sqrt(pixels))
+                        height = pixels // width
+                    frame_obj = Frame(frame, width, height, frame_id)
+                else:
+                    # Assume numpy array
+                    frame_obj = NumpyFrame(frame, frame_id)
+            
+            width, height = frame_obj.width, frame_obj.height
+            frame_bytes = frame_obj.to_bytes()
             
             # Determine delta mode
             if is_delta is None:
-                is_delta = not full_frame and prev_frame is not None and _detect_delta(frame, prev_frame)
+                is_delta = not full_frame and prev_frame is not None
+                if is_delta and prev_frame is not None:
+                    # Check if frames are different
+                    if isinstance(prev_frame, (Frame, NumpyFrame)):
+                        prev_obj = prev_frame
+                    else:
+                        prev_obj = NumpyFrame(prev_frame) if hasattr(prev_frame, 'shape') else None
+                    
+                    if prev_obj:
+                        is_delta = frame_obj.to_bytes() != prev_obj.to_bytes()
+                    else:
+                        is_delta = False
             
             # Calculate grid if not provided
             if cols <= 0 or rows <= 0:
@@ -249,12 +252,7 @@ class TCPSender:
                 blocks_per_packet = _calc_optimal_blocks_per_packet(block_w, block_h, compress)
             
             # Build blocks list
-            if is_delta and prev_frame is not None:
-                # For delta, we'd need to compare blocks
-                # Simple approach: send all for now
-                block_ids = list(range(total_blocks))
-            else:
-                block_ids = list(range(total_blocks))
+            block_ids = list(range(total_blocks))
             
             # Send blocks in batches
             for i in range(0, len(block_ids), blocks_per_packet):
@@ -278,7 +276,7 @@ class TCPSender:
                     for y in range(y0, y1):
                         start = y * bytes_per_row + x0 * 3
                         end = start + block_w_actual * 3
-                        block_data += frame[start:end]
+                        block_data += frame_bytes[start:end]
                     
                     if compress:
                         block_data = zlib.compress(block_data)
@@ -305,7 +303,7 @@ class TCPSender:
                 encoded = encode_frame_packet(packet)
                 self.sock.sendall(encoded)
             
-            self.prev_frame = frame
+            self.prev_frame = frame_obj
             return None
         
         except Exception as e:

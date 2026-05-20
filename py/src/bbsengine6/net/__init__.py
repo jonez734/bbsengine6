@@ -43,6 +43,14 @@ from .frame import (
     decode_frame_packet,
 )
 
+# Frame types (bytes and numpy)
+from .frame_types import (
+    Frame,
+    NumpyFrame,
+    frame_from_any,
+    frames_equal,
+)
+
 # Frame addressing (DSN-like URIs)
 from .frame_address import (
     FrameScheme,
@@ -114,6 +122,12 @@ __all__ = [
     "encode_frame_header",
     "encode_frame_packet",
     "decode_frame_packet",
+    
+    # Frame types
+    "Frame",
+    "NumpyFrame",
+    "frame_from_any",
+    "frames_equal",
     
     # Frame addressing
     "FrameScheme",
