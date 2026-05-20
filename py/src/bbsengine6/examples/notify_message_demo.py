@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 
 from bbsengine6 import database
 from bbsengine6.io.echo import echo, echo_traceback
+from bbsengine6.io.inputchoice import inputchoice
 from bbsengine6.io.inputstring import inputstring
 from bbsengine6.io import screen
 from bbsengine6.notify import UserNotificationQueue
@@ -614,15 +615,11 @@ def display_with_more_prompt(
                 # Try to use inputstring() for proper status bar updates
                 # Falls back to input() if in non-TTY environment (tests, pipes)
                 try:
-                    response = (
-                        inputstring(
-                            f"More? ({messages_remaining} remaining, n to abort): ",
-                            oldvalue="",
-                            max_len=1,
-                        )
-                        .lower()
-                        .strip()
-                    )
+                    response = inputchoice(
+                        f"More? ({messages_remaining} remaining): ",
+                        "yn",
+                        default="y",
+                    ) or ""
                 except Exception as e:
                     # Fall back to input() if inputstring fails (non-TTY, test environment)
                     # This catches: termios.error, OSError, IOError, UnsupportedOperation, etc.
