@@ -1146,27 +1146,31 @@ def group_exists(args, group_name: str, **kwargs) -> bool | None:
 
 
 def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
-    """Get all member monikers in a group.
+    """Get all member monikers in a group, recursively expanding nested groups.
 
-    Retrieves all members of a notification group from engine.__notify_group.
+    Retrieves all members of a notification group from engine.__notify_group,
+    recursively expanding any nested groups. Includes cycle detection to prevent
+    infinite loops from circular group references.
 
     Args:
         args: Application args
         group_name: Name of the group
-        **kwargs: Optional - pool, conn
+        **kwargs: Optional - pool, conn, _visited (internal: set of visited groups for cycle detection)
 
     Returns:
         list[str]: List of member monikers in the group (empty list if no members)
         None: On error
 
     Raises:
-        ValueError: If group_name format is invalid (same checks as group_exists)
+        ValueError: If group_name format is invalid or circular reference detected
 
     Examples:
         >>> get_group_members(args, "ops", pool=pool)
-        ["alice", "bob", "charlie"]
+        ["alice", "bob", "charlie"]  # Includes members from nested groups
         >>> get_group_members(args, "ops", pool=pool)
         []  # Empty group
+        >>> get_group_members(args, "circular", pool=pool)
+        ValueError: Circular group reference detected: circular -> ... -> circular
     """
     # Validate group name (reuse validation from group_exists)
     if not group_name or not isinstance(group_name, str):
@@ -1185,6 +1189,22 @@ def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
                 f"Invalid group name: contains non-printable character at position {i}: "
                 f"{repr(char)} (0x{code:02x}). Only ASCII (0x20-0x7E) allowed."
             )
+
+    # Initialize visited set for cycle detection
+    visited = kwargs.get("_visited", None)
+    if visited is None:
+        visited = set()
+    else:
+        # Make a copy so we don't modify the caller's set
+        visited = set(visited)
+
+    # Detect circular references
+    if group_name in visited:
+        raise ValueError(
+            f"Circular group reference detected: {group_name} is already being expanded"
+        )
+
+    visited.add(group_name)
 
     # Get group members
     conn = kwargs.get("conn", None)
@@ -1213,10 +1233,39 @@ def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
                     member_moniker = row.get("member_moniker")
                 else:
                     member_moniker = row[0]
-                if member_moniker:
+
+                if not member_moniker:
+                    continue
+
+                # Check if this member is itself a group
+                is_nested_group = group_exists(args, member_moniker, conn=conn)
+
+                if is_nested_group:
+                    # Recursively expand nested group with cycle detection
+                    nested_members = get_group_members(
+                        args,
+                        member_moniker,
+                        conn=conn,
+                        _visited=visited,
+                    )
+                    if nested_members is not None:
+                        members.extend(nested_members)
+                else:
+                    # Regular member (moniker)
                     members.append(member_moniker)
 
-            return members
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_members = []
+            for member in members:
+                if member not in seen:
+                    seen.add(member)
+                    unique_members.append(member)
+
+            return unique_members
+    except ValueError:
+        # Re-raise validation errors (like circular reference detection)
+        raise
     except Exception:
         io.echo_traceback("bbsengine6.member.get_group_members.100:")
         return None
