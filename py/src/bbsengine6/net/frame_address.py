@@ -146,8 +146,16 @@ class FrameAddressParser:
                 if not socket_path:
                     socket_path = parsed.netloc  # Sometimes parser puts path in netloc
                 
+                # Check for relative path indicators in netloc
+                if parsed.netloc and (parsed.netloc.startswith(".") or parsed.netloc == ""):
+                    return ParseResult(False, error="Unix socket path must be absolute", code="INVALID_UNIX_PATH")
+                
                 if not socket_path or not socket_path.startswith("/"):
                     return ParseResult(False, error="Unix socket path must be absolute", code="INVALID_UNIX_PATH")
+                
+                # Reject socket paths with colons (port-like syntax)
+                if ":" in socket_path:
+                    return ParseResult(False, error="Port not allowed for unix://", code="PORT_NOT_ALLOWED")
                 
                 address = FrameAddress(
                     scheme=scheme,

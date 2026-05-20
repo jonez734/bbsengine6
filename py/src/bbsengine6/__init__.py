@@ -1,3 +1,4 @@
+__version__ = "9.0.0"
 # from . import util
 # from . import database
 # from . import session

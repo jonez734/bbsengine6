@@ -101,7 +101,7 @@ class TestNumpyFrame:
     
     def test_numpy_frame_from_bytes(self):
         """Create NumpyFrame from bytes."""
-        data = bytes(range(256)) * 30
+        data = bytes(range(256)) * 117 + bytes(range(48))  # Exactly 30000 bytes for 100x100x3
         frame = NumpyFrame.from_bytes(data, 100, 100)
         assert frame.width == 100
         assert frame.height == 100

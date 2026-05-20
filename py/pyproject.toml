@@ -8,11 +8,12 @@ dynamic = ["version"]
 requires-python = ">=3.9,<3.13"
 
 [tool.setuptools.dynamic]
-version = {version = "9.0.0"}
+version = {attr = "bbsengine6.__version__"}
 
 [tool.pytest.ini_options]
 markers = [
     "unit: marks tests as unit tests (no database required)",
+    "integration: marks tests as integration tests (require networking)",
 ]
 
 [tool.pyright]

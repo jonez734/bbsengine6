@@ -162,7 +162,7 @@ class TCPSender:
     def send_frame(
         self,
         frame: Union[bytes, Frame, NumpyFrame, object],
-        frame_id: int,
+        frame_id: Optional[int] = None,
         prev_frame: Optional[Union[bytes, Frame, NumpyFrame, object]] = None,
         cols: int = 0,
         rows: int = 0,
@@ -184,6 +184,13 @@ class TCPSender:
             auto_batch: If True, automatically batch blocks to fill TCP packets
             is_delta: Explicit delta flag. If None, auto-detect from prev_frame.
         """
+        # Extract frame_id from Frame object if not provided
+        if frame_id is None:
+            if isinstance(frame, (Frame, NumpyFrame)):
+                frame_id = frame.frame_id
+            else:
+                frame_id = 0  # Default if not provided
+        
         if self.error:
             return self.error
         
