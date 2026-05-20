@@ -17,8 +17,8 @@ from typing import Any, Dict, List, Optional, Set
 import psycopg
 from psycopg import sql
 
-from . import database, io
-from .database import getpool
+from .. import database, io
+from ..database import getpool
 
 logger = logging.getLogger(__name__)
 

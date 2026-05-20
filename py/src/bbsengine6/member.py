@@ -1086,6 +1086,101 @@ def count(args, **kwargs):
         return None
 
 
+
+def insert(args, member, **kwargs):
+    """
+    Insert a new member record.
+
+    Inserts the member into __member table, then inserts any flags via helper function.
+    All operations kept in a single transaction (commit=False by default).
+    Caller is responsible for final conn.commit() or conn.rollback().
+
+    Transaction semantics:
+    1. INSERT into __member (member becomes visible in current transaction)
+    2. For each flag in flags_dict: DELETE + INSERT in map_member_flag
+    3. FK constraints are satisfied because member exists in same transaction
+    4. Caller commits entire operation atomically
+
+    Args:
+        args: Application args
+        member: Member dict with optional 'flags' key
+        **kwargs: Optional - table (default "engine.__member"), conn, commit (default False)
+
+    Returns:
+        New moniker on success, False/None on error
+    """
+    if member is None:
+        io.echo(f"bbsengine6.member.insert.120: no member present", level="warn")
+        return None
+
+    table = kwargs.get("table", "engine.__member")
+    conn = kwargs.get("conn", None)
+
+    cols = copy.copy(member)
+    flags_dict = cols.pop("flags", None)
+
+    if "attrs" in cols:
+        del cols["attrs"]
+        io.echo(f"bbsengine6.insert.140: removed 'attrs' from member")
+    if "id" in cols:
+        del cols["id"]
+        io.echo(f"bbsengine6.insert.200: removed 'id' from member")
+
+    io.echo(f"bbsengine6.member.insert.100: {member=}", level="debug")
+
+    try:
+        # Insert member record (commit=False to keep in same transaction)
+        moniker = database.insert(
+            args,
+            table,
+            cols,
+            commit=False,  # Keep in transaction; caller manages final commit
+            **kwargs,
+        )
+
+        if not moniker:
+            io.echo_traceback("bbsengine6.member.insert.110: database.insert failed")
+            return False
+
+        # Handle flags using helper function (same transaction)
+        if flags_dict and conn is not None:
+            if not _update_member_flags(
+                args, moniker, flags_dict, conn=conn, commit=False
+            ):
+                io.echo_traceback(
+                    "bbsengine6.member.insert.130: _update_member_flags failed"
+                )
+                return False
+
+        return moniker
+
+    except Exception:
+        io.echo_traceback("bbsengine6.member.insert.150:")
+        return False
+
+
+def count(args, **kwargs):
+    def _work(cur):
+        sql = "select count(moniker) from engine.member"
+        cur.execute(sql)
+        if cur.rowcount == 0:
+            return None
+        res = cur.fetchone()
+        count = res["count"]
+        return count
+
+    conn = kwargs.get("conn", None)
+    if conn is None:
+        io.echo("bbsengine6.member.count.100: conn=None", level="error")
+        return None
+    try:
+        with database.cursor(conn) as cur:
+            return _work(cur)
+    except Exception:
+        io.echo_traceback("bbsengine6.member.count.100:")
+        return None
+
+
 def group_exists(args, group_name: str, **kwargs) -> bool | None:
     """Check if a group exists in the database.
 
