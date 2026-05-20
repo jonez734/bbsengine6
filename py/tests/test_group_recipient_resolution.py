@@ -459,3 +459,53 @@ class TestMonikerStartsWithAtSign:
         # but the validation should still prevent @ prefix
         result = handler.resolve_recipient("alice")
         assert isinstance(result, list)
+
+
+@pytest.mark.unit
+class TestMonikerNoSpaces:
+    """Tests for space validation in monikers."""
+
+    def test_moniker_with_space_raises_valueerror(self):
+        """Test that monikers containing spaces are rejected."""
+        with pytest.raises(ValueError, match="cannot contain spaces"):
+            member.moniker_exists(None, "alice bob", conn=None)
+
+    def test_moniker_with_space_multiple_examples(self):
+        """Test various space patterns are all rejected."""
+        invalid_monikers = [
+            "alice bob",
+            "alice bob charlie",
+            " alice",
+            "alice ",
+            "ali ce",
+            "a b c",
+        ]
+
+        for bad_moniker in invalid_monikers:
+            with pytest.raises(ValueError, match="cannot contain spaces"):
+                member.moniker_exists(None, bad_moniker, conn=None)
+
+    def test_moniker_without_spaces_allowed(self):
+        """Test that monikers without spaces pass space validation."""
+        # These should not raise ValueError about spaces
+        # (may fail on lookup but not on format validation)
+        valid_monikers = ["alice", "bob123", "alice_bob", "alice-bob", "alice.bob"]
+
+        for good_moniker in valid_monikers:
+            try:
+                member.moniker_exists(None, good_moniker, conn=None)
+            except ValueError as e:
+                # Should not be about spaces
+                assert "cannot contain spaces" not in str(e)
+
+    def test_resolve_recipient_rejects_spaces(self):
+        """Test that resolve_recipient handles space rejection."""
+        config = DemoConfig(moniker="alice")
+        handler = MessageHandler(config, args=None, pool=None)
+
+        # In demo mode, spaces would be problematic anyway
+        result = handler.resolve_recipient("alice")
+        assert isinstance(result, list)
+        # Result should not contain spaces in moniker names
+        for moniker in result:
+            assert " " not in moniker

@@ -972,6 +972,9 @@ def moniker_exists(args, moniker: str, **kwargs) -> bool | None:
     if moniker.startswith("@"):
         raise ValueError("Invalid moniker: cannot start with '@'")
 
+    if " " in moniker:
+        raise ValueError("Invalid moniker: cannot contain spaces")
+
     if len(moniker) > 50:
         raise ValueError(f"Invalid moniker: exceeds 50 characters ({len(moniker)})")
 
