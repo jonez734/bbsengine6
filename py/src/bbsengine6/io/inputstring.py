@@ -19,6 +19,7 @@ from .common import (
     get_cursor_position,
     _current_stream_lock,
     _terminal_state,
+    _terminal_state_lock,
     _input_dirty,
 )
 from .util import logentry
@@ -1189,9 +1190,10 @@ def inputstring(
         cursor_display_col = input_col_start + (curpos - scroll_offset)
         # Position cursor BEFORE getch() without holding lock during the call
         echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
-        # Update terminal state (local tracking, doesn't need lock)
-        _terminal_state.cursor_row = start_row
-        _terminal_state.cursor_col = cursor_display_col
+        # Update terminal state under lock to prevent race conditions
+        with _terminal_state_lock:
+            _terminal_state.cursor_row = start_row
+            _terminal_state.cursor_col = cursor_display_col
 
         ch = getch(
             timeout=INPUTSTRING_GETCH_TIMEOUT,
