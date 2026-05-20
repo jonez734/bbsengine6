@@ -74,7 +74,7 @@ bbsengine6/
 
 ### Basic Usage
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
     notification_type="alert",
@@ -86,7 +86,7 @@ result = send_with_internet(
 
 ### Register Machine
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 registry = get_registry()
 registry.register("machine1", "host.example.com", 8765)
@@ -94,7 +94,7 @@ registry.register("machine1", "host.example.com", 8765)
 
 ### Parse Address
 ```python
-from bbsengine6.internet import parse_address, route_recipients
+from bbsengine6.net import parse_address, route_recipients
 
 addr = parse_address("alice@machine1")
 local, remote, errors = route_recipients([...])
@@ -167,12 +167,12 @@ local, remote, errors = route_recipients([...])
 The module is included in bbsengine6. Just import it:
 
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 ```
 
 ### One-Time Setup
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 registry = get_registry()
 
@@ -205,7 +205,7 @@ A: Three types:
 ### Q: How do I register machines?
 A: Use the registry API:
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 get_registry().register("machine_name", "host", port, auth_token="optional")
 ```
 

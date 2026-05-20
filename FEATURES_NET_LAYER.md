@@ -7,7 +7,7 @@ The Internet Layer adds **SMTP-like inter-machine messaging** to bbsengine6's no
 Send notifications to users across multiple machines using familiar email-style addressing:
 
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
     notification_type="alert",
@@ -58,7 +58,7 @@ result = send_with_internet(
 ### 1. Basic Usage
 
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
     notification_type="message",
@@ -70,7 +70,7 @@ result = send_with_internet(
 ### 2. Register a Remote Machine
 
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 registry = get_registry()
 registry.register(
@@ -139,7 +139,7 @@ pytest py/src/bbsengine6/tests/test_internet*.py -v
 ### High-Level
 
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
     notification_type="string",
@@ -153,7 +153,7 @@ result = send_with_internet(
 ### Address Parsing
 
 ```python
-from bbsengine6.internet import parse_address, route_recipients
+from bbsengine6.net import parse_address, route_recipients
 
 # Parse single address
 addr = parse_address("alice@machine1")
@@ -165,7 +165,7 @@ local, remote, errors = route_recipients(recipients)
 ### Machine Registry
 
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 registry = get_registry()
 registry.register("machine1", "host.example.com", 8765)

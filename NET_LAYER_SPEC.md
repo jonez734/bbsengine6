@@ -1,6 +1,6 @@
 # Internet Layer Specification
 
-**Module**: `bbsengine6.internet`  
+**Module**: `bbsengine6.net`  
 **Status**: Stable (Phase 3 Complete)  
 **Test Coverage**: 47 tests, 100% passing  
 **Code Quality**: All checks pass (ruff, type hints, linting)
@@ -77,7 +77,7 @@ Three address types are automatically detected:
 ### 3.1 High-Level Convenience Function
 
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
     notification_type: str,
@@ -106,7 +106,7 @@ result = send_with_internet(
 ### 3.2 Address Parsing API
 
 ```python
-from bbsengine6.internet import (
+from bbsengine6.net import (
     AddressParser, 
     parse_address,
     is_internet_address,
@@ -129,7 +129,7 @@ addr = parser.parse("alice@myhost")
 ### 3.3 Routing API
 
 ```python
-from bbsengine6.internet import route_recipients, InternetRouter
+from bbsengine6.net import route_recipients, InternetRouter
 
 # Simple routing
 local, remote, errors = route_recipients(
@@ -140,7 +140,7 @@ local, remote, errors = route_recipients(
 # errors = {}
 
 # Advanced routing with custom registry
-from bbsengine6.internet import InternetRouter, get_registry
+from bbsengine6.net import InternetRouter, get_registry
 
 router = InternetRouter(local_machine="myhost", registry=get_registry())
 local, remote, errors = router.route([...])
@@ -152,7 +152,7 @@ host, port, token = router.resolve_machine("machine1")
 ### 3.4 Machine Registry API
 
 ```python
-from bbsengine6.internet import get_registry, MachineConfig
+from bbsengine6.net import get_registry, MachineConfig
 
 registry = get_registry()
 
@@ -184,7 +184,7 @@ registry.unregister("machine1")
 ### 3.5 Integration API
 
 ```python
-from bbsengine6.internet import NotifyIntegration, get_integration
+from bbsengine6.net import NotifyIntegration, get_integration
 
 # Create integration instance
 integration = NotifyIntegration(
@@ -387,7 +387,7 @@ pytest py/src/bbsengine6/tests/test_internet*.py -v
 pytest py/src/bbsengine6/tests/test_internet.py::TestAddressParser -v
 
 # With coverage
-pytest py/src/bbsengine6/tests/test_internet*.py --cov=bbsengine6.internet
+pytest py/src/bbsengine6/tests/test_internet*.py --cov=bbsengine6.net
 ```
 
 ## 9. Configuration
@@ -401,7 +401,7 @@ None required. Optional:
 ### 9.2 Application Initialization
 
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 # Register your machines once at startup
 registry = get_registry()
@@ -426,7 +426,7 @@ notify.send(
 
 **After** (local + remote):
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 
 send_with_internet(
     notification_type="message",
@@ -439,7 +439,7 @@ send_with_internet(
 
 **One-time setup**:
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 registry = get_registry()
 registry.register("machine1", "host1.example.com", 8765, auth_token="secret")
@@ -488,7 +488,7 @@ registry.register("machine1", "host1.example.com", 8765, auth_token="secret")
 ### Example 1: Basic Inter-Machine Messaging
 
 ```python
-from bbsengine6.internet import send_with_internet, get_registry
+from bbsengine6.net import send_with_internet, get_registry
 
 # Register machines (once at startup)
 registry = get_registry()
@@ -515,7 +515,7 @@ if result["summary"][1] > 0:
 ### Example 2: Address Parsing
 
 ```python
-from bbsengine6.internet import parse_address, AddressType
+from bbsengine6.net import parse_address, AddressType
 
 recipients = ["alice@local", "bob@machine1", "charlie@remote.example.com"]
 
@@ -532,7 +532,7 @@ for addr_str in recipients:
 ### Example 3: Custom Routing
 
 ```python
-from bbsengine6.internet import InternetRouter, get_registry
+from bbsengine6.net import InternetRouter, get_registry
 
 router = InternetRouter("myhost")
 recipients = ["alice@myhost", "bob@other", "charlie@external.com"]

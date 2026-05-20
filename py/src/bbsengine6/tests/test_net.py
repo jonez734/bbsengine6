@@ -2,7 +2,7 @@
 # Tests for internet layer address parsing and routing.
 
 import pytest
-from bbsengine6.internet import (
+from bbsengine6.net import (
     AddressParser,
     AddressType,
     InternetAddress,

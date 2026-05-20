@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bbsengine6.internet import (
+from bbsengine6.net import (
     MachineConfig,
     MachineRegistry,
     WebSocketProtocol,
@@ -62,7 +62,7 @@ class TestMachineRegistry:
         assert registry._cache == {}
         assert registry._cache_valid is False
 
-    @patch("bbsengine6.internet.registry.psycopg.connect")
+    @patch("bbsengine6.net.registry.psycopg.connect")
     def test_register_machine(self, mock_connect):
         """Test registering a machine."""
         mock_conn = MagicMock()
@@ -71,7 +71,7 @@ class TestMachineRegistry:
         registry = MachineRegistry("test_db")
 
         # Mock database operations
-        with patch("bbsengine6.internet.registry.database.cursor") as mock_cursor:
+        with patch("bbsengine6.net.registry.database.cursor") as mock_cursor:
             mock_cursor.return_value.__enter__ = MagicMock()
             mock_cursor.return_value.__exit__ = MagicMock()
 
@@ -99,8 +99,8 @@ class TestMachineRegistry:
         assert result.host == "localhost"
         assert result.auth_token == "secret"
 
-    @patch("bbsengine6.internet.registry.psycopg.connect")
-    @patch("bbsengine6.internet.registry.database.cursor")
+    @patch("bbsengine6.net.registry.psycopg.connect")
+    @patch("bbsengine6.net.registry.database.cursor")
     def test_get_machine_not_found(self, mock_cursor, mock_connect):
         """Test getting non-existent machine."""
         mock_conn = MagicMock()
@@ -127,8 +127,8 @@ class TestMachineRegistry:
         registry._cache = {"machine1": config1, "machine2": config2}
         registry._cache_valid = True
 
-        with patch("bbsengine6.internet.registry.psycopg.connect"):
-            with patch("bbsengine6.internet.registry.database.cursor"):
+        with patch("bbsengine6.net.registry.psycopg.connect"):
+            with patch("bbsengine6.net.registry.database.cursor"):
                 machines = registry.list_all()
                 assert len(machines) >= 0
 

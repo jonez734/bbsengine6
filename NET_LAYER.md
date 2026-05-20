@@ -4,7 +4,7 @@ SMTP-like inter-machine messaging with elegant WebSocket transport.
 
 ## Overview
 
-The `bbsengine6.internet` module provides SMTP-style addressing (`user@machine`) for sending notifications between machines and users across a network. Built with a Twisted-style architecture for clean separation of concerns.
+The `bbsengine6.net` module provides SMTP-style addressing (`user@machine`) for sending notifications between machines and users across a network. Built with a Twisted-style architecture for clean separation of concerns.
 
 ## Architecture
 
@@ -77,7 +77,7 @@ tests/
 ### Basic Usage
 
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 
 # Send to mixed local and remote recipients
 result = send_with_internet(
@@ -96,7 +96,7 @@ result = send_with_internet(
 ### Register Remote Machines
 
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 registry = get_registry()
 

@@ -2,7 +2,7 @@
 
 **Looking for inter-machine messaging?** You've found the right place.
 
-The `bbsengine6.internet` module adds SMTP-style addressing (`user@machine`) to the notification system, allowing you to send messages between machines and users across your network.
+The `bbsengine6.net` module adds SMTP-style addressing (`user@machine`) to the notification system, allowing you to send messages between machines and users across your network.
 
 ## Quick Navigation
 
@@ -17,7 +17,7 @@ The `bbsengine6.internet` module adds SMTP-style addressing (`user@machine`) to 
 ### 1. Basic Usage
 
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 
 # Send to local and remote users
 result = send_with_internet(
@@ -36,7 +36,7 @@ print(f"Sent to {result['summary'][0]}, Failed: {result['summary'][1]}")
 ### 2. Register a Remote Machine (one-time setup)
 
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 registry = get_registry()
 registry.register(
@@ -80,7 +80,7 @@ user@machine
 ### Pattern 1: Broadcast to All Machines
 
 ```python
-from bbsengine6.internet import send_with_internet, get_registry
+from bbsengine6.net import send_with_internet, get_registry
 
 # Get all registered machines
 registry = get_registry()
@@ -122,7 +122,7 @@ if result["remote"]:
 ### Pattern 3: Conditional Delivery
 
 ```python
-from bbsengine6.internet import route_recipients
+from bbsengine6.net import route_recipients
 
 # Separate local from remote
 recipients = ["alice@local", "bob@machine1"]
@@ -149,7 +149,7 @@ if remote:
 ### High-Level
 
 ```python
-from bbsengine6.internet import send_with_internet
+from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
     notification_type="string",
@@ -163,7 +163,7 @@ result = send_with_internet(
 ### Address Parsing
 
 ```python
-from bbsengine6.internet import parse_address, is_internet_address
+from bbsengine6.net import parse_address, is_internet_address
 
 addr = parse_address("alice@machine1")
 # → InternetAddress(user="alice", machine="machine1", address_type=REMOTE)
@@ -175,7 +175,7 @@ if is_internet_address("alice@machine1"):
 ### Routing
 
 ```python
-from bbsengine6.internet import route_recipients
+from bbsengine6.net import route_recipients
 
 local, remote, errors = route_recipients(["alice@local", "bob@machine1"])
 # local = ["alice"]
@@ -186,7 +186,7 @@ local, remote, errors = route_recipients(["alice@local", "bob@machine1"])
 ### Machine Registry
 
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 registry = get_registry()
 
@@ -207,7 +207,7 @@ registry.unregister("machine1")
 ### Integration with notify
 
 ```python
-from bbsengine6.internet import NotifyIntegration
+from bbsengine6.net import NotifyIntegration
 
 integration = NotifyIntegration()
 
@@ -233,7 +233,7 @@ pytest py/src/bbsengine6/tests/test_internet*.py -v
 pytest py/src/bbsengine6/tests/test_internet.py::TestAddressParser -v
 
 # Check coverage
-pytest py/src/bbsengine6/tests/test_internet*.py --cov=bbsengine6.internet
+pytest py/src/bbsengine6/tests/test_internet*.py --cov=bbsengine6.net
 ```
 
 All 47 tests pass ✅
@@ -263,7 +263,7 @@ CREATE TABLE postoffice.machine_registry (
 
 **Solution**:
 ```python
-from bbsengine6.internet import get_registry
+from bbsengine6.net import get_registry
 
 registry = get_registry()
 registry.register("machine1", "host.example.com", 8765)
