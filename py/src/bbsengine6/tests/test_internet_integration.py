@@ -206,9 +206,6 @@ class TestModuleConvenience:
 class TestIntegrationWithNotify:
     """Integration tests with actual bbsengine6.notify (if available)."""
 
-    @pytest.mark.skipif(
-        True, reason="Skip unless bbsengine6.notify is available in test environment"
-    )
     def test_real_notify_integration(self):
         """Test integration with real notify module."""
         try:
