@@ -584,9 +584,10 @@ def handle_key_enter(
         args: Application namespace (passed to verify via kwargs if needed)
         **kwargs: Additional parameters passed to verify
     """
+    echo("{f6}", end="", flush=True)
+
     # No verify → accept immediately
     if not callable(verify):
-        echo("{f6}", end="", flush=True)
         return buffer, curpos, scroll_offset, True, True
 
     # Run verify with buffer and kwargs (pass args through kwargs if provided)
@@ -600,7 +601,6 @@ def handle_key_enter(
         ok = False
 
     if ok:
-        echo("{f6}", end="", flush=True)
         return buffer, curpos, scroll_offset, True, True
     else:
         echo("{BEL}", end="", flush=True)
