@@ -263,3 +263,153 @@ All steps are atomic.
 ## Known Issues / TODOs
 
 None currently.
+
+---
+
+## Recipient Validation & Group Management (v1.0)
+
+Added in latest release: Comprehensive moniker validation and group management for secure messaging.
+
+### New Functions
+
+#### `moniker_exists(args, moniker: str, **kwargs) -> bool | None`
+
+Validate moniker format and check existence in database.
+
+**Validation Rules:**
+- Non-empty string (no empty or None)
+- No "@" prefix (reserved for messaging syntax)
+- No spaces (ensures clean parsing)
+- Max 50 characters
+- Printable ASCII only (0x20-0x7E)
+
+**Returns:**
+- `True` - Moniker exists
+- `False` - Moniker doesn't exist
+- `None` - Database error
+
+**Raises:**
+- `ValueError` - Invalid format (with descriptive message)
+
+**Example:**
+```python
+# Valid moniker
+if member.moniker_exists(args, "alice", pool=pool):
+    print("alice exists")
+
+# Invalid: contains space
+try:
+    member.moniker_exists(args, "alice bob")
+except ValueError as e:
+    print(e)  # "Invalid moniker: cannot contain spaces"
+```
+
+---
+
+#### `group_exists(args, group_name: str, **kwargs) -> bool | None`
+
+Validate group name format and check existence in `engine.__notify_group`.
+
+**Validation Rules:**
+- Non-empty string
+- No "@" prefix
+- No spaces
+- Max 100 characters (longer than monikers)
+- Printable ASCII only (0x20-0x7E)
+
+**Returns:**
+- `True` - Group exists
+- `False` - Group doesn't exist
+- `None` - Database error
+
+**Raises:**
+- `ValueError` - Invalid format
+
+---
+
+#### `get_group_members(args, group_name: str, **kwargs) -> list[str] | None`
+
+Get all member monikers in a group, recursively expanding nested groups.
+
+**Features:**
+- Recursive group expansion (groups can contain other groups)
+- Automatic duplicate removal
+- Circular reference detection (prevents infinite loops)
+- Returns sorted, unique list
+
+**Returns:**
+- `list[str]` - Member monikers
+- `[]` - Empty group (exists but has no members)
+- `None` - Database error
+
+**Raises:**
+- `ValueError` - Invalid group name or circular reference detected
+
+**Example:**
+```python
+# Expand ops group (may contain users and/or nested groups)
+members = member.get_group_members(args, "ops", pool=pool)
+# Returns: ["alice", "bob", "charlie"] (flattened list)
+
+# Circular reference detected
+try:
+    members = member.get_group_members(args, "circular", pool=pool)
+except ValueError as e:
+    print(e)  # "Circular group reference detected: X is already being expanded"
+```
+
+---
+
+## Security Enhancements
+
+### Moniker Format Restrictions
+
+**@ Prefix Prevention:**
+- Prevents "@alice" monikers that could exploit "@alice" messaging syntax
+- Blocks accidental or malicious naming tricks
+- Error: "Invalid moniker: cannot start with '@'"
+
+**Space Prevention:**
+- Prevents "alice bob" that would be ambiguous in parsing
+- Ensures clean separation between moniker and message text
+- Error: "Invalid moniker: cannot contain spaces"
+
+**Result:**
+- Messaging syntax `@alice message` is unambiguous
+- Cannot create names like `@alice` or `alice bob` to bypass system
+
+### Circular Reference Protection
+
+**Cycle Detection:**
+- Detects self-references: ops contains ops
+- Detects mutual references: ops ↔ devs
+- Detects chain references: ops → devs → managers → ops
+
+**Implementation:**
+- Internal `_visited` set tracks expanded groups
+- Early detection prevents infinite loops
+- Clear error message identifies the cycle
+
+**Result:**
+- Safe expansion of arbitrarily nested groups
+- No performance degradation from cycles
+
+---
+
+## Testing
+
+Comprehensive test suite covers:
+
+1. **Moniker validation** - Format rules, edge cases
+2. **Group validation** - Format rules, existence checks
+3. **Nested groups** - Recursive expansion, cycles
+4. **Security** - @ prefix, spaces, UTF-8
+5. **Integration** - Real-world messaging flows
+
+Run tests:
+```bash
+pytest bbsengine6/py/tests/test_notify_message_demo_recipient_validation.py -v
+pytest bbsengine6/py/tests/test_group_recipient_resolution.py -v
+```
+
+See `NOTIFY_MESSAGING.md` for complete specification.
