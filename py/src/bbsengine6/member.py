@@ -937,6 +937,55 @@ def verifyMemberFound(args, name, **kwargs):
         return None
 
 
+def moniker_exists(args, moniker: str, **kwargs) -> bool | None:
+    """Check if a member moniker exists in the database.
+
+    Validates moniker format and checks existence in engine.member table.
+
+    Args:
+        args: Application args
+        moniker: Member moniker to validate (case-insensitive via citext)
+        **kwargs: Optional - pool, conn
+
+    Returns:
+        bool: True if moniker exists, False if not, None on error
+
+    Raises:
+        ValueError: If moniker format is invalid
+            - Empty or None
+            - Exceeds 50 characters
+            - Contains non-ASCII characters
+            - Contains non-printable characters
+
+    Examples:
+        >>> moniker_exists(args, "alice", pool=pool)
+        True
+        >>> moniker_exists(args, "baduser", pool=pool)
+        False
+        >>> moniker_exists(args, "café")  # raises ValueError
+        ValueError: Invalid moniker: contains non-ASCII characters
+    """
+    # Validate moniker format and content
+    if not moniker or not isinstance(moniker, str):
+        raise ValueError("Invalid moniker: must be non-empty string")
+
+    if len(moniker) > 50:
+        raise ValueError(f"Invalid moniker: exceeds 50 characters ({len(moniker)})")
+
+    # Validate printable ASCII only (0x20 to 0x7E)
+    for i, char in enumerate(moniker):
+        code = ord(char)
+        # Printable ASCII range: 0x20 (space) to 0x7E (tilde)
+        if code < 0x20 or code > 0x7E:
+            raise ValueError(
+                f"Invalid moniker: contains non-printable character at position {i}: "
+                f"{repr(char)} (0x{code:02x}). Only ASCII (0x20-0x7E) allowed."
+            )
+
+    # Check existence using existing verifyMemberFound with moniker column
+    return verifyMemberFound(args, moniker, column="moniker", **kwargs)
+
+
 def insert(args, member, **kwargs):
     """
     Insert a new member record.

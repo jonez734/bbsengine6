@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from bbsengine6 import database
+from bbsengine6 import database, member
 from bbsengine6.io.echo import echo, echo_traceback
 from bbsengine6.io.inputchoice import inputchoice
 from bbsengine6.io.inputstring import inputstring
@@ -292,6 +292,11 @@ class MessageHandler:
 
             if len(message) > 500:
                 raise ValueError(f"Message too long: {len(message)} > 500 chars")
+
+            # Validate recipient exists (database mode only)
+            if self.args and self.pool:
+                if not member.moniker_exists(self.args, recipient, pool=self.pool):
+                    raise ValueError(f"member {recipient} not found")
 
             # Process echo command if enabled
             if self.config.enable_echo_commands and EchoProcessor.is_echo_command(
@@ -615,11 +620,14 @@ def display_with_more_prompt(
                 # Try to use inputstring() for proper status bar updates
                 # Falls back to input() if in non-TTY environment (tests, pipes)
                 try:
-                    response = inputchoice(
-                        f"More? ({messages_remaining} remaining): ",
-                        "yn",
-                        default="y",
-                    ) or ""
+                    response = (
+                        inputchoice(
+                            f"More? ({messages_remaining} remaining): ",
+                            "yn",
+                            default="y",
+                        )
+                        or ""
+                    )
                 except Exception as e:
                     # Fall back to input() if inputstring fails (non-TTY, test environment)
                     # This catches: termios.error, OSError, IOError, UnsupportedOperation, etc.
