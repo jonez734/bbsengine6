@@ -609,10 +609,9 @@ def _handle_curpos(token):
     y = max(1, y)
     x = max(1, x)
 
-    # update terminal state under lock to prevent race conditions
-    with _terminal_state_lock:
-        _terminal_state.cursor_row = y
-        _terminal_state.cursor_col = x
+    # update terminal state - no lock needed (local tracking only)
+    _terminal_state.cursor_row = y
+    _terminal_state.cursor_col = x
 
     # emit escape
     token.text = f"{CSI}{y};{x}H"
