@@ -1093,3 +1093,181 @@ ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 def strip_ansi(s: str) -> str:
     """Remove ANSI escape sequences from a string for display width measurement."""
     return ANSI_ESCAPE_RE.sub("", s)
+
+
+# AES-256-GCM Password Encryption Functions
+# (Use bbsengine6.password module for pluggable system)
+
+
+def get_encryption_key() -> bytes:
+    """Get AES-256 encryption key from POSTOFFICE_PASSWORD_KEY environment variable.
+
+    Returns:
+        Decrypted 32-byte key from base64-encoded environment variable.
+
+    Raises:
+        ValueError: If key is invalid, not set, or wrong length.
+
+    Note:
+        Deprecated: Use bbsengine6.password.config.get_cipher() instead for
+        pluggable cipher implementations. This function is provided for
+        direct AES-256-GCM use cases.
+
+    Example:
+        >>> import os
+        >>> key_b64 = "K7nZ9pQmR2xLvW8yFhJdB3sC6eG1kL4mN9tU5vX2yZ3wA="
+        >>> os.environ["POSTOFFICE_PASSWORD_KEY"] = key_b64
+        >>> key = get_encryption_key()
+        >>> len(key)
+        32
+    """
+    import os
+    import base64
+
+    key_b64 = os.environ.get("POSTOFFICE_PASSWORD_KEY")
+    if not key_b64:
+        raise ValueError(
+            "POSTOFFICE_PASSWORD_KEY environment variable not set. "
+            "Generate with: openssl rand -base64 32"
+        )
+
+    try:
+        key = base64.b64decode(key_b64)
+    except Exception as e:
+        raise ValueError(f"POSTOFFICE_PASSWORD_KEY is not valid base64: {e}")
+
+    if len(key) != 32:
+        raise ValueError(
+            f"POSTOFFICE_PASSWORD_KEY must be 32 bytes (256 bits), got {len(key)} bytes"
+        )
+
+    return key
+
+
+def encrypt_password(plaintext: str) -> str:
+    """Encrypt plaintext password with AES-256-GCM.
+
+    Generates a random 96-bit nonce, encrypts the plaintext, and returns
+    the result as base64(nonce + ciphertext + auth_tag).
+
+    Args:
+        plaintext: Password string to encrypt (plaintext).
+
+    Returns:
+        Base64-encoded encrypted password: base64(nonce + ciphertext + auth_tag)
+
+    Raises:
+        ValueError: If encryption fails or key is invalid.
+
+    Note:
+        Deprecated: Use bbsengine6.password for pluggable cipher implementations.
+        This function provides direct AES-256-GCM encryption.
+
+    Algorithm:
+        - Cipher: AES-256-GCM (NIST SP800-38D)
+        - Key size: 256 bits (32 bytes)
+        - Nonce: 96 bits (12 bytes), random per message
+        - Auth tag: 128 bits (16 bytes)
+
+    Cross-language compatible:
+        Format works with Python, JavaScript, Rust, Perl, C, PHP, etc.
+
+    Example:
+        >>> import os, base64
+        >>> os.environ["POSTOFFICE_PASSWORD_KEY"] = base64.b64encode(os.urandom(32)).decode()
+        >>> encrypted = encrypt_password("mysecret")
+        >>> len(base64.b64decode(encrypted)) >= 28  # 12 bytes nonce + 16 bytes tag
+        True
+    """
+    import os
+    import base64
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    key = get_encryption_key()
+
+    # Generate random 96-bit nonce (12 bytes)
+    nonce = os.urandom(12)
+
+    # Create cipher and encrypt
+    cipher = AESGCM(key)
+    ciphertext = cipher.encrypt(nonce, plaintext.encode("utf-8"), None)
+
+    # Concatenate nonce + ciphertext (ciphertext includes 128-bit auth tag)
+    encrypted = nonce + ciphertext
+
+    # Encode as base64 for database storage
+    return base64.b64encode(encrypted).decode("utf-8")
+
+
+def decrypt_password(ciphertext_b64: str) -> str:
+    """Decrypt base64-encoded AES-256-GCM encrypted password.
+
+    Args:
+        ciphertext_b64: Base64-encoded encrypted password.
+
+    Returns:
+        Decrypted plaintext password.
+
+    Raises:
+        ValueError: If decryption fails (wrong key, tampering, invalid format, etc.)
+
+    Note:
+        Deprecated: Use bbsengine6.password for pluggable cipher implementations.
+        This function provides direct AES-256-GCM decryption.
+
+    Example:
+        >>> import os, base64
+        >>> os.environ["POSTOFFICE_PASSWORD_KEY"] = base64.b64encode(os.urandom(32)).decode()
+        >>> encrypted = encrypt_password("mysecret")
+        >>> decrypted = decrypt_password(encrypted)
+        >>> decrypted == "mysecret"
+        True
+    """
+    import base64
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    key = get_encryption_key()
+
+    try:
+        encrypted = base64.b64decode(ciphertext_b64)
+    except Exception as e:
+        raise ValueError(f"Failed to decode base64 encrypted password: {e}")
+
+    if len(encrypted) < 28:  # 12 bytes nonce + 16 bytes auth tag minimum
+        raise ValueError(
+            f"Encrypted password too short: {len(encrypted)} bytes "
+            "(expected at least 28 bytes)"
+        )
+
+    # Extract nonce and ciphertext
+    nonce = encrypted[:12]
+    ciphertext = encrypted[12:]
+
+    # Decrypt and verify auth tag
+    cipher = AESGCM(key)
+    try:
+        plaintext = cipher.decrypt(nonce, ciphertext, None)
+    except Exception as e:
+        raise ValueError(
+            f"Failed to decrypt password (authentication tag verification failed): {e}"
+        )
+
+    return plaintext.decode("utf-8")
+
+
+# IMPORTANT DISTINCTION
+# =====================
+# This module contains TWO password systems:
+#
+# 1. SHA-256 Hashing (password_hash.py)
+#    - For member login passwords
+#    - One-way: can verify but NOT decrypt
+#    - Use in: bbsengine6 authentication
+#
+# 2. AES-256-GCM Encryption (encrypt_password/decrypt_password below)
+#    - For IMAP/SMTP server credentials
+#    - Reversible: can encrypt AND decrypt
+#    - Use in: Email system authentication
+#
+# Choose the right one for your use case!
+
