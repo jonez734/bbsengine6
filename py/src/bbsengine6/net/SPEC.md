@@ -895,3 +895,251 @@ elif isinstance(packet, FramePacket):
 ```
 
 This design allows applications to use whatever packet types they need without creating dependencies between bbsengine6 and asimov.
+
+## PING/PONG Packet Types (Connection Keep-Alive)
+
+### Overview
+
+PingPacket and PongPacket are minimal packet types designed for connection health checking and latency measurement. They follow the "minimal header" pattern with just a timestamp field.
+
+**Packet Types:**
+- `PACKET_TYPE_PING = 1` - Keep-alive PING request
+- `PACKET_TYPE_PONG = 2` - Keep-alive PONG response
+
+### Binary Format
+
+Both PING and PONG packets use the same minimal 9-byte structure:
+
+```
+Byte 0:     Type (1 byte)
+            - 0x01 = PING
+            - 0x02 = PONG
+Bytes 1-8:  Timestamp (8 bytes, double precision IEEE 754)
+            - Unix epoch time in milliseconds as double
+            - Allows sub-millisecond precision if needed
+```
+
+**Total size: 9 bytes** (1 byte type + 8 byte timestamp)
+
+No checksum, no payload, no compression—just a minimal header for efficiency.
+
+### Use Cases
+
+#### 1. Connection Keep-Alive
+
+Detect stale or dead connections by sending periodic PING packets:
+
+```python
+import time
+from bbsengine6.net import PingPacket, encode_packet
+
+# Send PING every 30 seconds
+timestamp = time.time() * 1000  # Milliseconds
+ping = PingPacket(timestamp=timestamp)
+binary = encode_packet(ping)
+transport.send_raw(binary)
+```
+
+#### 2. Round-Trip Latency Measurement
+
+Measure network latency by recording RTT between PING and PONG:
+
+```python
+import time
+from bbsengine6.net import PingPacket, PongPacket, encode_packet, decode_packet
+
+# Send PING with current timestamp
+ping_time = time.time() * 1000
+ping = PingPacket(timestamp=ping_time)
+transport.send_raw(encode_packet(ping))
+
+# ... wait for PONG response ...
+pong_binary = transport.receive_raw()
+pong = decode_packet(pong_binary)
+
+# Calculate latency
+if isinstance(pong, PongPacket):
+    latency_ms = pong.timestamp - ping_time
+    print(f"RTT: {latency_ms:.2f}ms")
+```
+
+#### 3. Server-Driven Keep-Alive
+
+Server sends PING, client responds with PONG:
+
+```python
+# Server side
+ping = PingPacket(timestamp=time.time() * 1000)
+server.broadcast_packet(ping)
+
+# Client side (receives PING, responds with PONG)
+packet = decode_packet(binary)
+if isinstance(packet, PingPacket):
+    pong = PongPacket(timestamp=packet.timestamp)
+    client.send_packet(encode_packet(pong))
+```
+
+### Implementation Details
+
+**PingPacket class:**
+```python
+@register_packet_type
+@dataclass
+class PingPacket(Packet):
+    packet_type: int = field(init=False, default=PACKET_TYPE_PING)
+    timestamp: float  # Unix time in milliseconds
+    packet_id: int = 0  # Optional: inherited from Packet
+```
+
+**PongPacket class:**
+```python
+@register_packet_type
+@dataclass
+class PongPacket(Packet):
+    packet_type: int = field(init=False, default=PACKET_TYPE_PONG)
+    timestamp: float  # Echo of PING timestamp or server's current time
+    packet_id: int = 0  # Optional: inherited from Packet
+```
+
+**Encoding:**
+```python
+def encode_ping_packet(packet: PingPacket) -> bytes:
+    """Returns 9-byte binary: type (1) + timestamp (8)"""
+    return struct.pack("!Bd", PACKET_TYPE_PING, packet.timestamp)
+
+def encode_pong_packet(packet: PongPacket) -> bytes:
+    """Returns 9-byte binary: type (1) + timestamp (8)"""
+    return struct.pack("!Bd", PACKET_TYPE_PONG, packet.timestamp)
+```
+
+**Decoding:**
+```python
+def decode_ping_packet(data: bytes) -> PingPacket:
+    """Extracts timestamp and validates packet type"""
+    packet_type, timestamp = struct.unpack("!Bd", data[:9])
+    return PingPacket(timestamp=timestamp, packet_id=0)
+
+def decode_pong_packet(data: bytes) -> PongPacket:
+    """Extracts timestamp and validates packet type"""
+    packet_type, timestamp = struct.unpack("!Bd", data[:9])
+    return PongPacket(timestamp=timestamp, packet_id=0)
+```
+
+### Timestamp Semantics
+
+The timestamp field is a double-precision float representing Unix epoch time in **milliseconds**.
+
+**For PING packets:**
+- Sender: Sets to current time when sending
+- Receiver: Ignores timestamp, echoes it back in PONG
+
+**For PONG packets:**
+- Sender: Can echo PING timestamp (for RTT calculation) or use current time
+- Receiver: Compares to original PING time to calculate latency
+
+### Example: Complete Keep-Alive Protocol
+
+```python
+import time
+from bbsengine6.net import (
+    PingPacket, PongPacket,
+    encode_packet, decode_packet,
+    WebSocketTransport
+)
+
+class KeepAliveHandler:
+    def __init__(self, transport, interval=30.0, timeout=5.0):
+        self.transport = transport
+        self.interval = interval
+        self.timeout = timeout
+        self.last_pong_time = time.time()
+    
+    def send_ping(self):
+        """Send PING packet to peer"""
+        ping = PingPacket(timestamp=time.time() * 1000)
+        self.transport.send_raw(encode_packet(ping))
+        self.ping_time = time.time()
+    
+    def handle_ping(self, packet):
+        """Respond to PING with PONG"""
+        pong = PongPacket(timestamp=packet.timestamp)
+        self.transport.send_raw(encode_packet(pong))
+    
+    def handle_pong(self, packet):
+        """Measure latency and update health"""
+        latency = (time.time() * 1000) - packet.timestamp
+        self.last_pong_time = time.time()
+        print(f"RTT: {latency:.2f}ms - Connection healthy")
+    
+    def check_connection_health(self):
+        """Check if PONG received within timeout"""
+        elapsed = time.time() - self.last_pong_time
+        if elapsed > self.timeout:
+            print(f"No PONG for {elapsed:.1f}s - Connection dead")
+            self.transport.close()
+            return False
+        return True
+    
+    def run_keep_alive_loop(self):
+        """Send PING every interval, check for PONG"""
+        while True:
+            self.send_ping()
+            
+            # Wait for PONG with timeout
+            try:
+                data = self.transport.receive_raw(timeout=self.timeout)
+                packet = decode_packet(data)
+                if isinstance(packet, PongPacket):
+                    self.handle_pong(packet)
+            except TimeoutError:
+                if not self.check_connection_health():
+                    break
+            
+            time.sleep(self.interval)
+```
+
+### Integration with bbsengine6.net
+
+PING/PONG packets work seamlessly with the universal encode/decode API:
+
+```python
+from bbsengine6.net import (
+    PingPacket, PongPacket,
+    FilePacket, MessagePacket,
+    encode_packet, decode_packet
+)
+
+# All four types can be encoded/decoded uniformly
+ping = PingPacket(timestamp=time.time() * 1000)
+message = MessagePacket(sender="alice", ...)
+file = FilePacket(filename="data.bin", ...)
+
+# Universal encoding
+ping_binary = encode_packet(ping)
+msg_binary = encode_packet(message)
+file_binary = encode_packet(file)
+
+# Universal decoding (auto-detects type)
+packet = decode_packet(ping_binary)      # Returns PingPacket
+packet = decode_packet(msg_binary)       # Returns MessagePacket
+packet = decode_packet(file_binary)      # Returns FilePacket
+```
+
+### No Validation for Timestamp
+
+Unlike FilePacket and MessagePacket, PING/PONG packets perform minimal validation:
+
+- No checksum computation or verification (9-byte header is too small)
+- No length validation (fixed 9-byte format)
+- No payload processing (no payload field)
+- Timestamp values are not restricted (can be any float)
+
+This keeps PING/PONG as fast and lightweight as possible.
+
+### Compatibility Notes
+
+- PING/PONG types are always available in bbsengine6.net (no registration needed)
+- PING/PONG packet types (1, 2) do not conflict with asimov.net types (3, 4, 5)
+- Applications can send PING/PONG concurrently with Files, Messages, and custom types
+- PING/PONG can be used by intermediate proxies/routers without interpretation
+

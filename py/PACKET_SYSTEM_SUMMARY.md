@@ -2,7 +2,7 @@
 
 ## Summary
 
-A robust, security-hardened packet system has been added to `bbsengine6.net` for transmitting Files and Messages with optional compression and integrity verification. The system is designed with clean separation of concerns: bbsengine6.net provides File/Message packets, asimov.net provides Frame packets, and applications integrate custom types via a packet type registry.
+A robust, security-hardened packet system has been added to `bbsengine6.net` for transmitting Files and Messages with optional compression and integrity verification, plus PING/PONG packets for connection keep-alive and latency measurement. The system is designed with clean separation of concerns: bbsengine6.net provides File/Message/PING/PONG packets, asimov.net provides Frame packets, and applications integrate custom types via a packet type registry.
 
 ## Architecture
 
@@ -31,6 +31,8 @@ All use universal encode_packet() / decode_packet() API
 
 - ✓ FilePacket (file transmission with blocks)
 - ✓ MessagePacket (RFC 822-aligned messages)
+- ✓ PingPacket (keep-alive PING requests)
+- ✓ PongPacket (keep-alive PONG responses)
 - ✓ Packet base class and registry
 - ✓ Universal encode/decode API
 - ✓ SHA256 checksums and compression
@@ -54,13 +56,15 @@ All use universal encode_packet() / decode_packet() API
    - Universal `encode_packet()` and `decode_packet()` API
    - Exception hierarchy
 
-2. **packet_types.py** (137 lines)
+2. **packet_types.py** (189 lines)
    - `FilePacket`: For file transmission with block support
    - `MessagePacket`: For RFC 822-aligned messages
+   - `PingPacket`: For connection health checks
+   - `PongPacket`: For latency measurement
    - Field validation in `__post_init__` methods
 
-3. **packet_codec.py** (536 lines)
-   - Encode/decode functions for FilePacket and MessagePacket
+3. **packet_codec.py** (638 lines)
+   - Encode/decode functions for FilePacket, MessagePacket, PingPacket, and PongPacket
    - Compression utilities (zlib)
    - Checksum utilities (SHA256 with constant-time verification)
    - Filename validation (path traversal protection)
@@ -143,8 +147,8 @@ Tests demonstrate that applications can:
 ## Testing Results
 
 ```
-Total Tests: 70 / 70 PASSED ✓
-Execution Time: 0.38 seconds
+Total Tests: 83 / 83 PASSED ✓
+Execution Time: 0.26 seconds
 Pass Rate: 100%
 ```
 
@@ -159,17 +163,18 @@ Test Coverage:
 - RFC 822 alignment: 4 tests
 - FramePacket integration: 8 tests (demonstrating extensibility)
 - FramePacket transport: 6 tests (send/receive scenarios)
+- PING/PONG: 13 tests (encoding, decoding, latency, keep-alive)
 - Interoperability: 2 tests (all types coexist)
 
 ## Statistics
 
-- **Total Lines Added**: 2,577
-  - Code: 829 (core modules)
-  - Tests: 1,178 (test suite)
-  - Documentation: 650+ (SPEC.md additions)
+- **Total Lines Added**: 3,200
+  - Code: 950 (core modules)
+  - Tests: 1,350 (test suite, +13 PING/PONG tests)
+  - Documentation: 1,100+ (SPEC.md additions +PING/PONG section)
   - Modifications: 131 (__init__.py + transport.py)
 
-- **Test Coverage**: 70 tests, 100% passing, 0.38s execution
+- **Test Coverage**: 83 tests, 100% passing, 0.26s execution
 - **Code Quality**: ruff checks pass, fully formatted, comprehensive docstrings
 
 ## Files Modified
@@ -192,6 +197,7 @@ bbsengine6/py/tests/
 ```
 1fc9baf Add unified packet system to bbsengine6.net for Files and Messages
 08f5642 Add FramePacket integration and transport tests
+1170efb Add PING and PONG packet types for connection keep-alive
 ```
 
 ## Usage Examples
@@ -270,6 +276,9 @@ if isinstance(packet, FramePacket):
 ✓ Register custom packet types (extensible)
 ✓ Stream large files/frames efficiently
 ✓ Coexist multiple packet types in same system
+✓ Send PING/PONG for connection health checking
+✓ Measure round-trip latency (RTT)
+✓ Detect stale/dead connections
 
 ## Conclusion
 
