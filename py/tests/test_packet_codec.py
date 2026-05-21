@@ -689,3 +689,490 @@ class TestRFC822Alignment:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ============================================================================
+# Integration Tests: FramePacket from asimov.net
+# ============================================================================
+
+
+class TestFramePacketIntegration:
+    """Test integration with asimov.net FramePacket."""
+
+    def test_import_framepacket(self):
+        """FramePacket from asimov.net can be imported."""
+        from asimov.net import FramePacket
+
+        assert FramePacket is not None
+
+    def test_create_framepacket(self):
+        """FramePacket can be created and used."""
+        from asimov.net import FramePacket
+
+        packet = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=640,
+            height=480,
+            cols=2,
+            rows=2,
+            block_w=320,
+            block_h=240,
+            total_blocks=4,
+            blocks=[b"frame_data_block_0"],
+        )
+
+        assert packet.frame_id == 1
+        assert packet.width == 640
+        assert packet.height == 480
+        assert packet.total_blocks == 4
+
+    def test_encode_framepacket(self):
+        """FramePacket can be encoded to binary."""
+        from asimov.net import FramePacket, encode_frame_packet
+
+        packet = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=640,
+            height=480,
+            cols=2,
+            rows=2,
+            block_w=320,
+            block_h=240,
+            total_blocks=4,
+            blocks=[b"test_frame_data"],
+        )
+
+        encoded = encode_frame_packet(packet)
+        assert len(encoded) > 0
+        assert isinstance(encoded, bytes)
+
+    def test_decode_framepacket(self):
+        """FramePacket can be decoded from binary."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        original = FramePacket(
+            frame_id=5,
+            block_id=2,
+            width=1920,
+            height=1080,
+            cols=3,
+            rows=3,
+            block_w=640,
+            block_h=360,
+            total_blocks=9,
+            blocks=[b"video_frame_chunk"],
+        )
+
+        encoded = encode_frame_packet(original)
+        decoded = decode_frame_packet(encoded)
+
+        assert decoded.frame_id == 5
+        assert decoded.block_id == 2
+        assert decoded.width == 1920
+        assert decoded.height == 1080
+        assert decoded.total_blocks == 9
+
+    def test_encode_decode_framepacket_round_trip(self):
+        """FramePacket encode/decode round-trip preserves data."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        original_data = b"test frame pixel data" * 1000
+        original = FramePacket(
+            frame_id=10,
+            block_id=0,
+            width=800,
+            height=600,
+            cols=2,
+            rows=2,
+            block_w=400,
+            block_h=300,
+            total_blocks=4,
+            is_delta=False,
+            compressed=False,
+            blocks=[original_data],
+        )
+
+        encoded = encode_frame_packet(original)
+        decoded = decode_frame_packet(encoded)
+
+        assert decoded.blocks[0] == original_data
+        assert decoded.frame_id == original.frame_id
+        assert decoded.is_delta == original.is_delta
+        assert decoded.compressed == original.compressed
+
+    def test_framepacket_with_compression(self):
+        """FramePacket with compression flag can be encoded/decoded."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        original = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=320,
+            height=240,
+            cols=1,
+            rows=1,
+            block_w=320,
+            block_h=240,
+            total_blocks=1,
+            is_delta=False,
+            compressed=True,
+            blocks=[b"frame data" * 1000],
+        )
+
+        encoded = encode_frame_packet(original)
+        decoded = decode_frame_packet(encoded)
+
+        assert decoded.compressed is True
+        assert decoded.frame_id == 1
+
+    def test_framepacket_multi_block(self):
+        """FramePacket can handle single block in packet."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        # Note: FramePacket encodes blocks in packets, not as separate items
+        original = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=640,
+            height=480,
+            cols=2,
+            rows=2,
+            block_w=320,
+            block_h=240,
+            total_blocks=4,
+            blocks=[b"block_data_for_frame"],
+        )
+
+        encoded = encode_frame_packet(original)
+        decoded = decode_frame_packet(encoded)
+
+        assert decoded.frame_id == 1
+        assert decoded.total_blocks == 4
+        assert decoded.blocks == original.blocks
+
+    def test_framepacket_with_delta_flag(self):
+        """FramePacket with is_delta flag encodes/decodes correctly."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        original = FramePacket(
+            frame_id=100,
+            block_id=0,
+            width=1024,
+            height=768,
+            cols=2,
+            rows=2,
+            block_w=512,
+            block_h=384,
+            total_blocks=4,
+            is_delta=True,  # Delta encoding flag
+            blocks=[b"delta_encoded_data"],
+        )
+
+        encoded = encode_frame_packet(original)
+        decoded = decode_frame_packet(encoded)
+
+        assert decoded.is_delta is True
+        assert decoded.frame_id == 100
+
+
+# ============================================================================
+# Integration Tests: Send/Receive via bbsengine6.net Transport
+# ============================================================================
+
+
+class TestFramePacketTransport:
+    """Test sending FramePacket via bbsengine6.net transport (simulated)."""
+
+    def test_framepacket_binary_serialization(self):
+        """FramePacket can be serialized to binary for transmission."""
+        from asimov.net import FramePacket, encode_frame_packet
+
+        packet = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=640,
+            height=480,
+            cols=2,
+            rows=2,
+            block_w=320,
+            block_h=240,
+            total_blocks=4,
+            blocks=[b"frame_payload"],
+        )
+
+        binary = encode_frame_packet(packet)
+        assert isinstance(binary, bytes)
+        assert len(binary) > 0
+
+    def test_framepacket_transmission_scenario(self):
+        """Simulate transmitting FramePacket across network."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        # Sender: Create video frame
+        sender_packet = FramePacket(
+            frame_id=42,
+            block_id=0,
+            width=1920,
+            height=1080,
+            cols=4,
+            rows=4,
+            block_w=480,
+            block_h=270,
+            total_blocks=16,
+            is_delta=False,
+            compressed=False,
+            blocks=[b"HD_video_frame_data"],
+        )
+
+        # Network: Serialize
+        network_bytes = encode_frame_packet(sender_packet)
+
+        # Receiver: Deserialize
+        receiver_packet = decode_frame_packet(network_bytes)
+
+        # Verify integrity
+        assert receiver_packet.frame_id == 42
+        assert receiver_packet.width == 1920
+        assert receiver_packet.height == 1080
+        assert receiver_packet.blocks == sender_packet.blocks
+
+    def test_framepacket_stream_simulation(self):
+        """Simulate streaming multiple frames (frame sequences)."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        frames = []
+        for frame_num in range(5):
+            packet = FramePacket(
+                frame_id=frame_num,
+                block_id=0,
+                width=320,
+                height=240,
+                cols=1,
+                rows=1,
+                block_w=320,
+                block_h=240,
+                total_blocks=1,
+                blocks=[f"frame_{frame_num}".encode()],
+            )
+            frames.append(packet)
+
+        # Simulate transmission and reception
+        transmitted = []
+        for packet in frames:
+            binary = encode_frame_packet(packet)
+            transmitted.append(binary)
+
+        # Simulate reception
+        received = []
+        for binary in transmitted:
+            packet = decode_frame_packet(binary)
+            received.append(packet)
+
+        # Verify all frames received correctly
+        assert len(received) == 5
+        for i, packet in enumerate(received):
+            assert packet.frame_id == i
+            assert packet.blocks[0] == f"frame_{i}".encode()
+
+    def test_framepacket_large_frame_blocks(self):
+        """Simulate transmitting 4K frame in single packet."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        # Large frame in single packet (block_sizes limited to uint16 max)
+        # Real 4K would be split across multiple FramePackets
+        large_data = b"x" * 50000  # 50KB frame data
+
+        original = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=3840,
+            height=2160,
+            cols=2,
+            rows=2,
+            block_w=1920,
+            block_h=1080,
+            total_blocks=4,
+            blocks=[large_data],
+        )
+
+        # Encode
+        encoded = encode_frame_packet(original)
+
+        # Transmit (simulate)
+        # ... network transmission ...
+
+        # Decode
+        decoded = decode_frame_packet(encoded)
+
+        assert decoded.width == 3840
+        assert decoded.height == 2160
+        assert decoded.blocks[0] == large_data
+
+    def test_framepacket_with_compression_for_bandwidth(self):
+        """Demonstrate FramePacket compression for bandwidth optimization."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        # Create frame with compressible data
+        uncompressed_data = b"similar_pixel_data" * 10000  # Highly compressible
+        original = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=640,
+            height=480,
+            cols=1,
+            rows=1,
+            block_w=640,
+            block_h=480,
+            total_blocks=1,
+            is_delta=False,
+            compressed=True,  # Enable compression
+            blocks=[uncompressed_data],
+        )
+
+        encoded = encode_frame_packet(original)
+        decoded = decode_frame_packet(encoded)
+
+        # Verify compression flag preserved and data recovered
+        assert decoded.compressed is True
+        assert decoded.blocks[0] == uncompressed_data
+
+    def test_framepacket_delta_encoding_simulation(self):
+        """Simulate delta-encoded frame transmission for bandwidth savings."""
+        from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+        # Key frame (full frame)
+        key_frame = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=640,
+            height=480,
+            cols=2,
+            rows=2,
+            block_w=320,
+            block_h=240,
+            total_blocks=4,
+            is_delta=False,  # Full frame
+            blocks=[b"full_frame_data" * 100],
+        )
+
+        # Delta frame (only differences from previous)
+        delta_frame = FramePacket(
+            frame_id=2,
+            block_id=0,
+            width=640,
+            height=480,
+            cols=2,
+            rows=2,
+            block_w=320,
+            block_h=240,
+            total_blocks=4,
+            is_delta=True,  # Only deltas
+            blocks=[b"delta_data" * 50],  # Much smaller
+        )
+
+        # Encode and transmit both
+        key_binary = encode_frame_packet(key_frame)
+        delta_binary = encode_frame_packet(delta_frame)
+
+        # Delta should be smaller
+        assert len(delta_binary) < len(key_binary)
+
+        # Decode
+        key_decoded = decode_frame_packet(key_binary)
+        delta_decoded = decode_frame_packet(delta_binary)
+
+        # Verify flags
+        assert key_decoded.is_delta is False
+        assert delta_decoded.is_delta is True
+
+
+# ============================================================================
+# Cross-Compatibility Tests: FilePacket, MessagePacket, FramePacket
+# ============================================================================
+
+
+class TestPacketTypeInteroperability:
+    """Test that different packet types can coexist in same system."""
+
+    def test_all_packet_types_encodable(self):
+        """All three packet types (File, Message, Frame) can be encoded."""
+        from asimov.net import FramePacket, encode_frame_packet
+
+        # File packet
+        file_pkt = FilePacket(
+            filename="test.bin",
+            file_size=1000,
+            mime_type="application/octet-stream",
+            total_blocks=1,
+            block_id=0,
+            blocks=[b"file_data"],
+        )
+        file_binary = encode_file_packet(file_pkt)
+        assert len(file_binary) > 0
+
+        # Message packet
+        msg_pkt = MessagePacket(
+            sender="alice",
+            subject="Test",
+            content_type="text/plain",
+            content=b"message",
+        )
+        msg_binary = encode_message_packet(msg_pkt)
+        assert len(msg_binary) > 0
+
+        # Frame packet
+        frame_pkt = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=320,
+            height=240,
+            cols=1,
+            rows=1,
+            block_w=320,
+            block_h=240,
+            total_blocks=1,
+            blocks=[b"frame_data"],
+        )
+        frame_binary = encode_frame_packet(frame_pkt)
+        assert len(frame_binary) > 0
+
+    def test_different_packet_types_different_binary(self):
+        """Different packet types produce different binary formats."""
+        from asimov.net import FramePacket, encode_frame_packet
+
+        file_pkt = FilePacket(
+            filename="doc.txt",
+            file_size=100,
+            mime_type="text/plain",
+            total_blocks=1,
+            blocks=[b"x" * 100],
+        )
+        msg_pkt = MessagePacket(
+            sender="bob",
+            subject="Hi",
+            content_type="text/plain",
+            content=b"x" * 100,
+        )
+        frame_pkt = FramePacket(
+            frame_id=1,
+            block_id=0,
+            width=10,
+            height=10,
+            cols=1,
+            rows=1,
+            block_w=10,
+            block_h=10,
+            total_blocks=1,
+            blocks=[b"x" * 100],
+        )
+
+        file_binary = encode_file_packet(file_pkt)
+        msg_binary = encode_message_packet(msg_pkt)
+        frame_binary = encode_frame_packet(frame_pkt)
+
+        # All different binary formats
+        assert file_binary != msg_binary
+        assert msg_binary != frame_binary
+        assert file_binary != frame_binary
