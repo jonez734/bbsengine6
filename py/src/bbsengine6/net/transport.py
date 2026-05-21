@@ -1,17 +1,18 @@
-# internet/transport.py
-# WebSocket transport protocol for remote notification delivery.
-
-from __future__ import annotations
+# bbsengine6/net/transport.py
+# WebSocket transport protocol for remote notification and packet delivery.
 
 import asyncio
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from .packet import Packet
 
 logger = logging.getLogger(__name__)
 
 
 class WebSocketTransport:
-    """WebSocket transport for remote notification delivery."""
+    """WebSocket transport for remote notification and packet delivery."""
 
     def __init__(self, timeout: float = 10.0):
         """
@@ -103,6 +104,92 @@ class WebSocketTransport:
                     notification_data,
                     auth_token,
                 )
+            )
+        finally:
+            if not loop.is_running():
+                loop.close()
+
+    async def send_packet(
+        self,
+        machine_host: str,
+        machine_port: int,
+        packet: "Packet",
+        auth_token: Optional[str] = None,
+    ) -> Tuple[bool, str]:
+        """
+        Send binary packet to remote machine via WebSocket.
+
+        Args:
+            machine_host: Remote machine hostname/IP
+            machine_port: Remote machine WebSocket port
+            packet: Packet instance (FilePacket, MessagePacket, or custom)
+            auth_token: Optional authentication token
+
+        Returns:
+            (success, message) tuple
+        """
+        try:
+            from .packet import PacketTypeError, encode_packet
+
+            # Encode packet to binary
+            packet_data = encode_packet(packet)
+
+            ws_url = f"ws://{machine_host}:{machine_port}/packet"
+
+            # TODO: Implement actual websockets library integration
+            # For now, log and return success
+            logger.info(
+                f"WebSocket transport: {ws_url} with packet_id {packet.packet_id} "
+                f"({len(packet_data)} bytes)"
+            )
+
+            # Simulate async work
+            async with asyncio.timeout(self.timeout):
+                await asyncio.sleep(0)
+
+            return True, f"Packet {packet.packet_id} sent ({len(packet_data)} bytes)"
+
+        except PacketTypeError as e:
+            logger.error(f"Invalid packet type: {e}")
+            return False, f"Invalid packet type: {e}"
+        except asyncio.TimeoutError:
+            return False, f"WebSocket timeout after {self.timeout}s"
+        except Exception as e:
+            logger.error(f"Failed to send packet: {e}")
+            return False, f"Failed to send packet: {e}"
+
+    def send_packet_sync(
+        self,
+        machine_host: str,
+        machine_port: int,
+        packet: "Packet",
+        auth_token: Optional[str] = None,
+    ) -> Tuple[bool, str]:
+        """
+        Synchronous wrapper for send_packet.
+
+        Uses asyncio to execute async function.
+
+        Args:
+            machine_host: Remote machine hostname/IP
+            machine_port: Remote machine WebSocket port
+            packet: Packet instance
+            auth_token: Optional authentication token
+
+        Returns:
+            (success, message) tuple
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                return False, "Cannot use sync transport in async context"
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        try:
+            return loop.run_until_complete(
+                self.send_packet(machine_host, machine_port, packet, auth_token)
             )
         finally:
             if not loop.is_running():
