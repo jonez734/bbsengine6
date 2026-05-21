@@ -697,7 +697,12 @@ if __name__ == "__main__":
 
 
 class TestFramePacketIntegration:
-    """Test integration with asimov.net FramePacket."""
+    """Test integration with asimov.net FramePacket via packet registry.
+    
+    These tests demonstrate how applications can use the packet type registry
+    to integrate FramePacket from asimov.net without coupling bbsengine6.net
+    to asimov.net. This is the extensibility model in action.
+    """
 
     def test_import_framepacket(self):
         """FramePacket from asimov.net can be imported."""
@@ -883,7 +888,12 @@ class TestFramePacketIntegration:
 
 
 class TestFramePacketTransport:
-    """Test sending FramePacket via bbsengine6.net transport (simulated)."""
+    """Test sending/receiving FramePacket via bbsengine6.net transport.
+    
+    Demonstrates how applications register and use custom packet types
+    (like FramePacket from asimov.net) with the bbsengine6.net universal
+    encode/decode and transport APIs, maintaining clean separation of concerns.
+    """
 
     def test_framepacket_binary_serialization(self):
         """FramePacket can be serialized to binary for transmission."""

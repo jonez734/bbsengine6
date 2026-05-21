@@ -342,10 +342,20 @@ The `bbsengine6.net` packet system provides a unified, extensible protocol for t
 
 ### Overview
 
-**Three core capabilities:**
+**Built-in packet types (in bbsengine6.net):**
 - **File transmission**: Large files split into 1MB blocks with checksums
 - **Message transmission**: RFC 822-aligned messages with sender, subject, and content
-- **Custom packet types**: Extensible registry for adding new packet types
+
+**Extensible via packet type registry:**
+- **Custom packet types**: Applications can register and use any packet type
+- **Example: Video frames**: Applications can import FramePacket from asimov.net and register it
+- **No coupling**: bbsengine6.net remains independent of asimov.net
+
+**Architecture principle:**
+- bbsengine6.net provides FilePacket and MessagePacket
+- VideoFrame transmission remains in asimov.net
+- Applications integrate FramePacket via the packet registry (not imported by bbsengine6.net)
+- Clear separation of concerns with extensible design
 
 **Key features:**
 - SHA256 checksums for integrity verification (always computed)
@@ -774,3 +784,114 @@ from bbsengine6.net import (
 - **Compression**: Reduces payload 3-10x depending on content
 - **Checksums**: Minimal overhead (SHA256 is fast)
 - **Binary format**: No JSON/text overhead, compact binary encoding
+
+## Architecture & Separation of Concerns
+
+### Module Responsibility
+
+**bbsengine6.net (this module):**
+- Provides FilePacket for file transmission
+- Provides MessagePacket for messaging
+- Provides Packet base class and registry
+- Provides universal encode/decode API
+- Does NOT import or depend on asimov.net
+
+**asimov.net (separate module):**
+- Provides FramePacket for video frame transmission
+- Provides encode_frame_packet / decode_frame_packet
+- Independent of bbsengine6.net
+
+### Extensibility Model
+
+The packet type registry enables applications to integrate custom packet types without coupling:
+
+1. **Register a custom packet type:**
+```python
+from asimov.net import FramePacket
+from bbsengine6.net import register_packet_type
+
+# Register asimov's FramePacket in bbsengine6.net's registry
+register_packet_type(FramePacket)
+```
+
+2. **Use universal encode/decode:**
+```python
+from bbsengine6.net import encode_packet, decode_packet
+from asimov.net import FramePacket
+
+# Now all three packet types work with universal API
+file_packet = FilePacket(...)
+message_packet = MessagePacket(...)
+frame_packet = FramePacket(...)
+
+file_binary = encode_packet(file_packet)      # Works!
+msg_binary = encode_packet(message_packet)    # Works!
+frame_binary = encode_packet(frame_packet)    # Works!
+```
+
+3. **Decode any registered type:**
+```python
+packet = decode_packet(binary_data)  # Auto-detects and decodes any registered type
+```
+
+### Benefits of This Architecture
+
+- **No coupling**: bbsengine6.net doesn't depend on asimov.net
+- **Independent evolution**: Each module can evolve separately
+- **Clean separation**: File/Message in bbsengine6, Video in asimov
+- **Extensible**: Applications can add unlimited custom types
+- **Flexible**: Different applications might register different types
+- **Testable**: Each module can be tested independently
+
+### What This Means
+
+✓ bbsengine6.net provides Files and Messages  
+✓ asimov.net provides Video Frames  
+✓ Applications choose which types to use  
+✓ Applications use the registry to integrate custom types  
+✓ No circular dependencies  
+✓ Clear, focused responsibilities  
+
+### Real-World Usage
+
+**Scenario: An app needs to transmit files, messages, AND video frames**
+
+```python
+# Import what you need
+from bbsengine6.net import (
+    FilePacket, MessagePacket,
+    encode_packet, decode_packet,
+    register_packet_type,
+    WebSocketTransport
+)
+from asimov.net import FramePacket, encode_frame_packet, decode_frame_packet
+
+# Register the frame packet type
+register_packet_type(FramePacket)
+
+# Now you can use all three types
+transport = WebSocketTransport()
+
+# Send a file
+file_pkt = FilePacket(filename="data.bin", ...)
+transport.send_packet_sync(host, port, file_pkt)
+
+# Send a message
+msg_pkt = MessagePacket(sender="alice", ...)
+transport.send_packet_sync(host, port, msg_pkt)
+
+# Send a video frame
+frame_pkt = FramePacket(frame_id=1, ...)
+transport.send_packet_sync(host, port, frame_pkt)
+
+# Receive and decode (auto-detects type)
+packet = decode_packet(binary_data)
+if isinstance(packet, FilePacket):
+    process_file(packet)
+elif isinstance(packet, MessagePacket):
+    process_message(packet)
+elif isinstance(packet, FramePacket):
+    process_frame(packet)
+```
+
+This design allows applications to use whatever packet types they need without creating dependencies between bbsengine6 and asimov.
