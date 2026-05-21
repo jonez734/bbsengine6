@@ -2,11 +2,13 @@
 
 ## Overview
 
-The `bbsengine6.net` module is a unified networking layer supporting both:
+The `bbsengine6.net` module provides networking infrastructure for BBSEngine6:
 - **Notification delivery**: SMTP-like inter-machine notifications using WebSocket
-- **Frame transmission**: TCP/UDP binary frame transfer with advanced features
+- **Hybrid routing**: Route notifications and frame addresses together
+- **Machine registry**: Manage remote machine configurations
+- **Integration layer**: Connect with notification system
 
-Both systems coexist peacefully, using separate addressing schemes and protocols.
+**Note**: Video frame transmission code has been moved to `asimov.net`. This module focuses on notification infrastructure and hybrid routing capabilities.
 
 ## Architecture
 
@@ -18,156 +20,54 @@ Both systems coexist peacefully, using separate addressing schemes and protocols
           ↓                                      ↓
 ┌──────────────────────────┐     ┌──────────────────────────┐
 │  Notification System     │     │  Frame Transmission      │
-│  (SMTP-like addressing)  │     │  (DSN-like addressing)   │
+│  (SMTP-like addressing)  │     │  (in asimov.net)         │
 └──────────────────────────┘     └──────────────────────────┘
           │                                      │
           ├─→ AddressParser (user@machine)      │
-          ├─→ InternetRouter                    │
-          ├─→ MachineRegistry                   ├─→ FrameAddressParser (tcp://...)
-          └─→ WebSocketTransport                ├─→ TCPSender/TCPReceiver
-                                                ├─→ UDPSender/UDPReceiver
-                                                └─→ Socket utilities
+          ├─→ InternetRouter                    ├─→ from asimov.net import
+          ├─→ MachineRegistry                   │   FrameAddressParser,
+          └─→ WebSocketTransport                │   TCPSender, UDPSender
+                                                │
+                                    (asimov handles all frame code)
+                                                │
+                                    ├─→ FrameAddress
+                                    ├─→ Frame, NumpyFrame
+                                    └─→ TCP/UDP transports
 
 ┌─────────────────────────────────────────────────────────┐
-│               Network Layer (TCP/UDP/WebSocket)         │
+│         Network Layer (TCP/UDP/WebSocket)               │
+│         (Frame code in asimov, Notification in bbsengine6)  │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ## Module Organization
 
-### Configuration Layer
-- **conf.py**: Constants for frame transmission and notifications
-  - DEFAULT_PORT = 4200 (TCP/UDP)
-  - Buffer sizes, retry settings, service endpoints
-
-### Socket Layer
-- **socket.py**: Low-level socket utilities
-  - `recv_all(sock, length)` - Receive exact byte count
-  - `recv_udp(sock, bufsize)` - Receive UDP datagram
-  - `send_with_length(conn, payload)` - Send length-prefixed payload
-  - `recv_with_length(conn)` - Receive length-prefixed payload
-  - `retry_until_connected(host, port, retries, delay)` - Retry TCP connection
-
-### Packet Protocol Layer
-- **packet.py**: Generic packet types and encoding
-  - `Packet` class: container for any packet data
-  - `PING`, `PONG`, `EOS`: sentinel packet types
-  - `encode_packet()`, `decode_packet()`: binary serialization
-  - `register_packet_type()`: extensible type system
-
-- **frame.py**: Video frame-specific packet types
-  - `FramePacket`: dataclass for frame data
-  - Support for delta encoding, compression, block batching
-  - `encode_frame_packet()`, `decode_frame_packet()`: binary serialization
-
 ### Addressing Layer
-- **frame_address.py**: RFC 3986 compliant frame address parser
-  - Supports: `tcp://`, `udp://`, `unix://`, `ws://`, `wss://`
-  - Query parameters with hybrid handling (see below)
-  - Full validation and sanitization
-
 - **address.py**: SMTP-like notification addressing
   - Supports: `user@machine` format
   - Distinguishes local, remote, and federated addresses
+  - `AddressParser`, `InternetAddress`, `AddressType`
 
 ### Transport Layer
-- **tcp.py**: TCP sender/receiver for reliable frame transmission
-  - `TCPSender`: Connect and send frames with optional compression/batching
-  - `TCPReceiver`: Listen and receive frames
-
-- **udp.py**: UDP sender/receiver for fast frame transmission
-  - `UDPSender`: Send frames across network
-  - `UDPReceiver`: Listen, reassemble fragmented frames
-
 - **transport.py**: WebSocket transport for notifications
   - `WebSocketTransport`: Async/sync WebSocket client
   - `WebSocketProtocol`: Handle incoming WebSocket notifications
 
 ### Service Layer
 - **router.py**: Route mixed recipient types
-  - `InternetRouter`: Classify and route notifications and frames
-  - Detect frame vs notification addresses automatically
+  - `InternetRouter`: Classify and route notifications and frame addresses
+  - Automatically detects notification vs frame addresses
+  - Uses `asimov.net.FrameAddressParser` for frame addressing
 
 - **registry.py**: Machine registry for remote machine configs
   - `MachineRegistry`: PostgreSQL-backed registry
   - `MachineConfig`: Configuration for remote machines
+  - Stores machine endpoints and capabilities
 
 - **integration.py**: Notification system integration
   - `NotifyIntegration`: Unified interface for local + remote notifications
   - Handles routing and delivery to appropriate transport
-
-## Frame Addressing (DSN Format)
-
-### Scheme Format
-
-```
-scheme://[user[:password]@]host[:port][/path][?query]
-```
-
-### Supported Schemes
-
-| Scheme | Transport | Default Port | Use Case |
-|--------|-----------|---|---|
-| `tcp://` | TCP Socket | 4200 | Reliable, ordered delivery |
-| `udp://` | UDP Socket | 4200 | Fast, stateless delivery |
-| `unix://` | Unix Domain Socket | N/A | Local IPC |
-| `ws://` | WebSocket | 80 | HTTP-compatible unencrypted |
-| `wss://` | WebSocket Secure | 443 | HTTP-compatible encrypted |
-
-### Examples
-
-```
-# TCP with default port
-tcp://camera.local/
-
-# TCP with explicit port and credentials
-tcp://alice:secret@remote.host:4200/
-
-# UDP multicast
-udp://224.1.1.1:4200/
-
-# Unix socket (absolute path only)
-unix:///var/run/frame.sock
-
-# WebSocket with path and query
-ws://stream.example.com/camera/1/hires?quality=high&timeout=30
-
-# Secure WebSocket
-wss://secure.example.com:443/frames
-```
-
-### Query Parameters (Hybrid Approach)
-
-**Transport layer interprets these standard parameters:**
-- `timeout=N` - Connection timeout in seconds (int > 0)
-- `retry=N` - Retry count (int >= 0)
-- `keepalive=N` - Keepalive interval in seconds (int > 0)
-- `backoff=F` - Exponential backoff factor (float > 1.0)
-
-**Application layer receives everything else:**
-- Custom parameters passed through in `FrameAddress.custom_params` dict
-- Application decides how to interpret them
-- Examples: `compression=zlib`, `format=h264`, `token=xyz123`
-
-**Example:**
-```python
-address = FrameAddressParser.parse("tcp://host:4200/?timeout=30&compression=zlib")
-# address.timeout = 30 (transport uses this)
-# address.custom_params = {"compression": "zlib"} (app uses this)
-```
-
-### Error Handling
-
-All parsing/validation returns `ParseResult` objects (no exceptions):
-
-```python
-result = FrameAddressParser.parse(dsn_string)
-if not result.success:
-    print(result.error)      # Human-readable error message
-    print(result.code)       # Machine-readable error code
-    # Possible codes: INVALID_SCHEME, INVALID_PORT, INVALID_HOST,
-    #                 INVALID_UNIX_PATH, PORT_NOT_ALLOWED, etc.
-```
+  - Works with both local bbsengine6.notify and remote machines
 
 ## Notification Addressing (SMTP Format)
 
@@ -186,112 +86,56 @@ user@machine
 ### Classification
 
 ```python
-address = AddressParser("local.machine").parse("alice@remote.org")
+from bbsengine6.net import AddressParser
+
+parser = AddressParser("local.machine")
+address = parser.parse("alice@remote.org")
+
 # address.is_local() → False
 # address.is_remote() → True
 # address.is_federated() → True
 ```
 
-## TCP Frame Transmission
+## Frame Addressing (DSN Format - from asimov)
 
-### Sender Example
+Frame addresses follow RFC 3986 URI syntax and are handled by `asimov.net`:
 
-```python
-from bbsengine6.net import TCPSender
-
-# Old API (backward compatible)
-sender = TCPSender("camera.local", 4200)
-
-# New DSN API
-sender = TCPSender("tcp://camera.local:4200/")
-
-# Check for errors
-if sender.error:
-    print(f"Configuration error: {sender.error.error}")
-
-# Connect and send frame
-error = sender.connect()
-if not error:
-    frame_bytes = read_frame_data()  # Your frame data
-    error = sender.send_frame(
-        frame=frame_bytes,
-        frame_id=1,
-        compress=True,
-        auto_batch=True
-    )
-    if error:
-        print(f"Send failed: {error.error}")
-
-sender.close()
+```
+scheme://[user[:password]@]host[:port][/path][?query]
 ```
 
-### Receiver Example
+### Supported Schemes (from asimov.net)
 
-```python
-from bbsengine6.net import TCPReceiver
+| Scheme | Transport | Default Port | Use Case |
+|--------|-----------|---|---|
+| `tcp://` | TCP Socket | 5000 | Reliable, ordered delivery |
+| `udp://` | UDP Socket | 5000 | Fast, stateless delivery |
+| `unix://` | Unix Domain Socket | N/A | Local IPC |
+| `ws://` | WebSocket | 80 | HTTP-compatible unencrypted |
+| `wss://` | WebSocket Secure | 443 | HTTP-compatible encrypted |
 
-# Listen for frames
-receiver = TCPReceiver("127.0.0.1", 4200, timeout=1.0)
+### Examples
 
-if receiver.error:
-    print(f"Setup error: {receiver.error.error}")
-else:
-    frame = receiver.receive()
-    if frame:
-        print(f"Received frame {frame.frame_id}: {frame.width}x{frame.height}")
-        # Process frame.blocks
-
-receiver.close()
+```
+tcp://camera.local/
+tcp://alice:secret@remote.host:5000/
+udp://224.1.1.1:5000/
+unix:///var/run/frame.sock
+ws://stream.example.com/camera/1/hires?quality=high
+wss://secure.example.com:443/frames
 ```
 
-## UDP Frame Transmission
-
-### Sender Example
-
+**To use frame addressing:**
 ```python
-from bbsengine6.net import UDPSender
+from asimov.net import FrameAddressParser, TCPSender
 
-sender = UDPSender("streaming.host", 4200)
+parser = FrameAddressParser()
+result = parser.parse("tcp://camera:5000/")
 
-frame_data = get_video_frame()
-error = sender.send_frame(
-    frame=frame_data,
-    frame_id=1,
-    compress=False,
-    auto_batch=True
-)
-
-if error:
-    print(f"Send error: {error.error}")
-
-sender.close()
-```
-
-### Receiver Example (with Callbacks)
-
-```python
-from bbsengine6.net import UDPReceiver
-
-def on_frame_received(frame_bytes, frame_id):
-    print(f"Frame {frame_id} complete: {len(frame_bytes)} bytes")
-
-def on_idle():
-    # Called when no data available
-    return True  # Continue listening
-
-receiver = UDPReceiver(
-    "127.0.0.1",
-    4200,
-    frame_received_callback=on_frame_received,
-    idle_callback=on_idle,
-    blocking=True,
-    timeout=0.5
-)
-
-if not receiver.error:
-    receiver.start_listening()
-
-receiver.close()
+if result.success:
+    sender = TCPSender(address=result.value)
+    sender.connect()
+    sender.send_frame(frame_data, frame_id=1)
 ```
 
 ## Router: Mixed Recipient Routing
@@ -307,8 +151,8 @@ router = InternetRouter(local_machine="myhost")
 addresses = [
     "alice@local",                    # Local notification
     "bob@remote.org",                 # Remote notification
-    "tcp://camera:4200/feed",         # TCP frame
-    "udp://sensor:4200/data",         # UDP frame
+    "tcp://camera:5000/feed",         # TCP frame (routed via asimov)
+    "udp://sensor:5000/data",         # UDP frame (routed via asimov)
     "invalid@@@address",              # Error
 ]
 
@@ -321,82 +165,77 @@ print(f"Remote notifications: {remote_notif}")
 # → {'remote.org': ['bob']}
 
 print(f"Frames: {frames}")
-# → {'tcp://camera:4200/feed': FrameAddress(...),
-#    'udp://sensor:4200/data': FrameAddress(...)}
+# → {'tcp://camera:5000/feed': FrameAddress(...),
+#    'udp://sensor:5000/data': FrameAddress(...)}
 
 print(f"Errors: {errors}")
-# → {'invalid@@@address': 'Invalid address (frame: ..., notification: ...)'}
+# → {'invalid@@@address': 'Invalid address ...'}
 ```
 
-### Classify Individual Address
+**Key Features:**
+- ✓ Detects frame addresses (tcp://, udp://, etc.)
+- ✓ Detects notification addresses (user@machine)
+- ✓ Returns frame addresses from `asimov.net` parser
+- ✓ Separates local vs remote recipients
+- ✓ Captures invalid addresses with error messages
+
+## Notification Integration
+
+### Send Notifications
 
 ```python
-router = InternetRouter()
+from bbsengine6.net import get_integration
 
-print(router.classify_address("alice@host"))           # 'notification'
-print(router.classify_address("tcp://host:4200/"))     # 'frame'
-print(router.classify_address("not an address"))       # 'invalid'
-```
+notif = get_integration()
 
-## Constructor Flexibility
-
-### TCP/UDP: Multiple Calling Patterns
-
-```python
-# Old API (positional)
-sender = TCPSender("example.com", 4200)
-
-# Old API (kwargs)
-sender = TCPSender(host="example.com", port=4200)
-
-# New API (DSN string)
-sender = TCPSender("tcp://example.com:4200/")
-
-# New API (DSN kwarg)
-sender = TCPSender(dsn="tcp://example.com:4200/")
-
-# New API (FrameAddress object)
-from bbsengine6.net import FrameAddressParser
-addr = FrameAddressParser.parse("tcp://example.com:4200/")
-sender = TCPSender(address=addr.value)
-```
-
-### Backward Compatibility
-
-- All old-style constructors continue to work
-- No breaking changes to existing code
-- New DSN style optional, not required
-
-## Error Handling Pattern
-
-All frame transport operations return `Optional[ParseResult]`:
-- `None` on success
-- `ParseResult` with error details on failure
-
-```python
-error = sender.send_frame(frame_data, frame_id=1)
-if error:
-    # ParseResult object
-    print(f"Error: {error.error}")      # Message
-    print(f"Code: {error.code}")        # Code
-else:
-    # Success
-    print("Frame sent successfully")
-```
-
-## Configuration Constants
-
-```python
-from bbsengine6.net import (
-    CHUNK_SIZE,              # 64
-    DEFAULT_PORT,            # 4200
-    COMPRESSION_ENABLED,     # False
-    BUFFER_SIZE,             # 65507
-    TCP_BUFFER_SIZE,         # 8192
-    UDP_BUFFER_SIZE,         # 65507
-    RETRY_DELAY,             # 0.2 seconds
-    RETRY_COUNT,             # 5
+# Send to mixed recipients (some local, some remote)
+result = notif.send(
+    notification_type="alert",
+    recipients=[
+        "alice@local",              # Local via bbsengine6.notify
+        "bob@remote.org",           # Remote via WebSocket
+    ],
+    template="warning",
+    template_vars={"level": "high", "source": "camera"}
 )
+
+# Result contains routing info
+print(f"Local delivery: {result['local']}")
+print(f"Remote delivery: {result['remote']}")
+```
+
+### Check Delivery Capability
+
+```python
+notif = get_integration()
+
+# Check if we can send to specific recipients
+can_send = notif.can_send_to(["alice@local", "bob@remote"])
+# → True if notify module available, False otherwise
+```
+
+## Machine Registry
+
+### Configure Remote Machines
+
+```python
+from bbsengine6.net import MachineRegistry, MachineConfig
+
+registry = get_registry()
+
+# Add remote machine configuration
+config = MachineConfig(
+    name="remote-server",
+    host="remote.example.com",
+    port=5000,
+    protocol="tcp",
+    credentials={"token": "xyz123"},
+)
+
+registry.add_machine(config)
+
+# Look up machine for routing
+machine = registry.get_machine("remote.example.com")
 ```
 
 ## Coexistence: Notifications + Frames
@@ -404,20 +243,20 @@ from bbsengine6.net import (
 Both systems can operate simultaneously:
 
 ```python
-from bbsengine6.net import TCPSender, get_integration
+from asimov.net import TCPSender
+from bbsengine6.net import get_integration
 
-# Start frame transmission
-frame_sender = TCPSender("tcp://remote:4200/")
+# Start frame transmission (asimov)
+frame_sender = TCPSender("tcp://remote:5000/")
 frame_sender.connect()
 frame_sender.send_frame(frame_data, frame_id=1)
 
-# Also send notifications
+# Also send notifications (bbsengine6)
 notif = get_integration()
 result = notif.send(
     notification_type="alert",
     recipients=["alice@host", "bob@remote"],
     template="warning",
-    template_vars={"level": "high"}
 )
 
 # Both systems work independently
@@ -427,42 +266,72 @@ frame_sender.close()
 ## Dependencies
 
 **Imported:**
-- Standard library: `socket`, `struct`, `time`, `zlib`, `logging`, `math`, `collections`, `dataclasses`, `enum`, `typing`, `urllib.parse`
+- Standard library: `socket`, `struct`, `time`, `logging`, `dataclasses`, `enum`, `typing`, `urllib.parse`
 - BBSEngine6 internal: `database`, `notify`, `io` modules
+- Asimov external: `asimov.net` (for frame addressing)
 
 **NOT imported:**
-- `numpy` (frame data handled as bytes)
-- `asimov` (completely independent)
+- `numpy` (frame data is handled by asimov)
+- `asimov` core (only uses asimov.net for frame code)
+
+## Code Organization
+
+```
+bbsengine6/net/
+├── __init__.py           # 16 exports (notification + routing)
+├── address.py            # SMTP-like address parsing
+├── router.py             # Hybrid routing (notifications + frames)
+├── registry.py           # Machine registry with PostgreSQL
+├── integration.py        # Notification system integration
+└── transport.py          # WebSocket transport
+```
 
 ## Summary: Key Features
 
-✅ **Unified addressing**: Frame (DSN) + Notification (SMTP) in one router  
-✅ **RFC 3986 compliant**: Standard URI scheme for frames  
-✅ **Hybrid query parameters**: Transport handles standard, app handles custom  
-✅ **Error results**: No exceptions, all errors as ParseResult objects  
-✅ **Constructor overloading**: Multiple API styles supported  
-✅ **Zero new dependencies**: Stdlib only (unlike asimov which requires numpy)  
-✅ **Backward compatible**: All existing notification code works unchanged  
-✅ **Mixed routing**: Handle notifications and frames in same recipient list  
-✅ **Fully validated**: Credentials, paths, hosts, ports all sanitized  
+✅ **SMTP-like notification addressing**: `user@machine` format  
+✅ **Hybrid routing**: Handle notifications and frame addresses together  
+✅ **Frame support via asimov**: Import from `asimov.net` for frames  
+✅ **Machine registry**: PostgreSQL-backed remote machine configuration  
+✅ **WebSocket transport**: Secure notification delivery  
+✅ **Integration layer**: Connect with local and remote notification systems  
+✅ **Independence from asimov core**: Only uses asimov.net, not asimov  
+✅ **Error handling**: No exceptions, all errors as result objects  
 
-## Migration from Asimov
+## Migration from Previous bbsengine6.net
 
-If you're already using asimov's net module:
+If you were using frame code from bbsengine6.net:
 
-1. **Asimov continues unchanged**: Keep using asimov.net for your code
-2. **BBSEngine6 now has frame support**: Use bbsengine6.net for new frame code
-3. **No conflicts**: Both can coexist in same project
-4. **Similar API**: BBSEngine6 version is compatible enough
-
-Example migration:
+**Old way (no longer available):**
 ```python
-# Old: from asimov.net import TCPSender
-# New:
-from bbsengine6.net import TCPSender
-
-# Code works the same
-sender = TCPSender("host", 4200)
-sender.connect()
-sender.send_frame(frame, frame_id=1)
+# from bbsengine6.net import TCPSender, Frame, FrameAddress
+# ✗ These are no longer in bbsengine6.net
 ```
+
+**New way (use asimov.net):**
+```python
+from asimov.net import TCPSender, Frame, FrameAddress
+
+sender = TCPSender("tcp://host:5000/")
+sender.connect()
+sender.send_frame(frame_data, frame_id=1)
+```
+
+**For routing (bbsengine6 still handles):**
+```python
+from bbsengine6.net import InternetRouter
+
+router = InternetRouter()
+local, remote, frames, errors = router.route([
+    "alice@local",           # Notification
+    "tcp://camera:5000/",    # Frame (router parses via asimov)
+])
+```
+
+## Architecture Benefits
+
+This separation provides:
+- **Clear responsibility**: asimov owns frame transmission, bbsengine6 owns notifications
+- **No duplication**: Frame code lives in one place
+- **Independent evolution**: Each project can evolve separately
+- **Hybrid capabilities**: Router can work with both systems
+- **No circular dependencies**: bbsengine6 only uses asimov.net (not core asimov)
