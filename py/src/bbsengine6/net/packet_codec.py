@@ -534,3 +534,102 @@ def decode_message_packet(data: bytes) -> MessagePacket:
         compressed=bool(compressed_flag),
         checksum=checksum_hex,
     )
+
+
+# PingPacket and PongPacket encoding/decoding
+
+
+def encode_ping_packet(packet) -> bytes:
+    """
+    Encode PingPacket to binary.
+
+    PING packets are minimal - just the timestamp in a small header.
+
+    Args:
+        packet: PingPacket to encode
+
+    Returns:
+        Binary encoded packet (9 bytes: 1 byte type + 8 bytes timestamp)
+    """
+    from .packet import PACKET_TYPE_PING
+
+    header = struct.pack("!Bd", PACKET_TYPE_PING, packet.timestamp)
+    return header
+
+
+def decode_ping_packet(data: bytes):
+    """
+    Decode binary to PingPacket.
+
+    Args:
+        data: Raw packet bytes
+
+    Returns:
+        Decoded PingPacket
+
+    Raises:
+        PacketDecodeError: If packet malformed
+    """
+    from .packet import PACKET_TYPE_PING
+    from .packet_types import PingPacket
+
+    if len(data) < 9:
+        raise PacketDecodeError(f"PING packet too short: {len(data)} < 9")
+
+    try:
+        packet_type, timestamp = struct.unpack("!Bd", data[:9])
+    except struct.error as e:
+        raise PacketDecodeError(f"Failed to unpack PING header: {e}")
+
+    if packet_type != PACKET_TYPE_PING:
+        raise PacketDecodeError(f"Invalid PING packet type: {packet_type}")
+
+    return PingPacket(timestamp=timestamp, packet_id=0)
+
+
+def encode_pong_packet(packet) -> bytes:
+    """
+    Encode PongPacket to binary.
+
+    PONG packets are minimal - just the timestamp in a small header.
+
+    Args:
+        packet: PongPacket to encode
+
+    Returns:
+        Binary encoded packet (9 bytes: 1 byte type + 8 bytes timestamp)
+    """
+    from .packet import PACKET_TYPE_PONG
+
+    header = struct.pack("!Bd", PACKET_TYPE_PONG, packet.timestamp)
+    return header
+
+
+def decode_pong_packet(data: bytes):
+    """
+    Decode binary to PongPacket.
+
+    Args:
+        data: Raw packet bytes
+
+    Returns:
+        Decoded PongPacket
+
+    Raises:
+        PacketDecodeError: If packet malformed
+    """
+    from .packet import PACKET_TYPE_PONG
+    from .packet_types import PongPacket
+
+    if len(data) < 9:
+        raise PacketDecodeError(f"PONG packet too short: {len(data)} < 9")
+
+    try:
+        packet_type, timestamp = struct.unpack("!Bd", data[:9])
+    except struct.error as e:
+        raise PacketDecodeError(f"Failed to unpack PONG header: {e}")
+
+    if packet_type != PACKET_TYPE_PONG:
+        raise PacketDecodeError(f"Invalid PONG packet type: {packet_type}")
+
+    return PongPacket(timestamp=timestamp, packet_id=0)

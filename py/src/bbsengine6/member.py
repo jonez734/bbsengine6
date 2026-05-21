@@ -920,20 +920,34 @@ def verifyMemberFound(args, name, **kwargs):
     io.echo(f"verifyMemberFound.100: {kwargs=}", level="debug")
     column = kwargs.get("column", "loginid")
     conn = kwargs.get("conn", None)
-    if conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            io.echo(f"bbsengine.verifyMemberFound.160: pool=None", level="error")
+    pool = kwargs.get("pool", None)
+
+    def _work(conn):
+        try:
+            with database.cursor(conn) as cur:
+                sql = f"select 1 from engine.member where {column}=%s"
+                dat = (name,)
+                cur.execute(sql, dat)
+                return False if cur.rowcount == 0 else True
+        except Exception:
+            io.echo_traceback("bbsengine6.member.verifyMemberFound.100:")
             return None
-        conn = database.connect(args, pool=pool)
-    try:
-        with database.cursor(conn) as cur:
-            sql = f"select 1 from engine.member where {column}=%s"
-            dat = (name,)
-            cur.execute(sql, dat)
-            return False if cur.rowcount == 0 else True
-    except Exception:
-        io.echo_traceback("bbsengine6.member.verifyMemberFound.100:")
+
+    if conn is not None:
+        return _work(conn)
+    elif pool is not None:
+        try:
+            with database.connect(args, pool=pool) as conn:
+                with database.transaction(conn):
+                    return _work(conn)
+        except Exception:
+            io.echo_traceback("bbsengine6.member.verifyMemberFound.200:")
+            return None
+    else:
+        io.echo(
+            f"bbsengine6.member.verifyMemberFound.160: pool=None and conn=None",
+            level="error",
+        )
         return None
 
 
@@ -1084,7 +1098,6 @@ def count(args, **kwargs):
     except Exception:
         io.echo_traceback("bbsengine6.member.count.100:")
         return None
-
 
 
 def insert(args, member, **kwargs):

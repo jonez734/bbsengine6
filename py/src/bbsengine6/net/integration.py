@@ -105,7 +105,9 @@ class NotifyIntegration:
             }
 
         # Route recipients
-        local_recipients, remote_by_machine, frame_addresses, errors = self.router.route(recipients)
+        local_recipients, remote_by_machine, frame_addresses, errors = (
+            self.router.route(recipients)
+        )
 
         result: Dict[str, Any] = {
             "local": None,

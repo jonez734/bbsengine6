@@ -41,7 +41,7 @@ class TestNotifyMessageF2AbortUnread:
         alice = NotifyMessageDemo(alice_config)
 
         # Send 6 messages so that after 5 are shown, more prompt appears
-        message_texts = [f"Message {i+1}" for i in range(6)]
+        message_texts = [f"Message {i + 1}" for i in range(6)]
         for msg in message_texts:
             alice.handler.send_message(msg, "bob_f2_abort_test")
 
@@ -53,7 +53,9 @@ class TestNotifyMessageF2AbortUnread:
 
         # Check initial unread count
         unread_before = len(bob.handler.get_unread_messages())
-        assert unread_before == 6, f"Bob should have 6 unread messages, got {unread_before}"
+        assert unread_before == 6, (
+            f"Bob should have 6 unread messages, got {unread_before}"
+        )
 
         # Step 3-5: Simulate F2 key press with abort
         # This mimics what _check_and_display_messages() does
@@ -70,21 +72,19 @@ class TestNotifyMessageF2AbortUnread:
 
         # Simulate user pressing 'n' at more prompt (abort)
         with patch("builtins.input", return_value="n"):
-            fully_displayed = display_with_more_prompt(
-                formatted_messages, page_size=5
-            )
+            fully_displayed = display_with_more_prompt(formatted_messages, page_size=5)
 
         # Verify abort happened
-        assert (
-            fully_displayed is False
-        ), "Should return False when user presses 'n' at more prompt"
+        assert fully_displayed is False, (
+            "Should return False when user presses 'n' at more prompt"
+        )
 
         # Step 6-7: Verify messages remain unread
         # Since abort happened (fully_displayed=False), we don't mark as read
         unread_after = len(bob.handler.get_unread_messages())
-        assert (
-            unread_after == 6
-        ), f"Messages should remain unread after F2 abort, got {unread_after}"
+        assert unread_after == 6, (
+            f"Messages should remain unread after F2 abort, got {unread_after}"
+        )
 
     def test_f2_abort_then_view_again_same_messages_shown(self):
         """
@@ -100,7 +100,7 @@ class TestNotifyMessageF2AbortUnread:
         alice_config = DemoConfig(moniker="alice_f2_retry")
         alice = NotifyMessageDemo(alice_config)
 
-        messages_sent = [f"Attempt message {i+1}" for i in range(6)]
+        messages_sent = [f"Attempt message {i + 1}" for i in range(6)]
         for msg in messages_sent:
             alice.handler.send_message(msg, "bob_f2_retry")
 
@@ -145,7 +145,9 @@ class TestNotifyMessageF2AbortUnread:
         alice = NotifyMessageDemo(alice_config)
 
         for i in range(2):
-            alice.handler.send_message(f"Complete view message {i+1}", "bob_f2_complete")
+            alice.handler.send_message(
+                f"Complete view message {i + 1}", "bob_f2_complete"
+            )
 
         # Step 2: Bob starts demo
         bob_config = DemoConfig(moniker="bob_f2_complete")
@@ -224,7 +226,7 @@ class TestNotifyMessageF2AbortUnread:
         alice = NotifyMessageDemo(alice_config)
 
         for i in range(6):
-            alice.handler.send_message(f"Message set {i+1}", "bob_f2_multi")
+            alice.handler.send_message(f"Message set {i + 1}", "bob_f2_multi")
 
         # Step 2: Bob instance
         bob_config = DemoConfig(moniker="bob_f2_multi")
@@ -269,7 +271,7 @@ class TestNotifyMessageF2AbortUnread:
         alice = NotifyMessageDemo(alice_config)
 
         for i in range(2):
-            alice.handler.send_message(f"Status test {i+1}", "bob_f2_status")
+            alice.handler.send_message(f"Status test {i + 1}", "bob_f2_status")
 
         # Step 2: Bob checks initial status
         bob_config = DemoConfig(moniker="bob_f2_status")
@@ -286,9 +288,9 @@ class TestNotifyMessageF2AbortUnread:
 
         # Step 4: Status bar should still show 2
         status_after = bob._get_unread_count()
-        assert (
-            status_after == 2
-        ), f"Status should still show 2 after abort, got {status_after}"
+        assert status_after == 2, (
+            f"Status should still show 2 after abort, got {status_after}"
+        )
 
     def test_page_wise_marking_first_page_marked_before_prompt(self):
         """
@@ -308,7 +310,7 @@ class TestNotifyMessageF2AbortUnread:
         alice = NotifyMessageDemo(alice_config)
 
         for i in range(10):
-            alice.handler.send_message(f"Message page test {i+1}", "bob_pagewise")
+            alice.handler.send_message(f"Message page test {i + 1}", "bob_pagewise")
 
         assert alice.handler.stats["sent"] == 10
 
@@ -327,9 +329,9 @@ class TestNotifyMessageF2AbortUnread:
 
         # Step 6-7: Verify first page was marked as read
         unread_after_abort = len(bob.handler.get_unread_messages())
-        assert (
-            unread_after_abort == 5
-        ), f"After displaying and marking first page (5 msgs), second page (5 msgs) should remain unread. Got {unread_after_abort} unread."
+        assert unread_after_abort == 5, (
+            f"After displaying and marking first page (5 msgs), second page (5 msgs) should remain unread. Got {unread_after_abort} unread."
+        )
 
     def test_all_pages_marked_when_fully_displayed(self):
         """
@@ -348,7 +350,7 @@ class TestNotifyMessageF2AbortUnread:
         alice = NotifyMessageDemo(alice_config)
 
         for i in range(12):
-            alice.handler.send_message(f"All pages message {i+1}", "bob_all_pages")
+            alice.handler.send_message(f"All pages message {i + 1}", "bob_all_pages")
 
         # Step 2: Bob starts demo
         bob_config = DemoConfig(moniker="bob_all_pages")
@@ -364,7 +366,9 @@ class TestNotifyMessageF2AbortUnread:
 
         # Step 4-6: Verify all messages were marked as read
         unread_final = len(bob.handler.get_unread_messages())
-        assert unread_final == 0, f"All 12 messages should be marked as read, but {unread_final} remain unread"
+        assert unread_final == 0, (
+            f"All 12 messages should be marked as read, but {unread_final} remain unread"
+        )
 
 
 if __name__ == "__main__":

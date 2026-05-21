@@ -81,9 +81,7 @@ def resolve_recipient(args, pool, recipient: str) -> list[str]:
         raise ValueError(f"Error resolving recipient {recipient}")
 
 
-def insert_message_to_db(
-    args, pool, notify_id: int, recipient: str, conn=None
-) -> bool:
+def insert_message_to_db(args, pool, notify_id: int, recipient: str, conn=None) -> bool:
     """Insert message recipient into database.
 
     Args:
@@ -119,9 +117,7 @@ def insert_message_to_db(
         return False
 
 
-def send_message(
-    args, pool, config, message: str, recipient: str, conn=None
-) -> None:
+def send_message(args, pool, config, message: str, recipient: str, conn=None) -> None:
     """Send a message to a recipient (user or group).
 
     Validates message and recipient, then sends via database or demo queue.

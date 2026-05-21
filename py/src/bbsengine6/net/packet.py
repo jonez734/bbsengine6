@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
 # Packet type constants
+PACKET_TYPE_PING = 1
+PACKET_TYPE_PONG = 2
 PACKET_TYPE_FILE = 10
 PACKET_TYPE_MESSAGE = 11
 
@@ -19,6 +21,18 @@ CHECKSUM_HEX_LEN = 64  # SHA256 produces 64 hex characters
 
 # Packet type registry for extensibility
 _packet_type_registry: Dict[int, type] = {}
+
+
+class PING:
+    """Sentinel for PING packets (keep-alive)."""
+
+    pass
+
+
+class PONG:
+    """Sentinel for PONG packets (keep-alive response)."""
+
+    pass
 
 
 class PacketTypeError(ValueError):
@@ -78,7 +92,8 @@ def encode_packet(packet: Packet) -> bytes:
     Encode any packet type to binary.
 
     Args:
-        packet: Packet instance (FilePacket, MessagePacket, or custom)
+        packet: Packet instance (PingPacket, PongPacket, FilePacket,
+                MessagePacket, or custom)
 
     Returns:
         Binary encoded packet
@@ -87,9 +102,18 @@ def encode_packet(packet: Packet) -> bytes:
         PacketTypeError: If packet type not recognized
     """
     # Import here to avoid circular dependency
-    from .packet_codec import encode_file_packet, encode_message_packet
+    from .packet_codec import (
+        encode_file_packet,
+        encode_message_packet,
+        encode_ping_packet,
+        encode_pong_packet,
+    )
 
-    if packet.packet_type == PACKET_TYPE_FILE:
+    if packet.packet_type == PACKET_TYPE_PING:
+        return encode_ping_packet(packet)
+    elif packet.packet_type == PACKET_TYPE_PONG:
+        return encode_pong_packet(packet)
+    elif packet.packet_type == PACKET_TYPE_FILE:
         return encode_file_packet(packet)
     elif packet.packet_type == PACKET_TYPE_MESSAGE:
         return encode_message_packet(packet)
@@ -110,7 +134,8 @@ def decode_packet(data: bytes) -> Packet:
         data: Raw packet bytes
 
     Returns:
-        Decoded Packet (FilePacket, MessagePacket, or custom type)
+        Decoded Packet (PingPacket, PongPacket, FilePacket, MessagePacket,
+                or custom type)
 
     Raises:
         PacketDecodeError: If packet data is malformed
@@ -123,9 +148,18 @@ def decode_packet(data: bytes) -> Packet:
     packet_type = data[0]
 
     # Import here to avoid circular dependency
-    from .packet_codec import decode_file_packet, decode_message_packet
+    from .packet_codec import (
+        decode_file_packet,
+        decode_message_packet,
+        decode_ping_packet,
+        decode_pong_packet,
+    )
 
-    if packet_type == PACKET_TYPE_FILE:
+    if packet_type == PACKET_TYPE_PING:
+        return decode_ping_packet(data)
+    elif packet_type == PACKET_TYPE_PONG:
+        return decode_pong_packet(data)
+    elif packet_type == PACKET_TYPE_FILE:
         return decode_file_packet(data)
     elif packet_type == PACKET_TYPE_MESSAGE:
         return decode_message_packet(data)

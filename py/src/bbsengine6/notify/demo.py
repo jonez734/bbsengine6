@@ -74,7 +74,9 @@ def resolve_recipient(args: Any, pool: Any, recipient: str) -> List[str]:
         raise ValueError(f"Error resolving recipient {recipient}")
 
 
-def send_to_demo_queue(sender: str, recipients: List[str], rendered_message: str) -> None:
+def send_to_demo_queue(
+    sender: str, recipients: List[str], rendered_message: str
+) -> None:
     """Send message to in-memory demo queue.
 
     Args:
@@ -97,7 +99,11 @@ def send_to_demo_queue(sender: str, recipients: List[str], rendered_message: str
 
 
 def send_to_database(
-    args: Any, pool: Any, config: DemoConfig, rendered_message: str, recipients: List[str]
+    args: Any,
+    pool: Any,
+    config: DemoConfig,
+    rendered_message: str,
+    recipients: List[str],
 ) -> None:
     """Send message to database.
 

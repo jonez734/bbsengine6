@@ -30,7 +30,7 @@ def large_frame_bytes():
 def free_port():
     """Get a free port."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('127.0.0.1', 0))
+    sock.bind(("127.0.0.1", 0))
     port = sock.getsockname()[1]
     sock.close()
     return port
@@ -39,12 +39,12 @@ def free_port():
 @pytest.fixture
 def localhost_address(free_port):
     """Return localhost address tuple."""
-    return ('127.0.0.1', free_port)
+    return ("127.0.0.1", free_port)
 
 
 class FrameReceiverThread:
     """Helper for running frame receiver in thread."""
-    
+
     def __init__(self, receiver_class, host, port, timeout=2.0):
         self.receiver_class = receiver_class
         self.host = host
@@ -54,17 +54,18 @@ class FrameReceiverThread:
         self.thread = None
         self.frames = []
         self.errors = []
-    
+
     def on_frame(self, frame, frame_id):
         """Callback for frame reception."""
         self.frames.append((frame, frame_id))
-    
+
     def on_idle(self):
         """Callback for idle time."""
         return True
-    
+
     def start(self):
         """Start receiver in background thread."""
+
         def run():
             try:
                 self.receiver = self.receiver_class(
@@ -78,11 +79,11 @@ class FrameReceiverThread:
                     self.receiver.start_listening()
             except Exception as e:
                 self.errors.append(e)
-        
+
         self.thread = threading.Thread(target=run, daemon=True)
         self.thread.start()
         time.sleep(0.1)  # Give receiver time to start
-    
+
     def stop(self):
         """Stop receiver."""
         if self.receiver:

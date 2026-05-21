@@ -31,17 +31,17 @@ def display_with_more_prompt(messages: list[str], page_size: int = 5) -> bool:
     """Display messages with a more prompt for pagination."""
     if not messages:
         return True
-    
+
     for i, message in enumerate(messages):
         echo(message)
         if (i + 1) % page_size == 0 and i + 1 < len(messages):
             try:
                 response = input("More? (press Enter or 'n' to abort): ")
-                if response.lower() == 'n':
+                if response.lower() == "n":
                     return False
             except (EOFError, KeyboardInterrupt):
                 return False
-    
+
     return True
 
 
@@ -82,7 +82,9 @@ class MessageHandler:
                 if not member.moniker_exists(self.args, recipient, pool=self.pool):
                     raise ValueError(f"member {recipient} not found")
 
-            if self.config.enable_echo_commands and EchoProcessor.is_echo_command(message):
+            if self.config.enable_echo_commands and EchoProcessor.is_echo_command(
+                message
+            ):
                 message = EchoProcessor.process_echo(message)
 
             variables = {
@@ -119,7 +121,9 @@ class MessageHandler:
                                 notify_id = result_row[0] if result_row else None
 
                             if not notify_id:
-                                raise ValueError("Failed to get notify_id from database insert")
+                                raise ValueError(
+                                    "Failed to get notify_id from database insert"
+                                )
 
                             cur.execute(
                                 """
@@ -210,11 +214,11 @@ class MessageHandler:
 
     def resolve_recipient(self, recipient_input: str) -> list[str]:
         """Resolve recipient name(s) from input like '@bob' or '@ops_group'."""
-        recipient = recipient_input.lstrip('@')
-        
+        recipient = recipient_input.lstrip("@")
+
         if not recipient:
             raise ValueError("Empty recipient name")
-        
+
         try:
             is_grp = group.exists(self.args, recipient, pool=self.pool)
             if is_grp:
@@ -225,18 +229,18 @@ class MessageHandler:
                     raise ValueError(f"Group '{recipient}' is empty")
         except:
             pass
-        
+
         if self.args and self.pool:
             if not member.moniker_exists(self.args, recipient, pool=self.pool):
                 raise ValueError(f"Member or group '{recipient}' not found")
-        
+
         return [recipient]
 
     def mark_messages_as_read(self, message_ids: list[int]) -> None:
         """Mark messages as read in the database."""
         if not self.args or not self.pool or not message_ids:
             return
-        
+
         try:
             with database.connect(self.args, pool=self.pool) as conn:
                 with database.cursor(conn) as cur:
@@ -255,16 +259,16 @@ class MessageHandler:
     def receive_messages(self) -> list[dict]:
         """Get unread messages and mark them as read."""
         messages = self.get_unread_messages()
-        
+
         for msg in messages:
-            if 'direction' not in msg:
-                msg['direction'] = 'in'
-        
+            if "direction" not in msg:
+                msg["direction"] = "in"
+
         if messages and self.args and self.pool:
-            message_ids = [msg.get('id') for msg in messages if 'id' in msg]
+            message_ids = [msg.get("id") for msg in messages if "id" in msg]
             if message_ids:
                 self.mark_messages_as_read(message_ids)
-        
+
         return messages
 
 
@@ -301,19 +305,17 @@ class NotifyMessageDemo:
     def run_interactive(self) -> None:
         """Run the demo in interactive mode."""
         echo(f"Welcome, {self.config.moniker}!")
-        echo(
-            "Commands: '@user message' to send, 'F2' to check messages, 'q' to quit"
-        )
-        
+        echo("Commands: '@user message' to send, 'F2' to check messages, 'q' to quit")
+
         while True:
             try:
                 user_input = inputstring("Enter command: ", timeout=0.5)
                 if not user_input:
                     continue
-                
-                if user_input.lower() == 'q':
+
+                if user_input.lower() == "q":
                     break
-                elif user_input.startswith('@'):
+                elif user_input.startswith("@"):
                     self._process_input(user_input)
                 else:
                     echo("Unknown command", level="error")
@@ -325,19 +327,19 @@ class NotifyMessageDemo:
     def _process_input(self, user_input: str) -> None:
         """Process user input for sending messages or commands."""
         # Handle stats command
-        if user_input.lower() == 'stats':
+        if user_input.lower() == "stats":
             self._show_stats()
             return
-        
+
         # Handle message sending (@recipient message)
-        if user_input.startswith('@'):
-            parts = user_input.split(' ', 1)
+        if user_input.startswith("@"):
+            parts = user_input.split(" ", 1)
             if len(parts) < 2:
                 raise ValueError("Usage: @recipient message")
-            
+
             recipient_input = parts[0]
             message = parts[1]
-            
+
             try:
                 recipients = self.handler.resolve_recipient(recipient_input)
                 for recipient in recipients:
@@ -349,7 +351,6 @@ class NotifyMessageDemo:
             # Unknown command
             raise ValueError("Unknown command")
 
-    
     def _show_stats(self) -> None:
         """Display message statistics."""
         stats = self.handler.get_stats()
@@ -361,39 +362,39 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Interactive two-user message system demo"
     )
-    
+
     parser.add_argument(
         "--user",
         default="testuser",
         help="User moniker (default: testuser)",
     )
-    
+
     parser.add_argument(
         "--template",
         default=TemplateEngine.DEFAULT_TEMPLATE,
         help="Message template (default: '{sender}: {message}')",
     )
-    
+
     parser.add_argument(
         "--max-messages",
         type=int,
         default=50,
         help="Maximum messages to keep in history",
     )
-    
+
     parser.add_argument(
         "--timeout",
         type=float,
         default=2.0,
         help="Timeout for checking messages (seconds)",
     )
-    
+
     parser.add_argument(
         "--no-echo",
         action="store_true",
         help="Disable echo command processing",
     )
-    
+
     parser.add_argument(
         "--debug",
         action="store_true",

@@ -37,7 +37,9 @@ class InternetRouter:
 
     def route(
         self, addresses: List[str]
-    ) -> Tuple[List[str], Dict[str, List[str]], Dict[str, FrameAddress], Dict[str, str]]:
+    ) -> Tuple[
+        List[str], Dict[str, List[str]], Dict[str, FrameAddress], Dict[str, str]
+    ]:
         """
         Route a list of addresses into local, remote, and frame recipients.
 
@@ -59,17 +61,19 @@ class InternetRouter:
         for address in addresses:
             # Try to parse as frame address first (tcp://, udp://, etc.)
             frame_result = self.frame_parser.parse(address)
-            
+
             if frame_result.success:
                 # It's a frame address
                 frame_addresses[address] = frame_result.value
             else:
                 # Try as notification address (SMTP-like)
                 notif_result = self.parser.parse(address)
-                
+
                 if notif_result is None:
                     # Both parse attempts failed
-                    errors[address] = f"Invalid address (neither frame nor notification format)"
+                    errors[address] = (
+                        f"Invalid address (neither frame nor notification format)"
+                    )
                 else:
                     # Successfully parsed as notification address
                     if notif_result.is_local():
@@ -154,7 +158,7 @@ def route_recipients(
 ) -> Tuple[List[str], Dict[str, List[str]], Dict[str, FrameAddress], Dict[str, str]]:
     """
     Route recipients into local, remote, and frame groups.
-    
+
     Returns:
         (local_recipients, remote_by_machine, frame_addresses, errors) tuple
     """

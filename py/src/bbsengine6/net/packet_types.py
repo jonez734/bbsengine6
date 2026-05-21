@@ -1,5 +1,5 @@
 # bbsengine6/net/packet_types.py
-# FilePacket and MessagePacket type definitions with validation
+# FilePacket, MessagePacket, PingPacket, and PongPacket type definitions with validation
 
 import struct
 from dataclasses import dataclass, field
@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from .packet import (
     PACKET_TYPE_FILE,
     PACKET_TYPE_MESSAGE,
+    PACKET_TYPE_PING,
+    PACKET_TYPE_PONG,
     Packet,
     register_packet_type,
 )
@@ -18,6 +20,14 @@ FILEPACKET_HEADER_SIZE = struct.calcsize(FILEPACKET_HEADER_FORMAT)
 # MessagePacket header format and size
 MESSAGEPACKET_HEADER_FORMAT = "!BdIHHHIBH"
 MESSAGEPACKET_HEADER_SIZE = struct.calcsize(MESSAGEPACKET_HEADER_FORMAT)
+
+# PingPacket header format and size
+PINGPACKET_HEADER_FORMAT = "!Bd"
+PINGPACKET_HEADER_SIZE = struct.calcsize(PINGPACKET_HEADER_FORMAT)
+
+# PongPacket header format and size
+PONGPACKET_HEADER_FORMAT = "!Bd"
+PONGPACKET_HEADER_SIZE = struct.calcsize(PONGPACKET_HEADER_FORMAT)
 
 
 @register_packet_type
@@ -135,3 +145,44 @@ class MessagePacket(Packet):
             raise ValueError("content must be bytes")
         if len(self.content) > 1_048_575:
             raise ValueError(f"content too large: {len(self.content)} > 1048575 bytes")
+
+
+@register_packet_type
+@dataclass
+class PingPacket(Packet):
+    """
+    Packet for keep-alive PING requests.
+
+    Used to verify connection health and detect stale connections.
+    Server should respond with PongPacket containing the same timestamp
+    to allow sender to calculate round-trip latency.
+
+    This is a minimal packet type for transport-level health checking.
+    """
+
+    packet_type: int = field(init=False, default=PACKET_TYPE_PING)
+
+    def __post_init__(self) -> None:
+        """Validate PingPacket fields."""
+        # PING packets are minimal - just timestamp is enough
+        pass
+
+
+@register_packet_type
+@dataclass
+class PongPacket(Packet):
+    """
+    Packet for keep-alive PONG responses.
+
+    Response to a PingPacket. Contains the original PING timestamp
+    to allow sender to calculate round-trip latency.
+
+    This is a minimal packet type for transport-level health checking.
+    """
+
+    packet_type: int = field(init=False, default=PACKET_TYPE_PONG)
+
+    def __post_init__(self) -> None:
+        """Validate PongPacket fields."""
+        # PONG packets are minimal - just timestamp is enough
+        pass

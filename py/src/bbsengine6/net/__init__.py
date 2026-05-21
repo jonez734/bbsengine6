@@ -11,7 +11,7 @@ from .address import (
     parse_address,
 )
 
-# Packet system (Files and Messages)
+# Packet system (Files, Messages, PING/PONG)
 from .packet import (
     CHECKSUM_ALGORITHM,
     CHECKSUM_HEX_LEN,
@@ -23,13 +23,15 @@ from .packet import (
     PacketTypeError,
     PACKET_TYPE_FILE,
     PACKET_TYPE_MESSAGE,
+    PACKET_TYPE_PING,
+    PACKET_TYPE_PONG,
     decode_packet,
     encode_packet,
     get_packet_type,
     register_packet_type,
 )
 
-from .packet_types import FilePacket, MessagePacket
+from .packet_types import FilePacket, MessagePacket, PingPacket, PongPacket
 
 # Routing
 from .router import InternetRouter, get_router, route_recipients
@@ -55,8 +57,12 @@ __all__ = [
     "Packet",
     "FilePacket",
     "MessagePacket",
+    "PingPacket",
+    "PongPacket",
     "PACKET_TYPE_FILE",
     "PACKET_TYPE_MESSAGE",
+    "PACKET_TYPE_PING",
+    "PACKET_TYPE_PONG",
     "MAX_BLOCK_SIZE",
     "MAX_PAYLOAD_SIZE",
     "CHECKSUM_ALGORITHM",

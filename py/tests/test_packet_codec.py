@@ -7,11 +7,15 @@ from bbsengine6.net import (
     FilePacket,
     MAX_PAYLOAD_SIZE,
     MessagePacket,
+    PingPacket,
+    PongPacket,
     PacketChecksumError,
     PacketDecodeError,
     PacketTypeError,
     PACKET_TYPE_FILE,
     PACKET_TYPE_MESSAGE,
+    PACKET_TYPE_PING,
+    PACKET_TYPE_PONG,
     decode_packet,
     encode_packet,
     get_packet_type,
@@ -25,6 +29,10 @@ from bbsengine6.net.packet_codec import (
     decode_message_packet,
     encode_file_packet,
     encode_message_packet,
+    decode_ping_packet,
+    decode_pong_packet,
+    encode_ping_packet,
+    encode_pong_packet,
     validate_filename,
     verify_checksum,
 )
@@ -698,7 +706,7 @@ if __name__ == "__main__":
 
 class TestFramePacketIntegration:
     """Test integration with asimov.net FramePacket via packet registry.
-    
+
     These tests demonstrate how applications can use the packet type registry
     to integrate FramePacket from asimov.net without coupling bbsengine6.net
     to asimov.net. This is the extensibility model in action.
@@ -889,7 +897,7 @@ class TestFramePacketIntegration:
 
 class TestFramePacketTransport:
     """Test sending/receiving FramePacket via bbsengine6.net transport.
-    
+
     Demonstrates how applications register and use custom packet types
     (like FramePacket from asimov.net) with the bbsengine6.net universal
     encode/decode and transport APIs, maintaining clean separation of concerns.
@@ -1097,9 +1105,12 @@ class TestFramePacketTransport:
         assert key_decoded.is_delta is False
         assert delta_decoded.is_delta is True
 
+    # ============================================================================
+    # Cross-Compatibility Tests: FilePacket, MessagePacket, FramePacket
+    (PingPacket,)
+    (PongPacket,)
 
-# ============================================================================
-# Cross-Compatibility Tests: FilePacket, MessagePacket, FramePacket
+
 # ============================================================================
 
 
@@ -1186,3 +1197,172 @@ class TestPacketTypeInteroperability:
         assert file_binary != msg_binary
         assert msg_binary != frame_binary
         assert file_binary != frame_binary
+
+
+class TestPingPongPackets:
+    """Test PING and PONG packet encoding/decoding."""
+
+    def test_ping_packet_creation(self):
+        """Create a PingPacket."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        ping = PingPacket(timestamp=timestamp)
+        assert ping.timestamp == timestamp
+
+    def test_ping_packet_encode_decode(self):
+        """Encode and decode PING packet."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        ping = PingPacket(timestamp=timestamp)
+
+        encoded = encode_ping_packet(ping)
+        assert isinstance(encoded, bytes)
+        assert len(encoded) == 9  # 1 byte type + 8 bytes timestamp
+        assert encoded[0:1] == bytes([PACKET_TYPE_PING])
+
+        decoded = decode_ping_packet(encoded)
+        assert decoded.timestamp == timestamp
+
+    def test_pong_packet_creation(self):
+        """Create a PongPacket."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        pong = PongPacket(timestamp=timestamp)
+        assert pong.timestamp == timestamp
+
+    def test_pong_packet_encode_decode(self):
+        """Encode and decode PONG packet."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        pong = PongPacket(timestamp=timestamp)
+
+        encoded = encode_pong_packet(pong)
+        assert isinstance(encoded, bytes)
+        assert len(encoded) == 9  # 1 byte type + 8 bytes timestamp
+        assert encoded[0:1] == bytes([PACKET_TYPE_PONG])
+
+        decoded = decode_pong_packet(encoded)
+        assert decoded.timestamp == timestamp
+
+    def test_ping_pong_round_trip(self):
+        """Test PING/PONG universal codec round-trip."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        ping = PingPacket(timestamp=timestamp)
+
+        # Universal encode
+        encoded = encode_packet(ping)
+        assert encoded[0:1] == bytes([PACKET_TYPE_PING])
+
+        # Universal decode
+        decoded = decode_packet(encoded)
+        assert isinstance(decoded, PingPacket)
+        assert decoded.timestamp == timestamp
+
+    def test_ping_pong_latency_calculation(self):
+        """Test latency calculation from PING/PONG timestamps."""
+        import time
+
+        ping_timestamp = int(time.time() * 1000)
+        ping = PingPacket(timestamp=ping_timestamp)
+
+        # Simulate a small delay
+        time.sleep(0.01)  # 10ms
+        pong_timestamp = int(time.time() * 1000)
+        pong = PongPacket(timestamp=pong_timestamp)
+
+        latency = pong.timestamp - ping.timestamp
+        assert latency >= 10  # At least 10ms, probably slightly more
+        assert latency < 100  # But less than 100ms
+
+    def test_ping_packet_universal_get_type(self):
+        """get_packet_type should identify PING packets."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        ping = PingPacket(timestamp=timestamp)
+        encoded = encode_packet(ping)
+
+        pkt_type = get_packet_type(encoded)
+        assert pkt_type == PACKET_TYPE_PING
+
+    def test_pong_packet_universal_get_type(self):
+        """get_packet_type should identify PONG packets."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        pong = PongPacket(timestamp=timestamp)
+        encoded = encode_packet(pong)
+
+        pkt_type = get_packet_type(encoded)
+        assert pkt_type == PACKET_TYPE_PONG
+
+    def test_ping_pong_different_binary(self):
+        """PING and PONG packets with same timestamp produce different binary."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        ping = PingPacket(timestamp=timestamp)
+        pong = PongPacket(timestamp=timestamp)
+
+        ping_binary = encode_packet(ping)
+        pong_binary = encode_packet(pong)
+
+        assert ping_binary != pong_binary
+        assert ping_binary[0:1] == bytes([PACKET_TYPE_PING])
+        assert pong_binary[0:1] == bytes([PACKET_TYPE_PONG])
+
+    def test_ping_packet_minimal_size(self):
+        """PING packet should be exactly 9 bytes (minimal)."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        ping = PingPacket(timestamp=timestamp)
+        encoded = encode_packet(ping)
+
+        assert len(encoded) == 9
+
+    def test_pong_packet_minimal_size(self):
+        """PONG packet should be exactly 9 bytes (minimal)."""
+        import time
+
+        timestamp = int(time.time() * 1000)
+        pong = PongPacket(timestamp=timestamp)
+        encoded = encode_packet(pong)
+
+        assert len(encoded) == 9
+
+    def test_ping_multiple_instances(self):
+        """Multiple PING packets can be created with different timestamps."""
+        import time
+
+        pings = []
+        for i in range(5):
+            timestamp = int(time.time() * 1000) + i
+            ping = PingPacket(timestamp=timestamp)
+            pings.append(ping)
+            time.sleep(0.001)
+
+        # All should have different timestamps
+        timestamps = [p.timestamp for p in pings]
+        assert len(set(timestamps)) >= 4  # At least mostly different
+
+    def test_pong_multiple_instances(self):
+        """Multiple PONG packets can be created with different timestamps."""
+        import time
+
+        pongs = []
+        for i in range(5):
+            timestamp = int(time.time() * 1000) + i
+            pong = PongPacket(timestamp=timestamp)
+            pongs.append(pong)
+            time.sleep(0.001)
+
+        # All should have different timestamps
+        timestamps = [p.timestamp for p in pongs]
+        assert len(set(timestamps)) >= 4  # At least mostly different
