@@ -1,75 +1,8 @@
 # bbsengine6/net/__init__.py
-# Unified network layer: SMTP-like inter-machine addressing + frame transmission
+# BBSEngine6 network layer: SMTP-like addressing + notification integration
+# Video frame transmission code has been moved to asimov.net
 
-# Configuration
-from .conf import (
-    CHUNK_SIZE,
-    DEFAULT_PORT,
-    COMPRESSION_ENABLED,
-    BUFFER_SIZE,
-    TCP_BUFFER_SIZE,
-    UDP_BUFFER_SIZE,
-    RETRY_DELAY,
-    RETRY_COUNT,
-)
-
-# Socket utilities
-from .socket import (
-    recv_all,
-    recv_udp,
-    send_with_length,
-    recv_with_length,
-    retry_until_connected,
-)
-
-# Generic packet protocol
-from .packet import (
-    Packet,
-    NetError,
-    PacketTypeError,
-    PING,
-    PONG,
-    EOS,
-    PACKET_TYPE_PING,
-    PACKET_TYPE_PONG,
-    PACKET_TYPE_EOS,
-    encode_packet,
-    decode_packet,
-    register_packet_type,
-)
-
-# Frame packet protocol
-from .frame import (
-    FramePacket,
-    encode_frame_header,
-    encode_frame_packet,
-    decode_frame_packet,
-)
-
-# Frame types (bytes and numpy)
-from .frame_types import (
-    Frame,
-    NumpyFrame,
-    frame_from_any,
-    frames_equal,
-)
-
-# Frame addressing (DSN-like URIs)
-from .frame_address import (
-    FrameScheme,
-    FrameAddress,
-    FrameAddressParser,
-    ParseResult,
-    default_port_for_scheme,
-)
-
-# TCP transport
-from .tcp import TCPSender, TCPReceiver
-
-# UDP transport
-from .udp import UDPSender, UDPReceiver
-
-# SMTP-like addressing (existing)
+# SMTP-like addressing (user@machine)
 from .address import (
     AddressParser,
     AddressType,
@@ -92,62 +25,6 @@ from .integration import NotifyIntegration, get_integration, send_with_internet
 
 
 __all__ = [
-    # Configuration
-    "CHUNK_SIZE",
-    "DEFAULT_PORT",
-    "COMPRESSION_ENABLED",
-    "BUFFER_SIZE",
-    "TCP_BUFFER_SIZE",
-    "UDP_BUFFER_SIZE",
-    "RETRY_DELAY",
-    "RETRY_COUNT",
-    
-    # Socket utilities
-    "recv_all",
-    "recv_udp",
-    "send_with_length",
-    "recv_with_length",
-    "retry_until_connected",
-    
-    # Generic packet protocol
-    "Packet",
-    "NetError",
-    "PacketTypeError",
-    "PING",
-    "PONG",
-    "EOS",
-    "PACKET_TYPE_PING",
-    "PACKET_TYPE_PONG",
-    "PACKET_TYPE_EOS",
-    "encode_packet",
-    "decode_packet",
-    "register_packet_type",
-    
-    # Frame packet protocol
-    "FramePacket",
-    "encode_frame_header",
-    "encode_frame_packet",
-    "decode_frame_packet",
-    
-    # Frame types
-    "Frame",
-    "NumpyFrame",
-    "frame_from_any",
-    "frames_equal",
-    
-    # Frame addressing
-    "FrameScheme",
-    "FrameAddress",
-    "FrameAddressParser",
-    "ParseResult",
-    "default_port_for_scheme",
-    
-    # TCP/UDP transport
-    "TCPSender",
-    "TCPReceiver",
-    "UDPSender",
-    "UDPReceiver",
-    
     # SMTP-like addressing
     "AddressParser",
     "AddressType",

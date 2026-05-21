@@ -105,7 +105,7 @@ class NotifyIntegration:
             }
 
         # Route recipients
-        local_recipients, remote_by_machine, errors = self.router.route(recipients)
+        local_recipients, remote_by_machine, frame_addresses, errors = self.router.route(recipients)
 
         result: Dict[str, Any] = {
             "local": None,
@@ -194,7 +194,7 @@ class NotifyIntegration:
 
         Returns False if notify module is unavailable and there are local recipients.
         """
-        local_recipients, _, _ = self.router.route(recipients)
+        local_recipients, _, _, _ = self.router.route(recipients)
         if local_recipients and not self.notify_module:
             return False
         return True

@@ -7,7 +7,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .address import AddressParser
-from .frame_address import FrameAddress, FrameAddressParser, ParseResult
+from asimov.net import FrameAddress, FrameAddressParser, ParseResult
 from .registry import MachineRegistry, get_registry
 from .transport import WebSocketTransport
 
@@ -67,19 +67,18 @@ class InternetRouter:
                 # Try as notification address (SMTP-like)
                 notif_result = self.parser.parse(address)
                 
-                if address in notif_result.invalid:
+                if notif_result is None:
                     # Both parse attempts failed
-                    errors[address] = f"Invalid address (frame: {frame_result.error}, notification: {notif_result.invalid.get(address, 'unknown')})"
+                    errors[address] = f"Invalid address (neither frame nor notification format)"
                 else:
                     # Successfully parsed as notification address
-                    for addr in notif_result.valid:
-                        if addr.is_local():
-                            local_recipients.append(addr.user)
-                        else:
-                            machine = addr.machine
-                            if machine not in remote_by_machine:
-                                remote_by_machine[machine] = []
-                            remote_by_machine[machine].append(addr.user)
+                    if notif_result.is_local():
+                        local_recipients.append(notif_result.user)
+                    else:
+                        machine = notif_result.machine
+                        if machine not in remote_by_machine:
+                            remote_by_machine[machine] = []
+                        remote_by_machine[machine].append(notif_result.user)
 
         return local_recipients, remote_by_machine, frame_addresses, errors
 

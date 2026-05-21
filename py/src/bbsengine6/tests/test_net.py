@@ -99,7 +99,7 @@ class TestInternetRouter:
     def test_route_single_local(self):
         """Test routing single local recipient."""
         router = InternetRouter("local")
-        local, remote, errors = router.route(["alice@local"])
+        local, remote, frames, errors = router.route(["alice@local"])
 
         assert local == ["alice"]
         assert remote == {}
@@ -108,7 +108,7 @@ class TestInternetRouter:
     def test_route_single_remote(self):
         """Test routing single remote recipient."""
         router = InternetRouter("local")
-        local, remote, errors = router.route(["bob@machine1"])
+        local, remote, frames, errors = router.route(["bob@machine1"])
 
         assert local == []
         assert remote == {"machine1": ["bob"]}
@@ -117,7 +117,7 @@ class TestInternetRouter:
     def test_route_mixed_recipients(self):
         """Test routing mixed local and remote."""
         router = InternetRouter("local")
-        local, remote, errors = router.route(
+        local, remote, frames, errors = router.route(
             [
                 "alice@local",
                 "bob@machine1",
@@ -136,7 +136,7 @@ class TestInternetRouter:
     def test_route_with_errors(self):
         """Test routing with invalid addresses."""
         router = InternetRouter("local")
-        local, remote, errors = router.route(
+        local, remote, frames, errors = router.route(
             [
                 "alice@local",
                 "invalid",
@@ -151,7 +151,7 @@ class TestInternetRouter:
     def test_route_empty_list(self):
         """Test routing empty recipient list."""
         router = InternetRouter("local")
-        local, remote, errors = router.route([])
+        local, remote, frames, errors = router.route([])
 
         assert local == []
         assert remote == {}
@@ -221,7 +221,7 @@ class TestModuleConvenience:
 
     def test_route_recipients(self):
         """Test route_recipients function."""
-        local, remote, errors = route_recipients(
+        local, remote, frames, errors = route_recipients(
             [
                 "alice@local",
                 "bob@machine1",
@@ -230,6 +230,7 @@ class TestModuleConvenience:
 
         assert local == ["alice"]
         assert remote == {"machine1": ["bob"]}
+        assert frames == {}
         assert errors == {}
 
 
