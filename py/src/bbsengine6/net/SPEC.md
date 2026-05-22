@@ -614,6 +614,93 @@ except PacketChecksumError:
 - All decode operations perform bounds checking
 - Struct unpacking errors caught and converted to PacketDecodeError
 
+#### HMAC Packet Authentication
+
+**Threat model:** A rogue node listens on a port and can read/modify packets before they reach the real destination. Standard SHA256 checksums verify integrity *after* receipt — they don't prevent interception or forgery.
+
+**Solution:** HMAC-SHA256 authentication via `CryptoHash`.
+
+**How it works:**
+```python
+from bbsengine6.net import CryptoHash, encode_packet, decode_packet
+
+# Both ends share a secret key
+crypto = CryptoHash(b"shared-secret")
+
+# Sender: encode + authenticate
+packet_data = encode_packet(packet, crypto=crypto)
+transport.send(packet_data)
+
+# Receiver: verify + decode
+if crypto:
+    packet_data, ok = crypto.strip_and_verify(received_bytes)
+    if not ok:
+        raise PacketAuthError("HMAC mismatch")
+packet = decode_packet(packet_data)
+```
+
+**HMAC vs Checksum:**
+| Layer | Algorithm | Protects Against | Scope |
+|-------|-----------|-----------------|-------|
+| Checksum | SHA256 | Accidental corruption | Payload content only |
+| HMAC | HMAC-SHA256 | Deliberate forgery/tampering | Entire packet (header+payload+checksum) |
+
+**Integration with WebSocketTransport:**
+```python
+from bbsengine6.net import WebSocketTransport, MachineConfig
+
+# Use auth_token as the shared secret
+config = MachineConfig(
+    machine_name="node-a",
+    host="example.com",
+    port=8765,
+    auth_token=b"shared-secret",  # Used as HMAC key
+)
+
+transport = WebSocketTransport(secret_key=config.auth_token)
+# send_packet() automatically authenticates with HMAC
+# handle_packet() automatically verifies HMAC before decoding
+```
+
+**Cross-language compatibility:**
+```python
+# Python
+hmac.new(key, data, sha256).hexdigest()
+
+# JavaScript (Node.js)
+crypto.createHmac('sha256', key).update(data).digest('hex')
+
+# PHP
+hash_hmac('sha256', data, key)
+
+# Ruby
+OpenSSL::HMAC.hexdigest('sha256', key, data)
+```
+
+All produce identical 64-character hex strings for the same key + data.
+
+**Backwards compatibility:**
+- Packets without HMAC (`crypto=None`) decode normally
+- Nodes without crypto can still exchange unauthenticated packets
+- Mixed environments work seamlessly
+
+**Error handling:**
+```python
+from bbsengine6.net import (
+    decode_packet,
+    PacketAuthError,    # HMAC verification failed (spoofing detected)
+    PacketChecksumError,  # SHA256 mismatch (corruption)
+    PacketDecodeError,    # Malformed packet
+)
+```
+
+**Exception hierarchy:**
+- `PacketTypeError`: Unknown packet type (extends ValueError)
+- `PacketDecodeError`: Malformed packet data (extends ValueError)
+- `PacketChecksumError`: Checksum verification failed (extends ValueError)
+- `PacketAuthError`: HMAC authentication failed (extends ValueError)
+
+
 ### Error Handling
 
 **Exception hierarchy:**

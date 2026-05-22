@@ -3,7 +3,10 @@
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .crypto import CryptoHash
 
 # Packet type constants
 PACKET_TYPE_PING = 1
@@ -21,18 +24,6 @@ CHECKSUM_HEX_LEN = 64  # SHA256 produces 64 hex characters
 
 # Packet type registry for extensibility
 _packet_type_registry: Dict[int, type] = {}
-
-
-class PING:
-    """Sentinel for PING packets (keep-alive)."""
-
-    pass
-
-
-class PONG:
-    """Sentinel for PONG packets (keep-alive response)."""
-
-    pass
 
 
 class PacketTypeError(ValueError):
@@ -87,13 +78,14 @@ class Packet:
     checksum: Optional[str] = None  # SHA256 as hex string (64 chars)
 
 
-def encode_packet(packet: Packet) -> bytes:
+def encode_packet(packet: Packet, crypto: Optional["CryptoHash"] = None) -> bytes:
     """
     Encode any packet type to binary.
 
     Args:
         packet: Packet instance (PingPacket, PongPacket, FilePacket,
                 MessagePacket, or custom)
+        crypto: Optional CryptoHash for HMAC authentication
 
     Returns:
         Binary encoded packet
@@ -101,7 +93,6 @@ def encode_packet(packet: Packet) -> bytes:
     Raises:
         PacketTypeError: If packet type not recognized
     """
-    # Import here to avoid circular dependency
     from .packet_codec import (
         encode_file_packet,
         encode_message_packet,
@@ -114,11 +105,10 @@ def encode_packet(packet: Packet) -> bytes:
     elif packet.packet_type == PACKET_TYPE_PONG:
         return encode_pong_packet(packet)
     elif packet.packet_type == PACKET_TYPE_FILE:
-        return encode_file_packet(packet)
+        return encode_file_packet(packet, crypto=crypto)
     elif packet.packet_type == PACKET_TYPE_MESSAGE:
-        return encode_message_packet(packet)
+        return encode_message_packet(packet, crypto=crypto)
     else:
-        # Check registry for custom types
         if packet.packet_type in _packet_type_registry:
             encoder_func = _packet_type_registry[packet.packet_type].encode
             if callable(encoder_func):
@@ -126,12 +116,13 @@ def encode_packet(packet: Packet) -> bytes:
         raise PacketTypeError(f"Unknown packet type: {packet.packet_type}")
 
 
-def decode_packet(data: bytes) -> Packet:
+def decode_packet(data: bytes, crypto: Optional["CryptoHash"] = None) -> Packet:
     """
     Decode binary data to appropriate packet type.
 
     Args:
         data: Raw packet bytes
+        crypto: Optional CryptoHash for HMAC verification
 
     Returns:
         Decoded Packet (PingPacket, PongPacket, FilePacket, MessagePacket,
@@ -140,14 +131,14 @@ def decode_packet(data: bytes) -> Packet:
     Raises:
         PacketDecodeError: If packet data is malformed
         PacketTypeError: If packet type not recognized
+        PacketChecksumError: If checksum mismatch
+        PacketAuthError: If HMAC verification fails
     """
     if len(data) < 1:
         raise PacketDecodeError("Packet data too short (empty)")
 
-    # Peek at packet type (first byte)
     packet_type = data[0]
 
-    # Import here to avoid circular dependency
     from .packet_codec import (
         decode_file_packet,
         decode_message_packet,
@@ -160,11 +151,10 @@ def decode_packet(data: bytes) -> Packet:
     elif packet_type == PACKET_TYPE_PONG:
         return decode_pong_packet(data)
     elif packet_type == PACKET_TYPE_FILE:
-        return decode_file_packet(data)
+        return decode_file_packet(data, crypto=crypto)
     elif packet_type == PACKET_TYPE_MESSAGE:
-        return decode_message_packet(data)
+        return decode_message_packet(data, crypto=crypto)
     else:
-        # Check registry for custom types
         if packet_type in _packet_type_registry:
             decoder_func = _packet_type_registry[packet_type].decode
             if callable(decoder_func):

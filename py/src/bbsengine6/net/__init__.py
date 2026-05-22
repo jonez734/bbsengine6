@@ -33,6 +33,9 @@ from .packet import (
 
 from .packet_types import FilePacket, MessagePacket, PingPacket, PongPacket
 
+# HMAC authentication (rogue listener / packet tampering protection)
+from .crypto import CryptoHash, PacketAuthError, get_crypto
+
 # Routing
 from .router import InternetRouter, get_router, route_recipients
 
@@ -74,6 +77,10 @@ __all__ = [
     "PacketTypeError",
     "PacketDecodeError",
     "PacketChecksumError",
+    # HMAC authentication
+    "CryptoHash",
+    "PacketAuthError",
+    "get_crypto",
     # Routing
     "InternetRouter",
     "get_router",

@@ -4,10 +4,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from .address import AddressParser
-from asimov.net import FrameAddress, FrameAddressParser, ParseResult
+from asimov.net import FrameAddress, FrameAddressParser
 from .registry import MachineRegistry, get_registry
 from .transport import WebSocketTransport
 

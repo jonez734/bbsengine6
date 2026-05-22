@@ -5,7 +5,10 @@ import hashlib
 import hmac
 import struct
 import zlib
-from typing import List
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from .crypto import CryptoHash
 
 from .packet import (
     CHECKSUM_HEX_LEN,
@@ -92,7 +95,6 @@ def verify_checksum(data: bytes, checksum_hex: str) -> bool:
         True if checksum matches, False otherwise
     """
     expected = compute_checksum(data)
-    # Use hmac.compare_digest for constant-time comparison (prevents timing attacks)
     return hmac.compare_digest(expected, checksum_hex)
 
 
@@ -115,21 +117,17 @@ def validate_filename(filename: str) -> str:
     if not filename:
         raise ValueError("filename cannot be empty")
 
-    # Validate ASCII
     try:
         filename.encode("ascii")
     except UnicodeEncodeError:
         raise ValueError("filename must be ASCII")
 
-    # Validate length
     if len(filename) > 256:
         raise ValueError(f"filename too long: {len(filename)} > 256 bytes")
 
-    # Check for path traversal characters
     if ".." in filename or "/" in filename or "\\" in filename:
         raise ValueError("filename contains path traversal characters")
 
-    # Check for null bytes
     if "\x00" in filename:
         raise ValueError("filename contains null bytes")
 
@@ -139,12 +137,16 @@ def validate_filename(filename: str) -> str:
 # FilePacket encoding/decoding
 
 
-def encode_file_packet(packet: FilePacket) -> bytes:
+def encode_file_packet(
+    packet: FilePacket, crypto: Optional["CryptoHash"] = None
+) -> bytes:
     """
     Encode FilePacket to binary.
 
     Args:
         packet: FilePacket to encode
+        crypto: Optional CryptoHash for HMAC authentication. If provided,
+                an HMAC tag is appended after the checksum.
 
     Returns:
         Binary encoded packet
@@ -153,33 +155,28 @@ def encode_file_packet(packet: FilePacket) -> bytes:
         ValueError: If packet invalid or encoding fails
         PacketDecodeError: If payload too large
     """
-    # Validate filename
+    from .crypto import CryptoHash
+
     validate_filename(packet.filename)
 
-    # Encode strings to ASCII bytes
     filename_bytes = packet.filename.encode("ascii")
     mime_type_bytes = packet.mime_type.encode("ascii")
 
-    # Validate sizes before packing
     if len(filename_bytes) > 65535:
         raise ValueError("filename too long")
     if len(mime_type_bytes) > 65535:
         raise ValueError("mime_type too long")
 
-    # Prepare blocks
     blocks_to_use = packet.blocks
     if packet.compressed and blocks_to_use:
         blocks_to_use = compress_blocks(blocks_to_use)
 
-    # Calculate block sizes
     block_sizes = [len(b) for b in blocks_to_use]
     has_block_sizes = 1 if block_sizes else 0
 
-    # Compute payload checksum (before packing header)
     payload_data = b"".join(blocks_to_use)
     checksum_hex = compute_checksum(payload_data)
 
-    # Pack header
     header = struct.pack(
         FILEPACKET_HEADER_FORMAT,
         packet.packet_type,
@@ -196,18 +193,14 @@ def encode_file_packet(packet: FilePacket) -> bytes:
         CHECKSUM_HEX_LEN,
     )
 
-    # Build packet: header + filename + mime_type + block_sizes + blocks + checksum
     packet_data = header + filename_bytes + mime_type_bytes
 
-    # Add block sizes if present
     if block_sizes:
         for size in block_sizes:
             packet_data += struct.pack("!H", size)
 
-    # Add blocks and checksum
     packet_data += payload_data + checksum_hex.encode("ascii")
 
-    # Validate total payload size (excluding header)
     payload_size = (
         len(filename_bytes)
         + len(mime_type_bytes)
@@ -215,6 +208,11 @@ def encode_file_packet(packet: FilePacket) -> bytes:
         + len(payload_data)
         + CHECKSUM_HEX_LEN
     )
+
+    if crypto:
+        packet_data += crypto.compute(packet_data).encode("ascii")
+        payload_size += CryptoHash.HMAC_HEX_LEN
+
     if payload_size >= MAX_PAYLOAD_SIZE:
         raise PacketDecodeError(
             f"Payload too large: {payload_size} >= {MAX_PAYLOAD_SIZE}"
@@ -223,12 +221,17 @@ def encode_file_packet(packet: FilePacket) -> bytes:
     return packet_data
 
 
-def decode_file_packet(data: bytes) -> FilePacket:
+def decode_file_packet(
+    data: bytes, crypto: Optional["CryptoHash"] = None
+) -> FilePacket:
     """
     Decode binary to FilePacket.
 
     Args:
         data: Raw packet bytes
+        crypto: Optional CryptoHash for HMAC verification. If provided,
+                an HMAC tag is expected at the end of the packet and
+                will be verified before decoding.
 
     Returns:
         Decoded FilePacket
@@ -236,14 +239,15 @@ def decode_file_packet(data: bytes) -> FilePacket:
     Raises:
         PacketDecodeError: If packet malformed
         PacketChecksumError: If checksum mismatch
+        PacketAuthError: If HMAC verification fails
     """
-    # Validate minimum size
+    from .crypto import CryptoHash, PacketAuthError
+
     if len(data) < FILEPACKET_HEADER_SIZE:
         raise PacketDecodeError(
             f"FilePacket header too short: {len(data)} < {FILEPACKET_HEADER_SIZE}"
         )
 
-    # Unpack header
     try:
         header = data[:FILEPACKET_HEADER_SIZE]
         (
@@ -263,7 +267,6 @@ def decode_file_packet(data: bytes) -> FilePacket:
     except struct.error as e:
         raise PacketDecodeError(f"Failed to unpack header: {e}")
 
-    # Validate header fields
     if filename_len < 1 or filename_len > 65535:
         raise PacketDecodeError(f"Invalid filename_len: {filename_len}")
     if mime_type_len < 1 or mime_type_len > 65535:
@@ -279,7 +282,6 @@ def decode_file_packet(data: bytes) -> FilePacket:
             f"Invalid checksum_len: {checksum_len} != {CHECKSUM_HEX_LEN}"
         )
 
-    # Extract strings
     offset = FILEPACKET_HEADER_SIZE
     if offset + filename_len > len(data):
         raise PacketDecodeError("Packet truncated: missing filename")
@@ -291,7 +293,6 @@ def decode_file_packet(data: bytes) -> FilePacket:
     mime_type = data[offset : offset + mime_type_len].decode("ascii", errors="replace")
     offset += mime_type_len
 
-    # Extract block sizes if present
     block_sizes = None
     if has_block_sizes and blocks_in_packet > 0:
         block_sizes = []
@@ -303,7 +304,6 @@ def decode_file_packet(data: bytes) -> FilePacket:
             block_sizes.append(size)
             offset += 2
 
-    # Extract blocks
     blocks = []
     if blocks_in_packet > 0:
         if block_sizes:
@@ -313,31 +313,37 @@ def decode_file_packet(data: bytes) -> FilePacket:
                 blocks.append(data[offset : offset + size])
                 offset += size
         else:
-            # Single block, calculate size from remaining data (excluding checksum)
             block_data_len = len(data) - offset - CHECKSUM_HEX_LEN
+            if crypto:
+                block_data_len -= CryptoHash.HMAC_HEX_LEN
             if block_data_len < 0:
                 raise PacketDecodeError("Packet truncated: missing checksum")
             if block_data_len > 0:
                 blocks.append(data[offset : offset + block_data_len])
                 offset += block_data_len
 
-    # Extract checksum
     if offset + CHECKSUM_HEX_LEN > len(data):
         raise PacketDecodeError("Packet truncated: missing checksum")
     checksum_hex = data[offset : offset + CHECKSUM_HEX_LEN].decode(
         "ascii", errors="replace"
     )
+    offset += CHECKSUM_HEX_LEN
 
-    # Verify checksum
+    if crypto:
+        if offset + CryptoHash.HMAC_HEX_LEN > len(data):
+            raise PacketAuthError("Packet truncated: missing HMAC")
+        mac_hex = data[offset : offset + CryptoHash.HMAC_HEX_LEN].decode("ascii")
+        payload_for_auth = data[:offset]
+        if not crypto.verify(payload_for_auth, mac_hex):
+            raise PacketAuthError("FilePacket HMAC mismatch")
+
     payload_data = b"".join(blocks)
     if not verify_checksum(payload_data, checksum_hex):
         raise PacketChecksumError("FilePacket checksum mismatch")
 
-    # Decompress if needed
     if compressed_flag and blocks:
         blocks = decompress_blocks(blocks)
 
-    # Create and return packet
     return FilePacket(
         filename=filename,
         file_size=file_size,
@@ -357,12 +363,15 @@ def decode_file_packet(data: bytes) -> FilePacket:
 # MessagePacket encoding/decoding
 
 
-def encode_message_packet(packet: MessagePacket) -> bytes:
+def encode_message_packet(
+    packet: MessagePacket, crypto: Optional["CryptoHash"] = None
+) -> bytes:
     """
     Encode MessagePacket to binary.
 
     Args:
         packet: MessagePacket to encode
+        crypto: Optional CryptoHash for HMAC authentication.
 
     Returns:
         Binary encoded packet
@@ -371,12 +380,12 @@ def encode_message_packet(packet: MessagePacket) -> bytes:
         ValueError: If packet invalid or encoding fails
         PacketDecodeError: If payload too large
     """
-    # Encode strings to ASCII bytes
+    from .crypto import CryptoHash
+
     sender_bytes = packet.sender.encode("ascii")
     subject_bytes = packet.subject.encode("ascii")
     content_type_bytes = packet.content_type.encode("ascii")
 
-    # Validate sizes
     if len(sender_bytes) > 65535:
         raise ValueError("sender too long")
     if len(subject_bytes) > 65535:
@@ -384,15 +393,12 @@ def encode_message_packet(packet: MessagePacket) -> bytes:
     if len(content_type_bytes) > 65535:
         raise ValueError("content_type too long")
 
-    # Prepare content
     content_to_use = packet.content
     if packet.compressed and content_to_use:
         content_to_use = zlib.compress(content_to_use, level=6)
 
-    # Compute checksum (before packing header)
     checksum_hex = compute_checksum(content_to_use)
 
-    # Pack header
     header = struct.pack(
         MESSAGEPACKET_HEADER_FORMAT,
         packet.packet_type,
@@ -406,7 +412,6 @@ def encode_message_packet(packet: MessagePacket) -> bytes:
         CHECKSUM_HEX_LEN,
     )
 
-    # Build packet
     packet_data = (
         header
         + sender_bytes
@@ -416,7 +421,6 @@ def encode_message_packet(packet: MessagePacket) -> bytes:
         + checksum_hex.encode("ascii")
     )
 
-    # Validate total payload size
     payload_size = (
         len(sender_bytes)
         + len(subject_bytes)
@@ -424,6 +428,11 @@ def encode_message_packet(packet: MessagePacket) -> bytes:
         + len(content_to_use)
         + CHECKSUM_HEX_LEN
     )
+
+    if crypto:
+        packet_data += crypto.compute(packet_data).encode("ascii")
+        payload_size += CryptoHash.HMAC_HEX_LEN
+
     if payload_size >= MAX_PAYLOAD_SIZE:
         raise PacketDecodeError(
             f"Payload too large: {payload_size} >= {MAX_PAYLOAD_SIZE}"
@@ -432,12 +441,15 @@ def encode_message_packet(packet: MessagePacket) -> bytes:
     return packet_data
 
 
-def decode_message_packet(data: bytes) -> MessagePacket:
+def decode_message_packet(
+    data: bytes, crypto: Optional["CryptoHash"] = None
+) -> MessagePacket:
     """
     Decode binary to MessagePacket.
 
     Args:
         data: Raw packet bytes
+        crypto: Optional CryptoHash for HMAC verification.
 
     Returns:
         Decoded MessagePacket
@@ -445,14 +457,15 @@ def decode_message_packet(data: bytes) -> MessagePacket:
     Raises:
         PacketDecodeError: If packet malformed
         PacketChecksumError: If checksum mismatch
+        PacketAuthError: If HMAC verification fails
     """
-    # Validate minimum size
+    from .crypto import CryptoHash, PacketAuthError
+
     if len(data) < MESSAGEPACKET_HEADER_SIZE:
         raise PacketDecodeError(
             f"MessagePacket header too short: {len(data)} < {MESSAGEPACKET_HEADER_SIZE}"
         )
 
-    # Unpack header
     try:
         header = data[:MESSAGEPACKET_HEADER_SIZE]
         (
@@ -469,7 +482,6 @@ def decode_message_packet(data: bytes) -> MessagePacket:
     except struct.error as e:
         raise PacketDecodeError(f"Failed to unpack header: {e}")
 
-    # Validate header fields
     if sender_len < 1 or sender_len > 65535:
         raise PacketDecodeError(f"Invalid sender_len: {sender_len}")
     if subject_len < 0 or subject_len > 65535:
@@ -483,7 +495,6 @@ def decode_message_packet(data: bytes) -> MessagePacket:
             f"Invalid checksum_len: {checksum_len} != {CHECKSUM_HEX_LEN}"
         )
 
-    # Extract strings and content
     offset = MESSAGEPACKET_HEADER_SIZE
     if offset + sender_len > len(data):
         raise PacketDecodeError("Packet truncated: missing sender")
@@ -502,27 +513,35 @@ def decode_message_packet(data: bytes) -> MessagePacket:
     )
     offset += content_type_len
 
-    if offset + content_len > len(data) - CHECKSUM_HEX_LEN:
+    min_extra = CHECKSUM_HEX_LEN
+    if crypto:
+        min_extra += CryptoHash.HMAC_HEX_LEN
+    if offset + content_len > len(data) - min_extra:
         raise PacketDecodeError("Packet truncated: missing content")
     content = data[offset : offset + content_len]
     offset += content_len
 
-    # Extract checksum
     if offset + CHECKSUM_HEX_LEN > len(data):
         raise PacketDecodeError("Packet truncated: missing checksum")
     checksum_hex = data[offset : offset + CHECKSUM_HEX_LEN].decode(
         "ascii", errors="replace"
     )
+    offset += CHECKSUM_HEX_LEN
 
-    # Verify checksum
+    if crypto:
+        if offset + CryptoHash.HMAC_HEX_LEN > len(data):
+            raise PacketAuthError("Packet truncated: missing HMAC")
+        mac_hex = data[offset : offset + CryptoHash.HMAC_HEX_LEN].decode("ascii")
+        payload_for_auth = data[:offset]
+        if not crypto.verify(payload_for_auth, mac_hex):
+            raise PacketAuthError("MessagePacket HMAC mismatch")
+
     if not verify_checksum(content, checksum_hex):
         raise PacketChecksumError("MessagePacket checksum mismatch")
 
-    # Decompress if needed
     if compressed_flag and content:
         content = zlib.decompress(content)
 
-    # Create and return packet
     return MessagePacket(
         sender=sender,
         subject=subject,
@@ -530,7 +549,7 @@ def decode_message_packet(data: bytes) -> MessagePacket:
         content=content,
         timestamp=timestamp,
         packet_id=packet_id,
-        blocks=[content],  # Store content as single block for consistency
+        blocks=[content],
         compressed=bool(compressed_flag),
         checksum=checksum_hex,
     )
@@ -542,8 +561,6 @@ def decode_message_packet(data: bytes) -> MessagePacket:
 def encode_ping_packet(packet) -> bytes:
     """
     Encode PingPacket to binary.
-
-    PING packets are minimal - just the timestamp in a small header.
 
     Args:
         packet: PingPacket to encode
@@ -590,8 +607,6 @@ def decode_ping_packet(data: bytes):
 def encode_pong_packet(packet) -> bytes:
     """
     Encode PongPacket to binary.
-
-    PONG packets are minimal - just the timestamp in a small header.
 
     Args:
         packet: PongPacket to encode
