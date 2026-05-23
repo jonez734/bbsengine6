@@ -743,11 +743,16 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
             if pool is None:
                 io.echo(f"bbsengine.database.insert.200: {pool=}", level="error")
                 return False
-            with connect(args, pool=pool) as conn:
-                return _work(conn)
+            with connect(args, pool=pool) as managed_conn:
+                return _work(managed_conn)
         return _work(conn)
     except Exception as e:
         io.echo_traceback(f"bbsengine6.database.insert.200: {e}")
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         return False
 
 
@@ -785,6 +790,10 @@ def classexists(args: Any, name: str, **kwargs: Any) -> bool:
         return _work(conn)
     except Exception as e:
         io.echo_traceback(f"bbsengine6.database.classexists.200: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return False
 
 
@@ -1458,9 +1467,17 @@ def importsql(args: Any, filename: str, **kwargs: Any) -> bool:
                     cur.execute(sql_script)
                 except psycopg.errors.Error as e:
                     io.echo_traceback(f"bbsengine6.database.importsql.200: {e}")
+                    try:
+                        conn.rollback()
+                    except Exception:
+                        pass
                     return False
         except Exception as e:
             io.echo_traceback(f"bbsengine6.database.importsql.300: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
             return False
         return True
 

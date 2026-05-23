@@ -983,23 +983,35 @@ def getremoteaddr() -> Optional[str]:
     return None
 
 
-def getcurrentloginid(args, **kwargs) -> str:
+def getcurrentloginid(args, **kwargs) -> str | None:
     """Get the current logged-in user's login ID.
 
     Retrieves the login name of the user running the current process.
+    Uses os.getlogin() first, falls back to environment variables.
 
     Args:
         args: Arguments object (currently unused, for future compatibility).
         **kwargs: Additional keyword arguments (unused, for future compatibility).
 
     Returns:
-        The current login ID.
+        The current login ID, or None if unavailable.
 
     Example:
         >>> getcurrentloginid(args)
         'bbsadmin'
     """
-    return os.getlogin()
+    try:
+        return os.getlogin()
+    except OSError:
+        pass
+
+    # Fallback to environment variables
+    for var in ("LOGNAME", "USER", "USERNAME", "SUDO_USER"):
+        loginid = os.environ.get(var)
+        if loginid:
+            return loginid
+
+    return None
 
 
 def get_safe_path(args, *components, **kwargs) -> str:
