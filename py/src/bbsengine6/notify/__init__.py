@@ -24,13 +24,14 @@ from .lib import (
     is_blocked,
     get_blocked,
     set_rate_limit,
-    # Private/internal functions for testing
     _validate_moniker,
     _validate_type_name,
     _validate_template,
     _validate_template_vars,
     _render_template,
 )
+
+from .tui import run
 
 __all__ = [
     "NotificationUrgency",
@@ -42,6 +43,8 @@ __all__ = [
     "get_queue",
     "get_urgent",
     "mark_read",
+    "mark_delivered",
+    "expunge",
     "register_type",
     "get_types",
     "create_group",
@@ -58,4 +61,5 @@ __all__ = [
     "_validate_template",
     "_validate_template_vars",
     "_render_template",
+    "run",
 ]

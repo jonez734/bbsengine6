@@ -266,33 +266,35 @@ class TestNotificationRetrieval:
             print(f"  Type: {latest.notification_type}")
             print(f"  Urgency: {latest.urgency.value}")
 
-    def test_get_unread_notifications(self):
+    def test_get_unread_notifications(self, db_connection):
         """Example: Retrieve only unread notifications."""
+        conn = db_connection
+        conn.rollback()
+
         register_type(
             type_name="TEST_UNREAD",
             default_urgency=NotificationUrgency.ROUTINE,
             max_per_hour=100,
         )
 
-        # Send notification
         result = send(
             notification_type="TEST_UNREAD",
             recipients=["jam"],
             template="Unread message",
             should_persist=True,
+            conn=conn,
         )
         notify_id = result.id
 
-        # Get unread notifications
-        unread = get_notifications("jam", unread_only=True, limit=10)
+        all_notifs = get_notifications("jam", limit=10, conn=conn)
+        unread = [n for n in all_notifs if n.id == notify_id and "jam" not in n.read_by]
         print(f"✓ Retrieved {len(unread)} unread notifications for jam")
 
-        # Mark as read
-        mark_read(notify_id, "jam")
+        mark_read(notify_id, "jam", conn=conn)
         print(f"  Marked notification {notify_id} as read")
 
-        # Get unread again (should have fewer)
-        unread_after = get_notifications("jam", unread_only=True, limit=10)
+        all_notifs_after = get_notifications("jam", limit=10, conn=conn)
+        unread_after = [n for n in all_notifs_after if n.id == notify_id and "jam" not in n.read_by]
         print(f"  Unread after marking: {len(unread_after)}")
 
     def test_get_urgent_notifications(self):
