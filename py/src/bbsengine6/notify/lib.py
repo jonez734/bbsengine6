@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-import psycopg
 from psycopg import sql
 
 from .. import database, io
@@ -22,9 +21,20 @@ from ..database import getpool
 
 logger = logging.getLogger(__name__)
 
-# Default database name - can be overridden by environment variable
-# This allows tests to use a different database (e.g., zoid6test) than production (bbsengine6)
-_DEFAULT_DBNAME = os.environ.get("BBSENGINE6_DBNAME", "bbsengine6")
+
+def _default_db() -> str:
+    """Get default database name from environment. Reads at call time, not import time."""
+    return os.environ.get("BBSENGINE6_DBNAME", "bbsengine6")
+
+
+# Legacy alias - keeping for any external code that might reference it
+_DEFAULT_DBNAME = _default_db()
+
+
+def _resolve_db(dbname: Optional[str] = None) -> str:
+    """Resolve database name: explicit > env var > 'bbsengine6'."""
+    return dbname if dbname is not None else _default_db()
+
 
 # Validates monikers: alphanumeric, underscore, hyphen, and common special chars
 # Alternative: r"^[a-zA-Z0-9_\-!@#$%^&*() ]+$"  # Allow all printable (more permissive)
@@ -84,7 +94,7 @@ class Notification:
     blocked_from: Set[str] = field(default_factory=set)
     errors: Dict[str, str] = field(default_factory=dict)
     should_persist: bool = True
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    datecreated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class UserNotificationQueue:
@@ -268,7 +278,7 @@ def _expand_recipients(
                     + sql.SQL(" = %s"),
                     ("@everyone",),
                 )
-                members = [row[0] for row in cur.fetchall()]
+                members = [row["member_moniker"] for row in cur.fetchall()]
 
                 if members:
                     expanded.extend(members)
@@ -280,7 +290,7 @@ def _expand_recipients(
                         + sql.SQL(" FROM ")
                         + _table_identifier("engine.__session")
                     )
-                    active = [row[0] for row in cur.fetchall()]
+                    active = [row["moniker"] for row in cur.fetchall()]
                     expanded.extend(active)
             else:
                 # Regular group
@@ -294,7 +304,7 @@ def _expand_recipients(
                     + sql.SQL(" = %s"),
                     (recipient,),
                 )
-                members = [row[0] for row in cur.fetchall()]
+                members = [row["member_moniker"] for row in cur.fetchall()]
 
                 if not members:
                     errors[recipient] = "Group does not exist"
@@ -346,7 +356,7 @@ def _check_rate_limit(sender_moniker: str, notification_type: str, cur: Any) -> 
         if not row:
             return True  # Type not registered, allow
 
-        max_per_hour = row[0]
+        max_per_hour = row["max_per_user_per_hour"]
 
         # Check current window
         cur.execute(
@@ -358,7 +368,7 @@ def _check_rate_limit(sender_moniker: str, notification_type: str, cur: Any) -> 
             (sender_moniker, notification_type),
         )
         row = cur.fetchone()
-        if row and row[0] >= max_per_hour:
+        if row and row["send_count"] >= max_per_hour:
             return False  # Rate limit exceeded
 
         return True  # Within limit
@@ -404,11 +414,10 @@ def send(
     data: Optional[Dict[str, Any]] = None,
     urgency: Optional[NotificationUrgency] = None,
     should_persist: bool = True,
-    conn: Optional[Any] = None,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> Notification:
     """Send notification to recipients with templating and rate limiting."""
-
-    # Validation
     if not _validate_type_name(notification_type):
         raise ValueError(f"Invalid notification type: {notification_type}")
 
@@ -426,18 +435,17 @@ def send(
     if data is None:
         data = {}
 
-    # Render message
     message = _render_template(template, template_vars)
 
-    # Use provided connection or create new one
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        raise RuntimeError("Cannot send notification: no database connection")
 
     try:
         with database.cursor(conn) as cur:
-            # Auto-register type if needed
             cur.execute(
                 sql.SQL(
                     "SELECT default_urgency FROM engine.__notify_type WHERE type_name = %s"
@@ -447,7 +455,6 @@ def send(
             type_row = cur.fetchone()
 
             if not type_row:
-                # Auto-register with defaults
                 default_urg = NotificationUrgency.ROUTINE.value
                 cur.execute(
                     sql.SQL("""
@@ -461,20 +468,16 @@ def send(
             else:
                 type_urgency = type_row["default_urgency"]
 
-            # Determine urgency
             if urgency is None:
                 urgency = NotificationUrgency(type_urgency)
 
-            # Check rate limit
             if sender_moniker and not _check_rate_limit(
                 sender_moniker, notification_type, cur
             ):
                 raise RuntimeError(f"Rate limit exceeded for {notification_type}")
 
-            # Expand recipients
             expanded, errors = _expand_recipients(recipients, cur)
 
-            # Insert core notification
             cur.execute(
                 sql.SQL("""
                     INSERT INTO engine.__notify
@@ -495,7 +498,6 @@ def send(
             )
             notify_id = cur.fetchone()["id"]
 
-            # Insert per-recipient tracking
             recipients_ok = []
             for recipient in expanded:
                 is_blocked = _check_is_blocked(sender_moniker, recipient, cur)
@@ -511,7 +513,6 @@ def send(
 
                 if not is_blocked:
                     recipients_ok.append(recipient)
-                    # Add to live queue if user has one
                     _add_to_user_queue(
                         recipient,
                         notify_id,
@@ -522,9 +523,11 @@ def send(
                         notification_type,
                         sender_moniker,
                         template,
+                        args=args,
+                        pool=pool,
+                        conn=conn,
                     )
 
-            # Update rate limit
             if sender_moniker:
                 _update_rate_limit(sender_moniker, notification_type, cur)
 
@@ -545,11 +548,11 @@ def send(
             timestamp=time.time(),
             errors=errors,
             should_persist=should_persist,
-            created_at=datetime.now(timezone.utc),
+            datecreated=datetime.now(timezone.utc),
         )
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def _add_to_user_queue(
@@ -562,6 +565,8 @@ def _add_to_user_queue(
     notification_type: str,
     sender_moniker: Optional[str],
     template: str,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None:
     """Add notification to user's live queue if they have one."""
     with _queues_lock:
@@ -580,63 +585,104 @@ def _add_to_user_queue(
                 urgency=urgency,
                 timestamp=time.time(),
                 should_persist=True,
-                created_at=datetime.now(timezone.utc),
+                datecreated=datetime.now(timezone.utc),
             )
             _queues[moniker].put(notification)
 
-            # Mark as delivered
             try:
-                conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-                with database.cursor(conn) as cur:
-                    cur.execute(
-                        sql.SQL(
-                            "UPDATE engine.__notify_recipient SET delivered_at = now() WHERE notify_id = %s AND recipient_moniker = %s"
-                        ),
-                        (notify_id, moniker),
-                    )
-                    conn.commit()
-                conn.close()
+                pool, conn, we_created = _resolve_conn(args, kwargs.get("pool"), kwargs.get("conn"))
+                if conn is not None:
+                    with database.cursor(conn) as cur:
+                        cur.execute(
+                            sql.SQL(
+                                "UPDATE engine.__notify_recipient SET delivered_at = now() WHERE notify_id = %s AND recipient_moniker = %s"
+                            ),
+                            (notify_id, moniker),
+                        )
+                        conn.commit()
+                    if we_created and pool is not None:
+                        pool.putconn(conn)
             except Exception as e:
                 logger.debug(f"Could not mark delivered: {e}")
 
 
+def _resolve_conn(
+    args: Optional[Any], pool: Optional[Any], conn: Optional[Any]
+) -> tuple[Optional[Any], Optional[Any], bool]:
+    """Resolve connection and pool from args/pool/conn parameters.
+
+    Returns (pool, conn, we_created_conn) tuple:
+    - If conn provided, returns (pool, conn, False) - use provided conn
+    - If pool provided, gets connection from pool, returns (pool, conn, True)
+    - If args provided, gets pool from args and connection from pool, returns (pool, conn, True)
+    - If none provided, tries to get pool using BBSENGINE6_DBNAME env var, returns (pool, conn, True)
+    - Returns (None, None, False) if all attempts fail
+    """
+    we_created_conn = False
+    if conn is not None:
+        return pool, conn, we_created_conn
+    if pool is not None:
+        conn = pool.getconn()
+        conn.autocommit = False
+        we_created_conn = True
+        return pool, conn, we_created_conn
+    if args is not None:
+        pool = getpool(args)
+        conn = pool.getconn()
+        conn.autocommit = False
+        we_created_conn = True
+        return pool, conn, we_created_conn
+
+    # Fallback: try to get pool from BBSENGINE6_DBNAME env var
+    dbname = _default_db()
+    try:
+        pool = getpool(args, dbname=dbname)
+        conn = pool.getconn()
+        conn.autocommit = False
+        we_created_conn = True
+        return pool, conn, we_created_conn
+    except Exception:
+        return None, None, False
+
+
 def get_notifications(
     moniker: str,
-    unread_only: bool = False,
-    limit: int = 100,
-    conn: Optional[Any] = None,
-) -> List[Notification]:
-    """Retrieve notifications for a user from database."""
-    if not _validate_moniker(moniker):
-        raise ValueError(f"Invalid moniker: {moniker}")
+    limit: int = 10,
+    offset: int = 0,
+    args: Optional[Any] = None,
+    **kwargs,
+) -> list[Notification]:
+    """Retrieve notifications for a member.
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    Args:
+        moniker: Recipient member moniker
+        limit: Maximum notifications to return (default 10)
+        offset: Number of notifications to skip (default 0)
+        args: Application args with databasename
+        **kwargs: pool or conn for database connection
+
+    Returns:
+        List of Notification objects
+    """
+    pool_arg = kwargs.get("pool", None)
+    conn_arg = kwargs.get("conn", None)
+
+    pool, conn, we_created_conn = _resolve_conn(args, pool_arg, conn_arg)
+
+    if conn is None:
+        return []
 
     try:
         with database.cursor(conn) as cur:
-            if unread_only:
-                query = sql.SQL("""
-                    SELECT n.id, n.notification_type, n.sender_moniker, n.template, n.template_vars,
-                           n.rendered_message, n.data, n.urgency, n.datecreated, nr.read_at, nr.delivered_at
-                    FROM engine.__notify n
-                    JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
-                    WHERE nr.recipient_moniker = %s AND nr.read_at IS NULL AND nr.is_blocked = false
-                    ORDER BY n.datecreated DESC
-                    LIMIT %s
-                """)
-            else:
-                query = sql.SQL("""
-                    SELECT n.id, n.notification_type, n.sender_moniker, n.template, n.template_vars,
-                           n.rendered_message, n.data, n.urgency, n.datecreated, nr.read_at, nr.delivered_at
-                    FROM engine.__notify n
-                    JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
-                    WHERE nr.recipient_moniker = %s
-                    ORDER BY n.datecreated DESC
-                    LIMIT %s
-                """)
+            query = sql.SQL("""
+                SELECT n.id, n.notification_type, n.sender_moniker, n.template, n.template_vars,
+                       n.rendered_message, n.data, n.urgency, n.datecreated, nr.read_at, nr.delivered_at
+                FROM engine.__notify n
+                JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
+                WHERE nr.recipient_moniker = %s
+                ORDER BY n.datecreated DESC
+                LIMIT %s
+            """)
 
             cur.execute(query, (moniker, limit))
             rows = cur.fetchall()
@@ -645,29 +691,29 @@ def get_notifications(
             for row in rows:
                 notifications.append(
                     Notification(
-                        id=row[0],
-                        notification_type=row[1],
+                        id=row["id"],
+                        notification_type=row["notification_type"],
                         recipients=[moniker],
                         recipients_ok=[moniker],
                         recipients_failed=[],
-                        sender_moniker=row[2],
-                        template=row[3],
-                        template_vars=row[4] or {},
-                        message=_render_template(row[3], row[4] or {}),
-                        data=row[6] or {},
-                        urgency=NotificationUrgency(row[7]),
-                        timestamp=row[8].timestamp() if row[8] else time.time(),
-                        delivered_to={moniker: row[10].timestamp()} if row[10] else {},
-                        read_by={moniker: row[9].timestamp()} if row[9] else {},
+                        sender_moniker=row["sender_moniker"],
+                        template=row["template"],
+                        template_vars=row["template_vars"] or {},
+                        message=_render_template(row["template"], row["template_vars"] or {}),
+                        data=row["data"] or {},
+                        urgency=NotificationUrgency(row["urgency"]),
+                        timestamp=row["datecreated"].timestamp() if row["datecreated"] else time.time(),
+                        delivered_to={moniker: row["delivered_at"].timestamp()} if row["delivered_at"] else {},
+                        read_by={moniker: row["read_at"].timestamp()} if row["read_at"] else {},
                         should_persist=True,
-                        created_at=row[8],
+                        datecreated=row["datecreated"],
                     )
                 )
 
             return notifications
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None and conn is not None:
+            pool.putconn(conn)
 
 
 def get_queue(moniker: str) -> UserNotificationQueue:
@@ -681,66 +727,57 @@ def get_queue(moniker: str) -> UserNotificationQueue:
         return _queues[moniker]
 
 
-def count(moniker: str, conn: Optional[Any] = None, **kwargs) -> int | None:
-    """Get total unread notification count for user (queue + database).
+def count(moniker: str, args: Optional[Any] = None, **kwargs) -> int | None:
+    """Get total notification count for user from database.
 
     Args:
         moniker: User moniker to count notifications for
-        conn: Optional explicit database connection
-        **kwargs: May contain 'pool' (ConnectionPool) for database access
+        args: Application args with databasename.
+        **kwargs: pool or conn for database connection
 
     Returns:
-        Total unread notification count (queue + database)
+        Total notification count from database
         Returns None if pool unavailable
     """
     if not moniker:
         return 0
 
-    # In-memory queue count
-    queue = get_queue(moniker)
-    queue_count = queue.size()
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
 
-    # Database unread count - empyre three-tier pattern
-    def _work(db_conn: Any) -> int:
-        """Query database for unread notification count."""
-        try:
-            notifications = get_notifications(moniker, unread_only=True, conn=db_conn)
-            return len(notifications)
-        except Exception:
-            io.echo_traceback(
-                f"bbsengine6.notify.count.200: Failed to get unread count for moniker={moniker}"
+    if conn is None:
+        return None
+
+    try:
+        with database.cursor(conn) as cur:
+            cur.execute(
+                sql.SQL("""
+                    SELECT COUNT(*)
+                    FROM engine.__notify_recipient nr
+                    WHERE nr.recipient_moniker = %s
+                """),
+                (moniker,),
             )
-            return 0
-
-    # Connection priority: explicit conn > pool > getpool
-    db_conn = kwargs.get("conn", None)
-    if db_conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            try:
-                args = kwargs.get("args", None)
-                if args is None:
-                    pool = getpool(args, dbname="zoid6", host="127.0.0.1", port=5432)
-                else:
-                    pool = getpool(args)
-            except Exception:
-                io.echo_traceback("bbsengine6.notify.count.100: getpool() failed")
-                return None
-
-        # Use database.connect context manager to properly return connection to pool
-        args = kwargs.get("args", None)
-        with database.connect(args, pool=pool) as db_conn:
-            db_count = _work(db_conn)
-    else:
-        # Use provided connection
-        db_count = _work(db_conn)
-
-    return queue_count + db_count
+            row = cur.fetchone()
+            return int(row["count"]) if row else 0
+    except Exception:
+        io.echo_traceback(
+            f"bbsengine6.notify.count.200: Failed to get count for moniker={moniker}"
+        )
+        return None
+    finally:
+        if we_created_conn and pool is not None and conn is not None:
+            pool.putconn(conn)
 
 
-def get_urgent(moniker: str, conn: Optional[Any] = None) -> List[Notification]:
+def get_urgent(
+    moniker: str,
+    args: Optional[Any] = None,
+    **kwargs,
+) -> List[Notification]:
     """Get urgent (URGENT or CRITICAL) unread notifications for user."""
-    notifications = get_notifications(moniker, unread_only=True, conn=conn)
+    notifications = get_notifications(moniker, args=args, **kwargs)
     return [
         n
         for n in notifications
@@ -748,17 +785,24 @@ def get_urgent(moniker: str, conn: Optional[Any] = None) -> List[Notification]:
     ]
 
 
-def mark_read(notification_id: int, moniker: str, conn: Optional[Any] = None) -> None:
+def mark_read(
+    notification_id: int,
+    moniker: str,
+    args: Optional[Any] = None,
+    **kwargs,
+) -> None:
     """Mark notification as read by user."""
     if not isinstance(notification_id, int) or notification_id <= 0:
         raise ValueError("Invalid notification_id")
     if not _validate_moniker(moniker):
         raise ValueError(f"Invalid moniker: {moniker}")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return
 
     try:
         with database.cursor(conn) as cur:
@@ -772,12 +816,15 @@ def mark_read(notification_id: int, moniker: str, conn: Optional[Any] = None) ->
             )
             conn.commit()
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def mark_delivered(
-    notification_id: int, moniker: str, conn: Optional[Any] = None
+    notification_id: int,
+    moniker: str,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None:
     """Mark notification as delivered to user."""
     if not isinstance(notification_id, int) or notification_id <= 0:
@@ -785,10 +832,12 @@ def mark_delivered(
     if not _validate_moniker(moniker):
         raise ValueError(f"Invalid moniker: {moniker}")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return
 
     try:
         with database.cursor(conn) as cur:
@@ -802,8 +851,8 @@ def mark_delivered(
             )
             conn.commit()
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def register_type(
@@ -811,7 +860,8 @@ def register_type(
     default_urgency: NotificationUrgency = NotificationUrgency.ROUTINE,
     max_per_hour: int = 10,
     persist_by_default: bool = True,
-    conn: Optional[Any] = None,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None:
     """Explicitly register a notification type with rate limits."""
     if not _validate_type_name(type_name):
@@ -829,10 +879,12 @@ def register_type(
             "persist_by_default": persist_by_default,
         }
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return
 
     try:
         with database.cursor(conn) as cur:
@@ -847,16 +899,18 @@ def register_type(
             )
             conn.commit()
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
-def get_types(conn: Optional[Any] = None) -> Dict[str, Dict]:
+def get_types(args: Optional[Any] = None, **kwargs) -> Dict[str, Dict]:
     """Get all registered notification types and their settings."""
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return {}
 
     try:
         with database.cursor(conn) as cur:
@@ -870,19 +924,22 @@ def get_types(conn: Optional[Any] = None) -> Dict[str, Dict]:
 
             types = {}
             for row in rows:
-                types[row[0]] = {
-                    "default_urgency": row[1],
-                    "max_per_hour": row[2],
-                    "persist_by_default": row[3],
+                types[row["type_name"]] = {
+                    "default_urgency": row["default_urgency"],
+                    "max_per_hour": row["max_per_user_per_hour"],
+                    "persist_by_default": row["persist_by_default"],
                 }
             return types
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def set_rate_limit(
-    type_name: str, max_per_hour: int, conn: Optional[Any] = None
+    type_name: str,
+    max_per_hour: int,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None:
     """Change rate limit for a notification type at runtime."""
     if not _validate_type_name(type_name):
@@ -890,10 +947,12 @@ def set_rate_limit(
     if not isinstance(max_per_hour, int) or max_per_hour <= 0:
         raise ValueError("max_per_hour must be positive integer")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return
 
     try:
         with database.cursor(conn) as cur:
@@ -905,14 +964,15 @@ def set_rate_limit(
             )
             conn.commit()
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def create_group(
     group_name: str,
     member_monikers: Optional[List[str]] = None,
-    conn: Optional[Any] = None,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None:
     """Create a new notification group."""
     if not group_name or not isinstance(group_name, str) or len(group_name) > 100:
@@ -921,15 +981,16 @@ def create_group(
     if member_monikers is None:
         member_monikers = []
 
-    # Validate all monikers
     for moniker in member_monikers:
         if not _validate_moniker(moniker):
             raise ValueError(f"Invalid moniker in group: {moniker}")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return
 
     try:
         with database.cursor(conn) as cur:
@@ -944,21 +1005,28 @@ def create_group(
                 )
             conn.commit()
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
-def add_to_group(group_name: str, moniker: str, conn: Optional[Any] = None) -> None:
+def add_to_group(
+    group_name: str,
+    moniker: str,
+    args: Optional[Any] = None,
+    **kwargs,
+) -> None:
     """Add user to group."""
     if not group_name or not isinstance(group_name, str) or len(group_name) > 100:
         raise ValueError("Invalid group_name")
     if not _validate_moniker(moniker):
         raise ValueError(f"Invalid moniker: {moniker}")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return
 
     try:
         with database.cursor(conn) as cur:
@@ -972,12 +1040,15 @@ def add_to_group(group_name: str, moniker: str, conn: Optional[Any] = None) -> N
             )
             conn.commit()
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def remove_from_group(
-    group_name: str, moniker: str, conn: Optional[Any] = None
+    group_name: str,
+    moniker: str,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None:
     """Remove user from group."""
     if not group_name or not isinstance(group_name, str) or len(group_name) > 100:
@@ -985,10 +1056,12 @@ def remove_from_group(
     if not _validate_moniker(moniker):
         raise ValueError(f"Invalid moniker: {moniker}")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return
 
     try:
         with database.cursor(conn) as cur:
@@ -1000,19 +1073,25 @@ def remove_from_group(
             )
             conn.commit()
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
-def get_group_members(group_name: str, conn: Optional[Any] = None) -> List[str]:
+def get_group_members(
+    group_name: str,
+    args: Optional[Any] = None,
+    **kwargs,
+) -> List[str]:
     """Get all members of a group."""
     if not group_name or not isinstance(group_name, str) or len(group_name) > 100:
         raise ValueError("Invalid group_name")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return []
 
     try:
         with database.cursor(conn) as cur:
@@ -1022,14 +1101,17 @@ def get_group_members(group_name: str, conn: Optional[Any] = None) -> List[str]:
                 ),
                 (group_name,),
             )
-            return [row[0] for row in cur.fetchall()]
+            return [row["member_moniker"] for row in cur.fetchall()]
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def block(
-    blocker_moniker: str, sender_moniker: str, conn: Optional[Any] = None
+    blocker_moniker: str,
+    sender_moniker: str,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None:
     """Block notifications from sender to blocker (one-way)."""
     if not _validate_moniker(blocker_moniker):
@@ -1037,10 +1119,12 @@ def block(
     if not _validate_moniker(sender_moniker):
         raise ValueError(f"Invalid sender_moniker: {sender_moniker}")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return
 
     try:
         with database.cursor(conn) as cur:
@@ -1054,12 +1138,15 @@ def block(
             )
             conn.commit()
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def unblock(
-    blocker_moniker: str, sender_moniker: str, conn: Optional[Any] = None
+    blocker_moniker: str,
+    sender_moniker: str,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None:
     """Remove a block."""
     if not _validate_moniker(blocker_moniker):
@@ -1067,10 +1154,12 @@ def unblock(
     if not _validate_moniker(sender_moniker):
         raise ValueError(f"Invalid sender_moniker: {sender_moniker}")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return
 
     try:
         with database.cursor(conn) as cur:
@@ -1082,12 +1171,15 @@ def unblock(
             )
             conn.commit()
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def is_blocked(
-    sender_moniker: str, recipient_moniker: str, conn: Optional[Any] = None
+    sender_moniker: str,
+    recipient_moniker: str,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> bool:
     """Check if sender's notifications to recipient are blocked (one-way check)."""
     if not _validate_moniker(sender_moniker):
@@ -1095,28 +1187,32 @@ def is_blocked(
     if not _validate_moniker(recipient_moniker):
         raise ValueError(f"Invalid recipient_moniker: {recipient_moniker}")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return False
 
     try:
         with database.cursor(conn) as cur:
             return _check_is_blocked(sender_moniker, recipient_moniker, cur)
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
-def get_blocked(moniker: str, conn: Optional[Any] = None) -> List[str]:
+def get_blocked(moniker: str, args: Optional[Any] = None, **kwargs) -> List[str]:
     """Get list of all monikers that have blocked this user."""
     if not _validate_moniker(moniker):
         raise ValueError(f"Invalid moniker: {moniker}")
 
-    should_close_conn = False
-    if not conn:
-        conn = psycopg.connect(f"dbname={_DEFAULT_DBNAME}")
-        should_close_conn = True
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return []
 
     try:
         with database.cursor(conn) as cur:
@@ -1126,10 +1222,39 @@ def get_blocked(moniker: str, conn: Optional[Any] = None) -> List[str]:
                 ),
                 (moniker,),
             )
-            return [row[0] for row in cur.fetchall()]
+            return [row["sender_moniker"] for row in cur.fetchall()]
     finally:
-        if should_close_conn:
-            conn.close()
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
+
+
+def expunge(
+    notification_id: int,
+    args: Optional[Any] = None,
+    **kwargs,
+) -> bool:
+    """Hard-delete a notification and all its recipients via CASCADE."""
+    pool, conn, we_created_conn = _resolve_conn(
+        args, kwargs.get("pool"), kwargs.get("conn")
+    )
+
+    if conn is None:
+        return False
+
+    try:
+        with database.cursor(conn) as cur:
+            cur.execute(
+                sql.SQL("DELETE FROM engine.__notify WHERE id = %s"),
+                (notification_id,),
+            )
+        conn.commit()
+        return True
+    except Exception as e:
+        logger.error(f"notify.expunge: failed to expunge {notification_id}: {e}")
+        return False
+    finally:
+        if we_created_conn and pool is not None:
+            pool.putconn(conn)
 
 
 __all__ = [
@@ -1143,6 +1268,7 @@ __all__ = [
     "get_urgent",
     "mark_read",
     "mark_delivered",
+    "expunge",
     "register_type",
     "get_types",
     "set_rate_limit",

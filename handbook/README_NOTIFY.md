@@ -124,19 +124,21 @@ python example_notify_with_input.py
 python example_notify.py
 ```
 
-## 17 Public Functions
+## 18 Public Functions
 
 ### Sending
 - `send()` - Unified notification dispatch with templating
 
 ### Receiving
-- `get_notifications()` - Retrieve from database
+- `get_notifications()` - Retrieve from database (limit 10 default)
 - `get_queue()` - Get live queue for user
 - `get_urgent()` - Get high-priority notifications
+- `count()` - Get total notification count from database
 
 ### Marking
 - `mark_read()` - Mark as read
 - `mark_delivered()` - Mark as delivered
+- `expunge()` - Hard-delete notification
 
 ### Type Management
 - `register_type()` - Register notification type

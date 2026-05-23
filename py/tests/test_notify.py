@@ -55,7 +55,7 @@ class TestNotificationDataclass:
             urgency=NotificationUrgency.ROUTINE,
             timestamp=time.time(),
             should_persist=True,
-            created_at=datetime.now(timezone.utc),
+            datecreated=datetime.now(timezone.utc),
         )
 
         assert notif.id == 1

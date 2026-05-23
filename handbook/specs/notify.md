@@ -4,6 +4,46 @@
 
 `notify.py` provides a robust, thread-safe user notification system for broadcasting events to specific users or groups with templating, urgency levels, rate limiting, and blocking support. Notifications are delivered both live (in-memory queues) and persistently (database storage).
 
+## Connection Management
+
+All notify functions accept `args`, `pool`, and `conn` kwargs for database connection management:
+
+```python
+def send(
+    notification_type: str,
+    recipients: List[str],
+    template: str,
+    template_vars: Optional[Dict[str, Any]] = None,
+    sender_moniker: Optional[str] = None,
+    data: Optional[Dict[str, Any]] = None,
+    urgency: Optional[NotificationUrgency] = None,
+    should_persist: bool = True,
+    args: Optional[Any] = None,
+    **kwargs,
+) -> Notification
+```
+
+**Connection Priority:**
+1. `conn` - Use provided connection (caller manages lifecycle)
+2. `pool` - Get connection from pool (returned to pool in finally)
+3. `args` - Get pool from args, connection from pool (returned to pool in finally)
+4. Falls back to `BBSENGINE6_DBNAME` env var if none provided
+
+**Example:**
+```python
+# Option 1: Use args (creates pool from args, returns connection)
+notify.send(..., args=args)
+
+# Option 2: Use pool (get connection from pool, return it)
+notify.send(..., pool=pool)
+
+# Option 3: Use conn (caller manages lifecycle, not closed)
+notify.send(..., conn=conn)
+
+# Option 4: No connection args - uses BBSENGINE6_DBNAME env var
+notify.send(...)
+```
+
 ## Brief Description
 
 A standalone notification module enabling game logic and application code to send targeted notifications to users with:
@@ -182,16 +222,20 @@ notify.send(
 ```python
 def get_notifications(
     moniker: str,
-    unread_only: bool = False,
-    limit: int = 100
+    limit: int = 10,
+    offset: int = 0,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> List[Notification]
 ```
-Retrieve notifications for a user from database. Includes read and unread.
+Retrieve notifications for a user from database. All notifications (read and unread).
 
 **Parameters:**
 - `moniker`: User moniker.
-- `unread_only`: If True, only return unread notifications.
-- `limit`: Max notifications to return (default 100).
+- `limit`: Max notifications to return (default 10).
+- `offset`: Number to skip (for pagination, default 0).
+- `args`: Application args with databasename.
+- `**kwargs`: `pool` or `conn` for database connection.
 
 **Returns:** List of `Notification` objects, newest first.
 
@@ -200,7 +244,7 @@ Retrieve notifications for a user from database. Includes read and unread.
 ```python
 def get_queue(moniker: str) -> UserNotificationQueue
 ```
-Get the in-memory notification queue for active user sessions.
+Get the in-memory notification queue for active user sessions. No database connection needed.
 
 **Returns:** `UserNotificationQueue` object. Caller can `.get(timeout=1.0)` to block until notification arrives.
 
@@ -217,18 +261,38 @@ while True:
 ---
 
 ```python
-def get_urgent(moniker: str) -> List[Notification]
+def count(moniker: str, args: Optional[Any] = None, **kwargs) -> int | None
 ```
-Get urgent (URGENT or CRITICAL) unread notifications for user.
+Get total notification count for user from database.
+
+**Parameters:**
+- `moniker`: User moniker.
+- `args`: Application args with databasename.
+- `**kwargs`: `pool` or `conn` for database connection.
+
+**Returns:** Total count, or None if connection unavailable.
+
+---
+
+```python
+def get_urgent(moniker: str, args: Optional[Any] = None, **kwargs) -> List[Notification]
+```
+Get urgent (URGENT or CRITICAL) notifications for user.
 
 **Returns:** List of high-priority `Notification` objects.
 
 ---
 
 ```python
-def mark_read(notification_id: int, moniker: str) -> None
+def mark_read(notification_id: int, moniker: str, args: Optional[Any] = None, **kwargs) -> None
 ```
 Mark notification as read by user. Updates database and removes from queue.
+
+**Parameters:**
+- `notification_id`: Notification ID.
+- `moniker`: User moniker.
+- `args`: Application args with databasename.
+- `**kwargs`: `pool` or `conn` for database connection.
 
 **Raises:**
 - `ValueError`: Invalid notification_id or moniker.
@@ -236,7 +300,7 @@ Mark notification as read by user. Updates database and removes from queue.
 ---
 
 ```python
-def mark_delivered(notification_id: int, moniker: str) -> None
+def mark_delivered(notification_id: int, moniker: str, args: Optional[Any] = None, **kwargs) -> None
 ```
 Mark notification as delivered to user (internal use). Called when notification added to live queue.
 
@@ -248,6 +312,8 @@ def register_type(
     default_urgency: NotificationUrgency = NotificationUrgency.ROUTINE,
     max_per_hour: int = 10,
     persist_by_default: bool = True,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None
 ```
 Explicitly register a notification type with rate limits. Optional; types auto-register on first send with defaults.
@@ -257,6 +323,8 @@ Explicitly register a notification type with rate limits. Optional; types auto-r
 - `default_urgency`: Default urgency if not specified in send call.
 - `max_per_hour`: Rate limit (default 10/hour).
 - `persist_by_default`: Whether to persist to DB by default.
+- `args`: Application args with databasename.
+- `**kwargs`: `pool` or `conn` for database connection.
 
 **Raises:**
 - `ValueError`: Type already registered or invalid type_name.
@@ -274,25 +342,37 @@ notify.register_type(
 ---
 
 ```python
-def get_types() -> Dict[str, Dict]
+def get_types(args: Optional[Any] = None, **kwargs) -> Dict[str, Dict]
 ```
 Get all registered notification types and their settings.
+
+**Parameters:**
+- `args`: Application args with databasename.
+- `**kwargs`: `pool` or `conn` for database connection.
 
 **Returns:** Dict mapping type_name to {default_urgency, max_per_hour, persist_by_default}.
 
 ---
 
 ```python
-def set_rate_limit(type_name: str, max_per_hour: int) -> None
+def set_rate_limit(type_name: str, max_per_hour: int, args: Optional[Any] = None, **kwargs) -> None
 ```
 Change rate limit for a notification type at runtime.
+
+**Parameters:**
+- `type_name`: Notification type name.
+- `max_per_hour`: New rate limit.
+- `args`: Application args with databasename.
+- `**kwargs`: `pool` or `conn` for database connection.
 
 ### Group Management Functions
 
 ```python
 def create_group(
     group_name: str,
-    member_monikers: Optional[List[str]] = None
+    member_monikers: Optional[List[str]] = None,
+    args: Optional[Any] = None,
+    **kwargs,
 ) -> None
 ```
 Create a new notification group.
@@ -300,6 +380,8 @@ Create a new notification group.
 **Parameters:**
 - `group_name`: Freeform group name (max 100 chars). Can include special names like "@everyone".
 - `member_monikers`: Initial members (optional).
+- `args`: Application args with databasename.
+- `**kwargs`: `pool` or `conn` for database connection.
 
 **Example:**
 ```python
@@ -310,34 +392,36 @@ notify.create_group("@everyone", member_monikers=[...])  # Explicit @everyone
 ---
 
 ```python
-def add_to_group(group_name: str, moniker: str) -> None
+def add_to_group(group_name: str, moniker: str, args: Optional[Any] = None, **kwargs) -> None
 ```
 Add user to group.
 
 ---
 
 ```python
-def remove_from_group(group_name: str, moniker: str) -> None
+def remove_from_group(group_name: str, moniker: str, args: Optional[Any] = None, **kwargs) -> None
 ```
 Remove user from group.
 
 ---
 
 ```python
-def get_group_members(group_name: str) -> List[str]
+def get_group_members(group_name: str, args: Optional[Any] = None, **kwargs) -> List[str]
 ```
 Get all members of a group.
 
 ### Blocking Functions (One-Way)
 
 ```python
-def block(blocker_moniker: str, sender_moniker: str) -> None
+def block(blocker_moniker: str, sender_moniker: str, args: Optional[Any] = None, **kwargs) -> None
 ```
 Block notifications from sender to blocker (one-way). Blocker won't see sender's future notifications.
 
 **Parameters:**
 - `blocker_moniker`: User doing the blocking (validated).
 - `sender_moniker`: User being blocked (validated).
+- `args`: Application args with databasename.
+- `**kwargs`: `pool` or `conn` for database connection.
 
 **Effect:** `sender_moniker` can no longer send notifications that `blocker_moniker` will receive. Blocker won't see them in their queue or in new unread notifications.
 
@@ -353,14 +437,14 @@ notify.block("jam", "alice")
 ---
 
 ```python
-def unblock(blocker_moniker: str, sender_moniker: str) -> None
+def unblock(blocker_moniker: str, sender_moniker: str, args: Optional[Any] = None, **kwargs) -> None
 ```
 Remove a block.
 
 ---
 
 ```python
-def is_blocked(sender_moniker: str, recipient_moniker: str) -> bool
+def is_blocked(sender_moniker: str, recipient_moniker: str, args: Optional[Any] = None, **kwargs) -> bool
 ```
 Check if sender's notifications to recipient are blocked (one-way check).
 
@@ -369,9 +453,18 @@ Check if sender's notifications to recipient are blocked (one-way check).
 ---
 
 ```python
-def get_blocked(moniker: str) -> List[str]
+def get_blocked(moniker: str, args: Optional[Any] = None, **kwargs) -> List[str]
 ```
 Get list of all monikers that have blocked this user.
+
+---
+
+```python
+def expunge(notification_id: int, args: Optional[Any] = None, **kwargs) -> bool
+```
+Hard-delete a notification and all its recipients via CASCADE.
+
+**Returns:** True if successful, False otherwise.
 
 ## Input Validation
 

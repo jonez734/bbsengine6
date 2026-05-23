@@ -11,6 +11,8 @@ from .lib import (
     get_queue,
     get_urgent,
     mark_read,
+    mark_delivered,
+    expunge,
     register_type,
     get_types,
     create_group,

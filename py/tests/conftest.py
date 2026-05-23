@@ -8,15 +8,22 @@ Uses smart initialization: only loads 7 notify-specific SQL files
 Session-scoped fixtures:
   - db_connection: persistent connection to zoid6test
   - schema_init: loads notify tables & views
-  - create_test_users: creates test users (alice, bob)
+  - create_test_users: creates test users (alice, bob, jam)
+  - test_args: argparse.Namespace with databasename=zoid6test for notify functions
 
 Function-scoped fixtures (autouse):
   - test_transaction: wraps each test in transaction (rollback after)
 """
 
+import os
+
+# Set BBSENGINE6_DBNAME so notify functions use the right database
+os.environ["BBSENGINE6_DBNAME"] = "zoid6test"
+
 import pytest
 import psycopg
 import getpass
+import argparse
 from pathlib import Path
 import logging
 
