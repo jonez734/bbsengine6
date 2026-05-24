@@ -8,10 +8,17 @@ Run with: pytest py/tests/test_notify_message_demo_database.py -xvs
 """
 
 import pytest
+import argparse
 from bbsengine6.examples.notify_message_demo import (
     DemoConfig,
     MessageHandler,
 )
+
+
+def make_args(databasename: str = "zoid6test"):
+    """Create mock args object for MessageHandler."""
+    args = argparse.Namespace(databasename=databasename, debug=False)
+    return args
 
 
 @pytest.mark.integration
@@ -19,12 +26,11 @@ class TestNotifyMessageDemoDatabase:
     """Integration tests verifying database writes for notify_message_demo."""
 
     def test_send_message_inserts_into_notify_table(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify that sending a message inserts a row into engine.__notify."""
-        # Setup
         config = DemoConfig(moniker="alice")
-        handler = MessageHandler(config, db_connection)
+        handler = MessageHandler(config, args=make_args(), pool=pool)
 
         # Action: send message
         handler.send_message("Hello bob", "bob")
@@ -49,12 +55,11 @@ class TestNotifyMessageDemoDatabase:
         assert sender == "alice"
 
     def test_send_message_inserts_recipient_entry(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify that recipient is tracked in engine.__notify_recipient."""
-        # Setup
         config = DemoConfig(moniker="alice")
-        handler = MessageHandler(config, db_connection)
+        handler = MessageHandler(config, args=make_args(), pool=pool)
 
         # Action: send message to bob
         handler.send_message("Test message", "bob")
@@ -78,14 +83,13 @@ class TestNotifyMessageDemoDatabase:
         assert notify_id is not None
 
     def test_bidirectional_messaging_persists_to_database(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify alice->bob and bob->alice both persist correctly."""
-        # Setup
         config_alice = DemoConfig(moniker="alice")
         config_bob = DemoConfig(moniker="bob")
-        handler_alice = MessageHandler(config_alice, db_connection)
-        handler_bob = MessageHandler(config_bob, db_connection)
+        handler_alice = MessageHandler(config_alice, args=make_args(), pool=pool)
+        handler_bob = MessageHandler(config_bob, args=make_args(), pool=pool)
 
         # Action: bidirectional messaging
         handler_alice.send_message("Hi bob from alice", "bob")
@@ -109,13 +113,12 @@ class TestNotifyMessageDemoDatabase:
         assert bob_count >= 1, "No messages from bob found in database"
 
     def test_template_rendering_persists_correctly(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify that template rendering produces correct rendered_message in DB."""
-        # Setup: custom template
         custom_template = "[{sender}]: {message}"
         config = DemoConfig(moniker="alice", template=custom_template)
-        handler = MessageHandler(config, db_connection)
+        handler = MessageHandler(config, args=make_args(), pool=pool)
 
         # Action: send with custom template
         handler.send_message("test content", "bob")
@@ -140,12 +143,11 @@ class TestNotifyMessageDemoDatabase:
         assert "[alice]:" in rendered
 
     def test_multiple_messages_create_separate_entries(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify that each message creates a separate database entry."""
-        # Setup
         config = DemoConfig(moniker="alice")
-        handler = MessageHandler(config, db_connection)
+        handler = MessageHandler(config, args=make_args(), pool=pool)
 
         # Action: send multiple messages
         handler.send_message("message 1", "bob")
@@ -167,12 +169,11 @@ class TestNotifyMessageDemoDatabase:
         assert count >= 3, f"Expected at least 3 messages, found {count}"
 
     def test_message_urgency_defaults_to_routine(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify that messages default to ROUTINE urgency level."""
-        # Setup
         config = DemoConfig(moniker="alice")
-        handler = MessageHandler(config, db_connection)
+        handler = MessageHandler(config, args=make_args(), pool=pool)
 
         # Action
         handler.send_message("test", "bob")
@@ -194,12 +195,11 @@ class TestNotifyMessageDemoDatabase:
         assert row[0] == "ROUTINE"
 
     def test_timestamp_recorded_on_insert(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify that datecreated timestamp is automatically set."""
-        # Setup
         config = DemoConfig(moniker="alice")
-        handler = MessageHandler(config, db_connection)
+        handler = MessageHandler(config, args=make_args(), pool=pool)
 
         # Action
         handler.send_message("test", "bob")
@@ -221,12 +221,11 @@ class TestNotifyMessageDemoDatabase:
         assert row[0] is not None
 
     def test_multiple_recipients_create_recipient_entries(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify that sending messages creates recipient entries."""
-        # Setup
         config_alice = DemoConfig(moniker="alice")
-        handler_alice = MessageHandler(config_alice, db_connection)
+        handler_alice = MessageHandler(config_alice, args=make_args(), pool=pool)
 
         # Action: send message
         handler_alice.send_message("msg to bob", "bob")
@@ -245,12 +244,11 @@ class TestNotifyMessageDemoDatabase:
         assert recipient_count >= 1, "Should have at least 1 recipient entry for bob"
 
     def test_stats_match_database_counts(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify that handler statistics match actual database counts."""
-        # Setup
         config = DemoConfig(moniker="alice")
-        handler = MessageHandler(config, db_connection)
+        handler = MessageHandler(config, args=make_args(), pool=pool)
 
         # Action: send 3 messages
         handler.send_message("msg1", "bob")
@@ -278,13 +276,12 @@ class TestNotifyMessageDemoDatabase:
         assert db_count >= 3, f"Database has {db_count} records, expected at least 3"
 
     def test_template_stored_in_database(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, schema_init, create_test_users, pool
     ):
         """Verify that the template itself is stored in engine.__notify.template."""
-        # Setup
         custom_template = "CUSTOM: {sender} says {message}"
         config = DemoConfig(moniker="alice", template=custom_template)
-        handler = MessageHandler(config, db_connection)
+        handler = MessageHandler(config, args=make_args(), pool=pool)
 
         # Action
         handler.send_message("test", "bob")

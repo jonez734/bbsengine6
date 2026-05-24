@@ -2,27 +2,23 @@
 # Interactive two-user message system demo using bbsengine6's notify system
 
 import argparse
-import re
 import subprocess
 import sys
 import termios
 import threading
 from collections import deque
-from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from bbsengine6 import database, member, group
 from bbsengine6.io.echo import echo, echo_traceback
-from bbsengine6.io.inputchoice import inputchoice
 from bbsengine6.io.inputstring import inputstring
-from bbsengine6.io import screen
+from bbsengine6.io import screen, terminal
 from bbsengine6.notify import UserNotificationQueue
 from bbsengine6.notify.utils import (
     AsciiValidator,
     TemplateEngine,
     EchoProcessor,
-    TimestampFormatter,
     DemoConfig,
 )
 
@@ -171,10 +167,11 @@ class MessageHandler:
                     with database.cursor(conn) as cur:
                         cur.execute(
                             """
-                            SELECT id, sender_moniker, rendered_message, created_at
-                            FROM engine.__notify_recipient
-                            WHERE recipient_moniker = %s AND is_read = false
-                            ORDER BY created_at DESC
+                            SELECT n.id, n.sender_moniker, n.rendered_message, n.datecreated
+                            FROM engine.__notify n
+                            JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
+                            WHERE nr.recipient_moniker = %s AND nr.read_at IS NULL
+                            ORDER BY n.datecreated DESC
                             """,
                             (self.config.moniker,),
                         )
@@ -227,7 +224,7 @@ class MessageHandler:
                     return members
                 else:
                     raise ValueError(f"Group '{recipient}' is empty")
-        except:
+        except Exception:
             pass
 
         if self.args and self.pool:
@@ -236,22 +233,26 @@ class MessageHandler:
 
         return [recipient]
 
-    def mark_messages_as_read(self, message_ids: list[int]) -> None:
+    def mark_messages_as_read(self, message_ids: list[int | None]) -> None:
         """Mark messages as read in the database."""
         if not self.args or not self.pool or not message_ids:
+            return
+
+        valid_ids = [mid for mid in message_ids if mid is not None]
+        if not valid_ids:
             return
 
         try:
             with database.connect(self.args, pool=self.pool) as conn:
                 with database.cursor(conn) as cur:
-                    for msg_id in message_ids:
+                    for msg_id in valid_ids:
                         cur.execute(
                             """
                             UPDATE engine.__notify_recipient
-                            SET is_read = true
-                            WHERE id = %s
+                            SET read_at = now()
+                            WHERE notify_id = %s AND recipient_moniker = %s
                             """,
-                            (msg_id,),
+                            (msg_id, self.config.moniker),
                         )
         except Exception as e:
             echo_traceback(f"Error marking messages as read: {e}")
@@ -265,7 +266,9 @@ class MessageHandler:
                 msg["direction"] = "in"
 
         if messages and self.args and self.pool:
-            message_ids = [msg.get("id") for msg in messages if "id" in msg]
+            message_ids = [
+                msg.get("id") for msg in messages if msg.get("id") is not None
+            ]
             if message_ids:
                 self.mark_messages_as_read(message_ids)
 
@@ -302,27 +305,65 @@ class NotifyMessageDemo:
 
         self.handler = MessageHandler(config, args=args, pool=self.pool)
 
+    def _handle_f2(self) -> None:
+        """Handle F2 key to show unread messages."""
+        echo("\n{F2} Checking messages...")
+        messages = self.handler.receive_messages()
+
+        if not messages:
+            echo("No new messages.")
+            return
+
+        echo(f"You have {len(messages)} message(s):\n")
+        for i, msg in enumerate(messages, 1):
+            sender = msg.get("sender_moniker", msg.get("sender", "unknown"))
+            content = msg.get("rendered_message", msg.get("message", ""))
+            echo(f"  [{i}] {sender}: {content}")
+        echo("")
+
     def run_interactive(self) -> None:
         """Run the demo in interactive mode."""
+        screen.init()
+
+        def f2_handler(buffer, curpos, scroll_offset, max_width):
+            self._handle_f2()
+            return buffer, curpos, scroll_offset
+
         echo(f"Welcome, {self.config.moniker}!")
         echo("Commands: '@user message' to send, 'F2' to check messages, 'q' to quit")
 
-        while True:
-            try:
-                user_input = inputstring("Enter command: ", timeout=0.5)
-                if not user_input:
-                    continue
+        try:
+            while True:
+                try:
+                    user_input = inputstring(
+                        "Enter command: ",
+                        timeout=0.5,
+                        function_key_handlers={"KEY_F2": f2_handler},
+                    )
+                    if not user_input:
+                        continue
 
-                if user_input.lower() == "q":
+                    if user_input.lower() == "q":
+                        break
+                    elif user_input.startswith("@"):
+                        self._process_input(user_input)
+                    else:
+                        echo(
+                            "Unknown command. Use '@user message' to send, 'F2' to check messages.",
+                            level="error",
+                        )
+                except KeyboardInterrupt:
+                    echo("\nExiting... (Ctrl+C)")
                     break
-                elif user_input.startswith("@"):
-                    self._process_input(user_input)
-                else:
-                    echo("Unknown command", level="error")
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                echo(f"Error: {e}", level="error")
+                except EOFError:
+                    echo("\nExiting... (Ctrl+D)")
+                    break
+                except Exception as e:
+                    echo(f"Error: {e}", level="error")
+        finally:
+            echo(
+                f"{{savecursor}}{{curpos:{terminal.height()},0}}{{el}}{{reset}}{{restorecursor}}"
+            )
 
     def _process_input(self, user_input: str) -> None:
         """Process user input for sending messages or commands."""
@@ -345,7 +386,7 @@ class NotifyMessageDemo:
                 for recipient in recipients:
                     self.handler.send_message(message, recipient)
                     echo(f"Message sent to {recipient}")
-            except ValueError as e:
+            except ValueError:
                 raise
         else:
             # Unknown command
