@@ -15,19 +15,33 @@ Function-scoped fixtures (autouse):
   - test_transaction: wraps each test in transaction (rollback after)
 """
 
+import atexit
 import os
 
-# Set BBSENGINE6_DBNAME so notify functions use the right database
 os.environ["BBSENGINE6_DBNAME"] = "zoid6test"
 
 import pytest
 import psycopg
 import getpass
-import argparse
 from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
+
+_pools_to_close = []
+
+
+def _close_test_pools():
+    global _pools_to_close
+    for pool in _pools_to_close[:]:
+        try:
+            pool.closeall()
+        except Exception:
+            pass
+    _pools_to_close.clear()
+
+
+atexit.register(_close_test_pools)
 
 
 # ===== Session-Scoped Fixtures =====
@@ -66,9 +80,34 @@ def db_connection(request):
 
     yield conn
 
-    # Cleanup
     logger.info("Closing database connection...")
     conn.close()
+
+
+@pytest.fixture(scope="session")
+def pool(db_connection, schema_init, request):
+    """
+    Create a database connection pool for tests.
+
+    Required for CONN_POOL_PATTERN in bbsengine6 modules.
+    """
+    from bbsengine6 import database
+
+    class MockArgs:
+        databasename = "zoid6test"
+        debug = False
+
+    pool_obj = database.getpool(MockArgs(), dbname="zoid6test")
+
+    def close_pool():
+        try:
+            database.reset_pool_cache()
+        except Exception:
+            pass
+
+    request.addfinalizer(close_pool)
+
+    return pool_obj
 
 
 @pytest.fixture(scope="session")
@@ -121,38 +160,47 @@ def schema_init(db_connection, request):
 @pytest.fixture(scope="session", autouse=True)
 def create_test_users(request, db_connection, schema_init):
     """
-    Create minimal test users: alice, bob
-    (jam already exists in engine.__member)
+    Create minimal test users dynamically based on OS username.
+    Uses test_{user}_1, test_{user}_2, test_{user}_3 pattern.
 
     Required fields: moniker, email
 
     autouse=True: This fixture always runs, ensuring test users exist
     Skipped for tests marked with @pytest.mark.unit
     """
-    # Skip database setup for unit tests
     if request.node.get_closest_marker("unit"):
         logger.info("Skipping database fixtures for unit tests")
         return
 
-    logger.info("Creating test users (alice, bob)...")
+    user = getpass.getuser()
+    test_users = [
+        (f"test_{user}_1", f"test_{user}_1@test.local"),
+        (f"test_{user}_2", f"test_{user}_2@test.local"),
+        (f"test_{user}_3", f"test_{user}_3@test.local"),
+    ]
 
-    # Minimal INSERT: moniker and email (both required)
-    sql = """
-        INSERT INTO engine.__member (moniker, email) 
-        VALUES ('alice', 'alice@test.local'), ('bob', 'bob@test.local')
-        ON CONFLICT DO NOTHING
-    """
+    logger.info(f"Creating dynamic test users for {user}...")
+
+    sql = "INSERT INTO engine.__member (moniker, email) VALUES (%s, %s) ON CONFLICT DO NOTHING"
 
     try:
         with db_connection.cursor() as cur:
-            cur.execute(sql)
+            for moniker, email in test_users:
+                cur.execute(sql, (moniker, email))
         db_connection.commit()
-        logger.info("✓ Test users created (alice, bob)")
+        logger.info(f"✓ Test users created: {[u[0] for u in test_users]}")
     except Exception as e:
         logger.error(f"Failed to create test users: {e}")
         raise
 
     yield
+
+
+@pytest.fixture
+def test_users():
+    """Return the list of dynamic test user monikers."""
+    user = getpass.getuser()
+    return [f"test_{user}_1", f"test_{user}_2", f"test_{user}_3"]
 
 
 # ===== Function-Scoped Fixtures =====
@@ -244,6 +292,6 @@ def _execute_sql_file(conn, sql_content: str, filename: str) -> None:
     try:
         with conn.cursor() as cur:
             cur.execute(sql_content)
-    except Exception as e:
+    except Exception:
         # Re-raise - let caller decide how to handle
         raise

@@ -28,7 +28,6 @@ def validate_name(group_name: str) -> None:
             f"Invalid group name: exceeds 100 characters ({len(group_name)})"
         )
 
-    # Validate printable ASCII only (0x20 to 0x7E)
     for i, char in enumerate(group_name):
         code = ord(char)
         if code < 0x20 or code > 0x7E:
@@ -40,8 +39,6 @@ def validate_name(group_name: str) -> None:
 
 def exists(args, group_name: str, **kwargs) -> bool | None:
     """Check if a group exists in the database.
-
-    Validates group name format and checks existence in engine.__notify_group.
 
     Args:
         args: Application args
@@ -68,8 +65,14 @@ def exists(args, group_name: str, **kwargs) -> bool | None:
         if pool is None:
             io.echo("bbsengine6.group.exists.100: pool=None", level="error")
             return None
-        conn = database.connect(args, pool=pool)
+        with database.connect(args, pool=pool) as conn:
+            return _exists_impl(args, group_name, conn)
 
+    return _exists_impl(args, group_name, conn)
+
+
+def _exists_impl(args, group_name: str, conn) -> bool | None:
+    """Internal implementation of exists with explicit connection."""
     try:
         with database.cursor(conn) as cur:
             sql = "SELECT 1 FROM engine.__notify_group WHERE group_name=%s LIMIT 1"
@@ -83,10 +86,6 @@ def exists(args, group_name: str, **kwargs) -> bool | None:
 
 def get_members(args, group_name: str, **kwargs) -> list[str] | None:
     """Get all member monikers in a group, recursively expanding nested groups.
-
-    Retrieves all members of a notification group from engine.__notify_group,
-    recursively expanding any nested groups. Includes cycle detection to prevent
-    infinite loops from circular group references.
 
     Args:
         args: Application args
@@ -108,14 +107,12 @@ def get_members(args, group_name: str, **kwargs) -> list[str] | None:
     """
     validate_name(group_name)
 
-    # Initialize visited set for cycle detection
     visited = kwargs.get("_visited", None)
     if visited is None:
         visited = set()
     else:
         visited = set(visited)
 
-    # Detect circular references
     if group_name in visited:
         raise ValueError(
             f"Circular group reference detected: {group_name} is already being expanded"
@@ -123,15 +120,20 @@ def get_members(args, group_name: str, **kwargs) -> list[str] | None:
 
     visited.add(group_name)
 
-    # Get group members
     conn = kwargs.get("conn", None)
     if conn is None:
         pool = kwargs.get("pool", None)
         if pool is None:
             io.echo("bbsengine6.group.get_members.100: pool=None", level="error")
             return None
-        conn = database.connect(args, pool=pool)
+        with database.connect(args, pool=pool) as conn:
+            return _get_members_impl(args, group_name, conn, visited)
 
+    return _get_members_impl(args, group_name, conn, visited)
+
+
+def _get_members_impl(args, group_name: str, conn, visited: set) -> list[str] | None:
+    """Internal implementation of get_members with explicit connection."""
     try:
         with database.cursor(conn) as cur:
             sql = (
@@ -154,11 +156,9 @@ def get_members(args, group_name: str, **kwargs) -> list[str] | None:
                 if not member_moniker:
                     continue
 
-                # Check if this member is itself a group
                 is_nested_group = exists(args, member_moniker, conn=conn)
 
                 if is_nested_group:
-                    # Recursively expand nested group with cycle detection
                     nested_members = get_members(
                         args,
                         member_moniker,
@@ -168,10 +168,8 @@ def get_members(args, group_name: str, **kwargs) -> list[str] | None:
                     if nested_members is not None:
                         members.extend(nested_members)
                 else:
-                    # Regular member (moniker)
                     members.append(member_moniker)
 
-            # Remove duplicates while preserving order
             seen = set()
             unique_members = []
             for member in members:
@@ -181,7 +179,6 @@ def get_members(args, group_name: str, **kwargs) -> list[str] | None:
 
             return unique_members
     except ValueError:
-        # Re-raise validation errors (like circular reference detection)
         raise
     except Exception:
         io.echo_traceback("bbsengine6.group.get_members.100:")

@@ -388,13 +388,13 @@ def _update_rate_limit(sender_moniker: str, notification_type: str, cur: Any) ->
                 ON CONFLICT (sender_moniker, notification_type)
                 DO UPDATE SET
                     send_count = CASE
-                        WHEN (now() - window_start) < interval '1 hour'
-                        THEN send_count + 1
+                        WHEN (now() - engine.__notify_rate_limit.window_start) < interval '1 hour'
+                        THEN engine.__notify_rate_limit.send_count + 1
                         ELSE 1
                     END,
                     window_start = CASE
-                        WHEN (now() - window_start) < interval '1 hour'
-                        THEN window_start
+                        WHEN (now() - engine.__notify_rate_limit.window_start) < interval '1 hour'
+                        THEN engine.__notify_rate_limit.window_start
                         ELSE now()
                     END,
                     last_updated = now()
