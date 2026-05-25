@@ -1,4 +1,4 @@
-# notifyd/tests/test_credentials.py
+# notify/daemon/tests/test_credentials.py
 # Comprehensive tests for credential management
 
 import os
@@ -6,7 +6,7 @@ from unittest import mock
 
 import pytest
 
-from bbsengine6.notifyd.credentials import (
+from bbsengine6.notify.daemon.credentials import (
     CredentialError,
     get_password,
     store_password,
@@ -88,7 +88,7 @@ class TestGetPasswordFromKeyring:
 class TestGetPasswordFromPrompt:
     """Test retrieving passwords via user prompt"""
 
-    @mock.patch("bbsengine6.notifyd.credentials.getpass.getpass")
+    @mock.patch("bbsengine6.notify.daemon.credentials.getpass.getpass")
     def test_get_password_from_prompt(self, mock_getpass):
         """Test getting password from user prompt"""
         mock_getpass.return_value = "prompted_secret"
@@ -105,7 +105,7 @@ class TestGetPasswordFromPrompt:
         assert password == "prompted_secret"
         mock_getpass.assert_called_once()
 
-    @mock.patch("bbsengine6.notifyd.credentials.getpass.getpass")
+    @mock.patch("bbsengine6.notify.daemon.credentials.getpass.getpass")
     def test_no_prompt_when_disabled(self, mock_getpass):
         """Test that prompt is not called when disabled"""
         if "GMAIL_PASSWORD" in os.environ:

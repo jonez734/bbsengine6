@@ -30,6 +30,7 @@
 - Survives process restarts
 - Supports read status tracking
 - Suitable for production use
+- **User validation**: `--user` is validated against database unless `--mock` is specified
 
 ### F2 Key Feature
 
@@ -152,7 +153,25 @@ echo <text>     - Execute and output text
 ### Command Line Arguments
 ```bash
 python notify_message_demo.py --user alice [--databasename zoid6test]
+
+# With user validation (user must exist in database)
+python notify_message_demo.py --user alice --databasename zoid6test
+
+# Without validation (accept any user value)
+python notify_message_demo.py --user anyuser --mock
+
+# Demo mode (no database, any user accepted)
+python notify_message_demo.py --user alice
 ```
+
+#### User Validation
+
+When `--databasename` is specified, the `--user` option is validated against the database:
+- Uses `moniker_exists()` to check if the user exists
+- If user not found, exits with error unless `--mock` is specified
+- With `--mock`, any user value is accepted without database validation
+
+This ensures only registered users can send/receive messages in database mode.
 
 ### DemoConfig Parameters
 ```python

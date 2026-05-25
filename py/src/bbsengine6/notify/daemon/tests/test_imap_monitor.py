@@ -1,11 +1,10 @@
-# notifyd/tests/test_imap_monitor.py
+# notify/daemon/tests/test_imap_monitor.py
 # Tests for IMAP monitoring functionality
 
 import pytest
-from unittest import mock
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-from bbsengine6.notifyd import imap_monitor
+from bbsengine6.notify.daemon import imap_monitor
 
 
 class TestParseEmail:
@@ -277,7 +276,7 @@ class TestPollImap:
 
     def test_poll_new_emails(self):
         """Poll finds new emails"""
-        with patch("bbsengine6.notifyd.imap_monitor.connect_imap") as mock_connect:
+        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
 
@@ -320,7 +319,7 @@ class TestPollImap:
 
     def test_poll_no_new_emails(self):
         """Poll finds no new emails"""
-        with patch("bbsengine6.notifyd.imap_monitor.connect_imap") as mock_connect:
+        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b"1 2 3"])
@@ -338,7 +337,7 @@ class TestPollImap:
 
     def test_poll_handles_fetch_error_gracefully(self):
         """Poll continues on individual fetch failure"""
-        with patch("bbsengine6.notifyd.imap_monitor.connect_imap") as mock_connect:
+        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
 
@@ -372,7 +371,7 @@ class TestPollImap:
 
     def test_poll_closes_connection_on_success(self):
         """Connection is properly closed after polling"""
-        with patch("bbsengine6.notifyd.imap_monitor.connect_imap") as mock_connect:
+        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b""])
@@ -391,7 +390,7 @@ class TestPollImap:
 
     def test_poll_closes_connection_on_error(self):
         """Connection is closed even if error occurs"""
-        with patch("bbsengine6.notifyd.imap_monitor.connect_imap") as mock_connect:
+        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.side_effect = Exception("Connection error")
@@ -411,7 +410,7 @@ class TestPollImap:
 
     def test_poll_custom_timeout(self):
         """Poll respects custom timeout"""
-        with patch("bbsengine6.notifyd.imap_monitor.connect_imap") as mock_connect:
+        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b""])
@@ -442,7 +441,7 @@ class TestPollImapAllMailboxes:
         """Poll multiple mailboxes"""
         mock_get_last_uid = MagicMock(side_effect=lambda mb, srv: 0)
 
-        with patch("bbsengine6.notifyd.imap_monitor.poll_imap") as mock_poll:
+        with patch("bbsengine6.notify.daemon.imap_monitor.poll_imap") as mock_poll:
             # Return different emails for each mailbox
             mock_poll.side_effect = [
                 [{"uid": 1, "subject": "Inbox email"}],
@@ -466,7 +465,7 @@ class TestPollImapAllMailboxes:
         """Poll continues if one mailbox fails"""
         mock_get_last_uid = MagicMock(side_effect=lambda mb, srv: 0)
 
-        with patch("bbsengine6.notifyd.imap_monitor.poll_imap") as mock_poll:
+        with patch("bbsengine6.notify.daemon.imap_monitor.poll_imap") as mock_poll:
             # INBOX succeeds, Archive fails
             mock_poll.side_effect = [
                 [{"uid": 1, "subject": "Inbox email"}],
@@ -491,7 +490,7 @@ class TestPollImapAllMailboxes:
             side_effect=lambda mb, srv: int(mb[-1]) if mb[-1].isdigit() else 0
         )
 
-        with patch("bbsengine6.notifyd.imap_monitor.poll_imap") as mock_poll:
+        with patch("bbsengine6.notify.daemon.imap_monitor.poll_imap") as mock_poll:
             mock_poll.return_value = []
 
             imap_monitor.poll_imap_all_mailboxes(
@@ -749,13 +748,13 @@ class TestPollImapEdgeCases:
 
     def test_poll_imap_with_all_zeros_uids(self):
         """Poll with edge case UIDs"""
-        with patch("bbsengine6.notifyd.imap_monitor.connect_imap") as mock_connect:
+        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b"1 2 3"])
 
             # All UIDs are > 0, so should be included
-            result = imap_monitor.poll_imap(
+            _ = imap_monitor.poll_imap(
                 "imap.example.com",
                 993,
                 "user",
@@ -769,7 +768,7 @@ class TestPollImapEdgeCases:
 
     def test_poll_imap_connect_exception_handling(self):
         """Poll properly handles connection exceptions"""
-        with patch("bbsengine6.notifyd.imap_monitor.connect_imap") as mock_connect:
+        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
             mock_connect.side_effect = imap_monitor.ImapError("Connection refused")
 
             with pytest.raises(imap_monitor.ImapError):
@@ -784,7 +783,7 @@ class TestPollImapEdgeCases:
 
     def test_poll_imap_logout_error_handling(self):
         """Poll handles errors during logout gracefully"""
-        with patch("bbsengine6.notifyd.imap_monitor.connect_imap") as mock_connect:
+        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b""])
@@ -828,7 +827,7 @@ class TestPollImapAllMailboxesEdgeCases:
         """Poll fails on connection error"""
         mock_get_last_uid = MagicMock(return_value=0)
 
-        with patch("bbsengine6.notifyd.imap_monitor.poll_imap") as mock_poll:
+        with patch("bbsengine6.notify.daemon.imap_monitor.poll_imap") as mock_poll:
             mock_poll.side_effect = imap_monitor.ImapError("Connection failed")
 
             result = imap_monitor.poll_imap_all_mailboxes(

@@ -1,4 +1,4 @@
-# notifyd/imap_monitor.py
+# notify/daemon/imap_monitor.py
 # IMAP server monitoring for detecting new emails
 
 from __future__ import annotations
@@ -6,9 +6,7 @@ from __future__ import annotations
 import email
 import imaplib
 import logging
-import time
-from email.message import Message
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 

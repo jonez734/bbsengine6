@@ -1,4 +1,4 @@
-# notifyd/storage.py
+# notify/daemon/storage.py
 # PostgreSQL storage for IMAP state and notification history
 
 from __future__ import annotations

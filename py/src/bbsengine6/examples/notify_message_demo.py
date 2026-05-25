@@ -21,6 +21,15 @@ from bbsengine6.notify.utils import (
     EchoProcessor,
     DemoConfig,
 )
+from bbsengine6.notify.demo import (
+    _demo_queues,
+    _queues_lock,
+    validate_message,
+    resolve_recipient,
+    send_message as demo_send_message,
+    pop_demo_messages,
+    demo_queue_size,
+)
 
 
 def display_with_more_prompt(messages: list[str], page_size: int = 5) -> bool:
@@ -44,9 +53,6 @@ def display_with_more_prompt(messages: list[str], page_size: int = 5) -> bool:
 class MessageHandler:
     """Handles message reception and rendering for a single user."""
 
-    _demo_queues: Dict[str, deque] = {}
-    _queues_lock = threading.Lock()
-
     def __init__(
         self,
         config: DemoConfig,
@@ -62,103 +68,41 @@ class MessageHandler:
         self._lock = threading.Lock()
 
         if not self.args or not self.pool:
-            with MessageHandler._queues_lock:
-                if config.moniker not in MessageHandler._demo_queues:
-                    MessageHandler._demo_queues[config.moniker] = deque(maxlen=100)
+            with _queues_lock:
+                if config.moniker not in _demo_queues:
+                    _demo_queues[config.moniker] = deque(maxlen=100)
 
     def send_message(self, message: str, recipient: str) -> None:
         """Send a message to another user via the notify system."""
         try:
-            AsciiValidator.validate_or_raise(message, "message")
-
-            if len(message) > 500:
-                raise ValueError(f"Message too long: {len(message)} > 500 chars")
-
-            if self.args and self.pool:
-                if not member.moniker_exists(self.args, recipient, pool=self.pool):
-                    raise ValueError(f"member {recipient} not found")
-
-            if self.config.enable_echo_commands and EchoProcessor.is_echo_command(
-                message
-            ):
-                message = EchoProcessor.process_echo(message)
-
-            variables = {
-                "sender": self.config.moniker,
-                "message": message,
-                "timestamp": datetime.now().isoformat(),
-            }
-
-            rendered = TemplateEngine.render(self.config.template, variables)
-
-            if self.args and self.pool:
-                with database.connect(self.args, pool=self.pool) as conn:
-                    with database.transaction(conn):
-                        with database.cursor(conn) as cur:
-                            cur.execute(
-                                """
-                                INSERT INTO engine.__notify
-                                (notification_type, template, rendered_message, sender_moniker, urgency)
-                                VALUES (%s, %s, %s, %s, %s)
-                                RETURNING id
-                                """,
-                                (
-                                    "demo-message",
-                                    self.config.template,
-                                    rendered,
-                                    self.config.moniker,
-                                    "ROUTINE",
-                                ),
-                            )
-                            result_row = cur.fetchone()
-                            if isinstance(result_row, dict):
-                                notify_id = result_row.get("id")
-                            else:
-                                notify_id = result_row[0] if result_row else None
-
-                            if not notify_id:
-                                raise ValueError(
-                                    "Failed to get notify_id from database insert"
-                                )
-
-                            cur.execute(
-                                """
-                                INSERT INTO engine.__notify_recipient
-                                (notify_id, recipient_moniker)
-                                VALUES (%s, %s)
-                                """,
-                                (notify_id, recipient),
-                            )
-            else:
-                with MessageHandler._queues_lock:
-                    if recipient not in MessageHandler._demo_queues:
-                        MessageHandler._demo_queues[recipient] = deque(maxlen=100)
-                    MessageHandler._demo_queues[recipient].append(
+            was_sent = demo_send_message(
+                config=self.config,
+                message=message,
+                recipient=recipient,
+                args=self.args,
+                pool=self.pool,
+            )
+            if was_sent:
+                with self._lock:
+                    self.stats["sent"] += 1
+                    self.message_history.append(
                         {
-                            "sender": self.config.moniker,
-                            "message": rendered,
+                            "direction": "out",
                             "timestamp": datetime.now(),
+                            "recipient": recipient,
+                            "message": message,
                         }
                     )
-
-            with self._lock:
-                self.stats["sent"] += 1
-                self.message_history.append(
-                    {
-                        "direction": "out",
-                        "timestamp": datetime.now(),
-                        "recipient": recipient,
-                        "message": rendered,
-                    }
-                )
-
         except (ValueError, subprocess.SubprocessError):
             with self._lock:
                 self.stats["errors"] += 1
             raise
 
     def get_unread_messages(self) -> list[dict]:
-        """Get unread messages WITHOUT marking them as read."""
+        """Get unread messages WITHOUT marking them as read or clearing queue.
+
+        Returns a COPY of messages in demo mode (doesn't consume from queue).
+        """
         messages = []
 
         try:
@@ -189,15 +133,22 @@ class MessageHandler:
                                     }
                                 )
             else:
-                with MessageHandler._queues_lock:
-                    if self.config.moniker in MessageHandler._demo_queues:
-                        for msg in MessageHandler._demo_queues[self.config.moniker]:
+                with _queues_lock:
+                    if self.config.moniker in _demo_queues:
+                        for msg in _demo_queues[self.config.moniker]:
                             messages.append(msg)
 
         except Exception as e:
             echo_traceback(f"Error retrieving messages: {e}")
 
         return messages
+
+    def _pop_messages(self, count: int) -> list[dict]:
+        """Pop (consume) messages from demo queue (for receive_messages).
+
+        In demo mode, this removes messages from the queue to simulate being "received".
+        """
+        return pop_demo_messages(self.config.moniker, count)
 
     def get_history(self) -> list[dict]:
         """Get local message history for this session."""
@@ -234,7 +185,7 @@ class MessageHandler:
         return [recipient]
 
     def mark_messages_as_read(self, message_ids: list[int | None]) -> None:
-        """Mark messages as read in the database."""
+        """Mark messages as read in the database (no-op in demo mode)."""
         if not self.args or not self.pool or not message_ids:
             return
 
@@ -258,19 +209,12 @@ class MessageHandler:
             echo_traceback(f"Error marking messages as read: {e}")
 
     def receive_messages(self) -> list[dict]:
-        """Get unread messages and mark them as read."""
+        """Get unread messages (does not consume from demo queue)."""
         messages = self.get_unread_messages()
 
         for msg in messages:
             if "direction" not in msg:
                 msg["direction"] = "in"
-
-        if messages and self.args and self.pool:
-            message_ids = [
-                msg.get("id") for msg in messages if msg.get("id") is not None
-            ]
-            if message_ids:
-                self.mark_messages_as_read(message_ids)
 
         return messages
 
@@ -316,9 +260,13 @@ class NotifyMessageDemo:
 
         echo(f"You have {len(messages)} message(s):\n")
         for i, msg in enumerate(messages, 1):
-            sender = msg.get("sender_moniker", msg.get("sender", "unknown"))
-            content = msg.get("rendered_message", msg.get("message", ""))
-            echo(f"  [{i}] {sender}: {content}")
+            rendered = msg.get("rendered_message")
+            if rendered:
+                echo(f"  [{i}] {rendered}")
+            else:
+                sender = msg.get("sender_moniker", msg.get("sender", "unknown"))
+                content = msg.get("message", "")
+                echo(f"  [{i}] {sender}: {content}")
         echo("")
 
     def run_interactive(self) -> None:
@@ -397,6 +345,59 @@ class NotifyMessageDemo:
         stats = self.handler.get_stats()
         echo(f"Statistics: {stats}")
 
+    def _get_unread_count(self) -> int:
+        """Get count of unread messages for status bar display."""
+        return len(self.handler.get_unread_messages())
+
+    def _check_and_display_messages(self) -> None:
+        """Check for unread messages and display with pagination.
+
+        Handles page-wise marking: messages are marked as read after each
+        page is fully displayed. If user aborts (presses 'n'), remaining
+        messages stay unread.
+        """
+        all_unread = self.handler.get_unread_messages()
+
+        if not all_unread:
+            echo("No new messages.")
+            return
+
+        echo(f"You have {len(all_unread)} message(s):\n")
+
+        page_size = 5
+        displayed_count = 0
+        total_displayed = 0
+
+        for i, msg in enumerate(all_unread):
+            rendered = msg.get("rendered_message")
+            if rendered:
+                echo(f"  [{i + 1}] {rendered}")
+            else:
+                sender = msg.get("sender_moniker", msg.get("sender", "unknown"))
+                content = msg.get("message", "")
+                echo(f"  [{i + 1}] {sender}: {content}")
+
+            displayed_count += 1
+            total_displayed += 1
+
+            if displayed_count == page_size and i + 1 < len(all_unread):
+                echo("")
+                response = input(f"More? (press Enter or 'n' to abort): ")
+                if response.lower() == "n":
+                    echo("")
+                    return
+                echo("")
+                displayed_count = 0
+
+        if self.args and self.pool:
+            marked_ids = [
+                msg.get("id") for msg in all_unread if msg.get("id") is not None
+            ]
+            self.handler.mark_messages_as_read(marked_ids)
+        else:
+            self.handler._pop_messages(total_displayed)
+        echo("")
+
 
 def main() -> None:
     """Main entry point."""
@@ -442,14 +443,58 @@ def main() -> None:
         help="Enable debug logging",
     )
 
+    parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="Accept any user value without database validation",
+    )
+
     database.buildargs(parser)
 
     args = parser.parse_args()
 
+    # Validate user against database unless --mock is specified
+    mock_mode = args.mock
+    if not mock_mode and args.databasename:
+        try:
+            from bbsengine6.member import moniker_exists
+
+            system_pool = database.getpool(args, dbname="postgres")
+            if database.exists(args, args.databasename, pool=system_pool):
+                user_pool = database.getpool(args, dbname=args.databasename)
+                exists = moniker_exists(args, args.user, pool=user_pool)
+                if exists is False:
+                    echo(
+                        f"Error: User '{args.user}' not found in database '{args.databasename}'. "
+                        f"Use --mock to bypass validation.",
+                        level="error",
+                    )
+                    sys.exit(1)
+                elif exists is None:
+                    echo(
+                        f"Error: Could not validate user '{args.user}'. "
+                        f"Use --mock to bypass validation.",
+                        level="error",
+                    )
+                    sys.exit(1)
+        except Exception as e:
+            echo(f"Error validating user: {e}", level="error")
+            echo("Use --mock to bypass validation.", level="info")
+            sys.exit(1)
+
+    # Initialize screen for terminal management
     try:
         screen.init()
     except (OSError, termios.error):
         pass
+    except Exception:
+        pass
+
+    # Set bottom bar with message count status
+    try:
+        unread_count = demo_queue_size(args.user)
+        if unread_count > 0:
+            screen.setbottombar(f"F2: Messages ({unread_count})")
     except Exception:
         pass
 

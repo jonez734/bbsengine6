@@ -1,5 +1,5 @@
-# notifyd/config.py
-# Configuration loading and validation for notifyd daemon
+# notify/daemon/config.py
+# Configuration loading and validation for bbsengine6 notify daemon
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 

@@ -1,12 +1,11 @@
-# notifyd/tests/test_storage.py
+# notify/daemon/tests/test_storage.py
 # Tests for storage functionality
 
 import pytest
-from unittest import mock
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock
 import json
 
-from bbsengine6.notifyd import storage
+from bbsengine6.notify.daemon import storage
 
 
 class TestStorageError:
@@ -102,7 +101,6 @@ class TestGetLastUid:
     def test_get_last_uid_query_fails(self):
         """Get last UID when query fails"""
         mock_pool = MagicMock()
-        mock_cursor = MagicMock()
         mock_conn = MagicMock()
 
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
@@ -154,7 +152,6 @@ class TestSetLastUid:
     def test_set_last_uid_query_fails(self):
         """Set last UID when query fails"""
         mock_pool = MagicMock()
-        mock_cursor = MagicMock()
         mock_conn = MagicMock()
 
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
@@ -245,7 +242,6 @@ class TestRecordNotification:
     def test_record_notification_query_fails(self):
         """Record notification when query fails"""
         mock_pool = MagicMock()
-        mock_cursor = MagicMock()
         mock_conn = MagicMock()
 
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
@@ -438,7 +434,6 @@ class TestGetNotificationHistory:
     def test_get_notification_history_query_fails(self):
         """Get history when query fails"""
         mock_pool = MagicMock()
-        mock_cursor = MagicMock()
         mock_conn = MagicMock()
 
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
@@ -740,7 +735,6 @@ class TestStorageIntegration:
     def test_storage_error_on_query_failure(self):
         """Storage raises StorageError when query fails"""
         mock_pool = MagicMock()
-        mock_cursor = MagicMock()
         mock_conn = MagicMock()
 
         mock_pool.connection.return_value.__enter__ = MagicMock(return_value=mock_conn)

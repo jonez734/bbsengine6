@@ -44,12 +44,12 @@ def _mark_notification_read(
         echo(f"Could not mark as read: {e}", level="warn")
 
 
-def _delete_notification(args: Any, pool: Any, notification_id: int) -> bool:
+def _delete_notification(args: Any, pool: Any, notification_id: int, moniker: str) -> bool:
     """Delete a notification by ID."""
     try:
         from .lib import expunge
 
-        return expunge(notification_id, args=args, pool=pool)
+        return expunge(notification_id, moniker, args=args, pool=pool)
     except Exception as e:
         echo(f"Error deleting notification: {e}", level="error")
         return False
@@ -95,24 +95,45 @@ def _show_notification_detail(
     _mark_notification_read(args, pool, notif["id"], moniker)
 
 
-def run(args: Any, moniker: str) -> int:
+def run(args: Any, moniker: str, pool: Optional[Any] = None, **kwargs) -> int:
     """
     Main notification TUI loop.
 
     Args:
         args: bbsengine6 args object
         moniker: Current user moniker
+        pool: Database connection pool (optional, will get one if None)
+        **kwargs: Additional keyword arguments (ignored)
 
     Returns:
         Exit code (0 on success, 1 on error)
     """
-    pool: Optional[Any] = None
+    return run_until_quit(args, moniker, pool=pool, **kwargs)
 
-    try:
-        pool = database.getpool(args)
-    except Exception as e:
-        echo(f"Error: Could not connect to database: {e}", level="error")
-        return 1
+
+def run_until_quit(args: Any, moniker: str, pool: Optional[Any] = None, **kwargs) -> int:
+    """
+    Main notification TUI loop.
+
+    Args:
+        args: bbsengine6 args object
+        moniker: Current user moniker
+        pool: Database connection pool (optional, will get one if None)
+        **kwargs: Additional keyword arguments (ignored, for flexibility)
+
+    Returns:
+        Exit code (0 on success, 1 on error)
+    """
+    _pool = pool
+    should_close_pool = False
+
+    if _pool is None:
+        try:
+            _pool = database.getpool(args)
+            should_close_pool = True
+        except Exception as e:
+            echo(f"Error: Could not connect to database: {e}", level="error")
+            return 1
 
     while True:
         echo("")
@@ -128,11 +149,13 @@ def run(args: Any, moniker: str) -> int:
         )
 
         if choice == "L":
-            _run_list(args, pool, moniker)
+            _run_list(args, _pool, moniker)
         elif choice == "R":
-            _mark_all_read(args, pool, moniker)
+            _mark_all_read(args, _pool, moniker)
         elif choice == "X":
             echo("Goodbye!")
+            if should_close_pool:
+                _pool.close()
             return 0
 
 

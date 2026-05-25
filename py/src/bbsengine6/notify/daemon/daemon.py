@@ -1,4 +1,4 @@
-# notifyd/daemon.py
+# notify/daemon/daemon.py
 # Main daemon process and lifecycle management
 
 from __future__ import annotations

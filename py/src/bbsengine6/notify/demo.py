@@ -8,7 +8,7 @@ from typing import Optional, Any, Dict, List
 
 from bbsengine6 import database, member, group
 from bbsengine6.io.echo import echo_traceback
-from ..notify.utils import AsciiValidator, TemplateEngine, EchoProcessor, DemoConfig
+from .utils import AsciiValidator, TemplateEngine, EchoProcessor, DemoConfig
 
 # Class-level in-memory queues for demo mode
 _demo_queues: Dict[str, deque] = {}
@@ -160,7 +160,7 @@ def send_message(
     recipient: str,
     args: Optional[Any] = None,
     pool: Optional[Any] = None,
-) -> None:
+) -> bool:
     """Send a message to a recipient (user or group).
 
     Validates message and recipient, then sends via database or demo queue.
@@ -171,6 +171,9 @@ def send_message(
         recipient: Recipient name (user moniker or group name)
         args: Optional application args
         pool: Optional database pool
+
+    Returns:
+        True if sent successfully
 
     Raises:
         ValueError: If message or recipient is invalid
@@ -199,6 +202,8 @@ def send_message(
     else:
         send_to_demo_queue(config.moniker, recipients, rendered)
 
+    return True
+
 
 def get_demo_messages(moniker: str) -> List[Dict]:
     """Get all messages in demo queue for a user.
@@ -216,6 +221,42 @@ def get_demo_messages(moniker: str) -> List[Dict]:
     return []
 
 
+def pop_demo_messages(moniker: str, count: int) -> List[Dict]:
+    """Pop (consume) messages from demo queue.
+
+    Args:
+        moniker: User moniker
+        count: Maximum number of messages to pop
+
+    Returns:
+        List of popped message dicts
+    """
+    global _demo_queues
+    popped = []
+    with _queues_lock:
+        queue = _demo_queues.get(moniker)
+        if queue:
+            for _ in range(min(count, len(queue))):
+                popped.append(queue.popleft())
+    return popped
+
+
+def demo_queue_size(moniker: str) -> int:
+    """Get number of messages in demo queue.
+
+    Args:
+        moniker: User moniker
+
+    Returns:
+        Number of messages in queue
+    """
+    global _demo_queues
+    with _queues_lock:
+        if moniker in _demo_queues:
+            return len(_demo_queues[moniker])
+    return 0
+
+
 def clear_demo_queue(moniker: str) -> None:
     """Clear demo queue for a user.
 
@@ -229,11 +270,15 @@ def clear_demo_queue(moniker: str) -> None:
 
 
 __all__ = [
+    "_demo_queues",
+    "_queues_lock",
     "validate_message",
     "resolve_recipient",
     "send_to_demo_queue",
     "send_to_database",
     "send_message",
     "get_demo_messages",
+    "pop_demo_messages",
+    "demo_queue_size",
     "clear_demo_queue",
 ]

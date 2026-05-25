@@ -136,11 +136,11 @@ class TestMonikerExistsFunction:
             result = member.moniker_exists(None, moniker, conn=db_connection)
             assert isinstance(result, (bool, type(None)))
 
-    def test_moniker_exists_boundary_ascii_space_allowed(self):
-        """Test that space (0x20, minimum printable ASCII) is allowed."""
-        # Space is allowed but lookup will fail
-        result = member.moniker_exists(None, " ", conn=None)
-        assert isinstance(result, (bool, type(None)))
+    def test_moniker_exists_boundary_ascii_space_raises_valueerror(self):
+        """Test that space (0x20, minimum printable ASCII) is rejected in moniker."""
+        # Space is not allowed in monikers
+        with pytest.raises(ValueError, match="cannot contain spaces"):
+            member.moniker_exists(None, " ", conn=None)
 
     def test_moniker_exists_boundary_ascii_tilde_allowed(self):
         """Test that tilde (0x7E, maximum printable ASCII) is allowed."""

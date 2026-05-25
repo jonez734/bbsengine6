@@ -31,7 +31,7 @@ from .lib import (
     _render_template,
 )
 
-from .tui import run
+from .tui import run, run_until_quit
 
 __all__ = [
     "NotificationUrgency",
@@ -62,4 +62,5 @@ __all__ = [
     "_validate_template_vars",
     "_render_template",
     "run",
+    "run_until_quit",
 ]

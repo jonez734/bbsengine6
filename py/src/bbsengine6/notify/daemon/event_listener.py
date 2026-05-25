@@ -1,4 +1,4 @@
-# notifyd/event_listener.py
+# notify/daemon/event_listener.py
 # Event handler registration and management
 
 from __future__ import annotations

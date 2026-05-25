@@ -283,12 +283,11 @@ def _expand_recipients(
                 if members:
                     expanded.extend(members)
                 else:
-                    # Fall back to active sessions
                     cur.execute(
                         sql.SQL("SELECT DISTINCT ")
                         + sql.Identifier("moniker")
                         + sql.SQL(" FROM ")
-                        + _table_identifier("engine.__session")
+                        + _table_identifier("engine.__member")
                     )
                     active = [row["moniker"] for row in cur.fetchall()]
                     expanded.extend(active)
@@ -354,7 +353,7 @@ def _check_rate_limit(sender_moniker: str, notification_type: str, cur: Any) -> 
         )
         row = cur.fetchone()
         if not row:
-            return True  # Type not registered, allow
+            return False  # Type not registered, deny to prevent abuse
 
         max_per_hour = row["max_per_user_per_hour"]
 
@@ -374,7 +373,7 @@ def _check_rate_limit(sender_moniker: str, notification_type: str, cur: Any) -> 
         return True  # Within limit
     except Exception as e:
         logger.error(f"Error checking rate limit: {e}")
-        return True
+        return False  # Deny on error to prevent abuse
 
 
 def _update_rate_limit(sender_moniker: str, notification_type: str, cur: Any) -> None:
@@ -623,13 +622,13 @@ def _resolve_conn(
         return pool, conn, we_created_conn
     if pool is not None:
         conn = pool.getconn()
-        conn.autocommit = False
+        conn.autocommit = False  # type: ignore[attr-defined]
         we_created_conn = True
         return pool, conn, we_created_conn
     if args is not None:
         pool = getpool(args)
         conn = pool.getconn()
-        conn.autocommit = False
+        conn.autocommit = False  # type: ignore[attr-defined]
         we_created_conn = True
         return pool, conn, we_created_conn
 
@@ -638,7 +637,7 @@ def _resolve_conn(
     try:
         pool = getpool(args, dbname=dbname)
         conn = pool.getconn()
-        conn.autocommit = False
+        conn.autocommit = False  # type: ignore[attr-defined]
         we_created_conn = True
         return pool, conn, we_created_conn
     except Exception:
@@ -787,15 +786,20 @@ def get_urgent(
 
 def mark_read(
     notification_id: int,
-    moniker: str,
+    current_moniker: str,
     args: Optional[Any] = None,
     **kwargs,
 ) -> None:
-    """Mark notification as read by user."""
+    """Mark notification as read by user.
+
+    Args:
+        notification_id: ID of the notification
+        current_moniker: Moniker of the caller (must match recipient to authorize)
+    """
     if not isinstance(notification_id, int) or notification_id <= 0:
         raise ValueError("Invalid notification_id")
-    if not _validate_moniker(moniker):
-        raise ValueError(f"Invalid moniker: {moniker}")
+    if not _validate_moniker(current_moniker):
+        raise ValueError(f"Invalid moniker: {current_moniker}")
 
     pool, conn, we_created_conn = _resolve_conn(
         args, kwargs.get("pool"), kwargs.get("conn")
@@ -812,7 +816,7 @@ def mark_read(
                     SET read_at = now()
                     WHERE notify_id = %s AND recipient_moniker = %s
                 """),
-                (notification_id, moniker),
+                (notification_id, current_moniker),
             )
             conn.commit()
     finally:
@@ -822,15 +826,20 @@ def mark_read(
 
 def mark_delivered(
     notification_id: int,
-    moniker: str,
+    current_moniker: str,
     args: Optional[Any] = None,
     **kwargs,
 ) -> None:
-    """Mark notification as delivered to user."""
+    """Mark notification as delivered to user.
+
+    Args:
+        notification_id: ID of the notification
+        current_moniker: Moniker of the caller (must match recipient to authorize)
+    """
     if not isinstance(notification_id, int) or notification_id <= 0:
         raise ValueError("Invalid notification_id")
-    if not _validate_moniker(moniker):
-        raise ValueError(f"Invalid moniker: {moniker}")
+    if not _validate_moniker(current_moniker):
+        raise ValueError(f"Invalid moniker: {current_moniker}")
 
     pool, conn, we_created_conn = _resolve_conn(
         args, kwargs.get("pool"), kwargs.get("conn")
@@ -847,7 +856,7 @@ def mark_delivered(
                     SET delivered_at = now()
                     WHERE notify_id = %s AND recipient_moniker = %s
                 """),
-                (notification_id, moniker),
+                (notification_id, current_moniker),
             )
             conn.commit()
     finally:
@@ -1230,10 +1239,14 @@ def get_blocked(moniker: str, args: Optional[Any] = None, **kwargs) -> List[str]
 
 def expunge(
     notification_id: int,
+    current_moniker: str,
     args: Optional[Any] = None,
     **kwargs,
 ) -> bool:
-    """Hard-delete a notification and all its recipients via CASCADE."""
+    """Hard-delete a notification and all its recipients via CASCADE.
+
+    Only the sender of the notification may expunge it.
+    """
     pool, conn, we_created_conn = _resolve_conn(
         args, kwargs.get("pool"), kwargs.get("conn")
     )
@@ -1241,8 +1254,24 @@ def expunge(
     if conn is None:
         return False
 
+    if not isinstance(notification_id, int) or notification_id <= 0:
+        return False
+
     try:
         with database.cursor(conn) as cur:
+            cur.execute(
+                sql.SQL(
+                    "SELECT sender_moniker FROM engine.__notify WHERE id = %s"
+                ),
+                (notification_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return False
+
+            if row["sender_moniker"] != current_moniker:
+                return False
+
             cur.execute(
                 sql.SQL("DELETE FROM engine.__notify WHERE id = %s"),
                 (notification_id,),

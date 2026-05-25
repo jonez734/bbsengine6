@@ -1,11 +1,11 @@
-# notifyd/hooks.py
+# notify/daemon/hooks.py
 # Custom event hook system for bbsengine6 application events
 
 from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ def fire_event(event_type: str, data: Dict[str, Any]) -> None:
     Global function to fire custom event.
 
     Example:
-        from bbsengine6.notifyd import fire_event
+        from bbsengine6.notify.daemon import fire_event
         fire_event("user.login", {"moniker": "player1"})
 
     Args:

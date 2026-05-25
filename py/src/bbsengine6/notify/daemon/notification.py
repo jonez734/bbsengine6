@@ -1,4 +1,4 @@
-# notifyd/notification.py
+# notify/daemon/notification.py
 # Notification dispatcher for sending notifications via bbsengine6.notify
 
 from __future__ import annotations

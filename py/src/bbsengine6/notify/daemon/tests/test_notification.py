@@ -1,11 +1,10 @@
-# notifyd/tests/test_notification.py
+# notify/daemon/tests/test_notification.py
 # Tests for notification dispatcher
 
 import pytest
-from unittest.mock import MagicMock, patch, call
-from typing import Dict, Any
+from unittest.mock import MagicMock, patch
 
-from bbsengine6.notifyd import notification
+from bbsengine6.notify.daemon import notification
 
 
 class TestNotificationDispatcher:
@@ -45,7 +44,7 @@ class TestNotificationDispatcher:
         mock_storage = MagicMock()
         dispatcher = notification.NotificationDispatcher(mock_storage)
 
-        with patch("bbsengine6.notify") as mock_notify_module:
+        with patch("bbsengine6.notify") as mock_notify_module:  # noqa: F841
             with patch("bbsengine6.notify.NotificationUrgency") as mock_urgency:
                 mock_urgency.ROUTINE = "ROUTINE"
 
@@ -60,7 +59,7 @@ class TestNotificationDispatcher:
     def test_load_notify_import_error(self):
         """_load_notify raises on import failure"""
         mock_storage = MagicMock()
-        dispatcher = notification.NotificationDispatcher(mock_storage)
+        dispatcher = notification.NotificationDispatcher(mock_storage)  # noqa: F841
 
         # Just skip this test - it's difficult to simulate import error
         # The actual code works, and we test the success path
@@ -383,7 +382,7 @@ class TestSendCustomNotification:
 
             mock_notify.send.return_value = 1
 
-            result = dispatcher.send_custom_notification(
+            _ = dispatcher.send_custom_notification(
                 event_type="test.event",
                 recipients=["user1"],
                 template="test",

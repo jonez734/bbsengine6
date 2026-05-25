@@ -1,14 +1,13 @@
-# notifyd/tests/test_config.py
+# notify/daemon/tests/test_config.py
 # Comprehensive tests for configuration loading and validation
 
 import json
 import os
 import tempfile
-from pathlib import Path
 
 import pytest
 
-from bbsengine6.notifyd.config import (
+from bbsengine6.notify.daemon.config import (
     ConfigError,
     NotifydConfig,
     _merge_config,

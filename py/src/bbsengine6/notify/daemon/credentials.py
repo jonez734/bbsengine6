@@ -1,4 +1,4 @@
-# notifyd/credentials.py
+# notify/daemon/credentials.py
 # Credential management with hybrid storage strategy
 
 from __future__ import annotations
@@ -6,7 +6,6 @@ from __future__ import annotations
 import getpass
 import logging
 import os
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

@@ -60,6 +60,11 @@ python notify_message_demo.py --user bob --databasename=zoid6test
 
 Messages will persist in the `zoid6test` database.
 
+**Note**: In database mode, the `--user` value is validated against the database. Use `--mock` to bypass validation for testing:
+```bash
+python notify_message_demo.py --user anyname --databasename=zoid6test --mock
+```
+
 ### Sending Messages
 
 In alice's terminal:
@@ -379,8 +384,7 @@ This ensures:
 usage: notify_message_demo.py [-h] --user USER [--template TEMPLATE]
                                [--max-messages MAX_MESSAGES]
                                [--timeout TIMEOUT] [--no-echo]
-                               [--clear-prompt-on-timeout]
-                               [--debug] [--databasename DATABASENAME]
+                               [--debug] [--mock] [--databasename DATABASENAME]
                                [--databasehost DATABASEHOST]
                                [--databaseport DATABASEPORT]
                                [--databaseuser DATABASEUSER]
@@ -397,9 +401,8 @@ options:
                         Max messages to keep in history (default: 50)
   --timeout TIMEOUT     Notification check timeout in seconds (default: 2.0)
   --no-echo             Disable echo command processing
-  --clear-prompt-on-timeout
-                        Clear prompt on timeout instead of keeping it visible
   --debug               Enable debug logging
+  --mock                Accept any user value without database validation
   --databasename DATABASENAME
                         Database name for persistent message storage
   --databasehost DATABASEHOST
@@ -412,6 +415,29 @@ options:
                         Database password
   --databaseschema DATABASESCHEMA
                         Database schema (default: public)
+```
+
+### User Validation
+
+When `--databasename` is specified, the `--user` option is validated against the database:
+
+| Mode | Behavior |
+|------|----------|
+| With `--databasename` | User must exist in database (validated via `moniker_exists()`) |
+| With `--mock` | Any user value accepted (bypasses validation) |
+| Without `--databasename` | Demo mode - any user value accepted |
+
+### Usage Examples
+
+```bash
+# Database mode - user must exist in database
+python notify_message_demo.py --user alice --databasename zoid6
+
+# Database mode - mock mode (any user accepted)
+python notify_message_demo.py --user testuser --databasename zoid6 --mock
+
+# Demo mode (no database) - any user accepted
+python notify_message_demo.py --user alice
 ```
 
 ## Testing

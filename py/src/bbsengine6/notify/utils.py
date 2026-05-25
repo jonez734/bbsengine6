@@ -112,7 +112,12 @@ class EchoProcessor:
 
     @staticmethod
     def process_echo(text: str) -> str:
-        """Execute echo command and return output."""
+        """Execute echo command and return sanitized output.
+
+        Args are validated for printable ASCII. Output is additionally
+        sanitized to printable ASCII and length-capped to prevent
+        terminal injection through echo output.
+        """
         match = re.match(EchoProcessor.ECHO_PATTERN, text, re.IGNORECASE)
         if not match:
             raise ValueError("Not an echo command")
@@ -130,9 +135,24 @@ class EchoProcessor:
             )
             output = result.stdout.rstrip("\n")
 
-            AsciiValidator.validate_or_raise(output, "echo output")
+            safe_chars = []
+            for ch in output:
+                code = ord(ch)
+                if 0x20 <= code <= 0x7E:
+                    safe_chars.append(ch)
+                else:
+                    safe_chars.append("?")
+            sanitized = "".join(safe_chars)
 
-            return output
+            if len(sanitized) > 500:
+                sanitized = sanitized[:500] + "..."
+
+            if not sanitized:
+                return ""
+
+            AsciiValidator.validate_or_raise(sanitized, "echo output")
+
+            return sanitized
         except subprocess.TimeoutExpired:
             raise ValueError("Echo command timed out")
         except Exception as e:

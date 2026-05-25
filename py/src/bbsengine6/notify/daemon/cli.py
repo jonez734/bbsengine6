@@ -1,5 +1,5 @@
-# notifyd/cli.py
-# Command-line interface for notifyd daemon
+# notify/daemon/cli.py
+# Command-line interface for bbsengine6 notify daemon
 
 from __future__ import annotations
 
@@ -199,7 +199,7 @@ def main() -> int:
         Exit code
     """
     parser = argparse.ArgumentParser(
-        prog="notifyd", description="IMAP/Event notification daemon for bbsengine6"
+        prog="bbsengine6-notify-daemon", description="IMAP/Event notification daemon for bbsengine6"
     )
 
     parser.add_argument(

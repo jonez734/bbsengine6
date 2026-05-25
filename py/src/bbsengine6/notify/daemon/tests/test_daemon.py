@@ -1,12 +1,12 @@
-# notifyd/tests/test_daemon.py
+# notify/daemon/tests/test_daemon.py
 # Tests for daemon and CLI
 
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import threading
 import signal
 
-from bbsengine6.notifyd import daemon as daemon_module
+from bbsengine6.notify.daemon import daemon as daemon_module
 
 
 class TestNotifyDaemon:
