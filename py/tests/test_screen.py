@@ -2,9 +2,9 @@
 Comprehensive tests for bbsengine6.io.screen module.
 
 Tests cover:
-- rightstack list operations (append, remove, clear, iteration)
+- bottombar_fragments list operations (append, remove, clear, iteration)
 - register_bottombar_fragment / unregister_bottombar_fragment functions
-- _render_rightstack internal function
+- _render_bottombar_fragments internal function
 - setbottombar with various left/right/stack combinations
 - Backwards compatibility with explicit right parameter
 - Edge cases: empty stack, None items, single item, multiple items
@@ -19,93 +19,93 @@ sys.path.insert(0, "py/src")
 
 from bbsengine6.io import screen
 from bbsengine6.io.screen import (
-    rightstack,
+    bottombar_fragments,
     register_bottombar_fragment,
     unregister_bottombar_fragment,
-    _render_rightstack,
+    _render_bottombar_fragments,
     setbottombar,
     bottombarstack,
 )
 
 
 @pytest.fixture(autouse=True)
-def clean_rightstack():
-    """Clean rightstack before and after each test."""
-    rightstack.clear()
+def clean_bottombar_fragments():
+    """Clean bottombar_fragments before and after each test."""
+    bottombar_fragments.clear()
     yield
-    rightstack.clear()
+    bottombar_fragments.clear()
 
 
 class TestRightstackListOperations:
-    """Test rightstack as a plain list with standard operations."""
+    """Test bottombar_fragments as a plain list with standard operations."""
 
-    def test_rightstack_is_list(self):
-        """Verify rightstack is a standard Python list."""
-        assert isinstance(rightstack, list)
+    def test_bottombar_fragments_is_list(self):
+        """Verify bottombar_fragments is a standard Python list."""
+        assert isinstance(bottombar_fragments, list)
 
     def test_append_string(self):
-        """Test appending a string to rightstack."""
-        rightstack.append("test item")
-        assert "test item" in rightstack
+        """Test appending a string to bottombar_fragments."""
+        bottombar_fragments.append("test item")
+        assert "test item" in bottombar_fragments
 
     def test_append_callable(self):
-        """Test appending a callable to rightstack."""
+        """Test appending a callable to bottombar_fragments."""
         def func(**kw):
             return "dynamic"
-        rightstack.append(func)
-        assert func in rightstack
+        bottombar_fragments.append(func)
+        assert func in bottombar_fragments
 
     def test_remove_item(self):
-        """Test removing an item from rightstack."""
-        rightstack.append("item1")
-        rightstack.append("item2")
-        rightstack.remove("item1")
-        assert "item1" not in rightstack
-        assert "item2" in rightstack
+        """Test removing an item from bottombar_fragments."""
+        bottombar_fragments.append("item1")
+        bottombar_fragments.append("item2")
+        bottombar_fragments.remove("item1")
+        assert "item1" not in bottombar_fragments
+        assert "item2" in bottombar_fragments
 
     def test_clear_stack(self):
         """Test clearing the entire stack."""
-        rightstack.append("item1")
-        rightstack.append("item2")
-        rightstack.append(lambda **kw: "x")
-        rightstack.clear()
-        assert len(rightstack) == 0
+        bottombar_fragments.append("item1")
+        bottombar_fragments.append("item2")
+        bottombar_fragments.append(lambda **kw: "x")
+        bottombar_fragments.clear()
+        assert len(bottombar_fragments) == 0
 
     def test_iteration_order(self):
         """Test that iteration follows insertion order."""
         items = ["first", "second", "third"]
         for item in items:
-            rightstack.append(item)
-        assert list(rightstack) == items
+            bottombar_fragments.append(item)
+        assert list(bottombar_fragments) == items
 
     def test_duplicate_prevention(self):
         """Test that same item can be added multiple times (list behavior)."""
-        rightstack.append("item")
-        rightstack.append("item")
-        assert rightstack.count("item") == 2
+        bottombar_fragments.append("item")
+        bottombar_fragments.append("item")
+        assert bottombar_fragments.count("item") == 2
 
     def test_len_after_operations(self):
         """Test len() reflects correct count."""
-        assert len(rightstack) == 0
-        rightstack.append("a")
-        rightstack.append("b")
-        assert len(rightstack) == 2
-        rightstack.remove("a")
-        assert len(rightstack) == 1
+        assert len(bottombar_fragments) == 0
+        bottombar_fragments.append("a")
+        bottombar_fragments.append("b")
+        assert len(bottombar_fragments) == 2
+        bottombar_fragments.remove("a")
+        assert len(bottombar_fragments) == 1
 
     def test_contains_check(self):
         """Test 'in' operator for membership check."""
-        rightstack.append("present")
-        assert "present" in rightstack
-        assert "absent" not in rightstack
+        bottombar_fragments.append("present")
+        assert "present" in bottombar_fragments
+        assert "absent" not in bottombar_fragments
 
     def test_pop_last_item(self):
         """Test popping the last item."""
-        rightstack.append("first")
-        rightstack.append("second")
-        popped = rightstack.pop()
+        bottombar_fragments.append("first")
+        bottombar_fragments.append("second")
+        popped = bottombar_fragments.pop()
         assert popped == "second"
-        assert len(rightstack) == 1
+        assert len(bottombar_fragments) == 1
 
 
 class TestRegisterUnregisterBottombar:
@@ -114,7 +114,7 @@ class TestRegisterUnregisterBottombar:
     def test_register_adds_to_stack(self):
         """Test that register_bottombar_fragment adds item to stack."""
         register_bottombar_fragment("test")
-        assert "test" in rightstack
+        assert "test" in bottombar_fragments
 
     def test_register_returns_item(self):
         """Test that register_bottombar_fragment returns the registered item."""
@@ -127,27 +127,27 @@ class TestRegisterUnregisterBottombar:
             return "result"
         result = register_bottombar_fragment(func)
         assert result is func
-        assert func in rightstack
+        assert func in bottombar_fragments
 
     def test_register_no_duplicates(self):
         """Test that register_bottombar_fragment prevents duplicates."""
         register_bottombar_fragment("unique")
         register_bottombar_fragment("unique")  # Should not add again
-        assert rightstack.count("unique") == 1
+        assert bottombar_fragments.count("unique") == 1
 
     def test_register_lambda(self):
         """Test registering a lambda function."""
         def lam(**kw):
             return "lambda result"
         register_bottombar_fragment(lam)
-        assert lam in rightstack
+        assert lam in bottombar_fragments
 
     def test_unregister_removes_from_stack(self):
         """Test that unregister_bottombar_fragment removes item."""
         register_bottombar_fragment("to_remove")
         result = unregister_bottombar_fragment("to_remove")
         assert result is True
-        assert "to_remove" not in rightstack
+        assert "to_remove" not in bottombar_fragments
 
     def test_unregister_returns_true_on_success(self):
         """Test unregister returns True when item found."""
@@ -167,46 +167,46 @@ class TestRegisterUnregisterBottombar:
         register_bottombar_fragment(func)
         result = unregister_bottombar_fragment(func)
         assert result is True
-        assert func not in rightstack
+        assert func not in bottombar_fragments
 
     def test_register_unregister_roundtrip(self):
         """Test adding and removing same item multiple times."""
         item = "roundtrip"
         register_bottombar_fragment(item)
-        assert item in rightstack
+        assert item in bottombar_fragments
         unregister_bottombar_fragment(item)
-        assert item not in rightstack
+        assert item not in bottombar_fragments
         register_bottombar_fragment(item)
-        assert item in rightstack
+        assert item in bottombar_fragments
 
 
 class TestRenderRightstack:
-    """Test _render_rightstack internal function."""
+    """Test _render_bottombar_fragments internal function."""
 
     def test_empty_stack_returns_empty_string(self):
         """Test that empty stack returns empty string."""
-        result = _render_rightstack()
+        result = _render_bottombar_fragments()
         assert result == ""
 
     def test_single_string(self):
         """Test rendering single string item."""
-        rightstack.append("single")
-        result = _render_rightstack()
+        bottombar_fragments.append("single")
+        result = _render_bottombar_fragments()
         assert result == "single"
 
     def test_single_string_no_pipe(self):
         """Test single item does NOT get pipe separator."""
-        rightstack.append("alone")
-        result = _render_rightstack()
+        bottombar_fragments.append("alone")
+        result = _render_bottombar_fragments()
         assert result == "alone"
         assert "|" not in result
 
     def test_multiple_strings_joined_with_pipe(self):
         """Test multiple strings are joined with ' | '."""
-        rightstack.append("item1")
-        rightstack.append("item2")
-        rightstack.append("item3")
-        result = _render_rightstack()
+        bottombar_fragments.append("item1")
+        bottombar_fragments.append("item2")
+        bottombar_fragments.append("item3")
+        result = _render_bottombar_fragments()
         assert result == "item1 | item2 | item3"
 
     def test_callable_invoked_with_kwargs(self):
@@ -217,22 +217,22 @@ class TestRenderRightstack:
             received_kwargs.update(kwargs)
             return "captured"
 
-        rightstack.append(capture_kwargs)
-        _render_rightstack(foo="bar", baz=123)
+        bottombar_fragments.append(capture_kwargs)
+        _render_bottombar_fragments(foo="bar", baz=123)
         assert received_kwargs == {"foo": "bar", "baz": 123}
 
     def test_callable_returns_string(self):
         """Test callable returning a string."""
-        rightstack.append(lambda **kw: "from callable")
-        result = _render_rightstack()
+        bottombar_fragments.append(lambda **kw: "from callable")
+        result = _render_bottombar_fragments()
         assert result == "from callable"
 
     def test_mixed_strings_and_callables(self):
         """Test mixing strings and callables."""
-        rightstack.append("static")
-        rightstack.append(lambda **kw: "dynamic")
-        rightstack.append("another")
-        result = _render_rightstack()
+        bottombar_fragments.append("static")
+        bottombar_fragments.append(lambda **kw: "dynamic")
+        bottombar_fragments.append("another")
+        result = _render_bottombar_fragments()
         assert result == "static | dynamic | another"
 
     def test_none_callable_result_filtered(self):
@@ -240,9 +240,9 @@ class TestRenderRightstack:
         def returns_none(**kw):
             return None
 
-        rightstack.append("valid")
-        rightstack.append(returns_none)
-        result = _render_rightstack()
+        bottombar_fragments.append("valid")
+        bottombar_fragments.append(returns_none)
+        result = _render_bottombar_fragments()
         assert result == "valid"
 
     def test_empty_string_callable_result_filtered(self):
@@ -250,57 +250,57 @@ class TestRenderRightstack:
         def returns_empty(**kw):
             return ""
 
-        rightstack.append("valid")
-        rightstack.append(returns_empty)
-        rightstack.append("after")
-        result = _render_rightstack()
+        bottombar_fragments.append("valid")
+        bottombar_fragments.append(returns_empty)
+        bottombar_fragments.append("after")
+        result = _render_bottombar_fragments()
         assert result == "valid | after"
 
     def test_none_in_stack_filtered(self):
         """Test that None in stack is filtered out."""
-        rightstack.append("before")
-        rightstack.append(None)
-        rightstack.append("after")
-        result = _render_rightstack()
+        bottombar_fragments.append("before")
+        bottombar_fragments.append(None)
+        bottombar_fragments.append("after")
+        result = _render_bottombar_fragments()
         assert result == "before | after"
 
     def test_empty_string_in_stack_filtered(self):
         """Test that empty string in stack is filtered out."""
-        rightstack.append("first")
-        rightstack.append("")
-        rightstack.append("last")
-        result = _render_rightstack()
+        bottombar_fragments.append("first")
+        bottombar_fragments.append("")
+        bottombar_fragments.append("last")
+        result = _render_bottombar_fragments()
         assert result == "first | last"
 
     def test_notification_status_prepended(self):
         """Test that notification status is prepended when present."""
-        rightstack.append("module status")
+        bottombar_fragments.append("module status")
 
         with patch("bbsengine6.io.screen.get_notification_status") as mock_notif:
             mock_notif.return_value = "F2: notify (5)"
-            result = _render_rightstack()
+            result = _render_bottombar_fragments()
 
         assert result == "F2: notify (5) | module status"
 
     def test_notification_empty_not_added(self):
         """Test that empty notification status doesn't add prefix."""
-        rightstack.append("module status")
+        bottombar_fragments.append("module status")
 
         with patch("bbsengine6.io.screen.get_notification_status") as mock_notif:
             mock_notif.return_value = ""
-            result = _render_rightstack()
+            result = _render_bottombar_fragments()
 
         assert result == "module status"
         assert "|" not in result
 
     def test_notification_before_all_items(self):
         """Test notification is always first in output."""
-        rightstack.append("item1")
-        rightstack.append("item2")
+        bottombar_fragments.append("item1")
+        bottombar_fragments.append("item2")
 
         with patch("bbsengine6.io.screen.get_notification_status") as mock_notif:
             mock_notif.return_value = "F2: notify (1)"
-            result = _render_rightstack()
+            result = _render_bottombar_fragments()
 
         assert result.startswith("F2: notify (1)")
         assert result == "F2: notify (1) | item1 | item2"
@@ -311,11 +311,11 @@ class TestRenderRightstack:
         def bad_callable(**kw):
             raise RuntimeError("test error")
 
-        rightstack.append(bad_callable)
-        rightstack.append("after error")
+        bottombar_fragments.append(bad_callable)
+        bottombar_fragments.append("after error")
 
         # Should not raise, should continue with other items
-        result = _render_rightstack()
+        result = _render_bottombar_fragments()
         assert result == "after error"
 
     def test_callable_returning_non_string(self):
@@ -323,13 +323,13 @@ class TestRenderRightstack:
         def returns_int(**kw):
             return 42
 
-        rightstack.append(returns_int)
-        result = _render_rightstack()
+        bottombar_fragments.append(returns_int)
+        result = _render_bottombar_fragments()
         assert result == "42"
 
 
 class TestSetbottombarWithStack:
-    """Test setbottombar behavior with rightstack."""
+    """Test setbottombar behavior with bottombar_fragments."""
 
     def test_empty_stack_no_right(self):
         """Test setbottombar with empty stack and no right param."""
@@ -339,8 +339,8 @@ class TestSetbottombarWithStack:
 
     def test_stack_populates_right_when_none(self):
         """Test that stack items appear when right is None."""
-        rightstack.append("stack item 1")
-        rightstack.append("stack item 2")
+        bottombar_fragments.append("stack item 1")
+        bottombar_fragments.append("stack item 2")
 
         with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
             setbottombar("left")
@@ -349,8 +349,8 @@ class TestSetbottombarWithStack:
 
     def test_explicit_right_overrides_stack(self):
         """Test that explicit right parameter overrides stack."""
-        rightstack.append("from stack")
-        rightstack.append("also from stack")
+        bottombar_fragments.append("from stack")
+        bottombar_fragments.append("also from stack")
 
         with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
             setbottombar("left", "explicit right")
@@ -360,7 +360,7 @@ class TestSetbottombarWithStack:
 
     def test_explicit_callable_right_overrides_stack(self):
         """Test that explicit callable right overrides stack."""
-        rightstack.append("from stack")
+        bottombar_fragments.append("from stack")
 
         def explicit_callable(**kw):
             return "explicit callable result"
@@ -376,7 +376,7 @@ class TestSetbottombarWithStack:
         def dynamic_item(**kw):
             return "generated at " + kw.get("time", "runtime")
 
-        rightstack.append(dynamic_item)
+        bottombar_fragments.append(dynamic_item)
 
         with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
             setbottombar("left", time="noon")
@@ -385,7 +385,7 @@ class TestSetbottombarWithStack:
 
     def test_stack_left_still_works(self):
         """Test that left side works independently of stack."""
-        rightstack.append("right item")
+        bottombar_fragments.append("right item")
 
         with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
             setbottombar("left side")
@@ -398,7 +398,7 @@ class TestSetbottombarWithStack:
         def left_func(**kw):
             return "left from callable"
 
-        rightstack.append("right item")
+        bottombar_fragments.append("right item")
 
         with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
             setbottombar(left_func)
@@ -413,7 +413,7 @@ class TestSetbottombarWithStack:
         def right_func(**kw):
             return "right result"
 
-        rightstack.append(right_func)
+        bottombar_fragments.append(right_func)
 
         with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
             setbottombar(left_func, time="test")
@@ -489,8 +489,8 @@ class TestSetbottombarBackwardsCompat:
             received_kwargs.append(("func2", kw))
             return "f2"
 
-        rightstack.append(capture1)
-        rightstack.append(capture2)
+        bottombar_fragments.append(capture1)
+        bottombar_fragments.append(capture2)
 
         with patch("bbsengine6.io.screen.updatebottombar"):
             setbottombar("left", foo="bar", count=5)
@@ -505,7 +505,7 @@ class TestEdgeCases:
     def test_very_long_string_in_stack(self):
         """Test handling of very long string in stack."""
         long_string = "x" * 1000
-        rightstack.append(long_string)
+        bottombar_fragments.append(long_string)
 
         with patch("bbsengine6.io.screen.updatebottombar"):
             setbottombar("short left")
@@ -513,14 +513,14 @@ class TestEdgeCases:
 
     def test_special_characters_in_strings(self):
         """Test special characters are preserved."""
-        rightstack.append("pipe: | and backslash: \\")
-        result = _render_rightstack()
+        bottombar_fragments.append("pipe: | and backslash: \\")
+        result = _render_bottombar_fragments()
         assert "pipe: | and backslash: \\" in result
 
     def test_unicode_in_strings(self):
         """Test unicode characters are preserved."""
-        rightstack.append("Unicode: \u2764 \u2603 \U0001F600")
-        result = _render_rightstack()
+        bottombar_fragments.append("Unicode: \u2764 \u2603 \U0001F600")
+        result = _render_bottombar_fragments()
         assert "\u2764" in result
 
     def test_empty_stack_with_explicit_right_none(self):
@@ -531,12 +531,12 @@ class TestEdgeCases:
 
     def test_stack_cleared_between_calls(self):
         """Test that clearing stack between calls works."""
-        rightstack.append("item")
+        bottombar_fragments.append("item")
 
         with patch("bbsengine6.io.screen.updatebottombar"):
             setbottombar("first")
 
-        rightstack.clear()
+        bottombar_fragments.clear()
 
         with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
             setbottombar("second")
@@ -554,7 +554,7 @@ class TestEdgeCases:
             setbottombar("left")
 
         # Should only appear once
-        assert rightstack.count(func) == 1
+        assert bottombar_fragments.count(func) == 1
 
     def test_register_in_loop(self):
         """Test registering multiple items in a loop."""
@@ -562,12 +562,12 @@ class TestEdgeCases:
         for item in items:
             register_bottombar_fragment(item)
 
-        assert len(rightstack) == 5
-        assert list(rightstack) == items
+        assert len(bottombar_fragments) == 5
+        assert list(bottombar_fragments) == items
 
 
 class TestThreadSafety:
-    """Test thread safety of rightstack operations."""
+    """Test thread safety of bottombar_fragments operations."""
 
     def test_register_bottombar_fragment_thread_safe(self):
         """Test register is protected by lock."""
@@ -589,7 +589,7 @@ class TestThreadSafety:
             t.join()
 
         assert len(errors) == 0
-        assert len(rightstack) == 200
+        assert len(bottombar_fragments) == 200
 
     def test_unregister_bottombar_fragment_thread_safe(self):
         """Test unregister is protected by lock."""
@@ -614,9 +614,9 @@ class TestThreadSafety:
             t.join()
 
         assert len(errors) == 0
-        assert len(rightstack) == 0
+        assert len(bottombar_fragments) == 0
 
-    def test_render_rightstack_thread_safe(self):
+    def test_render_bottombar_fragments_thread_safe(self):
         """Test render creates snapshot before iteration."""
         import threading
 
@@ -627,7 +627,7 @@ class TestThreadSafety:
 
         def render_and_append():
             try:
-                result = _render_rightstack()
+                result = _render_bottombar_fragments()
                 results.append(result)
             except Exception as e:
                 errors.append(e)

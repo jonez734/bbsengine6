@@ -11,8 +11,8 @@ import threading
 # ------------------------
 
 bottombarstack = []
-rightstack = []
-_rightstack_lock = threading.Lock()
+bottombar_fragments = []
+_bottombar_fragments_lock = threading.Lock()
 
 
 def init(args=None, topmargin=1, bottommargin=1):
@@ -41,7 +41,7 @@ def updatebottombar(buf: str) -> None:
 
 
 def register_bottombar_fragment(item):
-    """Register a right-side fragment for the bottombar.
+    """Register a fragment for the bottombar right side.
 
     Args:
         item: str or callable. Callables receive **kwargs and should return str.
@@ -49,40 +49,40 @@ def register_bottombar_fragment(item):
     Returns:
         The registered item (same as input).
     """
-    with _rightstack_lock:
-        if item not in rightstack:
-            rightstack.append(item)
+    with _bottombar_fragments_lock:
+        if item not in bottombar_fragments:
+            bottombar_fragments.append(item)
     return item
 
 
 def unregister_bottombar_fragment(item):
-    """Unregister a right-side fragment from the bottombar.
+    """Unregister a fragment from the bottombar right side.
 
     Args:
-        item: str or callable to remove from the stack.
+        item: str or callable to remove from the fragments list.
 
     Returns:
         True if item was found and removed, False otherwise.
     """
-    with _rightstack_lock:
-        if item in rightstack:
-            rightstack.remove(item)
+    with _bottombar_fragments_lock:
+        if item in bottombar_fragments:
+            bottombar_fragments.remove(item)
             return True
     return False
 
 
-def _render_rightstack(**kwargs) -> str:
-    """Render all registered right-side items as a joined string.
+def _render_bottombar_fragments(**kwargs) -> str:
+    """Render all registered fragments for the bottombar right side.
 
-    Items are rendered in registration order, joined with ' | '.
+    Fragments are rendered in registration order, joined with ' | '.
     Callables are invoked with **kwargs; strs are used directly.
     Also includes notification status if there are unread messages.
 
     Returns:
         Combined string like "F2: notify (3) | murdermotel: 5 moves" or empty str.
     """
-    with _rightstack_lock:
-        items_snapshot = list(rightstack)
+    with _bottombar_fragments_lock:
+        items_snapshot = list(bottombar_fragments)
 
     parts = []
 
@@ -93,7 +93,7 @@ def _render_rightstack(**kwargs) -> str:
                 if result:
                     parts.append(str(result))
             except Exception:
-                echo_traceback("bbsengine6.io.screen._render_rightstack:")
+                echo_traceback("bbsengine6.io.screen._render_bottombar_fragments:")
         elif item:
             parts.append(str(item))
 
@@ -115,8 +115,8 @@ def setbottombar(left, right=None, **kwargs):
     else:
         left_buf = left
 
-    if right is None and rightstack:
-        right_buf = _render_rightstack(**kwargs)
+    if right is None and bottombar_fragments:
+        right_buf = _render_bottombar_fragments(**kwargs)
     elif callable(right) is True:
         right_buf = right(**kwargs)
     else:

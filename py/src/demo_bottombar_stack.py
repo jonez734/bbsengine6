@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Demo of the new stack-based right side bottombar functionality.
+Demo of the bottombar fragments functionality.
 
 Shows:
-- Static strings in the right side stack
+- Static strings in the fragments list
 - Callable items that return dynamic strings
 - Automatic notification status from bbsengine6
 - Registration and unregistration
@@ -42,9 +42,9 @@ def run(args=None):
     screen.init()
     io.echo("")
 
-    io.echo("{titlecolor}Stack-Based Bottombar Demo{/titlecolor}")
+    io.echo("{titlecolor}Bottombar Fragments Demo{/titlecolor}")
     io.echo("")
-    io.echo("This demo shows the new right-side stack functionality:")
+    io.echo("This demo shows the bottombar fragments functionality:")
     io.echo("  - Items can be str or callable")
     io.echo("  - Callables are invoked with **kwargs on each render")
     io.echo("  - Items are joined with ' | ' separator")
@@ -66,13 +66,13 @@ def run(args=None):
                 f"demo iteration {iteration}",
                 player="TestPlayer",
             )
-            io.echo(f"  Iteration {iteration} - checking stack...")
+            io.echo(f"  Iteration {iteration} - checking fragments...")
             time.sleep(2)
             iteration += 1
 
             if iteration == 3:
                 io.echo("")
-                io.echo("Removing dynamic_item from stack...", level="notice")
+                io.echo("Removing dynamic_item from fragments...", level="notice")
                 screen.unregister_bottombar_fragment(dynamic_item)
 
             if iteration == 6:
@@ -82,9 +82,9 @@ def run(args=None):
 
             if iteration == 8:
                 io.echo("")
-                io.echo("Clearing entire stack...", level="notice")
-                screen.rightstack.clear()
-                screen.setbottombar("stack cleared", "no more items")
+                io.echo("Clearing entire list...", level="notice")
+                screen.bottombar_fragments.clear()
+                screen.setbottombar("fragments cleared", "no more items")
                 break
 
     except KeyboardInterrupt:
@@ -99,12 +99,12 @@ def run(args=None):
         )
 
     io.echo("")
-    io.echo("Stack contents at exit:")
-    for i, item in enumerate(screen.rightstack):
+    io.echo("Fragment contents at exit:")
+    for i, item in enumerate(screen.bottombar_fragments):
         kind = "callable" if callable(item) else "str"
         io.echo(f"  [{i}] {kind}: {item if isinstance(item, str) else item.__name__}")
 
-    screen.rightstack.clear()
+    screen.bottombar_fragments.clear()
 
     io.echo("")
     io.echo("Done!", level="success")
