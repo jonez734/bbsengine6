@@ -18,13 +18,15 @@ from bbsengine6 import io
 from bbsengine6.io import screen
 
 
-def static_item():
+def static_item(**kwargs):
     """A simple static string item."""
+    _ = kwargs
     return "static: hello"
 
 
 def dynamic_item(**kwargs):
     """A callable that returns a dynamic value."""
+    _ = kwargs
     return f"dynamic: {time.strftime('%H:%M:%S')}"
 
 
@@ -82,6 +84,7 @@ def run(args=None):
                 io.echo("{notice}Clearing entire stack...{/notice}")
                 screen.rightstack.clear()
                 screen.setbottombar("stack cleared", "no more items")
+                break
 
     except KeyboardInterrupt:
         io.echo("")

@@ -13,7 +13,7 @@ Tests cover:
 
 import sys
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 sys.path.insert(0, "py/src")
 
@@ -50,7 +50,8 @@ class TestRightstackListOperations:
 
     def test_append_callable(self):
         """Test appending a callable to rightstack."""
-        func = lambda **kw: "dynamic"
+        def func(**kw):
+            return "dynamic"
         rightstack.append(func)
         assert func in rightstack
 
@@ -122,7 +123,8 @@ class TestRegisterUnregisterBottombar:
 
     def test_register_callable(self):
         """Test registering a callable."""
-        func = lambda **kw: "result"
+        def func(**kw):
+            return "result"
         result = register_bottombar(func)
         assert result is func
         assert func in rightstack
@@ -135,7 +137,8 @@ class TestRegisterUnregisterBottombar:
 
     def test_register_lambda(self):
         """Test registering a lambda function."""
-        lam = lambda **kw: "lambda result"
+        def lam(**kw):
+            return "lambda result"
         register_bottombar(lam)
         assert lam in rightstack
 
@@ -159,7 +162,8 @@ class TestRegisterUnregisterBottombar:
 
     def test_unregister_callable(self):
         """Test unregistering a callable."""
-        func = lambda **kw: "x"
+        def func(**kw):
+            return "x"
         register_bottombar(func)
         result = unregister_bottombar(func)
         assert result is True
@@ -329,7 +333,7 @@ class TestSetbottombarWithStack:
 
     def test_empty_stack_no_right(self):
         """Test setbottombar with empty stack and no right param."""
-        with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
+        with patch("bbsengine6.io.screen.updatebottombar"):
             setbottombar("left side")
             # Should not crash even with empty stack
 
@@ -503,7 +507,7 @@ class TestEdgeCases:
         long_string = "x" * 1000
         rightstack.append(long_string)
 
-        with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
+        with patch("bbsengine6.io.screen.updatebottombar"):
             setbottombar("short left")
             # Should not crash
 
@@ -521,7 +525,7 @@ class TestEdgeCases:
 
     def test_empty_stack_with_explicit_right_none(self):
         """Test empty stack with explicit right=None (should use None, not empty)."""
-        with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
+        with patch("bbsengine6.io.screen.updatebottombar"):
             setbottombar("left", None)
             # Should work, right_buf becomes None
 
@@ -536,12 +540,13 @@ class TestEdgeCases:
 
         with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
             setbottombar("second")
-            call_args = mock_update.call_args[0][0]
+            mock_update.call_args[0][0]
             # Stack is empty, no right-side items
 
     def test_multiple_registrations_same_callable(self):
         """Test registering same callable multiple times via register_bottombar."""
-        func = lambda **kw: "test"
+        def func(**kw):
+            return "test"
         register_bottombar(func)
         register_bottombar(func)  # Should not add duplicate
 
@@ -559,6 +564,84 @@ class TestEdgeCases:
 
         assert len(rightstack) == 5
         assert list(rightstack) == items
+
+
+class TestThreadSafety:
+    """Test thread safety of rightstack operations."""
+
+    def test_register_bottombar_thread_safe(self):
+        """Test register is protected by lock."""
+        import threading
+
+        errors = []
+
+        def register_items(start, count):
+            try:
+                for i in range(count):
+                    register_bottombar(f"item_{start + i}")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=register_items, args=(i * 100, 50)) for i in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
+        assert len(rightstack) == 200
+
+    def test_unregister_bottombar_thread_safe(self):
+        """Test unregister is protected by lock."""
+        import threading
+
+        for i in range(100):
+            register_bottombar(f"item_{i}")
+
+        errors = []
+
+        def unregister_items(start, count):
+            try:
+                for i in range(count):
+                    unregister_bottombar(f"item_{start + i}")
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=unregister_items, args=(i * 25, 25)) for i in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
+        assert len(rightstack) == 0
+
+    def test_render_rightstack_thread_safe(self):
+        """Test render creates snapshot before iteration."""
+        import threading
+
+        register_bottombar(lambda **kw: "from render")
+
+        results = []
+        errors = []
+
+        def render_and_append():
+            try:
+                result = _render_rightstack()
+                results.append(result)
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=render_and_append) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        assert len(errors) == 0
+        assert len(results) == 10
+        for result in results:
+            assert "from render" in result
 
 
 class TestBottombarstackUnaffected:

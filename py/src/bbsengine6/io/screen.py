@@ -1,6 +1,8 @@
 from .echo import echo, rendered_length, echo_traceback
 from . import terminal
 
+import threading
+
 # terminal import lines as terminal_lines, columns as terminal_columns
 
 
@@ -10,6 +12,7 @@ from . import terminal
 
 bottombarstack = []
 rightstack = []
+_rightstack_lock = threading.Lock()
 
 
 def init(args=None, topmargin=1, bottommargin=1):
@@ -46,8 +49,9 @@ def register_bottombar(item):
     Returns:
         The registered item (same as input).
     """
-    if item not in rightstack:
-        rightstack.append(item)
+    with _rightstack_lock:
+        if item not in rightstack:
+            rightstack.append(item)
     return item
 
 
@@ -60,9 +64,10 @@ def unregister_bottombar(item):
     Returns:
         True if item was found and removed, False otherwise.
     """
-    if item in rightstack:
-        rightstack.remove(item)
-        return True
+    with _rightstack_lock:
+        if item in rightstack:
+            rightstack.remove(item)
+            return True
     return False
 
 
@@ -76,9 +81,12 @@ def _render_rightstack(**kwargs) -> str:
     Returns:
         Combined string like "F2: notify (3) | murdermotel: 5 moves" or empty str.
     """
+    with _rightstack_lock:
+        items_snapshot = list(rightstack)
+
     parts = []
 
-    for item in rightstack:
+    for item in items_snapshot:
         if callable(item):
             try:
                 result = item(**kwargs)
