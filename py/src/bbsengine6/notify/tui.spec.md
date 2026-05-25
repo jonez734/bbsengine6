@@ -9,7 +9,7 @@
 - [ ] make a comprehensive set of integrated tests-- access via api instead of direct database calls
 - [x] be sure all features in every demo are merged
 - [x] be sure to activate venv!
-- [x] build/update __main__ patterned after murdermotel/src/murdermotel/__main__.py and murdermotel/src/murdermotel/__main__.py
+- [x] build/update __main__ patterned after empyre/src/empyre/__main__.py and murdermotel/src/murdermotel/__main__.py
   * try/except/finally
   * handle KeyboardInterupt, EOFError
   * finally resets screen
