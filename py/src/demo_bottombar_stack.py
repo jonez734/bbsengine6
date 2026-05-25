@@ -14,8 +14,9 @@ import time
 
 sys.path.insert(0, "/home/opencode/data/work/bbsengine6/py/src")
 
+from bbsengine6.io.echo import echo
 from bbsengine6 import io
-from bbsengine6.io import screen
+from bbsengine6.io import screen, terminal
 
 
 def static_item(**kwargs):
@@ -88,7 +89,14 @@ def run(args=None):
 
     except KeyboardInterrupt:
         io.echo("")
-        io.echo("Demo complete.")
+        io.echo("Exiting... (Ctrl+C)")
+    except EOFError:
+        io.echo("")
+        io.echo("Exiting... (Ctrl+D)")
+    finally:
+        echo(
+            f"{{savecursor}}{{curpos:{terminal.height()},0}}{{el}}{{reset}}{{restorecursor}}"
+        )
 
     io.echo("")
     io.echo("Stack contents at exit:")
