@@ -284,15 +284,10 @@ def _expand_recipients(
                     expanded.extend(members)
                 else:
                     cur.execute(
-                        sql.SQL("""
-                            SELECT DISTINCT m.moniker
-                            FROM engine.__member m
-                            LEFT JOIN engine.map_member_flag f
-                                ON m.moniker = f.moniker
-                                AND f.name IN ('ASIMOV', 'SYSOP')
-                                AND f.value = true
-                            WHERE f.moniker IS NULL
-                        """)
+                        sql.SQL("SELECT DISTINCT ")
+                        + sql.Identifier("moniker")
+                        + sql.SQL(" FROM ")
+                        + _table_identifier("engine.__member")
                     )
                     active = [row["moniker"] for row in cur.fetchall()]
                     expanded.extend(active)

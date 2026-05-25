@@ -8,7 +8,6 @@ from typing import Optional, Any, Dict, List
 
 from bbsengine6 import database, member, group
 from bbsengine6.io.echo import echo_traceback
-from psycopg2 import sql
 from .utils import AsciiValidator, TemplateEngine, EchoProcessor, DemoConfig
 
 # Class-level in-memory queues for demo mode
@@ -36,12 +35,11 @@ def resolve_recipient(args: Any, pool: Any, recipient: str) -> List[str]:
     """Resolve recipient name to list of monikers.
 
     Handles both individual users and group names, expanding groups automatically.
-    Also handles the special @everyone keyword which expands to all registered members.
 
     Args:
         args: Application args
         pool: Database pool
-        recipient: User moniker, group name, or @everyone
+        recipient: User moniker or group name
 
     Returns:
         List of member monikers to send to
@@ -49,31 +47,6 @@ def resolve_recipient(args: Any, pool: Any, recipient: str) -> List[str]:
     Raises:
         ValueError: If recipient not found
     """
-    # Handle @everyone specially
-    if recipient.lower() == "@everyone":
-        if not args or not pool:
-            return []
-        try:
-            with database.connect(args, pool=pool) as conn:
-                with database.cursor(conn) as cur:
-                    cur.execute(
-                        sql.SQL("""
-                            SELECT m.moniker
-                            FROM engine.__member m
-                            LEFT JOIN engine.map_member_flag f
-                                ON m.moniker = f.moniker
-                                AND f.name IN ('ASIMOV', 'SYSOP')
-                                AND f.value = true
-                            WHERE f.moniker IS NULL
-                            ORDER BY m.moniker
-                        """)
-                    )
-                    rows = cur.fetchall()
-                    return [row["moniker"] for row in rows]
-        except Exception as e:
-            echo_traceback(f"Error resolving @everyone: {e}")
-            raise ValueError(f"Error resolving @everyone")
-
     # Demo mode: return recipient as-is
     if not args or not pool:
         return [recipient]
