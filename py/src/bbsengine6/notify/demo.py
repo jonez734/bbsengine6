@@ -57,7 +57,16 @@ def resolve_recipient(args: Any, pool: Any, recipient: str) -> List[str]:
             with database.connect(args, pool=pool) as conn:
                 with database.cursor(conn) as cur:
                     cur.execute(
-                        sql.SQL("SELECT moniker FROM engine.__member ORDER BY moniker")
+                        sql.SQL("""
+                            SELECT m.moniker
+                            FROM engine.__member m
+                            LEFT JOIN engine.map_member_flag f
+                                ON m.moniker = f.moniker
+                                AND f.name IN ('ASIMOV', 'SYSOP')
+                                AND f.value = true
+                            WHERE f.moniker IS NULL
+                            ORDER BY m.moniker
+                        """)
                     )
                     rows = cur.fetchall()
                     return [row["moniker"] for row in rows]
