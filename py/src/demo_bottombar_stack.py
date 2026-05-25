@@ -83,7 +83,7 @@ def run(args=None):
             if iteration == 8:
                 io.echo("")
                 io.echo("Clearing entire list...", level="notice")
-                screen.bottombar_fragments.clear()
+                screen._bottombar_fragments.clear()
                 screen.setbottombar("fragments cleared", "no more items")
                 break
 
@@ -100,11 +100,11 @@ def run(args=None):
 
     io.echo("")
     io.echo("Fragment contents at exit:")
-    for i, item in enumerate(screen.bottombar_fragments):
+    for i, item in enumerate(screen._bottombar_fragments):
         kind = "callable" if callable(item) else "str"
         io.echo(f"  [{i}] {kind}: {item if isinstance(item, str) else item.__name__}")
 
-    screen.bottombar_fragments.clear()
+    screen._bottombar_fragments.clear()
 
     io.echo("")
     io.echo("Done!", level="success")

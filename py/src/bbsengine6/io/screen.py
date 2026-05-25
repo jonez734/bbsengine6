@@ -11,7 +11,7 @@ import threading
 # ------------------------
 
 bottombarstack = []
-bottombar_fragments = []
+_bottombar_fragments = []
 _bottombar_fragments_lock = threading.Lock()
 
 
@@ -50,8 +50,8 @@ def register_bottombar_fragment(item):
         The registered item (same as input).
     """
     with _bottombar_fragments_lock:
-        if item not in bottombar_fragments:
-            bottombar_fragments.append(item)
+        if item not in _bottombar_fragments:
+            _bottombar_fragments.append(item)
     return item
 
 
@@ -65,8 +65,8 @@ def unregister_bottombar_fragment(item):
         True if item was found and removed, False otherwise.
     """
     with _bottombar_fragments_lock:
-        if item in bottombar_fragments:
-            bottombar_fragments.remove(item)
+        if item in _bottombar_fragments:
+            _bottombar_fragments.remove(item)
             return True
     return False
 
@@ -82,7 +82,7 @@ def _render_bottombar_fragments(**kwargs) -> str:
         Combined string like "F2: notify (3) | murdermotel: 5 moves" or empty str.
     """
     with _bottombar_fragments_lock:
-        items_snapshot = list(bottombar_fragments)
+        items_snapshot = list(_bottombar_fragments)
 
     parts = []
 
@@ -115,7 +115,7 @@ def setbottombar(left, right=None, **kwargs):
     else:
         left_buf = left
 
-    if right is None and bottombar_fragments:
+    if right is None and _bottombar_fragments:
         right_buf = _render_bottombar_fragments(**kwargs)
     elif callable(right) is True:
         right_buf = right(**kwargs)
