@@ -83,7 +83,7 @@ def _render_rightstack(**kwargs) -> str:
             try:
                 result = item(**kwargs)
                 if result:
-                    parts.append(result)
+                    parts.append(str(result))
             except Exception:
                 echo_traceback("bbsengine6.io.screen._render_rightstack:")
         elif item:
