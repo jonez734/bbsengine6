@@ -35,6 +35,10 @@ def __getattr__(name):
         from . import const
 
         return const
+    if name == "screen":
+        from . import screen
+
+        return screen
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

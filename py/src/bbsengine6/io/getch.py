@@ -1,4 +1,5 @@
 import os
+import signal
 import tty
 import select
 import fcntl
@@ -9,7 +10,46 @@ import threading
 from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Callable, Dict, Optional, List
+from typing import Any, Callable, Dict, Optional, List
+
+# Global state for tty recovery
+_global_tty_settings: Optional[Any] = None
+_global_tty_fd: Optional[int] = None
+
+
+def _restore_tty():
+    """Restore tty settings and clear globals."""
+    global _global_tty_settings, _global_tty_fd
+    if _global_tty_fd is not None and _global_tty_settings is not None:
+        try:
+            termios.tcsetattr(_global_tty_fd, termios.TCSADRAIN, _global_tty_settings)
+        except Exception:
+            pass
+    _global_tty_fd = None
+    _global_tty_settings = None
+
+
+def _make_signal_handler(signum: int):
+    """Factory for signal handlers that restore tty."""
+    def handler(signum, frame):
+        _restore_tty()
+        # Re-raise for any cleanup the caller might want
+        signal.default_int_handler(signum, frame)
+    return handler
+
+
+# Install signal handlers for all fatal signals
+_fatal_signals = [
+    signal.SIGINT,
+    signal.SIGQUIT,
+    signal.SIGTERM,
+    signal.SIGHUP,
+]
+for sig in _fatal_signals:
+    try:
+        signal.signal(sig, _make_signal_handler(sig))
+    except (OSError, ValueError):
+        pass  # Signal not supported on this platform
 
 
 from .common import (
@@ -496,8 +536,10 @@ def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str 
     if char == "\x01":
         processed = "KEY_CTRL_A"
     elif char == ETX:  # Ctrl+C (ETX)
+        _restore_tty()
         raise KeyboardInterrupt
     elif char == EOF:  # Ctrl+D (EOF)
+        _restore_tty()
         raise EOFError
     elif char == "\x05":  # ctrl-e (EOL)
         processed = "KEY_CTRL_E"
@@ -571,6 +613,7 @@ def getch_str(
     debug: bool = False,
     fire_events: bool = True,
     check_notifications: bool = True,
+    idle: "Callable[[], None] | None" = None,
     **kwargs,
 ) -> str | None:
     """Reads a single keypress without blocking and handles control/extended keys.
@@ -580,6 +623,9 @@ def getch_str(
         debug: If True, log unknown escape sequences and return None
         fire_events: If True, fire key events if dispatcher is running
         check_notifications: If True, check for notifications and emit bell (default: True)
+        idle: Optional callback called on idle (timeout) (default: None)
+            Called each time getch_str() times out waiting for input.
+            Useful for updating status displays, checking notifications, etc.
 
     Returns:
         Processed key name (e.g., 'a', 'KEY_UP', 'KEY_ENTER'), or None on timeout.
@@ -612,6 +658,11 @@ def getch_str(
         fd = _current_input_stream.fileno()
         old_settings = termios.tcgetattr(fd)
 
+    # Store settings globally for signal handler
+    global _global_tty_settings, _global_tty_fd
+    _global_tty_fd = fd
+    _global_tty_settings = old_settings
+
     # Set terminal to raw mode while holding lock briefly
     with _current_stream_lock:
         try:
@@ -636,6 +687,8 @@ def getch_str(
                 # Timeout reached - restore and return
                 with _current_stream_lock:
                     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                if idle is not None:
+                    idle()
                 return None
 
             # Calculate timeout for select
