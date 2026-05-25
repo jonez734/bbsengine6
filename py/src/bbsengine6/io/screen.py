@@ -9,6 +9,7 @@ from . import terminal
 # ------------------------
 
 bottombarstack = []
+rightstack = []
 
 
 def init(args=None, topmargin=1, bottommargin=1):
@@ -36,6 +37,65 @@ def updatebottombar(buf: str) -> None:
     return
 
 
+def register_bottombar(item):
+    """Register a right-side item for the bottombar.
+
+    Args:
+        item: str or callable. Callables receive **kwargs and should return str.
+
+    Returns:
+        The registered item (same as input).
+    """
+    if item not in rightstack:
+        rightstack.append(item)
+    return item
+
+
+def unregister_bottombar(item):
+    """Unregister a right-side item from the bottombar.
+
+    Args:
+        item: str or callable to remove from the stack.
+
+    Returns:
+        True if item was found and removed, False otherwise.
+    """
+    if item in rightstack:
+        rightstack.remove(item)
+        return True
+    return False
+
+
+def _render_rightstack(**kwargs) -> str:
+    """Render all registered right-side items as a joined string.
+
+    Items are rendered in registration order, joined with ' | '.
+    Callables are invoked with **kwargs; strs are used directly.
+    Also includes notification status if there are unread messages.
+
+    Returns:
+        Combined string like "F2: notify (3) | murdermotel: 5 moves" or empty str.
+    """
+    parts = []
+
+    for item in rightstack:
+        if callable(item):
+            try:
+                result = item(**kwargs)
+                if result:
+                    parts.append(result)
+            except Exception:
+                echo_traceback("bbsengine6.io.screen._render_rightstack:")
+        elif item:
+            parts.append(str(item))
+
+    notification_status = get_notification_status(**kwargs)
+    if notification_status:
+        parts.insert(0, notification_status)
+
+    return " | ".join(parts)
+
+
 # @since 20230523 copied from bbsengine5
 # @since 20250517 rewrite
 # from wcwidth import wcswidth, wcwidth
@@ -47,9 +107,10 @@ def setbottombar(left, right=None, **kwargs):
     else:
         left_buf = left
 
-    if callable(right) is True:
+    if right is None and rightstack:
+        right_buf = _render_rightstack(**kwargs)
+    elif callable(right) is True:
         right_buf = right(**kwargs)
-    #      echo(f"called right({kwargs=})", level="debug")
     else:
         right_buf = right
 

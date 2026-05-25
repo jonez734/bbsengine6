@@ -11,6 +11,9 @@ from .io.screen import (
     get_notification_status,
     updateprogress,
     bottombarstack,
+    rightstack,
+    register_bottombar,
+    unregister_bottombar,
 )
 
 __all__ = [
@@ -22,4 +25,7 @@ __all__ = [
     "get_notification_status",
     "updateprogress",
     "bottombarstack",
+    "rightstack",
+    "register_bottombar",
+    "unregister_bottombar",
 ]
