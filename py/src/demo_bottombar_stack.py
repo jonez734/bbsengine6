@@ -54,10 +54,10 @@ def run(args=None):
     io.echo("Press Ctrl+C to exit.")
     io.echo("")
 
-    screen.register_bottombar(static_item)
-    screen.register_bottombar("just a string")
-    screen.register_bottombar(dynamic_item)
-    screen.register_bottombar(lambda **kw: f"lambda: {1 + 1}")
+    screen.register_bottombar_fragment(static_item)
+    screen.register_bottombar_fragment("just a string")
+    screen.register_bottombar_fragment(dynamic_item)
+    screen.register_bottombar_fragment(lambda **kw: f"lambda: {1 + 1}")
 
     try:
         iteration = 0
@@ -73,12 +73,12 @@ def run(args=None):
             if iteration == 3:
                 io.echo("")
                 io.echo("Removing dynamic_item from stack...", level="notice")
-                screen.unregister_bottombar(dynamic_item)
+                screen.unregister_bottombar_fragment(dynamic_item)
 
             if iteration == 6:
                 io.echo("")
                 io.echo("Adding another static string...", level="notice")
-                screen.register_bottombar("added at runtime")
+                screen.register_bottombar_fragment("added at runtime")
 
             if iteration == 8:
                 io.echo("")

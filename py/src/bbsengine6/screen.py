@@ -12,8 +12,8 @@ from .io.screen import (
     updateprogress,
     bottombarstack,
     rightstack,
-    register_bottombar,
-    unregister_bottombar,
+    register_bottombar_fragment,
+    unregister_bottombar_fragment,
 )
 
 __all__ = [
@@ -26,6 +26,6 @@ __all__ = [
     "updateprogress",
     "bottombarstack",
     "rightstack",
-    "register_bottombar",
-    "unregister_bottombar",
+    "register_bottombar_fragment",
+    "unregister_bottombar_fragment",
 ]

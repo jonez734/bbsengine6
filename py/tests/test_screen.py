@@ -3,7 +3,7 @@ Comprehensive tests for bbsengine6.io.screen module.
 
 Tests cover:
 - rightstack list operations (append, remove, clear, iteration)
-- register_bottombar / unregister_bottombar functions
+- register_bottombar_fragment / unregister_bottombar_fragment functions
 - _render_rightstack internal function
 - setbottombar with various left/right/stack combinations
 - Backwards compatibility with explicit right parameter
@@ -20,8 +20,8 @@ sys.path.insert(0, "py/src")
 from bbsengine6.io import screen
 from bbsengine6.io.screen import (
     rightstack,
-    register_bottombar,
-    unregister_bottombar,
+    register_bottombar_fragment,
+    unregister_bottombar_fragment,
     _render_rightstack,
     setbottombar,
     bottombarstack,
@@ -109,74 +109,74 @@ class TestRightstackListOperations:
 
 
 class TestRegisterUnregisterBottombar:
-    """Test register_bottombar and unregister_bottombar functions."""
+    """Test register_bottombar_fragment and unregister_bottombar_fragment functions."""
 
     def test_register_adds_to_stack(self):
-        """Test that register_bottombar adds item to stack."""
-        register_bottombar("test")
+        """Test that register_bottombar_fragment adds item to stack."""
+        register_bottombar_fragment("test")
         assert "test" in rightstack
 
     def test_register_returns_item(self):
-        """Test that register_bottombar returns the registered item."""
-        result = register_bottombar("test")
+        """Test that register_bottombar_fragment returns the registered item."""
+        result = register_bottombar_fragment("test")
         assert result == "test"
 
     def test_register_callable(self):
         """Test registering a callable."""
         def func(**kw):
             return "result"
-        result = register_bottombar(func)
+        result = register_bottombar_fragment(func)
         assert result is func
         assert func in rightstack
 
     def test_register_no_duplicates(self):
-        """Test that register_bottombar prevents duplicates."""
-        register_bottombar("unique")
-        register_bottombar("unique")  # Should not add again
+        """Test that register_bottombar_fragment prevents duplicates."""
+        register_bottombar_fragment("unique")
+        register_bottombar_fragment("unique")  # Should not add again
         assert rightstack.count("unique") == 1
 
     def test_register_lambda(self):
         """Test registering a lambda function."""
         def lam(**kw):
             return "lambda result"
-        register_bottombar(lam)
+        register_bottombar_fragment(lam)
         assert lam in rightstack
 
     def test_unregister_removes_from_stack(self):
-        """Test that unregister_bottombar removes item."""
-        register_bottombar("to_remove")
-        result = unregister_bottombar("to_remove")
+        """Test that unregister_bottombar_fragment removes item."""
+        register_bottombar_fragment("to_remove")
+        result = unregister_bottombar_fragment("to_remove")
         assert result is True
         assert "to_remove" not in rightstack
 
     def test_unregister_returns_true_on_success(self):
         """Test unregister returns True when item found."""
-        register_bottombar("exists")
-        result = unregister_bottombar("exists")
+        register_bottombar_fragment("exists")
+        result = unregister_bottombar_fragment("exists")
         assert result is True
 
     def test_unregister_returns_false_when_not_found(self):
         """Test unregister returns False when item not in stack."""
-        result = unregister_bottombar("nonexistent")
+        result = unregister_bottombar_fragment("nonexistent")
         assert result is False
 
     def test_unregister_callable(self):
         """Test unregistering a callable."""
         def func(**kw):
             return "x"
-        register_bottombar(func)
-        result = unregister_bottombar(func)
+        register_bottombar_fragment(func)
+        result = unregister_bottombar_fragment(func)
         assert result is True
         assert func not in rightstack
 
     def test_register_unregister_roundtrip(self):
         """Test adding and removing same item multiple times."""
         item = "roundtrip"
-        register_bottombar(item)
+        register_bottombar_fragment(item)
         assert item in rightstack
-        unregister_bottombar(item)
+        unregister_bottombar_fragment(item)
         assert item not in rightstack
-        register_bottombar(item)
+        register_bottombar_fragment(item)
         assert item in rightstack
 
 
@@ -544,11 +544,11 @@ class TestEdgeCases:
             # Stack is empty, no right-side items
 
     def test_multiple_registrations_same_callable(self):
-        """Test registering same callable multiple times via register_bottombar."""
+        """Test registering same callable multiple times via register_bottombar_fragment."""
         def func(**kw):
             return "test"
-        register_bottombar(func)
-        register_bottombar(func)  # Should not add duplicate
+        register_bottombar_fragment(func)
+        register_bottombar_fragment(func)  # Should not add duplicate
 
         with patch("bbsengine6.io.screen.updatebottombar"):
             setbottombar("left")
@@ -560,7 +560,7 @@ class TestEdgeCases:
         """Test registering multiple items in a loop."""
         items = [f"item_{i}" for i in range(5)]
         for item in items:
-            register_bottombar(item)
+            register_bottombar_fragment(item)
 
         assert len(rightstack) == 5
         assert list(rightstack) == items
@@ -569,7 +569,7 @@ class TestEdgeCases:
 class TestThreadSafety:
     """Test thread safety of rightstack operations."""
 
-    def test_register_bottombar_thread_safe(self):
+    def test_register_bottombar_fragment_thread_safe(self):
         """Test register is protected by lock."""
         import threading
 
@@ -578,7 +578,7 @@ class TestThreadSafety:
         def register_items(start, count):
             try:
                 for i in range(count):
-                    register_bottombar(f"item_{start + i}")
+                    register_bottombar_fragment(f"item_{start + i}")
             except Exception as e:
                 errors.append(e)
 
@@ -591,19 +591,19 @@ class TestThreadSafety:
         assert len(errors) == 0
         assert len(rightstack) == 200
 
-    def test_unregister_bottombar_thread_safe(self):
+    def test_unregister_bottombar_fragment_thread_safe(self):
         """Test unregister is protected by lock."""
         import threading
 
         for i in range(100):
-            register_bottombar(f"item_{i}")
+            register_bottombar_fragment(f"item_{i}")
 
         errors = []
 
         def unregister_items(start, count):
             try:
                 for i in range(count):
-                    unregister_bottombar(f"item_{start + i}")
+                    unregister_bottombar_fragment(f"item_{start + i}")
             except Exception as e:
                 errors.append(e)
 
@@ -620,7 +620,7 @@ class TestThreadSafety:
         """Test render creates snapshot before iteration."""
         import threading
 
-        register_bottombar(lambda **kw: "from render")
+        register_bottombar_fragment(lambda **kw: "from render")
 
         results = []
         errors = []

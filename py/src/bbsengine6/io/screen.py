@@ -40,8 +40,8 @@ def updatebottombar(buf: str) -> None:
     return
 
 
-def register_bottombar(item):
-    """Register a right-side item for the bottombar.
+def register_bottombar_fragment(item):
+    """Register a right-side fragment for the bottombar.
 
     Args:
         item: str or callable. Callables receive **kwargs and should return str.
@@ -55,8 +55,8 @@ def register_bottombar(item):
     return item
 
 
-def unregister_bottombar(item):
-    """Unregister a right-side item from the bottombar.
+def unregister_bottombar_fragment(item):
+    """Unregister a right-side fragment from the bottombar.
 
     Args:
         item: str or callable to remove from the stack.
