@@ -71,17 +71,17 @@ def run(args=None):
 
             if iteration == 3:
                 io.echo("")
-                io.echo("{notice}Removing dynamic_item from stack...{/notice}")
+                io.echo("Removing dynamic_item from stack...", level="notice")
                 screen.unregister_bottombar(dynamic_item)
 
             if iteration == 6:
                 io.echo("")
-                io.echo("{notice}Adding another static string...{/notice}")
+                io.echo("Adding another static string...", level="notice")
                 screen.register_bottombar("added at runtime")
 
             if iteration == 8:
                 io.echo("")
-                io.echo("{notice}Clearing entire stack...{/notice}")
+                io.echo("Clearing entire stack...", level="notice")
                 screen.rightstack.clear()
                 screen.setbottombar("stack cleared", "no more items")
                 break
