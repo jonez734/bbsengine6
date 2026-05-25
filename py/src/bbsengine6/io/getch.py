@@ -33,9 +33,50 @@ def _make_signal_handler(signum: int):
     """Factory for signal handlers that restore tty."""
     def handler(signum, frame):
         _restore_tty()
-        # Re-raise for any cleanup the caller might want
-        signal.default_int_handler(signum, frame)
+        if signum == signal.SIGWINCH:
+            _handle_sigwinch()
+        else:
+            signal.default_int_handler(signum, frame)
     return handler
+
+
+def _handle_sigwinch() -> None:
+    """Handle SIGWINCH signal - invoke resize callbacks."""
+    with _winlock:
+        for cb in _resize_callbacks:
+            try:
+                cb()
+            except Exception:
+                pass
+        if _default_resize_handler:
+            try:
+                _default_resize_handler()
+            except Exception:
+                pass
+
+
+def register_resize_handler(callback: Callable[[], None]) -> None:
+    """Register a callback to be invoked when terminal is resized.
+
+    Callbacks are invoked with no arguments during signal handler context,
+    so they should be minimal and thread-safe.
+    """
+    with _winlock:
+        _resize_callbacks.append(callback)
+
+
+def unregister_resize_handler(callback: Callable[[], None]) -> None:
+    """Remove a registered resize handler."""
+    with _winlock:
+        if callback in _resize_callbacks:
+            _resize_callbacks.remove(callback)
+
+
+def set_resize_handler(callback: Callable[[], None] | None) -> None:
+    """Set the default resize handler, replacing any previous one."""
+    global _default_resize_handler
+    with _winlock:
+        _default_resize_handler = callback
 
 
 # Install signal handlers for all fatal signals
@@ -50,6 +91,15 @@ for sig in _fatal_signals:
         signal.signal(sig, _make_signal_handler(sig))
     except (OSError, ValueError):
         pass  # Signal not supported on this platform
+
+# Install SIGWINCH handler separately
+_winlock = threading.Lock()
+_resize_callbacks: list[Callable[[], None]] = []
+_default_resize_handler: Callable[[], None] | None = None
+try:
+    signal.signal(signal.SIGWINCH, _make_signal_handler(signal.SIGWINCH))
+except (OSError, ValueError):
+    pass  # Signal not supported on this platform
 
 
 from .common import (
