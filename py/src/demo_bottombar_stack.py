@@ -99,7 +99,7 @@ def run(args=None):
     screen.rightstack.clear()
 
     io.echo("")
-    io.echo("{success}Done!{/success}")
+    io.echo("Done!", level="success")
     return 0
 
 
