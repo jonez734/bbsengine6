@@ -152,51 +152,41 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
     else:
         raise ValueError
 
+    # Hold lock only for setup/teardown, not during the full DSR exchange
     with _current_stream_lock:
-        # drain input and output into queues
         drain_stream_to_queue(_current_input_stream, _input_queue)
-
-        # store original settings
         fd = _current_input_stream.fileno()
         old_settings = termios.tcgetattr(fd)
 
-        try:
-            # Step 0: set raw mode
-            tty.setraw(fd)  # _current_input_stream
-            # Step 1: send the DSR request
-            _write_current_output_stream(f"{ESC}[{code}n", flush=True)
+    try:
+        tty.setraw(fd)
+        _write_current_output_stream(f"{ESC}[{code}n", flush=True)
 
-            # Step 2: read the response in a loop until we see the trailing 'R'
-            start_time = time.time()
-            buffer = ""
+        start_time = time.time()
+        buffer = ""
 
-            while True:
-                # Step 2a: read up to 32 bytes (adjust as needed)
-                chunk = _read_current_input_stream(1)
-                buffer += chunk
+        while True:
+            chunk = _read_current_input_stream(1)
+            buffer += chunk
 
-                match = DSR_CURPOS_RE.search(buffer)
-                if match:
-                    row, col = map(int, match.groups())
+            match = DSR_CURPOS_RE.search(buffer)
+            if match:
+                row, col = map(int, match.groups())
+                start, end = match.span()
+                leftover = buffer[:start] + buffer[end:]
+                with _input_queue_lock:
+                    _input_queue.clear()
+                    _input_queue.extend(leftover)
+                return (row, col)
 
-                    # Remove the matched DSR from buf and push the rest back into the queue
-                    start, end = match.span()
-                    leftover = buffer[:start] + buffer[end:]
-                    with _input_queue_lock:
-                        _input_queue.clear()
-                        _input_queue.extend(leftover)
-                    return (row, col)
+            if (time.time() - start_time) > timeout:
+                raise TimeoutError(
+                    f"DSR response not received in {timeout}s: {buffer!r}"
+                )
 
-                # Step 2c: check for timeout
-                if (time.time() - start_time) > timeout:
-                    raise TimeoutError(
-                        f"DSR response not received in {timeout}s: {buffer!r}"
-                    )
-                    break
-
-            return buffer  # .decode(errors="ignore")
-        finally:
-            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)  # restore
+        return buffer
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 ##    write_current_output_stream(f"{CSI}{code}n", flush=True)
@@ -243,7 +233,7 @@ def get_terminal_status():
 
     with _current_stream_lock:
         response = get_dsr("status")
-        if response and response.startswith(CSI) and response.endswith("n"):
+        if isinstance(response, str) and response.startswith(CSI) and response.endswith("n"):
             part = int(response[2])
             if part == 0:
                 return True

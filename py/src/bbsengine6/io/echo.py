@@ -641,11 +641,10 @@ def _handle_f6(token):
             text=indent_text,
             raw=indent_text,
         )
-        # No lock needed - just updating local state tracking
-        _terminal_state.cursor_col = _terminal_state.indent
-    else:
-        # No lock needed - just updating local state tracking
-        _terminal_state.cursor_col = 0
+    with _current_stream_lock:
+        _terminal_state.cursor_col = (
+            _terminal_state.indent if _terminal_state.indent > 0 else 0
+        )
 
     return
 
@@ -1036,7 +1035,6 @@ _emoji = {
     "compass": "\U0001f9ed",  # 🧭 @since 20220907
     "worldmap": "\U0001f5fa",  # 🗺 @since 20220916
     "wolf": "\U0001f43a",  # 🐺 @since 20221002
-    "person": "\U0001f9d1",  # 👤 @since 20260221
     "supervillian": "\U0001f9b9",  # 🦹 @since 20221016
     "joker": "\U0001f0cf",  # 🃏 @since 20221127
     "warning": "\U000026a0",  # ⚠ @since 20260221
@@ -1190,7 +1188,8 @@ def echo_iter(
                         raw=indent_str,
                     )
                     yield indent_token
-                    _terminal_state.cursor_col = _terminal_state.indent
+                    with _current_stream_lock:
+                        _terminal_state.cursor_col = _terminal_state.indent
                     _first_line_after_f6 = (
                         True  # First line after newline uses full width
                     )
@@ -1255,7 +1254,7 @@ def echo(
     if end:
         write_current_output_stream(end, flush=flush)
         if end == "\n":
-            with _current_stream_lock:
+            with _terminal_state_lock:
                 _terminal_state.cursor_col = 0
                 _terminal_state.cursor_row += 1
 
