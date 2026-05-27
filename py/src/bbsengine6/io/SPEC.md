@@ -9,9 +9,11 @@
 ```
 io/
 ├── __init__.py              # Public API exports
+├── _version.py              # Version info
 ├── const.py                 # Terminal constants
 ├── terminal.py              # Terminal size utilities
 ├── common.py                # Token and I/O primitives
+├── echovars.py              # Echo variables
 ├── echo.py                  # Main echo function with formatting
 ├── palette.py               # Color palettes
 ├── util.py                  # Logging utilities
@@ -24,10 +26,12 @@ io/
 ├── inputstring.py           # String input
 ├── inputinteger.py          # Integer input
 ├── inputboolean.py          # Boolean input
-└── inputchoice.py           # Choice input
+├── inputchoice.py           # Choice input
+├── output.py                # [DEPRECATED] Use echo.py instead
+└── specs/                   # Specification files
 ```
 
-> **Note:** `output.py` was removed. Use `echo.py` instead.
+> **Note:** `output.py` is deprecated. Use `echo.py` instead.
 > **Note:** `input.py` is deprecated. Use `inputstring.py` instead.
 
 ## Module Specifications
@@ -94,6 +98,16 @@ Main echo function with rich formatting and runtime variables:
 | `getvar` | `(name, default=None)` | Get runtime variable |
 | `register_emoji` | `(name, value)` | Register custom emoji |
 | `register_emojis` | `(emojis: dict)` | Register multiple emojis |
+
+### echovars.py
+
+Runtime variables for echo:
+
+| Variable | Description |
+|----------|-------------|
+| `ECHOPREFIX` | Prefix for echo output |
+| `ECHOENABLED` | Whether echo is enabled |
+| `ECHOSTDERR` | Output to stderr |
 
 **Echo Commands:**
 The echo function supports these formatting commands:
