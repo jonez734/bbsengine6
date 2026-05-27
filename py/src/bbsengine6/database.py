@@ -330,7 +330,7 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
                 "user": None,
                 "password": None,
                 "host": None,
-                "port": 5432,
+                "port": None,
                 "autocommit": False,
             }
 
@@ -355,8 +355,17 @@ def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
 
     Returns:
       ConnectionPool instance (min=10, max=100 connections)
+
+    Raises:
+      ValueError: If DSN is empty or invalid (no connection parameters)
     """
     dsn = make_dsn(args, **kwargs)
+
+    if not dsn or dsn == "port=5432":
+        raise ValueError(
+            "bbsengine6.database.getpool: empty or invalid DSN. "
+            "Database connection parameters are required."
+        )
 
     with _pool_cache_lock:
         if dsn not in _pool_cache or _pool_cache[dsn].closed:

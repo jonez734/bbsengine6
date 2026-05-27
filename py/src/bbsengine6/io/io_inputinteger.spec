@@ -1,4 +1,4 @@
-# asimov.io.inputinteger Specification
+# bbsengine6.io.inputinteger Specification
 
 ## Overview
 
@@ -13,21 +13,24 @@
 ### Main Function
 
 ```python
-def inputinteger(prompt, oldvalue=None, **kwargs) -> int | list[int] | None
+def inputinteger(
+    prompt: str,
+    oldvalue: int | str | None = None,
+    **kwargs
+) -> int | list[int] | None
 ```
 
 Prompts user for integer input with optional validation.
 
 **Parameters:**
 - `prompt`: Prompt text to display
-- `oldvalue`: Pre-fill value (default: None)
-- `filter`: Regex pattern to filter input (default: `r"^([+-]?[1-9]\d*|0)[ ,]?$"`)
+- `oldvalue`: Pre-fill value (converted to string, default: None)
 - `**kwargs`: Passed to `inputstring`
 
 **Returns:**
 - `int` for single integer input
 - `list[int]` for multiple integers (space/comma separated)
-- `None` if input is empty or invalid
+- `None` if input is empty, cancelled, or invalid
 
 **Default Filter:**
 - Matches integers with optional sign (+/-)
@@ -38,6 +41,6 @@ Prompts user for integer input with optional validation.
 
 ```python
 result = inputinteger("Enter age:")  # Returns int
-result = inputinteger("Enter numbers:", filter=r"^\d+\s+\d+$")  # Returns list[int]
+result = inputinteger("Enter numbers:")  # Returns list[int] with space/comma separator
 result = inputinteger("Enter value:", oldvalue=42)  # Pre-fills with 42
 ```

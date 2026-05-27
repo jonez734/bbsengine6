@@ -1,4 +1,4 @@
-# asimov.io.inputboolean Specification
+# bbsengine6.io.inputboolean Specification
 
 ## Overview
 
@@ -14,7 +14,12 @@
 ### Main Function
 
 ```python
-def inputboolean(prompt:str, default:str=None, options="YN", **kwargs) -> bool | None
+def inputboolean(
+    prompt: str,
+    default: str | None = None,
+    options: str = "YN",
+    **kwargs
+) -> bool | None
 ```
 
 Prompts user for a boolean response.
@@ -23,17 +28,15 @@ Prompts user for a boolean response.
 - `prompt`: Prompt text to display
 - `default`: Default value (default: None)
 - `options`: Options string (default: "YN")
-- `args`: Application args namespace (for database operations in kwargs handlers)
-- `pool`: Database connection pool (alternative to args for direct pool access)
 - `**kwargs`: Passed to `inputchoice`
 
 **Returns:**
 - `True` for "Y" or "T" (case-insensitive)
 - `False` for "N" or "F" (case-insensitive)
-- `None` if input fails or is cancelled
+- `None` if input is cancelled
 
 **Behavior:**
-- Displays "Yes" or "No" echo after selection
+- Displays "Yes"/"True" or "No"/"False" echo after selection
 - Falls back to `inputchoice` for the actual key handling
 
 ## Examples
@@ -41,5 +44,5 @@ Prompts user for a boolean response.
 ```python
 result = inputboolean("Continue?")  # Returns True/False
 result = inputboolean("Enable?", options="TF")  # Returns True/False
-result = inputboolean("Confirm?", args=args, pool=pool)  # With notifications
+result = inputboolean("Confirm?")  # Returns True/False
 ```

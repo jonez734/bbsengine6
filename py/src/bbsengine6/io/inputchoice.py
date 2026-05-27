@@ -24,6 +24,7 @@ def inputchoice(
     echo(prompt, end="", flush=True)
 
     done = False
+    ch: str | None = None
     while not done:
         ch = getch(**kwargs)
         if ch is not None:
@@ -50,4 +51,4 @@ def inputchoice(
             echo("{bell}", end="", flush=True)
             continue
 
-    return ch
+    return ch  # type: ignore[return-value]

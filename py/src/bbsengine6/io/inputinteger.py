@@ -1,32 +1,36 @@
 from .inputstring import inputstring
 
 
-# @see https://stackoverflow.com/questions/9043551/regex-that-matches-integers-only
 def inputinteger(
     prompt: str, oldvalue: int | str | None = None, **kwargs
 ) -> int | list[int] | None:
-    oldvalue = int(oldvalue) if oldvalue is not None else ""
-    filter = kwargs.get("filter", r"^([+-]?[1-9]\d*|0)[ ,]?$")
-    buf = inputstring(prompt, str(oldvalue), filter=filter, **kwargs)
+    """Read integer input from the terminal.
+
+    Args:
+        prompt: Display prompt
+        oldvalue: Pre-fill value (converted to string)
+        **kwargs: Passed to inputstring
+
+    Returns:
+        Integer value, list of integers, or None if cancelled
+    """
+    filter = kwargs.pop("filter", r"^([+-]?[1-9]\d*|0)[ ,]?$")
+    default = str(oldvalue) if oldvalue is not None else ""
+    buf: str | list[str] = inputstring(prompt, default, filter=filter, **kwargs)
 
     if buf is None or buf == "":
         return None
 
-    #  print(f"type(buf)={type(buf)!r}")
-    if type(buf) is list:
-        res = []
+    if isinstance(buf, list):
+        result: list[int] = []
         for b in buf:
             try:
-                res.append(int(b))
-            except Exception:
-                return
-        #    echo(f"res={res!r}", level="debug")
-        return res
-    else:
-        #    echo("inputinteger.100: plain int, not a list", level="debug")
-        try:
-            res = int(buf)
-        except ValueError:
-            return
-        else:
-            return res
+                result.append(int(b))
+            except ValueError:
+                return None
+        return result
+
+    try:
+        return int(buf)
+    except ValueError:
+        return None

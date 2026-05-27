@@ -1,8 +1,8 @@
-# asimov.io Specification
+# bbsengine6.io Specification
 
 ## Overview
 
-`asimov.io` is the terminal I/O module for Asimov. It provides rich terminal output with ANSI escape codes, input handling, color palettes, and terminal utilities.
+`bbsengine6.io` is the terminal I/O module for bbsengine6. It provides rich terminal output with ANSI escape codes, input handling, color palettes, and terminal utilities.
 
 ## Package Structure
 
