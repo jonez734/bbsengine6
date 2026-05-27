@@ -18,7 +18,6 @@ from .getch import getch_str as getch
 from .common import (
     get_cursor_position,
     _current_stream_lock,
-    _terminal_state,
     _input_dirty,
 )
 from .util import logentry

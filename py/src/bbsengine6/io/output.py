@@ -173,10 +173,10 @@ def tokenize(buf: str, exclude=()):  # -> generator:
         yield Token(kind, value)
 
 
-def interpret(tokens, **kw: dict):
+def interpret(tokens, **kwargs: dict):
     # from wcwidth import wcswidth
     wcswidth = len
-    # def interpret(buf:str, **kw) -> str: #wordwrap:bool=True, end:str="\n", args=Namespace(), indent:str="---") -> str:
+    # def interpret(buf:str, **kwargs) -> str: #wordwrap:bool=True, end:str="\n", args=Namespace(), indent:str="---") -> str:
     global width, strip, wordwrap, end, indent, exclude, speed, pos
 
     width = kw["width"] if "width" in kw else width
@@ -358,13 +358,13 @@ def interpret(tokens, **kw: dict):
             yield token
 
 
-def echo(buf: str = "", **kw):
+def echo(buf: str = "", **kwargs):
     wcswidth = len
     # from wcwidth import wcswidth
 
     global pos, indent, end, wordwrap, strip, width, speed
     # width = kw["width"] if "width" in kw else terminal.width() # getterminalwidth()
-    level = kw["level"] if "level" in kw else None
+    level = kwargs["level"] if "level" in kw else None
     # strip = kw["strip"] if "strip" in kw else strip
     wordwrap = kw["wordwrap"] if "wordwrap" in kw else wordwrap
     flush = kw["flush"] if "flush" in kw else True
@@ -420,7 +420,7 @@ def echo(buf: str = "", **kw):
             tokensallowed = ("WORD", "WHITESPACE", "F6")
 
         for token in interpret(tokenize(buf, exclude=exclude)):
-            # for token in interpret(buf, **kw):
+            # for token in interpret(buf, **kwargs):
             if isinstance(token, Token):
                 if token.kind == "WHITESPACE":
                     pos += wcswidth(token.value)
@@ -502,7 +502,7 @@ def echo(buf: str = "", **kw):
     return
 
 
-def tostr(buf: str, **kw: dict):
+def tostr(buf: str, **kwargs: dict):
     # strip = kw["strip"] if "strip" in kw else False
     interp: bool = kw["interpret"] if "interpret" in kw else True
     exclude: tuple = kw["exclude"] if "exclude" in kw else ()
