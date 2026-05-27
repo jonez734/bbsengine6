@@ -31,12 +31,14 @@ def _restore_tty():
 
 def _make_signal_handler(signum: int):
     """Factory for signal handlers that restore tty."""
+
     def handler(signum, frame):
         _restore_tty()
         if signum == signal.SIGWINCH:
             _handle_sigwinch()
         else:
             signal.default_int_handler(signum, frame)
+
     return handler
 
 
@@ -718,11 +720,9 @@ def getch_str(
         try:
             tty.setraw(fd)
         except Exception:
-            # If setraw fails, restore settings and re-raise
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             raise
 
-    old_flags = None
     try:
         # 2. Wait for input using wall-clock timeout for accuracy
         # Lock is released during select() to allow other threads (like echo) to proceed
@@ -734,9 +734,7 @@ def getch_str(
             # Calculate elapsed time and remaining timeout
             elapsed = time.time() - start_time
             if timeout is not None and elapsed >= timeout:
-                # Timeout reached - restore and return
-                with _current_stream_lock:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
                 if idle is not None:
                     idle()
                 return None
@@ -786,14 +784,5 @@ def getch_str(
 
             return result
 
-    except Exception:
-        # If any error occurs, restore terminal settings
-        if old_settings is not None:
-            with _current_stream_lock:
-                try:
-                    if old_flags is not None:
-                        fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                except Exception:
-                    pass
-        raise
+    finally:
+        _restore_tty()
