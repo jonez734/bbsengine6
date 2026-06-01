@@ -203,9 +203,14 @@ def test_transaction(db_connection):
     Uses psycopg's built-in autocommit=False (default) behavior.
     Each test's inserts/deletes are rolled back automatically.
 
-    For DB-connected tests: also clears _types to prevent cross-test pollution
-    of notification type registrations.
+    Also clears _types to prevent cross-test pollution of notification type
+    registrations between tests.
     """
+    from bbsengine6.notify import _types, _types_lock
+
+    with _types_lock:
+        _types.clear()
+
     yield  # Test runs here
 
     # Rollback after test - all inserts/deletes are undone.
