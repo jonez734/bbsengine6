@@ -15,7 +15,13 @@ import pytest
 sys.path.insert(0, "/home/opencode/data/work/bbsengine6/py/src/bbsengine6/examples")
 
 from bbsengine6 import member
-from notify_message_demo import DemoConfig, MessageHandler
+from bbsengine6.notify.demo import _demo_queues, _queues_lock
+
+# MessageHandler and DemoConfig from examples (via sys.path below)
+import notify_message_demo as nm_demo
+
+MessageHandler = nm_demo.MessageHandler
+DemoConfig = nm_demo.DemoConfig
 
 
 # ============================================================================

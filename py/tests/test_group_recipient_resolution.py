@@ -15,6 +15,7 @@ import pytest
 sys.path.insert(0, "/home/opencode/data/work/bbsengine6/py/src/bbsengine6/examples")
 
 from bbsengine6 import member
+from bbsengine6.notify.demo import _queues_lock
 from notify_message_demo import DemoConfig, MessageHandler
 
 
@@ -223,8 +224,10 @@ class TestDemoGroupSending:
         handler.send_message("ops alert", "ops")
 
         # Message should be queued
-        with MessageHandler._queues_lock:
-            queue = MessageHandler._demo_queues.get("ops")
+        from bbsengine6.notify.demo import _demo_queues
+
+        with _queues_lock:
+            queue = _demo_queues.get("ops")
             assert queue is not None
             assert len(queue) > 0
 
