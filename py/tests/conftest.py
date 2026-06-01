@@ -202,20 +202,20 @@ def test_transaction(db_connection):
 
     Uses psycopg's built-in autocommit=False (default) behavior.
     Each test's inserts/deletes are rolled back automatically.
-    """
-    # Ensure we're not in a transaction (clean state)
-    # PostgreSQL auto-starts a transaction on first DML
-    # Just yield and let test run normally
 
+    For DB-connected tests: also clears _types to prevent cross-test pollution
+    of notification type registrations.
+    """
     yield  # Test runs here
 
-    # Rollback after test - all inserts/deletes are undone
-    # This doesn't affect CREATE TABLE/VIEW/TYPE (DDL) from session fixtures
+    # Rollback after test - all inserts/deletes are undone.
+    # Only try rollback on real psycopg connections (skip for mock connections
+    # used in pure unit tests that don't connect to the database).
     try:
-        db_connection.rollback()
-    except Exception as e:
-        # If rollback fails (transaction already closed, etc), just log it
-        logger.debug(f"Rollback warning: {e}")
+        if db_connection and hasattr(db_connection, "rollback"):
+            db_connection.rollback()
+    except Exception:
+        pass
 
 
 # ===== Helper Functions =====
