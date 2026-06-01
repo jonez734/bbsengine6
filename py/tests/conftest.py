@@ -48,24 +48,8 @@ atexit.register(_close_test_pools)
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip session fixtures for tests marked with @pytest.mark.unit.
-
-    Only skip DB fixtures if ALL tests are marked unit. If any test lacks
-    the unit marker, all tests run with DB fixtures (unit tests still get
-    their DB connection through the fixture chain).
-    """
-    needs_db = False
-    for item in items:
-        if not item.get_closest_marker("unit"):
-            needs_db = True
-            break
-
-    if not needs_db:
-        # All tests are unit tests - skip DB session for all
-        # (each test still gets its own skip from the db_connection fixture)
-        skip_db = pytest.mark.skip(reason="Unit test - no database required")
-        for item in items:
-            item.add_marker(skip_db)
+    """No-op: session fixtures handle their own skip logic per-test."""
+    pass
 
 
 @pytest.fixture(scope="session")
@@ -99,12 +83,7 @@ def pool(db_connection, schema_init, request):
     """
     from bbsengine6 import database
 
-    class MockArgs:
-        databasename = "zoid6test"
-        databaseuser = "opencode"
-        debug = False
-
-    pool_obj = database.getpool(MockArgs(), dbname="zoid6test")
+    pool_obj = database.getpool(None, dbname="zoid6test", user=getpass.getuser())
 
     def close_pool():
         try:

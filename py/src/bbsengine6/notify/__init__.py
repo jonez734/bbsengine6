@@ -2,6 +2,8 @@
 # Public API for bbsengine6 notification system
 
 from .lib import (
+    _types,
+    _types_lock,
     NotificationUrgency,
     Notification,
     NotificationTamperError,
@@ -35,6 +37,8 @@ from .lib import (
 from .tui import run, run_until_quit
 
 __all__ = [
+    "_types",
+    "_types_lock",
     "NotificationUrgency",
     "Notification",
     "NotificationTamperError",
