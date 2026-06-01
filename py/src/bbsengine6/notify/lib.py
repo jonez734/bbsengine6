@@ -166,7 +166,8 @@ def _notify_mac_column_probe(cur: Any) -> bool:
                 "LIMIT 1"
             )
         )
-        _notify_mac_column_exists = cur.fetchone() is not None
+        result = cur.fetchone() is not None
+        _notify_mac_column_exists = result
     except Exception:
         _notify_mac_column_exists = False
     return _notify_mac_column_exists
