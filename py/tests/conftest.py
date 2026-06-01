@@ -101,6 +101,7 @@ def pool(db_connection, schema_init, request):
 
     class MockArgs:
         databasename = "zoid6test"
+        databaseuser = "opencode"
         debug = False
 
     pool_obj = database.getpool(MockArgs(), dbname="zoid6test")
