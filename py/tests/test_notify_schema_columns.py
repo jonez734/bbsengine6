@@ -97,7 +97,7 @@ class TestNotifySchemaColumns:
     def test_notify_recipient_has_no_is_read_column(self, db_connection):
         """Verify engine.__notify_recipient does NOT have 'is_read' column.
 
-        Read status is tracked via read_at timestamp, not a boolean.
+        Read status is tracked via dateread timestamp, not a boolean.
         """
         with db_connection.cursor() as cur:
             cur.execute(
@@ -112,7 +112,7 @@ class TestNotifySchemaColumns:
 
         assert "is_read" not in columns, (
             "engine.__notify_recipient should not have 'is_read' column - "
-            "use read_at timestamp instead"
+            "use dateread timestamp instead"
         )
 
     def test_notify_table_has_no_created_at_column(self, db_connection):
@@ -151,8 +151,10 @@ class TestNotifySchemaColumns:
 
         assert row is None or len(row) == 4, "Query should return 4 columns"
 
-    def test_notify_recipient_select_query_works(self, db_connection, create_test_users):
-        """Verify SELECT using read_at (not is_read) works."""
+    def test_notify_recipient_select_query_works(
+        self, db_connection, create_test_users
+    ):
+        """Verify SELECT using dateread (not is_read) works."""
         with db_connection.cursor() as cur:
             cur.execute(
                 """
@@ -189,8 +191,10 @@ class TestNotifySchemaColumns:
 
         assert row is None or len(row) == 4, "Join query should return 4 columns"
 
-    def test_mark_messages_read_uses_correct_columns(self, db_connection, create_test_users):
-        """Verify UPDATE using read_at works (not is_read)."""
+    def test_mark_messages_read_uses_correct_columns(
+        self, db_connection, create_test_users
+    ):
+        """Verify UPDATE using dateread works (not is_read)."""
         import getpass
 
         user = getpass.getuser()

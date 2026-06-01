@@ -1,0 +1,90 @@
+# Makefile for bbsengine6 notify HMAC key management
+
+KEY_DIR ?= /etc/bbsengine6
+KEY_FILE ?= $(KEY_DIR)/notify.key
+KEY_PERMS := 0600
+KEY_OWNER := root:root
+ENV_VAR := BBSENGINE6_NOTIFY_MAC_KEY
+
+.PHONY: all help gen-key show-key check-key remove-key install-system check-perms migrate-db help
+
+all: help
+
+gen-key:
+	@echo "Generating new HMAC key..."
+	@mkdir -p $(KEY_DIR)
+	@openssl rand -base64 32 > $(KEY_FILE).tmp
+	@chmod $(KEY_PERMS) $(KEY_FILE).tmp
+	@mv $(KEY_FILE).tmp $(KEY_FILE)
+	@chown $(KEY_OWNER) $(KEY_FILE)
+	@echo "Key generated at $(KEY_FILE)"
+	@echo ""
+	@echo "bbsengine6 reads this file directly - no environment variable needed."
+
+check-key:
+	@if [ -f $(KEY_FILE) ]; then \
+		perms=$$(stat -c '%a' $(KEY_FILE) 2>/dev/null || stat -f '%Lp' $(KEY_FILE) 2>/dev/null); \
+		if [ "$$perms" != "$(KEY_PERMS)" ]; then \
+			echo "WARNING: $(KEY_FILE) has permissions $$perms (expected $(KEY_PERMS))"; \
+		else \
+			echo "Key exists at $(KEY_FILE) with correct permissions"; \
+		fi; \
+	else \
+		echo "No key found at $(KEY_FILE)"; \
+	fi
+
+show-key:
+	@if [ -f $(KEY_FILE) ]; then \
+		key=$$(cat $(KEY_FILE)); \
+		echo "$(ENV_VAR)=$$key"; \
+	else \
+		echo "No key found at $(KEY_FILE)"; \
+		exit 1; \
+	fi
+
+remove-key:
+	@echo "Removing HMAC key..."
+	@sudo rm -f $(KEY_FILE)
+	@echo "Key removed"
+
+install-system:
+	@echo "Installing HMAC key to $(KEY_DIR)..."
+	@sudo mkdir -p $(KEY_DIR)
+	@openssl rand -base64 32 | sudo tee $(KEY_FILE) > /dev/null
+	@sudo chmod $(KEY_PERMS) $(KEY_FILE)
+	@sudo chown $(KEY_OWNER) $(KEY_FILE)
+	@echo "Installed $(KEY_FILE)"
+	@echo ""
+	@echo "Key file is 0600 - only root can read it."
+	@echo "bbsengine6 reads this file directly - no environment variable needed."
+
+check-perms:
+	@if [ -f $(KEY_FILE) ]; then \
+		perms=$$(stat -c '%a' $(KEY_FILE) 2>/dev/null || stat -f '%Lp' $(KEY_FILE) 2>/dev/null); \
+		if [ "$$perms" != "$(KEY_PERMS)" ]; then \
+			echo "ERROR: $(KEY_FILE) has insecure permissions $$perms"; \
+			echo "Set with: sudo chmod $(KEY_PERMS) $(KEY_FILE)"; \
+			exit 1; \
+		fi; \
+	fi
+
+migrate-db:
+	@echo "Use psql to add the mac column:"
+	@echo "  psql -d bbsengine6 -c \"ALTER TABLE engine.__notify ADD COLUMN mac text;\""
+
+help:
+	@echo "bbsengine6 notify HMAC key management"
+	@echo ""
+	@echo "Targets:"
+	@echo "  gen-key        - Generate a new key locally (override with KEY_DIR=value)"
+	@echo "  check-key      - Check if key exists and verify permissions"
+	@echo "  show-key       - Print the current key"
+	@echo "  remove-key     - Remove the key from the filesystem (sudo)"
+	@echo "  install-system - Generate key and install to $(KEY_DIR) (sudo)"
+	@echo "  check-perms    - Verify key file permissions"
+	@echo "  migrate-db     - Show SQL to add mac column to __notify table"
+	@echo ""
+	@echo "Variables:"
+	@echo "  KEY_DIR  = $(KEY_DIR)    (override with KEY_DIR=/path)"
+	@echo "  KEY_FILE = $(KEY_FILE)"
+	@echo "  ENV_VAR  = $(ENV_VAR)   (environment variable name)"

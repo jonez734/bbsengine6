@@ -5,7 +5,12 @@ import threading
 import time
 import pytest
 import socket
-from bbsengine6.net import Packet, PACKET_TYPE_PING, PACKET_TYPE_PONG
+from bbsengine6.net import (
+    Packet,
+    PACKET_TYPE_PING,
+    PACKET_TYPE_PONG,
+    TCPSender,
+)
 
 
 class TestPingPongIntegration:

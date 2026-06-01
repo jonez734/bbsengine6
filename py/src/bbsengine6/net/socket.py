@@ -40,6 +40,7 @@ def send_with_length(conn: socket.socket, payload: bytes):
 
 def recv_with_length(conn: socket.socket) -> bytes:
     """Receive a length-prefixed payload."""
+
     def recv_exactly(n: int) -> bytes:
         buf = b""
         while len(buf) < n:

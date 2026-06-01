@@ -6,6 +6,7 @@ from typing import Union, Optional, Any
 
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
@@ -45,7 +46,11 @@ class Frame:
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Frame):
-            return self.data == other.data and self.width == other.width and self.height == other.height
+            return (
+                self.data == other.data
+                and self.width == other.width
+                and self.height == other.height
+            )
         return False
 
 
@@ -83,14 +88,18 @@ class NumpyFrame:
         return NumpyFrame(self.data.copy(), self.frame_id)
 
     @staticmethod
-    def from_bytes(data: bytes, width: int, height: int, frame_id: int = 0) -> "NumpyFrame":
+    def from_bytes(
+        data: bytes, width: int, height: int, frame_id: int = 0
+    ) -> "NumpyFrame":
         if not HAS_NUMPY:
             raise RuntimeError("numpy not installed")
         arr = np.frombuffer(data, dtype=np.uint8).reshape((height, width, 3)).copy()
         return NumpyFrame(arr, frame_id)
 
     @staticmethod
-    def from_size(width: int, height: int, fill: int = 0, frame_id: int = 0) -> "NumpyFrame":
+    def from_size(
+        width: int, height: int, fill: int = 0, frame_id: int = 0
+    ) -> "NumpyFrame":
         if not HAS_NUMPY:
             raise RuntimeError("numpy not installed")
         data = np.full((height, width, 3), fill, dtype=np.uint8)

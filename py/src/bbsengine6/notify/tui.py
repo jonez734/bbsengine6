@@ -44,7 +44,9 @@ def _mark_notification_read(
         echo(f"Could not mark as read: {e}", level="warn")
 
 
-def _delete_notification(args: Any, pool: Any, notification_id: int, moniker: str) -> bool:
+def _delete_notification(
+    args: Any, pool: Any, notification_id: int, moniker: str
+) -> bool:
     """Delete a notification by ID."""
     try:
         from .lib import expunge
@@ -111,7 +113,9 @@ def run(args: Any, moniker: str, pool: Optional[Any] = None, **kwargs) -> int:
     return run_until_quit(args, moniker, pool=pool, **kwargs)
 
 
-def run_until_quit(args: Any, moniker: str, pool: Optional[Any] = None, **kwargs) -> int:
+def run_until_quit(
+    args: Any, moniker: str, pool: Optional[Any] = None, **kwargs
+) -> int:
     """
     Main notification TUI loop.
 

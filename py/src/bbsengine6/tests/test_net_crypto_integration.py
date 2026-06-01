@@ -398,9 +398,7 @@ class TestWebSocketTransportCrypto:
         )
 
         async def run():
-            success, msg = await transport.send_packet(
-                "example.com", 8765, packet
-            )
+            success, msg = await transport.send_packet("example.com", 8765, packet)
             assert success
 
         asyncio.run(run())
@@ -409,7 +407,6 @@ class TestWebSocketTransportCrypto:
         """WebSocketTransport without secret_key has no crypto."""
         transport = WebSocketTransport(timeout=10.0)
         assert transport._crypto is None
-
 
     def test_transport_send_packet_sync_authenticated(self, shared_secret):
         """send_packet_sync produces authenticated output."""
@@ -420,9 +417,7 @@ class TestWebSocketTransportCrypto:
             content_type="text/plain",
             content=b"hello sync",
         )
-        success, msg = transport.send_packet_sync(
-            "example.com", 8765, packet
-        )
+        success, msg = transport.send_packet_sync("example.com", 8765, packet)
         assert success
         assert "authenticated" in msg
 

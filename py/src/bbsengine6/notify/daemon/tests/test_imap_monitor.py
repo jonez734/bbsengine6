@@ -276,7 +276,9 @@ class TestPollImap:
 
     def test_poll_new_emails(self):
         """Poll finds new emails"""
-        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
+        with patch(
+            "bbsengine6.notify.daemon.imap_monitor.connect_imap"
+        ) as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
 
@@ -319,7 +321,9 @@ class TestPollImap:
 
     def test_poll_no_new_emails(self):
         """Poll finds no new emails"""
-        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
+        with patch(
+            "bbsengine6.notify.daemon.imap_monitor.connect_imap"
+        ) as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b"1 2 3"])
@@ -337,7 +341,9 @@ class TestPollImap:
 
     def test_poll_handles_fetch_error_gracefully(self):
         """Poll continues on individual fetch failure"""
-        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
+        with patch(
+            "bbsengine6.notify.daemon.imap_monitor.connect_imap"
+        ) as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
 
@@ -371,7 +377,9 @@ class TestPollImap:
 
     def test_poll_closes_connection_on_success(self):
         """Connection is properly closed after polling"""
-        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
+        with patch(
+            "bbsengine6.notify.daemon.imap_monitor.connect_imap"
+        ) as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b""])
@@ -390,7 +398,9 @@ class TestPollImap:
 
     def test_poll_closes_connection_on_error(self):
         """Connection is closed even if error occurs"""
-        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
+        with patch(
+            "bbsengine6.notify.daemon.imap_monitor.connect_imap"
+        ) as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.side_effect = Exception("Connection error")
@@ -410,7 +420,9 @@ class TestPollImap:
 
     def test_poll_custom_timeout(self):
         """Poll respects custom timeout"""
-        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
+        with patch(
+            "bbsengine6.notify.daemon.imap_monitor.connect_imap"
+        ) as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b""])
@@ -748,7 +760,9 @@ class TestPollImapEdgeCases:
 
     def test_poll_imap_with_all_zeros_uids(self):
         """Poll with edge case UIDs"""
-        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
+        with patch(
+            "bbsengine6.notify.daemon.imap_monitor.connect_imap"
+        ) as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b"1 2 3"])
@@ -768,7 +782,9 @@ class TestPollImapEdgeCases:
 
     def test_poll_imap_connect_exception_handling(self):
         """Poll properly handles connection exceptions"""
-        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
+        with patch(
+            "bbsengine6.notify.daemon.imap_monitor.connect_imap"
+        ) as mock_connect:
             mock_connect.side_effect = imap_monitor.ImapError("Connection refused")
 
             with pytest.raises(imap_monitor.ImapError):
@@ -783,7 +799,9 @@ class TestPollImapEdgeCases:
 
     def test_poll_imap_logout_error_handling(self):
         """Poll handles errors during logout gracefully"""
-        with patch("bbsengine6.notify.daemon.imap_monitor.connect_imap") as mock_connect:
+        with patch(
+            "bbsengine6.notify.daemon.imap_monitor.connect_imap"
+        ) as mock_connect:
             mock_imap = MagicMock()
             mock_connect.return_value = mock_imap
             mock_imap.uid.return_value = ("OK", [b""])

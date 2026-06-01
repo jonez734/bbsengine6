@@ -48,18 +48,24 @@ atexit.register(_close_test_pools)
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip session fixtures for tests marked with @pytest.mark.unit"""
-    needs_db = True
+    """Skip session fixtures for tests marked with @pytest.mark.unit.
+
+    Only skip DB fixtures if ALL tests are marked unit. If any test lacks
+    the unit marker, all tests run with DB fixtures (unit tests still get
+    their DB connection through the fixture chain).
+    """
+    needs_db = False
     for item in items:
-        if item.get_closest_marker("unit"):
-            needs_db = False
+        if not item.get_closest_marker("unit"):
+            needs_db = True
             break
 
     if not needs_db:
+        # All tests are unit tests - skip DB session for all
+        # (each test still gets its own skip from the db_connection fixture)
         skip_db = pytest.mark.skip(reason="Unit test - no database required")
         for item in items:
-            if not item.get_closest_marker("unit"):
-                item.add_marker(skip_db)
+            item.add_marker(skip_db)
 
 
 @pytest.fixture(scope="session")

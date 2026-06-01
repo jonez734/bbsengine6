@@ -56,9 +56,9 @@ class TestMarkRead:
         assert len(marked) == 1
         assert "jam" in marked[0].read_by
 
-    def test_mark_read_updates_read_at(self, conn):
-        """Verify mark_read sets read_at timestamp."""
-        type_name = "TEST_READ_AT"
+    def test_mark_read_updates_dateread(self, conn):
+        """Verify mark_read sets dateread timestamp."""
+        type_name = "TEST_DATEREAD"
         register_type(
             type_name=type_name,
             default_urgency=NotificationUrgency.ROUTINE,

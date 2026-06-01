@@ -595,7 +595,7 @@ Thread-safe queue for active user sessions. Uses Python's `queue.Queue` internal
    - `notify_id` (FK → __notify)
    - `recipient_moniker` (FK → __member)
    - `sessionid` (FK → __session, optional for live delivery)
-   - `is_blocked`, `delivered_at`, `read_at`, `datecreated`
+   - `is_blocked`, `datedelivered`, `dateread`, `datecreated`
    - PK: (notify_id, recipient_moniker)
    - Indexes: moniker, read (partial), blocked (partial), session
 
@@ -609,7 +609,7 @@ Thread-safe queue for active user sessions. Uses Python's `queue.Queue` internal
 4. **`engine.__notify_group`** - Group membership
    - `group_name` (text)
    - `member_moniker` (FK → __member)
-   - `added_at`, `addedbymoniker`
+   - `dateadded`, `addedbymoniker`
    - PK: (group_name, member_moniker)
    - Indexes: member, group_name
 
@@ -618,7 +618,7 @@ Thread-safe queue for active user sessions. Uses Python's `queue.Queue` internal
    - `default_urgency` (ENUM)
    - `max_per_user_per_hour` (int)
    - `persist_by_default` (boolean)
-   - `registered_at`, `registeredbymoniker`
+   - `dateregistered`, `registeredbymoniker`
 
 6. **`engine.__notify_rate_limit`** - Per-user rate limit tracking
    - `sender_moniker`, `notification_type` (composite PK)
@@ -726,6 +726,6 @@ WHERE blocker_moniker = 'jam';
 **Mark notification as read from website:**
 ```sql
 UPDATE engine.__notify_recipient 
-SET read_at = now() 
+SET dateread = now() 
 WHERE notify_id = $1 AND recipient_moniker = $2;
 ```

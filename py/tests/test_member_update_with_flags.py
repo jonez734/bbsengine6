@@ -13,7 +13,7 @@ Requires database connection to zoid6test.
 
 import pytest
 import argparse
-from bbsengine6.member import buildrec, update
+from bbsengine6.member import buildrec
 from bbsengine6 import database
 
 
@@ -230,7 +230,7 @@ class TestMemberUpdateIntegration:
     def test_member_update_with_flags_via_buildrec(self, db_connection):
         """Test updating member with flags through buildrec() and database.update()."""
         # Create test args
-        args = argparse.Namespace(debug=True)
+        argparse.Namespace(debug=True)
 
         # Member data with flags
         member = {

@@ -16,7 +16,6 @@ select
     n.should_persist,
     n.datecreated,
     n.createdbymoniker,
-    nr.is_blocked,
     nr.delivered_at as datedelivered,
     nr.read_at as dateread,
     nr.datecreated as recipient_datecreated,

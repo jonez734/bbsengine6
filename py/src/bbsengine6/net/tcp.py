@@ -4,11 +4,10 @@
 
 import socket
 import struct
-import time
 from typing import Optional, Union
 
 from .frame_address import FrameAddress, FrameAddressParser, ParseResult
-from .frame_types import Frame, NumpyFrame, frame_from_any
+from .frame_types import Frame, NumpyFrame
 
 
 class TCPSender:
@@ -39,33 +38,50 @@ class TCPSender:
         dsn: Optional[str],
         address: Optional[FrameAddress],
     ) -> ParseResult:
-        arg_count = sum([
-            host_or_dsn is not None,
-            port is not None,
-            dsn is not None,
-            address is not None,
-        ])
+        arg_count = sum(
+            [
+                host_or_dsn is not None,
+                port is not None,
+                dsn is not None,
+                address is not None,
+            ]
+        )
 
         if arg_count == 0:
-            return ParseResult(False, error="No connection parameters provided", code="NO_ARGS")
+            return ParseResult(
+                False, error="No connection parameters provided", code="NO_ARGS"
+            )
 
         if address is not None:
             if arg_count > 1:
-                return ParseResult(False, error="Cannot mix address object with other args", code="AMBIGUOUS_ARGS")
+                return ParseResult(
+                    False,
+                    error="Cannot mix address object with other args",
+                    code="AMBIGUOUS_ARGS",
+                )
             return address.validate()
 
         if dsn is not None:
             if arg_count > 1:
-                return ParseResult(False, error="Cannot mix dsn with other args", code="AMBIGUOUS_ARGS")
+                return ParseResult(
+                    False, error="Cannot mix dsn with other args", code="AMBIGUOUS_ARGS"
+                )
             return FrameAddressParser.parse(dsn)
 
-        if isinstance(host_or_dsn, str) and host_or_dsn.startswith(("tcp://", "udp://", "unix://", "ws://", "wss://")):
+        if isinstance(host_or_dsn, str) and host_or_dsn.startswith(
+            ("tcp://", "udp://", "unix://", "ws://", "wss://")
+        ):
             if port is not None:
-                return ParseResult(False, error="Cannot specify port with DSN string", code="AMBIGUOUS_ARGS")
+                return ParseResult(
+                    False,
+                    error="Cannot specify port with DSN string",
+                    code="AMBIGUOUS_ARGS",
+                )
             return FrameAddressParser.parse(host_or_dsn)
 
         if isinstance(host_or_dsn, str) and port is not None:
             from .frame_address import FrameScheme
+
             address = FrameAddress(
                 scheme=FrameScheme.TCP,
                 host=host_or_dsn,
@@ -78,7 +94,9 @@ class TCPSender:
             return address.validate()
 
         if isinstance(host_or_dsn, str) and port is None:
-            return ParseResult(False, error="Port required when host provided", code="MISSING_PORT")
+            return ParseResult(
+                False, error="Port required when host provided", code="MISSING_PORT"
+            )
 
         return ParseResult(False, error="Invalid arguments", code="INVALID_ARGS")
 
@@ -99,7 +117,9 @@ class TCPSender:
             self.sock.connect((self.address.host, self.address.port))
             return None
         except Exception as e:
-            return ParseResult(False, error=f"Connection failed: {str(e)}", code="CONNECT_ERROR")
+            return ParseResult(
+                False, error=f"Connection failed: {str(e)}", code="CONNECT_ERROR"
+            )
 
     def send(self, packet) -> Optional[ParseResult]:
         if self.error:
@@ -132,6 +152,7 @@ class TCPSender:
 
         try:
             from .socket import recv_all
+
             header = recv_all(self.sock, 16)
             if header is None:
                 return None
@@ -140,9 +161,12 @@ class TCPSender:
             if payload is None:
                 return None
             from .packet import Packet as BbsPacket
+
             return BbsPacket(ptype, payload, timestamp)
         except Exception as e:
-            return ParseResult(False, error=f"Receive failed: {str(e)}", code="RECV_ERROR")
+            return ParseResult(
+                False, error=f"Receive failed: {str(e)}", code="RECV_ERROR"
+            )
 
     def close(self):
         if self.sock:
@@ -193,7 +217,9 @@ class TCPReceiver:
             self.server_sock.settimeout(timeout_val)
             self._accept_connection()
         except Exception as e:
-            self.error = ParseResult(False, error=f"Server setup failed: {str(e)}", code="SERVER_SETUP_ERROR")
+            self.error = ParseResult(
+                False, error=f"Server setup failed: {str(e)}", code="SERVER_SETUP_ERROR"
+            )
 
     def _accept_connection(self):
         if self.client_sock is None and self.server_sock:
@@ -204,7 +230,9 @@ class TCPReceiver:
             except socket.timeout:
                 pass
             except Exception as e:
-                self.error = ParseResult(False, error=f"Accept failed: {str(e)}", code="ACCEPT_ERROR")
+                self.error = ParseResult(
+                    False, error=f"Accept failed: {str(e)}", code="ACCEPT_ERROR"
+                )
 
     def recv(self) -> Union[Optional[object], ParseResult]:
         if self.error:
@@ -217,6 +245,7 @@ class TCPReceiver:
 
         try:
             from .socket import recv_all
+
             header = recv_all(self.client_sock, 16)
             if header is None:
                 self.client_sock = None
@@ -227,12 +256,15 @@ class TCPReceiver:
                 self.client_sock = None
                 return None
             from .packet import Packet as BbsPacket
+
             return BbsPacket(ptype, payload, timestamp)
         except socket.timeout:
             return None
         except Exception as e:
             self.client_sock = None
-            return ParseResult(False, error=f"Receive failed: {str(e)}", code="RECV_ERROR")
+            return ParseResult(
+                False, error=f"Receive failed: {str(e)}", code="RECV_ERROR"
+            )
 
     def close(self):
         if self.client_sock:

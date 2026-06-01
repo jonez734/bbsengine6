@@ -9,7 +9,6 @@ Tests verify that:
 5. Overall structure is correct for database operations
 """
 
-import pytest
 from bbsengine6.member import buildrec
 
 
@@ -302,7 +301,6 @@ class TestBuildrecEdgeCases:
 
     def test_buildrec_preserves_dict_order(self):
         """Dict field should preserve key order (Python 3.7+)."""
-        from collections import OrderedDict
 
         member = {
             "moniker": "testuser",

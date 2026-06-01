@@ -60,7 +60,7 @@ class TestNotifyMessageF2Demo:
         # Step 4: Simulate F2 key press to view messages
         # In the actual demo, F2 calls handle_f2() which displays messages
         # Note: In demo mode (no database), receive_messages() does NOT clear the queue
-        # because there's no read_at tracking. Messages only get cleared via
+        # because there's no dateread tracking. Messages only get cleared via
         # explicit get_unread_messages() or mark_messages_as_read().
         messages_for_display = bob.handler.receive_messages()
         # Demo mode doesn't clear queue, so messages may still be present

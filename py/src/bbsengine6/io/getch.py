@@ -735,7 +735,7 @@ def getch_str(
             elapsed = time.time() - start_time
             if timeout is not None and elapsed >= timeout:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-                if idle is not None:
+                if callable(idle):
                     idle()
                 return None
 

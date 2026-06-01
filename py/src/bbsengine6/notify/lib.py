@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import hmac
+import json
 import logging
 import os
 import queue
@@ -18,6 +20,7 @@ from psycopg import sql
 
 from .. import database, io
 from ..database import getpool
+from ..net.crypto import CryptoHash
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +65,7 @@ _queues: Dict[str, UserNotificationQueue] = {}
 _types_lock = threading.Lock()
 _types: Dict[str, Dict[str, Any]] = {}
 _rate_limit_lock = threading.Lock()
+_notify_mac_column_exists: Optional[bool] = None
 
 
 class NotificationUrgency(Enum):
@@ -95,6 +99,110 @@ class Notification:
     errors: Dict[str, str] = field(default_factory=dict)
     should_persist: bool = True
     datecreated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class NotificationTamperError(ValueError):
+    """Raised when HMAC verification fails on a notification (tampering detected)."""
+
+    pass
+
+
+_mac_key_cache: Optional[bytes] = None
+_mac_key_lock = threading.Lock()
+
+
+def _get_mac_key() -> Optional[bytes]:
+    """Get the HMAC secret key from environment or key file, with caching.
+
+    Priority:
+    1. BBSENGINE6_NOTIFY_MAC_KEY environment variable
+    2. /etc/bbsengine6/notify.key file
+
+    Returns:
+        Key bytes, or None if not configured.
+    """
+    global _mac_key_cache
+    if _mac_key_cache is not None:
+        return _mac_key_cache
+    with _mac_key_lock:
+        if _mac_key_cache is not None:
+            return _mac_key_cache
+        key = os.environ.get("BBSENGINE6_NOTIFY_MAC_KEY", "")
+        if not key:
+            key_file = "/etc/bbsengine6/notify.key"
+            if os.path.exists(key_file):
+                try:
+                    stat_info = os.stat(key_file)
+                    mode = stat_info.st_mode
+                    if mode & 0o077:
+                        logging.warning(
+                            f"%s has insecure permissions 0%o (should be 0600)",
+                            key_file,
+                            mode,
+                        )
+                    with open(key_file) as f:
+                        key = f.read().strip()
+                except OSError as e:
+                    logging.warning("Could not read %s: %s", key_file, e)
+        _mac_key_cache = key.encode() if key else None
+        return _mac_key_cache
+
+
+def _notify_mac_column_probe(cur: Any) -> bool:
+    """Probe whether the __notify table has a mac column, cached globally.
+
+    Uses information_schema for a reliable, transaction-consistent answer
+    rather than relying on cursor description which can be stale after
+    ALTER TABLE on the connection's pre-existing schema view.
+    """
+    global _notify_mac_column_exists
+    if _notify_mac_column_exists is not None:
+        return _notify_mac_column_exists
+    try:
+        cur.execute(
+            sql.SQL(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_schema = 'engine' AND table_name = '__notify' AND column_name = 'mac' "
+                "LIMIT 1"
+            )
+        )
+        _notify_mac_column_exists = cur.fetchone() is not None
+    except Exception:
+        _notify_mac_column_exists = False
+    return _notify_mac_column_exists
+
+
+def _compute_notify_mac(
+    notification_type: str,
+    sender_moniker: Optional[str],
+    template: str,
+    template_vars: Dict[str, Any],
+    rendered_message: str,
+    data: Dict[str, Any],
+    urgency: NotificationUrgency,
+) -> Optional[str]:
+    """Compute HMAC-SHA256 over the immutable notification content fields."""
+    key = _get_mac_key()
+    if not key:
+        return None
+    crypto = CryptoHash(key)
+    template_vars_json = json.dumps(
+        template_vars, sort_keys=True, separators=(",", ":")
+    )
+    data_json = json.dumps(data, sort_keys=True, separators=(",", ":"))
+    payload = "|".join(
+        str(x) if x is not None else ""
+        for x in [
+            notification_type,
+            sender_moniker or "",
+            template,
+            template_vars_json,
+            rendered_message,
+            data_json,
+            urgency.value,
+        ]
+    )
+    return crypto.compute(payload.encode("utf-8"))
 
 
 class UserNotificationQueue:
@@ -477,24 +585,60 @@ def send(
 
             expanded, errors = _expand_recipients(recipients, cur)
 
-            cur.execute(
-                sql.SQL("""
-                    INSERT INTO engine.__notify
-                    (notification_type, sender_moniker, template, template_vars, rendered_message, data, urgency, should_persist, datecreated)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
-                    RETURNING id
-                """),
-                (
+            has_mac = _notify_mac_column_probe(cur)
+            mac = (
+                _compute_notify_mac(
                     notification_type,
                     sender_moniker,
                     template,
-                    database.convert_for_jsonb(template_vars),
+                    template_vars,
                     message,
-                    database.convert_for_jsonb(data),
-                    urgency.value,
-                    should_persist,
-                ),
+                    data,
+                    urgency,
+                )
+                if has_mac
+                else None
             )
+
+            if has_mac:
+                cur.execute(
+                    sql.SQL("""
+                        INSERT INTO engine.__notify
+                        (notification_type, sender_moniker, template, template_vars, rendered_message, data, urgency, should_persist, mac, datecreated)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                        RETURNING id
+                    """),
+                    (
+                        notification_type,
+                        sender_moniker,
+                        template,
+                        database.convert_for_jsonb(template_vars),
+                        message,
+                        database.convert_for_jsonb(data),
+                        urgency.value,
+                        should_persist,
+                        mac,
+                    ),
+                )
+            else:
+                cur.execute(
+                    sql.SQL("""
+                        INSERT INTO engine.__notify
+                        (notification_type, sender_moniker, template, template_vars, rendered_message, data, urgency, should_persist, datecreated)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, now())
+                        RETURNING id
+                    """),
+                    (
+                        notification_type,
+                        sender_moniker,
+                        template,
+                        database.convert_for_jsonb(template_vars),
+                        message,
+                        database.convert_for_jsonb(data),
+                        urgency.value,
+                        should_persist,
+                    ),
+                )
             notify_id = cur.fetchone()["id"]
 
             recipients_ok = []
@@ -589,7 +733,9 @@ def _add_to_user_queue(
             _queues[moniker].put(notification)
 
             try:
-                pool, conn, we_created = _resolve_conn(args, kwargs.get("pool"), kwargs.get("conn"))
+                pool, conn, we_created = _resolve_conn(
+                    args, kwargs.get("pool"), kwargs.get("conn")
+                )
                 if conn is not None:
                     with database.cursor(conn) as cur:
                         cur.execute(
@@ -673,21 +819,40 @@ def get_notifications(
 
     try:
         with database.cursor(conn) as cur:
+            has_mac = _notify_mac_column_probe(cur)
+            mac_col = sql.SQL("n.mac") if has_mac else sql.SQL("NULL AS mac")
             query = sql.SQL("""
                 SELECT n.id, n.notification_type, n.sender_moniker, n.template, n.template_vars,
-                       n.rendered_message, n.data, n.urgency, n.datecreated, nr.read_at, nr.delivered_at
+                       n.rendered_message, n.data, n.urgency, {mac_col}, n.datecreated, nr.read_at, nr.delivered_at
                 FROM engine.__notify n
                 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
                 WHERE nr.recipient_moniker = %s
                 ORDER BY n.datecreated DESC
                 LIMIT %s
-            """)
+            """).format(mac_col=mac_col)
 
             cur.execute(query, (moniker, limit))
             rows = cur.fetchall()
 
             notifications = []
             for row in rows:
+                stored_mac = row.get("mac")
+                if stored_mac:
+                    expected_mac = _compute_notify_mac(
+                        row["notification_type"],
+                        row["sender_moniker"],
+                        row["template"],
+                        row["template_vars"] or {},
+                        _render_template(row["template"], row["template_vars"] or {}),
+                        row["data"] or {},
+                        NotificationUrgency(row["urgency"]),
+                    )
+                    if expected_mac is not None and not hmac.compare_digest(
+                        expected_mac, stored_mac
+                    ):
+                        raise NotificationTamperError(
+                            f"Notification {row['id']} HMAC verification failed: content has been tampered with"
+                        )
                 notifications.append(
                     Notification(
                         id=row["id"],
@@ -698,12 +863,20 @@ def get_notifications(
                         sender_moniker=row["sender_moniker"],
                         template=row["template"],
                         template_vars=row["template_vars"] or {},
-                        message=_render_template(row["template"], row["template_vars"] or {}),
+                        message=_render_template(
+                            row["template"], row["template_vars"] or {}
+                        ),
                         data=row["data"] or {},
                         urgency=NotificationUrgency(row["urgency"]),
-                        timestamp=row["datecreated"].timestamp() if row["datecreated"] else time.time(),
-                        delivered_to={moniker: row["delivered_at"].timestamp()} if row["delivered_at"] else {},
-                        read_by={moniker: row["read_at"].timestamp()} if row["read_at"] else {},
+                        timestamp=row["datecreated"].timestamp()
+                        if row["datecreated"]
+                        else time.time(),
+                        delivered_to={moniker: row["delivered_at"].timestamp()}
+                        if row["delivered_at"]
+                        else {},
+                        read_by={moniker: row["read_at"].timestamp()}
+                        if row["read_at"]
+                        else {},
                         should_persist=True,
                         datecreated=row["datecreated"],
                     )
@@ -1260,9 +1433,7 @@ def expunge(
     try:
         with database.cursor(conn) as cur:
             cur.execute(
-                sql.SQL(
-                    "SELECT sender_moniker FROM engine.__notify WHERE id = %s"
-                ),
+                sql.SQL("SELECT sender_moniker FROM engine.__notify WHERE id = %s"),
                 (notification_id,),
             )
             row = cur.fetchone()

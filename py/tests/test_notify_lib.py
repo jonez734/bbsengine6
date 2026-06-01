@@ -3,7 +3,7 @@
 
 import time
 import uuid
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -90,7 +90,7 @@ class TestNotificationUrgency:
 class TestRegisterType:
     def test_register_type_creates_type(self):
         mock_conn = MagicMock()
-        mock_pool = MagicMock()
+        MagicMock()
         mock_cursor = MockCursor(rows=[None])
 
         def enter_side_effect():
@@ -285,9 +285,10 @@ class TestGetNotifications:
             "rendered_message": "Hello",
             "data": None,
             "urgency": "ROUTINE",
+            "mac": None,
             "datecreated": MagicMock(timestamp=lambda: time.time()),
-            "delivered_at": None,
-            "read_at": None,
+            "datedelivered": None,
+            "dateread": None,
         }
         mock_cursor = MockCursor(rows=[mock_row])
 
@@ -320,7 +321,12 @@ class TestSendValidation:
 
     def test_send_invalid_sender(self):
         with pytest.raises(ValueError):
-            send("test_type", recipients=["user"], template="test", sender_moniker="bad/user")
+            send(
+                "test_type",
+                recipients=["user"],
+                template="test",
+                sender_moniker="bad/user",
+            )
 
 
 class TestNotificationDataclass:

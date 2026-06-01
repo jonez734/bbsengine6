@@ -2,7 +2,6 @@
 # Frame address parser: RFC 3986 DSN-like URI scheme with hybrid query parameter handling
 # Copied from asimov.net (bbsengine6 is not permitted to import from asimov)
 
-import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Optional, Union
@@ -11,6 +10,7 @@ from urllib.parse import urlparse, parse_qs, urlencode, quote, unquote
 
 class FrameScheme(Enum):
     """Supported frame address schemes."""
+
     TCP = "tcp"
     UDP = "udp"
     UNIX = "unix"
@@ -21,6 +21,7 @@ class FrameScheme(Enum):
 @dataclass
 class ParseResult:
     """Result object for parsing operations (error handling without exceptions)."""
+
     success: bool
     value: Optional[Union["FrameAddress", str, Dict]] = None
     error: Optional[str] = None
@@ -34,6 +35,7 @@ class FrameAddress:
 
     Transport layer interprets standard parameters, passes custom parameters to app.
     """
+
     scheme: FrameScheme
     host: Optional[str]
     port: Optional[int]
@@ -86,19 +88,40 @@ class FrameAddress:
 
     def validate(self) -> ParseResult:
         """Validate all fields."""
-        if self.scheme in [FrameScheme.TCP, FrameScheme.UDP, FrameScheme.WS, FrameScheme.WSS]:
+        if self.scheme in [
+            FrameScheme.TCP,
+            FrameScheme.UDP,
+            FrameScheme.WS,
+            FrameScheme.WSS,
+        ]:
             if not self.host:
-                return ParseResult(False, error="Host required for " + self.scheme.value, code="HOST_REQUIRED")
+                return ParseResult(
+                    False,
+                    error="Host required for " + self.scheme.value,
+                    code="HOST_REQUIRED",
+                )
             if self.port and (self.port < 1 or self.port > 65535):
-                return ParseResult(False, error="Port out of range", code="INVALID_PORT")
+                return ParseResult(
+                    False, error="Port out of range", code="INVALID_PORT"
+                )
 
         if self.scheme == FrameScheme.UNIX:
             if not self.socket_path:
-                return ParseResult(False, error="Socket path required for unix://", code="SOCKET_PATH_REQUIRED")
+                return ParseResult(
+                    False,
+                    error="Socket path required for unix://",
+                    code="SOCKET_PATH_REQUIRED",
+                )
             if not self.socket_path.startswith("/"):
-                return ParseResult(False, error="Unix socket path must be absolute", code="INVALID_UNIX_PATH")
+                return ParseResult(
+                    False,
+                    error="Unix socket path must be absolute",
+                    code="INVALID_UNIX_PATH",
+                )
             if self.port:
-                return ParseResult(False, error="Port not allowed for unix://", code="PORT_NOT_ALLOWED")
+                return ParseResult(
+                    False, error="Port not allowed for unix://", code="PORT_NOT_ALLOWED"
+                )
 
         return ParseResult(True, value=self)
 
@@ -112,10 +135,16 @@ class FrameAddressParser:
     def parse(dsn: str) -> ParseResult:
         """Parse DSN string into FrameAddress."""
         if not dsn or not isinstance(dsn, str):
-            return ParseResult(False, error="DSN must be non-empty string", code="INVALID_DSN_FORMAT")
+            return ParseResult(
+                False, error="DSN must be non-empty string", code="INVALID_DSN_FORMAT"
+            )
 
         if "://" not in dsn:
-            return ParseResult(False, error="Invalid DSN format: missing ://", code="INVALID_URI_FORMAT")
+            return ParseResult(
+                False,
+                error="Invalid DSN format: missing ://",
+                code="INVALID_URI_FORMAT",
+            )
 
         try:
             parsed = urlparse(dsn)
@@ -130,14 +159,28 @@ class FrameAddressParser:
                 if not socket_path:
                     socket_path = parsed.netloc
 
-                if parsed.netloc and (parsed.netloc.startswith(".") or parsed.netloc == ""):
-                    return ParseResult(False, error="Unix socket path must be absolute", code="INVALID_UNIX_PATH")
+                if parsed.netloc and (
+                    parsed.netloc.startswith(".") or parsed.netloc == ""
+                ):
+                    return ParseResult(
+                        False,
+                        error="Unix socket path must be absolute",
+                        code="INVALID_UNIX_PATH",
+                    )
 
                 if not socket_path or not socket_path.startswith("/"):
-                    return ParseResult(False, error="Unix socket path must be absolute", code="INVALID_UNIX_PATH")
+                    return ParseResult(
+                        False,
+                        error="Unix socket path must be absolute",
+                        code="INVALID_UNIX_PATH",
+                    )
 
                 if ":" in socket_path:
-                    return ParseResult(False, error="Port not allowed for unix://", code="PORT_NOT_ALLOWED")
+                    return ParseResult(
+                        False,
+                        error="Port not allowed for unix://",
+                        code="PORT_NOT_ALLOWED",
+                    )
 
                 address = FrameAddress(
                     scheme=scheme,
@@ -146,11 +189,13 @@ class FrameAddressParser:
                     socket_path=socket_path,
                     user=None,
                     password=None,
-                    path="/"
+                    path="/",
                 )
                 return ParseResult(True, value=address)
 
-            authority_result = FrameAddressParser._parse_authority(parsed.netloc, scheme)
+            authority_result = FrameAddressParser._parse_authority(
+                parsed.netloc, scheme
+            )
             if not authority_result.success:
                 return authority_result
             user, password, host, port = authority_result.value
@@ -183,13 +228,15 @@ class FrameAddressParser:
                 retry=retry,
                 keepalive=keepalive,
                 backoff=backoff,
-                custom_params=custom_params
+                custom_params=custom_params,
             )
 
             return address.validate()
 
         except Exception as e:
-            return ParseResult(False, error=f"Parse error: {str(e)}", code="PARSE_ERROR")
+            return ParseResult(
+                False, error=f"Parse error: {str(e)}", code="PARSE_ERROR"
+            )
 
     @staticmethod
     def _validate_scheme(scheme: str) -> ParseResult:
@@ -200,7 +247,9 @@ class FrameAddressParser:
             frame_scheme = FrameScheme(scheme.lower())
             return ParseResult(True, value=frame_scheme)
         except ValueError:
-            return ParseResult(False, error=f"Invalid scheme: {scheme}", code="INVALID_SCHEME")
+            return ParseResult(
+                False, error=f"Invalid scheme: {scheme}", code="INVALID_SCHEME"
+            )
 
     @staticmethod
     def _parse_authority(netloc: str, scheme: FrameScheme) -> ParseResult:
@@ -242,17 +291,23 @@ class FrameAddressParser:
             return ParseResult(True, value=(user, password, host, port))
 
         except Exception as e:
-            return ParseResult(False, error=f"Invalid authority: {str(e)}", code="INVALID_AUTHORITY")
+            return ParseResult(
+                False, error=f"Invalid authority: {str(e)}", code="INVALID_AUTHORITY"
+            )
 
     @staticmethod
     def _validate_port(port_str: str, scheme: FrameScheme) -> ParseResult:
         if scheme == FrameScheme.UNIX:
-            return ParseResult(False, error="Port not allowed for unix://", code="PORT_NOT_ALLOWED")
+            return ParseResult(
+                False, error="Port not allowed for unix://", code="PORT_NOT_ALLOWED"
+            )
 
         try:
             port = int(port_str)
             if port < 1 or port > 65535:
-                return ParseResult(False, error="Port out of range (1-65535)", code="INVALID_PORT")
+                return ParseResult(
+                    False, error="Port out of range (1-65535)", code="INVALID_PORT"
+                )
             return ParseResult(True, value=port)
         except ValueError:
             return ParseResult(False, error="Port must be numeric", code="INVALID_PORT")
@@ -277,7 +332,9 @@ class FrameAddressParser:
         custom_params = {}
 
         if not query:
-            return ParseResult(True, value=(timeout, retry, keepalive, backoff, custom_params))
+            return ParseResult(
+                True, value=(timeout, retry, keepalive, backoff, custom_params)
+            )
 
         try:
             params = parse_qs(query, keep_blank_values=True)
@@ -286,42 +343,68 @@ class FrameAddressParser:
                 try:
                     timeout = int(params["timeout"][0])
                     if timeout <= 0:
-                        return ParseResult(False, error="timeout must be > 0", code="INVALID_TIMEOUT")
+                        return ParseResult(
+                            False, error="timeout must be > 0", code="INVALID_TIMEOUT"
+                        )
                 except (ValueError, IndexError):
-                    return ParseResult(False, error="timeout must be integer", code="INVALID_TIMEOUT")
+                    return ParseResult(
+                        False, error="timeout must be integer", code="INVALID_TIMEOUT"
+                    )
 
             if "retry" in params:
                 try:
                     retry = int(params["retry"][0])
                     if retry < 0:
-                        return ParseResult(False, error="retry must be >= 0", code="INVALID_RETRY")
+                        return ParseResult(
+                            False, error="retry must be >= 0", code="INVALID_RETRY"
+                        )
                 except (ValueError, IndexError):
-                    return ParseResult(False, error="retry must be integer", code="INVALID_RETRY")
+                    return ParseResult(
+                        False, error="retry must be integer", code="INVALID_RETRY"
+                    )
 
             if "keepalive" in params:
                 try:
                     keepalive = int(params["keepalive"][0])
                     if keepalive <= 0:
-                        return ParseResult(False, error="keepalive must be > 0", code="INVALID_KEEPALIVE")
+                        return ParseResult(
+                            False,
+                            error="keepalive must be > 0",
+                            code="INVALID_KEEPALIVE",
+                        )
                 except (ValueError, IndexError):
-                    return ParseResult(False, error="keepalive must be integer", code="INVALID_KEEPALIVE")
+                    return ParseResult(
+                        False,
+                        error="keepalive must be integer",
+                        code="INVALID_KEEPALIVE",
+                    )
 
             if "backoff" in params:
                 try:
                     backoff = float(params["backoff"][0])
                     if backoff <= 1.0:
-                        return ParseResult(False, error="backoff must be > 1.0", code="INVALID_BACKOFF")
+                        return ParseResult(
+                            False, error="backoff must be > 1.0", code="INVALID_BACKOFF"
+                        )
                 except (ValueError, IndexError):
-                    return ParseResult(False, error="backoff must be float > 1.0", code="INVALID_BACKOFF")
+                    return ParseResult(
+                        False,
+                        error="backoff must be float > 1.0",
+                        code="INVALID_BACKOFF",
+                    )
 
             for key, values in params.items():
                 if key not in FrameAddressParser.STANDARD_PARAMS:
                     custom_params[key] = values[0] if values else ""
 
-            return ParseResult(True, value=(timeout, retry, keepalive, backoff, custom_params))
+            return ParseResult(
+                True, value=(timeout, retry, keepalive, backoff, custom_params)
+            )
 
         except Exception as e:
-            return ParseResult(False, error=f"Query parse error: {str(e)}", code="QUERY_PARSE_ERROR")
+            return ParseResult(
+                False, error=f"Query parse error: {str(e)}", code="QUERY_PARSE_ERROR"
+            )
 
 
 def default_port_for_scheme(scheme: FrameScheme) -> Optional[int]:

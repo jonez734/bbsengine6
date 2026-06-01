@@ -2,7 +2,6 @@
 Test suite for md2tpl.py - markdown to Smarty template converter.
 """
 
-import pytest
 from pathlib import Path
 
 from bbsengine6.md2tpl import parse_frontmatter, convert_to_smarty

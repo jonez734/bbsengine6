@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from bbsengine6.net import NotifyIntegration, get_integration, send_with_internet
+from bbsengine6.net import NotifyIntegration
 
 
 class MockNotifyModule:

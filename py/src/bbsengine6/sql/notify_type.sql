@@ -1,6 +1,7 @@
 --\echo notify_type
 
 -- Notification type registration and rate limit configuration
+drop table if exists engine.__notify_type;
 create table engine.__notify_type (
     "type_name" text primary key,
     "default_urgency" engine.notify_urgency_enum default 'ROUTINE'::engine.notify_urgency_enum,

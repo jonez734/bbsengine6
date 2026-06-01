@@ -11,14 +11,12 @@ Tests verify that:
 
 import sys
 import pytest
-from io import StringIO
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 # Add source to path
 sys.path.insert(0, "py/src")
 
 from bbsengine6.examples.notify_message_demo import display_with_more_prompt
-from bbsengine6.io.echo import echo
 
 
 class TestMorePromptBasicFunctionality:

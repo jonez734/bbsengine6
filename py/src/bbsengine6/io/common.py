@@ -233,7 +233,11 @@ def get_terminal_status():
 
     with _current_stream_lock:
         response = get_dsr("status")
-        if isinstance(response, str) and response.startswith(CSI) and response.endswith("n"):
+        if (
+            isinstance(response, str)
+            and response.startswith(CSI)
+            and response.endswith("n")
+        ):
             part = int(response[2])
             if part == 0:
                 return True

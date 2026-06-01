@@ -1133,6 +1133,9 @@ def inputstring(prompt: str = "", initial: str = "", **kwargs)
   "Supports: editing, history (if available)"
 ```
 
+**F1 help:** Pressing F1 displays the `f1_help` string (or calls the callable).
+Parameter: `f1_help: str | Callable[[], str] | None = None`
+
 **Dependencies:**
 - io.getch (character input)
 - io.echo (output)
@@ -1178,6 +1181,11 @@ def inputchoice(prompt: str = "", choices: list[str] = [], **kwargs)
   "Let user select from list of choices"
   "Supports: number keys for selection"
 ```
+
+**KEY_F1 / KEY_HELP / ? support:** Pressing F1, KEY_HELP, or ? displays the `help` string.
+  The `help` parameter accepts `str` or `callable(**kwargs) -> None`.
+**KEY_F2 handler:** Pressing F2 calls `f2_handler` (str or callable(**kwargs) -> None).
+  NOTE: For F2-F12 support, use dict pattern: `f2_handler={"KEY_F2": fn, ...}`
 
 **Dependencies:**
 - io.getch (character input)

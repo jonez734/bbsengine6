@@ -14,53 +14,32 @@
 
 2. **`engine.__notify_recipient`** - The recipient delivery tracking table
    - Stores which user receives each message
-   - Tracks if message was read (read_at timestamp)
-   - Tracks if sender was blocked (is_blocked)
-   - One row per (message, recipient) pair
+- Tracks if message was read (dateread timestamp)
+- Tracks if sender was blocked (is_blocked)
+- One row per (message, recipient) pair
 
 ## How Messages Flow
 
 ### SENDING (alice sends to bob)
 
-```
-1. User types: @bob Hello
-   ↓
-2. Code validates ASCII, renders template
-   ↓
-3. INSERT into engine.__notify:
-   - notification_type: "demo-message"
-   - rendered_message: "alice: Hello"
-   - sender_moniker: "alice"
-   - urgency: "ROUTINE"
-   ↓
-4. Get returned message ID (e.g., 123)
-   ↓
-5. INSERT into engine.__notify_recipient:
-   - notify_id: 123
-   - recipient_moniker: "bob"
-   - read_at: NULL (not read yet)
-   ↓
+...
+    - dateread: NULL (not read yet)
+    ↓
 6. Display "[SENT to bob] alice: Hello"
 ```
 
 ### RECEIVING (bob sees the message)
 
-```
-1. Code polls database every 2 seconds
-   ↓
-2. Query unread messages for bob:
-   SELECT n.id, n.rendered_message, n.sender_moniker
-   FROM engine.__notify n
-   JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
-   WHERE nr.recipient_moniker = 'bob'
-   AND nr.read_at IS NULL
-   AND n.notification_type = 'demo-message'
-   ↓
+...
+    WHERE nr.recipient_moniker = 'bob'
+    AND nr.dateread IS NULL
+    AND n.notification_type = 'demo-message'
+    ↓
 3. For each message found:
-   - Display it: "[RECEIVED] alice: Hello"
-   - UPDATE read_at = NOW() to mark as read
-   ↓
-4. Next poll won't show this message (read_at is set)
+    - Display it: "[RECEIVED] alice: Hello"
+    - UPDATE dateread = NOW() to mark as read
+    ↓
+4. Next poll won't show this message (dateread is set)
 ```
 
 ## Database Tables
@@ -90,7 +69,7 @@ Column              Type        Example
 ──────────────────────────────────────────────────
 notify_id           bigint      123 (FK → __notify.id)
 recipient_moniker   citext      "bob"
-read_at             timestamptz 2024-05-18T10:30:50.456Z (NULL if unread)
+dateread             timestamptz 2024-05-18T10:30:50.456Z (NULL if unread)
 is_blocked          boolean     false
 datecreated         timestamptz 2024-05-18T10:30:45.123Z
 ```
@@ -117,7 +96,7 @@ Result:
 ### See who received what
 
 ```sql
-SELECT n.id, n.rendered_message, nr.recipient_moniker, nr.read_at
+SELECT n.id, n.rendered_message, nr.recipient_moniker, nr.dateread
 FROM engine.__notify n
 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
 WHERE n.notification_type = 'demo-message'
@@ -126,8 +105,8 @@ ORDER BY n.datecreated DESC;
 
 Result:
 ```
- id  │ rendered_message │ recipient_moniker │ read_at
-─────┼──────────────────┼───────────────────┼──────────────────
+id  │ rendered_message │ recipient_moniker │ dateread
+────┼──────────────────┼───────────────────┼──────────────────
  123 │ alice: Hello     │ bob               │ 2024-05-18 10:30:50
  124 │ bob: Hi there    │ alice             │ 2024-05-18 10:31:20
 ```
@@ -139,7 +118,7 @@ SELECT n.id, n.rendered_message, n.sender_moniker
 FROM engine.__notify n
 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
 WHERE nr.recipient_moniker = 'bob'
-AND nr.read_at IS NULL
+AND nr.dateread IS NULL
 AND n.notification_type = 'demo-message'
 ORDER BY n.datecreated ASC;
 ```
@@ -195,7 +174,7 @@ cur.execute(
     FROM engine.__notify n
     JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
     WHERE nr.recipient_moniker = %s
-    AND nr.read_at IS NULL
+    AND nr.dateread IS NULL
     AND n.notification_type = 'demo-message'
     ORDER BY n.datecreated ASC
     """,
@@ -216,7 +195,7 @@ for row in cur.fetchall():
     cur.execute(
         """
         UPDATE engine.__notify_recipient
-        SET read_at = NOW()
+        SET dateread = NOW()
         WHERE notify_id = %s AND recipient_moniker = %s
         """,
         (notify_id, self.config.moniker),

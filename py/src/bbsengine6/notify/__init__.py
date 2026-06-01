@@ -4,6 +4,7 @@
 from .lib import (
     NotificationUrgency,
     Notification,
+    NotificationTamperError,
     UserNotificationQueue,
     send,
     count,
@@ -36,6 +37,7 @@ from .tui import run, run_until_quit
 __all__ = [
     "NotificationUrgency",
     "Notification",
+    "NotificationTamperError",
     "UserNotificationQueue",
     "send",
     "count",

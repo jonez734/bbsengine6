@@ -294,7 +294,9 @@ class TestNotificationRetrieval:
         print(f"  Marked notification {notify_id} as read")
 
         all_notifs_after = get_notifications("jam", limit=10, conn=conn)
-        unread_after = [n for n in all_notifs_after if n.id == notify_id and "jam" not in n.read_by]
+        unread_after = [
+            n for n in all_notifs_after if n.id == notify_id and "jam" not in n.read_by
+        ]
         print(f"  Unread after marking: {len(unread_after)}")
 
     def test_get_urgent_notifications(self):
@@ -602,7 +604,7 @@ class TestNotificationCount:
         assert isinstance(final_count, int)
         assert final_count >= initial_count
 
-        print(f"✓ notify.count() test PASSED - count() works without errors")
+        print("✓ notify.count() test PASSED - count() works without errors")
         print(f"  Initial: {initial_count}, Final: {final_count}")
 
 

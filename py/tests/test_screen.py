@@ -49,8 +49,10 @@ class TestBottombarFragmentsListOperations:
 
     def test_append_callable(self):
         """Test appending a callable to _bottombar_fragments."""
+
         def func(**kw):
             return "dynamic"
+
         screen._bottombar_fragments.append(func)
         assert func in screen._bottombar_fragments
 
@@ -122,8 +124,10 @@ class TestRegisterUnregisterBottombar:
 
     def test_register_callable(self):
         """Test registering a callable."""
+
         def func(**kw):
             return "result"
+
         result = register_bottombar_fragment(func)
         assert result is func
         assert func in screen._bottombar_fragments
@@ -136,8 +140,10 @@ class TestRegisterUnregisterBottombar:
 
     def test_register_lambda(self):
         """Test registering a lambda function."""
+
         def lam(**kw):
             return "lambda result"
+
         register_bottombar_fragment(lam)
         assert lam in screen._bottombar_fragments
 
@@ -161,8 +167,10 @@ class TestRegisterUnregisterBottombar:
 
     def test_unregister_callable(self):
         """Test unregistering a callable."""
+
         def func(**kw):
             return "x"
+
         register_bottombar_fragment(func)
         result = unregister_bottombar_fragment(func)
         assert result is True
@@ -236,6 +244,7 @@ class TestRenderRightstack:
 
     def test_none_callable_result_filtered(self):
         """Test that None returned from callable is not added."""
+
         def returns_none(**kw):
             return None
 
@@ -246,6 +255,7 @@ class TestRenderRightstack:
 
     def test_empty_string_callable_result_filtered(self):
         """Test that empty string from callable is not added."""
+
         def returns_empty(**kw):
             return ""
 
@@ -319,6 +329,7 @@ class TestRenderRightstack:
 
     def test_callable_returning_non_string(self):
         """Test callable returning non-string is converted."""
+
         def returns_int(**kw):
             return 42
 
@@ -372,6 +383,7 @@ class TestSetbottombarWithStack:
 
     def test_stack_with_callable(self):
         """Test stack items that are callables are invoked."""
+
         def dynamic_item(**kw):
             return "generated at " + kw.get("time", "runtime")
 
@@ -394,6 +406,7 @@ class TestSetbottombarWithStack:
 
     def test_callable_left_still_works(self):
         """Test that callable left side works with stack."""
+
         def left_func(**kw):
             return "left from callable"
 
@@ -406,6 +419,7 @@ class TestSetbottombarWithStack:
 
     def test_both_left_and_right_callable(self):
         """Test callable on both left and right (via stack)."""
+
         def left_func(**kw):
             return "left result"
 
@@ -441,6 +455,7 @@ class TestSetbottombarBackwardsCompat:
 
     def test_left_string_right_callable(self):
         """Traditional usage: left string, right callable."""
+
         def right_func(**kw):
             return "dynamic right"
 
@@ -518,7 +533,7 @@ class TestEdgeCases:
 
     def test_unicode_in_strings(self):
         """Test unicode characters are preserved."""
-        screen._bottombar_fragments.append("Unicode: \u2764 \u2603 \U0001F600")
+        screen._bottombar_fragments.append("Unicode: \u2764 \u2603 \U0001f600")
         result = _render_bottombar_fragments()
         assert "\u2764" in result
 
@@ -544,8 +559,10 @@ class TestEdgeCases:
 
     def test_multiple_registrations_same_callable(self):
         """Test registering same callable multiple times via register_bottombar_fragment."""
+
         def func(**kw):
             return "test"
+
         register_bottombar_fragment(func)
         register_bottombar_fragment(func)  # Should not add duplicate
 
@@ -581,7 +598,10 @@ class TestThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=register_items, args=(i * 100, 50)) for i in range(4)]
+        threads = [
+            threading.Thread(target=register_items, args=(i * 100, 50))
+            for i in range(4)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -606,7 +626,10 @@ class TestThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=unregister_items, args=(i * 25, 25)) for i in range(4)]
+        threads = [
+            threading.Thread(target=unregister_items, args=(i * 25, 25))
+            for i in range(4)
+        ]
         for t in threads:
             t.start()
         for t in threads:

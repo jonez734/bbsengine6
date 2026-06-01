@@ -28,8 +28,8 @@ Messages are stored in the bbsengine6 notify system:
 **Recipient Tracking**: `engine.__notify_recipient` table
 - `notify_id`: References the message in engine.__notify
 - `recipient_moniker`: Who receives the message
-- `delivered_at`: When delivered (if applicable)
-- `read_at`: When read by recipient
+- `datedelivered`: When delivered (if applicable)
+- `dateread`: When read by recipient
 - `is_blocked`: Whether recipient blocked sender
 
 ## Quick Start
@@ -252,7 +252,7 @@ Errors:   1
 3. **Message Persistence**:
    - Messages stored in `engine.__notify` table
    - Recipient entry created in `engine.__notify_recipient`
-   - `read_at` field tracks which messages have been read
+   - `dateread` field tracks which messages have been read
    - Messages persist indefinitely for audit history
 
 ### Example: Offline Delivery
@@ -299,7 +299,7 @@ When checking for unread messages:
    FROM engine.__notify n
    JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
    WHERE nr.recipient_moniker = 'bob'
-   AND nr.read_at IS NULL
+   AND nr.dateread IS NULL
    AND n.notification_type = 'demo-message'
    ```
    - Update bottom status bar with count
@@ -311,7 +311,7 @@ When checking for unread messages:
    FROM engine.__notify n
    JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
    WHERE nr.recipient_moniker = 'bob'
-   AND nr.read_at IS NULL
+   AND nr.dateread IS NULL
    AND n.notification_type = 'demo-message'
    ORDER BY n.datecreated ASC
    ```
@@ -321,7 +321,7 @@ When checking for unread messages:
    - Mark each as read:
    ```sql
    UPDATE engine.__notify_recipient
-   SET read_at = NOW()
+   SET dateread = NOW()
    WHERE notify_id = X AND recipient_moniker = 'bob'
    ```
 

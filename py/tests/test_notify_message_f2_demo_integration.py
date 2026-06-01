@@ -4,11 +4,6 @@
 
 import pytest
 
-from bbsengine6.examples.notify_message_demo import (
-    DemoConfig,
-    MessageHandler,
-)
-
 
 def _insert_test_message(db_connection, sender: str, recipient: str, message_text: str):
     """Helper: Insert a test message directly into the database."""
@@ -84,7 +79,7 @@ class TestNotifyMessageF2DemoIntegration:
         with db_connection.cursor() as cur:
             cur.execute(
                 """
-                SELECT notify_id, recipient_moniker, read_at
+                SELECT notify_id, recipient_moniker, dateread
                 FROM engine.__notify_recipient
                 WHERE notify_id=%s AND recipient_moniker='bob'
                 """,
@@ -93,10 +88,10 @@ class TestNotifyMessageF2DemoIntegration:
             recipient_row = cur.fetchone()
 
         assert recipient_row is not None, "Recipient entry not found"
-        recipient_notify_id, recipient_moniker, read_at = recipient_row
+        recipient_notify_id, recipient_moniker, dateread = recipient_row
         assert recipient_notify_id == notify_id
         assert recipient_moniker == "bob"
-        assert read_at is None, "Message should not be read yet"
+        assert dateread is None, "Message should not be read yet"
 
     def test_unread_query_retrieves_messages(
         self, db_connection, schema_init, create_test_users
@@ -117,7 +112,7 @@ class TestNotifyMessageF2DemoIntegration:
                 FROM engine.__notify n
                 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
                 WHERE nr.recipient_moniker = %s
-                AND nr.read_at IS NULL
+                AND nr.dateread IS NULL
                 AND n.notification_type = 'demo-message'
                 AND n.rendered_message LIKE %s
                 ORDER BY n.datecreated ASC
@@ -151,7 +146,7 @@ class TestNotifyMessageF2DemoIntegration:
                 """
                 SELECT COUNT(*)
                 FROM engine.__notify_recipient
-                WHERE notify_id=%s AND read_at IS NULL
+                WHERE notify_id=%s AND dateread IS NULL
                 """,
                 (notify_id,),
             )
@@ -164,7 +159,7 @@ class TestNotifyMessageF2DemoIntegration:
             cur.execute(
                 """
                 UPDATE engine.__notify_recipient
-                SET read_at = NOW()
+                SET dateread = NOW()
                 WHERE notify_id=%s AND recipient_moniker='bob'
                 """,
                 (notify_id,),
@@ -178,7 +173,7 @@ class TestNotifyMessageF2DemoIntegration:
                 """
                 SELECT COUNT(*)
                 FROM engine.__notify_recipient
-                WHERE notify_id=%s AND read_at IS NULL
+                WHERE notify_id=%s AND dateread IS NULL
                 """,
                 (notify_id,),
             )
@@ -211,7 +206,7 @@ class TestNotifyMessageF2DemoIntegration:
                 FROM engine.__notify n
                 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
                 WHERE nr.recipient_moniker = %s
-                AND nr.read_at IS NULL
+                AND nr.dateread IS NULL
                 AND n.notification_type = 'demo-message'
                 ORDER BY n.datecreated ASC
                 """,
@@ -249,7 +244,7 @@ class TestNotifyMessageF2DemoIntegration:
                 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
                 WHERE n.sender_moniker='alice'
                 AND nr.recipient_moniker='bob'
-                AND nr.read_at IS NULL
+                AND nr.dateread IS NULL
                 """
             )
             bob_receives_from_alice = cur.fetchone()[0]
@@ -265,7 +260,7 @@ class TestNotifyMessageF2DemoIntegration:
                 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
                 WHERE n.sender_moniker='bob'
                 AND nr.recipient_moniker='alice'
-                AND nr.read_at IS NULL
+                AND nr.dateread IS NULL
                 """
             )
             alice_receives_from_bob = cur.fetchone()[0]
@@ -288,7 +283,7 @@ class TestNotifyMessageF2DemoIntegration:
                 FROM engine.__notify n
                 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
                 WHERE nr.recipient_moniker = %s
-                AND nr.read_at IS NULL
+                AND nr.dateread IS NULL
                 AND n.notification_type = 'demo-message'
                 """,
                 ("bob",),
@@ -438,7 +433,7 @@ class TestNotifyMessageF2DemoIntegration:
                     """
                     SELECT COUNT(*)
                     FROM engine.__notify_recipient
-                    WHERE notify_id=%s AND recipient_moniker=%s AND read_at IS NULL
+                    WHERE notify_id=%s AND recipient_moniker=%s AND dateread IS NULL
                     """,
                     (notify_id, recipient),
                 )

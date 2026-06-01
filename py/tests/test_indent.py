@@ -5,7 +5,6 @@ sys.path.insert(0, "src")
 
 from bbsengine6 import io
 from bbsengine6.io.common import _terminal_state
-from bbsengine6.io import terminal
 
 
 @pytest.fixture(autouse=True)

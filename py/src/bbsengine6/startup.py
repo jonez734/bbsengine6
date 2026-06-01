@@ -21,7 +21,10 @@ def main(args, **kwargs) -> bool:
         io.echo("running bbsengine6 startup...")
 
         # --- schema ---
-        io.echo(f"{{var:labelcolor}}schema {{var:valuecolor}}engine{{var:labelcolor}}: ", end="")
+        io.echo(
+            f"{{var:labelcolor}}schema {{var:valuecolor}}engine{{var:labelcolor}}: ",
+            end="",
+        )
         if database.schemaexists(args, "engine", conn=conn) is False:
             if database.createschema(args, "engine", conn=conn) is False:
                 io.echo("fail", level="error")
@@ -30,8 +33,12 @@ def main(args, **kwargs) -> bool:
 
         # --- schema privs ---
         for role in ("web", "term", "sysop"):
-            database.manage_schema_priv(args, "grant", "usage", "engine", role, conn=conn)
-        database.manage_schema_priv(args, "grant", "create", "engine", "sysop", conn=conn)
+            database.manage_schema_priv(
+                args, "grant", "usage", "engine", role, conn=conn
+            )
+        database.manage_schema_priv(
+            args, "grant", "create", "engine", "sysop", conn=conn
+        )
 
         # --- classes in dependency order ---
         classes = (
@@ -53,7 +60,10 @@ def main(args, **kwargs) -> bool:
             )
             if database.classexists(args, cls, conn=conn) is False:
                 io.echo("import ", end="")
-                if database.importsql(args, sql, conn=conn, package="bbsengine6.sql") is False:
+                if (
+                    database.importsql(args, sql, conn=conn, package="bbsengine6.sql")
+                    is False
+                ):
                     io.echo("fail", level="error")
                     failcount += 1
                 else:

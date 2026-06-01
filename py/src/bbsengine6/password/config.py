@@ -2,7 +2,6 @@
 # Factory and configuration for password manager
 
 import os
-from typing import Optional, Type
 
 from bbsengine6.io import echo
 

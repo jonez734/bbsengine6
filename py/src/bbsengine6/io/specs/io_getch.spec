@@ -16,7 +16,7 @@
 ### Main Function
 
 ```python
-getch_str(timeout=1.0, debug=False, **kwargs) -> str | None
+getch_str(timeout=1.0, debug=False, fire_events=True, check_notifications=True, idle=None, **kwargs) -> str | None
 getch = getch_str  # alias exported from bbsengine6.io
 ```
 
@@ -25,6 +25,11 @@ Reads a single keypress and returns a key name or character.
 **Parameters:**
 - `timeout`: Seconds to wait for input (default: 1.0). If 0, returns immediately.
 - `debug`: If True, log unknown escape sequences and return None (default: False)
+- `fire_events`: If True, fire key events if dispatcher is running (default: True)
+- `check_notifications`: If True, check for notifications and emit bell (default: True)
+- `idle`: Optional callable called on idle (timeout) (default: None)
+  - Called each time getch_str() times out waiting for input
+  - Useful for updating status displays, checking notifications, etc.
 - `**kwargs`: Additional arguments passed to notification handlers:
   - `args`: Application args namespace (for database connection if pool not provided)
   - `pool`: Database connection pool (alternative to args)
@@ -170,6 +175,7 @@ Processes a single character and returns the appropriate key name.
 - **CPU usage**: ~0.1% (was ~5% before refactoring)
 - **Response time**: < 1ms from event push to handler execution
 - **Callback timeout**: Can run handlers with execution timeout if enabled
+- **Idle callback**: Optional `idle` callable invoked on timeout for status updates
 
 ---
 

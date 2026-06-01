@@ -199,7 +199,8 @@ def main() -> int:
         Exit code
     """
     parser = argparse.ArgumentParser(
-        prog="bbsengine6-notify-daemon", description="IMAP/Event notification daemon for bbsengine6"
+        prog="bbsengine6-notify-daemon",
+        description="IMAP/Event notification daemon for bbsengine6",
     )
 
     parser.add_argument(

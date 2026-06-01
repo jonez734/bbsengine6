@@ -55,12 +55,13 @@ def main() -> int:
                 args, dbname="postgres", host=args.databasehost, port=args.databaseport
             )
             if not database.exists(args, args.databasename, pool=system_pool):
-                echo(
-                    f"Database '{args.databasename}' does not exist.", level="error"
-                )
+                echo(f"Database '{args.databasename}' does not exist.", level="error")
                 return 1
             user_pool = database.getpool(
-                args, dbname=args.databasename, host=args.databasehost, port=args.databaseport
+                args,
+                dbname=args.databasename,
+                host=args.databasehost,
+                port=args.databaseport,
             )
 
         try:

@@ -20,7 +20,7 @@ from .common import (
     _current_stream_lock,
     _input_dirty,
 )
-from .util import logentry
+
 
 # --- 0. MANDATORY DEFINITIONS & GLOBALS ---
 
@@ -454,10 +454,29 @@ def handle_yank(
 
 
 def handle_help(
-    buffer: str, curpos: int, scroll_offset: int, max_width: int
+    buffer: str,
+    curpos: int,
+    scroll_offset: int,
+    max_width: int,
+    f1_help: str | Callable[[], str] | None = None,
 ) -> Tuple[str, int, int]:
-    """Help stub handler - will be enhanced in Phase 3."""
-    logentry("handle_help.100: trace")
+    """Display F1 help text inline, then redraw the input line."""
+    if f1_help is None:
+        return buffer, curpos, scroll_offset
+
+    help_text: str
+    if callable(f1_help):
+        help_text = f1_help()
+    else:
+        help_text = str(f1_help)
+
+    echo(f"{{savecursor}}")
+    echo(f"{{curpos:1,1}}")
+    echo(f"{{clearscreen}}")
+    echo(help_text, flush=True)
+    echo(f"{{restorecursor}}")
+
+    _input_dirty = True
     return buffer, curpos, scroll_offset
 
 
@@ -857,7 +876,6 @@ add_key_mapping("KEY_PAGEUP", handle_pageup)
 add_key_mapping("KEY_PAGEDOWN", handle_pagedown)
 
 # Function keys (Phase 4)
-add_key_mapping("KEY_F1", handle_help)
 add_key_mapping("KEY_F2", lambda b, c, s, m: handle_function_key("KEY_F2", b, c, s, m))
 add_key_mapping("KEY_F3", lambda b, c, s, m: handle_function_key("KEY_F3", b, c, s, m))
 add_key_mapping("KEY_F4", lambda b, c, s, m: handle_function_key("KEY_F4", b, c, s, m))

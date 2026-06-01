@@ -1,7 +1,12 @@
 # test_notify_daemon.py
 # Entry point tests for python -m bbsengine6.notify.daemon
 
-from bbsengine6.notify.daemon import NotifyDaemon, EventBus, fire_event, register_event_handler
+from bbsengine6.notify.daemon import (
+    NotifyDaemon,
+    EventBus,
+    fire_event,
+    register_event_handler,
+)
 
 
 class TestDaemonExports:

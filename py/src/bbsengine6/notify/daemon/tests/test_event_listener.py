@@ -55,7 +55,9 @@ class TestEventListener:
 
         listener = event_listener.EventListener(mock_config, mock_dispatcher)
 
-        with patch("bbsengine6.notify.daemon.hooks.register_event_handler") as mock_register:
+        with patch(
+            "bbsengine6.notify.daemon.hooks.register_event_handler"
+        ) as mock_register:
             listener.register_handlers()
 
             # Verify handler registered
@@ -85,7 +87,9 @@ class TestEventListener:
 
         listener = event_listener.EventListener(mock_config, mock_dispatcher)
 
-        with patch("bbsengine6.notify.daemon.hooks.register_event_handler") as mock_register:
+        with patch(
+            "bbsengine6.notify.daemon.hooks.register_event_handler"
+        ) as mock_register:
             listener.register_handlers()
 
             assert mock_register.call_count == 2
@@ -110,7 +114,9 @@ class TestEventListener:
 
         listener = event_listener.EventListener(mock_config, mock_dispatcher)
 
-        with patch("bbsengine6.notify.daemon.hooks.register_event_handler") as mock_register:
+        with patch(
+            "bbsengine6.notify.daemon.hooks.register_event_handler"
+        ) as mock_register:
             listener.register_handlers()
 
             # Should register both handlers
@@ -146,7 +152,9 @@ class TestEventListener:
 
         listener = event_listener.EventListener(mock_config, mock_dispatcher)
 
-        with patch("bbsengine6.notify.daemon.hooks.register_event_handler") as mock_register:
+        with patch(
+            "bbsengine6.notify.daemon.hooks.register_event_handler"
+        ) as mock_register:
             listener.register_handlers()
 
             # Should not register invalid handler
@@ -168,7 +176,9 @@ class TestEventListener:
 
         listener = event_listener.EventListener(mock_config, mock_dispatcher)
 
-        with patch("bbsengine6.notify.daemon.hooks.register_event_handler") as mock_register:
+        with patch(
+            "bbsengine6.notify.daemon.hooks.register_event_handler"
+        ) as mock_register:
             listener.register_handlers()
 
             assert not mock_register.called
@@ -389,7 +399,9 @@ class TestEventListenerIntegration:
 
         listener = event_listener.EventListener(mock_config, mock_dispatcher)
 
-        with patch("bbsengine6.notify.daemon.hooks.register_event_handler") as mock_register:
+        with patch(
+            "bbsengine6.notify.daemon.hooks.register_event_handler"
+        ) as mock_register:
             listener.register_handlers()
 
             # Get registered handler
@@ -422,7 +434,9 @@ class TestEventListenerIntegration:
 
         listener = event_listener.EventListener(mock_config, mock_dispatcher)
 
-        with patch("bbsengine6.notify.daemon.hooks.register_event_handler") as mock_register:
+        with patch(
+            "bbsengine6.notify.daemon.hooks.register_event_handler"
+        ) as mock_register:
             listener.register_handlers()
 
             # Both handlers registered

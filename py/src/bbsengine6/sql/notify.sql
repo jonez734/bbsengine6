@@ -22,7 +22,8 @@ create table engine.__notify (
     "should_persist" boolean default true,
     "datecreated" timestamptz default now(),
     "createdbymoniker" citext constraint fk_notify_createdby 
-        references engine.__member(moniker) on update cascade on delete set null
+        references engine.__member(moniker) on update cascade on delete set null,
+    "mac" text
 );
 
 -- Indexes for __notify

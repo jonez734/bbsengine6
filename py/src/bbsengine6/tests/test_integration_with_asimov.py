@@ -2,8 +2,6 @@
 # Integration tests demonstrating frame transmission between asimov and bbsengine6
 
 import pytest
-import socket
-import threading
 import time
 
 # Import asimov frame code
@@ -11,10 +9,6 @@ from asimov.net import (
     Frame,
     FrameAddress,
     FrameAddressParser,
-    TCPSender,
-    TCPReceiver,
-    UDPSender,
-    UDPReceiver,
     encode_frame_packet,
     decode_frame_packet,
     FramePacket,

@@ -32,7 +32,7 @@ from bbsengine6.notify.demo import (
 
 def handle_character_input(key: str, buffer: str) -> str:
     """Process a single keystroke and return updated buffer.
-    
+
     Used by test_interactive_harness.py for unit testing the input loop.
     Mirrors inputstring's key handling logic for character input, backspace,
     and escape key.
@@ -543,4 +543,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

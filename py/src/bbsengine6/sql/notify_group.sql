@@ -1,6 +1,7 @@
 --\echo notify_group
 
 -- Group membership for notification targeting
+drop table if exists engine.__notify_group;
 create table engine.__notify_group (
     "group_name" text not null,
     "member_moniker" citext not null constraint fk_notify_group_member
