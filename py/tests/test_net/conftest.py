@@ -5,7 +5,6 @@ import pytest
 import socket
 import threading
 import time
-from typing import Optional
 
 
 @pytest.fixture

@@ -5,7 +5,8 @@ import threading
 import time
 import pytest
 import socket
-from bbsengine6.net import TCPSender, Packet, PACKET_TYPE_PING, PACKET_TYPE_PONG
+from asimov.net import TCPSender, TCPReceiver, Packet
+from bbsengine6.net import PACKET_TYPE_PING, PACKET_TYPE_PONG
 
 
 class TestPingPongIntegration:
@@ -108,8 +109,8 @@ class TestPingPongIntegration:
         # Verify we sent and received messages
         sent_pings = [m for m in messages if m[0] == "tx_ping"]
         recv_pings = [m for m in messages if m[0] == "rx"]
-        sent_pongs = [m for m in messages if m[0] == "tx_pong"]
-        recv_pongs = [m for m in messages if m[0] == "rx_pong"]
+        [m for m in messages if m[0] == "tx_pong"]
+        [m for m in messages if m[0] == "rx_pong"]
 
         assert len(sent_pings) > 0, f"No pings sent. Messages: {messages}"
         assert len(recv_pings) > 0, f"No pings received by server. Messages: {messages}"
@@ -217,8 +218,8 @@ class TestPingPongIntegration:
         # Verify bidirectional exchange with role reversal
         cli_pongs = [m for m in messages if m[0] == "cli_tx_pong"]
         srv_pongs = [m for m in messages if m[0] == "srv_rx"]
-        cli_pings = [m for m in messages if m[0] == "cli_rx_ping"]
-        srv_pings = [m for m in messages if m[0] == "srv_tx_ping"]
+        [m for m in messages if m[0] == "cli_rx_ping"]
+        [m for m in messages if m[0] == "srv_tx_ping"]
 
         assert len(cli_pongs) > 0, f"Client didn't send pongs. Messages: {messages}"
         assert len(srv_pongs) > 0, f"Server didn't receive pongs. Messages: {messages}"

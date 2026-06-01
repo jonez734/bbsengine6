@@ -17,15 +17,15 @@ select
     n.datecreated,
     n.createdbymoniker,
     nr.is_blocked,
-    nr.delivered_at,
-    nr.read_at,
+    nr.delivered_at as datedelivered,
+    nr.read_at as dateread,
     nr.datecreated as recipient_datecreated,
     extract(epoch from n.datecreated) as datecreatedepoch,
-    extract(epoch from nr.delivered_at) as delivered_at_epoch,
-    extract(epoch from nr.read_at) as read_at_epoch,
+    extract(epoch from nr.delivered_at) as datedeliveredepoch,
+    extract(epoch from nr.read_at) as datereadepoch,
     timezone(currentmember.tz, n.datecreated) as datecreatedlocal,
-    timezone(currentmember.tz, nr.delivered_at) as delivered_at_local,
-    timezone(currentmember.tz, nr.read_at) as read_at_local
+    timezone(currentmember.tz, nr.delivered_at) as datedeliveredlocal,
+    timezone(currentmember.tz, nr.read_at) as datereadlocal
 from engine.__notify n
 join engine.__notify_recipient nr on n.id = nr.notify_id
 left outer join engine.__member currentmember on (currentmember.loginid = current_user);
@@ -34,7 +34,7 @@ left outer join engine.__member currentmember on (currentmember.loginid = curren
 create or replace view engine.notify_unread as
 select *
 from engine.notify
-where read_at is null and is_blocked = false;
+where dateread is null and is_blocked = false;
 
 -- Urgent unread notifications view
 create or replace view engine.notify_urgent as

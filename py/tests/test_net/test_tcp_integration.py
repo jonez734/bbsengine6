@@ -2,9 +2,8 @@
 # Integration tests for TCP frame transmission
 
 import pytest
-import threading
-import time
-from bbsengine6.net import TCPSender, TCPReceiver, Frame
+from bbsengine6.net import InternetAddress
+from asimov.net import TCPSender, TCPReceiver, Frame
 
 
 @pytest.mark.integration

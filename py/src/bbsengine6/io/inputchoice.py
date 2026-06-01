@@ -2,14 +2,15 @@ from .echo import echo
 from .getch import getch_str as getch
 
 
-# @since 20230105 backported from ttyio6 (bugfix)
-# @see https://ballingt.com/nonblocking-stdin-in-python-3/
-# @since 20230512 renamed from 'inputchar' in ttyio5 @BCBREAK
 def inputchoice(
     prompt: str, options: str, default: str | None = "", **kwargs
 ) -> str | None:
     noneok = kwargs.get("noneok", False)
     help = kwargs.get("help", None)
+    # NOTE: For multi-key function key support (F2-F12), adopt a dict pattern
+    # consistent with inputstring's function_key_handlers:
+    #   f2_handler={"KEY_F2": handler, "KEY_F3": handler, ...}
+    f2_handler = kwargs.get("f2_handler", None)
 
     rewriteprompt = kwargs.get("rewriteprompt", False)
 
@@ -38,12 +39,18 @@ def inputchoice(
             else:
                 echo("{bell}", end="", flush=True)
                 continue
-        elif ch == "?" or ch == "KEY_HELP":  #  and callable(helpcallback) is True:
+        elif ch == "KEY_HELP" or ch == "KEY_F1":
             echo("help")
             if callable(help):
                 help(**kwargs)
             elif type(help) is str:
                 echo(help)
+            echo(prompt, end="", flush=True)
+        elif ch == "KEY_F2":
+            if callable(f2_handler):
+                f2_handler(**kwargs)
+            elif type(f2_handler) is str:
+                echo(f2_handler)
             echo(prompt, end="", flush=True)
         elif ch is not None:
             if ch[:4] == "KEY_" or ch in options:

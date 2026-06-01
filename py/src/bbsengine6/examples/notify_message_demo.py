@@ -8,7 +8,7 @@ import termios
 import threading
 from collections import deque
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from bbsengine6 import database, member, group
 from bbsengine6.io.echo import echo, echo_traceback
@@ -16,20 +16,35 @@ from bbsengine6.io.inputstring import inputstring
 from bbsengine6.io import screen, terminal
 from bbsengine6.notify import UserNotificationQueue
 from bbsengine6.notify.utils import (
-    AsciiValidator,
+    AsciiValidator,  # noqa: F401  re-exported for tests
+    EchoProcessor,  # noqa: F401  re-exported for tests
     TemplateEngine,
-    EchoProcessor,
     DemoConfig,
 )
 from bbsengine6.notify.demo import (
     _demo_queues,
     _queues_lock,
-    validate_message,
-    resolve_recipient,
     send_message as demo_send_message,
     pop_demo_messages,
     demo_queue_size,
 )
+
+
+def handle_character_input(key: str, buffer: str) -> str:
+    """Process a single keystroke and return updated buffer.
+    
+    Used by test_interactive_harness.py for unit testing the input loop.
+    Mirrors inputstring's key handling logic for character input, backspace,
+    and escape key.
+    """
+    if key == "KEY_BACKSPACE":
+        return buffer[:-1] if buffer else ""
+    elif key == "KEY_ESC":
+        return ""
+    elif key.startswith("KEY_") or key in ("\x00", "\x03"):
+        return buffer
+    else:
+        return buffer + key
 
 
 def display_with_more_prompt(messages: list[str], page_size: int = 5) -> bool:
@@ -114,7 +129,7 @@ class MessageHandler:
                             SELECT n.id, n.sender_moniker, n.rendered_message, n.datecreated
                             FROM engine.__notify n
                             JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
-                            WHERE nr.recipient_moniker = %s AND nr.read_at IS NULL
+                            WHERE nr.recipient_moniker = %s AND nr.dateread IS NULL
                             ORDER BY n.datecreated DESC
                             """,
                             (self.config.moniker,),
@@ -200,7 +215,7 @@ class MessageHandler:
                         cur.execute(
                             """
                             UPDATE engine.__notify_recipient
-                            SET read_at = now()
+                            SET dateread = now()
                             WHERE notify_id = %s AND recipient_moniker = %s
                             """,
                             (msg_id, self.config.moniker),
@@ -314,13 +329,16 @@ class NotifyMessageDemo:
             )
 
     def _process_input(self, user_input: str) -> None:
-        """Process user input for sending messages or commands."""
+        """Process user input for sending messages or commands.
+
+        Supports @recipient or @group for group messaging.
+        """
         # Handle stats command
         if user_input.lower() == "stats":
             self._show_stats()
             return
 
-        # Handle message sending (@recipient message)
+        # Handle message sending (@recipient or @group)
         if user_input.startswith("@"):
             parts = user_input.split(" ", 1)
             if len(parts) < 2:
@@ -525,3 +543,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
