@@ -8,7 +8,7 @@ import termios
 import threading
 from collections import deque
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from bbsengine6 import database, member, group
 from bbsengine6.io.echo import echo, echo_traceback
@@ -47,17 +47,29 @@ def handle_character_input(key: str, buffer: str) -> str:
         return buffer + key
 
 
-def display_with_more_prompt(messages: list[str], page_size: int = 5) -> bool:
+def display_with_more_prompt(
+    messages: list[str],
+    page_size: int = 5,
+    on_page_displayed: Optional[Callable[[], None]] = None,
+    input_func: Optional[Callable[[str], str]] = None,
+) -> bool:
     """Display messages with a more prompt for pagination."""
+    if input_func is None:
+        import builtins
+
+        input_func = builtins.input
+
     if not messages:
         return True
 
     for i, message in enumerate(messages):
         echo(message)
         if (i + 1) % page_size == 0 and i + 1 < len(messages):
+            if on_page_displayed:
+                on_page_displayed()
             try:
-                response = input("More? (press Enter or 'n' to abort): ")
-                if response.lower() == "n":
+                response = input_func("More? (press Enter or 'n' to abort): ")
+                if response == "n":
                     return False
             except (EOFError, KeyboardInterrupt):
                 return False

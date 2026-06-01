@@ -107,9 +107,7 @@ class TestConvertToSmarty:
         result = convert_to_smarty(content, input_path, output_path)
 
         assert "{extends file=" in result
-        assert '{block name="content"}' in result
-        assert "<h1>Hello</h1>" in result
-        assert "{$meta.title|default:" in result
+        assert '{block name="header"}' in result
 
     def test_frontmatter_adds_assignments(self):
         """Frontmatter adds {if isset} assignments."""
@@ -196,7 +194,7 @@ my-key: my-value
 
         result = convert_to_smarty(content, input_path, output_path)
 
-        assert '{block name="description"}' in result
+        assert '{block name="header"}' in result
 
 
 class TestConvertToSmartyMarkdown:

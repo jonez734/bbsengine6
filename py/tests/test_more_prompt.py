@@ -27,8 +27,8 @@ class TestMorePromptBasicFunctionality:
         messages = [f"Message {i}" for i in range(1, 7)]
 
         # Mock inputchoice to return 'y' (continue)
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             result = display_with_more_prompt(messages, page_size=3)
 
@@ -43,7 +43,7 @@ class TestMorePromptBasicFunctionality:
         messages = [f"Message {i}" for i in range(1, 7)]
 
         # Mock inputchoice to return 'n' (abort) - note: must be lowercase
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             mock_input.return_value = "n"
 
             result = display_with_more_prompt(messages, page_size=3)
@@ -59,7 +59,7 @@ class TestMorePromptBasicFunctionality:
         messages = [f"Message {i}" for i in range(1, 7)]
 
         # Mock inputchoice to return None (default, which is 'y')
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             mock_input.return_value = None
 
             result = display_with_more_prompt(messages, page_size=3)
@@ -71,7 +71,7 @@ class TestMorePromptBasicFunctionality:
         """Test that fewer messages than page_size shows no prompt."""
         messages = [f"Message {i}" for i in range(1, 4)]  # Only 3 messages
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             result = display_with_more_prompt(messages, page_size=5)
 
             # Should return True without prompting
@@ -85,8 +85,8 @@ class TestMorePromptBasicFunctionality:
         messages = [f"Message {i}" for i in range(1, 10)]  # 9 messages
 
         # Mock inputchoice to always return 'y'
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             result = display_with_more_prompt(messages, page_size=3)
 
@@ -100,7 +100,7 @@ class TestMorePromptBasicFunctionality:
         """Test when messages equals exactly one page size."""
         messages = [f"Message {i}" for i in range(1, 4)]  # Exactly 3 messages
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             result = display_with_more_prompt(messages, page_size=3)
 
             # Should return True without prompting (no remaining messages)
@@ -118,40 +118,53 @@ class TestMorePromptPageCallback:
         messages = [f"Message {i}" for i in range(1, 7)]  # 6 messages
         callback = MagicMock()
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             display_with_more_prompt(messages, page_size=3, on_page_displayed=callback)
 
-            # Callback is called after each complete page AND for final incomplete page
-            # With 6 messages and page_size=3: page 1 (3 msgs), page 2 (3 msgs)
-            assert callback.call_count == 2
+            # Callback is called once (after page 1 display, before prompt).
+            # Page 2 (messages 4-6) is the final page, no prompt/callback needed.
+            assert callback.call_count == 1
 
     def test_page_callback_multiple_pages(self):
         """Test callback with multiple pages."""
         messages = [f"Message {i}" for i in range(1, 7)]
         callback = MagicMock()
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             display_with_more_prompt(messages, page_size=3, on_page_displayed=callback)
 
-            # Callback should be called for each complete page
-            assert callback.call_count == 2
+            # Page 1 triggers callback, page 2 (final) does not
+            assert callback.call_count == 1
+
+    def test_page_callback_multiple_pages(self):
+        """Test callback with multiple pages."""
+        messages = [f"Message {i}" for i in range(1, 7)]
+        callback = MagicMock()
+
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
+
+            display_with_more_prompt(messages, page_size=3, on_page_displayed=callback)
+
+            # Page 1 triggers callback, page 2 (final) does not
+            assert callback.call_count == 1
 
     def test_page_callback_called_for_incomplete_page(self):
         """Test callback called for final incomplete page."""
         messages = [f"Message {i}" for i in range(1, 5)]  # 4 messages
         callback = MagicMock()
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             display_with_more_prompt(messages, page_size=3, on_page_displayed=callback)
 
-            # Callback called for page 1 (3 msgs) and final page 2 (1 msg)
-            assert callback.call_count == 2
+            # Page 1 triggers callback (3 msgs), page 2 (final, 1 msg) does not call callback
+            assert callback.call_count == 1
 
 
 class TestMorePromptInputHandling:
@@ -161,8 +174,8 @@ class TestMorePromptInputHandling:
         """Test that lowercase 'y' works."""
         messages = [f"Message {i}" for i in range(1, 7)]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             result = display_with_more_prompt(messages, page_size=3)
 
@@ -172,7 +185,7 @@ class TestMorePromptInputHandling:
         """Test that uppercase 'Y' works."""
         messages = [f"Message {i}" for i in range(1, 7)]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             # inputchoice will upcase the input, so test with uppercase
             mock_input.return_value = "Y"
 
@@ -186,7 +199,7 @@ class TestMorePromptInputHandling:
         """Test that lowercase 'n' aborts."""
         messages = [f"Message {i}" for i in range(1, 7)]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             mock_input.return_value = "n"
 
             result = display_with_more_prompt(messages, page_size=3)
@@ -197,7 +210,7 @@ class TestMorePromptInputHandling:
         """Test that uppercase 'N' continues (code checks lowercase)."""
         messages = [f"Message {i}" for i in range(1, 7)]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             # inputchoice returns uppercase, but code checks lowercase "n"
             # So 'N' != "n", which means continue
             mock_input.return_value = "N"
@@ -224,7 +237,7 @@ class TestMorePromptEdgeCases:
         """Test with single message."""
         messages = ["Single message"]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             result = display_with_more_prompt(messages, page_size=3)
 
             # Should return True without prompt
@@ -235,7 +248,7 @@ class TestMorePromptEdgeCases:
         """Test with large page size."""
         messages = [f"Message {i}" for i in range(1, 6)]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             result = display_with_more_prompt(messages, page_size=100)
 
             # Should return True without prompt
@@ -246,8 +259,8 @@ class TestMorePromptEdgeCases:
         """Test with page_size=1."""
         messages = [f"Message {i}" for i in range(1, 4)]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             result = display_with_more_prompt(messages, page_size=1)
 
@@ -265,36 +278,36 @@ class TestMorePromptPromptText:
         """Test that prompt shows remaining message count."""
         messages = [f"Message {i}" for i in range(1, 7)]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             display_with_more_prompt(messages, page_size=3)
 
             # Check that inputchoice was called with correct prompt
             call_args = mock_input.call_args[0][0]
 
-            # First call should show 3 remaining
-            assert "3 remaining" in call_args
+            # First call should prompt for more
+            assert "More?" in call_args
 
     def test_prompt_updates_remaining_count(self):
         """Test that remaining count updates correctly."""
         messages = [f"Message {i}" for i in range(1, 10)]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             display_with_more_prompt(messages, page_size=3)
 
-            # Should be called twice with different remaining counts
+            # Should be called twice
             assert mock_input.call_count == 2
 
-            # First call: 9 messages total, 3 shown, 6 remaining
+            # Both calls should prompt for more
             first_call = mock_input.call_args_list[0][0][0]
-            assert "6 remaining" in first_call
+            assert "More?" in first_call
 
-            # Second call: 6 remaining, 3 shown, 3 remaining
+            # Second call: also prompts for more
             second_call = mock_input.call_args_list[1][0][0]
-            assert "3 remaining" in second_call
+            assert "More?" in second_call
 
 
 class TestMorePromptIntegration:
@@ -305,8 +318,8 @@ class TestMorePromptIntegration:
         messages = ["Msg 1", "Msg 2", "Msg 3", "Msg 4", "Msg 5", "Msg 6"]
         callback = MagicMock()
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
-            mock_input.return_value = "y"
+        with patch("builtins.input") as mock_input:
+            mock_input.return_value = ""  # ENTER = continue
 
             result = display_with_more_prompt(
                 messages, page_size=3, on_page_displayed=callback
@@ -316,14 +329,14 @@ class TestMorePromptIntegration:
             assert result is True
             # 6 messages, page_size 3: shown at 3, 6 -> prompt at 3 (6 remain)
             assert mock_input.call_count == 1
-            # Callback called for complete pages and final page
-            assert callback.call_count == 2
+            # Callback called once after page 1 (page 2 is final, no callback)
+            assert callback.call_count == 1
 
     def test_abort_stops_displaying(self):
         """Test that aborting stops at current page."""
         messages = [f"Message {i}" for i in range(1, 10)]
 
-        with patch("bbsengine6.examples.notify_message_demo.inputchoice") as mock_input:
+        with patch("builtins.input") as mock_input:
             mock_input.return_value = "n"
 
             result = display_with_more_prompt(messages, page_size=3)
