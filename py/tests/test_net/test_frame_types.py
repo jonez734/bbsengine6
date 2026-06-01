@@ -2,7 +2,7 @@
 # Tests for Frame and NumpyFrame abstractions
 
 import pytest
-from asimov.net import Frame, NumpyFrame, frame_from_any, frames_equal
+from bbsengine6.net import Frame, NumpyFrame, frame_from_any, frames_equal
 
 try:
     import numpy as np

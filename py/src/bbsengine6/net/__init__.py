@@ -1,6 +1,5 @@
 # bbsengine6/net/__init__.py
 # BBSEngine6 network layer: SMTP-like addressing, packet system, notification integration
-# Video frame transmission code has been moved to asimov.net
 
 # SMTP-like addressing (user@machine)
 from .address import (
@@ -9,6 +8,28 @@ from .address import (
     InternetAddress,
     is_internet_address,
     parse_address,
+)
+
+# Frame addressing (DSN-style URI)
+from .frame_address import (
+    FrameAddress,
+    FrameAddressParser,
+    FrameScheme,
+    ParseResult,
+)
+
+# Frame types (copied from asimov.net, not imported)
+from .frame_types import (
+    Frame,
+    NumpyFrame,
+    frame_from_any,
+    frames_equal,
+)
+
+# TCP sender/receiver (copied from asimov.net, not imported)
+from .tcp import (
+    TCPSender,
+    TCPReceiver,
 )
 
 # Packet system (Files, Messages, PING/PONG)
@@ -33,7 +54,7 @@ from .packet import (
 
 from .packet_types import FilePacket, MessagePacket, PingPacket, PongPacket
 
-# HMAC authentication (rogue listener / packet tampering protection)
+# HMAC authentication
 from .crypto import CryptoHash, PacketAuthError, get_crypto
 
 # Routing
@@ -56,6 +77,19 @@ __all__ = [
     "InternetAddress",
     "is_internet_address",
     "parse_address",
+    # Frame addressing
+    "FrameAddress",
+    "FrameAddressParser",
+    "FrameScheme",
+    "ParseResult",
+    # Frame types
+    "Frame",
+    "NumpyFrame",
+    "frame_from_any",
+    "frames_equal",
+    # TCP sender/receiver
+    "TCPSender",
+    "TCPReceiver",
     # Packet system
     "Packet",
     "FilePacket",

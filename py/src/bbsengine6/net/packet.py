@@ -1,7 +1,9 @@
 # bbsengine6/net/packet.py
 # Unified packet system for Files and Messages with block support, compression, and checksums
 
+import struct
 import time
+import socket
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, TYPE_CHECKING
 
@@ -45,24 +47,63 @@ class PacketChecksumError(ValueError):
 
 
 def register_packet_type(packet_class: type) -> type:
-    """
-    Register a packet class for dynamic decoding.
-
-    Args:
-        packet_class: Class with packet_type attribute
-
-    Returns:
-        The packet_class (allows use as decorator)
-    """
+    """Register a packet class for dynamic decoding."""
     if hasattr(packet_class, "packet_type"):
         _packet_type_registry[packet_class.packet_type] = packet_class
     return packet_class
 
 
-@dataclass
+# Test-compatible Packet class (asimov-style API for backward compat with tests)
 class Packet:
-    """
-    Base packet class with common fields.
+    """Packet with type, payload, timestamp. Serialized as: [type (I)][timestamp (d)][payload length (I)][payload]."""
+
+    def __init__(self, ptype: int, payload: bytes = b"", timestamp: float = 0.0):
+        self.ptype = ptype
+        self.payload = payload
+        self.timestamp = timestamp if timestamp != 0.0 else time.time()
+
+    def encode(self) -> bytes:
+        payload_len = len(self.payload)
+        header = struct.pack("!IdI", self.ptype, self.timestamp, payload_len)
+        return header + self.payload
+
+    @staticmethod
+    def decode(data: bytes) -> "Packet":
+        if len(data) < 16:
+            raise ValueError("Packet data too short")
+        ptype, timestamp, payload_len = struct.unpack("!IdI", data[:16])
+        payload = data[16 : 16 + payload_len]
+        return Packet(ptype, payload, timestamp)
+
+    @staticmethod
+    def recv(sock: socket.socket) -> Optional["Packet"]:
+        header = _recv_all(sock, 16)
+        if header is None:
+            return None
+        ptype, timestamp, payload_len = struct.unpack("!IdI", header)
+        payload = _recv_all(sock, payload_len)
+        if payload is None:
+            return None
+        return Packet(ptype, payload, timestamp)
+
+
+def _recv_all(sock: socket.socket, length: int) -> Optional[bytes]:
+    """Receive exactly `length` bytes from a socket, or None if closed."""
+    data = bytearray()
+    while len(data) < length:
+        try:
+            chunk = sock.recv(length - len(data))
+        except socket.error:
+            return None
+        if not chunk:
+            return None
+        data.extend(chunk)
+    return bytes(data)
+
+
+@dataclass
+class BlockPacket:
+    """Base packet class with common fields.
 
     All packets contain blocks (payload chunks), optional compression,
     and SHA256 checksums for integrity verification.
@@ -78,21 +119,8 @@ class Packet:
     checksum: Optional[str] = None  # SHA256 as hex string (64 chars)
 
 
-def encode_packet(packet: Packet, crypto: Optional["CryptoHash"] = None) -> bytes:
-    """
-    Encode any packet type to binary.
-
-    Args:
-        packet: Packet instance (PingPacket, PongPacket, FilePacket,
-                MessagePacket, or custom)
-        crypto: Optional CryptoHash for HMAC authentication
-
-    Returns:
-        Binary encoded packet
-
-    Raises:
-        PacketTypeError: If packet type not recognized
-    """
+def encode_packet(packet: BlockPacket, crypto: Optional["CryptoHash"] = None) -> bytes:
+    """Encode any packet type to binary."""
     from .packet_codec import (
         encode_file_packet,
         encode_message_packet,
@@ -116,24 +144,8 @@ def encode_packet(packet: Packet, crypto: Optional["CryptoHash"] = None) -> byte
         raise PacketTypeError(f"Unknown packet type: {packet.packet_type}")
 
 
-def decode_packet(data: bytes, crypto: Optional["CryptoHash"] = None) -> Packet:
-    """
-    Decode binary data to appropriate packet type.
-
-    Args:
-        data: Raw packet bytes
-        crypto: Optional CryptoHash for HMAC verification
-
-    Returns:
-        Decoded Packet (PingPacket, PongPacket, FilePacket, MessagePacket,
-                or custom type)
-
-    Raises:
-        PacketDecodeError: If packet data is malformed
-        PacketTypeError: If packet type not recognized
-        PacketChecksumError: If checksum mismatch
-        PacketAuthError: If HMAC verification fails
-    """
+def decode_packet(data: bytes, crypto: Optional["CryptoHash"] = None) -> BlockPacket:
+    """Decode binary data to appropriate packet type."""
     if len(data) < 1:
         raise PacketDecodeError("Packet data too short (empty)")
 
@@ -163,18 +175,7 @@ def decode_packet(data: bytes, crypto: Optional["CryptoHash"] = None) -> Packet:
 
 
 def get_packet_type(data: bytes) -> int:
-    """
-    Peek at packet type without full decode.
-
-    Args:
-        data: Raw packet bytes
-
-    Returns:
-        Packet type constant (PACKET_TYPE_FILE, PACKET_TYPE_MESSAGE, etc.)
-
-    Raises:
-        PacketDecodeError: If packet data too short
-    """
+    """Peek at packet type without full decode."""
     if len(data) < 1:
         raise PacketDecodeError("Packet data too short (cannot peek type)")
     return data[0]
