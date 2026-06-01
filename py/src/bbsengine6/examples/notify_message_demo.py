@@ -68,6 +68,9 @@ def display_with_more_prompt(messages: list[str], page_size: int = 5) -> bool:
 class MessageHandler:
     """Handles message reception and rendering for a single user."""
 
+    _demo_queues = _demo_queues
+    _queues_lock = _queues_lock
+
     def __init__(
         self,
         config: DemoConfig,
