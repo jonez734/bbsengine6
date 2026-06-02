@@ -13,6 +13,7 @@ import threading
 bottombarstack = []
 _bottombar_fragments = []
 _bottombar_fragments_lock = threading.Lock()
+_bottombarstack_lock = threading.Lock()
 
 
 def init(args=None, topmargin=1, bottommargin=1):
@@ -163,21 +164,26 @@ def get_notification_status(**kwargs) -> str:
 
 
 # @since 20230523 copied from bbsengine5
+def clear_bottombar_fragments() -> None:
+    """Remove all registered fragments from the bottombar right side.
+
+    Useful when exiting a mode (e.g. playground) that may have added
+    context-specific fragments, returning to a cleaner lobby state.
+    """
+    with _bottombar_fragments_lock:
+        _bottombar_fragments.clear()
+
+
 def popbottombar():
-    global bottombarstack
-
-    if len(bottombarstack) == 0:
-        return
-
-    if len(bottombarstack) > 0:
+    with _bottombarstack_lock:
+        if not bottombarstack:
+            return
         buf = bottombarstack.pop()
-        if buf != "":
-            updatebottombar(f"{{var:areacolor}}{buf}{{/all}}")
-
+    if buf != "":
+        updatebottombar(f"{{var:areacolor}}{buf}{{/all}}")
     return
 
 
-# @since 20240708
 poparea = popbottombar
 
 # @since 20230523
