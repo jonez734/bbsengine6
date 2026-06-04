@@ -125,11 +125,30 @@ from bbsengine6.notify import (
     get_group_members,        # List group members
     remove_from_group,        # Remove member from group
     get_queue,               # Get in-process notification queue for a user
+    is_enabled,              # Check if notify subsystem is enabled
+    enable,                  # Enable the notify subsystem
+    disable,                 # Disable the notify subsystem (count returns 0)
     NotificationUrgency,     # CRITICAL, URGENT, IMPORTANT, ROUTINE
     Notification,            # Notification dataclass
     NotificationTamperError, # Raised when HMAC verification fails
 )
 ```
+
+## Subsystem Toggle
+
+The notify subsystem can be disabled at runtime to skip DB access entirely:
+
+```python
+from bbsengine6 import notify
+
+notify.disable()  # count() now returns 0, no DB connections
+# ... do work without notify overhead ...
+notify.enable()   # re-enable
+```
+
+`count()` uses `autocommit=True` for its read-only SELECT COUNT query,
+eliminating "rolling back returned connection [INTRANS]" warnings from
+psycopg_pool when the connection is returned to the pool.
 
 ## Rate Limiting
 

@@ -93,6 +93,8 @@ Main echo function with rich formatting and runtime variables:
 |----------|-----------|-------------|
 | `echo` | `(text, level='info', flush=False, end='\\n', wordwrap=True)` | Output formatted text |
 | `echo_traceback` | `(msg='')` | Output traceback |
+| `exit_on_db_error` | `(message='fatal database error')` | Log error and call sys.exit(1) |
+| `fatal_on_db_error` | `(func)` | Decorator: catch DB errors, exit 1 |
 | `rendered_length` | `(text) -> int` | Calculate rendered length |
 | `setvar` | `(name, value)` | Set runtime variable |
 | `getvar` | `(name, default=None)` | Get runtime variable |
@@ -269,3 +271,21 @@ io.echo("{home}")           # Move to home position
 io.echo("{curpos:10,20}")   # Move to row 10, col 20
 io.echo("{eraseline}")      # Clear current line
 ```
+
+### Fatal DB Errors
+
+```python
+from bbsengine6.io import fatal_on_db_error
+
+@fatal_on_db_error
+def main(args, **kwargs):
+    with database.connect(args, pool=pool) as conn:
+        _work(conn)
+```
+
+The decorator catches `psycopg.OperationalError` and `psycopg.InterfaceError`,
+logs the traceback via `echo_traceback()`, and calls `sys.exit(1)`.
+Other exceptions propagate normally.
+
+Use on module `main()` functions to ensure DB failures cause program exit
+rather than silent failure.
