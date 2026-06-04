@@ -18,8 +18,12 @@ from . import io, util
 
 DEFAULTDATABASE = "postgres"
 
+# CONVENTION: Connection and cursor objects are passed via **kwargs, NOT as positional or
+# keyword arguments. All database functions accept **kwargs and extract conn/cur from it.
+# Example: database.cursor(conn=conn) not database.cursor(**kwargs) or database.cursor(conn)
 
-def convert_for_jsonb(v: Any) -> Any:
+
+def convert_for_jsonb(v: Any, *, wrap: bool = True) -> Any:
     """Recursively convert values for safe JSONB encoding.
 
     Wraps Python objects in psycopg3 Jsonb/Json types for database storage.
@@ -39,24 +43,28 @@ def convert_for_jsonb(v: Any) -> Any:
     Example (wrong):
         rec = {"flags": json.dumps({"APPROVED": {"value": True}})}  # Don't do this!
         # json.dumps() can't serialize Jsonb objects if convert_for_jsonb() is called on them
+
+    Note: Only the top-level dict/list is wrapped in Jsonb. Inner dicts/lists
+    are returned as plain dicts/lists to avoid "Object of type Jsonb is not JSON
+    serializable" when psycopg calls json.dumps() on the outer Jsonb wrapper.
+    The ``wrap`` parameter controls this and is intended for internal recursion;
+    callers should use the default (wrap=True).
     """
     import datetime
 
     if isinstance(v, type):
-        ##        io.echo(f"convert_for_jsonb: converting type {v}", level="debug")
         return str(v)
     if isinstance(v, Jsonb):
         return v
     if isinstance(v, datetime.datetime):
         return v.isoformat()
     if isinstance(v, dict):
-        return Jsonb({k: convert_for_jsonb(val) for k, val in v.items()})
-    elif isinstance(v, (list, tuple)):
-        return Jsonb([convert_for_jsonb(item) for item in v])
+        inner = {k: convert_for_jsonb(val, wrap=False) for k, val in v.items()}
+        return Jsonb(inner) if wrap else inner
+    if isinstance(v, (list, tuple)):
+        inner = [convert_for_jsonb(item, wrap=False) for item in v]
+        return Jsonb(inner) if wrap else inner
     if v is not None and not isinstance(v, (str, int, float, bool)):
-        ##        io.echo(
-        ##            f"convert_for_jsonb: converting {type(v).__name__} to str", level="debug"
-        ##        )
         return str(v)
     return v
 
@@ -227,7 +235,7 @@ def getoid(args: Any, typ: str, cur: Any = None) -> int | None:
     try:
         if cur is None:
             with connect(args) as conn:
-                with cursor(conn) as cur:
+                with cursor(conn=conn) as cur:
                     return _work(cur)
         else:
             return _work(cur)
@@ -424,8 +432,16 @@ def connect(
     Yields:
       Connection from pool (raw or DatabaseConnection wrapper if wrapper=True)
     """
-    if args and args.debug is True:
-        io.echo(f"bbsengine6.database.connect.100: {args=}", level="debug")
+    import traceback
+
+    _debug = args and getattr(args, "debug", False) is True
+    if _debug:
+        stack = "".join(traceback.format_stack()[-15:])
+        io.echo(
+            f"database.connect: entering, args.debug={getattr(args, 'debug', 'MISSING')}, auto_commit={auto_commit}, pool={id(pool) if pool else None}",
+            level="debug",
+        )
+        io.echo(f"database.connect: call stack:\n{stack}", level="debug")
 
     if "readonly" in kwargs:
         del kwargs["readonly"]
@@ -434,25 +450,56 @@ def connect(
         io.echo("bbsengine6.database.connect.200: pool is None", level="error")
         raise ValueError("pool is None")
 
-    if args and args.debug is True:
-        io.echo(f"{pool=}", level="debug")
-
+    conn: Any = None
     try:
-        conn: Any = pool.getconn()
+        conn = pool.getconn()
         conn.autocommit = False
+        if _debug:
+            io.echo(
+                f"database.connect: got conn id={id(conn)}, autocommit={conn.autocommit}, status={conn.pgconn.transaction_status}",
+                level="debug",
+            )
     except Exception as e:
         io.echo_traceback(f"bbsengine6.database.connect.300: {e}")
         raise
 
+    exception_occurred = False
     try:
         if wrapper:
             yield DatabaseConnection(conn, pool)
         else:
             yield conn
+    except BaseException as e:
+        exception_occurred = True
+        io.echo_traceback(f"bbsengine6.database.connect.400: {e}")
+        conn.rollback()
+        raise
     finally:
-        if auto_commit:
-            conn.commit()
-        pool.putconn(conn)
+        if conn is not None:
+            conn_id = id(conn)
+            pool_id = id(pool)
+            try:
+                tx_status = conn.pgconn.transaction_status
+            except Exception:
+                tx_status = "unknown"
+            if _debug:
+                io.echo(
+                    f"database.connect: finally for conn id={conn_id} ({hex(conn_id)}), pool id={pool_id}, status={tx_status}, auto_commit={auto_commit}, exception={exception_occurred}",
+                    level="debug",
+                )
+            if auto_commit and not exception_occurred:
+                conn.commit()
+                if _debug:
+                    io.echo(
+                        f"database.connect: after commit conn id={conn_id} ({hex(conn_id)}), pool id={pool_id}, status={conn.pgconn.transaction_status}",
+                        level="debug",
+                    )
+            pool.putconn(conn)
+            if _debug:
+                io.echo(
+                    f"database.connect: putconn done conn id={conn_id} ({hex(conn_id)}), pool id={pool_id}, tx_status before={tx_status}",
+                    level="debug",
+                )
 
 
 # def buildkwargs(args, **kwargs):
@@ -526,7 +573,7 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
         io.echo(f"bbsengine.database.update.120: {conn=}", level="error")
         return False
     try:
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             _work(cur)
             if commit is True:
                 conn.commit()
@@ -615,7 +662,7 @@ def upsert(
         return conflict_clause
 
     def _work(conn):
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             # Build column list and values
             columns = list(items.keys())
             values = [convert_for_jsonb(items[col]) for col in columns]
@@ -729,7 +776,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
         )
 
     def _work(conn):
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             cur.execute(query, dat)
             if returnid is True:
                 res = cur.fetchone()
@@ -771,7 +818,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
 def classexists(args: Any, name: str, **kwargs: Any) -> bool:
     def _work(conn):
         mogrify = kwargs.get("mogrify", False)
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             sql = "select to_regclass(%s) as class"  # does not work with schemas
             dat = (name,)
             cur.execute(sql, dat)
@@ -814,7 +861,7 @@ def schemaexists(args: Any, name: str, **kwargs: Any) -> bool:
             "SELECT 't' as exists FROM information_schema.schemata where schema_name=%s"
         )
         dat = (name,)
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             if mogrify is True:
                 io.echo(
                     f"bbsengine6.database.schemaexists.100: {mogrifysql(cur, sql, dat)=}",
@@ -840,7 +887,7 @@ def schemaexists(args: Any, name: str, **kwargs: Any) -> bool:
 def typeexists(args: Any, name: str, **kwargs: Any) -> bool:
     def _work(conn):
         mogrify = kwargs.get("mogrify", False)
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             sql = "select to_regtype(%s) as type"
             dat = (name,)
             cur.execute(sql, dat)
@@ -874,7 +921,7 @@ def tableexists(args: Any, schema: str, table: str, **kwargs: Any) -> bool:
     def _work(conn):
         sql = "SELECT 't' as exists FROM information_schema.tables where table_schema=%s and table_name=%s"
         dat = (schema, table)
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             if mogrify is True:
                 io.echo(
                     f"bbsengine6.database.tableexists.100: {mogrifysql(cur, sql, dat)=}",
@@ -1104,7 +1151,7 @@ def createrol(args: Any, name: str, **kwargs: Any) -> bool:
         if conn is None:
             io.echo("bbsengine.database.createrol.140: {conn=}", level="error")
             return False
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             return _work(cur)
     except psycopg.DatabaseError as e:
         io.echo_traceback(f"bbsengine6.database.createrol.200: {e}")
@@ -1131,7 +1178,7 @@ def rolexists(args: Any, rolname: str, **kwargs: Any) -> bool:
         return False
 
     try:
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             return _work(cur)
     except psycopg.DatabaseError as e:
         io.echo_traceback(f"bbsengine6.database.rolexists.200: {e}")
@@ -1149,7 +1196,7 @@ def exists(args: Any, databasename: str, **kwargs: Any) -> bool:
         with connect(args, pool=pool) as conn:
             sql = "SELECT datname FROM pg_catalog.pg_database WHERE lower(datname) = lower(%s)"
             dat = (databasename,)
-            with cursor(conn) as cur:
+            with cursor(conn=conn) as cur:
                 cur.execute(sql, dat)
                 result = False if cur.rowcount == 0 else True
             conn.commit()
@@ -1177,7 +1224,7 @@ def create(args: Any, name: str, **kwargs: Any) -> bool:
         io.echo(f"bbsengine.database.create.180: {conn=}", level="error")
         return False
     io.echo(f"{conn=}", level="debug")
-    with cursor(conn) as cur:
+    with cursor(conn=conn) as cur:
         return _work(cur)
 
 
@@ -1188,7 +1235,7 @@ def createschema(args: Any, name: str, **kwargs: Any) -> bool:
     def _work(conn):
         stmt = sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(name))
         io.echo(f"bbsengine6.database.createschema.260: {stmt=}", level="debug")
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             cur.execute(stmt)
         conn.commit()
         return True
@@ -1227,10 +1274,10 @@ def get_role_privs(
             return False
 
         with connect(args, pool=pool) as conn:
-            with cursor(conn) as cur:
+            with cursor(conn=conn) as cur:
                 return _work(cur)
     else:
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             return _work(cur)
 
 
@@ -1240,7 +1287,7 @@ def manage_role_privs(
     def _work(conn):
         sql = "select manage_role_privs(%s, %s, %s)"
         dat = (role_name, action, priv)
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             return cur.execute(sql, dat)
 
     conn = kwargs.get("conn", None)
@@ -1270,24 +1317,26 @@ def manage_secondary_role(
         return cur.execute(sql, dat)
 
     try:
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             return _work(cur)
     except psycopg.DatabaseError as e:
         io.echo_traceback(f"bbsengine6.database.manage_secondary_role.200: {e}")
         return False
 
 
-def cursor(conn: Any, row_factory: Any = dict_row, **kwargs: Any) -> Any:
+def cursor(conn: Any = None, row_factory: Any = dict_row, **kwargs: Any) -> Any:
     """Create a cursor with the specified row factory.
 
     Args:
-      conn: Database connection
+      conn: Database connection (can be passed as arg or via kwargs)
       row_factory: Row factory (default: dict_row for dict results)
-      **kwargs: Additional arguments
+      **kwargs: Additional arguments (conn can be passed here)
 
     Returns:
       Cursor instance
     """
+    if conn is None:
+        conn = kwargs.get("conn", None)
     return conn.cursor(row_factory=row_factory)
 
 
@@ -1400,7 +1449,7 @@ def extensionavailable(args: Any, ext: str, **kwargs: Any) -> bool:
     if cur is None:
         pool = kwargs.get("pool", None)
         with connect(args, pool=pool) as conn:
-            with cursor(conn) as cur:
+            with cursor(conn=conn) as cur:
                 return _work(cur)
     else:
         return _work(cur)
@@ -1423,7 +1472,7 @@ def extensioninstalled(args: Any, ext: str, **kwargs: Any) -> bool:
     if cur is None:
         pool = kwargs.get("pool", None)
         with connect(args, pool=pool) as conn:
-            with cursor(conn) as cur:
+            with cursor(conn=conn) as cur:
                 return _work(cur)
     else:
         return _work(cur)
@@ -1453,7 +1502,7 @@ def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
     if cur is None:
         pool = kwargs.get("pool", None)
         with connect(args, pool=pool) as conn:
-            with cursor(conn) as cur:
+            with cursor(conn=conn) as cur:
                 return _work(cur)
     else:
         return _work(cur)
@@ -1471,7 +1520,7 @@ def importsql(args: Any, filename: str, **kwargs: Any) -> bool:
             sql_script = util.load_sql(args, filename, package=package)
             #      with open(fullpath, 'r') as file:
             #        sql_script = file.read()
-            with cursor(conn) as cur:
+            with cursor(conn=conn) as cur:
                 try:
                     cur.execute(sql_script)
                 except psycopg.errors.Error as e:
@@ -1511,7 +1560,7 @@ def functionexists(args: Any, name: str, **kwargs: Any) -> bool:
         #    io.echo(f"bbsengine.database.functionexists.100: {schema=} {function_name=}", level="debug")
         sql = "SELECT 1 FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid WHERE p.proname = %s AND n.nspname = %s"
         dat = (function_name, schema)
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             cur.execute(sql, dat)
             #    io.echo(f"bbsengine6.database.functionexists.120: {mogrifysql(cur, sql, dat)=} {cur.rowcount=}", level="debug")
             return True if cur.rowcount > 0 else False
@@ -1539,7 +1588,7 @@ def manage_database_priv(
     def _work(conn):
         sql = "select manage_database_priv(%s, %s, %s, %s)"
         dat = (action, priv, database_name, target_role)
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             cur.execute(sql, dat)
             return True if cur.rowcount > 0 else False
 
@@ -1568,7 +1617,7 @@ def manage_schema_priv(
     def _work(conn):
         sql = "select manage_schema_priv(%s, %s, %s, %s)"
         dat = (action, priv, database_name, target_role)
-        with cursor(conn) as cur:
+        with cursor(conn=conn) as cur:
             cur.execute(sql, dat)
             return True if cur.rowcount > 0 else False
 

@@ -90,30 +90,41 @@ class TestDatabaseConversionFlow:
         assert "APPROVED" in result.obj
 
     def test_jsonb_object_not_json_serializable(self):
-        """Jsonb objects should NOT be JSON serializable (the original bug)."""
+        """Jsonb objects should NOT be JSON serializable (the original bug).
+
+        The outer Jsonb wrapper itself is not json.dumps()-serializable
+        (psycopg handles it via its registered adapter, not json.dumps).
+        """
         import json
 
         test_dict = {"APPROVED": {"value": True}}
         jsonb_obj = database.convert_for_jsonb(test_dict)
 
-        # This would fail before the fix
+        # json.dumps() on the outer Jsonb raises TypeError; psycopg uses
+        # its own dumper, not the stdlib json.dumps.
         with pytest.raises(TypeError, match="Object of type Jsonb"):
             json.dumps(jsonb_obj)
 
     def test_jsonb_obj_attribute_has_correct_structure(self):
-        """Jsonb.obj contains the recursively converted structure."""
+        """Jsonb.obj contains the recursively converted structure.
+
+        Only the outermost dict is wrapped in Jsonb. Inner dicts are
+        returned as plain dicts to avoid nested Jsonb objects that
+        json.dumps() cannot serialize.
+        """
         from psycopg.types.json import Jsonb
 
         test_dict = {"APPROVED": {"value": True}}
         jsonb_obj = database.convert_for_jsonb(test_dict)
 
-        # convert_for_jsonb() recursively wraps nested dicts
-        # so the structure is Jsonb({"APPROVED": Jsonb({"value": True})})
+        # Structure: Jsonb({"APPROVED": {"value": True}})
+        # The inner dict is plain (not wrapped in Jsonb)
         assert isinstance(jsonb_obj, Jsonb)
         assert isinstance(jsonb_obj.obj, dict)
         assert "APPROVED" in jsonb_obj.obj
-        # The nested value is also wrapped in Jsonb
-        assert isinstance(jsonb_obj.obj["APPROVED"], Jsonb)
+        # The nested value is a plain dict, not a Jsonb wrapper
+        assert isinstance(jsonb_obj.obj["APPROVED"], dict)
+        assert jsonb_obj.obj["APPROVED"] == {"value": True}
 
 
 class TestBuildrecNoJsonDumps:

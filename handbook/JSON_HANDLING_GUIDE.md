@@ -4,6 +4,8 @@
 
 **Database conversions are handled by `database.py`. Never call `json.dumps()` before passing data to database functions.**
 
+> **Note (2026-06):** `convert_for_jsonb()` now wraps only the top-level dict/list in `Jsonb`. Inner dicts/lists are returned as plain Python objects to avoid the `Object of type Jsonb is not JSON serializable` error that psycopg's dumper raises on nested `Jsonb` instances. See [Pattern 4](#pattern-4-nested-dicts-complex-jsonb) and the [function reference](#databaseconvert_for_jsonbvalue-wraptrue) for details.
+
 ---
 
 ## The Rule
@@ -164,13 +166,15 @@ rec = {
     }
 }
 database.update(args, table, pk, rec)
-# database.update() → convert_for_jsonb() → recursively wraps
+# database.update() → convert_for_jsonb() → wraps top-level in Jsonb only
 # Result: Jsonb({
-#   "settings": Jsonb({
-#     "theme": Jsonb({...}),
-#     "notifications": Jsonb({...})
-#   })
+#   "settings": {
+#     "theme": {...},
+#     "notifications": {...}
+#   }
 # })
+# Inner dicts/lists are plain (NOT wrapped in nested Jsonb) to avoid
+# "Object of type Jsonb is not JSON serializable" at psycopg's dumper.
 ```
 
 ---
@@ -206,26 +210,32 @@ output = buildrec(input)
 # }
 ```
 
-### database.convert_for_jsonb(value)
+### database.convert_for_jsonb(value, *, wrap=True)
 
 **Purpose**: Convert Python objects to psycopg3 types for database storage
 
-**Input**: Any Python value
+**Input**: 
+- `value`: Any Python value
+- `wrap` (keyword-only, default `True`): Whether to wrap dicts/lists in `Jsonb`. The
+  default wraps the top-level only. Internal recursion uses `wrap=False` so inner
+  dicts/lists are returned as plain Python objects — this prevents nested `Jsonb`
+  instances that `json.dumps()` cannot serialize.
 
-**Output**: 
-- Dicts → Jsonb({...})
-- Lists/tuples → Jsonb([...])
+**Output**:
+- Dicts → `Jsonb({...})` (top-level) or plain `dict` (inner, when `wrap=False`)
+- Lists/tuples → `Jsonb([...])` (top-level) or plain `list` (inner)
 - Datetimes → ISO string
 - Strings, ints, floats, bools → unchanged
 - Other types → converted to string
 
-**Key**: Returns psycopg3 types, not JSON strings
+**Key**: Top-level dicts/lists are wrapped in `Jsonb`; inner values stay plain.
 
 ```python
-dict_value = {"key": "value"}
+dict_value = {"outer": {"inner": 1}}
 jsonb_value = database.convert_for_jsonb(dict_value)
-print(type(jsonb_value))  # <class 'psycopg.types.json.Jsonb'>
-print(jsonb_value.obj)    # {'key': 'value'}
+print(type(jsonb_value))              # <class 'psycopg.types.json.Jsonb'>
+print(type(jsonb_value.obj["outer"])) # <class 'dict'> (plain, not Jsonb)
+print(jsonb_value.obj)                # {'outer': {'inner': 1}}
 ```
 
 ### database.update(args, table, pk, items, ...)
@@ -265,11 +275,15 @@ If you get `TypeError: Object of type Jsonb is not JSON serializable`:
    - Don't call it in application code
    - `database.update()` calls it internally
    
-3. ✅ Verify buildrec() returns dicts as dicts
+3. ❌ Check for hand-rolled `Jsonb(Jsonb(...))` constructions
+   - Only the outer wrap is needed; inner `Jsonb` objects break psycopg's dumper
+   - Pass plain dicts and let `convert_for_jsonb()` handle the wrap
+   
+4. ✅ Verify buildrec() returns dicts as dicts
    - Should NOT be JSON strings
    - Should NOT be Jsonb objects
    
-4. ✅ Verify database.update() is called with plain dicts
+5. ✅ Verify database.update() is called with plain dicts
    - Not JSON strings
    - Not Jsonb objects
 
@@ -278,11 +292,11 @@ If you get `TypeError: Object of type Jsonb is not JSON serializable`:
 ## References
 
 - **Fix File**: `bbsengine6/py/src/bbsengine6/member.py:76` (buildrec function)
-- **Database File**: `bbsengine6/py/src/bbsengine6/database.py:21` (convert_for_jsonb function)
-- **Related Code**: `bbsengine6/py/src/bbsengine6/database.py:341` (where convert_for_jsonb is called)
+- **Database File**: `bbsengine6/py/src/bbsengine6/database.py:26` (convert_for_jsonb function)
+- **Related Code**: `bbsengine6/py/src/bbsengine6/database.py` — `update()`, `insert()`, `execute()`, `executemany()` all call `convert_for_jsonb()` internally
 - **Test Cases**: `bbsengine6/py/tests/test_buildrec.py` and `test_member_update_with_flags.py`
 
 ---
 
-**Last Updated**: March 28, 2026
-**Status**: Finalized after fix completion
+**Last Updated**: June 4, 2026
+**Status**: Documented convert_for_jsonb() wrap-once behavior (inner dicts/lists stay plain)

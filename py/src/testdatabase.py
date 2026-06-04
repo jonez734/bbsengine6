@@ -779,10 +779,16 @@ class TestConvertForJsonb(unittest.TestCase):
         self.assertIsInstance(result, Jsonb)
         self.assertEqual(result.obj["string"], "value")
         self.assertEqual(result.obj["number"], 42)
+        # Inner dict is a plain dict (not wrapped in Jsonb) so we index
+        # it directly rather than via .obj.
         nested = result.obj["nested"]
-        self.assertEqual(nested.obj["inner"], "<class 'int'>")
-        self.assertIsInstance(nested.obj["datetime"], str)
-        self.assertEqual(result.obj["list"].obj[0], "<class 'str'>")
+        self.assertIsInstance(nested, dict)
+        self.assertEqual(nested["inner"], "<class 'int'>")
+        self.assertIsInstance(nested["datetime"], str)
+        # Inner list is also plain (not wrapped in Jsonb).
+        lst = result.obj["list"]
+        self.assertIsInstance(lst, list)
+        self.assertEqual(lst[0], "<class 'str'>")
 
     def test_convert_datetime_naive(self):
         dt = datetime.datetime(2024, 1, 15, 10, 30, 0)
