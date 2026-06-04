@@ -150,6 +150,27 @@ notify.enable()   # re-enable
 eliminating "rolling back returned connection [INTRANS]" warnings from
 psycopg_pool when the connection is returned to the pool.
 
+### Connection Resolution
+
+Most notify API calls (`count`, `get_notifications`, `mark_read`, ...) accept
+the following kwargs for database access, resolved in this priority order
+by `_resolve_conn()`:
+
+1. `conn=` — use the caller's existing connection
+2. `pool=` — borrow a connection from the caller's pool
+3. `args=` — build/cache a pool via `database.getpool(args)`, which uses
+   `args.databasename`, `args.databasehost`, `args.databaseport`,
+   `args.databaseuser`, `args.databasepassword`
+4. **Fallback** — `getpool(args=None, dbname=_default_db())` where
+   `_default_db()` reads the `BBSENGINE6_DBNAME` env var (default
+   `bbsengine6`). This path uses no host, so libpq attempts a UNIX socket
+   connection.
+
+Callers should always pass `args=args` (or an explicit `pool=`/`conn=`)
+to avoid the fallback. The fallback exists only for last-resort/legacy
+code paths and will fail loudly when the default database does not exist
+or the UNIX socket is unreachable.
+
 ## Rate Limiting
 
 Per-sender, per-type rate limits are enforced at `send()` time. Default is 20 per hour per type. The `set_rate_limit()` function overrides limits.
