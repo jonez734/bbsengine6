@@ -9,6 +9,8 @@ with warnings.catch_warnings():
         echo,
         echo_file,
         echo_traceback,
+        exit_on_db_error,
+        fatal_on_db_error,
         rendered_length,
         get_cursor_position,
     )
@@ -48,6 +50,8 @@ __all__ = [
     "echo",
     "echo_file",
     "echo_traceback",
+    "exit_on_db_error",
+    "fatal_on_db_error",
     "rendered_length",
     "get_cursor_position",
     "setvar",

@@ -1364,6 +1364,62 @@ def echo_traceback(
     echo(traceback_string, level=None)
 
 
+def exit_on_db_error(message: str = "fatal database error") -> None:
+    """Log a database error via echo_traceback and call sys.exit(1).
+
+    Use this in module main() functions to make DB/connection errors fatal.
+    The program will print the traceback and exit with status 1.
+
+    Example:
+        def main(args, **kwargs):
+            try:
+                with database.connect(args, pool=pool) as conn:
+                    _work(conn)
+            except psycopg.OperationalError as e:
+                io.exit_on_db_error("mm.lobby.main: DB connection failed")
+    """
+    import sys
+
+    import psycopg
+
+    try:
+        raise
+    except (psycopg.OperationalError, psycopg.InterfaceError) as e:
+        echo_traceback(f"{message}: {e}")
+        sys.exit(1)
+
+
+def fatal_on_db_error(func):
+    """Decorator that makes DB/connection errors fatal (exit 1) in module main().
+
+    Catches psycopg.OperationalError and psycopg.InterfaceError, logs them
+    via echo_traceback, and calls sys.exit(1). Other exceptions propagate.
+
+    Use on module main() functions to ensure DB failures cause program exit
+    rather than silent failure.
+
+    Example:
+        @io.fatal_on_db_error
+        def main(args, **kwargs):
+            with database.connect(args, pool=pool) as conn:
+                _work(conn)
+    """
+    import functools
+    import sys
+
+    import psycopg
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (psycopg.OperationalError, psycopg.InterfaceError) as e:
+            echo_traceback(f"{func.__module__}.{func.__name__}: {e}")
+            sys.exit(1)
+
+    return wrapper
+
+
 def _get_template_dirs() -> list:
     """Get list of template directories to search, in priority order."""
     dirs = []
