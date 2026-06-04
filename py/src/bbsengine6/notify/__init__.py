@@ -32,6 +32,9 @@ from .lib import (
     _validate_template,
     _validate_template_vars,
     _render_template,
+    is_enabled,
+    enable,
+    disable,
 )
 
 from .tui import run, run_until_quit
@@ -69,4 +72,7 @@ __all__ = [
     "_render_template",
     "run",
     "run_until_quit",
+    "is_enabled",
+    "enable",
+    "disable",
 ]

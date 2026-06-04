@@ -24,6 +24,27 @@ from ..net.crypto import CryptoHash
 
 logger = logging.getLogger(__name__)
 
+# Feature flag to enable/disable the notify subsystem entirely.
+# When disabled, notify.count() returns 0 and no DB connections are used.
+_notify_enabled: bool = True
+
+
+def is_enabled() -> bool:
+    """Return current notify subsystem enabled state."""
+    return _notify_enabled
+
+
+def enable() -> None:
+    """Enable the notify subsystem (DB connections may be used)."""
+    global _notify_enabled
+    _notify_enabled = True
+
+
+def disable() -> None:
+    """Disable the notify subsystem (returns 0, no DB connections used)."""
+    global _notify_enabled
+    _notify_enabled = False
+
 
 def _default_db() -> str:
     """Get default database name from environment. Reads at call time, not import time."""
@@ -567,7 +588,7 @@ def send(
                 cur.execute(
                     sql.SQL("""
                         INSERT INTO engine.__notify_type
-                        (type_name, default_urgency, max_per_user_per_hour, persist_by_default, registered_at)
+                        (type_name, default_urgency, max_per_user_per_hour, persist_by_default, dateregistered)
                         VALUES (%s, %s, 10, true, now())
                     """),
                     (notification_type, default_urg),
@@ -741,7 +762,7 @@ def _add_to_user_queue(
                     with database.cursor(conn) as cur:
                         cur.execute(
                             sql.SQL(
-                                "UPDATE engine.__notify_recipient SET delivered_at = now() WHERE notify_id = %s AND recipient_moniker = %s"
+                                "UPDATE engine.__notify_recipient SET datedelivered = now() WHERE notify_id = %s AND recipient_moniker = %s"
                             ),
                             (notify_id, moniker),
                         )
@@ -753,29 +774,35 @@ def _add_to_user_queue(
 
 
 def _resolve_conn(
-    args: Optional[Any], pool: Optional[Any], conn: Optional[Any]
+    args: Optional[Any],
+    pool: Optional[Any],
+    conn: Optional[Any],
+    autocommit: bool = False,
 ) -> tuple[Optional[Any], Optional[Any], bool]:
     """Resolve connection and pool from args/pool/conn parameters.
 
-    Returns (pool, conn, we_created_conn) tuple:
-    - If conn provided, returns (pool, conn, False) - use provided conn
-    - If pool provided, gets connection from pool, returns (pool, conn, True)
-    - If args provided, gets pool from args and connection from pool, returns (pool, conn, True)
-    - If none provided, tries to get pool using BBSENGINE6_DBNAME env var, returns (pool, conn, True)
-    - Returns (None, None, False) if all attempts fail
+    Args:
+        args: Application args for pool resolution
+        pool: Optional connection pool
+        conn: Optional existing connection
+        autocommit: If True, connection uses autocommit mode (no transaction state).
+                    Use for read-only queries to avoid INTRANS warnings from pool.
+
+    Returns:
+        (pool, conn, we_created_conn) tuple as documented above.
     """
     we_created_conn = False
     if conn is not None:
         return pool, conn, we_created_conn
     if pool is not None:
         conn = pool.getconn()
-        conn.autocommit = False  # type: ignore[attr-defined]
+        conn.autocommit = autocommit  # type: ignore[attr-defined]
         we_created_conn = True
         return pool, conn, we_created_conn
     if args is not None:
         pool = getpool(args)
         conn = pool.getconn()
-        conn.autocommit = False  # type: ignore[attr-defined]
+        conn.autocommit = autocommit  # type: ignore[attr-defined]
         we_created_conn = True
         return pool, conn, we_created_conn
 
@@ -784,7 +811,7 @@ def _resolve_conn(
     try:
         pool = getpool(args, dbname=dbname)
         conn = pool.getconn()
-        conn.autocommit = False  # type: ignore[attr-defined]
+        conn.autocommit = autocommit  # type: ignore[attr-defined]
         we_created_conn = True
         return pool, conn, we_created_conn
     except Exception:
@@ -824,7 +851,7 @@ def get_notifications(
             mac_col = sql.SQL("n.mac") if has_mac else sql.SQL("NULL AS mac")
             query = sql.SQL("""
                 SELECT n.id, n.notification_type, n.sender_moniker, n.template, n.template_vars,
-                       n.rendered_message, n.data, n.urgency, {mac_col}, n.datecreated, nr.read_at, nr.delivered_at
+                       n.rendered_message, n.data, n.urgency, {mac_col}, n.datecreated, nr.dateread, nr.datedelivered
                 FROM engine.__notify n
                 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
                 WHERE nr.recipient_moniker = %s
@@ -872,11 +899,11 @@ def get_notifications(
                         timestamp=row["datecreated"].timestamp()
                         if row["datecreated"]
                         else time.time(),
-                        delivered_to={moniker: row["delivered_at"].timestamp()}
-                        if row["delivered_at"]
+                        delivered_to={moniker: row["datedelivered"].timestamp()}
+                        if row["datedelivered"]
                         else {},
-                        read_by={moniker: row["read_at"].timestamp()}
-                        if row["read_at"]
+                        read_by={moniker: row["dateread"].timestamp()}
+                        if row["dateread"]
                         else {},
                         should_persist=True,
                         datecreated=row["datecreated"],
@@ -911,12 +938,16 @@ def count(moniker: str, args: Optional[Any] = None, **kwargs) -> int | None:
     Returns:
         Total notification count from database
         Returns None if pool unavailable
+        Returns 0 if notify subsystem is disabled
     """
     if not moniker:
         return 0
 
+    if not _notify_enabled:
+        return 0
+
     pool, conn, we_created_conn = _resolve_conn(
-        args, kwargs.get("pool"), kwargs.get("conn")
+        args, kwargs.get("pool"), kwargs.get("conn"), autocommit=True
     )
 
     if conn is None:
@@ -987,7 +1018,7 @@ def mark_read(
             cur.execute(
                 sql.SQL("""
                     UPDATE engine.__notify_recipient
-                    SET read_at = now()
+                    SET dateread = now()
                     WHERE notify_id = %s AND recipient_moniker = %s
                 """),
                 (notification_id, current_moniker),
@@ -1027,7 +1058,7 @@ def mark_delivered(
             cur.execute(
                 sql.SQL("""
                     UPDATE engine.__notify_recipient
-                    SET delivered_at = now()
+                    SET datedelivered = now()
                     WHERE notify_id = %s AND recipient_moniker = %s
                 """),
                 (notification_id, current_moniker),
@@ -1074,7 +1105,7 @@ def register_type(
             cur.execute(
                 sql.SQL("""
                     INSERT INTO engine.__notify_type
-                    (type_name, default_urgency, max_per_user_per_hour, persist_by_default, registered_at)
+                    (type_name, default_urgency, max_per_user_per_hour, persist_by_default, dateregistered)
                     VALUES (%s, %s, %s, %s, now())
                     ON CONFLICT (type_name) DO NOTHING
                 """),
@@ -1180,7 +1211,7 @@ def create_group(
             for moniker in member_monikers:
                 cur.execute(
                     sql.SQL("""
-                        INSERT INTO engine.__notify_group (group_name, member_moniker, added_at)
+                        INSERT INTO engine.__notify_group (group_name, member_moniker, dateadded)
                         VALUES (%s, %s, now())
                         ON CONFLICT (group_name, member_moniker) DO NOTHING
                     """),
@@ -1215,7 +1246,7 @@ def add_to_group(
         with database.cursor(conn) as cur:
             cur.execute(
                 sql.SQL("""
-                    INSERT INTO engine.__notify_group (group_name, member_moniker, added_at)
+                    INSERT INTO engine.__notify_group (group_name, member_moniker, dateadded)
                     VALUES (%s, %s, now())
                     ON CONFLICT (group_name, member_moniker) DO NOTHING
                 """),
@@ -1481,4 +1512,7 @@ __all__ = [
     "unblock",
     "is_blocked",
     "get_blocked",
+    "is_enabled",
+    "enable",
+    "disable",
 ]

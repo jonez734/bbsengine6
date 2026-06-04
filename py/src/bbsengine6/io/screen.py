@@ -148,6 +148,10 @@ def get_notification_status(**kwargs) -> str:
     """
     try:
         from bbsengine6 import notify
+
+        if not notify.is_enabled():
+            return ""
+
         from bbsengine6.member import _threadlocal
 
         # Get moniker from thread-local storage (already logged in)
