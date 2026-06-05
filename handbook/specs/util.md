@@ -47,7 +47,7 @@ dpkg-reconfigure locales
 ```python
 hr(acs=True, width=None, end="\n") -> bool
 heading(title: str, **kwargs) -> None
-pluralize(amount: int, singular="singular", plural="plural", quantity=True, emoji="", determiner="a", **kw) -> str
+pluralize(amount: int, singular: str, plural: str, quantity=True, emoji="", determiner="a", **kw) -> str
 datestamp(t=None, format="%Y-%m-%d %I:%M%P %Z (%a)") -> str
 inputpassword(prompt="password: ", mask="X", **kwargs) -> str
 oxfordcomma(seq, conjunction="and") -> Optional[str]

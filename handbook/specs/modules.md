@@ -369,11 +369,13 @@ def heading(title: str, **kwargs)
   -> str
   "Format title as heading with decorative border"
   
-def pluralize(amount: int, singular: str = "singular", plural: str = "plural",
-              quantity: bool = True, emoji: str = "", determiner: str = "a", **kw) 
+def pluralize(amount: int, singular: str, plural: str,
+              quantity: bool = True, emoji: str = "", determiner: str = "a", **kw)
   -> str
   "Return singular or plural form with optional count and emoji"
   "Example: pluralize(3, 'message', 'messages') → '3 messages'"
+  "Note: singular and plural are required (no footgun defaults)."
+  "Emoji is followed by exactly one space when present, none when empty."
   
 def oxfordcomma(seq: list, conjunction: str = "and") 
   -> str

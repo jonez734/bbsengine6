@@ -28,6 +28,7 @@
 #
 # pyright: ignore[import-not-found, reportMissingTypeHints]
 
+import io
 import logging
 import logging.handlers
 import os
@@ -145,27 +146,41 @@ def heading(title: str, **kwargs) -> None:
 
 def pluralize(
     amount: int,
-    singular: str = "singular",
-    plural: str = "plural",
+    singular: str,
+    plural: str,
     quantity: bool = True,
     emoji: str = "",
     determiner: str = "a",
     **kw,
 ) -> str:
-    """Generate a grammatically correct singular or plural phrase.
+    """Format a count with a singular or plural noun phrase.
 
     Args:
-        amount: The quantity to base pluralization on. If 0 or None, returns plural form.
-        singular: The singular form of the word (default: "singular").
-        plural: The plural form of the word (default: "plural").
-        quantity: If True, include the quantity in the output (default: True).
-        emoji: Optional emoji to prepend to the output.
-        determiner: Article to use with singular form, e.g., "a", "an" (default: "a").
-                   Set to "" to use quantity number instead.
-        **kw: Additional keyword arguments (unused, for future compatibility).
+        amount: Coerced to int. 0 yields the plural with a "no" prefix,
+            1 yields the singular (with determiner or count), any other
+            value (including negatives) yields the plural with the count.
+        singular: Singular form of the noun. Required.
+        plural: Plural form of the noun. Required. Empty strings are tolerated.
+        quantity: If True (default), include the count or determiner in the
+            output. If False, return only the noun (with emoji prefix).
+        emoji: Optional string prepended to the output. When non-empty, a
+            single space separates the emoji from the rest of the phrase.
+            When empty, no leading space is produced.
+        determiner: Article used for the singular form, e.g. "a", "an"
+            (default: "a"). Set to "" to use the count instead of an article.
+        **kw: Silently absorbed. Supports the common pattern of spreading
+            a caller-side resource dict (e.g. ``**coinres``) without forcing
+            every key to be a named parameter.
 
     Returns:
-        A grammatically correct phrase.
+        A formatted phrase such as "5 apples", "a apple", "no apples",
+        or ":moneybag: 5 apples".
+
+    Raises:
+        TypeError: If ``amount`` is not coercible to int, or if
+            ``singular``/``plural``/``amount`` are bound by both a
+            positional argument and ``**kw`` in the same call.
+        ValueError: If ``amount`` is a string that is not a valid int literal.
 
     Examples:
         >>> pluralize(0, "apple", "apples")
@@ -176,22 +191,31 @@ def pluralize(
         '5 apples'
         >>> pluralize(1, "apple", "apples", determiner="an")
         'an apple'
+        >>> pluralize(5, "apple", "apples", emoji=":moneybag:")
+        ':moneybag: 5 apples'
+        >>> pluralize(1, "apple", "apples", emoji=":moneybag:")
+        ':moneybag: a apple'
+        >>> pluralize(0, "apple", "apples", emoji=":moneybag:")
+        ':moneybag: no apples'
     """
-    if amount is None or amount == 0:
-        if quantity is True:
-            return f"no {emoji}{plural}"
-        return plural
+    amount = int(amount)
+    prefix = f"{emoji} " if emoji else ""
 
-    if quantity is True:
-        if amount == 1:
-            if determiner != "":
-                return f"{emoji} {determiner} {singular}"
-            return f"{emoji}{amount} {singular}"
-        return f"{emoji}{amount:n} {plural}"
+    if amount == 0:
+        if quantity is True:
+            return f"{prefix}no {plural}"
+        return f"{prefix}{plural}"
 
     if amount == 1:
-        return f"{emoji}{singular}"
-    return f"{emoji}{plural}"
+        if quantity is True:
+            if determiner:
+                return f"{prefix}{determiner} {singular}"
+            return f"{prefix}{amount} {singular}"
+        return f"{prefix}{singular}"
+
+    if quantity is True:
+        return f"{prefix}{amount:d} {plural}"
+    return f"{prefix}{plural}"
 
 
 def datestamp(
