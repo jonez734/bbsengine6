@@ -16,6 +16,7 @@ from . import member, database, io
 
 # Security: Validate folder path to prevent regex DoS and path traversal attacks
 _SAFE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
+_SAFE_URI_PATTERN = re.compile(r"^[a-zA-Z0-9._/-]+$")
 
 
 def _validate_path(path: str) -> bool:
@@ -23,6 +24,18 @@ def _validate_path(path: str) -> bool:
     if not path or len(path) > 256:
         return False
     return _SAFE_PATH_PATTERN.match(path) is not None
+
+
+def _validate_uri(uri: str) -> bool:
+    """Validate that uri contains only safe characters.
+
+    URIs are built from paths (dots replaced with slashes) and may contain
+    forward slashes for nested folders. Used with the SQL `=` operator only,
+    so the ReDoS concern from the `~` operator does not apply.
+    """
+    if not uri or len(uri) > 256:
+        return False
+    return _SAFE_URI_PATTERN.match(uri) is not None
 
 
 def buildpath(args, path: str) -> str:
@@ -49,7 +62,7 @@ def builddict(args, row):
         "title",
         "name",
         "intro",
-        "attributes",
+        "attrs",
         "datecreated",
         "createdbymoniker",
         "dateapproved",
@@ -59,6 +72,8 @@ def builddict(args, row):
     ):
         if col in row:
             folder[col] = row[col]
+    if "attrs" in folder:
+        folder["attributes"] = folder.pop("attrs")
     return folder
 
 
@@ -70,7 +85,7 @@ def buildrow(args, folder):
         "title",
         "name",
         "intro",
-        "attributes",
+        "attrs",
         "datecreated",
         "createdbymoniker",
         "dateapproved",
@@ -96,11 +111,22 @@ def insert(args, folder, **kwargs):
     #    return None
 
     folder["datecreated"] = "now()"
-    folder["createdbymoniker"] = member.getcurrentmoniker(args)
+    folder["createdbymoniker"] = member.getcurrentmoniker(args, **kwargs)
 
     #  if "approved" in sig and sig["approved"] is True:
     #    sig["dateapproved"] = "now()"
     #    sig["approvedbymoniker"] = member.getcurrentmoniker(args)
+
+    insert_kwargs = {"mogrify": mogrify}
+    if cur is not None:
+        insert_kwargs["conn"] = cur.connection if hasattr(cur, "connection") else None
+        insert_kwargs["cur"] = cur
+    for key in ("conn", "pool"):
+        if key in kwargs:
+            insert_kwargs[key] = kwargs[key]
+
+    if "attributes" in folder:
+        folder["attrs"] = folder.pop("attributes")
 
     try:
         return database.insert(
@@ -109,12 +135,52 @@ def insert(args, folder, **kwargs):
             folder,
             returnid=True,
             primarykey="path",
-            mogrify=mogrify,
-            cur=cur,
+            **insert_kwargs,
         )
     except psycopg.DatabaseError as e:
         io.echo(f"engine.folder.insert.120: database error: {e}", level="error")
         raise
+
+
+# @since 20260606
+def create(args, folder, **kwargs) -> bool:
+    """Create a new folder. Silently skips if folder already exists.
+
+    Args:
+        args: argparse namespace with debug, databasename, etc.
+        folder: dict with keys - path (required), title, intro, uri, attributes
+        **kwargs: cur (cursor), conn (connection), pool
+
+    Returns:
+        bool: True if folder was created, False if it already exists
+    """
+    cur = kwargs.get("cur", None)
+
+    if not _validate_path(folder.get("path", "")):
+        io.echo(
+            f"engine.folder.create.050: invalid path: {folder.get('path', '')!r}",
+            level="error",
+        )
+        return False
+
+    if exists(args, folder["path"], **kwargs) is True:
+        io.echo(
+            f"engine.folder.create.100: folder {folder['path']!r} already exists",
+            level="debug",
+        )
+        return False
+
+    insert_kwargs = dict(kwargs)
+    insert_kwargs.pop("cur", None)
+    if cur is not None:
+        insert_kwargs["cur"] = cur
+
+    try:
+        insert(args, folder, **insert_kwargs)
+        return True
+    except psycopg.DatabaseError as e:
+        io.echo(f"engine.folder.create.120: database error: {e}", level="error")
+        return False
 
 
 def get(args, path, **kwargs):
@@ -134,7 +200,18 @@ def get(args, path, **kwargs):
             row = cur.fetchone()
             return builddict(args, row)
 
-    pool = kwargs.pop("pool")
+    cur = kwargs.get("cur", None)
+    if cur is not None:
+        return _work(cur.connection)
+
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        return _work(conn)
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo(f"engine.folder.get.150: {pool=}", level="error")
+        return None
     with database.connect(args, pool=pool) as conn:
         return _work(conn)
 
@@ -143,9 +220,41 @@ def get(args, path, **kwargs):
 def update(args, path: str, folder: dict, **kwargs) -> bool:
     #  cur = kwargs.get("cur", None)
     #  mogrify = kwargs.get("mogrify", False)
+    kwargs.setdefault("primarykey", "path")
     return database.update(
-        args, "engine.__folder", path, folder, "path", **kwargs
+        args, "engine.__folder", path, folder, **kwargs
     )  # mogrify=mogify, cur=cur)
+
+
+# @since 20250605
+def delete(args, path: str, **kwargs) -> bool:
+    """Delete a folder by path."""
+    if not _validate_path(path):
+        io.echo(f"engine.folder.delete.050: invalid path: {path!r}", level="error")
+        return False
+
+    conn = kwargs.get("conn", None)
+    commit = kwargs.get("commit", True)
+
+    def _work(cur):
+        sql = "delete from engine.__folder where path = %s"
+        dat = (path,)
+        cur.execute(sql, dat)
+        return cur.rowcount > 0
+
+    if conn is None:
+        with database.connect(args) as conn:
+            with database.cursor(conn) as cur:
+                result = _work(cur)
+                if commit:
+                    conn.commit()
+                return result
+    else:
+        with database.cursor(conn) as cur:
+            result = _work(cur)
+            if commit:
+                conn.commit()
+            return result
 
 
 class foldercompleter(object):
@@ -205,21 +314,38 @@ def noneexist(buf: str, **kwargs: dict) -> bool:
     args = kwargs.get("args", None)
 
     sql = "select 1 from engine.folder where path ~ %s"
-    with database.connect(args) as dbh:
-        with dbh.cursor() as cur:
-            for s in buildlist(buf):
-                if not _validate_path(s):
-                    io.echo(
-                        f"engine.folder.noneexist.100: invalid path: {s!r}",
-                        level="error",
-                    )
-                    return False
-                dat = (s,)
-                cur.execute(sql, dat)
-                if cur.rowcount == 1:
-                    io.echo(f"folder {s!r} already exists")
-                    return False
-    return True
+
+    def _work(cur):
+        for s in buildlist(buf):
+            if not _validate_path(s):
+                io.echo(
+                    f"engine.folder.noneexist.100: invalid path: {s!r}",
+                    level="error",
+                )
+                return False
+            dat = (s,)
+            cur.execute(sql, dat)
+            if cur.rowcount == 1:
+                io.echo(f"folder {s!r} already exists")
+                return False
+        return True
+
+    cur = kwargs.get("cur", None)
+    if cur is not None:
+        return _work(cur)
+
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        with database.cursor(conn) as cur:
+            return _work(cur)
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo(f"engine.folder.noneexist.150: {pool=}", level="error")
+        return False
+    with database.connect(args, pool=pool) as conn:
+        with database.cursor(conn) as cur:
+            return _work(cur)
 
 
 def allexist(buf, **kwargs):
@@ -239,14 +365,22 @@ def allexist(buf, **kwargs):
         return True
 
     cur = kwargs.get("cur", None)
-    args = kwargs.get("args", None)
-
-    if cur is None:
-        with database.connect(args) as conn:
-            with database.cursor(conn) as cur:
-                return _work(cur)
-    else:
+    if cur is not None:
         return _work(cur)
+
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        with database.cursor(conn) as cur:
+            return _work(cur)
+
+    pool = kwargs.get("pool", None)
+    args = kwargs.get("args", None)
+    if pool is None:
+        io.echo(f"engine.folder.allexist.150: {pool=}", level="error")
+        return False
+    with database.connect(args, pool=pool) as conn:
+        with database.cursor(conn) as cur:
+            return _work(cur)
 
 
 def getchfoldercompleter(word, **kwargs):
@@ -265,7 +399,34 @@ def getchfoldercompleter(word, **kwargs):
         else:
             dat = (word + "*",)
 
-        with database.connect(args) as conn:
+        cur = kwargs.get("cur", None)
+        if cur is not None:
+            if args.debug is True:
+                io.echo(f"{database.mogrifysql(cur, sql, dat)=}", level="debug")
+            cur.execute(sql, dat)
+            if cur.rowcount == 0:
+                return
+            for rec in database.resultiter(cur):
+                yield rec["path"]
+            return
+
+        conn = kwargs.get("conn", None)
+        if conn is not None:
+            with database.cursor(conn) as cur:
+                if args.debug is True:
+                    io.echo(f"{database.mogrifysql(cur, sql, dat)=}", level="debug")
+                cur.execute(sql, dat)
+                if cur.rowcount == 0:
+                    return
+                for rec in database.resultiter(cur):
+                    yield rec["path"]
+            return
+
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            io.echo(f"engine.folder.getchfoldercompleter.150: {pool=}", level="error")
+            return
+        with database.connect(args, pool=pool) as conn:
             with database.cursor(conn) as cur:
                 if args.debug is True:
                     io.echo(f"{database.mogrifysql(cur, sql, dat)=}", level="debug")
@@ -301,65 +462,51 @@ def exists(args, buf: str, **kwargs: dict) -> bool:
             io.echo(f"engine.folder.exists.050: invalid path: {s!r}", level="error")
             return False
 
-    if cur is None:
-        with database.connect(args) as conn:
-            with database.cursor(conn) as cur:
-                for s in buildlist(buf):
-                    dat: tuple = (s,)
-                    io.echo(
-                        f"engine.folder.exists.100: {database.mogrifysql(cur, sql, dat)=}",
-                        level="debug",
-                    )
-                    cur.execute(sql, dat)
-                    if cur.rowcount == 1:
-                        io.echo(
-                            f"engine.folder.exists.120: {buf=} exists", level="debug"
-                        )
-                        return True
-                    io.echo(
-                        f"engine.folder.exists.140: {buf=} does not exist",
-                        level="debug",
-                    )
-                    return False
-    else:
+    def _work(cur):
         for s in buildlist(buf):
             dat: tuple = (s,)
             io.echo(
-                f"engine.folder.exists.160: {database.mogrifysql(cur, sql, dat)=}",
+                f"engine.folder.exists.100: {database.mogrifysql(cur, sql, dat)=}",
                 level="debug",
             )
             cur.execute(sql, dat)
             if cur.rowcount == 1:
-                io.echo(f"engine.folder.exists.180: {buf=} exists", level="debug")
+                io.echo(f"engine.folder.exists.120: {buf=} exists", level="debug")
                 return True
-            io.echo(f"engine.folder.exists.200: {buf=} does not exist", level="debug")
+            io.echo(
+                f"engine.folder.exists.140: {buf=} does not exist",
+                level="debug",
+            )
             return False
+        return False
+
+    if cur is not None:
+        return _work(cur)
+
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        with database.cursor(conn) as cur:
+            return _work(cur)
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo(f"engine.folder.exists.150: {pool=}", level="error")
+        return False
+    with database.connect(args, pool=pool) as conn:
+        with database.cursor(conn) as cur:
+            return _work(cur)
 
 
 def uriexists(args, buf: str, **kwargs: dict) -> bool:
-    if not _validate_path(buf):
+    if not _validate_uri(buf):
         io.echo(f"engine.folder.uriexists.050: invalid uri: {buf!r}", level="error")
         return False
 
-    cur = kwargs.get("cur", None)
-    if cur is None:
-        with database.connect(args) as conn:
-            with database.cursor(conn) as cur:
-                io.echo(f"engine.folder.uriexists.100: {buf=}", level="debug")
-                sql = "select 1 from engine.folder where uri=%s"
-                dat = (buf,)
-                cur.execute(sql, dat)
-                io.echo(
-                    f"engine.folder.uriexists.120: {database.mogrifysql(cur, sql, dat)=}",
-                    level="debug",
-                )
-                if cur.rowcount == 0:
-                    return False
-                return True
-    else:
-        io.echo(f"engine.folder.uriexists.120: {buf=}", level="debug")
-        sql = "select 1 from engine.folder where uri=%s"
-        dat = (buf,)
+    sql = "select 1 from engine.folder where uri=%s"
+    dat = (buf,)
+
+    def _work(cur):
+        io.echo(f"engine.folder.uriexists.100: {buf=}", level="debug")
         cur.execute(sql, dat)
         io.echo(
             f"engine.folder.uriexists.120: {database.mogrifysql(cur, sql, dat)=}",
@@ -368,6 +515,23 @@ def uriexists(args, buf: str, **kwargs: dict) -> bool:
         if cur.rowcount == 0:
             return False
         return True
+
+    cur = kwargs.get("cur", None)
+    if cur is not None:
+        return _work(cur)
+
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        with database.cursor(conn) as cur:
+            return _work(cur)
+
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        io.echo(f"engine.folder.uriexists.150: {pool=}", level="error")
+        return False
+    with database.connect(args, pool=pool) as conn:
+        with database.cursor(conn) as cur:
+            return _work(cur)
 
 
 # @since 20240624

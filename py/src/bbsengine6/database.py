@@ -1,4 +1,5 @@
 import copy
+import os
 from contextlib import contextmanager
 import threading
 from typing import Any, Generator, Iterator, Literal
@@ -570,8 +571,20 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
         io.echo(f"bbsengine6.database.update.100: {items=}", level="debug")
     conn = kwargs.get("conn", None)
     if conn is None:
-        io.echo(f"bbsengine.database.update.120: {conn=}", level="error")
-        return False
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            io.echo(f"bbsengine.database.update.120: {pool=}", level="error")
+            return False
+        with connect(args, pool=pool) as conn:
+            try:
+                with cursor(conn=conn) as cur:
+                    _work(cur)
+                    if commit is True:
+                        conn.commit()
+            except Exception as e:
+                io.echo_traceback(f"bbsengine6.database.update.200: {e}")
+                return False
+            return True
     try:
         with cursor(conn=conn) as cur:
             _work(cur)
@@ -953,12 +966,26 @@ def buildargs(
 ) -> None:
     if defaults is None:
         defaults = {}
-    databasename = defaults.get("databasename", "zoid6")
-    databasehost = defaults.get("databasehost", "127.0.0.1")
-    databaseport = defaults.get("databaseport", 5432)
-    databaseuser = defaults.get("databaseuser", None)
-    databasepassword = defaults.get("databasepassword", None)
-    databaseschema = defaults.get("databaseschema", "engine")
+    databasename = defaults.get(
+        "databasename", os.environ.get("BBSENGINE6_DBNAME", "zoid6")
+    )
+    databasehost = defaults.get(
+        "databasehost", os.environ.get("BBSENGINE6_DBHOST", "127.0.0.1")
+    )
+    databaseport = int(
+        defaults.get(
+            "databaseport", os.environ.get("BBSENGINE6_DBPORT", "5432")
+        )
+    )
+    databaseuser = defaults.get(
+        "databaseuser", os.environ.get("BBSENGINE6_DBUSER", None)
+    )
+    databasepassword = defaults.get(
+        "databasepassword", os.environ.get("BBSENGINE6_DBPASSWORD", None)
+    )
+    databaseschema = defaults.get(
+        "databaseschema", os.environ.get("BBSENGINE6_DBSCHEMA", "engine")
+    )
 
     group = parentparser.add_argument_group(label)
     #    group = argparse.ArgumentParser("database", parents=[parentparser], add_help=False)
