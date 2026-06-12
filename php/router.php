@@ -483,7 +483,7 @@ class folder
     $normalizeduri = \bbsengine6\normalizeuri($uri);
     if ($normalizeduri == "/")
     {
-      $labelpath = "top";
+      $labelpath = defined('TEOSLABELPREFIX') ? TEOSLABELPREFIX : "top";
     }
     else
     {
@@ -495,7 +495,7 @@ class folder
 
     \bbsengine6\util\logentry("browse.120: trace");
 
-    if ($labelpath === "top")
+    if ($labelpath === (defined('TEOSLABELPREFIX') ? TEOSLABELPREFIX : "top"))
     {
       \bbsengine6\setcurrentpage("index");
     }
