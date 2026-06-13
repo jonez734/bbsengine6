@@ -214,17 +214,17 @@ def getcurrentid(args, **kwargs):
         if loginid is None:
             return None
         try:
-            sql = "select id from engine.member where loginid=%s"
+            sql = "select moniker from engine.member where loginid=%s"
             dat = (loginid,)
             cur.execute(sql, dat)
             if cur.rowcount == 0:
                 return None
             rec = cur.fetchone()
-            member_id = rec["id"]
-            _threadlocal.id = member_id
+            moniker = rec["moniker"]
+            _threadlocal.id = moniker
             if args.debug is True:
-                io.echo(f"getcurrentid.120: {member_id=}", level="debug")
-            return member_id
+                io.echo(f"getcurrentid.120: {moniker=}", level="debug")
+            return moniker
         except psycopg.DatabaseError:
             io.echo_traceback(f"bbsengine6.member.getcurrentid.180:")
             return None
@@ -580,6 +580,20 @@ def checkflag(
     except Exception:
         io.echo_traceback("bbsengine6.member.checkflag.100:")
         return None
+
+
+def issysop(args, moniker: str | None = None, **kwargs) -> bool | None:
+    """Check if the sysop flag is set on an account.
+
+    Args:
+        args: Application args
+        moniker: Member moniker. If None, gets current user.
+        **kwargs: Optional - conn, pool
+
+    Returns:
+        True if sysop flag is set, False if not, None on error/not logged in.
+    """
+    return checkflag(args, "sysop", moniker=moniker, **kwargs)
 
 
 def getflags(args, moniker=None, **kwargs):

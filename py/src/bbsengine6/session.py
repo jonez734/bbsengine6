@@ -431,7 +431,7 @@ def set(
             )
 
         with database.cursor(conn) as cur:
-            cur.execute(query, (data, sessionid))
+            cur.execute(query, (database.Jsonb(data), sessionid))
         return value
 
     if sessionid is None:
@@ -445,8 +445,11 @@ def set(
         io.echo("session.set.110: session expired or invalid", level="error")
         return False
 
+    pool = kwargs.get("pool", None)
     if memberid is None:
-        memberid = member.getcurrentid(args)
+        memberid = (
+            member.getcurrentid(args, pool=pool) if pool else member.getcurrentid(args)
+        )
         if memberid is None:
             io.echo(
                 "bbsengine6.session.set.100: You do not exist! Go Away!", level="error"
@@ -457,7 +460,6 @@ def set(
     if conn is not None:
         return _work(conn)
 
-    pool = kwargs.get("pool", None)
     if pool is None:
         io.echo("bbsengine6.session.set.100: no conn or pool", level="error")
         return False

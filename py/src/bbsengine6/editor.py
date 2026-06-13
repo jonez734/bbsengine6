@@ -1,7 +1,7 @@
 # @since 20230801 it's about time
 import os
 import tempfile
-from . import util, screen, io
+from . import util, screen, io, member
 
 buf = []
 currentline = 0
@@ -126,7 +126,7 @@ def visual(args, text: str = "", suffix: str = "noteupdate"):
 
     diary = {}
     diary["lastmodified"] = "now()"
-    diary["lastmodifiedbyid"] = member.getcurrentid(args)
+    diary["lastmodifiedbymoniker"] = member.getcurrentid(args)
     diary["notes"] = notes
 
     io.echo(f"{diary=}", level="debug")

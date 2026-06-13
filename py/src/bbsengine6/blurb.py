@@ -1,6 +1,19 @@
+import os
+from pathlib import Path
+
 from . import database, member, io
+from .io.echo import echo
 
 from psycopg2.extras import Json
+
+
+def get_content_dir(args) -> Path:
+    content_dir = getattr(args, "blurb_content_dir", None)
+    if content_dir is None:
+        content_dir = os.environ.get(
+            "BBSENGINE6_BLURB_CONTENT_DIR", "/var/bbsengine6/blurb_content"
+        )
+    return Path(content_dir)
 
 
 def insert(
@@ -15,7 +28,7 @@ def insert(
     blurb["prg"] = prg
     blurb["attributes"] = Json(blurb["attributes"])
     blurb["datecreated"] = "now()"
-    blurb["createdbyid"] = member.getcurrentid(args)
+    blurb["createdbymoniker"] = member.getcurrentid(args)
     if args.debug is True:
         io.echo(
             f"bbsengine.blurb.insert.100: blurb={blurb!r} table={table!r}",
@@ -24,6 +37,70 @@ def insert(
     return database.insert(
         args, table, blurb, returnid=returnid, primarykey=primarykey, mogrify=mogrify
     )
+
+
+def save_content(args, blurbid: int, content: str, mogrify: bool = False) -> str:
+    content_dir = get_content_dir(args)
+    content_dir.mkdir(parents=True, exist_ok=True)
+
+    filepath = content_dir / f"{blurbid}.txt"
+    filepath.write_text(content)
+
+    if args.debug is True:
+        echo(f"bbsengine6.blurb.save_content.100: saved to {filepath}", level="debug")
+
+    return str(filepath)
+
+
+def insert_with_content(
+    args, blurb: dict, prg: str, content: str | None = None, **kwargs
+) -> int:
+    blurbid = insert(args, blurb, prg, **kwargs)
+
+    if content is not None and blurbid is not None:
+        contentpath = save_content(
+            args, blurbid, content, mogrify=kwargs.get("mogrify", False)
+        )
+        blurb["attributes"]["contentpath"] = contentpath
+        updateattributes(
+            args,
+            blurbid,
+            {"contentpath": contentpath},
+            mogrify=kwargs.get("mogrify", False),
+        )
+
+    return blurbid
+
+
+def load_content(args, blurbid: int) -> str | None:
+    content_dir = get_content_dir(args)
+    filepath = content_dir / f"{blurbid}.txt"
+
+    if not filepath.exists():
+        return None
+
+    return filepath.read_text()
+
+
+def delete_content(args, blurbid: int) -> bool:
+    content_dir = get_content_dir(args)
+    filepath = content_dir / f"{blurbid}.txt"
+
+    if filepath.exists():
+        filepath.unlink()
+        return True
+    return False
+
+
+def update_with_content(
+    args, id: int, blurb: dict, content: str | None = None, **kwargs
+) -> int:
+    blurbid = update(args, id, blurb, **kwargs)
+
+    if content is not None:
+        save_content(args, id, content, mogrify=kwargs.get("mogrify", False))
+
+    return blurbid
 
 
 def updatesigs(
@@ -88,7 +165,7 @@ def updateattributes(
 
 def update(args, id: int, blurb: dict, reset=False, mogrify=False):
     blurb["dateupdated"] = "now()"
-    blurb["updatedbyid"] = member.getcurrentid(args)
+    blurb["updatedbymoniker"] = member.getcurrentid(args)
     attr = blurb["attributes"] if "attributes" in blurb else {}
     if len(attr) > 0:
         updateattributes(args, id, attr, reset=reset, mogrify=mogrify)
@@ -145,6 +222,20 @@ def get(args, id: int):
         return None
     rec = cur.fetchone()
     blurb = build(args, rec, cur)
+    return blurb
+
+
+def get_with_content(args, id: int) -> dict | None:
+    blurb = get(args, id)
+    if blurb is None:
+        return None
+
+    contentpath = blurb.get("attributes", {}).get("contentpath")
+    if contentpath and Path(contentpath).exists():
+        blurb["content"] = Path(contentpath).read_text()
+    else:
+        blurb["content"] = load_content(args, id)
+
     return blurb
 
 
