@@ -101,7 +101,7 @@ def schema_init(db_connection, request):
     """
     Initialize notify schema tables.
 
-    Only loads 7 notify-specific SQL files:
+    Only loads 8 notify-specific SQL files:
     - notify.sql
     - notify_recipient.sql
     - notify_block.sql
@@ -109,6 +109,7 @@ def schema_init(db_connection, request):
     - notify_type.sql
     - notify_rate_limit.sql
     - notifyview.sql
+    - notifyd.sql
 
     Skips: schema, extensions, roles, member, session (already exist)
     """
@@ -122,14 +123,14 @@ def schema_init(db_connection, request):
             _execute_sql_file(db_connection, sql_content, filepath.name)
             logger.info(f"  ✓ Loaded {filepath.name}")
         except (psycopg.errors.DuplicateObject, psycopg.errors.DuplicateTable):
-            # Already exists - this is OK on re-runs
-            # Reset transaction state (PostgreSQL requires this after duplicate error)
             db_connection.rollback()
             logger.info(f"  ⊘ {filepath.name} already exists, skipping")
         except psycopg.errors.InsufficientPrivilege:
-            # Permission error - skip this file
             db_connection.rollback()
             logger.warning(f"  ⊘ {filepath.name} - insufficient privileges, skipping")
+        except psycopg.errors.DependentObjectsStillExist:
+            db_connection.rollback()
+            logger.warning(f"  ⊘ {filepath.name} - dependent objects, skipping (can only run on clean schema)")
         except Exception as e:
             logger.error(f"  ✗ Failed to load {filepath.name}: {e}")
             db_connection.rollback()
@@ -243,6 +244,7 @@ def _get_notify_sql_files() -> list[Path]:
         "notify_type.sql",  # Independent
         "notify_rate_limit.sql",  # Depends on: engine.__notify_type
         "notifyview.sql",  # Depends on: all tables above
+        "notifyd.sql",  # notifyd daemon tables: engine.__notify_imap_state, engine.__notify_history
     ]
 
     paths = [sql_dir / f for f in files]

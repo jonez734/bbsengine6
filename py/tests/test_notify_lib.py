@@ -287,8 +287,8 @@ class TestGetNotifications:
             "urgency": "ROUTINE",
             "mac": None,
             "datecreated": MagicMock(timestamp=lambda: time.time()),
-            "delivered_at": None,
-            "read_at": None,
+            "datedelivered": None,
+            "dateread": None,
         }
         mock_cursor = MockCursor(rows=[mock_row])
 

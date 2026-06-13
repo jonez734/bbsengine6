@@ -46,6 +46,7 @@ def test_pool(test_args):
                     path text unique not null primary key,
                     title text,
                     intro text,
+                    visible boolean not null default true,
                     parent text,
                     createdbyid bigint,
                     datecreated timestamptz,
@@ -240,3 +241,67 @@ class TestFolderCreate:
         paths = {row["path"] for row in rows}
         assert "top.foldercreatetest.noancestors" not in paths
         assert "top.foldercreatetest.noancestors.child" in paths
+
+
+class TestFolderVisibility:
+    """Test folder visibility field handling."""
+
+    def test_create_sets_visible_true_by_default(self, test_args, test_pool, db_conn):
+        """Test that create sets visible=True when not specified."""
+        f = {
+            "path": folder.buildpath(test_args, "top.foldercreatetest.visible"),
+            "title": "Visible Folder",
+        }
+        folder.create(test_args, f, cur=db_conn.cursor())
+        db_conn.commit()
+
+        with database.cursor(db_conn) as cur:
+            cur.execute(
+                "select visible from engine.__folder where path = %s",
+                (f["path"],),
+            )
+            row = cur.fetchone()
+        assert row is not None
+        assert row["visible"] is True
+
+    def test_create_with_visible_false(self, test_args, test_pool, db_conn):
+        """Test that create can set visible=False."""
+        f = {
+            "path": folder.buildpath(test_args, "top.foldercreatetest.invisible"),
+            "title": "Invisible Folder",
+            "visible": False,
+        }
+        folder.create(test_args, f, cur=db_conn.cursor())
+        db_conn.commit()
+
+        with database.cursor(db_conn) as cur:
+            cur.execute(
+                "select visible from engine.__folder where path = %s",
+                (f["path"],),
+            )
+            row = cur.fetchone()
+        assert row is not None
+        assert row["visible"] is False
+
+    def test_builddict_includes_visible(self, test_args):
+        """Test that builddict includes visible field."""
+        row = {
+            "path": "top.test",
+            "title": "Test",
+            "visible": False,
+            "datecreated": "2024-01-01",
+        }
+        result = folder.builddict(test_args, row)
+        assert "visible" in result
+        assert result["visible"] is False
+
+    def test_buildrow_includes_visible(self, test_args):
+        """Test that buildrow includes visible field."""
+        folder_data = {
+            "path": "top.test",
+            "title": "Test",
+            "visible": False,
+        }
+        result = folder.buildrow(test_args, folder_data.copy())
+        assert "visible" in result
+        assert result["visible"] is False

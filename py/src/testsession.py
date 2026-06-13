@@ -571,6 +571,391 @@ class TestCurrentsessionidGlobal(_TestCaseWithPoolCleanup):
         self.assertIsNone(session.getcurrentsessionid())
 
 
+class TestGetmembersessionErrors(unittest.TestCase):
+    def setUp(self):
+        self.mock_args = MagicMock()
+        self.mock_args.debug = False
+
+    @patch("bbsengine6.session.member")
+    def test_getmembersession_returns_none_when_moniker_is_none(
+        self, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = None
+
+        result = session.getmembersession(self.mock_args)
+
+        self.assertIsNone(result)
+        mock_member.getcurrentmoniker.assert_called_once()
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_getmembersession_logs_error_when_moniker_is_none(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = None
+
+        session.getmembersession(self.mock_args)
+
+        mock_io.echo.assert_called()
+        call_args = mock_io.echo.call_args
+        assert call_args is not None
+        self.assertIn("You do not exist", str(call_args))
+
+    @patch("bbsengine6.session.member")
+    def test_getmembersession_with_explicit_moniker_returns_session(
+        self, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = "testuser"
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = session.getmembersession(self.mock_args, moniker="testuser", conn=mock_conn)
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["moniker"], "testuser")
+
+    @patch("bbsengine6.session.member")
+    def test_getmembersession_returns_none_when_no_session_for_moniker(
+        self, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = "nonexistentuser"
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 0
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = session.getmembersession(self.mock_args, conn=mock_conn)
+
+        self.assertIsNone(result)
+
+
+class TestBuildsessionErrors(unittest.TestCase):
+    def setUp(self):
+        self.mock_args = MagicMock()
+        self.mock_args.debug = False
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_buildsession_returns_none_and_logs_error_when_no_moniker(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = None
+
+        result = session.buildsession(self.mock_args)
+
+        self.assertIsNone(result)
+        mock_io.echo.assert_called()
+        call_args = mock_io.echo.call_args
+        assert call_args is not None
+        self.assertIn("You do not exist", str(call_args))
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.os")
+    @patch("bbsengine6.session.database")
+    def test_buildsession_creates_valid_session_with_moniker(
+        self, mock_database: MagicMock, mock_os: MagicMock, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = "testuser"
+        mock_database.Jsonb.side_effect = lambda x: x
+        mock_os.environ = {"TERM": "xterm-256color"}
+
+        result = session.buildsession(self.mock_args)
+
+        self.assertIsNotNone(result)
+        assert result is not None
+        self.assertEqual(result["moniker"], "testuser")
+        self.assertIn("id", result)
+        self.assertIn("expiry", result)
+
+
+class TestSessionSetErrors(unittest.TestCase):
+    def setUp(self):
+        self.mock_args = MagicMock()
+        self.mock_args.debug = False
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_set_returns_none_when_memberid_is_none(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        session.setcurrentsessionid("test-session-id")
+        mock_member.getcurrentid.return_value = None
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = session.set(self.mock_args, "key", "value", conn=mock_conn)
+
+        self.assertIsNone(result)
+        mock_io.echo.assert_called()
+        call_args = mock_io.echo.call_args
+        assert call_args is not None
+        self.assertIn("You do not exist", str(call_args))
+
+        session.setcurrentsessionid(None)
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_set_returns_false_when_session_expired(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        session.setcurrentsessionid("test-session-id")
+        mock_member.getcurrentid.return_value = 1
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) - timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = session.set(self.mock_args, "key", "value", conn=mock_conn)
+
+        self.assertFalse(result)
+
+        session.setcurrentsessionid(None)
+
+
+class TestSessionStartErrors(unittest.TestCase):
+    def setUp(self):
+        self.mock_args = MagicMock()
+        self.mock_args.debug = False
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_start_returns_false_when_buildsession_fails(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = None
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 0
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = session.start(self.mock_args, conn=mock_conn)
+
+        self.assertFalse(result)
+
+    @patch("bbsengine6.session.getmembersession")
+    @patch("bbsengine6.session.buildsession")
+    @patch("bbsengine6.session.database")
+    def test_start_creates_new_session_when_none_exists(
+        self, mock_database: MagicMock, mock_buildsession: MagicMock, mock_getmembersession: MagicMock
+    ) -> None:
+        session.setcurrentsessionid(None)
+        mock_getmembersession.return_value = None
+        mock_buildsession.return_value = {
+            "id": "new-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
+        mock_database.insert.return_value = "new-session-id"
+        mock_database.Jsonb.side_effect = lambda x: x
+
+        mock_pool = MagicMock()
+        result = session.start(self.mock_args, pool=mock_pool)
+
+        self.assertTrue(result)
+        self.assertEqual(session.getcurrentsessionid(), "new-session-id")
+
+        session.setcurrentsessionid(None)
+
+    @patch("bbsengine6.session.getmembersession")
+    @patch("bbsengine6.session.database")
+    def test_start_returns_existing_session_when_valid(
+        self, mock_database: MagicMock, mock_getmembersession: MagicMock
+    ) -> None:
+        session.setcurrentsessionid(None)
+        mock_getmembersession.return_value = {
+            "id": "existing-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
+
+        mock_pool = MagicMock()
+        result = session.start(self.mock_args, pool=mock_pool)
+
+        self.assertTrue(result)
+        self.assertEqual(session.getcurrentsessionid(), "existing-session-id")
+
+        session.setcurrentsessionid(None)
+
+
+class TestIsValid(unittest.TestCase):
+    def test_is_valid_returns_false_for_none(self) -> None:
+        result = session.is_valid(None)
+        self.assertFalse(result)
+
+    def test_is_valid_returns_false_for_non_dict(self) -> None:
+        result = session.is_valid("not a dict")
+        self.assertFalse(result)
+
+    def test_is_valid_returns_false_when_no_expiry(self) -> None:
+        result = session.is_valid({})
+        self.assertFalse(result)
+
+    def test_is_valid_returns_false_when_expiry_is_string(self) -> None:
+        result = session.is_valid({"expiry": "some date string"})
+        self.assertFalse(result)
+
+    def test_is_valid_returns_false_when_expired(self) -> None:
+        result = session.is_valid(
+            {"expiry": datetime.now(timezone.utc) - timedelta(hours=1)}
+        )
+        self.assertFalse(result)
+
+    def test_is_valid_returns_true_when_valid(self) -> None:
+        result = session.is_valid(
+            {"expiry": datetime.now(timezone.utc) + timedelta(hours=1)}
+        )
+        self.assertTrue(result)
+
+
+class TestMemberLookupEdgeCases(unittest.TestCase):
+    def setUp(self):
+        self.mock_args = MagicMock()
+        self.mock_args.debug = False
+
+    @patch("bbsengine6.session.member")
+    def test_getmembersession_returns_none_when_member_exists_but_moniker_is_null(
+        self, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = None
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": None,
+        }
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = session.getmembersession(self.mock_args, conn=mock_conn)
+
+        self.assertIsNone(result)
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_getmembersession_logs_error_when_member_lookup_returns_none(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = None
+
+        session.getmembersession(self.mock_args)
+
+        error_calls = [str(call) for call in mock_io.echo.call_args_list]
+        self.assertTrue(any("You do not exist" in c for c in error_calls))
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_buildsession_logs_error_when_member_lookup_returns_none(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        mock_member.getcurrentmoniker.return_value = None
+
+        session.buildsession(self.mock_args)
+
+        error_calls = [str(call) for call in mock_io.echo.call_args_list]
+        self.assertTrue(any("You do not exist" in c for c in error_calls))
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_set_logs_error_when_memberid_lookup_returns_none(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        session.setcurrentsessionid("test-session-id")
+        mock_member.getcurrentid.return_value = None
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_cursor.fetchone.return_value = {
+            "id": "test-session-id",
+            "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
+            "lastactivity": datetime.now(timezone.utc),
+            "data": {},
+            "ipaddress": "127.0.0.1",
+            "useragent": "test-agent",
+            "datecreated": datetime.now(timezone.utc),
+            "dateupdated": datetime.now(timezone.utc),
+            "moniker": "testuser",
+        }
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        session.set(self.mock_args, "key", "value", conn=mock_conn)
+
+        error_calls = [str(call) for call in mock_io.echo.call_args_list]
+        self.assertTrue(any("You do not exist" in c for c in error_calls))
+
+        session.setcurrentsessionid(None)
+
+
 if __name__ == "__main__":
     import sys
 

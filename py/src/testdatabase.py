@@ -282,6 +282,92 @@ class TestBuildArgs(unittest.TestCase):
         self.assertIn("custom label", groups)
 
 
+class TestBuildArgsEnvVars(unittest.TestCase):
+    """Verify that buildargs() reads BBSENGINE6_* env vars as a fallback
+    layer between explicit defaults and hardcoded fallbacks.  This keeps
+    the bbsengine6.notify subsystem (which always reads BBSENGINE6_DBNAME
+    at fallback time) consistent with the args registered here."""
+
+    ENV_VARS = (
+        "BBSENGINE6_DBNAME",
+        "BBSENGINE6_DBHOST",
+        "BBSENGINE6_DBPORT",
+        "BBSENGINE6_DBUSER",
+        "BBSENGINE6_DBPASSWORD",
+        "BBSENGINE6_DBSCHEMA",
+    )
+
+    def setUp(self):
+        self._saved = {v: os.environ.pop(v, None) for v in self.ENV_VARS}
+
+    def tearDown(self):
+        for v, val in self._saved.items():
+            if val is not None:
+                os.environ[v] = val
+            else:
+                os.environ.pop(v, None)
+
+    def test_env_dbname_used_when_no_defaults(self):
+        os.environ["BBSENGINE6_DBNAME"] = "envdb"
+        parser = argparse.ArgumentParser()
+        database.buildargs(parser)
+        args = parser.parse_args([])
+        self.assertEqual(args.databasename, "envdb")
+
+    def test_env_dbhost_used_when_no_defaults(self):
+        os.environ["BBSENGINE6_DBHOST"] = "10.0.0.5"
+        parser = argparse.ArgumentParser()
+        database.buildargs(parser)
+        args = parser.parse_args([])
+        self.assertEqual(args.databasehost, "10.0.0.5")
+
+    def test_env_port_used_when_no_defaults(self):
+        os.environ["BBSENGINE6_DBPORT"] = "6543"
+        parser = argparse.ArgumentParser()
+        database.buildargs(parser)
+        args = parser.parse_args([])
+        self.assertEqual(args.databaseport, 6543)
+
+    def test_env_user_and_password_used_when_no_defaults(self):
+        os.environ["BBSENGINE6_DBUSER"] = "alice"
+        os.environ["BBSENGINE6_DBPASSWORD"] = "s3cret"
+        parser = argparse.ArgumentParser()
+        database.buildargs(parser)
+        args = parser.parse_args([])
+        self.assertEqual(args.databaseuser, "alice")
+        self.assertEqual(args.databasepassword, "s3cret")
+
+    def test_env_schema_used_when_no_defaults(self):
+        os.environ["BBSENGINE6_DBSCHEMA"] = "custom_schema"
+        parser = argparse.ArgumentParser()
+        database.buildargs(parser)
+        args = parser.parse_args([])
+        self.assertEqual(args.databaseschema, "custom_schema")
+
+    def test_explicit_defaults_override_env(self):
+        os.environ["BBSENGINE6_DBNAME"] = "envdb"
+        parser = argparse.ArgumentParser()
+        database.buildargs(parser, defaults={"databasename": "explicit_db"})
+        args = parser.parse_args([])
+        self.assertEqual(args.databasename, "explicit_db")
+
+    def test_hardcoded_fallback_when_neither_env_nor_defaults(self):
+        parser = argparse.ArgumentParser()
+        database.buildargs(parser)
+        args = parser.parse_args([])
+        self.assertEqual(args.databasename, "zoid6")
+        self.assertEqual(args.databasehost, "127.0.0.1")
+        self.assertEqual(args.databaseport, 5432)
+
+    def test_env_port_is_coerced_to_int(self):
+        os.environ["BBSENGINE6_DBPORT"] = "7777"
+        parser = argparse.ArgumentParser()
+        database.buildargs(parser)
+        args = parser.parse_args([])
+        self.assertIsInstance(args.databaseport, int)
+        self.assertEqual(args.databaseport, 7777)
+
+
 class TestResultIter(unittest.TestCase):
     def test_resultiter_with_no_filter(self):
         mock_cursor = MagicMock()

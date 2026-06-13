@@ -65,8 +65,8 @@ class TestNotifySchemaColumns:
             "recipient_moniker",
             "sessionid",
             "is_blocked",
-            "delivered_at",
-            "read_at",
+            "datedelivered",
+            "dateread",
             "datecreated",
         }
 
@@ -158,9 +158,9 @@ class TestNotifySchemaColumns:
         with db_connection.cursor() as cur:
             cur.execute(
                 """
-                SELECT nr.notify_id, nr.recipient_moniker, nr.read_at
+                SELECT nr.notify_id, nr.recipient_moniker, nr.dateread
                 FROM engine.__notify_recipient nr
-                WHERE nr.read_at IS NULL
+                WHERE nr.dateread IS NULL
                 LIMIT 1
                 """
             )
@@ -181,7 +181,7 @@ class TestNotifySchemaColumns:
                 SELECT n.id, n.sender_moniker, n.rendered_message, n.datecreated
                 FROM engine.__notify n
                 JOIN engine.__notify_recipient nr ON n.id = nr.notify_id
-                WHERE nr.recipient_moniker = %s AND nr.read_at IS NULL
+                WHERE nr.recipient_moniker = %s AND nr.dateread IS NULL
                 ORDER BY n.datecreated DESC
                 LIMIT 1
                 """,
@@ -204,8 +204,8 @@ class TestNotifySchemaColumns:
             cur.execute(
                 """
                 UPDATE engine.__notify_recipient
-                SET read_at = now()
-                WHERE recipient_moniker = %s AND read_at IS NULL
+                SET dateread = now()
+                WHERE recipient_moniker = %s AND dateread IS NULL
                 RETURNING notify_id
                 """,
                 (test_moniker,),

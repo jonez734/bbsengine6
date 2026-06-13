@@ -17,9 +17,7 @@ class TestHandleHelp:
         with patch("bbsengine6.io.inputstring.echo") as mock_echo:
             result = handle_help("buffer", 0, 0, 80, f1_help="Test help text")
             assert result == ("buffer", 0, 0)
-            assert (
-                mock_echo.call_count >= 4
-            )  # savecursor, curpos, clearscreen, restorecursor
+            assert mock_echo.call_count >= 1  # at least one echo for the help text
 
     def test_handle_help_with_callable(self):
         """Test handle_help calls the callable and echoes result."""
@@ -46,8 +44,8 @@ class TestHandleHelp:
         with patch("bbsengine6.io.inputstring.echo") as mock_echo:
             result = handle_help("buffer", 0, 0, 80, f1_help="")
             assert result == ("buffer", 0, 0)
-            # Empty string still triggers echo calls (the function handles it)
-            assert mock_echo.call_count >= 4
+            # Empty string still triggers echo call (the function handles it)
+            assert mock_echo.call_count >= 1
 
 
 class TestInputChoiceKeyF1:

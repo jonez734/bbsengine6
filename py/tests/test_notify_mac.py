@@ -293,8 +293,8 @@ class TestGetNotificationsMacVerification:
             "urgency": "ROUTINE",
             "mac": KNOWN_MAC,
             "datecreated": MagicMock(timestamp=lambda: 0.0),
-            "delivered_at": None,
-            "read_at": None,
+            "datedelivered": None,
+            "dateread": None,
         }
 
         mock_cur = MagicMock()
@@ -309,8 +309,8 @@ class TestGetNotificationsMacVerification:
             ("urgency",),
             ("mac",),
             ("datecreated",),
-            ("read_at",),
-            ("delivered_at",),
+            ("dateread",),
+            ("datedelivered",),
         ]
         mock_cur.fetchall.return_value = [mock_row]
 
@@ -341,8 +341,8 @@ class TestGetNotificationsMacVerification:
             "urgency": "ROUTINE",
             "mac": "a" * 64,
             "datecreated": MagicMock(timestamp=lambda: 0.0),
-            "delivered_at": None,
-            "read_at": None,
+            "datedelivered": None,
+            "dateread": None,
         }
 
         mock_cur = MagicMock()
@@ -357,8 +357,8 @@ class TestGetNotificationsMacVerification:
             ("urgency",),
             ("mac",),
             ("datecreated",),
-            ("read_at",),
-            ("delivered_at",),
+            ("dateread",),
+            ("datedelivered",),
         ]
         mock_cur.fetchall.return_value = [mock_row]
 
@@ -388,8 +388,8 @@ class TestGetNotificationsMacVerification:
             "urgency": "ROUTINE",
             "mac": "any-value",
             "datecreated": MagicMock(timestamp=lambda: 0.0),
-            "delivered_at": None,
-            "read_at": None,
+            "datedelivered": None,
+            "dateread": None,
         }
 
         mock_cur = MagicMock()
@@ -404,8 +404,8 @@ class TestGetNotificationsMacVerification:
             ("urgency",),
             ("mac",),
             ("datecreated",),
-            ("read_at",),
-            ("delivered_at",),
+            ("dateread",),
+            ("datedelivered",),
         ]
         mock_cur.fetchall.return_value = [mock_row]
 
@@ -435,8 +435,8 @@ class TestGetNotificationsMacVerification:
             "urgency": "ROUTINE",
             "mac": None,
             "datecreated": MagicMock(timestamp=lambda: 0.0),
-            "delivered_at": None,
-            "read_at": None,
+            "datedelivered": None,
+            "dateread": None,
         }
 
         mock_cur = MagicMock()
@@ -451,8 +451,8 @@ class TestGetNotificationsMacVerification:
             ("urgency",),
             ("mac",),
             ("datecreated",),
-            ("read_at",),
-            ("delivered_at",),
+            ("dateread",),
+            ("datedelivered",),
         ]
         mock_cur.fetchall.return_value = [mock_row]
 
