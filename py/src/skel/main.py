@@ -3,15 +3,15 @@ from bbsengine6 import util
 # from . import lib
 
 
-def init(args, **kwargs: dict) -> bool:
+def init(args, **kwargs) -> bool:
     return True
 
 
-def access(args, op: str, **kwargs: dict) -> bool:
+def access(args, op: str, **kwargs) -> bool:
     return True
 
 
-def buildargs(args, **kwargs: dict):
+def buildargs(args, **kwargs):
     #    return lib.buildargs(args, **kw)
     return None
 

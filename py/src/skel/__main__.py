@@ -32,4 +32,4 @@ except KeyboardInterrupt:
 except EOFError:
     io.echo("{/all}{bold}EOF{/bold}")
 finally:
-    io.echo("{decsc}{curpos:%d,0}{el}{decrc}{reset}{/all}" % (io.getterminalheight()))
+    io.echo("{decsc}{curpos:%d,0}{el}{decrc}{reset}{/all}" % (io.terminal.height()))
