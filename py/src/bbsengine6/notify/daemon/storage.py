@@ -63,7 +63,7 @@ def get_last_uid(pool: Any, server: str, mailbox: str) -> int:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT max_uid FROM notifyd_imap_state
+                    SELECT max_uid FROM engine.__notify_imap_state
                     WHERE server = %s AND mailbox = %s
                     """,
                     (server, mailbox),
@@ -92,10 +92,10 @@ def set_last_uid(pool: Any, server: str, mailbox: str, uid: int) -> None:
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO notifyd_imap_state (server, mailbox, max_uid)
+                    INSERT INTO engine.__notify_imap_state (server, mailbox, max_uid)
                     VALUES (%s, %s, %s)
                     ON CONFLICT (server, mailbox)
-                    DO UPDATE SET max_uid = %s, updated_at = CURRENT_TIMESTAMP
+                    DO UPDATE SET max_uid = %s, dateupdated = CURRENT_TIMESTAMP
                     """,
                     (server, mailbox, uid, uid),
                 )
@@ -138,7 +138,7 @@ def record_notification(
             with conn.cursor() as cursor:
                 cursor.execute(
                     """
-                    INSERT INTO notifyd_history 
+                    INSERT INTO engine.__notify_history
                     (notification_type, recipients, notification_id, data, status, error_message)
                     VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id
@@ -187,11 +187,11 @@ def get_notification_history(
                 if notification_type:
                     cursor.execute(
                         """
-                        SELECT id, notification_type, recipients, sent_at, 
+                        SELECT id, notification_type, recipients, datesent,
                                notification_id, data, status, error_message
-                        FROM notifyd_history
+                        FROM engine.__notify_history
                         WHERE notification_type = %s
-                        ORDER BY sent_at DESC
+                        ORDER BY datesent DESC
                         LIMIT %s
                         """,
                         (notification_type, limit),
@@ -199,10 +199,10 @@ def get_notification_history(
                 else:
                     cursor.execute(
                         """
-                        SELECT id, notification_type, recipients, sent_at,
+                        SELECT id, notification_type, recipients, datesent,
                                notification_id, data, status, error_message
-                        FROM notifyd_history
-                        ORDER BY sent_at DESC
+                        FROM engine.__notify_history
+                        ORDER BY datesent DESC
                         LIMIT %s
                         """,
                         (limit,),
@@ -222,7 +222,7 @@ def get_notification_history(
                             "id": row[0],
                             "notification_type": row[1],
                             "recipients": row[2],
-                            "sent_at": row[3],
+                            "datesent": row[3],
                             "notification_id": row[4],
                             "data": data,
                             "status": row[6],

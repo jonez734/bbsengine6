@@ -7,7 +7,7 @@ create table engine.__notify_type (
     "default_urgency" engine.notify_urgency_enum default 'ROUTINE'::engine.notify_urgency_enum,
     "max_per_user_per_hour" integer default 10,
     "persist_by_default" boolean default true,
-    "registered_at" timestamptz default now(),
+    "dateregistered" timestamptz default now(),
     "registeredbymoniker" citext constraint fk_notify_type_registeredby
         references engine.__member(moniker) on update cascade on delete set null
 );

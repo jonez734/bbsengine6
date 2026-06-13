@@ -77,9 +77,9 @@ class TestGetLastUid:
 
         assert result == 42
         mock_cursor.execute.assert_called_once()
-        # Verify correct SQL was executed
         call_args = mock_cursor.execute.call_args
-        assert "notifyd_imap_state" in str(call_args[0][0])
+        sql = call_args[0][0]
+        assert "__notify_imap_state" in sql
 
     def test_get_last_uid_not_found(self):
         """Get last UID when no record exists returns 0"""
@@ -467,8 +467,8 @@ class TestStorageIntegration:
         sql_executed = mock_cursor.execute.call_args[0][0]
 
         # Verify SQL contains expected table definitions
-        assert "notifyd_imap_state" in sql_executed
-        assert "notifyd_history" in sql_executed
+        assert "__notify_imap_state" in sql_executed
+        assert "__notify_history" in sql_executed
         assert "CREATE TABLE IF NOT EXISTS" in sql_executed
 
     def test_get_last_uid_queries_correct_table(self):
@@ -491,7 +491,7 @@ class TestStorageIntegration:
         sql = call_args[0][0]
         params = call_args[0][1]
 
-        assert "notifyd_imap_state" in sql
+        assert "FROM engine.__notify_imap_state" in sql
         assert "max_uid" in sql
         assert "server = %s AND mailbox = %s" in sql
         assert params == ("Gmail", "INBOX")
@@ -515,7 +515,7 @@ class TestStorageIntegration:
         sql = call_args[0][0]
         params = call_args[0][1]
 
-        assert "INSERT INTO notifyd_imap_state" in sql
+        assert "INSERT INTO engine.__notify_imap_state" in sql
         assert "ON CONFLICT" in sql
         assert "DO UPDATE" in sql
         assert params[0] == "Gmail"
@@ -555,7 +555,7 @@ class TestStorageIntegration:
         sql = call_args[0][0]
         params = call_args[0][1]
 
-        assert "INSERT INTO notifyd_history" in sql
+        assert "INSERT INTO engine.__notify_history" in sql
         assert params[0] == "imap.message"
         assert params[1] == ["user1", "user2"]
         assert params[2] == 42
@@ -601,9 +601,9 @@ class TestStorageIntegration:
         params = call_args[0][1]
 
         assert "SELECT id, notification_type" in sql
-        assert "FROM notifyd_history" in sql
+        assert "FROM engine.__notify_history" in sql
         assert "WHERE notification_type" not in sql
-        assert "ORDER BY sent_at DESC" in sql
+        assert "ORDER BY datesent DESC" in sql
         assert params == (100,)
 
         assert len(result) == 1

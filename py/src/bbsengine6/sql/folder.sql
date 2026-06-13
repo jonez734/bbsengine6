@@ -4,6 +4,7 @@ create table engine.__folder (
     "uri"  text unique,
     "title" text,
     "intro" text,
+    "visible" boolean not null default true,
     "attrs" jsonb,
     "access" jsonb,
     "dateupdated" timestamptz,

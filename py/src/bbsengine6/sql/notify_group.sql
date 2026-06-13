@@ -6,7 +6,7 @@ create table engine.__notify_group (
     "group_name" text not null,
     "member_moniker" citext not null constraint fk_notify_group_member
         references engine.__member(moniker) on update cascade on delete cascade,
-    "added_at" timestamptz default now(),
+    "dateadded" timestamptz default now(),
     "addedbymoniker" citext constraint fk_notify_group_addedby
         references engine.__member(moniker) on update cascade on delete set null,
     constraint pk_notify_group primary key (group_name, member_moniker)

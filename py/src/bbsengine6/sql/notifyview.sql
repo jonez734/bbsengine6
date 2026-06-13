@@ -16,15 +16,16 @@ select
     n.should_persist,
     n.datecreated,
     n.createdbymoniker,
-    nr.delivered_at as datedelivered,
-    nr.read_at as dateread,
+    nr.is_blocked,
+    nr.datedelivered as datedelivered,
+    nr.dateread as dateread,
     nr.datecreated as recipient_datecreated,
     extract(epoch from n.datecreated) as datecreatedepoch,
-    extract(epoch from nr.delivered_at) as datedeliveredepoch,
-    extract(epoch from nr.read_at) as datereadepoch,
+    extract(epoch from nr.datedelivered) as datedeliveredepoch,
+    extract(epoch from nr.dateread) as datereadepoch,
     timezone(currentmember.tz, n.datecreated) as datecreatedlocal,
-    timezone(currentmember.tz, nr.delivered_at) as datedeliveredlocal,
-    timezone(currentmember.tz, nr.read_at) as datereadlocal
+    timezone(currentmember.tz, nr.datedelivered) as datedeliveredlocal,
+    timezone(currentmember.tz, nr.dateread) as datereadlocal
 from engine.__notify n
 join engine.__notify_recipient nr on n.id = nr.notify_id
 left outer join engine.__member currentmember on (currentmember.loginid = current_user);
