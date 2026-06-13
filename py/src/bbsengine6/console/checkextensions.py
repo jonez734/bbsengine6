@@ -24,7 +24,7 @@ def access(args, op, **kwargs):
 
 def main(args, **kwargs):
     conn = kwargs.get("conn", None)
-    with database.cursor(conn, **kwargs) as cur:
+    with database.cursor(conn) as cur:
         for ext in ("pgcrypto", "ltree", "citext"):
             io.echo(
                 f"{{var:labelcolor}}extension {{var:valuecolor}}{ext}{{var:labelcolor}}: {{var:valuecolor}}",

@@ -23,7 +23,7 @@ def buildargs(args, **kw: dict):
 
 def main(args, **kw):
     util.heading("member approval")
-    sql = "select id, moniker from engine.member where approvedbyid is null"
+    sql = "select moniker from engine.member where approvedbymoniker is null"
     dat = ()
 
     currentmoniker = member.getcurrentmoniker(args)
@@ -37,7 +37,6 @@ def main(args, **kw):
 
             res = cur.fetchmany()
             for rec in res:
-                memberid = rec["id"]
                 m = member.getbymoniker(args, rec["moniker"])
                 if m is None:
                     io.echo("You do not exist! Go away!", level="error")
@@ -55,7 +54,7 @@ def main(args, **kw):
                 )
                 if member.checkflag(args, "EMAILVERIFIED", moniker=moniker) is True:
                     io.echo(
-                        " (verified by {{valuecolor}}{m['verifiedbyid']}{{labelcolor}} on {{valuecolor}}{util.datestamp(m['dateverified'])})"
+                        " (verified)"
                     )
                 else:
                     io.echo(" (not verified)")

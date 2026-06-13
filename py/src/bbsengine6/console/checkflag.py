@@ -24,27 +24,24 @@ def access(args, op, **kwargs) -> bool:
 
 def main(args, **kwargs):
     failcount = 0
-    conn = kwargs.get("conn", None)
     io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}engine.flag: ", end="")
-    if database.classexists(args, "engine.flag", conn=conn, **kwargs) is False:
+    if database.classexists(args, "engine.flag", **kwargs) is False:
         io.echo("import ", end="")
-        if database.importsql(args, "flag.sql", conn=conn, **kwargs) is False:
+        if database.importsql(args, "flag.sql", **kwargs) is False:
             failcount += 1
-            conn.rollback()
             io.echo(" fail ", level="error")
             return False
         else:
             io.echo(" ok ", level="ok")
-            conn.commit()
     else:
         io.echo(" ok ", level="ok")
 
     io.echo(
         f"{{var:labelcolor}}class {{var:valuecolor}}engine.map_member_flag: ", end=""
     )
-    if database.classexists(args, "engine.map_member_flag", conn=conn) is False:
+    if database.classexists(args, "engine.map_member_flag", **kwargs) is False:
         io.echo("import ", end="")
-        if database.importsql(args, "map_member_flag.sql", conn=conn) is False:
+        if database.importsql(args, "map_member_flag.sql", **kwargs) is False:
             io.echo(" fail ", level="error")
             failcount += 1
         else:
@@ -54,7 +51,7 @@ def main(args, **kwargs):
 
     io.echo(f"{{var:labelcolor}}flagdata: ", end="")
     sql = "select count(name) from engine.flag"
-    with database.cursor(conn) as cur:
+    with database.cursor(**kwargs) as cur:
         cur.execute(sql)
         if cur.rowcount == 0:
             io.echo("fail")
@@ -63,7 +60,7 @@ def main(args, **kwargs):
             count = cur.fetchone()["count"]
             if count == 0:
                 io.echo("import ", end="")
-                if database.importsql(args, "flagdata.sql", conn=conn) is False:
+                if database.importsql(args, "flagdata.sql", **kwargs) is False:
                     failcount += 1
                     io.echo("fail", level="error")
                 else:

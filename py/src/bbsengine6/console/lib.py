@@ -193,6 +193,10 @@ def checknotify(args, **kwargs):
     return runmodule(args, "checknotify", **kwargs)
 
 
+def checknotifyd(args, **kwargs):
+    return runmodule(args, "checknotifyd", **kwargs)
+
+
 def checkwebserverrole(args, **kwargs):
     return runmodule(args, "checkwebserverrole", **kwargs)
 
