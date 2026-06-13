@@ -29,20 +29,9 @@ require_once("util.php");
 namespace bbsengine6 {
 
 /**
- * Helper function to get the database DSN with fallback
- * @return string DSN connection string
+ * getDSN() moved to database.php in bbsengine6\database namespace
+ * @deprecated Use \bbsengine6\database\getDSN() instead
  */
-function getDSN()
-{
-  // Try config namespace first, then fallback to bare constant
-  if (defined('\config\SYSTEMDSN')) {
-    return \config\SYSTEMDSN;
-  } elseif (defined('\SYSTEMDSN')) {
-    return \SYSTEMDSN;
-  }
-  // Final fallback - return empty string which will cause database error with proper error handling
-  return '';
-}
 
 /**
  * @since 20180804
@@ -268,7 +257,7 @@ function getfortune($fortuneid)
   
   $sql = "select * from engine.mantra where id=?";
   $dat = [$fortuneid];
-  $pdo = \bbsengine6\database\connect(getDSN());
+  $pdo = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   $res = $stmt->fetch();
@@ -550,7 +539,7 @@ function buildbreadcrumbs($path)
 {
   util\logentry("buildbreadcrumbs.100: ".var_export($path, true));
 
-  $pdo = \bbsengine6\database\connect(getDSN());
+  $pdo = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
   $sql = "select * from engine.sig where path @> ? order by path asc";
   $dat = [$path];
   $stmt = $pdo->prepare($sql);
@@ -882,7 +871,7 @@ function getsubsigs($labelpath)
   $sql = "select path from engine.sig where path ~ ?";
   $dat = ["{$labelpath}.*{1}",];
 
-  $pdo = \bbsengine6\database\connect(getDSN());
+  $pdo = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   if ($stmt->rowCount() === 0)
@@ -908,7 +897,7 @@ function getsig($labelpath, $subsigs=true)
   $sql = "select * from engine.sig where path=:labelpath";
   $dat = ["labelpath" => $labelpath];
 
-  $pdo = \bbsengine6\database\connect(getDSN());
+  $pdo = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
 
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);

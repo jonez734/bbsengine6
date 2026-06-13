@@ -4,6 +4,20 @@ namespace bbsengine6\database
 {
 
 /**
+ * Helper function to get the database DSN with fallback
+ * @return string DSN connection string
+ */
+function getDSN(): string
+{
+  if (defined('\config\SYSTEMDSN')) {
+    return \config\SYSTEMDSN;
+  } elseif (defined('\SYSTEMDSN')) {
+    return \SYSTEMDSN;
+  }
+  return '';
+}
+
+/**
  * @since 20221116
  */
 function connect($dsn)
