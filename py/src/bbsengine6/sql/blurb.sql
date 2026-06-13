@@ -25,7 +25,7 @@ CREATE INDEX idx_blurb_attributes ON engine.__blurb USING gin (attributes);
 
 CREATE TABLE IF NOT EXISTS engine.map_blurb_sig (
     "blurbid" text CONSTRAINT fk_engine_map_blurb_sig_blurbid REFERENCES engine.__blurb(id) ON UPDATE CASCADE ON DELETE CASCADE,
-    "sigpath" ltree CONSTRAINT fk_engine_map_blurb_sig_sigpath REFERENCES engine.__sig(path) ON UPDATE CASCADE ON DELETE CASCADE
+    "sigpath" ltree CONSTRAINT fk_engine_map_blurb_sig_sigpath REFERENCES engine.__folder(path) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_map_blurb_sig ON engine.map_blurb_sig (blurbid, sigpath);
