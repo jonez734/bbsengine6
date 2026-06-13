@@ -131,13 +131,8 @@ def insert(args, folder, **kwargs):
     mogrify = kwargs.get("mogrify", False)
     cur = kwargs.get("cur", None)
 
-    #  attributes = sig["attributes"] if "attributes" in sig else {}
-    #  sig["attributes"] = attributes
-
-    #  if exists(args, sig["path"], cur=cur) is True:
-    #    if args.debug is True:
-    #      io.echo("engine.sig.insert.100: {sig=} exists.")
-    #    return None
+    if cur is not None:
+        kwargs["conn"] = cur.connection if hasattr(cur, "connection") else None
 
     folder["datecreated"] = "now()"
     folder["createdbymoniker"] = member.getcurrentmoniker(args, **kwargs)

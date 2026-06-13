@@ -35,6 +35,12 @@ def test_pool(test_args):
         conn.commit()
 
         with database.cursor(conn) as cur:
+            cur.execute(
+                "create table if not exists engine.__member (moniker citext primary key)"
+            )
+        conn.commit()
+
+        with database.cursor(conn) as cur:
             cur.execute("""
                 create table if not exists engine.__folder (
                     path text unique not null primary key,
@@ -42,7 +48,10 @@ def test_pool(test_args):
                     intro text,
                     parent text,
                     createdbyid bigint,
-                    datecreated timestamptz
+                    datecreated timestamptz,
+                    createdbymoniker citext references engine.__member(moniker) on update cascade on delete set null,
+                    updatedbymoniker citext references engine.__member(moniker) on update cascade on delete set null,
+                    approvedbymoniker citext references engine.__member(moniker) on update cascade on delete set null
                 )
             """)
         conn.commit()
@@ -54,31 +63,31 @@ def test_pool(test_args):
 @pytest.fixture
 def db_conn(test_args, test_pool):
     conn = test_pool.getconn()
-    conn.autocommit = False
+    try:
+        conn.autocommit = True
+    except Exception:
+        test_pool.putconn(conn)
+        conn = test_pool.getconn()
+        conn.autocommit = True
     yield conn
-    conn.rollback()
+    try:
+        conn.rollback()
+    except Exception:
+        pass
+    conn.autocommit = False
     test_pool.putconn(conn)
 
 
 @pytest.fixture(scope="function", autouse=True)
-def clean_test_folders(db_conn):
-    try:
-        with database.cursor(db_conn) as cur:
+def clean_test_folders(test_pool):
+    with test_pool.getconn() as conn:
+        conn.autocommit = True
+        with database.cursor(conn) as cur:
             cur.execute(
-                "delete from engine.__folder where path like 'top.foldercreatetest%';"
+                "delete from engine.__folder where path::text like 'top.foldercreatetest%';"
             )
-        db_conn.commit()
-    except Exception:
-        pass
+        conn.autocommit = False
     yield
-    try:
-        with database.cursor(db_conn) as cur:
-            cur.execute(
-                "delete from engine.__folder where path like 'top.foldercreatetest%';"
-            )
-        db_conn.commit()
-    except Exception:
-        pass
 
 
 class TestFolderCreate:
@@ -171,7 +180,7 @@ class TestFolderCreate:
         with database.cursor(db_conn) as cur:
             cur.execute(
                 "select path, title from engine.__folder where path ~ %s",
-                ("top.foldercreatetest.ancestor*",),
+                ("top.foldercreatetest.ancestor.*",),
             )
             rows = cur.fetchall()
         paths = {row["path"] for row in rows}
@@ -201,7 +210,7 @@ class TestFolderCreate:
         with database.cursor(db_conn) as cur:
             cur.execute(
                 "select path from engine.__folder where path ~ %s",
-                ("top.foldercreatetest.existing*",),
+                ("top.foldercreatetest.existing.*",),
             )
             rows = cur.fetchall()
         paths = {row["path"] for row in rows}
@@ -225,7 +234,7 @@ class TestFolderCreate:
         with database.cursor(db_conn) as cur:
             cur.execute(
                 "select path from engine.__folder where path ~ %s",
-                ("top.foldercreatetest.noancestors*",),
+                ("top.foldercreatetest.noancestors.*",),
             )
             rows = cur.fetchall()
         paths = {row["path"] for row in rows}
