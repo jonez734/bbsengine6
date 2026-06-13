@@ -1,7 +1,7 @@
 \echo blurb.sql
 
 -- Drop old sequence if exists (replaced by text IDs)
-DROP SEQUENCE IF EXISTS engine.__blurb_id_seq;
+-- DROP SEQUENCE IF EXISTS engine.__blurb_id_seq;
 
 CREATE TABLE IF NOT EXISTS engine.__blurb (
     "id" text UNIQUE NOT NULL PRIMARY KEY,
@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS engine.__blurb (
     "kind" text,
     "attributes" jsonb,
     "contentfilename" text,
+    "folders" ltree[],
     "datecreated" timestamptz,
     "createdbymoniker" citext CONSTRAINT fk_engine_blurb_createdbyid REFERENCES engine.__member(moniker) ON UPDATE CASCADE ON DELETE SET NULL,
     "dateupdated" timestamptz,

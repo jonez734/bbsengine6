@@ -10,23 +10,29 @@
 #   ./sync_teos_blurbs.sh /srv/www/zoid6/teos/ --dry-run
 
 usage() {
-    echo "Usage: $0 <directory> [--dry-run]"
+    echo "Usage: $0 <directory> [--dry-run] [--dbname <database>]"
     echo ""
     echo "Arguments:"
     echo "  directory    Path to scan for markdown files (required)"
     echo "  --dry-run    Preview what would be created without making changes"
+    echo "  --dbname     Database name (default: zoid6)"
     exit 1
 }
 
 # Parse arguments
 DRY_RUN=""
 TEOSFILEPATH=""
+DBNAME="zoid6"
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --dry-run)
             DRY_RUN="1"
             shift
+            ;;
+        --dbname)
+            DBNAME="$2"
+            shift 2
             ;;
         -h|--help)
             usage
@@ -54,8 +60,6 @@ if [ ! -d "$TEOSFILEPATH" ]; then
     exit 1
 fi
 
-DBNAME="zoid6"
-
 # Get current user (default to 'jam' if not logged in)
 CURRENT_USER=$(whoami)
 if [ -z "$CURRENT_USER" ]; then
@@ -82,11 +86,11 @@ find "$TEOSFILEPATH" -type f -name "*.md" -print0 | while IFS= read -r -d '' fil
     # Skip backup files (*.md~)
     if [[ "$filepath" =~ \.md~$ ]]; then
         echo "Skipping backup: $filepath"
-        ((skipped++)) || true
+        skipped=$((skipped + 1))
         continue
     fi
     
-    ((count++)) || true
+    count=$((count + 1))
     
     # Generate blurb ID from filepath
     # /srv/www/zoid6/teos/ec/john-edward.md → ec.john-edward
@@ -101,7 +105,7 @@ find "$TEOSFILEPATH" -type f -name "*.md" -print0 | while IFS= read -r -d '' fil
     
     if [ -n "$exists" ]; then
         echo "  Already exists in DB: $blurbid"
-        ((skipped++)) || true
+        skipped=$((skipped + 1))
         continue
     fi
     
@@ -124,11 +128,15 @@ find "$TEOSFILEPATH" -type f -name "*.md" -print0 | while IFS= read -r -d '' fil
     if [ -n "$DRY_RUN" ]; then
         echo "  [DRY RUN] Would create: $blurbid (title: $title, contentfilename: $relativepath, user: $CURRENT_USER)"
     else
-        psql -d "$DBNAME" -c "INSERT INTO engine.__blurb (id, kind, attributes, contentfilename, datecreated, createdbymoniker) VALUES ('$blurbid', 'markdown', '{\"title\": \"$title_escaped\"}', '$relativepath', NOW(), '$CURRENT_USER')" 2>/dev/null
-        echo "  Created: $blurbid"
+        psql -d "$DBNAME" -c "INSERT INTO engine.__blurb (id, kind, attributes, contentfilename, datecreated, createdbymoniker) VALUES ('$blurbid', 'markdown', '{\"title\": \"$title_escaped\"}', '$relativepath', NOW(), '$CURRENT_USER')" 2>&1
+        if [ $? -eq 0 ]; then
+            echo "  Created: $blurbid"
+        else
+            echo "  ERROR inserting blurb"
+        fi
     fi
     
-    ((created++)) || true
+    created=$((created + 1))
     
 done
 
