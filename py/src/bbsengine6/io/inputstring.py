@@ -459,22 +459,22 @@ def handle_help(
     scroll_offset: int,
     max_width: int,
     f1_help: str | Callable[[], str] | None = None,
+    help: str | Callable[[], str] | None = None,
 ) -> Tuple[str, int, int]:
-    """Display F1 help text inline, then redraw the input line."""
-    if f1_help is None:
+    """Display F1 help text as simple vertical list below current input line."""
+    help_text = f1_help if f1_help is not None else help
+    if help_text is None:
         return buffer, curpos, scroll_offset
 
-    help_text: str
-    if callable(f1_help):
-        help_text = f1_help()
+    text: str
+    if callable(help_text):
+        text = help_text()
     else:
-        help_text = str(f1_help)
+        text = str(help_text)
 
-    echo(f"{{savecursor}}")
-    echo(f"{{curpos:1,1}}")
-    echo(f"{{clearscreen}}")
-    echo(help_text, flush=True)
-    echo(f"{{restorecursor}}")
+    lines = text.split("\n")
+    for line in lines:
+        echo(f"{{var:labelcolor}}{line}{{var:inputcolor}}", flush=True)
 
     _input_dirty = True
     return buffer, curpos, scroll_offset
@@ -876,6 +876,7 @@ add_key_mapping("KEY_PAGEUP", handle_pageup)
 add_key_mapping("KEY_PAGEDOWN", handle_pagedown)
 
 # Function keys (Phase 4)
+# KEY_F1 is handled dynamically with f1_help context per-call, not registered at module load
 add_key_mapping("KEY_F2", lambda b, c, s, m: handle_function_key("KEY_F2", b, c, s, m))
 add_key_mapping("KEY_F3", lambda b, c, s, m: handle_function_key("KEY_F3", b, c, s, m))
 add_key_mapping("KEY_F4", lambda b, c, s, m: handle_function_key("KEY_F4", b, c, s, m))
@@ -905,6 +906,7 @@ def inputstring(
     pagesize: int = INPUTSTRING_DEFAULT_PAGESIZE,
     beep_on_error: bool = True,
     f1_help: Union[str, Callable[[], str], None] = None,
+    help: Union[str, Callable[[], str], None] = None,
     function_key_handlers: Optional[dict] = None,
     **kwargs,
 ) -> str:
@@ -929,6 +931,7 @@ def inputstring(
             - callable: Call with no args, display return value
             - None: F1 is no-op
             Help is displayed inline without interrupting input.
+        help: Alias for f1_help for consistency with inputchoice (default: None)
         function_key_handlers: Dict mapping KEY_F2-KEY_F12 to callables (default: None)
             Example:
                 def handle_f2(buffer, curpos, scroll_offset, max_width):
@@ -1041,7 +1044,12 @@ def inputstring(
     kwargs["pagesize"] = pagesize
     kwargs["beep_on_error"] = beep_on_error
 
-    buffer = oldvalue if oldvalue is not None else ""
+    if oldvalue is None:
+        buffer = ""
+    elif isinstance(oldvalue, str):
+        buffer = oldvalue
+    else:
+        buffer = str(oldvalue)
     curpos = len(buffer)
 
     scroll_offset = 0
@@ -1128,6 +1136,16 @@ def inputstring(
             new_scroll = scroll_offset
         return buffer, new_curpos, new_scroll
 
+    def help_handler(buffer, curpos, scroll_offset, max_width):
+        return handle_help(
+            buffer,
+            curpos,
+            scroll_offset,
+            max_width,
+            f1_help=f1_help,
+            help=help,
+        )
+
     # NEW: Create closures for function key handlers (F2-F12)
     _function_key_callbacks = function_key_handlers or {}
 
@@ -1158,6 +1176,7 @@ def inputstring(
         KEY_ACTIONS["KEY_DELETE"] = delete_handler
         KEY_ACTIONS["KEY_PAGEUP"] = pageup_handler
         KEY_ACTIONS["KEY_PAGEDOWN"] = pagedown_handler
+        KEY_ACTIONS["KEY_F1"] = help_handler
         # NEW: Override function key handlers with closures
         for key_num in range(2, 13):  # F2 through F12
             key_name = f"KEY_F{key_num}"
