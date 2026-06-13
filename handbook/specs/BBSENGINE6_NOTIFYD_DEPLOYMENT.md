@@ -273,11 +273,11 @@ journalctl -u notifyd --since "1 hour ago"
 
 - notifyd uses bbsengine6's existing pool
 - No additional database tuning needed
-- Monitor `notifyd_history` table size
+- Monitor `engine.__notify_history` table size
 - Clean up old records periodically:
   ```sql
-  DELETE FROM notifyd_history 
-  WHERE sent_at < CURRENT_TIMESTAMP - INTERVAL '30 days';
+  DELETE FROM engine.__notify_history
+  WHERE datesent < CURRENT_TIMESTAMP - INTERVAL '30 days';
   ```
 
 ### Memory

@@ -775,6 +775,8 @@ def help(args: object, **kwargs)
 - io.echo (output)
 - io.screen (cursor control)
 
+> **Note:** The old `editor.py` is deprecated. The new `ed/` package (`bbsengine6.ed`) provides both visual and line-based editors with more features. Use `from bbsengine6.ed import run` for the new API.
+
 ---
 
 ### input.py - Input Parsing
@@ -841,33 +843,82 @@ def updateattributes(args: object, blurbid: int, attributes: dict, **kwargs)
 
 ### folder.py - Directory/Folder Management
 
-**Purpose:** Manage message folders and directory structure
+**Purpose:** Manage message folders and directory structure (SIGs). Uses PostgreSQL ltree extension for hierarchical paths.
 
-**File Size:** ~205 lines
+**File Size:** ~380 lines
 
 #### Functions
 
 ```python
-def get_folder_tree(args: object, **kwargs) 
-  -> dict
-  "Get hierarchical folder structure"
-  
-def create_folder(args: object, parent_id: int, name: str, **kwargs) 
-  -> int | None
-  "Create new folder, return ID"
-  
-def delete_folder(args: object, folder_id: int, **kwargs) 
-  -> bool
-  "Delete folder and contents"
-  
-def get_folder_metadata(args: object, folder_id: int, **kwargs) 
-  -> dict | None
-  "Get folder info (name, description, message count)"
+def insert(args, folder, **kwargs) -> int | bool
+  "Insert a new folder/sig. Sets datecreated, createdbymoniker."
+
+def create(args, folder, **kwargs) -> bool
+  "Create a new folder. Skips if folder already exists. Validates path. Returns True if created, False otherwise."
+
+def get(args, path, **kwargs) -> dict | None
+  "Get folder by path. Validates path for security."
+
+def update(args, path: str, folder: dict, **kwargs) -> bool
+  "Update folder by path."
+
+def delete(args, path: str, **kwargs) -> bool
+  "Delete folder by path. Validates path for security."
+
+def buildpath(args, path: str) -> str
+  "Convert folder path hyphens to underscores."
+
+def builduri(args, path: str, top: str = "top") -> str
+  "Build URI from folder path."
+
+def builddict(args, row) -> dict
+  "Build folder dict from database row."
+
+def buildrow(args, folder) -> dict
+  "Build database row from folder dict."
+
+def input(prompt: str, oldvalue: str, **kw) -> str
+  "Input folder path with autocomplete."
+
+def allexist(buf, **kwargs) -> bool
+  "Verify all folder paths in buffer exist."
+
+def noneexist(buf, **kwargs) -> bool
+  "Verify no folder paths in buffer exist."
+
+def exists(args, buf: str, **kwargs) -> bool
+  "Check if folder exists by path."
+
+def uriexists(args, buf: str, **kwargs) -> bool
+  "Check if folder exists by URI."
+
+def getchfoldercompleter(word, **kwargs) -> list
+  "Get completions for folder path input."
+```
+
+#### Security
+
+- Path validation via `_validate_path()` with regex `^[a-zA-Z0-9._-]+$`
+- Prevents ReDoS attacks via malicious regex in SQL ~ operator
+- Prevents path traversal attacks
+
+#### sig.py Alias
+
+For backwards compatibility, `sig.py` provides an alias module that delegates to `folder.py`:
+
+```python
+from bbsengine6 import sig
+sig.get(args, path)  # delegates to folder.get
+sig.insert(args, folder)  # delegates to folder.insert
+sig.create(args, folder)  # delegates to folder.create
+sig.update(args, path, folder)  # delegates to folder.update
+sig.delete(args, path)  # delegates to folder.delete
 ```
 
 **Dependencies:**
 - database module (persistence)
-- util module (path utilities)
+- member module (current user tracking)
+- io module (error logging)
 
 ---
 

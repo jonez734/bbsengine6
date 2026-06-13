@@ -252,7 +252,7 @@ python -m bbsengine6.notifyd test-imap
 - Use bbsengine6's existing database configuration
 - Ensure PostgreSQL access is restricted
 - notifyd should connect as read-write user
-- Audit logs in notifyd_history table
+- Audit logs in engine.__notify_history table
 
 ---
 

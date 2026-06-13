@@ -1,20 +1,20 @@
 # bbsengine6 notifyd - Database Schema
 
-Status: NOT YET IMPLEMENTED
-Last Updated: 2026-05-18 13:43:46
+Status: IMPLEMENTED
+Last Updated: 2026-06-01
 
 ---
 
 ## Database Schema
 
-### Tables
+### Tables (engine schema)
 
-#### notifyd_imap_state
+#### __notify_imap_state
 
 Tracks last processed email UID per server/mailbox to avoid duplicates.
 
 ```sql
-CREATE TABLE IF NOT EXISTS notifyd_imap_state (
+CREATE TABLE IF NOT EXISTS engine.__notify_imap_state (
     id SERIAL PRIMARY KEY,
     server VARCHAR(255) NOT NULL,
     mailbox VARCHAR(255) NOT NULL,
@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS notifyd_imap_state (
     UNIQUE(server, mailbox)
 );
 
-CREATE INDEX IF NOT EXISTS idx_notifyd_imap_state_server 
-  ON notifyd_imap_state(server, mailbox);
+CREATE INDEX IF NOT EXISTS idx___notify_imap_state_server
+    ON engine.__notify_imap_state(server, mailbox);
 ```
 
 **Purpose**: Prevent duplicate email notifications by tracking the last UID processed for each server/mailbox combination.
@@ -38,27 +38,27 @@ CREATE INDEX IF NOT EXISTS idx_notifyd_imap_state_server
 - `last_checked`: Timestamp of last check
 - `updated_at`: Last update timestamp
 
-#### notifyd_history
+#### __notify_history
 
 Audit log of all notifications sent by notifyd.
 
 ```sql
-CREATE TABLE IF NOT EXISTS notifyd_history (
+CREATE TABLE IF NOT EXISTS engine.__notify_history (
     id SERIAL PRIMARY KEY,
     notification_type VARCHAR(255) NOT NULL,
     recipients TEXT[] DEFAULT ARRAY[]::TEXT[],
-    sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    datesent TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     notification_id INTEGER,
     data JSONB,
     status VARCHAR(50) DEFAULT 'sent',
     error_message TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_notifyd_history_type 
-  ON notifyd_history(notification_type);
+CREATE INDEX IF NOT EXISTS idx___notify_history_type
+    ON engine.__notify_history(notification_type);
 
-CREATE INDEX IF NOT EXISTS idx_notifyd_history_sent_at 
-  ON notifyd_history(sent_at DESC);
+CREATE INDEX IF NOT EXISTS idx___notify_history_datesent
+    ON engine.__notify_history(datesent DESC);
 ```
 
 **Purpose**: Complete audit trail of all notifications sent by the notifyd system.
@@ -67,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_notifyd_history_sent_at
 - `id`: Primary key
 - `notification_type`: Type (e.g., "imap.message", "user.login")
 - `recipients`: List of recipients
-- `sent_at`: When notification was sent
+- `datesent`: When notification was sent
 - `notification_id`: ID returned by notify.send()
 - `data`: Template variables (JSONB)
 - `status`: "sent", "failed", or "pending"
@@ -85,15 +85,15 @@ class NotificationStorage:
         """Initialize storage with existing connection pool"""
         self.pool = pool
         self._ensure_schema()
-    
+
     def get_last_uid(self, server: str, mailbox: str) -> int:
         """Get last processed email UID for server/mailbox"""
         # Returns last max_uid or 0 if none
-    
+
     def set_last_uid(self, server: str, mailbox: str, uid: int):
         """Update last processed UID (UPSERT)"""
         # Inserts or updates depending on existing record
-    
+
     def record_notification(self,
                            notification_type: str,
                            recipients: List[str],
@@ -101,8 +101,8 @@ class NotificationStorage:
                            notification_id: Optional[int] = None,
                            status: str = "sent"):
         """Record sent notification in history"""
-        # Records to notifyd_history table
-    
+        # Records to __notify_history table
+
     def get_notification_history(self, limit: int = 100) -> List[dict]:
         """Get recent notifications sent by notifyd"""
         # Returns last N notifications
@@ -179,14 +179,29 @@ notify.send(
 
 ---
 
+## Console Stage Integration
+
+The notifyd tables are created via `bbsengine6/console/checknotifyd.py` as part of the stage_one build pipeline:
+
+```python
+# Stage: checknotifyd
+# Tables checked/created:
+#   - engine.__notify_imap_state (from sql/notifyd.sql)
+#   - engine.__notify_history (from sql/notifyd.sql)
+```
+
+The `sql/notifyd.sql` file defines both tables with indices and grants to web/sysop/term roles.
+
+---
+
 ## Performance
 
 ### Indexes
 
 Indexes are created on:
-- `notifyd_imap_state(server, mailbox)` - For UID lookups
-- `notifyd_history(notification_type)` - For filtering by type
-- `notifyd_history(sent_at DESC)` - For recent history queries
+- `engine.__notify_imap_state(server, mailbox)` - For UID lookups
+- `engine.__notify_history(notification_type)` - For filtering by type
+- `engine.__notify_history(datesent DESC)` - For recent history queries
 
 ### Query Performance
 
@@ -201,11 +216,13 @@ Indexes are created on:
 
 ### Schema Initialization
 
-The schema is automatically created on daemon startup:
+The schema is created automatically via the console stage_one build:
 
-```python
-daemon.start()  # Calls storage._ensure_schema()
+```bash
+zoidoffice stage --check checknotifyd
 ```
+
+Or on first run via the full staging pipeline.
 
 ### Cleanup
 
@@ -213,8 +230,8 @@ Historical data can be cleaned up manually:
 
 ```sql
 -- Delete notifications older than 30 days
-DELETE FROM notifyd_history 
-WHERE sent_at < CURRENT_TIMESTAMP - INTERVAL '30 days';
+DELETE FROM engine.__notify_history
+WHERE datesent < CURRENT_TIMESTAMP - INTERVAL '30 days';
 ```
 
 ### Monitoring
@@ -222,9 +239,9 @@ WHERE sent_at < CURRENT_TIMESTAMP - INTERVAL '30 days';
 Check database size:
 
 ```sql
-SELECT 
-    pg_size_pretty(pg_total_relation_size('notifyd_imap_state')) as imap_size,
-    pg_size_pretty(pg_total_relation_size('notifyd_history')) as history_size;
+SELECT
+    pg_size_pretty(pg_total_relation_size('engine.__notify_imap_state')) as imap_size,
+    pg_size_pretty(pg_total_relation_size('engine.__notify_history')) as history_size;
 ```
 
 ---

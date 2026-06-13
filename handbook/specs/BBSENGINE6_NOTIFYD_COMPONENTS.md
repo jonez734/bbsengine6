@@ -60,7 +60,7 @@ class ImapServer:
 - `set_last_uid(server: str, mailbox: str, uid: int)`
   - UPSERT operation
 - `record_notification(...)`
-  - Records to notifyd_history table
+  - Records to engine.__notify_history table
 - `get_notification_history(limit: int = 100) -> List[dict]`
   - Query recent notifications
 - `_ensure_schema()`

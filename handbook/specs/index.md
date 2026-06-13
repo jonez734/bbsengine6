@@ -160,9 +160,11 @@ bbsengine6 is a comprehensive Bulletin Board System (BBS) engine written in Pyth
 | listbox.py | Paginated list widget | database.py, io.* |
 | form.py | Form handling & validation | util.py, io.* |
 | blurb.py | Message/post storage & retrieval | database.py, util.py |
-| editor.py | Line-based text editor | io.getch, io.echo |
+| editor.py | Legacy line editor (deprecated) | io.getch, io.echo |
+| ed/ | Visual & line editor package | io.*, common modules |
 | input.py | User input parsing | io.* |
 | folder.py | Directory/folder management | database.py |
+| sig.py | Alias to folder.py for backwards compatibility | folder.py |
 
 ### I/O Subpackage (Terminal Interface)
 
