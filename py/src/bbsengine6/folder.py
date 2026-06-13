@@ -14,9 +14,29 @@ import psycopg
 from . import member, database, io
 
 
+# Root sig path prefix. Set to "" to disable 'top.' prefix, "top" to use it (legacy).
+ROOT_SIG_PREFIX = ""
+
+
 # Security: Validate folder path to prevent regex DoS and path traversal attacks
 _SAFE_PATH_PATTERN = re.compile(r"^[a-zA-Z0-9._-]+$")
 _SAFE_URI_PATTERN = re.compile(r"^[a-zA-Z0-9._/-]+$")
+
+
+def _prefix_path(path: str) -> str:
+    """Apply ROOT_SIG_PREFIX to a path if configured."""
+    prefix = ROOT_SIG_PREFIX
+    if prefix and not path.startswith(prefix + ".") and path != prefix:
+        return f"{prefix}.{path}"
+    return path
+
+
+def _strip_prefix(path: str) -> str:
+    """Remove ROOT_SIG_PREFIX from a path if present."""
+    prefix = ROOT_SIG_PREFIX
+    if prefix and path.startswith(prefix + "."):
+        return path[len(prefix) + 1 :]
+    return path
 
 
 def _validate_path(path: str) -> bool:
@@ -43,9 +63,9 @@ def buildpath(args, path: str) -> str:
     return path.replace("-", "_")
 
 
-def builduri(args, path: str, top: str = "top") -> str:
+def builduri(args, path: str) -> str:
     """Build URI from folder path."""
-    path = striptop(path)
+    path = _strip_prefix(path)
     path = path.lstrip(".")
     path = path.replace(".", "/")
     if path[:-1] != "/":
@@ -79,6 +99,15 @@ def builddict(args, row):
 
 def buildrow(args, folder):
     row = {}
+    old_to_new = {
+        "createdbyid": "createdbymoniker",
+        "updatedbyid": "updatedbymoniker",
+        "approvedbyid": "approvedbymoniker",
+        "attributes": "attrs",
+    }
+    for old_col, new_col in old_to_new.items():
+        if old_col in folder:
+            folder[new_col] = folder.pop(old_col)
     for col in (
         "path",
         "uri",
@@ -125,8 +154,7 @@ def insert(args, folder, **kwargs):
         if key in kwargs:
             insert_kwargs[key] = kwargs[key]
 
-    if "attributes" in folder:
-        folder["attrs"] = folder.pop("attributes")
+    folder = buildrow(args, folder)
 
     try:
         return database.insert(
@@ -143,29 +171,53 @@ def insert(args, folder, **kwargs):
 
 
 # @since 20260606
-def create(args, folder, **kwargs) -> bool:
+def create(args, folder, create_parents: bool = False, **kwargs) -> bool:
     """Create a new folder. Silently skips if folder already exists.
 
     Args:
         args: argparse namespace with debug, databasename, etc.
         folder: dict with keys - path (required), title, intro, uri, attributes
+        create_parents: If True, create any missing ancestor folders
         **kwargs: cur (cursor), conn (connection), pool
 
     Returns:
         bool: True if folder was created, False if it already exists
     """
     cur = kwargs.get("cur", None)
+    path = folder.get("path", "")
 
-    if not _validate_path(folder.get("path", "")):
+    if not _validate_path(path):
         io.echo(
-            f"engine.folder.create.050: invalid path: {folder.get('path', '')!r}",
+            f"engine.folder.create.050: invalid path: {path!r}",
             level="error",
         )
         return False
 
-    if exists(args, folder["path"], **kwargs) is True:
+    if create_parents is True:
+        parts = path.split(".")
+        ancestor_paths = [".".join(parts[:i]) for i in range(1, len(parts))]
+        for ancestor_path in ancestor_paths:
+            if exists(args, ancestor_path, **kwargs) is not True:
+                ancestor_folder = {
+                    "path": ancestor_path,
+                    "title": ancestor_path.split(".")[-1],
+                }
+                insert_kwargs = dict(kwargs)
+                insert_kwargs.pop("cur", None)
+                if cur is not None:
+                    insert_kwargs["cur"] = cur
+                try:
+                    insert(args, ancestor_folder, **insert_kwargs)
+                except psycopg.DatabaseError as e:
+                    io.echo(
+                        f"engine.folder.create.110: database error creating ancestor {ancestor_path}: {e}",
+                        level="error",
+                    )
+                    return False
+
+    if exists(args, path, **kwargs) is True:
         io.echo(
-            f"engine.folder.create.100: folder {folder['path']!r} already exists",
+            f"engine.folder.create.100: folder {path!r} already exists",
             level="debug",
         )
         return False
@@ -221,6 +273,7 @@ def update(args, path: str, folder: dict, **kwargs) -> bool:
     #  cur = kwargs.get("cur", None)
     #  mogrify = kwargs.get("mogrify", False)
     kwargs.setdefault("primarykey", "path")
+    folder = buildrow(args, folder)
     return database.update(
         args, "engine.__folder", path, folder, **kwargs
     )  # mogrify=mogify, cur=cur)
@@ -270,8 +323,10 @@ class foldercompleter(object):
     def getmatches(self, text):
         sql = "select distinct path from engine.folder where path ~ %s"
 
+        prefix = ROOT_SIG_PREFIX
         if text == "":
-            dat = ("top.*{1}",)
+            # Return all children of root prefix
+            dat = (prefix + ".*{1}" if prefix else "*{1}",)
         elif text[-1] == ".":
             dat = (text + "*{1}",)
         else:
@@ -305,7 +360,14 @@ def buildlist(folders: str, args=None) -> list:
 
     folders = [s.strip() for s in folders]
     folders = [s for s in folders if s]
-    folders = ["top." + s if not s.startswith("top.") else s for s in folders]
+    # Apply ROOT_SIG_PREFIX instead of hardcoding "top."
+    prefix = ROOT_SIG_PREFIX
+    folders = [
+        prefix + "." + s
+        if prefix and not s.startswith(prefix + ".") and s != prefix
+        else s
+        for s in folders
+    ]
     return folders
 
 
@@ -392,8 +454,9 @@ def getchfoldercompleter(word, **kwargs):
 
         sql = "select distinct path from engine.folder where path ~ %s"
 
+        prefix = ROOT_SIG_PREFIX
         if word == "":
-            dat = ("top.*{1}",)
+            dat = (prefix + ".*{1}" if prefix else "*{1}",)
         elif word[-1] == ".":
             dat = (word + "*{1}",)
         else:
@@ -536,5 +599,9 @@ def uriexists(args, buf: str, **kwargs: dict) -> bool:
 
 # @since 20240624
 # @project:9294
-def striptop(folderpath, top: str = "top") -> str:
+def striptop(folderpath, top: str = None) -> str:
+    if top is None:
+        top = ROOT_SIG_PREFIX
+    if not top:
+        return folderpath
     return folderpath.replace(top, "").strip(".")

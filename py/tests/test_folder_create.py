@@ -62,10 +62,20 @@ def db_conn(test_args, test_pool):
 
 @pytest.fixture(scope="function", autouse=True)
 def clean_test_folders(db_conn):
+    try:
+        with database.cursor(db_conn) as cur:
+            cur.execute(
+                "delete from engine.__folder where path like 'top.foldercreatetest%';"
+            )
+        db_conn.commit()
+    except Exception:
+        pass
     yield
     try:
         with database.cursor(db_conn) as cur:
-            cur.execute("delete from engine.__folder where path like 'top.foldercreatetest%';")
+            cur.execute(
+                "delete from engine.__folder where path like 'top.foldercreatetest%';"
+            )
         db_conn.commit()
     except Exception:
         pass
@@ -145,3 +155,79 @@ class TestFolderCreate:
             row = cur.fetchone()
         assert row is not None
         assert row["datecreated"] is not None
+
+    def test_create_with_parents_creates_ancestors(self, test_args, test_pool, db_conn):
+        """Test that create_parents=True creates missing ancestor folders."""
+        f = {
+            "path": folder.buildpath(
+                test_args, "top.foldercreatetest.ancestor.parent.child"
+            ),
+            "title": "Child Folder",
+        }
+        result = folder.create(test_args, f, create_parents=True, cur=db_conn.cursor())
+        db_conn.commit()
+        assert result is True
+
+        with database.cursor(db_conn) as cur:
+            cur.execute(
+                "select path, title from engine.__folder where path ~ %s",
+                ("top.foldercreatetest.ancestor*",),
+            )
+            rows = cur.fetchall()
+        paths = {row["path"] for row in rows}
+        assert "top.foldercreatetest.ancestor" in paths
+        assert "top.foldercreatetest.ancestor.parent" in paths
+        assert "top.foldercreatetest.ancestor.parent.child" in paths
+
+    def test_create_with_parents_skips_existing_ancestors(
+        self, test_args, test_pool, db_conn
+    ):
+        """Test that create_parents=True skips existing ancestor folders."""
+        existing_folder = {
+            "path": folder.buildpath(test_args, "top.foldercreatetest.existing"),
+            "title": "Existing Folder",
+        }
+        folder.create(test_args, existing_folder, cur=db_conn.cursor())
+        db_conn.commit()
+
+        f = {
+            "path": folder.buildpath(test_args, "top.foldercreatetest.existing.child"),
+            "title": "Child Folder",
+        }
+        result = folder.create(test_args, f, create_parents=True, cur=db_conn.cursor())
+        db_conn.commit()
+        assert result is True
+
+        with database.cursor(db_conn) as cur:
+            cur.execute(
+                "select path from engine.__folder where path ~ %s",
+                ("top.foldercreatetest.existing*",),
+            )
+            rows = cur.fetchall()
+        paths = {row["path"] for row in rows}
+        assert "top.foldercreatetest.existing" in paths
+        assert "top.foldercreatetest.existing.child" in paths
+
+    def test_create_without_parents_default_behavior(
+        self, test_args, test_pool, db_conn
+    ):
+        """Test that create without create_parents doesn't create ancestors."""
+        f = {
+            "path": folder.buildpath(
+                test_args, "top.foldercreatetest.noancestors.child"
+            ),
+            "title": "Child Folder",
+        }
+        result = folder.create(test_args, f, cur=db_conn.cursor())
+        db_conn.commit()
+        assert result is True
+
+        with database.cursor(db_conn) as cur:
+            cur.execute(
+                "select path from engine.__folder where path ~ %s",
+                ("top.foldercreatetest.noancestors*",),
+            )
+            rows = cur.fetchall()
+        paths = {row["path"] for row in rows}
+        assert "top.foldercreatetest.noancestors" not in paths
+        assert "top.foldercreatetest.noancestors.child" in paths
