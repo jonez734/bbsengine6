@@ -1,36 +1,31 @@
 \echo blurb.sql
 
-create table if not exists engine.__blurb (
-    "id" bigserial unique not null primary key,
-    "parentid" bigint constraint fk_engine_blurb_parentid references engine.__blurb(id) on update cascade on delete set null,
+-- Drop old sequence if exists (replaced by text IDs)
+DROP SEQUENCE IF EXISTS engine.__blurb_id_seq;
+
+CREATE TABLE IF NOT EXISTS engine.__blurb (
+    "id" text UNIQUE NOT NULL PRIMARY KEY,
+    "parentid" text CONSTRAINT fk_engine_blurb_parentid REFERENCES engine.__blurb(id) ON UPDATE CASCADE ON DELETE SET NULL,
     "kind" text,
     "attributes" jsonb,
+    "contentfilename" text,
     "datecreated" timestamptz,
-    "createdbymoniker" citext constraint fk_engine_blurb_createdbyid references engine.__member(moniker) on update cascade on delete set null,
+    "createdbymoniker" citext CONSTRAINT fk_engine_blurb_createdbyid REFERENCES engine.__member(moniker) ON UPDATE CASCADE ON DELETE SET NULL,
     "dateupdated" timestamptz,
-    "updatedbymoniker" citext constraint fk_engine_blurb_updatedbyid references engine.__member(moniker) on update cascade on delete set null,
+    "updatedbymoniker" citext CONSTRAINT fk_engine_blurb_updatedbyid REFERENCES engine.__member(moniker) ON UPDATE CASCADE ON DELETE SET NULL,
     "dateapproved" timestamptz,
-    "approvedbymoniker" citext constraint fk_engine_blurb_approvedbyid references engine.__member(moniker) on update cascade on delete set null
+    "approvedbymoniker" citext CONSTRAINT fk_engine_blurb_approvedbyid REFERENCES engine.__member(moniker) ON UPDATE CASCADE ON DELETE SET NULL
 );
 
--- create index idx_node_tags on engine.__node using gist(tags);
+GRANT INSERT, UPDATE, DELETE ON engine.__blurb TO web, term;
+GRANT SELECT ON engine.__blurb TO web, term;
 
-grant insert, update, delete on engine.__blurb to web, term;
+CREATE INDEX idx_blurb_attributes ON engine.__blurb USING gin (attributes);
 
-create index idx_blurb_attributes ON engine.__blurb USING GIN (attributes);
-
-create table if not exists engine.map_blurb_sig (
-    "blurbid" bigint constraint fk_engine_map_blurb_sig_blurbid references engine.__blurb(id) on update cascade on delete cascade,
-    "sigpath" ltree constraint fk_engine_map_blurb_sig_sigpath references engine.__sig(path) on update cascade on delete cascade
+CREATE TABLE IF NOT EXISTS engine.map_blurb_sig (
+    "blurbid" text CONSTRAINT fk_engine_map_blurb_sig_blurbid REFERENCES engine.__blurb(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    "sigpath" ltree CONSTRAINT fk_engine_map_blurb_sig_sigpath REFERENCES engine.__sig(path) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
-create unique index if not exists idx_map_blurb_sig on engine.map_blurb_sig (blurbid, sigpath);
-
-grant insert, update, delete, select on engine.map_blurb_sig to web;
-
-\echo grant engine.__blurb_id_seq
-grant select, update on engine.__blurb_id_seq to web;
-
--- alter table engine.__node add column parentid bigint;
--- alter table engine.__node add constraint fk_engine_node_parentid foreign key (parentid) references engine.__node(id) on update cascade on delete set null;
--- create unique index if not exists idx_node_attr_playername_unique on engine.__node( (attributes->>'playername') ); -- playername) ); -- attributes->>'playername') ) ;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_map_blurb_sig ON engine.map_blurb_sig (blurbid, sigpath);
+GRANT INSERT, UPDATE, DELETE, SELECT ON engine.map_blurb_sig TO web;

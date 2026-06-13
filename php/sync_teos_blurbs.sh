@@ -56,9 +56,16 @@ fi
 
 DBNAME="zoid6"
 
+# Get current user (default to 'jam' if not logged in)
+CURRENT_USER=$(whoami)
+if [ -z "$CURRENT_USER" ]; then
+    CURRENT_USER="jam"
+fi
+
 echo "TEOS Blurb Sync"
 echo "==============="
 echo "Directory: $TEOSFILEPATH"
+echo "User: $CURRENT_USER"
 if [ -n "$DRY_RUN" ]; then
     echo "Mode: DRY RUN"
 else
@@ -115,9 +122,9 @@ find "$TEOSFILEPATH" -type f -name "*.md" -print0 | while IFS= read -r -d '' fil
     
     # Create blurb in database
     if [ -n "$DRY_RUN" ]; then
-        echo "  [DRY RUN] Would create: $blurbid (title: $title)"
+        echo "  [DRY RUN] Would create: $blurbid (title: $title, contentfilename: $relativepath, user: $CURRENT_USER)"
     else
-        psql -d "$DBNAME" -c "INSERT INTO engine.__blurb (id, kind, attributes, datecreated, createdbymoniker) VALUES ('$blurbid', 'markdown', '{\"title\": \"$title_escaped\", \"filepath\": \"$relativepath\"}', NOW(), 'system')" 2>/dev/null
+        psql -d "$DBNAME" -c "INSERT INTO engine.__blurb (id, kind, attributes, contentfilename, datecreated, createdbymoniker) VALUES ('$blurbid', 'markdown', '{\"title\": \"$title_escaped\"}', '$relativepath', NOW(), '$CURRENT_USER')" 2>/dev/null
         echo "  Created: $blurbid"
     fi
     
