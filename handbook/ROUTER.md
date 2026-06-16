@@ -2,22 +2,85 @@
 
 ## Overview
 
-- Router location: `/srv/www/bbsengine6/php/router.php`
-- Router URL: `https://zoidtechnologies.com/router.php`
+- Router location: `/srv/www/bbsengine6/php/router.php` (source)
+- Router URL: `https://zoidtechnologies.com/engine/router.php` (web-accessible)
 - TEOSFILEPATH: `/srv/www/zoid6/teos/` (named constant)
 - TEOSLABELPREFIX: `top` (named constant - can be set to "" to remove prefix)
 - DOCROOT: `/srv/www/vhosts/zoidtechnologies.com/html/`
+
+## Deployment
+
+### Makefile Structure
+
+The `bbsengine6/Makefile` now uses an `engine/` subdirectory for orchestration:
+
+```
+bbsengine6/
+├── Makefile           # Main makefile - calls engine/Makefile
+├── engine/
+│   └── Makefile       # Orchestrates staging and deployment
+├── php/
+│   └── router.php     # Router source (backend library)
+├── skin/
+├── js/
+└── smarty/
+```
+
+### Deployment Commands
+
+```bash
+# Deploy engine files (includes router.php to /engine/)
+cd /home/opencode/data/work/bbsengine6 && make engine
+
+# Deploy www site (includes htaccess with router rules)
+cd /home/opencode/data/work/zoid6/sites/www && make prod
+```
+
+### What the engine target does
+
+1. `stage` - Copies php/skin/js/smarty to staging (`/srv/www/bbsengine6/`)
+2. `deploy` - Rsyncs staging to production
+3. `deploy-router` - Copies `router.php` to web-accessible `/engine/` directory
 
 ## URL Structure
 
 ```
 https://zoidtechnologies.com/
-├── achilles/      (static site - has own code)
-├── empyre/        (static site - has own code)
-├── murdermotel/   (static site - has own code)
-├── teos/          (static files: seo.php, about.php, etc)
-└── [everything else] → /router.php
+├── engine/            (web-accessible PHP from bbsengine6)
+│   └── router.php     (router entry point)
+├── achilles/          (static site - has own code)
+├── empyre/            (static site - has own code)
+├── murdermotel/       (static site - has own code)
+└── [clean URLs]       → /engine/router.php
 ```
+
+## htaccess Rules (in www/.htaccess)
+
+```apache
+RewriteEngine On
+RewriteBase /
+
+# Router for teos blurbs (clean URLs like /comp/, /ec/, etc.)
+# Handler chain: blurb -> folder -> markdown -> error
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^([a-zA-Z0-9_/-]+)$ /engine/router.php?mode=browse&uri=$1 [last,qsappend]
+
+# Teos routes (legacy - still works for /teos/ URLs)
+RewriteRule ^teos/(.+)$ php/teos.php?path=$1 [last,QSA]
+```
+
+## Routing Logic
+
+1. Apache checks if request matches a static file/directory first
+2. If not, routes to `/engine/router.php?mode=browse&uri=...`
+3. Router checks handlers in order:
+   - **blurb** - Database (engine.__blurb table)
+   - **folder** - TEOSFILEPATH (`/srv/www/zoid6/teos/`) for directories
+   - **markdown** - TEOSFILEPATH for .md files
+   - **error** - 404 page
+4. If found: display content
+5. If not found: show bbsengine6 404 error page
 
 ## Static Site Prefixes
 
@@ -26,46 +89,6 @@ These paths are handled by their own directories/code and should be processed BE
 - `/achilles/`
 - `/empyre/`
 - `/murdermotel/`
-
-## Routing Logic
-
-1. Apache checks if request matches a static site directory first
-2. If not, routes to `/router.php?mode=...&uri=...`
-3. Router checks:
-   - Database (engine.sig table) for folder paths
-   - TEOSFILEPATH (`/srv/www/zoid6/teos/`) for files/directories
-4. If found: display content
-5. If not found: show bbsengine6 404 error page
-
-## htaccess Rules (in /teos/.htaccess)
-
-```apache
-RewriteEngine On
-RewriteBase /teos/
-
-# Static files within /teos/
-RewriteRule ^robots.txt$ /teos/seo.php?mode=robotstxt [last,qsappend]
-RewriteRule ^sitemap.xml$ /teos/seo.php?mode=sitemapxml [last,qsappend]
-RewriteRule ^favicon\.ico$ - [last]
-RewriteRule ^about[/]?$ /teos/about.php [last]
-RewriteRule ^credits\.html$ /teos/page.php?mode=view&page=credits [last,qsappend]
-RewriteRule ^credits$ /teos/page.php?mode=view&page=credits [last,qsappend]
-
-# Route to router.php at root
-RewriteRule ^detail$ /router.php?mode=detail&uri=/ [last,qsappend]
-RewriteRule ^([a-zA-Z0-9/-]+)detail$ /router.php?mode=detail&uri=$1 [last,qsappend]
-
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^([a-zA-Z0-9_/-]+)$ /router.php?mode=browse&uri=$1 [last,qsappend]
-
-RewriteRule ^$ /router.php?mode=browse&uri=ec [last,qsappend]
-
-RewriteRule ^login[/]?$ /teos/login.php [last]
-RewriteRule ^logout[/]?$ /teos/logout.php [last]
-
-RewriteRule ^([a-zA-Z0-9_/-]+/[-a-zA-Z0-9_]+-blurb\.md)$ /router.php?mode=blurb&path=$1 [last,qsappend]
-```
 
 ## Requirements
 
@@ -79,14 +102,34 @@ RewriteRule ^([a-zA-Z0-9_/-]+/[-a-zA-Z0-9_]+-blurb\.md)$ /router.php?mode=blurb&
 - A folder can have blurbs in it (and eventually other content types)
 - In processing, prepend a named constant to ltree paths so it can be set to "" (empty) instead of assuming "top"
 
-## Future Phases
+## Engine Web Modules
 
-### Phase 3: Full Router Dispatch
-- Route ALL paths through router.php (not just /teos/*)
-- Dispatch based on URI prefix
-- Static sites checked first via Apache config order
+The `/engine/` directory contains web-accessible PHP modules:
 
-### Phase 4: Remove /teos/ Prefix
-- Move .htaccess from /teos/ to root level
-- Update TEOSURL constant from `/teos/` to `/`
-- Router handles all non-static paths at root level
+```
+engine/
+├── router.php    # Main request router
+├── login.php     # Member authentication (functional style)
+├── logout.php    # Member logout (functional style)
+└── join.php      # Member registration (functional style)
+```
+
+### Security (2026-06-15)
+
+- **Path Traversal Prevention**: Router uses `\bbsengine6\util\safe_path_web()` to validate all user-supplied paths before filesystem access
+- **Cookie Domain**: Uses `\config\SESSIONCOOKIEDOMAIN` instead of hardcoded values
+- **Credits Validation**: Non-SYSOP users cannot set credits field (always defaults to 42)
+- **Session Safety**: Null checks on session variables in logout
+
+### Code Style (2026-06-15)
+
+- **Functional Style**: All modules use `*_run()` entry point pattern
+- **Consistent Paths**: Uses `__DIR__` for require_once paths
+- **Namespace Imports**: Uses `use` statements for bbsengine6 namespaces
+- **Redirect Helper**: Uses `\bbsengine6\page\redirect()` instead of deprecated functions
+
+## History
+
+- **2026-06-15**: Security fixes + modernization (path traversal, functional style)
+- **2025-06-15**: Router moved to `/engine/router.php` for clean URL support
+- **Prior**: Router was at `/router.php` (web root) with shim file
