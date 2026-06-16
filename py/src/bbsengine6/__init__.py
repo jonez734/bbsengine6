@@ -11,7 +11,6 @@ __version__ = "9.0.0"
 # from . import input
 # from . import io
 
-from .module import ModuleRegistry
 from .module import (
     register_module,
     unregister_module,
@@ -24,7 +23,6 @@ from .module import (
 )
 
 __all__ = [
-    "ModuleRegistry",
     "register_module",
     "unregister_module",
     "is_module_registered",

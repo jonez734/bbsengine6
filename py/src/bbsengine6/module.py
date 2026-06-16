@@ -276,47 +276,6 @@ def get_all_modules() -> list[str]:
     return _get_all_module_names()
 
 
-# Backwards compatibility - thin wrapper class that delegates to functions
-class ModuleRegistry:
-    """Central registry for BBS modules - tied to module system.
-
-    Modules register themselves via explicit init() call.
-    Other modules can discover registered modules and access their APIs.
-
-    Delegates to functional implementations for actual operations.
-    """
-
-    @staticmethod
-    def register(
-        name: str, module_path: str, version: str, apis: dict[str, Callable]
-    ) -> None:
-        register_module(name, module_path, version, apis)
-
-    @staticmethod
-    def unregister(name: str) -> None:
-        unregister_module(name)
-
-    @staticmethod
-    def is_registered(name: str) -> bool:
-        return is_module_registered(name)
-
-    @staticmethod
-    def get(name: str) -> Optional[ModuleAPI]:
-        return get_module(name)
-
-    @staticmethod
-    def get_api(name: str, api_name: str) -> Optional[Callable]:
-        return get_module_api(name, api_name)
-
-    @staticmethod
-    def set_require_registration(required: bool) -> None:
-        set_require_registration(required)
-
-    @staticmethod
-    def get_all() -> list[str]:
-        return get_all_modules()
-
-
 # --- Signature Validation ---
 
 
