@@ -158,13 +158,25 @@ function isFolderVisible(string $uri): bool
         $stmt = $pdo->prepare($sql);
         $stmt->execute(["path" => $path]);
         $result = $stmt->fetch();
-        if (!$result) {
-            return true;
+        if ($result) {
+            return (bool) $result['visible'];
         }
-        return (bool) $result['visible'];
     } catch (\Throwable $e) {
-        return true;
+        // Fall through to .folder.json fallback
     }
+
+    // Fallback: check .folder.json in filesystem
+    $teospath = getteospath();
+    $folderJsonPath = $teospath . $uri . '/.folder.json';
+    if (file_exists($folderJsonPath)) {
+        $json = json_decode(file_get_contents($folderJsonPath), true);
+        if (isset($json['visible'])) {
+            return (bool) $json['visible'];
+        }
+    }
+
+    // Default: visible if no config found
+    return true;
 }
 
 /**
@@ -211,7 +223,7 @@ function getDirectoryItems(string $dirpath, string $uri): array
 
         $items[] = [
             'title' => $displayTitle,
-            'uri' => "/teos/" . $fileuri,
+            'uri' => \TEOSURL . $fileuri,
             'filename' => $filename,
         ];
     }

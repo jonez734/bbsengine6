@@ -79,7 +79,13 @@ function router_handleFolder(string $uri)
   router_log("router.012: handleFolder called with uri=" . var_export($uri, true));
 
   $teospath = defined('TEOSFILEPATH') ? TEOSFILEPATH : '/srv/www/zoid6/teos/';
-  $filepath = $teospath . $uri;
+  $filepath = \bbsengine6\util\safe_path_web([$teospath, $uri], ['base_dir' => $teospath]);
+
+  if ($filepath === false)
+  {
+    router_log("router.013: path validation failed for uri=" . var_export($uri, true), "warning");
+    return ROUTER_NEXT;
+  }
 
   if (is_dir($filepath))
   {
@@ -116,14 +122,14 @@ function router_handleMarkdown(string $uri)
   $teospath = defined('TEOSFILEPATH') ? TEOSFILEPATH : '/srv/www/zoid6/teos/';
   
   // Try with .md extension
-  $filepath = $teospath . $uri . ".md";
-  if (!file_exists($filepath))
+  $filepath = \bbsengine6\util\safe_path_web([$teospath, $uri . ".md"], ['base_dir' => $teospath]);
+  if ($filepath === false || !file_exists($filepath))
   {
     // Try as-is (in case already has .md)
-    $filepath = $teospath . $uri;
+    $filepath = \bbsengine6\util\safe_path_web([$teospath, $uri], ['base_dir' => $teospath]);
   }
 
-  if (file_exists($filepath) && is_file($filepath))
+  if ($filepath !== false && file_exists($filepath) && is_file($filepath))
   {
     router_log("router.019: markdown file found at filepath=" . var_export($filepath, true));
     return router_displayMarkdownFile($filepath, $uri);
@@ -205,7 +211,14 @@ function router_displayMarkdownFile(string $filepath, string $uri): ?string
  */
 function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidden = false): ?string
 {
-  $files = glob($dirpath . "/*.md");
+  $safeDir = \bbsengine6\util\safe_path_web([$dirpath], ['base_dir' => dirname($dirpath)]);
+  if ($safeDir === false)
+  {
+    router_log("router.016: directory path validation failed for dirpath=" . var_export($dirpath, true), "warning");
+    return null;
+  }
+  
+  $files = glob($safeDir . "/*.md");
   sort($files);
 
   $title = htmlspecialchars(basename($uri));

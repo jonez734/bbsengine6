@@ -10,6 +10,10 @@
 require_once("/home/opencode/data/work/bbsengine6/php/bootstrap.php");
 require_once("/home/opencode/data/work/bbsengine6/php/folder.php");
 
+if (!defined('TEOSURL')) {
+    define('TEOSURL', '');
+}
+
 $run_db = in_array("--db", $argv);
 
 echo "=== Testing folder functions ===\n\n";
@@ -134,9 +138,9 @@ if (count($result) === 4 && $result['author'] === 'John' && $result['status'] ==
 echo "Test 10: URI construction for directory items\n";
 $uri = "ec/john-edward";
 $filename = "my-file";
-$expected = "/teos/ec/john-edward/my-file";
+$expected = TEOSURL . "ec/john-edward/my-file";
 $fileuri = $uri . "/" . $filename;
-$result = "/teos/" . $fileuri;
+$result = TEOSURL . $fileuri;
 if ($result === $expected) {
     echo "  ✓ PASS: URI constructed correctly\n";
     $passed++;
@@ -244,11 +248,11 @@ if ($run_db) {
     echo "Test 17: getDirectoryItems constructs correct URIs\n";
     $result = \bbsengine6\folder\getDirectoryItems($testDir, "test");
     $firstItem = $result[0];
-    if ($firstItem['uri'] === '/teos/test/aaa-first') {
-        echo "  ✓ PASS: URI is correct: /teos/test/aaa-first\n";
+    if ($firstItem['uri'] === TEOSURL . 'test/aaa-first') {
+        echo "  ✓ PASS: URI is correct: " . TEOSURL . "test/aaa-first\n";
         $passed++;
     } else {
-        echo "  ✗ FAIL: expected '/teos/test/aaa-first', got '" . $firstItem['uri'] . "'\n";
+        echo "  ✗ FAIL: expected '" . TEOSURL . "test/aaa-first', got '" . $firstItem['uri'] . "'\n";
         $failed++;
     }
 
