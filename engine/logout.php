@@ -1,25 +1,32 @@
 <?php
-/*
- * this module performs a "logout" of the currently logged in member.
+/**
+ * logout.php - Member logout
  *
  * @copyright (C) 2024 {@link https://zoidtechnologies.com/ zoidtechnologies.com} All Rights Reserved.
+ * @package bbsengine6
  */
-require_once("../config.php");
-require_once("session.php");
-require_once("engine.php");
 
-//require_once("zoid6.php");
+require_once(__DIR__ . "/../config.php");
+require_once(__DIR__ . "/../php/session.php");
+require_once(__DIR__ . "/../php/engine.php");
+require_once(__DIR__ . "/../php/libmember.php");
 
-class logout
+use bbsengine6\util\logentry;
+use bbsengine6\member\lib as memberlib;
+
+function logout_run(array $args = []): void
 {
-  function main()
-  {
     \bbsengine6\session\start();
     
-    $moniker = $_SESSION["currentmoniker"];
-    \bbsengine6\util\logentry("logout: OK for moniker ".var_export($moniker, true));
+    $moniker = $_SESSION["currentmoniker"] ?? null;
+    $memberid = $_SESSION["currentmemberid"] ?? null;
+    
+    logentry("logout: OK for moniker " . var_export($moniker, true));
 
-    \bbsengine6\member\lib\setflag("AUTHENTICATED", 0, $_SESSION["currentmemberid"]);
+    if ($memberid !== null)
+    {
+        memberlib\setflag("AUTHENTICATED", 0, $memberid);
+    }
 
     \bbsengine6\util\actionlog(action: "logout");
 
@@ -32,15 +39,9 @@ class logout
 
     $_SESSION["currentid"] = null;
     $_SESSION["currentmoniker"] = null;
-    
+    $_SESSION["currentmemberid"] = null;
 
-    \bbsengine6\displayredirectpage("OK -- logged out");
-
-    return;
-  }
+    \bbsengine6\page\redirect("OK -- logged out");
 }
 
-$l = new logout();
-$l->main();
-
-?>
+logout_run();
