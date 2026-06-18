@@ -5,7 +5,7 @@
  * Implements a handler registry pattern that checks handlers in order.
  * Each handler can return ROUTER_NEXT to pass to the next handler.
  * 
- * Handler order: blurb → folder → markdown → error
+ * Handler order: index → blurb → folder → markdown → error
  * 
  * @since 2026
  */
@@ -38,11 +38,51 @@ function router_log(string $message, string $level = "info"): void
 function router_gethandlers(): array
 {
   return [
+    'index'    => 'router_handleIndex',
     'blurb'    => 'router_handleBlurb',
     'folder'   => 'router_handleFolder',
     'markdown' => 'router_handleMarkdown',
     'error'    => 'router_handleError',
   ];
+}
+
+/**
+ * Handle index requests (root path)
+ * 
+ * @param string $uri The request URI
+ * @return string|bool Result or ROUTER_NEXT
+ */
+function router_handleIndex(string $uri)
+{
+  router_log("router.000: handleIndex called with uri=" . var_export($uri, true));
+
+  // Only handle root path or empty URI
+  if ($uri !== '/' && $uri !== '')
+  {
+    router_log("router.001: not root path, passing to next handler");
+    return ROUTER_NEXT;
+  }
+
+  $teospath = defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
+  $indexfile = $teospath . 'index.php';
+
+  if (!file_exists($indexfile))
+  {
+    router_log("router.002: index.php not found at " . var_export($indexfile, true), "warning");
+    return ROUTER_NEXT;
+  }
+
+  router_log("router.003: including index.php from " . var_export($indexfile, true));
+
+  try {
+    // Include the site's index.php - it handles rendering via bbsengine6\displaypage
+    include($indexfile);
+    router_log("router.004: index.php included successfully");
+    return ROUTER_STOP;
+  } catch (Throwable $e) {
+    router_log("router.005: error including index.php: " . $e->getMessage(), "error");
+    return ROUTER_NEXT;
+  }
 }
 
 /**
@@ -53,18 +93,18 @@ function router_gethandlers(): array
  */
 function router_handleBlurb(string $uri)
 {
-  router_log("router.001: handleBlurb called with uri=" . var_export($uri, true));
+  router_log("router.010: handleBlurb called with uri=" . var_export($uri, true));
 
   if (function_exists('\bbsengine6\blurb\isBlurb') && \bbsengine6\blurb\isBlurb($uri))
   {
-    router_log("router.010: blurb found for uri=" . var_export($uri, true));
+    router_log("router.011: blurb found for uri=" . var_export($uri, true));
     if (function_exists('\bbsengine6\blurb\display')) {
       return \bbsengine6\blurb\display($uri, null);
     }
     return ROUTER_NEXT;
   }
 
-  router_log("router.011: no blurb found, passing to next handler");
+  router_log("router.012: no blurb found, passing to next handler");
   return ROUTER_NEXT;
 }
 
@@ -76,14 +116,14 @@ function router_handleBlurb(string $uri)
  */
 function router_handleFolder(string $uri)
 {
-  router_log("router.012: handleFolder called with uri=" . var_export($uri, true));
+  router_log("router.020: handleFolder called with uri=" . var_export($uri, true));
 
   $teospath = defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
   $filepath = \bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath]);
 
   if ($filepath === false)
   {
-    router_log("router.013: path validation failed for uri=" . var_export($uri, true), "warning");
+    router_log("router.021: path validation failed for uri=" . var_export($uri, true), "warning");
     return ROUTER_NEXT;
   }
 
@@ -95,17 +135,17 @@ function router_handleFolder(string $uri)
       $isVisible = \bbsengine6\folder\isFolderVisible($uri);
       $isSysop = function_exists('\bbsengine6\folder\isSysop') && \bbsengine6\folder\isSysop();
       if (!$isVisible && !$isSysop) {
-        router_log("router.014: folder not visible, passing to next handler");
+        router_log("router.022: folder not visible, passing to next handler");
         return ROUTER_NEXT;
       }
     }
 
     $hidden = isset($isVisible) && !$isVisible && $isSysop;
-    router_log("router.015: directory found at filepath=" . var_export($filepath, true));
+    router_log("router.023: directory found at filepath=" . var_export($filepath, true));
     return router_displayDirectoryListing($filepath, $uri, $hidden);
   }
 
-  router_log("router.016: no directory found, passing to next handler");
+  router_log("router.024: no directory found, passing to next handler");
   return ROUTER_NEXT;
 }
 
@@ -117,7 +157,7 @@ function router_handleFolder(string $uri)
  */
 function router_handleMarkdown(string $uri)
 {
-  router_log("router.017: handleMarkdown called with uri=" . var_export($uri, true));
+  router_log("router.030: handleMarkdown called with uri=" . var_export($uri, true));
 
   $teospath = defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
   
@@ -131,11 +171,11 @@ function router_handleMarkdown(string $uri)
 
   if ($filepath !== false && file_exists($filepath) && is_file($filepath))
   {
-    router_log("router.019: markdown file found at filepath=" . var_export($filepath, true));
+    router_log("router.031: markdown file found at filepath=" . var_export($filepath, true));
     return router_displayMarkdownFile($filepath, $uri);
   }
 
-  router_log("router.020: no markdown file found, passing to error handler");
+  router_log("router.032: no markdown file found, passing to error handler");
   return ROUTER_NEXT;
 }
 
@@ -178,7 +218,7 @@ function router_displayMarkdownFile(string $filepath, string $uri): ?string
 
   // Ensure markdown library is loaded
   if (!class_exists('\Parsedown')) {
-    @include_once('/srv/www/zoid6/markdown/Parsedown.php');
+    require_once 'Parsedown.php';
   }
 
   if (class_exists('\Parsedown')) {
@@ -221,7 +261,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   $safeDir = \bbsengine6\util\safe_path_web([$dirpath], ['base_dir' => dirname($dirpath)]);
   if ($safeDir === false)
   {
-    router_log("router.016: directory path validation failed for dirpath=" . var_export($dirpath, true), "warning");
+    router_log("router.025: directory path validation failed for dirpath=" . var_export($dirpath, true), "warning");
     return null;
   }
   
@@ -306,22 +346,22 @@ function router_parseYamlFrontmatter(string $yaml): array
  */
 function router(string $uri)
 {
-  router_log("router.021: routing uri=" . var_export($uri, true));
+  router_log("router.999: routing uri=" . var_export($uri, true));
 
   $handlers = router_gethandlers();
 
   foreach ($handlers as $name => $handler)
   {
-    router_log("router.002: trying handler $name for uri=" . var_export($uri, true));
+    router_log("router.998: trying handler $name for uri=" . var_export($uri, true));
     $result = $handler($uri);
 
     if ($result !== ROUTER_NEXT)
     {
-      router_log("router.003: handler $name handled the request");
+      router_log("router.997: handler $name handled the request");
       return $result;
     }
 
-    router_log("router.004: handler $name returned ROUTER_NEXT, trying next");
+    router_log("router.996: handler $name returned ROUTER_NEXT, trying next");
   }
 
   router_log("router.100: no handler found for uri=" . var_export($uri, true), "error");

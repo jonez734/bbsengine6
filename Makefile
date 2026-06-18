@@ -109,6 +109,10 @@ sql:
 markdown:
 	$(RSYNC) --links --exclude 'vhosts' /srv/www/php-markdown-lib /srv/www/markdown $(MARKDOWNLIBPROD)
 
+
+skin-prod:
+	$(MAKE) -C skin stage
+	$(RSYNC) $(ENGINESTAGE)skin/ $(ENGINEPROD)skin/
 #wwwcom:
 #	$(MAKE) -C www com
 
@@ -116,9 +120,7 @@ wwworg:
 	$(MAKE) -C www org
 
 engine:
-	mkdir -p $(ENGINESTAGE)
 	$(MAKE) -C engine all
-
 push:
 	git push -u gitlab
 	git push -u github
@@ -130,5 +132,5 @@ log:
 	git log --graph --pretty=format:"%h %ad %s%d [%an]%n%B" --date=short > LOG_FULL.md
 	git log --pretty=format:"%ad|%h %s%d [%an]" --date=short | awk -F'|' '{if ($$1!=date) {print "## " $$1; date=$$1} print "  " $$2}' > LOG_SUMMARY.md
 
-.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod
+.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod
 
