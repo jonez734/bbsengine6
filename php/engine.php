@@ -115,24 +115,6 @@ function getcurrentsite()
  * @param string $page
  * @since 20221116
  */
-function setcurrentpage($page)
-{
-  $_SESSION["currentpage"] = $page;
-  return;
-}
-
-/**
- * get current page
- *
- * @author zoidtechnologies.com
- * @since 20221116
- */
-function getcurrentpage()
-{
-  $page = isset($_SESSION["currentpage"]) ? $_SESSION["currentpage"] : null;
-  return $page;
-}
-
 /**
  * function to set the current "action" so that "view" can be hidden when in view mode, etc
  *
@@ -1455,6 +1437,31 @@ function handleform($form, $callback)
     util\logentry("engine.getparentsig.140: parentsig=".var_export($parentsig, true));
     return $parentsig;
   }
+
+  /**
+   * set current page
+   *
+   * @param string $page
+   * @since 20221116
+   */
+  function setcurrentpage($page)
+  {
+    $_SESSION["currentpage"] = $page;
+    return;
+  }
+
+  /**
+   * get current page
+   *
+   * @author zoidtechnologies.com
+   * @since 20221116
+   */
+  function getcurrentpage()
+  {
+    $page = isset($_SESSION["currentpage"]) ? $_SESSION["currentpage"] : null;
+    return $page;
+  }
+
 
 } /* bbsengine6 namespace */
 ?>
