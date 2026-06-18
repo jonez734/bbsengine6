@@ -1,0 +1,7 @@
+{extends file="page.tmpl"}
+{block name="title"}{$title}{/block}
+{block name="content"}
+  {foreach $sections as $section}
+    {include file="blurb.tmpl" meta=$section meta.header=$section.header content=$section.content}
+  {/foreach}
+{/block}
