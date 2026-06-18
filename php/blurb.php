@@ -8,6 +8,8 @@
 
 namespace bbsengine6\blurb {
 
+require_once(__DIR__ . "/bootstrap.php");
+
 /**
  * Build breadcrumbs from a sig path
  *
@@ -214,9 +216,9 @@ function isBlurb($uri)
     $blurbid = str_replace("/", ".", $uri);
 
     // 1. Check database first
-    $sql = "SELECT 1 
-            FROM engine.__blurb b 
-            WHERE b.id = :blurbid 
+    $sql = "SELECT 1
+            FROM engine.__blurb b
+            WHERE b.id = :blurbid
             LIMIT 1";
 
     try {
@@ -259,7 +261,7 @@ function display($uri, $filepath)
 
     $content = file_get_contents($blurbfile);
 
-    $sql = "SELECT b.id, b.kind, b.attributes, b.datecreated, b.createdbymoniker 
+    $sql = "SELECT b.id, b.kind, b.attributes, b.datecreated, b.createdbymoniker
             FROM engine.__blurb b WHERE b.id = :blurbid LIMIT 1";
 
     try {
