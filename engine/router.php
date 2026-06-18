@@ -78,8 +78,8 @@ function router_handleFolder(string $uri)
 {
   router_log("router.012: handleFolder called with uri=" . var_export($uri, true));
 
-  $teospath = defined('TEOSFILEPATH') ? TEOSFILEPATH : '/srv/www/zoid6/teos/';
-  $filepath = \bbsengine6\util\safe_path_web([$teospath, $uri], ['base_dir' => $teospath]);
+  $teospath = defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
+  $filepath = \bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath]);
 
   if ($filepath === false)
   {
@@ -119,14 +119,14 @@ function router_handleMarkdown(string $uri)
 {
   router_log("router.017: handleMarkdown called with uri=" . var_export($uri, true));
 
-  $teospath = defined('TEOSFILEPATH') ? TEOSFILEPATH : '/srv/www/zoid6/teos/';
+  $teospath = defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
   
   // Try with .md extension
-  $filepath = \bbsengine6\util\safe_path_web([$teospath, $uri . ".md"], ['base_dir' => $teospath]);
+  $filepath = \bbsengine6\util\safe_path_web([$uri . ".md"], ['base_dir' => $teospath]);
   if ($filepath === false || !file_exists($filepath))
   {
     // Try as-is (in case already has .md)
-    $filepath = \bbsengine6\util\safe_path_web([$teospath, $uri], ['base_dir' => $teospath]);
+    $filepath = \bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath]);
   }
 
   if ($filepath !== false && file_exists($filepath) && is_file($filepath))
@@ -176,8 +176,15 @@ function router_displayMarkdownFile(string $filepath, string $uri): ?string
     $content = preg_replace('/^---\s*\n.*?\n---\s*\n/s', '', $content);
   }
 
-  if (class_exists('\Markdown')) {
-    $html = \Markdown::defaultTransform($content);
+  // Ensure markdown library is loaded
+  if (!class_exists('\Parsedown')) {
+    @include_once('/srv/www/zoid6/markdown/Parsedown.php');
+  }
+
+  if (class_exists('\Parsedown')) {
+    $parsedown = new \Parsedown();
+    $parsedown->setBreaksEnabled(true);
+    $html = $parsedown->text($content);
   } else {
     $html = $content;
   }
@@ -190,7 +197,7 @@ function router_displayMarkdownFile(string $filepath, string $uri): ?string
   }
 
   $data = [];
-  $data["content"] = $content;
+  $data["content"] = $html;
   $data["title"] = $title;
   $data["date"] = $date;
 
@@ -330,4 +337,46 @@ function router(string $uri)
 function route(string $uri)
 {
   return router($uri);
+}
+// HTTP execution - runs when accessed via Apache
+if (php_sapi_name() !== 'cli') {
+    // Set include path
+    
+    
+    // Set include path for PEAR/Log
+    set_include_path(get_include_path() 
+        . PATH_SEPARATOR . "/srv/www/bbsengine6/php"
+        . PATH_SEPARATOR . "/srv/www/zoid6/markdown");
+    
+    // Include dependencies (PEAR first for constants)
+    require_once("PEAR.php");
+    require_once("Log.php");
+    require_once("bootstrap.php");
+    require_once("util.php");
+    require_once("blurb.php");
+    
+    // Define constants if not already defined
+    if (!defined('TEOSURL')) define('TEOSURL', '/teos');
+    if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
+    
+    // Get path from query string (support both 'path' and 'uri')
+    $path = $_GET['path'] ?? $_GET['uri'] ?? '';
+    $path = preg_replace('/\.md$/', '', $path);
+    
+    // Debug logging using bbsengine6\util\logentry
+    if (function_exists('\bbsengine6\util\logentry')) {
+        \bbsengine6\util\logentry("router.http: path=$path SAPI=" . php_sapi_name());
+    }
+    
+    if (!empty($path)) {
+        try {
+            echo router($path);
+        } catch (Throwable $e) {
+            if (function_exists('\bbsengine6\util\logentry')) {
+                \bbsengine6\util\logentry("router.error: " . $e->getMessage());
+            }
+            http_response_code(500);
+            echo "Error: " . $e->getMessage();
+        }
+    }
 }
