@@ -277,7 +277,7 @@ function display($uri, $filepath)
         ? \bbsengine6\blurb\buildbreadcrumbs($sigpathltree)
         : [];
 
-    setcurrentpage("teos/" . $uri);
+    \bbsengine6\setcurrentpage("teos/" . $uri);
 
     $data = [];
     $data["content"] = $content;
