@@ -110,12 +110,6 @@ function getcurrentsite()
 }
 
 /**
- * set current page
- *
- * @param string $page
- * @since 20221116
- */
-/**
  * function to set the current "action" so that "view" can be hidden when in view mode, etc
  *
  * @since 20221116
