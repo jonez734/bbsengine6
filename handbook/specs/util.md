@@ -2,7 +2,7 @@
 
 ## Summary
 
-`util.py` provides general-purpose utility functions for the BBS engine: display formatting, date/time operations, logging, input helpers, file/directory verification, range operations, SQL resource loading, password hashing, and ANSI stripping.
+`util.py` (Python) and `util.php` provide general-purpose utility functions for the BBS engine: display formatting, date/time operations, logging, input helpers, file/directory verification, range operations, SQL resource loading, password hashing, and ANSI stripping.
 
 ## Brief Description
 
@@ -17,7 +17,7 @@ A catch-all module of ~30 utility functions used across the BBS engine. Function
 - **`hr()`**, **`heading()`**, **`oxfordcomma()`**, **`pluralize()`** -- Pure functions with no shared state. Safe.
 - **`expandrange()`**, **`collapserange()`**, **`rangestr()`** -- Pure functions. Safe.
 - **`checksum()`** -- Pure function with no shared state. Safe.
-- **`ltree_to_path()`**, **`chop_last_element()`**, **`strip_ansi()`** -- Pure string functions. Safe.
+- **`ltree_to_path()`**, **`chop_last_element()`**, **`strip_ansi()`**, **`path_to_ltree()`** -- Pure string functions. Safe.
 - **`serialize_datetimes()`**, **`tobool()`** -- Pure functions. Safe.
 - **`getremoteaddr()`**, **`getcurrentloginid()`** -- Read from process environment, no shared state. Safe.
 - **`verifyDirExistsWritable()`**, **`verifyFileExistsReadable()`**, **`verifyFileExistsReadableWritable()`** -- Stateless filesystem checks. Safe.
@@ -66,6 +66,7 @@ getencryptedpassword(args, plaintextpassword: str) -> Optional[str]
 init(args=None, **kw)
 checksum(data: bytes) -> str
 ltree_to_path(ltree: str) -> str
+path_to_ltree(path: str) -> str
 chop_last_element(ltree: str) -> str
 tobool(value) -> bool
 getremoteaddr() -> Optional[str]

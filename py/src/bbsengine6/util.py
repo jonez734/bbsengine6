@@ -935,6 +935,27 @@ def ltree_to_path(ltree: str) -> str:
     return "/".join(labels)
 
 
+def path_to_ltree(path: str) -> str:
+    """Convert a forward-slash delimited path to a PostgreSQL ltree string.
+
+    Replaces "/" with "." and "-" with "_" to create a valid ltree path.
+    This is the inverse of ltree_to_path.
+
+    Args:
+        path: A forward-slash delimited path (e.g., "software/python").
+
+    Returns:
+        A dot-separated ltree string (e.g., "software.python").
+
+    Example:
+        >>> path_to_ltree("software/python")
+        'software.python'
+        >>> path_to_ltree("ec_john-edward")
+        'ec_john_edward'
+    """
+    return path.replace("-", "_").replace("/", ".")
+
+
 def chop_last_element(ltree: str) -> str:
     """Remove the last element from a dot-separated ltree string.
 

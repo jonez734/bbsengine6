@@ -8,10 +8,6 @@
 
 namespace bbsengine6\blurb {
 
-require_once("/srv/www/bbsengine6/php/bootstrap.php");
-require_once("engine.php");
-// require_once("database.php");
-
 /**
  * Build breadcrumbs from a sig path
  *
@@ -215,14 +211,12 @@ function getcount(): int
  */
 function isBlurb($uri)
 {
-    $uri = preg_replace('/\.(md|html)$/', '', $uri);
-    $uri = preg_replace('/^teos\//', '', $uri);
+    $uri = preg_replace('/\.md$/', '', $uri);
     $blurbid = str_replace("/", ".", $uri);
 
-    // 1. Check database first
-    $sql = "SELECT 1
-            FROM engine.__blurb b
-            WHERE b.id = :blurbid
+    $sql = "SELECT 1 
+            FROM engine.__blurb b 
+            WHERE b.id = :blurbid 
             LIMIT 1";
 
     try {
@@ -230,17 +224,10 @@ function isBlurb($uri)
         $stmt = $pdo->prepare($sql);
         $stmt->execute(["blurbid" => $blurbid]);
         $result = $stmt->fetch();
-        if ($result !== false) {
-            return true;
-        }
+        return $result !== false;
     } catch (\Throwable $e) {
-        // Fall through to filesystem check
+        return false;
     }
-
-    // 2. Fallback: check if .md file exists on disk
-    $teospath = defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
-    $mdfile = $teospath . str_replace(".", "/", $blurbid) . '.md';
-    return file_exists($mdfile);
 }
 
 /**
@@ -252,8 +239,7 @@ function isBlurb($uri)
  */
 function display($uri, $filepath)
 {
-    $uri = preg_replace('/\.(md|html)$/', '', $uri);
-    $uri = preg_replace('/^teos\//', '', $uri);
+    $uri = preg_replace('/\.md$/', '', $uri);
     $blurbid = str_replace("/", ".", $uri);
 
     $blurbdir = defined('TEOSDIR') ? TEOSDIR : "/srv/www/vhosts/zoidtechnologies.com/html/teos/";
@@ -265,7 +251,7 @@ function display($uri, $filepath)
 
     $content = file_get_contents($blurbfile);
 
-    $sql = "SELECT b.id, b.kind, b.attributes, b.datecreated, b.createdbymoniker
+    $sql = "SELECT b.id, b.kind, b.attributes, b.datecreated, b.createdbymoniker 
             FROM engine.__blurb b WHERE b.id = :blurbid LIMIT 1";
 
     try {
@@ -287,70 +273,10 @@ function display($uri, $filepath)
 
     $data = [];
     $data["content"] = $content;
-    $data["blurb"] = $blurb ?? [];
-    $data["breadcrumbs"] = $breadcrumbs ?? [];
+    $data["blurb"] = $blurb;
+    $data["breadcrumbs"] = $breadcrumbs;
 
-    $parsed = parseMarkdownSections($content);
-
-    $data["title"] = $parsed["title"];
-    $data["sections"] = $parsed["sections"];
-
-    return \bbsengine6\displaypage($data, "page-markdown-sections.tmpl");
-}
-function parseMarkdownSections(string $markdown): array
-{
-    $frontmatter = [];
-    $body = $markdown;
-
-    if (preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $markdown, $matches)) {
-        $frontmatterText = $matches[1];
-        $body = substr($markdown, strlen($matches[0]));
-
-        $lines = explode("\n", $frontmatterText);
-        foreach ($lines as $line) {
-            if (preg_match('/^(\w+):\s*(.*)$/', $line, $m)) {
-                $key = $m[1];
-                $value = trim($m[2], '"\' ');
-                $frontmatter[$key] = $value;
-            }
-        }
-    }
-
-    require_once("Parsedown.php");
-    require_once("ParsedownExtra.php");
-
-    static $parser = null;
-    if ($parser === null) {
-        $parser = new \ParsedownExtra();
-        $parser->setMarkupEscaped(true);
-        $parser->setSafeMode(true);
-    }
-    $html = $parser->text($body);
-
-    $title = $frontmatter["title"] ?? "";
-    $sections = [];
-
-    $parts = preg_split('/(<h1>.*?<\/h1>)/i', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
-
-    $firstPart = true;
-    foreach ($parts as $part) {
-        if (preg_match('/<h1>(.*?)<\/h1>/i', $part, $m)) {
-            $headerText = strip_tags($m[1]);
-            if ($firstPart && $title === "") {
-                $title = $headerText;
-            }
-            $sections[] = ["header" => $headerText, "content" => ""];
-            $firstPart = false;
-        } elseif (!empty($part) && !empty($sections)) {
-            $sections[count($sections) - 1]["content"] .= $part;
-        }
-    }
-
-    if (empty($sections)) {
-        $sections[] = ["header" => $title, "content" => $html];
-    }
-
-    return ["title" => $title, "sections" => $sections];
+    return \bbsengine6\displaypage($data, "page-markdown.tmpl");
 }
 
 }

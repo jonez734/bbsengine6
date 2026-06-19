@@ -108,7 +108,7 @@ Public-facing view combining blurb data with computed fields.
 Returns a list of dictionaries with keys `title`, `path`, `uri` for each part of the SIG path hierarchy.
 
 **Parameters:**
-- `$sigpath` (string) - ltree path (e.g., `top.software.python`)
+- `$sigpath` (string) - ltree path (e.g., `top.software.python`) or URI path (e.g., `software/python`). The input is normalized using `\bbsengine6\util\pathToLtree()` which replaces `/` with `.` and `-` with `_`.
 - `$skiptop` (bool) - Skip the `top` node in the path
 - `$hidepath` (string|null) - Optional path to exclude from results
 
