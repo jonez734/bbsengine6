@@ -107,7 +107,7 @@ alert.py                   → util.py
 ### PHP Modules
 
 ```
-bootstrap.php    → [sets include path]
+bootstrap.php    → [sets include path, bbsengine6\bootstrap(array) function]
 engine.php       → database.php, session.php, libmember.php, util.php, Smarty
 database.php     → PDO, PostgreSQL driver
 session.php      → database.php, libmember.php
