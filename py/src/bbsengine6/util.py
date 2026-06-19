@@ -935,7 +935,7 @@ def ltree_to_path(ltree: str) -> str:
     return "/".join(labels)
 
 
-def path_to_ltree(path: str) -> str:
+def pathToLtree(path: str) -> str:
     """Convert a forward-slash delimited path to a PostgreSQL ltree string.
 
     Replaces "/" with "." and "-" with "_" to create a valid ltree path.
@@ -948,9 +948,9 @@ def path_to_ltree(path: str) -> str:
         A dot-separated ltree string (e.g., "software.python").
 
     Example:
-        >>> path_to_ltree("software/python")
+        >>> pathToLtree("software/python")
         'software.python'
-        >>> path_to_ltree("ec_john-edward")
+        >>> pathToLtree("ec_john-edward")
         'ec_john_edward'
     """
     return path.replace("-", "_").replace("/", ".")
