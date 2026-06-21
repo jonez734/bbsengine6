@@ -448,8 +448,16 @@ def connect(
         del kwargs["readonly"]
 
     if pool is None:
-        io.echo("bbsengine6.database.connect.200: pool is None", level="error")
-        raise ValueError("pool is None")
+        # CONN_POOL_PATTERN fallback: try to get pool from args
+        if args is not None and hasattr(args, "databasename"):
+            try:
+                pool = getpool(args)
+            except Exception:
+                io.echo("bbsengine6.database.connect.200: pool is None", level="error")
+                raise ValueError("pool is None")
+        else:
+            io.echo("bbsengine6.database.connect.200: pool is None", level="error")
+            raise ValueError("pool is None")
 
     conn: Any = None
     try:

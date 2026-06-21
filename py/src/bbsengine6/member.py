@@ -854,9 +854,31 @@ def setpassword(args, plaintextpassword: str, moniker: str, **kwargs):
 def checkpassword(
     args, plaintextpassword: str, membermoniker: str | None = None, **kwargs
 ):
+    """Check if password matches member's stored password.
+
+    CONN_POOL_PATTERN: Resolves connection from kwargs in priority order:
+    1. cur= - use caller's existing cursor
+    2. conn= - use caller's existing connection
+    3. pool= - borrow connection from caller's pool
+    4. args= - build/cache pool via database.getpool(args)
+
+    Args:
+        args: Application args for pool resolution
+        plaintextpassword: Password to check (plaintext, will be crypt'd)
+        membermoniker: Member moniker to check against
+        **kwargs: Optional - cur, conn, pool, args
+    """
     def _work(cur):
         if membermoniker is None:
             return None
+        sql = "select password from engine.member where moniker=%s"
+        cur.execute(sql, (membermoniker,))
+        row = cur.fetchone()
+        if row is None:
+            return False
+        stored_password = row[0]
+        if stored_password is None or stored_password == "":
+            return plaintextpassword == ""
         sql = "select 1 from engine.member where password=crypt(%s, password) and moniker=%s"
         dat = (plaintextpassword, membermoniker)
         cur.execute(sql, dat)
@@ -873,10 +895,18 @@ def checkpassword(
     try:
         cur = kwargs.get("cur", None)
         if cur is None:
+            conn = kwargs.get("conn", None)
+            if conn is not None:
+                with database.cursor(conn) as cur:
+                    return _work(cur)
             pool = kwargs.get("pool", None)
             if pool is None:
-                io.echo("bbsengine6.checkpassword.100: pool=None", level="error")
-                return None
+                # CONN_POOL_PATTERN: Try to get pool from args parameter
+                if args is not None:
+                    pool = database.getpool(args)
+                else:
+                    io.echo("bbsengine6.checkpassword.100: pool=None", level="error")
+                    return None
             with database.connect(args, pool=pool) as conn:
                 with database.cursor(conn) as cur:
                     return _work(cur)
@@ -931,7 +961,18 @@ def verifyMemberNotFound(args, name, column="loginid", **kwargs):
 
 
 def verifyMemberFound(args, name, **kwargs):
-    io.echo(f"verifyMemberFound.100: {kwargs=}", level="debug")
+    """Check if a member exists in the database.
+
+    CONN_POOL_PATTERN: Resolves connection from kwargs in priority order:
+    1. conn= - use caller's existing connection
+    2. pool= - borrow connection from caller's pool
+    3. args= - build/cache pool via database.getpool(args)
+
+    Args:
+        args: Application args for pool resolution (used if pool/conn not provided)
+        name: Member moniker or loginid to find
+        **kwargs: Optional - column, conn, pool, args
+    """
     column = kwargs.get("column", "loginid")
     conn = kwargs.get("conn", None)
     pool = kwargs.get("pool", None)
@@ -958,6 +999,16 @@ def verifyMemberFound(args, name, **kwargs):
             io.echo_traceback("bbsengine6.member.verifyMemberFound.200:")
             return None
     else:
+        # CONN_POOL_PATTERN: Try to get pool from args parameter
+        if args is not None:
+            try:
+                pool = database.getpool(args)
+                with database.connect(args, pool=pool) as conn:
+                    with database.transaction(conn):
+                        return _work(conn)
+            except Exception:
+                io.echo_traceback("bbsengine6.member.verifyMemberFound.300:")
+                return None
         io.echo(
             f"bbsengine6.member.verifyMemberFound.160: pool=None and conn=None",
             level="error",
@@ -1018,6 +1069,51 @@ def moniker_exists(args, moniker: str, **kwargs) -> bool | None:
 
     # Check existence using existing verifyMemberFound with moniker column
     return verifyMemberFound(args, moniker, column="moniker", **kwargs)
+
+
+def has_password(args, moniker: str, **kwargs) -> bool:
+    """Check if a member has a password set (non-empty).
+
+    Args:
+        args: Application args
+        moniker: Member moniker to check
+        **kwargs: Optional - pool, conn, cur
+
+    Returns:
+        bool: True if member has a password, False if password is empty/missing
+    """
+    conn = kwargs.get("conn", None)
+    pool = kwargs.get("pool", None)
+
+    def _work(conn):
+        try:
+            with database.cursor(conn) as cur:
+                cur.execute("SELECT password FROM engine.member WHERE moniker = %s", (moniker,))
+                row = cur.fetchone()
+                if row is None:
+                    return False
+                return bool(row[0])
+        except Exception:
+            io.echo_traceback("bbsengine6.member.has_password.100:")
+            return False
+
+    if conn is not None:
+        return _work(conn)
+    elif pool is not None:
+        try:
+            with database.connect(args, pool=pool) as conn:
+                return _work(conn)
+        except Exception:
+            io.echo_traceback("bbsengine6.member.has_password.200:")
+            return False
+    else:
+        try:
+            pool = database.getpool(args)
+            with database.connect(args, pool=pool) as conn:
+                return _work(conn)
+        except Exception:
+            io.echo_traceback("bbsengine6.member.has_password.300:")
+            return False
 
 
 def insert(args, member, **kwargs):

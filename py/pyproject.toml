@@ -30,6 +30,7 @@ dependencies = [
     "psycopg[binary]",
     "psycopg-pool",
     "python-dateutil",
+    "websockets",
 ]
 
 [project.optional-dependencies]
