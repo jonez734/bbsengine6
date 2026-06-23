@@ -16,6 +16,14 @@ PACKET_TYPE_PONG = 2
 PACKET_TYPE_FILE = 10
 PACKET_TYPE_MESSAGE = 11
 
+# TODO: Add PACKET_TYPE_SETBOTTOMBAR = 12 for server-to-client UI updates
+# This will allow the server to update the client's bottom bar (e.g., from casino module).
+# When implemented:
+# - Add SetBottomBarPacket class in packet_types.py with @register_packet_type decorator
+# - Add encode/decode functions in packet_codec.py
+# - Client should check sys.stdout.isatty() to decide whether to call io.screen.setbottombar()
+#   or print the message for automated testing
+
 # Size constraints
 MAX_BLOCK_SIZE = 1_048_576  # 1 MB per block
 MAX_PAYLOAD_SIZE = 1_048_576  # 1 MB total per-packet payload

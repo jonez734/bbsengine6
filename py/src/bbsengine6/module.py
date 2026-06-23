@@ -96,7 +96,7 @@ def load(args: object, modulepath: str) -> ModuleType:
         m = importlib.import_module(modulepath)
         return m
     except Exception:
-        io.echo_traceback(f"module {modulepath=} not importable")
+        _echo_traceback(f"module {modulepath=} not importable")
         raise
 
 
@@ -281,7 +281,7 @@ def get_all_modules() -> list[str]:
 
 def _check_func_return(func_ann, stub_ann):
     """Check return type compatibility with Optional[T] == Union[T, None] support."""
-    # DEBUG using io.echo like the rest of the game
+    # DEBUG using _echo like the rest of the game
     # try:
     #     io.echo(f"DEBUG _check_func_return: func_ann={func_ann!r} type={type(func_ann)} id={id(func_ann)}")
     #     io.echo(f"DEBUG _check_func_return: stub_ann={stub_ann!r} type={type(stub_ann)} id={id(stub_ann)}")
@@ -516,7 +516,7 @@ def check(args, modulename, op="run", **kwargs):
                 io.echo("access check failed", level="error")
             return False
     except Exception as e:
-        io.echo_traceback(f"module.check error: {e}")
+        _echo_traceback(f"module.check error: {e}")
         return None
 
     # --- Check buildargs() (REQUIRED) ---
@@ -768,7 +768,7 @@ def check_func(
         module = get(mod_ref)
     except Exception:
         if not silent:
-            io.echo_traceback("validate_function: failed to resolve module")
+            _echo_traceback("validate_function: failed to resolve module")
         return False
 
     if not hasattr(module, func_name):

@@ -81,13 +81,38 @@ def set_resize_handler(callback: Callable[[], None] | None) -> None:
         _default_resize_handler = callback
 
 
-# Install signal handlers for all fatal signals
+def install_signal_handlers() -> None:
+    """Install signal handlers for fatal signals and SIGWINCH.
+    
+    Call this explicitly in non-asyncio programs. For asyncio programs,
+    use loop.add_signal_handler() instead.
+    """
+    global _signal_handlers_installed
+    if _signal_handlers_installed:
+        return
+    
+    for sig in _fatal_signals:
+        try:
+            signal.signal(sig, _make_signal_handler(sig))
+        except (OSError, ValueError):
+            pass
+    
+    try:
+        signal.signal(signal.SIGWINCH, _make_signal_handler(signal.SIGWINCH))
+    except (OSError, ValueError):
+        pass
+    
+    _signal_handlers_installed = True
+
+
 _fatal_signals = [
     signal.SIGINT,
     signal.SIGQUIT,
     signal.SIGTERM,
     signal.SIGHUP,
 ]
+
+# Install signal handlers for all fatal signals
 for sig in _fatal_signals:
     try:
         signal.signal(sig, _make_signal_handler(sig))
@@ -97,7 +122,8 @@ for sig in _fatal_signals:
 # Install SIGWINCH handler separately
 _winlock = threading.Lock()
 _resize_callbacks: list[Callable[[], None]] = []
-_default_resize_handler: Callable[[], None] | None = None
+_default_resize_handler: Callable[[], None] = None
+_signal_handlers_installed = True
 try:
     signal.signal(signal.SIGWINCH, _make_signal_handler(signal.SIGWINCH))
 except (OSError, ValueError):
@@ -116,7 +142,7 @@ from .keymap import KEY_MAP
 from .const import ESC, ETX, EOF
 from . import screen
 
-# Notification support (with graceful fallback)
+# Notification support
 try:
     from bbsengine6.member import _threadlocal
 
