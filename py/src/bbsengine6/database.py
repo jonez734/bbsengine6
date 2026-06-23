@@ -1667,3 +1667,160 @@ def manage_schema_priv(
         with connect(args, pool=pool) as conn:
             return _work(conn)
     return _work(conn)
+
+
+# ============================================================
+# ASYNC DATABASE SUPPORT
+# @since 20250622
+# ============================================================
+
+import asyncio
+from psycopg_pool import AsyncConnectionPool
+
+
+_async_pools: dict[str, AsyncConnectionPool] = {}
+
+
+async def get_async_pool(args: Any, dbname: str | None = None) -> AsyncConnectionPool:
+    """Get or create an async connection pool.
+
+    Args:
+        args: Application args for DSN construction
+        dbname: Optional database name override
+
+    Returns:
+        AsyncConnectionPool instance (min=2, max=10 connections)
+    """
+    key = dbname or getattr(args, "databasename", None) or DEFAULTDATABASE
+
+    if key not in _async_pools or _async_pools[key].closed:
+        dsn = make_dsn(args, dbname=dbname)
+        _async_pools[key] = AsyncConnectionPool(
+            dsn,
+            min_size=2,
+            max_size=10,
+            timeout=30.0,
+            open=False,
+        )
+        await _async_pools[key].open()
+
+    return _async_pools[key]
+
+
+async def reset_async_pool_cache() -> None:
+    """Reset the async pool cache. Call this in tests."""
+    global _async_pools
+    for pool in _async_pools.values():
+        try:
+            await pool.close()
+        except Exception:
+            io.echo_traceback("bbsengine6.database.reset_async_pool_cache:")
+    _async_pools = {}
+
+
+class AsyncDBConnection:
+    """Async wrapper for database connection."""
+
+    def __init__(self, conn: Any):
+        self._conn = conn
+
+    @property
+    def cursor(self):
+        return AsyncCursor(self._conn)
+
+    async def __aenter__(self) -> "AsyncDBConnection":
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        await self._conn.close()
+
+
+class AsyncCursor:
+    """Async cursor wrapper."""
+
+    def __init__(self, conn: Any):
+        self._conn = conn
+        self._cur = None
+
+    async def execute(self, query: Any, params: dict | None = None) -> "AsyncCursor":
+        self._cur = self._conn.cursor(row_factory=dict_row)
+        if params:
+            await self._cur.execute(query, params)
+        else:
+            await self._cur.execute(query)
+        return self
+
+    async def fetchone(self) -> dict | None:
+        return dict(self._cur.fetchone()) if self._cur else None
+
+    async def fetchall(self) -> list[dict]:
+        return [dict(row) for row in self._cur.fetchall()] if self._cur else []
+
+    async def __aenter__(self) -> "AsyncCursor":
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
+        if self._cur:
+            await self._curclose()
+
+
+async def async_connect(
+    args: Any,
+    pool: AsyncConnectionPool | None = None,
+    *,
+    auto_commit: bool = True,
+    dbname: str | None = None,
+) -> AsyncDBConnection:
+    """Async context manager for database connections.
+
+    Args:
+        args: Application args
+        pool: AsyncConnectionPool instance (optional)
+        auto_commit: If True (default), commits before returning connection
+        dbname: Optional database name
+
+    Yields:
+        AsyncDBConnection wrapper
+
+    Note:
+        In psycopg-pool 3.3.0+, pool.connection() returns an AsyncIterator context manager,
+        not an awaitable. This function handles both old (3.1.x) and new (3.3.0+) APIs.
+    """
+    if pool is None:
+        pool = await get_async_pool(args, dbname)
+
+    # psycopg-pool 3.3.0+ uses context manager, handle both old and new APIs
+    try:
+        # Try new 3.3.0+ API: async with pool.connection() as conn
+        async with pool.connection() as conn:
+            yield AsyncDBConnection(conn)
+    except TypeError:
+        # Fall back to old 3.1.x API: conn = await pool.connection()
+        conn = await pool.connection()
+        yield AsyncDBConnection(conn)
+
+
+async def async_query(
+    args: Any,
+    sql: str,
+    pool: AsyncConnectionPool | None = None,
+    *,
+    dbname: str | None = None,
+    **params: Any,
+) -> list[dict]:
+    """Async query helper - executes SQL and returns list of dicts.
+
+    Args:
+        args: Application args
+        sql: SQL query with named parameters (:param)
+        pool: Optional async pool
+        dbname: Optional database name
+        **params: Query parameters
+
+    Returns:
+        List of result rows as dicts
+    """
+    async with async_connect(args, pool, dbname=dbname) as db_conn:
+        async with db_conn.cursor as cur:
+            await cur.execute(sql, params)
+            return await cur.fetchall()
