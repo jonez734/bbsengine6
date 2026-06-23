@@ -298,7 +298,9 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
 
     Args:
       args: Application args with database* attributes
-      **kwargs: Optional overrides for dbname, user, password, host, port
+      **kwargs: Optional overrides for dbname/database, user, password, host, port.
+                Supports both 'database' and 'dbname' for backward compatibility;
+                'database' takes precedence.
 
     Returns:
       DSN string like 'dbname=test user=admin'
@@ -306,6 +308,11 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
     Raises:
       ValueError: If args is None and required database parameters are not provided via kwargs.
     """
+    if "database" in kwargs and "dbname" not in kwargs:
+        kwargs["dbname"] = kwargs.pop("database")
+    elif "database" in kwargs and "dbname" in kwargs:
+        kwargs.pop("database")
+
     components = []
 
     if args is None:
@@ -360,7 +367,8 @@ def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
 
     Args:
       args: Application args for DSN construction
-      **kwargs: Optional DSN overrides
+      **kwargs: Optional DSN overrides. Supports both 'database' and 'dbname'
+                for backward compatibility; 'database' takes precedence.
 
     Returns:
       ConnectionPool instance (min=10, max=100 connections)
@@ -368,6 +376,11 @@ def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
     Raises:
       ValueError: If DSN is empty or invalid (no connection parameters)
     """
+    if "database" in kwargs and "dbname" in kwargs:
+        kwargs.pop("dbname", None)
+    elif "dbname" in kwargs and "database" not in kwargs:
+        kwargs["database"] = kwargs.pop("dbname")
+
     dsn = make_dsn(args, **kwargs)
 
     if not dsn or dsn == "port=5432":
@@ -1675,33 +1688,42 @@ def manage_schema_priv(
 # ============================================================
 
 import asyncio
+from contextlib import asynccontextmanager
 from psycopg_pool import AsyncConnectionPool
 
 
 _async_pools: dict[str, AsyncConnectionPool] = {}
 
 
-async def get_async_pool(args: Any, dbname: str | None = None) -> AsyncConnectionPool:
+async def get_async_pool(
+    args: Any, database: str | None = None, dbname: str | None = None
+) -> AsyncConnectionPool:
     """Get or create an async connection pool.
 
     Args:
         args: Application args for DSN construction
-        dbname: Optional database name override
+        database: Optional database name override (preferred)
+        dbname: Optional database name override (legacy, for backward compatibility)
 
     Returns:
         AsyncConnectionPool instance (min=2, max=10 connections)
     """
-    key = dbname or getattr(args, "databasename", None) or DEFAULTDATABASE
+    db = database or dbname
+    key = db or getattr(args, "databasename", None) or DEFAULTDATABASE
+    dsn = make_dsn(args, **(dict(database=db) if db else {}))
 
-    # Always recreate pool to avoid stale state
+    # Return existing pool if valid
+    if key in _async_pools and not _async_pools[key].closed:
+        return _async_pools[key]
+
+    # Close and remove stale pool if exists
     if key in _async_pools:
         try:
             await _async_pools[key].close()
         except Exception:
             pass
         del _async_pools[key]
-    
-    dsn = make_dsn(args, dbname=dbname)
+
     _async_pools[key] = AsyncConnectionPool(
         dsn,
         min_size=2,
@@ -1758,24 +1780,28 @@ class AsyncCursor:
         return self
 
     async def fetchone(self) -> dict | None:
-        return dict(self._cur.fetchone()) if self._cur else None
+        row = await self._cur.fetchone()
+        return dict(row) if row else None
 
     async def fetchall(self) -> list[dict]:
-        return [dict(row) for row in self._cur.fetchall()] if self._cur else []
+        rows = await self._cur.fetchall()
+        return [dict(row) for row in rows] if rows else []
 
     async def __aenter__(self) -> "AsyncCursor":
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         if self._cur:
-            await self._curclose()
+            await self._cur.close()
 
 
+@asynccontextmanager
 async def async_connect(
     args: Any,
     pool: AsyncConnectionPool | None = None,
     *,
     auto_commit: bool = True,
+    database: str | None = None,
     dbname: str | None = None,
 ) -> AsyncDBConnection:
     """Async context manager for database connections.
@@ -1784,7 +1810,8 @@ async def async_connect(
         args: Application args
         pool: AsyncConnectionPool instance (optional)
         auto_commit: If True (default), commits before returning connection
-        dbname: Optional database name
+        database: Optional database name (preferred)
+        dbname: Optional database name (legacy, for backward compatibility)
 
     Yields:
         AsyncDBConnection wrapper
@@ -1794,7 +1821,7 @@ async def async_connect(
         not an awaitable. This function handles both old (3.1.x) and new (3.3.0+) APIs.
     """
     if pool is None:
-        pool = await get_async_pool(args, dbname)
+        pool = await get_async_pool(args, database, dbname)
 
     # psycopg-pool 3.3.0+ changed pool.connection() to return an async context manager
     # Handle both old (3.1.x) and new (3.3.0+) APIs
@@ -1813,6 +1840,7 @@ async def async_query(
     sql: str,
     pool: AsyncConnectionPool | None = None,
     *,
+    database: str | None = None,
     dbname: str | None = None,
     **params: Any,
 ) -> list[dict]:
@@ -1822,13 +1850,15 @@ async def async_query(
         args: Application args
         sql: SQL query with named parameters (:param)
         pool: Optional async pool
-        dbname: Optional database name
+        database: Optional database name (preferred)
+        dbname: Optional database name (legacy, for backward compatibility)
         **params: Query parameters
 
     Returns:
         List of result rows as dicts
     """
-    async with async_connect(args, pool, dbname=dbname) as db_conn:
+    sql_processed = query(sql, **params) if params else query(sql)
+    async with async_connect(args, pool, database=database, dbname=dbname) as db_conn:
         async with db_conn.cursor as cur:
-            await cur.execute(sql, params)
+            await cur.execute(sql_processed)
             return await cur.fetchall()
