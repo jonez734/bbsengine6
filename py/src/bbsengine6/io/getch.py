@@ -465,7 +465,18 @@ def clear_key_event_history() -> None:
 
 
 def _check_notifications(moniker: str, **kwargs) -> tuple[bool, int]:
-    """Check for pending notifications. Returns (has_notifications, count)."""
+    """Check for pending notifications. Returns (has_notifications, count).
+    
+    Uses message system (Phase 1B+) if available, falls back to notify.
+    """
+    try:
+        from .. import message as message_module
+        if message_module.is_enabled():
+            count = message_module.get_unread_count(moniker, **kwargs)
+            return (count or 0) > 0, count or 0
+    except Exception:
+        pass
+    
     if not _has_notify_module:
         return False, 0
     try:

@@ -145,18 +145,31 @@ def get_notification_status(**kwargs) -> str:
 
     Returns:
         "F2: notify (N)" if notifications > 0, else empty string.
+    
+    Uses message system (Phase 1B+) if available, falls back to notify.
     """
     try:
+        from bbsengine6.member import _threadlocal
+
+        moniker = getattr(_threadlocal, "moniker", None)
+        if not moniker:
+            return ""
+        
+        # Try message system first (Phase 1B+)
+        try:
+            from bbsengine6 import message as message_module
+            if message_module.is_enabled():
+                count = message_module.get_unread_count(moniker, **kwargs)
+                if count and count > 0:
+                    return f"F2: notify ({count})"
+                return ""
+        except Exception:
+            pass
+        
+        # Fall back to notify
         from bbsengine6 import notify
 
         if not notify.is_enabled():
-            return ""
-
-        from bbsengine6.member import _threadlocal
-
-        # Get moniker from thread-local storage (already logged in)
-        moniker = getattr(_threadlocal, "moniker", None)
-        if not moniker:
             return ""
 
         count = notify.count(moniker, **kwargs)
