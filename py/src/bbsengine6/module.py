@@ -96,7 +96,7 @@ def load(args: object, modulepath: str) -> ModuleType:
         m = importlib.import_module(modulepath)
         return m
     except Exception:
-        _echo_traceback(f"module {modulepath=} not importable")
+        io.echo_traceback(f"module {modulepath=} not importable")
         raise
 
 
@@ -470,6 +470,13 @@ def check(args, modulename, op="run", **kwargs):
     debug = args.debug if args is not None and args.debug is True else False
     silent = kwargs.get("silent", True)
 
+    # Look up module_path from registry if module is registered
+    module_info = get_module(modulename)
+    if module_info is not None:
+        actual_modpath = module_info.module_path
+    else:
+        actual_modpath = modulename
+
     # --- Registration Check ---
     if get_require_registration() is True:
         if not is_module_registered(modulename):
@@ -480,7 +487,7 @@ def check(args, modulename, op="run", **kwargs):
             return False
         io.echo(f"module.check: {modulename} is registered", level="debug")
 
-    m = get(modulename, args)
+    m = get(actual_modpath, args)
 
     if debug is True:
         io.echo(f"bbsengine6.module.check.100: {modulename=}", level="debug")
@@ -516,7 +523,7 @@ def check(args, modulename, op="run", **kwargs):
                 io.echo("access check failed", level="error")
             return False
     except Exception as e:
-        _echo_traceback(f"module.check error: {e}")
+        io.echo_traceback(f"module.check error: {e}")
         return None
 
     # --- Check buildargs() (REQUIRED) ---
@@ -657,8 +664,15 @@ def run(args, modulename, **kwargs):
     debug = args.debug if hasattr(args, "debug") and args.debug else False
     buildargs = True
 
+    # Look up module_path from registry if module is registered
+    module_info = get_module(modulename)
+    if module_info is not None:
+        actual_modpath = module_info.module_path
+    else:
+        actual_modpath = modulename
+
     # Use get() to resolve module
-    m = get(modulename, args)
+    m = get(actual_modpath, args)
 
     if check(args, modulename, **kwargs) is False:
         io.echo(f"check of {modulename=} failed. module not run.", level="error")
@@ -768,7 +782,7 @@ def check_func(
         module = get(mod_ref)
     except Exception:
         if not silent:
-            _echo_traceback("validate_function: failed to resolve module")
+            io.echo_traceback("validate_function: failed to resolve module")
         return False
 
     if not hasattr(module, func_name):
