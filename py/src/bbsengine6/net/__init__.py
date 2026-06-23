@@ -10,6 +10,36 @@ from .address import (
     parse_address,
 )
 
+# TCP sender/receiver
+from .tcp import (
+    TCPSender,
+    TCPReceiver,
+)
+
+# Socket utilities
+from .socket import (
+    recv_all,
+    recv_udp,
+    send_with_length,
+    recv_with_length,
+)
+
+# Frame addressing (DSN-style URI)
+from .frame_address import (
+    FrameAddress,
+    FrameAddressParser,
+    FrameScheme,
+    ParseResult,
+)
+
+# Frame types
+from .frame_types import (
+    Frame,
+    NumpyFrame,
+    frame_from_any,
+    frames_equal,
+)
+
 # Packet system (Files, Messages, PING/PONG)
 from .packet import (
     CHECKSUM_ALGORITHM,
@@ -60,6 +90,24 @@ __all__ = [
     "InternetAddress",
     "is_internet_address",
     "parse_address",
+    # TCP
+    "TCPSender",
+    "TCPReceiver",
+    # Socket utilities
+    "recv_all",
+    "recv_udp",
+    "send_with_length",
+    "recv_with_length",
+    # Frame addressing
+    "FrameAddress",
+    "FrameAddressParser",
+    "FrameScheme",
+    "ParseResult",
+    # Frame types
+    "Frame",
+    "NumpyFrame",
+    "frame_from_any",
+    "frames_equal",
     # Packet system
     "Packet",
     "FilePacket",
