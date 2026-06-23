@@ -2,14 +2,101 @@
 # WebSocket transport protocol for remote notification and packet delivery.
 
 import asyncio
+import inspect
 import json
 import logging
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
 if TYPE_CHECKING:
     from .packet import Packet
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ChannelState:
+    """State container for channel subscriptions."""
+
+    channels: Dict[str, Set[int]] = field(default_factory=dict)  # channel -> session_ids
+    callbacks: Dict[str, List[Callable]] = field(default_factory=dict)  # channel -> callbacks
+    session_channels: Dict[int, Set[str]] = field(default_factory=dict)  # session_id -> channels
+
+
+def channel_subscribe(state: ChannelState, session_id: int, channel: str) -> None:
+    """Subscribe a session to a channel."""
+    if channel not in state.channels:
+        state.channels[channel] = set()
+    state.channels[channel].add(session_id)
+
+    if session_id not in state.session_channels:
+        state.session_channels[session_id] = set()
+    state.session_channels[session_id].add(channel)
+
+
+def channel_unsubscribe(state: ChannelState, session_id: int, channel: str) -> None:
+    """Unsubscribe a session from a channel."""
+    if channel in state.channels:
+        state.channels[channel].discard(session_id)
+        if not state.channels[channel]:
+            del state.channels[channel]
+
+    if session_id in state.session_channels:
+        state.session_channels[session_id].discard(channel)
+
+
+def channel_unsubscribe_all(state: ChannelState, session_id: int) -> None:
+    """Unsubscribe a session from all channels (cleanup on disconnect)."""
+    if session_id not in state.session_channels:
+        return
+
+    for channel in list(state.session_channels[session_id]):
+        if channel in state.channels:
+            state.channels[channel].discard(session_id)
+            if not state.channels[channel]:
+                del state.channels[channel]
+
+    del state.session_channels[session_id]
+
+
+def channel_register_callback(state: ChannelState, channel: str, callback: Callable) -> None:
+    """Register a callback for a channel (for in-process bots)."""
+    if channel not in state.callbacks:
+        state.callbacks[channel] = []
+    state.callbacks[channel].append(callback)
+
+
+def channel_get_subscribers(state: ChannelState, channel: str) -> Set[int]:
+    """Get all session_ids subscribed to a channel."""
+    return state.channels.get(channel, set()).copy()
+
+
+def channel_get_session_channels(state: ChannelState, session_id: int) -> Set[str]:
+    """Get all channels a session is subscribed to."""
+    return state.session_channels.get(session_id, set()).copy()
+
+
+async def channel_publish(
+    state: ChannelState,
+    channel: str,
+    message: Dict[str, Any],
+    server: Optional["WebSocketServer"] = None,
+) -> None:
+    """Publish message to all subscribers of a channel."""
+    # Send to WebSocket subscribers
+    if server and channel in state.channels:
+        await server.broadcast(message, path=f"channel:{channel}")
+
+    # Invoke registered callbacks (for bots)
+    if channel in state.callbacks:
+        for callback in state.callbacks[channel]:
+            try:
+                if inspect.iscoroutinefunction(callback):
+                    await callback(message)
+                else:
+                    callback(message)
+            except Exception as e:
+                logger.error(f"Error in channel callback: {e}")
 
 # Callback type for handling incoming WebSocket messages
 # signature: async def handler(websocket, path, message: dict) -> Optional[dict]
@@ -345,6 +432,9 @@ class WebSocketServer:
         
         # Default service (catches unhandled messages)
         self._default_service: Optional[Any] = None
+        
+        # Channel state for pub/sub
+        self._channel_state = ChannelState()
     
     def register_service(self, service: Any, message_types: Optional[list[str]] = None) -> None:
         """
@@ -538,6 +628,11 @@ class WebSocketServer:
         if path:
             return len(self._clients.get(path, set()))
         return sum(len(clients) for clients in self._clients.values())
+
+    async def publish(self, channel: str, message: Dict[str, Any]) -> None:
+        """Publish message to a channel using the pub/sub system."""
+        from bbsengine6.net import channel_publish
+        await channel_publish(self._channel_state, channel, message, self)
 
     @property
     def is_running(self) -> bool:
