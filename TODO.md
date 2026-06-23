@@ -6,4 +6,4 @@
 
 ## Python Issues
 
-- [ ] Fix psycopg-pool 3.3.0 incompatibility: The async database layer uses `pool.connection()` which in psycopg-pool 3.3.0 returns an AsyncGeneratorContextManager instead of an awaitable. This breaks `async_connect()`, `get_async_pool()`, and `async_query()` in `database.py`. The error is "object _AsyncGeneratorContextManager can't be used in 'await' expression". **Fix**: Update the async pool code to work with psycopg-pool 3.3.0 API, or specify `psycopg-pool<3.3` as a dependency.
+- [x] Fix psycopg-pool 3.3.0 incompatibility: The async database layer uses `pool.connection()` which in psycopg-pool 3.3.0 returns an AsyncGeneratorContextManager instead of an awaitable. This breaks `async_connect()`, `get_async_pool()`, and `async_query()` in `database.py`. The error is "object _AsyncGeneratorContextManager can't be used in 'await' expression". **Fix**: Updated the async pool code to work with psycopg-pool 3.3.0+ API - handles both 3.1.x (awaitable) and 3.3.0+ (async context manager) automatically.

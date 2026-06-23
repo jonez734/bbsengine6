@@ -1693,16 +1693,23 @@ async def get_async_pool(args: Any, dbname: str | None = None) -> AsyncConnectio
     """
     key = dbname or getattr(args, "databasename", None) or DEFAULTDATABASE
 
-    if key not in _async_pools or _async_pools[key].closed:
-        dsn = make_dsn(args, dbname=dbname)
-        _async_pools[key] = AsyncConnectionPool(
-            dsn,
-            min_size=2,
-            max_size=10,
-            timeout=30.0,
-            open=False,
-        )
-        await _async_pools[key].open()
+    # Always recreate pool to avoid stale state
+    if key in _async_pools:
+        try:
+            await _async_pools[key].close()
+        except Exception:
+            pass
+        del _async_pools[key]
+    
+    dsn = make_dsn(args, dbname=dbname)
+    _async_pools[key] = AsyncConnectionPool(
+        dsn,
+        min_size=2,
+        max_size=10,
+        timeout=30.0,
+        open=False,
+    )
+    await _async_pools[key].open()
 
     return _async_pools[key]
 
@@ -1789,7 +1796,8 @@ async def async_connect(
     if pool is None:
         pool = await get_async_pool(args, dbname)
 
-    # psycopg-pool 3.3.0+ uses context manager, handle both old and new APIs
+    # psycopg-pool 3.3.0+ changed pool.connection() to return an async context manager
+    # Handle both old (3.1.x) and new (3.3.0+) APIs
     try:
         # Try new 3.3.0+ API: async with pool.connection() as conn
         async with pool.connection() as conn:
