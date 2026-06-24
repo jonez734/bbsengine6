@@ -114,12 +114,16 @@ def main() -> None:
     if args.router == "defaultrouter":
         router_class = DefaultRouter
     else:
-        # Split 'module.path.MessageRouter' into module='module.path' and attr='MessageRouter'
-        parts = args.router.rsplit('.', 1)
-        module_path = parts[0]
-        attr_name = parts[1] if len(parts) > 1 else 'MessageRouter'
-        module = importlib.import_module(module_path)
-        router_class = getattr(module, attr_name)
+        # Use bbsengine6.module.get() to load router module (like runcallback pattern)
+        # Handle 'module.path.MessageRouter' format
+        from bbsengine6 import module as bbsmodule
+
+        parts = args.router.split('.')
+        module_path = '.'.join(parts[:-1])
+        attr_name = parts[-1]
+
+        router_module = bbsmodule.get(module_path, args)
+        router_class = getattr(router_module, attr_name)
 
     bed = BED(args, router_class)
 
