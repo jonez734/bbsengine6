@@ -1,7 +1,13 @@
 {extends file="page.tmpl"}
+<pre>!!data={$data|var_export:true}</pre>
 {block name="title"}{$title}{/block}
 {block name="content"}
+<pre>{$sections|var_dump}</pre>
   {foreach $sections as $section}
-    {include file="blurb.tmpl" meta=$section meta.header=$section.header content=$section.content}
+    {assign var="sectionMeta" value=$section}
+    {assign var="sectionHeader" value=$section.header}
+    {assign var="sectionContent" value=$section.content}
+    {include file="blurb.tmpl" meta=$sectionMeta header=$sectionHeader content=$sectionContent}
   {/foreach}
 {/block}
+<pre>after content block</pre>

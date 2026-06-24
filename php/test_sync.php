@@ -22,13 +22,13 @@ echo "--- Mock Tests ---\n\n";
 
 // Test 1: Path to blurbID conversion (core logic)
 echo "Test 1: Path to blurbID conversion - basic\n";
-$teospath = '/srv/www/zoid6/teos/';
-$filepath = '/srv/www/zoid6/teos/ec/john-edward.md';
+$teospath = '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
+$filepath = '/srv/www/vhosts/zoidtechnologies.com/html/teos/ec/john-edward.md';
 $relativepath = str_replace($teospath, '', $filepath);
 $blurbid = preg_replace('/\.md$/', '', $relativepath);
 $blurbid = str_replace('/', '.', $blurbid);
 if ($blurbid === 'ec.john-edward') {
-    echo "  ✓ PASS: /srv/www/zoid6/teos/ec/john-edward.md → ec.john-edward\n";
+    echo "  ✓ PASS: /srv/www/vhosts/zoidtechnologies.com/html/teos/ec/john-edward.md → ec.john-edward\n";
 } else {
     echo "  ✗ FAIL: expected 'ec.john-edward', got '$blurbid'\n";
     exit(1);
@@ -36,7 +36,7 @@ if ($blurbid === 'ec.john-edward') {
 
 // Test 2: Path to blurbID conversion - nested path
 echo "Test 2: Path to blurbID conversion - nested path\n";
-$filepath = '/srv/www/zoid6/teos/comp/lang/python/intro.md';
+$filepath = '/srv/www/vhosts/zoidtechnologies.com/html/teos/comp/lang/python/intro.md';
 $relativepath = str_replace($teospath, '', $filepath);
 $blurbid = preg_replace('/\.md$/', '', $relativepath);
 $blurbid = str_replace('/', '.', $blurbid);
@@ -49,7 +49,7 @@ if ($blurbid === 'comp.lang.python.intro') {
 
 // Test 3: Path to blurbID conversion - root file
 echo "Test 3: Path to blurbID conversion - root file\n";
-$filepath = '/srv/www/zoid6/teos/about.md';
+$filepath = '/srv/www/vhosts/zoidtechnologies.com/html/teos/about.md';
 $relativepath = str_replace($teospath, '', $filepath);
 $blurbid = preg_replace('/\.md$/', '', $relativepath);
 $blurbid = str_replace('/', '.', $blurbid);
@@ -88,7 +88,7 @@ if ($title === 'John Edward - Mediumship') {
 
 // Test 5: Title fallback to filename (no frontmatter)
 echo "Test 5: Title fallback to filename\n";
-$filepath = '/srv/www/zoid6/teos/ec/john-edward.md';
+$filepath = '/srv/www/vhosts/zoidtechnologies.com/html/teos/ec/john-edward.md';
 $title = basename($filepath, '.md');
 $title = preg_replace('/-/', ' ', $title);
 
@@ -150,8 +150,8 @@ if ($isBackup === 1 && preg_match('/\.md~$/', $backupFiles[1]) === 0 && preg_mat
 
 // Test 10: contentfilename path format
 echo "Test 10: contentfilename path format\n";
-$teospath = '/srv/www/zoid6/teos/';
-$filepath = '/srv/www/zoid6/teos/ec/john-edward.md';
+$teospath = '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
+$filepath = '/srv/www/vhosts/zoidtechnologies.com/html/teos/ec/john-edward.md';
 $relativepath = str_replace($teospath, '', $filepath);
 if ($relativepath === 'ec/john-edward.md') {
     echo "  ✓ PASS: contentfilename path format correct\n";
@@ -176,7 +176,7 @@ if ($run_db) {
     $output = [];
     $return = 0;
     exec(
-        "bash " . __DIR__ . "/sync_teos_blurbs.sh /srv/www/zoid6/teos/ --dry-run --dbname zoid6test 2>&1",
+        "bash " . __DIR__ . "/sync_teos_blurbs.sh /srv/www/vhosts/zoidtechnologies.com/html/teos/ --dry-run --dbname zoid6test 2>&1",
         $output,
         $return
     );

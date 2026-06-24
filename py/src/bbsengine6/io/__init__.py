@@ -25,6 +25,7 @@ with warnings.catch_warnings():
     inputchar = inputchoice  # alias
 
     from .getch import getch_str as getch
+    from .getch import install_signal_handlers
 
 
 # For backwards compatibility, also expose as module attributes via __getattr__
@@ -66,4 +67,5 @@ __all__ = [
     "inputchoice",
     "inputchar",
     "getch",
+    "install_signal_handlers",
 ]

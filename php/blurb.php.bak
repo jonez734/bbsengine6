@@ -19,10 +19,8 @@ namespace bbsengine6\blurb {
 function buildbreadcrumbs($sigpath, $skiptop = true, $hidepath = null)
 {
     try {
-        $sigpath = \bbsengine6\util\pathToLtree($sigpath);
         $sql = "select title, path, uri from engine.sig where path @> :sigpath order by path asc";
         $dat = ["sigpath" => $sigpath];
-        \bbsengine6\util\logentry("blurb.buildbreadcrumbs: sql=" . $sql . " dat=" . var_export($dat, true));
         $dbh = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
         $stmt = $dbh->prepare($sql);
         $stmt->execute($dat);
@@ -264,9 +262,9 @@ function display($uri, $filepath)
     }
 
     $parts = explode(".", $blurbid);
-    $sigpath = implode(".", $parts);
+    $sigpathltree = implode("_", $parts);
     $breadcrumbs = function_exists('bbsengine6\blurb\buildbreadcrumbs')
-        ? \bbsengine6\blurb\buildbreadcrumbs($sigpath)
+        ? \bbsengine6\blurb\buildbreadcrumbs($sigpathltree)
         : [];
 
     \bbsengine6\setcurrentpage("teos/" . $uri);

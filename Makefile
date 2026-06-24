@@ -98,16 +98,16 @@ handbook-prod:
 	$(RSYNC) $(WWWSTAGEDOCROOT)handbook/$(VERSION)/ $(WWWPRODDOCROOT)handbook/$(VERSION)/
 
 prod:
-	$(MAKE) wwworg
+##	$(MAKE) wwworg
 	$(MAKE) engine
-	$(MAKE) handbook-prod
+##	$(MAKE) handbook-prod
 	$(MAKE) markdown
 
 sql:
 	tar zcvf $(PROJECT)-sql-$(datestamp).tar.gz sql/
 
 markdown:
-	$(RSYNC) --links --exclude 'vhosts' /srv/www/php-markdown-lib /srv/www/markdown $(MARKDOWNLIBPROD)
+	$(RSYNC) --links --exclude 'vhosts' /srv/www/markdown $(MARKDOWNLIBPROD)
 
 
 skin-prod:
@@ -132,7 +132,7 @@ log:
 	git log --graph --pretty=format:"%h %ad %s%d [%an]%n%B" --date=short > LOG_FULL.md
 	git log --pretty=format:"%ad|%h %s%d [%an]" --date=short | awk -F'|' '{if ($$1!=date) {print "## " $$1; date=$$1} print "  " $$2}' > LOG_SUMMARY.md
 
-.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod
+.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod
 
 
 
@@ -142,3 +142,17 @@ php-deploy:
 php-deploy-prod: php-deploy
 	$(RSYNC) $(ENGINESTAGE)php/ $(ENGINEPROD)php/
 
+parsedown-deploy:
+	mkdir -p /srv/www/markdown/
+	$(RSYNC) vendor/erusev/parsedown/Parsedown.php /srv/www/markdown/
+	$(RSYNC) vendor/erusev/parsedown-extra/ParsedownExtra.php /srv/www/markdown/
+
+parsedown-deploy-prod: parsedown-deploy
+	$(RSYNC) /srv/www/markdown/ merlin:/srv/www/markdown/
+
+markdown-deploy:
+	mkdir -p /srv/www/markdown/
+	$(RSYNC) markdown/Markdown*.php /srv/www/markdown/
+
+markdown-deploy-prod: parsedown-deploy
+	$(RSYNC) /srv/www/markdown/ merlin:/srv/www/markdown/

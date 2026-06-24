@@ -26,10 +26,10 @@ time.tzset()
 # module.init(args)
 
 try:
-    lib.runmodule(args, "main")
+    lib.runmodule(args, "main", argv=sys.argv[1:])
 except KeyboardInterrupt:
     io.echo("{/all}{bold}INTR{bold}")
 except EOFError:
-    io.echo("{/all}{bold}EOF{/bold}")
+    io.echo("{/all}{bold}EOF{bold}")
 finally:
     io.echo("{decsc}{curpos:%d,0}{el}{decrc}{reset}{/all}" % (io.terminal.height()))

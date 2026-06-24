@@ -1,5 +1,7 @@
 <?php
 
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
 /**
  * @since 20110621
  */

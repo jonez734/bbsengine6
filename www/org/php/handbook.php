@@ -1,5 +1,7 @@
 <?php
 
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
 require_once("config.php");
 require_once("engine.php");
 require_once("database.php");
@@ -12,8 +14,8 @@ class handbook
   function displayindex()
   {
     $version = isset($_REQUEST["version"]) ? $_REQUEST["version"] : null;
-    
-    $handbookdir = HANDBOOKDIR.$_REQUEST["version"]."/handbook/";
+
+    $handbookdir = \HANDBOOKDIR.$_REQUEST["version"]."/handbook/";
     \bbsengine6\logentry("handbookdir=".$handbookdir);
     $files = glob($handbookdir."*.txt");
     \bbsengine6\logentry("files=".var_export($files, True));
@@ -35,7 +37,7 @@ class handbook
     $data["pagetemplate"] = "handbook-index.tmpl";
     $data["version"] = $version;
     displaypage($page, $data);
-    
+
     return;
   }
 
@@ -73,9 +75,9 @@ class handbook
       return;
     }
     return;
-  
+
   }
-  
+
   function main()
   {
     \bbsengine6\session\start();
@@ -102,7 +104,7 @@ $b = $a->main();
 if (PEAR::isError($b))
 {
   displayerrorpage($b->getMessage());
-  exit;  
+  exit;
 }
 
 ?>

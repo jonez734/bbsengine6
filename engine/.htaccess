@@ -1,0 +1,7 @@
+RewriteEngine On
+RewriteBase /engine/
+
+# Pass through to router.php
+RewriteRule ^test\.php$ /engine/test.php [last]
+RewriteRule ^router\.php$ /engine/router.php [last]
+RewriteRule ^simple\.php$ /engine/simple.php [last]

@@ -6,7 +6,7 @@ import threading
 import psycopg
 from psycopg import sql
 
-from . import database, io, util
+from . import bank, database, io, util
 
 
 _threadlocal = threading.local()
@@ -271,17 +271,6 @@ def clear_current_id_cache() -> None:
 
 
 def setcredits(args, amount: int, moniker: str | None = None, **kwargs):
-    def _work(conn):
-        sql = "update engine.__member set credits=%s where moniker=%s"
-        dat = (int(amount), moniker)
-        with database.cursor(conn) as cur:
-            return cur.execute(sql, dat)
-
-    conn = kwargs.get("conn", None)
-    if conn is None:
-        io.echo(f"bbsengine.member.setcredits.100: conn=None", level="error")
-        return None
-
     if amount is None or int(amount) < 0:
         return None
 
@@ -295,48 +284,37 @@ def setcredits(args, amount: int, moniker: str | None = None, **kwargs):
             return None
 
     try:
-        return _work(conn)
-    except psycopg.DatabaseError:
+        bank_service = bank.BankService(args)
+        current_balance = bank_service.get_balance(moniker)
+        delta = int(amount) - current_balance
+
+        if delta > 0:
+            bank_service.add_funds(moniker, delta, transaction_type="set", description="Credit adjustment")
+        elif delta < 0:
+            bank_service.remove_funds(moniker, abs(delta), transaction_type="set", description="Credit adjustment")
+
+        return True
+    except Exception:
         io.echo_traceback("bbsengine6.member.setcredits.200:")
         return None
 
 
-def getcredits(args, membermoniker: str | None = None, **kwargs) -> int | None:
-    def _work(conn):
-        sql = "select credits from engine.member where moniker=%s"
-        dat = (membermoniker,)
-        with database.cursor(conn) as cur:
-            cur.execute(sql, dat)
-            if cur.rowcount == 0:
-                return None
-            row = cur.fetchone()
-            return row["credits"] if "credits" in row else None
-
+def getcredits(args, membermoniker: str | None = None, **kwargs) -> int:
     if membermoniker is None:
         membermoniker = getcurrentmoniker(args, **kwargs)
-        io.echo(f"bbsengine6.member.getcredits.300: {membermoniker=}", level="debug")
         if membermoniker is None:
             io.echo(
                 "bbsengine.member.getcredits.100: You do not exist! Go Away!",
                 level="error",
             )
-            return None
+            return 0
 
     try:
-        conn = kwargs.get("conn", None)
-        if conn is None:
-            pool = kwargs.get("pool", None)
-            if pool is None:
-                io.echo(
-                    f"bbsengine6.member.getcredits.200: pool is None", level="error"
-                )
-                return None
-            with database.connect(args, pool=pool) as conn:
-                return _work(conn)
-        return _work(conn)
-    except psycopg.DatabaseError:
+        bank_service = bank.BankService(args)
+        return bank_service.get_balance(membermoniker)
+    except Exception:
         io.echo_traceback("bbsengine6.member.getcredits.200:")
-        return None
+        return 0
 
 
 # def getcurrentmembercredits(args:argparse.Namespace) -> int:
@@ -876,7 +854,7 @@ def checkpassword(
         row = cur.fetchone()
         if row is None:
             return False
-        stored_password = row[0]
+        stored_password = row["password"]
         if stored_password is None or stored_password == "":
             return plaintextpassword == ""
         sql = "select 1 from engine.member where password=crypt(%s, password) and moniker=%s"
@@ -1092,7 +1070,7 @@ def has_password(args, moniker: str, **kwargs) -> bool:
                 row = cur.fetchone()
                 if row is None:
                     return False
-                return bool(row[0])
+                return row["password"] is not None and row["password"] != ""
         except Exception:
             io.echo_traceback("bbsengine6.member.has_password.100:")
             return False

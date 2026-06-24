@@ -6,11 +6,13 @@
  * @package bbsengine6
  */
 
-require_once(__DIR__ . "/../config.php");
-require_once(__DIR__ . "/../php/engine.php");
-require_once(__DIR__ . "/../php/session.php");
-require_once(__DIR__ . "/../php/database.php");
-require_once(__DIR__ . "/../php/libmember.php");
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
+require_once("config.php");
+require_once("engine.php");
+require_once("session.php");
+require_once("database.php");
+require_once("libmember.php");
 
 use bbsengine6\util\logentry;
 use bbsengine6\member\lib as memberlib;
@@ -95,10 +97,10 @@ function join_run(array $args = []): bool
     $const = [];
     $const["memberid"] = isset($_REQUEST["memberid"]) ? intval($_REQUEST["memberid"]) : memberlib\getcurrentid();
     
-    $form->addDataSource(new \HTML_QuickForm2_DataSource_Array($const));
+    $form->addDataSource(new \bbsengine6\Form\DataSource\ArrayDataSource($const));
   
     $defaults = [];
-    $form->addDataSource(new \HTML_QuickForm2_DataSource_Array($defaults));
+    $form->addDataSource(new \bbsengine6\Form\DataSource\ArrayDataSource($defaults));
     
     $res = \bbsengine6\handleform($form, "join_insert", "new member");
     if ($res === true)

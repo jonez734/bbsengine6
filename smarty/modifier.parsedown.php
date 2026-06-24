@@ -9,8 +9,9 @@
  * Markdown Extra features.
  */
 
-require_once("vendor/autoload.php");
-// require_once("Markdown.inc.php"); // OLD - commented out for reference
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+require_once("Parsedown.php");
+require_once("ParsedownExtra.php");
 
 function smarty_modifier_parsedown($str)
 {

@@ -1,5 +1,7 @@
 <?php
 
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
 require_once("config.php");
 require_once("vfw10058.php");
 require_once("bbsengine3.php");

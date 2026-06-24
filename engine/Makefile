@@ -18,6 +18,6 @@ deploy:
 deploy-engine:
 	$(RSYNC) *.php $(ENGINESTAGEDOCROOT)
 
-all: stage deploy deploy-engine
+all: stage deploy-engine deploy
 
 .PHONY: all clean stage deploy deploy-engine

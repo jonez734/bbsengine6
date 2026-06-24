@@ -1,8 +1,8 @@
 <?php
 
-require_once("config.prg");
-require_once(SITENAME.".prg");
-require_once("bbsengine5.prg");
+require_once("config.php");
+require_once("database.php");
+require_once("engine.php");
 
 function buildpluginfilepath($smarty, $name)
 {
@@ -22,57 +22,54 @@ function smarty_function_teos($options, Smarty_Internal_Template $template)
 //  logentry("options=".var_export($options, True));
 //  $template->smarty->loadPlugin("modifier.escape.php");
 //  $template->smarty->loadPlugin("modifier.wpprop.php");
+//  \bbsengine6\logentry("function.teos.php: $template=".var_export($template, True));
   require_once(buildpluginfilepath($template->smarty, "modifier.escape.php"));
   require_once(buildpluginfilepath($template->smarty, "modifier.wpprop.php"));
 
   $path = isset($options["path"]) ? $options["path"] : null;
-  $path = normalizelabelpath($path);
+  $path = \bbsengine6\normalizelabelpath($path);
   
-  $breadcrumbs = isset($options["breadcrumbs"]) ? $options["breadcrumbs"] : False;
+  $breadcrumbs = isset($options["breadcrumbs"]) ? $options["breadcrumbs"] : false;
   
-  $itemprop = isset($options["itemprop"]) ? $options["itemprop"] : False;
+  $itemprop = isset($options["itemprop"]) ? $options["itemprop"] : false;
   
 //  logentry("function.teos.200: path=".var_export($options["path"], True)." labelpath=".var_export($labelpath, True));
 
-  $dbh = dbconnect(SYSTEMDSN);
-  if (PEAR::isError($dbh))
+  $dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
+/*
+  if (($dbh === false))
   {
     logentry("function.teos.100: ". $dbh->toString());
     return "TEOS.100";
   }
-
+*/
 //  logentry("function.teos.101: labelpath=".var_export($labelpath, True));
 
-  if ($breadcrumbs === False)
+  if ($breadcrumbs === false)
   {
-    $sql = "select * from engine.sig where path=?";
-    $dat = array($path);
-    $res = $dbh->getRow($sql, array("text", "text"), $dat, array("text"));
-    if (PEAR::isError($res))
+    $sql = "select * from engine.sig where path=:path";
+    $dat = ["path" => $path];
+    $stmt = $dbh->prepare($sql);
+    $stmt->execute($dat);
+    if ($stmt->rowcount() === 0)
     {
-      logentry("function.teos.102: " . $res->toString());
-      return "TEOS.102";
+      \bbsengine6\util\logentry("zoidweb6.teos.smarty_function_teos.100: path ".var_export($path, true)." not found.");
+      return "TEOS.PATHNOTFOUND";
     }
-
-    if ($res === null)
-    {
-      logentry("function.teos.104: path ".var_export($path, True)." not found");
-      return "TEOS.104";
-    }
-//    logentry("function.teos.106: res=".var_export($res, true));
     
+    $res = $stmt->fetch();
+
     $title = $res["title"];
 
-    // http://stackoverflow.com/a/5448671
     $uri = $res["uri"];
 
     $title = smarty_modifier_escape($title);
     $title = smarty_modifier_wpprop($title);
 
-//    logentry("title=".var_export($title, True));
+  //  logentry("title=".var_export($title, True));
     
-    $tmpl = getsmarty();
-    $tmpl->assign("uri", joinpath($uri, "/"));
+    $tmpl = \bbsengine6\getsmarty();
+    $tmpl->assign("uri", \bbsengine6\joinpath($uri)."/");
     $tmpl->assign("title", $title);
     $tmpl->assign("itemprop", $itemprop);
     

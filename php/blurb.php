@@ -8,8 +8,14 @@
 
 namespace bbsengine6\blurb {
 
-require_once("/srv/www/bbsengine6/php/bootstrap.php");
+require_once("/srv/www/zoid6/php/bootstrap.php");
+\bbsengine6\bootstrap();
+
+require_once("zoid6config.php");
+require_once("zoid6.php");
+
 require_once("engine.php");
+require_once("zoid6config.php");
 // require_once("database.php");
 
 /**
@@ -24,13 +30,9 @@ function buildbreadcrumbs($sigpath, $skiptop = true, $hidepath = null)
 {
     try {
         $sigpath = \bbsengine6\util\pathToLtree($sigpath);
-        $sql = "select title, path, uri from engine.sig where path @> :sigpath order by path asc";
-        $dat = ["sigpath" => $sigpath];
-        \bbsengine6\util\logentry("blurb.buildbreadcrumbs: sql=" . $sql . " dat=" . var_export($dat, true));
         $dbh = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
-        $stmt = $dbh->prepare($sql);
-        $stmt->execute($dat);
-        if ($stmt->rowCount() == 0) {
+        $stmt = \bbsengine6\database\query($dbh, 'SELECT title, path, uri FROM $engine.sig WHERE path @> :sigpath ORDER BY path ASC', [":sigpath" => $sigpath]);
+        if ($stmt === false || $stmt->rowCount() == 0) {
             return [];
         }
         $res = $stmt->fetchAll();
@@ -63,12 +65,8 @@ function buildbreadcrumblist($blurbid)
 {
     try {
         $dbh = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
-        $sql = "select unnest(sigs) as path, title from engine.blurb where id=:blurbid";
-        $dat = ["blurbid" => $blurbid];
-
-        $stmt = $dbh->prepare($sql);
-        $stmt->execute($dat);
-        if ($stmt->rowCount() == 0) {
+        $stmt = \bbsengine6\database\query($dbh, 'SELECT unnest(sigs) as path, title FROM $engine.blurb WHERE id = :blurbid', [":blurbid" => $blurbid]);
+        if ($stmt === false || $stmt->rowCount() == 0) {
             return [];
         }
         $res = $stmt->fetchAll();
@@ -138,11 +136,11 @@ function getcontent(int $blurbid): ?string
 function getlist(int $offset = 0, int $limit = 20): array
 {
     try {
-        $sql = "select * from engine.blurb order by datecreated desc offset :offset limit :limit";
-        $dat = ["offset" => $offset, "limit" => $limit];
         $dbh = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
-        $stmt = $dbh->prepare($sql);
-        $stmt->execute($dat);
+        $stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.blurb ORDER BY datecreated DESC OFFSET :offset LIMIT :limit', [":offset" => $offset, ":limit" => $limit]);
+        if ($stmt === false) {
+            return [];
+        }
         return $stmt->fetchAll();
     } catch (\Throwable $e) {
         \bbsengine6\util\echo_traceback("blurb.getlist.100: " . $e->getMessage());
@@ -159,12 +157,9 @@ function getlist(int $offset = 0, int $limit = 20): array
 function getbyid(int $id): ?array
 {
     try {
-        $sql = "select * from engine.blurb where id = :id";
-        $dat = ["id" => $id];
         $dbh = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
-        $stmt = $dbh->prepare($sql);
-        $stmt->execute($dat);
-        if ($stmt->rowCount() == 0) {
+        $stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.blurb WHERE id = :id', [":id" => $id]);
+        if ($stmt === false || $stmt->rowCount() == 0) {
             return null;
         }
         $blurb = $stmt->fetch();
@@ -196,9 +191,11 @@ function getbyid(int $id): ?array
 function getcount(): int
 {
     try {
-        $sql = "select count(*) as cnt from engine.blurb";
         $dbh = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
-        $stmt = $dbh->query($sql);
+        $stmt = \bbsengine6\database\query($dbh, 'SELECT COUNT(*) as cnt FROM $engine.blurb');
+        if ($stmt === false) {
+            return 0;
+        }
         $row = $stmt->fetch();
         return (int)$row["cnt"];
     } catch (\Throwable $e) {
@@ -294,6 +291,11 @@ function display($uri, $filepath)
 
     $data["title"] = $parsed["title"];
     $data["sections"] = $parsed["sections"];
+
+    \bbsengine6\util\logentry("bbsengine6.blurb.100: data.title=".var_export($data["title"], true));
+
+    $choices = [];
+    $data["choices"] = \zoid6\buildchoices($choices);
 
     return \bbsengine6\displaypage($data, "page-markdown-sections.tmpl");
 }

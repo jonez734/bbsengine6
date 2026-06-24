@@ -72,7 +72,19 @@ from .router import InternetRouter, get_router, route_recipients
 from .registry import MachineConfig, MachineRegistry, get_registry
 
 # WebSocket transport
-from .transport import WebSocketProtocol, WebSocketTransport, WebSocketServer
+from .transport import (
+    WebSocketProtocol,
+    WebSocketTransport,
+    WebSocketServer,
+    ChannelState,
+    channel_subscribe,
+    channel_unsubscribe,
+    channel_unsubscribe_all,
+    channel_register_callback,
+    channel_get_subscribers,
+    channel_get_session_channels,
+    channel_publish,
+)
 
 # Integration layer
 from .integration import NotifyIntegration, get_integration, send_with_internet
@@ -145,6 +157,15 @@ __all__ = [
     "WebSocketProtocol",
     "WebSocketTransport",
     "WebSocketServer",
+    # Channel subscription system
+    "ChannelState",
+    "channel_subscribe",
+    "channel_unsubscribe",
+    "channel_unsubscribe_all",
+    "channel_register_callback",
+    "channel_get_subscribers",
+    "channel_get_session_channels",
+    "channel_publish",
     # Integration
     "NotifyIntegration",
     "get_integration",

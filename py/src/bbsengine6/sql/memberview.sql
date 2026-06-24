@@ -19,6 +19,7 @@ create or replace view engine.member as
   (select count(alert2.id) from engine.alert as alert2 where alert2.membermoniker = m.moniker and alert2.status='sent') as sentalertcount,
   (select count(alert3.id) from engine.alert as alert3 where alert3.membermoniker = m.moniker and alert3.status='delivered') as sentdeliveredcount,
   (select count(alert4.id) from engine.alert as alert4 where alert4.membermoniker = m.moniker and alert4.status='read') as sentreadcount,
+  m.attrs->>'tier' as tier,
 
 --  loginid,
 --  shell,

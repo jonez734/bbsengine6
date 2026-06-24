@@ -1,4 +1,7 @@
 <?php
+
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
 /*
  * this module performs a "logout" of the currently logged in member.
  *

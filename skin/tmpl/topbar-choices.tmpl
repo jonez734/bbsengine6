@@ -1,6 +1,6 @@
 {*<pre> {$data|var_dump} </pre>*}
 <!-- bbsengine6/skin/tmpl/topbar-choices.tmpl -->
-{if count($data.choices) > 0}
+{if isset($data.choices) && is_array($data.choices) && count($data.choices) > 0}
 {*<pre>currentpage={$currentpage|var_dump}</pre>*}
 {foreach $data.choices as $choice}
   {$class = $choice.class|default:""}

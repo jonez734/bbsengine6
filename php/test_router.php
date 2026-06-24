@@ -75,10 +75,10 @@ if ($metadata['title'] === 'Test Page' && $metadata['date'] === '2024-01-01') {
 
 // Test 6: Filepath construction for teos
 echo "Test 6: Filepath construction\n";
-$teospath = '/srv/www/zoid6/teos/';
+$teospath = '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
 $uri = 'ec/john-edward';
 $filepath = $teospath . $uri . ".md";
-if ($filepath === '/srv/www/zoid6/teos/ec/john-edward.md') {
+if ($filepath === '/srv/www/vhosts/zoidtechnologies.com/html/teos/ec/john-edward.md') {
     echo "  ✓ PASS: filepath constructed correctly\n";
 } else {
     echo "  ✗ FAIL: filepath incorrect: $filepath\n";

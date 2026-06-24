@@ -14,7 +14,7 @@ function bootstrap(array $paths = []): bool
     $defaults = [
         __DIR__,
         dirname(__DIR__),
-        "/srv/www/markdown",
+        "/srv/www/markdown/",
         "/srv/www/smarty/",
     ];
 
@@ -44,9 +44,10 @@ function bootstrap(array $paths = []): bool
 
 }
 
+namespace {
 // Backward compatibility: auto-run when included directly
 if (function_exists('bbsengine6\bootstrap')) {
     bbsengine6\bootstrap();
 }
-
+}
 ?>

@@ -10,19 +10,13 @@ namespace bbsengine6\member\lib
     \bbsengine6\util\logentry("namespace=".var_export(__NAMESPACE__, true));
 
     /**
-     * Helper function to get the database DSN with fallback
+     * Helper function to get the database DSN - delegates to database namespace
      * @return string DSN connection string
+     * @deprecated Use \bbsengine6\database\getDSN() instead
      */
-    function getDSN()
+    function getDSN(): string
     {
-      // Try config namespace first, then fallback to bare constant
-      if (defined('\config\SYSTEMDSN')) {
-        return \config\SYSTEMDSN;
-      } elseif (defined('\SYSTEMDSN')) {
-        return \SYSTEMDSN;
-      }
-      // Final fallback - return empty string which will cause database error with proper error handling
-      return '';
+      return \bbsengine6\database\getDSN();
     }
 
     function getcurrentid()
@@ -169,19 +163,11 @@ SQL;
 
       $value = trim($value);
       $value = strip_tags($value);
-      $sql = "select 1 from engine.member where moniker ilike ?";
-      $dat = array($value);
 
-      $dbh = \bbsengine6\database\connect(getDSN());
-      if (\PEAR::isError($dbh))
-      {
-        logentry("uniqueusernamecallback.1: " . $res->toString());
-        return \PEAR::raiseError($dbh);
-      }
+      $dbh = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
 
-      $stmt = $dbh->prepare($sql);
-      $stmt->execute($dat);
-      if ($stmt->rowCount() == 0)
+      $stmt = \bbsengine6\database\query($dbh, 'SELECT 1 FROM $engine.member WHERE moniker ilike $1', [$value]);
+      if ($stmt === false || $stmt->rowCount() == 0)
       {
         return true;
       }
@@ -196,24 +182,21 @@ SQL;
 
       if ($value === null || $value == "")
       {
-        util\logentry("refcodevalid.100: no need to check ".var_export($value, true));
+        \bbsengine6\util\logentry("refcodevalid.100: no need to check ".var_export($value, true));
         return true;
       }
 
-      $sql = "select * from engine.refcode where code=:refcode";
-      $dat = ["refcode" => $value];
       $dbh = \bbsengine6\database\connect(getDSN());
-      $stmt = $dbh->prepare($sql);
-      $stmt->execute($dat);
-      if ($stmt->rowCount() == 0)
+      $stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.refcode WHERE code = :refcode', [":refcode" => $value]);
+      if ($stmt === false || $stmt->rowCount() == 0)
       {
-        util\logentry("refcodevalid.120: refcode ".var_export($value, true)." not found");
+        \bbsengine6\util\logentry("refcodevalid.120: refcode ".var_export($value, true)." not found");
         return false;
       }
       $res = $stmt->fetch();
       if ($res["status"] == "active")
       {
-        util\logentry("refcodevalid.140: refcode ".var_export($value, true)." active. returning true");
+        \bbsengine6\util\logentry("refcodevalid.140: refcode ".var_export($value, true)." active. returning true");
         return true;
       }
       return false;
@@ -265,33 +248,16 @@ SQL;
      */
     function checkpassword($password, $moniker)
     {
-      $sql = "select 1 as valid from engine.member where moniker=:moniker and password=crypt(:password, password)";
-      $dat = ["moniker" => $moniker, "password" => $password];
-
-//      \bbsengine6\logentry("checkpassword.100: password=".var_export($password, true)." memberid=".var_export($memberid, true));
-      $pdo = \bbsengine6\database\connect(getDSN());
-      if (\PEAR::isError($pdo))
-      {
-        \bbsengine6\util\logentry("checkpassword.100: " . $pdo->toString());
-        return false;
-      }
-      $stmt = $pdo->prepare($sql);
-      $stmt->execute($dat);
-      return $stmt->rowCount() === 1;
+      $pdo = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
+      $stmt = \bbsengine6\database\query($pdo, 'SELECT 1 as valid FROM $engine.member WHERE moniker = :moniker AND password = crypt(:password, password)', [":moniker" => $moniker, ":password" => $password]);
+      return $stmt !== false && $stmt->rowCount() === 1;
     }
 
     function setpassword($moniker, $plaintext)
     {
-      $sql = "update engine.__member set password=crypt(:password, gen_salt('bf')) where moniker=:moniker";
-      $dat = ["password" => $plaintext, "moniker" => $moniker];
       $pdo = \bbsengine6\database\connect(getDSN());
-      $stmt = $pdo->prepare($sql);
-      $stmt->execute($dat);
-      if ($stmt->rowCount() == 1)
-      {
-        return true;
-      }
-      return false;
+      $stmt = \bbsengine6\database\query($pdo, 'UPDATE $engine.__member SET password = crypt(:password, gen_salt(\'bf\')) WHERE moniker = :moniker', [":password" => $plaintext, ":moniker" => $moniker]);
+      return $stmt !== false && $stmt->rowCount() == 1;
     }
 
     function approved($moniker)
@@ -303,7 +269,7 @@ SQL;
     {
       $lastloginfrom = \bbsengine6\util\getremoteaddr();
 
-      \bbsengine6\util\actionlog(name: "login", moniker: $moniker);
+      \bbsengine6\util\actionlog("login", null, $moniker);
 /*
       $sql = "update engine.__member set lastlogin=:lastlogin, lastloginfrom=:lastloginfrom where moniker=:moniker";
       $dat = ["lastlogin" => "now()", "lastloginfrom" => $lastloginfrom, "moniker" => $moniker];
@@ -318,12 +284,9 @@ SQL;
 
     function getbymoniker($moniker)
     {
-      $sql = "select * from engine.member where moniker=:moniker";
-      $dat = ["moniker" => $moniker];
       $dbh = \bbsengine6\database\connect(getDSN());
-      $stmt = $dbh->prepare($sql);
-      $stmt->execute($dat);
-      if ($stmt->rowCount() == 0)
+      $stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.member WHERE moniker = :moniker', [":moniker" => $moniker]);
+      if ($stmt === false || $stmt->rowCount() == 0)
       {
         return ["moniker" => null];
       }
@@ -339,17 +302,9 @@ SQL;
         $memberid = getcurrentid();
       }
       $dbh = \bbsengine6\database\connect(getDSN());
-      $dbh->beginTransaction();
-      $sql = "delete from engine.map_member_flag where memberid=:memberid and name=:name";
-      $dat = ["name" => $name, "memberid" => $memberid];
-      $stmt = $dbh->prepare($sql);
-      $stmt->execute($dat);
+      \bbsengine6\database\query($dbh, 'DELETE FROM $engine.map_member_flag WHERE memberid = :memberid AND name = :name', [":name" => $name, ":memberid" => $memberid]);
 
-      $sql = "insert into engine.map_member_flag(name, value, memberid) values (:name, :value, :memberid)";
-      $dat = ["name" => $name, "value" => $value, "memberid" => $memberid];
-      $stmt = $dbh->prepare($sql);
-      $stmt->execute($dat);
-      $dbh->commit();
+      \bbsengine6\database\query($dbh, 'INSERT INTO $engine.map_member_flag(name, value, memberid) VALUES (:name, :value, :memberid)', [":name" => $name, ":value" => $value, ":memberid" => $memberid]);
     }
     
 }

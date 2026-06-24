@@ -126,6 +126,12 @@ _skin = {
     "notify.routinecolor": "{lightgray}",
     "notify.datestampcolor": "{darkgray}",
     "notify.recipientcolor": "{cyan}",
+    "message_delivery.criticalcolor": "{bgred}{white}",
+    "message_delivery.urgentcolor": "{orange}",
+    "message_delivery.importantcolor": "{yellow}",
+    "message_delivery.routinecolor": "{lightgray}",
+    "message_delivery.datestampcolor": "{darkgray}",
+    "message_delivery.recipientcolor": "{cyan}",
 }
 
 # Runtime variables dictionary

@@ -52,7 +52,10 @@ def safe_path(
     expanded = [os.path.expandvars(os.path.expanduser(str(c))) for c in components]
 
     # 2. Join, normalize, and make absolute
-    joined_path = os.path.normpath(os.path.join(*expanded))
+    # Strip leading slashes from all components except the first to prevent
+    # absolute paths from overriding previous components (os.path.join behavior)
+    normalized = [expanded[0]] + [c.lstrip('/') for c in expanded[1:]]
+    joined_path = os.path.normpath(os.path.join(*normalized))
     abs_path = os.path.abspath(joined_path)
 
     # 3. Optionally resolve symlinks for maximum safety

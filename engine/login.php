@@ -6,10 +6,12 @@
  * @package bbsengine6
  */
 
-require_once(__DIR__ . "/../config.php");
-require_once(__DIR__ . "/../php/engine.php");
-require_once(__DIR__ . "/../php/session.php");
-require_once(__DIR__ . "/../php/libmember.php");
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
+require_once("config.php");
+require_once("engine.php");
+require_once("session.php");
+require_once("libmember.php");
 
 use bbsengine6\util\logentry;
 use bbsengine6\member\lib as memberlib;
@@ -135,7 +137,7 @@ function login_run(array $args = []): bool
     $group->addElement("submit", "cancel", ["value" => "blue pill (decline)"]);
 
     $const = [];
-    $form->addDataSource(new \HTML_QuickForm2_DataSource_Array($const));
+    $form->addDataSource(new \bbsengine6\Form\DataSource\ArrayDataSource($const));
 
     $res = \bbsengine6\handleform($form, "login_validate", "follow the white rabbit...");
     if ($res === true)

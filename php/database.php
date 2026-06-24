@@ -41,20 +41,15 @@ function connect($dsn)
   try {
     $pdo = new \PDO($dsn, $user, $pass, $options);
   } catch (\PDOException $e) {
-    // Check if the exception is "connection refused"
-    // SQLSTATE[08006] [7] connection to server at "127.0.0.1", port 5432 failed: Connection refused
     if (strpos($e->getMessage(), 'SQLSTATE[08006] [7]') !== false) {
-      // Gracefully handle the error
       error_log('Database connection error: ' . $e->getMessage());
       echo 'We are experiencing technical difficulties [database]. Please try again later.';
     } 
     else 
     {
-      // Re-throw the exception for unexpected cases
       throw $e;
     }
 
-//    throw new \PDOException($e->getMessage(), (int)$e->getCode());
   }
   
   $pdocache[$dsn] = $pdo;
@@ -69,6 +64,66 @@ function validateColumnName(string $column): bool
 function validateTableName(string $table): bool
 {
   return preg_match('/^[a-zA-Z_][a-zA-Z0-9_.]*$/', $table) === 1;
+}
+
+function quoteIdentifier(string $identifier): string
+{
+  if (strpos($identifier, '.') !== false) {
+    return $identifier;
+  }
+  return '"' . str_replace('"', '""', $identifier) . '"';
+}
+
+/**
+ * Build a parameterized SQL query from readable string.
+ *
+ * Allows readable SQL like:
+ *   $db->query("SELECT * FROM $engine.__session WHERE id = :id", [':id' => $sessionid])
+ *
+ * Supports:
+ *   - $schema.table identifiers (converted to proper SQL identifiers)
+ *   - :name named placeholders
+ *   - $1, $2 positional placeholders
+ *
+ * @param \PDO $pdo Database connection
+ * @param string $sql_template SQL with $schema.table identifiers and :name placeholders
+ * @param array $params Parameters for placeholders
+ * @return \PDOStatement|false
+ */
+function query(\PDO $pdo, string $sql_template, array $params = []): \PDOStatement|false
+{
+  $identifier_pattern = '/\$([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)/';
+  $named_placeholder_pattern = '/:([a-zA-Z_][a-zA-Z0-9_]*)/';
+  $positional_pattern = '/\$(\d+)/';
+
+  $result = '';
+  $last_end = 0;
+
+  preg_replace_callback($identifier_pattern, function($matches) use ($sql_template, &$result, &$last_end) {
+    $match = $matches[0];
+    $identifier = $matches[1];
+
+    $result .= substr($sql_template, $last_end, strpos($sql_template, $match) - $last_end);
+
+    if (strpos($identifier, '.') !== false) {
+      $result .= $identifier;
+    } else {
+      $result .= '"' . $identifier . '"';
+    }
+
+    $last_end = strpos($sql_template, $match) + strlen($match);
+  }, $sql_template);
+
+  $result .= substr($sql_template, $last_end);
+
+  try {
+    $stmt = $pdo->prepare($result);
+    $stmt->execute($params);
+    return $stmt;
+  } catch (\PDOException $e) {
+    \bbsengine6\util\echo_traceback("bbsengine6.database.query.100: " . $e->getMessage());
+    return false;
+  }
 }
 
 function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $removeprimary=true, $mogrify=false)
@@ -100,16 +155,18 @@ function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $remo
     unset($data[$primarykey]);
   }
 
-  $sql = "insert into $tablename(".join(", ", $validColumns).")";
+  $quotedTable = quoteIdentifier($tablename);
+  $quotedColumns = array_map('bbsengine6\database\quoteIdentifier', $validColumns);
+  $sql = "insert into $quotedTable(" . join(", ", $quotedColumns) . ")";
   $foo = [];
   foreach(array_keys($data) as $k)
   {
     $foo[] = ":$k";
   }
-  $sql .= " values (".join(", ", $foo).")";
+  $sql .= " values (" . join(", ", $foo) . ")";
   if ($returnid === true)
   {
-    $sql .=" returning $primarykey";
+    $sql .= " returning " . quoteIdentifier($primarykey);
   }
 
   \bbsengine6\util\logentry("database.insert.100: sql=$sql");
@@ -125,7 +182,9 @@ function insert($pdo, $tablename, $data, $returnid=true, $primarykey="id", $remo
     }
     return true;
   } catch (\Throwable $e) {
-    $pdo->rollBack();
+    if (isset($pdo) && $pdo->inTransaction()) {
+      $pdo->rollBack();
+    }
     \bbsengine6\util\echo_traceback("bbsengine6.database.insert.200: " . $e->getMessage());
     return false;
   }
@@ -150,7 +209,8 @@ function update($pdo, $tablename, $key, $data, $primarykey="id", $removeprimary=
     return false;
   }
 
-  $sql = "update $tablename set ";
+  $quotedTable = quoteIdentifier($tablename);
+  $sql = "update $quotedTable set ";
   
   $foo = [];
   foreach (array_keys($data) as $k)
@@ -162,11 +222,11 @@ function update($pdo, $tablename, $key, $data, $primarykey="id", $removeprimary=
     }
     if ($removeprimary === true && $k !== $primarykey)
     {
-      $foo[] = "$k=:$k";
+      $foo[] = quoteIdentifier($k) . "=:$k";
     }
   }
   $sql .= join(", ", $foo);
-  $sql .= " where $primarykey=:$primarykey";
+  $sql .= " where " . quoteIdentifier($primarykey) . "=:$primarykey";
   \bbsengine6\util\logentry("bbsengine6.database.update.100: sql=".var_export($sql, true));
 
   try {
@@ -177,7 +237,9 @@ function update($pdo, $tablename, $key, $data, $primarykey="id", $removeprimary=
     $pdo->commit();
     return $stmt->rowcount();
   } catch (\Throwable $e) {
-    $pdo->rollBack();
+    if (isset($pdo) && $pdo->inTransaction()) {
+      $pdo->rollBack();
+    }
     \bbsengine6\util\echo_traceback("bbsengine6.database.update.200: " . $e->getMessage());
     return false;
   }
@@ -185,8 +247,95 @@ function update($pdo, $tablename, $key, $data, $primarykey="id", $removeprimary=
 
 function disconnect($dsn)
 {
-  // $pdocache[$dsn] = null;
   return;
 }
-} /* namespace \bbsengine6\database */
+
+define("bbsengine6\\database\\MDB2_AUTOQUERY_INSERT", 1);
+define("bbsengine6\\database\\MDB2_AUTOQUERY_UPDATE", 2);
+define("bbsengine6\\database\\MDB2_AUTOQUERY_DELETE", 3);
+
+function getAll(\PDO $dbh, string $sql, array $params = []): array|false
+{
+  try {
+    $stmt = $dbh->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+  } catch (\PDOException $e) {
+    \bbsengine6\util\echo_traceback("database.getAll.error: " . $e->getMessage());
+    return false;
+  }
+}
+
+function getRow(\PDO $dbh, string $sql, array $params = []): array|false
+{
+  try {
+    $stmt = $dbh->prepare($sql);
+    $stmt->execute($params);
+    return $stmt->fetch(\PDO::FETCH_ASSOC) ?: false;
+  } catch (\PDOException $e) {
+    \bbsengine6\util\echo_traceback("database.getRow.error: " . $e->getMessage());
+    return false;
+  }
+}
+
+function autoExecute(\PDO $dbh, string $table, array $data, int $mode, ?string $where = null): bool
+{
+  if (!validateTableName($table)) {
+    \bbsengine6\util\echo_traceback("database.autoExecute.100: Invalid table name: " . $table);
+    return false;
+  }
+
+  $quotedTable = quoteIdentifier($table);
+
+  try {
+    if ($mode === \bbsengine6\database\MDB2_AUTOQUERY_INSERT) {
+      $cols = [];
+      $placeholders = [];
+      foreach ($data as $col => $val) {
+        if (!validateColumnName($col)) {
+          continue;
+        }
+        $cols[] = quoteIdentifier($col);
+        $placeholders[] = "?";
+      }
+      $sql = "INSERT INTO $quotedTable (" . implode(", ", $cols) . ") VALUES (" . implode(", ", $placeholders) . ")";
+      $stmt = $dbh->prepare($sql);
+      return $stmt->execute(array_values($data));
+    }
+
+    if ($mode === \bbsengine6\database\MDB2_AUTOQUERY_UPDATE) {
+      $set = [];
+      foreach ($data as $col => $val) {
+        if (!validateColumnName($col)) {
+          continue;
+        }
+        $set[] = quoteIdentifier($col) . " = ?";
+      }
+      $sql = "UPDATE $quotedTable SET " . implode(", ", $set) . " WHERE " . $where;
+      $stmt = $dbh->prepare($sql);
+      return $stmt->execute(array_values($data));
+    }
+
+    if ($mode === \bbsengine6\database\MDB2_AUTOQUERY_DELETE) {
+      $sql = "DELETE FROM $quotedTable WHERE " . $where;
+      $stmt = $dbh->prepare($sql);
+      return $stmt->execute();
+    }
+
+    return false;
+  } catch (\PDOException $e) {
+    \bbsengine6\util\echo_traceback("database.autoExecute.error: " . $e->getMessage());
+    return false;
+  }
+}
+
+function quote(\PDO $dbh, $value, ?string $type = null): string
+{
+  if ($value === null) {
+    return "NULL";
+  }
+  return $dbh->quote($value);
+}
+
+}
 ?>

@@ -45,13 +45,13 @@ if ($actual === $expected) {
 
 // Test 3: Full blurbID generation from filepath
 echo "Test 3: Full blurbID generation from filepath\n";
-$filepath = "/srv/www/zoid6/teos/ec/john-edward.md";
-$teospath = "/srv/www/zoid6/teos/";
+$filepath = "/srv/www/vhosts/zoidtechnologies.com/html/teos/ec/john-edward.md";
+$teospath = "/srv/www/vhosts/zoidtechnologies.com/html/teos/";
 $relative = str_replace($teospath, "", $filepath);
 $blurbid = preg_replace('/\.md$/', '', $relative);
 $blurbid = str_replace("/", ".", $blurbid);
 if ($blurbid === "ec.john-edward") {
-    echo "  ✓ PASS: /srv/www/zoid6/teos/ec/john-edward.md → ec.john-edward\n";
+    echo "  ✓ PASS: /srv/www/vhosts/zoidtechnologies.com/html/teos/ec/john-edward.md → ec.john-edward\n";
 } else {
     echo "  ✗ FAIL: expected 'ec.john-edward', got '$blurbid'\n";
     exit(1);
@@ -59,8 +59,8 @@ if ($blurbid === "ec.john-edward") {
 
 // Test 4: Nested path conversion
 echo "Test 4: Nested path conversion\n";
-$filepath = "/srv/www/zoid6/teos/comp/lang/python/intro.md";
-$teospath = "/srv/www/zoid6/teos/";
+$filepath = "/srv/www/vhosts/zoidtechnologies.com/html/teos/comp/lang/python/intro.md";
+$teospath = "/srv/www/vhosts/zoidtechnologies.com/html/teos/";
 $relative = str_replace($teospath, "", $filepath);
 $blurbid = preg_replace('/\.md$/', '', $relative);
 $blurbid = str_replace("/", ".", $blurbid);
@@ -73,8 +73,8 @@ if ($blurbid === "comp.lang.python.intro") {
 
 // Test 5: Root-level file
 echo "Test 5: Root-level file\n";
-$filepath = "/srv/www/zoid6/teos/about.md";
-$teospath = "/srv/www/zoid6/teos/";
+$filepath = "/srv/www/vhosts/zoidtechnologies.com/html/teos/about.md";
+$teospath = "/srv/www/vhosts/zoidtechnologies.com/html/teos/";
 $relative = str_replace($teospath, "", $filepath);
 $blurbid = preg_replace('/\.md$/', '', $relative);
 $blurbid = str_replace("/", ".", $blurbid);

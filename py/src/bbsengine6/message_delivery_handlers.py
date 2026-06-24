@@ -1,5 +1,6 @@
-# message_delivery.py
+# message_delivery_handlers.py
 # Phase 1D: Multi-Channel Delivery handlers for message system
+# This file was originally message_delivery.py, renamed to avoid conflict with message_delivery package
 
 from __future__ import annotations
 

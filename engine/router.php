@@ -1,13 +1,14 @@
 <?php
 /**
  * router.php - Handler registry for routing requests
- * 
+ *
  * Implements a handler registry pattern that checks handlers in order.
  * Each handler can return ROUTER_NEXT to pass to the next handler.
- * 
+ *
  * Handler order: index → blurb → folder → markdown → error
- * 
+ *
  * @since 2026
+ * intentional bogus comment added here
  */
 
 if (!defined("ROUTER_NEXT")) {
@@ -48,7 +49,7 @@ function router_gethandlers(): array
 
 /**
  * Handle index requests (root path)
- * 
+ *
  * @param string $uri The request URI
  * @return string|bool Result or ROUTER_NEXT
  */
@@ -87,7 +88,7 @@ function router_handleIndex(string $uri)
 
 /**
  * Handle blurb requests
- * 
+ *
  * @param string $uri The request URI
  * @return string|bool Result or ROUTER_NEXT
  */
@@ -110,7 +111,7 @@ function router_handleBlurb(string $uri)
 
 /**
  * Handle folder/directory requests
- * 
+ *
  * @param string $uri The request URI
  * @return string|bool Result or ROUTER_NEXT
  */
@@ -151,7 +152,7 @@ function router_handleFolder(string $uri)
 
 /**
  * Handle markdown file requests
- * 
+ *
  * @param string $uri The request URI
  * @return string|bool Result or ROUTER_NEXT
  */
@@ -160,7 +161,7 @@ function router_handleMarkdown(string $uri)
   router_log("router.030: handleMarkdown called with uri=" . var_export($uri, true));
 
   $teospath = defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
-  
+
   // Try with .md extension
   $filepath = \bbsengine6\util\safe_path_web([$uri . ".md"], ['base_dir' => $teospath]);
   if ($filepath === false || !file_exists($filepath))
@@ -181,7 +182,7 @@ function router_handleMarkdown(string $uri)
 
 /**
  * Handle errors - called when no other handler matches
- * 
+ *
  * @param string $uri The request URI
  * @return string|bool Result
  */
@@ -196,7 +197,7 @@ function router_handleError(string $uri)
 
 /**
  * Display a markdown file
- * 
+ *
  * @param string $filepath Full filesystem path
  * @param string $uri The request URI
  * @return string|null Rendered HTML or null on error
@@ -206,7 +207,7 @@ function router_displayMarkdownFile(string $filepath, string $uri): ?string
   if (!file_exists($filepath)) {
     return null;
   }
-  
+
   $content = file_get_contents($filepath);
 
   $metadata = [];
@@ -244,13 +245,13 @@ function router_displayMarkdownFile(string $filepath, string $uri): ?string
   if (function_exists('\bbsengine6\displaypage')) {
     return \bbsengine6\displaypage($data, "page-markdown.tmpl");
   }
-  
+
   return $html;
 }
 
 /**
  * Display a directory listing
- * 
+ *
  * @param string $dirpath Full filesystem path
  * @param string $uri The request URI
  * @param bool $hidden Whether folder is hidden (for sysop display)
@@ -264,7 +265,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
     router_log("router.025: directory path validation failed for dirpath=" . var_export($dirpath, true), "warning");
     return null;
   }
-  
+
   $files = glob($safeDir . "/*.md");
   sort($files);
 
@@ -318,7 +319,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
 
 /**
  * Parse YAML frontmatter from content
- * 
+ *
  * @param string $yaml The YAML content
  * @return array Parsed metadata
  */
@@ -340,7 +341,7 @@ function router_parseYamlFrontmatter(string $yaml): array
 
 /**
  * Main router entry point
- * 
+ *
  * @param string $uri The request URI
  * @return string|bool Result
  */
@@ -370,7 +371,7 @@ function router(string $uri)
 
 /**
  * Alias for router() - backward compatibility
- * 
+ *
  * @param string $uri The request URI
  * @return string|bool Result
  */
@@ -381,33 +382,37 @@ function route(string $uri)
 // HTTP execution - runs when accessed via Apache
 if (php_sapi_name() !== 'cli') {
     // Set include path
-    
-    
+
+
     // Set include path for PEAR/Log
-    set_include_path(get_include_path() 
+    set_include_path(get_include_path()
         . PATH_SEPARATOR . "/srv/www/bbsengine6/php"
-        . PATH_SEPARATOR . "/srv/www/zoid6/markdown");
-    
+        . PATH_SEPARATOR . "/srv/www/zoid6/markdown"
+        . PATH_SEPARATOR . "/srv/www/vhosts/zoidtechnologies.com/html/teos");
+
     // Include dependencies (PEAR first for constants)
     require_once("PEAR.php");
     require_once("Log.php");
-    require_once("bootstrap.php");
+    require_once("/srv/www/bbsengine6/php/bootstrap.php");
     require_once("util.php");
     require_once("blurb.php");
-    
+
+    // Include teos config to get SITEURL, TEOSDIR, SYSTEMDSN, etc.
+    require_once("config.php");
+
     // Define constants if not already defined
     if (!defined('TEOSURL')) define('TEOSURL', '/teos');
     if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
-    
+
     // Get path from query string (support both 'path' and 'uri')
     $path = $_GET['path'] ?? $_GET['uri'] ?? '';
     $path = preg_replace('/\.md$/', '', $path);
-    
+
     // Debug logging using bbsengine6\util\logentry
     if (function_exists('\bbsengine6\util\logentry')) {
         \bbsengine6\util\logentry("router.http: path=$path SAPI=" . php_sapi_name());
     }
-    
+
     if (!empty($path)) {
         try {
             echo router($path);

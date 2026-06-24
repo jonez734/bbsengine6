@@ -27,11 +27,14 @@ dependencies = [
     "argcomplete",
     "getdate-next",
     "markdown",
-    "psycopg[binary]",
+    "psycopg[binary,pool]",
     "psycopg-pool",
     "python-dateutil",
     "websockets",
 ]
+
+[project.scripts]
+bed = "bbsengine6.bed:main"
 
 [project.optional-dependencies]
 dev = [

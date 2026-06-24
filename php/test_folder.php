@@ -30,7 +30,7 @@ echo "--- Mock Tests ---\n\n";
 // Test 1: getteospath returns default when not defined
 echo "Test 1: getteospath returns default path\n";
 $result = \bbsengine6\folder\getteospath();
-$expected = '/srv/www/zoid6/teos/';
+$expected = '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
 if ($result === $expected) {
     echo "  ✓ PASS: default teos path is correct\n";
     $passed++;
@@ -168,7 +168,7 @@ if ($run_db) {
     if (!defined('TEOSFILEPATH')) {
         define('TEOSFILEPATH', $testTeosPath);
         $result = \bbsengine6\folder\isFolder($testUri);
-        define('TEOSFILEPATH', '/srv/www/zoid6/teos/');
+        define('TEOSFILEPATH', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
     } else {
         $expectedPath = $testTeosPath . $testUri;
         $result = is_dir($expectedPath);

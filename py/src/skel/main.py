@@ -1,6 +1,10 @@
 from bbsengine6 import util
 
-# from . import lib
+from . import lib
+
+
+def buildargs(args, **kwargs):
+    return lib.buildargs(args, **kwargs)
 
 
 def init(args, **kwargs) -> bool:
@@ -9,11 +13,6 @@ def init(args, **kwargs) -> bool:
 
 def access(args, op: str, **kwargs) -> bool:
     return True
-
-
-def buildargs(args, **kwargs):
-    #    return lib.buildargs(args, **kw)
-    return None
 
 
 def main(args, **kwargs):

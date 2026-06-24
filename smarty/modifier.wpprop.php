@@ -4,7 +4,7 @@
 
 /**
  * Smarty plugin to evaluate wpprop codes
- * @package bbsengine4
+ * @package bbsengine3
  */
 
 
@@ -14,12 +14,19 @@
  *
  * began Sat Jun 29 13:17:30 CDT 2002 by Chad Hendry.
  *
- * @package bbsengine4
+ * @package bbsengine3
  */
 
 
 /* {{{ prop interpretation functions
  */
+
+function _wp_prop_int_image($matches, $data)
+{
+  $formatstring = $data;
+  $param = $matches[3];
+  return sprintf($formatstring, $param);
+}
 
 /* {{{ function _wp_prop_int_html */
 // used for 'close tags' that do not have arguments
@@ -34,10 +41,8 @@ function _wp_prop_int_html($matches, $data)
 function _wp_prop_int_printf($matches, $data)
 {
     $fmt_string = $data;
-    $param = strlen($matches[3]) ? $matches[3] : '';
-    $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
-    // Escape % to prevent format string attacks
-    $param = str_replace('%', '%%', $param);
+    $param = strlen($matches[3]) ? $matches[3] : "";
+//    $param = htmlspecialchars($param, ENT_QUOTES, False);
     return sprintf($fmt_string, $param);
 }
 /* }}} */
@@ -49,9 +54,6 @@ function _wp_prop_int_printf_with_default($matches, $data)
    $default = $data[1];
 
    $param = strlen($matches[3]) ? $matches[3] : $default;
-   $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
-   // Escape % to prevent format string attacks
-   $param = str_replace('%', '%%', $param);
 
    return sprintf($fmt_string, $param);
 }
@@ -62,10 +64,7 @@ function _wp_prop_int_aolbonics($matches, $data)
 {
     $fmt_string = $data;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
-    // Escape % to prevent format string attacks
-    $param = str_replace('%', '%%', $param);
-
+    
     $buf = sprintf($fmt_string, $param, $param, $param);
     return $buf;
 }
@@ -78,10 +77,7 @@ function _wp_prop_int_link($matches, $data)
 
     $fmt_string = $data;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    $param = htmlentities($param, ENT_QUOTES, 'UTF-8');
-    // Escape % to prevent format string attacks
-    $param = str_replace('%', '%%', $param);
-
+    
     $buf = sprintf($fmt_string, $param, $param);
     return $buf;
 }
@@ -101,9 +97,7 @@ function _wp_prop_int_youtube($matches, $data)
 
     $fmt_string = $tube;
     $param = strlen($matches[3]) ? $matches[3] : '';
-    // Validate YouTube video ID - alphanumeric, hyphens, underscores only
-    $param = preg_replace('/[^a-zA-Z0-9_-]/', '', $param);
-
+    
     $buf = sprintf($fmt_string, $param, $param);
     return $buf;
 }
@@ -148,18 +142,16 @@ $table = array
 
    /* {{{ fonts
     */
-   'f'  => array('_wp_prop_int_printf',
-                 '<span style="font-family: %s">'),
-   '/f' => array('_wp_prop_int_html', '</span>'),
+//   'f'  => array('_wp_prop_int_printf',
+//                 '<span style="font-family: %s">'),
+//   '/f' => array('_wp_prop_int_html', '</span>'),
    /* }}} */
 
    /* {{{ font attributes
     */
-   'b'  => array('_wp_prop_int_html',
-                 '<span style="font-weight: bold">'),
+   'b'  => array('_wp_prop_int_html', '<span style="font-weight: bold">'),
 
-   'bold' => array('_wp_prop_int_html',
-   				 '<span style="font-weight: bold">'),
+   'bold' => array('_wp_prop_int_html', '<span style="font-weight: bold">'),
 
    '/b' => array('_wp_prop_int_html', '</span>'),
 
@@ -167,28 +159,22 @@ $table = array
    
    'br' => array('_wp_prop_int_html','<br />'),
 
-   'i'  => array('_wp_prop_int_html',
-                 '<span style="font-style: italic">'),
+   'i'  => array('_wp_prop_int_html', '<span style="font-style: italic">'), 
    '/i' => array('_wp_prop_int_html', '</span>'),
 
-   'italics' => array('_wp_prop_int_html',
-                 '<span style="font-style: italic">'),
+   'italics' => array('_wp_prop_int_html', '<span style="font-style: italic">'),
    '/italics' => array('_wp_prop_int_html', '</span>'),
 
-   'u'  => array('_wp_prop_int_html',
-                 '<span style="text-decoration: underline">'),
+   'u'  => array('_wp_prop_int_html', '<span style="text-decoration: underline">'),
    '/u' => array('_wp_prop_int_html', '</span>'),
 
-   'underline'  => array('_wp_prop_int_html',
-                 '<span style="text-decoration: underline">'),
+   'underline'  => array('_wp_prop_int_html', '<span style="text-decoration: underline">'),
    '/underline' => array('_wp_prop_int_html', '</span>'),
 
-   's'  => array('_wp_prop_int_html',
-                 '<span style="text-decoration: line-through">'),
+   's'  => array('_wp_prop_int_html', '<span style="text-decoration: line-through">'),
    '/s' => array('_wp_prop_int_html', '</span>'),
 
-   'strike'  => array('_wp_prop_int_html',
-                 '<span style="text-decoration: line-through">'),
+   'strike'  => array('_wp_prop_int_html', '<span style="text-decoration: line-through">'),
    '/strike' => array('_wp_prop_int_html', '</span>'),
 
    /* }}} */
@@ -234,12 +220,10 @@ $table = array
    /* }}} */
 
    /* {{{ font size */
-   'small'   => array('_wp_prop_int_html',
-                      '<span style="font-size: small">'),
+   'small'   => array('_wp_prop_int_html', '<span style="font-size: small">'),
    '/small'  => array('_wp_prop_int_html', '</span>'),
 
-   'large'   => array('_wp_prop_int_html',
-                      '<span style="font-size: large">'),
+   'large'   => array('_wp_prop_int_html', '<span style="font-size: large">'),
    '/large'  => array('_wp_prop_int_html', '</span>'),
    'h1' => array('_wp_prop_int_html', '<h1>'),
    '/h1' => array('_wp_prop_int_html', '</h1>'),
@@ -254,21 +238,17 @@ $table = array
    /* {{{ images */
 /* FIX: check the MIME-TYPE of the link prior to display of it so we're not vulnerable to
    FIX: xss or goodness-knows-what */
-/*   'image'   => array('_wp_prop_int_printf', '<img src="%s">'), */
+   'image'   => array('_wp_prop_int_image', '<img src="%s">'), 
    /* }}} */
 
    /* {{{ text alignment */
-   'left'     => array('_wp_prop_int_html',
-                       '<div style="text-align: left">'),
+   'left'     => array('_wp_prop_int_html', '<div style="text-align: left">'),
    '/left'    => array('_wp_prop_int_html', '</div>'),
-   'right'    => array('_wp_prop_int_html',
-                       '<div style="text-align: right">'),
+   'right'    => array('_wp_prop_int_html', '<div style="text-align: right">'),
    '/right'   => array('_wp_prop_int_html', '</div>'),
-   'center'   => array('_wp_prop_int_html',
-                       '<div style="text-align: center">'),
+   'center'   => array('_wp_prop_int_html', '<div style="text-align: center">'),
    '/center'  => array('_wp_prop_int_html', '</div>'),
-   'justify'  => array('_wp_prop_int_html',
-                       '<div style="text-align: justify">'),
+   'justify'  => array('_wp_prop_int_html', '<div style="text-align: justify">'),
    '/justify' => array('_wp_prop_int_html', '</div>'),
    /* }}} */
 
@@ -300,16 +280,10 @@ $table = array
    '/p' => array('_wp_prop_int_html', '</p>'),
 
 //   "youtube" => array("_wp_prop_int_youtube", '<object width="425" height="355"><param name="movie" value="http://www.youtube.com/v/%s&amp;rel=1"></param><param name="wmode" value="transparent"></param><embed src="http://www.youtube.com/v/%s&amp;rel=1" type="application/x-shockwave-flash" wmode="transparent" width="425" height="355"></embed></object>')
-   "youtube" => array("_wp_prop_int_youtube", ''),
-  
-
+   "youtube" => array("_wp_prop_int_youtube")
 );
 /* }}} */
 
-//   global $_wp_prop_interpretation_table;
-
-//  $table = $_GLOBALS["_wp_prop_interpretation_table"];
-//  var_dump($table);
    $leading_ws  = $matches[1];
    $prop_name   = $matches[2];
    $prop_param  = $matches[3];
@@ -317,11 +291,11 @@ $table = array
 
 //   logentry("wpprop: name: [" . $prop_name . "]");
    
-if (($pos = strrpos($leading_ws, "\r\n")) !== false)
-      $leading_ws = substr($leading_ws, 0, $pos) . substr($leading_ws, $pos + 2);
+   if (($pos = strrpos($leading_ws, "\r\n")) !== false)
+     $leading_ws = substr_replace($leading_ws, '', $pos, 2);
 
    if (($pos = strpos($trailing_ws, "\r\n")) !== false)
-      $trailing_ws = substr($trailing_ws, 0, $pos) . substr($trailing_ws, $pos + 2);
+     $trailing_ws = substr_replace($trailing_ws, '', $pos, 2);
 
 //  logentry("wpprop: length of jumptable: " . count($table));
    if (isset($table[$prop_name]))
@@ -349,6 +323,7 @@ function wp_prop_eval($str)
               '/m';
 
    
+    $str = htmlentities($str, ENT_QUOTES, "utf-8", False);
     return preg_replace_callback($pattern, "_wp_prop_callback_func", $str);
 //   return nl2br(preg_replace_callback($pattern, '_wp_prop_callback_func', htmlentities($str)));
 }
@@ -363,7 +338,7 @@ function wp_prop_eval($str)
  * Purpose:  evaluate wpprop codes and return html
  * Input:    string to evaluate
  * Example:  {$var|wpprop}
- * @author   Jeff MacDonald <jam@zoidtechnologies.com>
+ * @author   zoidtechnologies.com <jam@zoidtechnologies.com>
  * @version 1.0
  * @param string
  * @return string

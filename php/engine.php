@@ -78,7 +78,10 @@ function displaypage($data=[], $pagetemplate="page.tmpl")
 
   $data["pagefooter"]["fortune"] = null; // getrandomfortune();
 
-  $data["choices"] = isset($data["choices"]) ? $data["choices"] : null; // buildchoices($choices);
+  $data["choices"] = $data["choices"] ?? [];
+  $data["actions"] = $data["actions"] ?? [];
+  $data["breadcrumbs"] = $data["breadcrumbs"] ?? [];
+  $data["sidebar"] = $data["sidebar"] ?? [];
 //  util\logentry("bbsengine6.displaypage.100: choices=".var_export($choices, true));
 
   $tmpl = getsmarty();

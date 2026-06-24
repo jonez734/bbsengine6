@@ -1,5 +1,7 @@
 <?php
 
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
 require_once("Text/CAPTCHA.php");
 require_once("Text/CAPTCHA/Driver/Image.php");
 

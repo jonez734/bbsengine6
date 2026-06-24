@@ -1,7 +1,19 @@
 # notify/__init__.py
-# Public API for bbsengine6 notification system
+# BACKWARD COMPATIBILITY ALIAS
+# This module is deprecated. Use bbsengine6.message_delivery instead.
+#
+# This module re-exports everything from bbsengine6.message_delivery
+# to maintain backward compatibility with existing code.
 
-from .lib import (
+import warnings
+
+warnings.warn(
+    "bbsengine6.notify is deprecated. Use bbsengine6.message_delivery instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
+from ..message_delivery import (
     _types,
     _types_lock,
     NotificationUrgency,
@@ -35,9 +47,18 @@ from .lib import (
     is_enabled,
     enable,
     disable,
+    run,
+    run_until_quit,
+    DeliveryHandler,
+    EmailDeliveryHandler,
+    SMSDeliveryHandler,
+    InMemoryQueueHandler,
+    DeliveryManager,
+    get_delivery_manager,
+    subscribe_channel,
+    publish_to_channel,
+    register_handler,
 )
-
-from .tui import run, run_until_quit
 
 __all__ = [
     "_types",
@@ -75,4 +96,13 @@ __all__ = [
     "is_enabled",
     "enable",
     "disable",
+    "DeliveryHandler",
+    "EmailDeliveryHandler",
+    "SMSDeliveryHandler",
+    "InMemoryQueueHandler",
+    "DeliveryManager",
+    "get_delivery_manager",
+    "subscribe_channel",
+    "publish_to_channel",
+    "register_handler",
 ]

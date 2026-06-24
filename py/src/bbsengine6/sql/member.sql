@@ -2,7 +2,7 @@
 
 create table engine.__member (
 --  "id" bigserial unique not null primary key,
-  "moniker" citext unique not null,
+  "moniker" citext unique not null constraint chk_member_moniker_format check (moniker ~ '^[a-zA-Z0-9_]+$'),
   "email" text not null,
   "password" text,
   "credits" numeric(10,0),

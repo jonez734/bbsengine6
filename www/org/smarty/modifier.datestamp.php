@@ -1,5 +1,7 @@
 <?php
 
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
 // 
 // $Id: modifier.datestamp.php 1821 2011-08-15 18:41:18Z jam $
 //

@@ -1,6 +1,6 @@
 import copy
 
-from bbsengine6 import io, database, util
+from bbsengine6 import io, database, util, bank
 from bbsengine6 import member as libmember
 
 from . import lib
@@ -540,7 +540,8 @@ def add(args, **kwargs) -> bool:
             libmember.setpassword(
                 args, member["password"], moniker, conn=conn, **kwargs
             )
-        libmember.setcredits(args, member["credits"], moniker, conn=conn, **kwargs)
+        bank_service = bank.BankService(args)
+        bank_service.add_funds(moniker, 100, transaction_type="initial", description="New member bonus")
 
         configurerole(
             args,

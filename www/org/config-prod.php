@@ -63,6 +63,7 @@ define("CURRENTVERSION", "6");
 
 define("config\HANDBOOKDIR", \config\DOCUMENTROOT."handbook/");
 define("config\HANDBOOKURI", "/handbook/");
+define("\HANDBOOKDIR", \config\HANDBOOKDIR);
 
 define("config\CURRENTHANDBOOKURI", \config\HANDBOOKURI."current/");
 

@@ -1,4 +1,7 @@
 <?php
+
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
 /**
  * handle 'directory index' for /v4, /v5, etc.
  */

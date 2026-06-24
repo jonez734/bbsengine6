@@ -311,6 +311,20 @@ cur.execute(database.query("SELECT * FROM $engine.member p JOIN $engine.room r O
 cur.execute(database.query("SELECT * FROM $empyre.player WHERE moniker = :moniker", moniker="test"))
 ```
 
+```php
+// PHP - Named placeholders (use single quotes to avoid escaping $)
+$stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.member WHERE moniker = :moniker', [":moniker" => "test"]);
+
+// PHP - Positional placeholders
+$stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.member WHERE moniker = $1', ["test"]);
+
+// PHP - DELETE/UPDATE
+\bbsengine6\database\query($dbh, 'DELETE FROM $engine.__session WHERE id = :id', [":id" => $sessionid]);
+
+// PHP - JOINs
+$stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.member p JOIN $engine.room r ON p.room_id = r.id WHERE p.moniker = :moniker', [":moniker" => "test"]);
+```
+
 ### Utility Functions
 
 ```python

@@ -1,4 +1,7 @@
 <?php
+
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
 /*
  * this module accepts a login id and password and validates it against the postgresql database.
  *

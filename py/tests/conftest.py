@@ -99,9 +99,9 @@ def pool(db_connection, schema_init, request):
 @pytest.fixture(scope="session")
 def schema_init(db_connection, request):
     """
-    Initialize notify schema tables.
+    Initialize notify and bank schema tables.
 
-    Only loads 8 notify-specific SQL files:
+    Only loads notify-specific SQL files:
     - notify.sql
     - notify_recipient.sql
     - notify_block.sql
@@ -110,6 +110,9 @@ def schema_init(db_connection, request):
     - notify_rate_limit.sql
     - notifyview.sql
     - notifyd.sql
+
+    Also loads bank schema:
+    - bank.sql
 
     Skips: schema, extensions, roles, member, session (already exist)
     """
@@ -141,7 +144,37 @@ def schema_init(db_connection, request):
     db_connection.commit()
     logger.info("✓ All notify tables initialized")
 
+    logger.info("Initializing bank schema tables...")
+    _load_bank_schema(db_connection)
+
     yield
+
+
+def _load_bank_schema(db_connection):
+    """Load bank schema SQL file."""
+    sql_dir = Path(__file__).parent.parent / "src" / "bbsengine6" / "sql"
+    bank_sql = sql_dir / "bank.sql"
+
+    if not bank_sql.exists():
+        logger.warning(f"  ⊘ bank.sql not found, skipping")
+        return
+
+    try:
+        sql_content = _read_sql_file(bank_sql)
+        _execute_sql_file(db_connection, sql_content, "bank.sql")
+        logger.info(f"  ✓ Loaded bank.sql")
+    except (psycopg.errors.DuplicateObject, psycopg.errors.DuplicateTable):
+        db_connection.rollback()
+        logger.info(f"  ⊘ bank.sql already exists, skipping")
+    except psycopg.errors.InsufficientPrivilege:
+        db_connection.rollback()
+        logger.warning(f"  ⊘ bank.sql - insufficient privileges, skipping")
+    except Exception as e:
+        logger.error(f"  ✗ Failed to load bank.sql: {e}")
+        db_connection.rollback()
+        raise pytest.fail(f"Schema initialization failed loading bank.sql: {e}")
+
+    db_connection.commit()
 
 
 @pytest.fixture(scope="session", autouse=True)

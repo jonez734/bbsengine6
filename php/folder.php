@@ -124,7 +124,7 @@ function getTopLevelFolders(): array
  */
 function getteospath(): string
 {
-    return defined('TEOSFILEPATH') ? TEOSFILEPATH : '/srv/www/zoid6/teos/';
+    return defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
 }
 
 /**
