@@ -511,14 +511,12 @@ Create MemberServices for the BBS Engine Daemon (BED), leveraging bbsengine6's m
 
 ---
 
-### Fix FK Column Types
+### Fix FK Column Types and Remove Unused Tables
 
-Fix inconsistent moniker column types in SQL schemas:
-
-- [ ] Fix `engine.__actionlog.moniker` - change from `text` to `citext` with FK constraint
+- [ ] Fix `engine.__actionlog.moniker` - change from `text` to `citext` with FK constraint (actively used in zoid6 PHP)
 - [ ] Fix `engine.map_sigop_sigpath.createdbymoniker` - change from `bigint` to `citext` with FK constraint
 - [ ] Fix `engine.map_sigop_sigpath.approvedbymoniker` - change from `bigint` to `citext` with FK constraint
-- [ ] Fix `engine.__blocklist.createdbymoniker` - change from `bigint` to `citext` with FK constraint
+- [ ] Remove `engine.__blocklist` table - unused code, no references found
 
 ---
 
