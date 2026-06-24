@@ -114,8 +114,12 @@ def main() -> None:
     if args.router == "defaultrouter":
         router_class = DefaultRouter
     else:
-        module = importlib.import_module(args.router)
-        router_class = getattr(module, "MessageRouter")
+        # Split 'module.path.MessageRouter' into module='module.path' and attr='MessageRouter'
+        parts = args.router.rsplit('.', 1)
+        module_path = parts[0]
+        attr_name = parts[1] if len(parts) > 1 else 'MessageRouter'
+        module = importlib.import_module(module_path)
+        router_class = getattr(module, attr_name)
 
     bed = BED(args, router_class)
 
