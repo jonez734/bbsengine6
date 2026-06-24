@@ -6,40 +6,10 @@
 import argparse
 import asyncio
 import importlib
-import os
 import signal
 import sys
 
-# Add current working directory and search up the tree for packages
-cwd = os.getcwd()
-added_paths = set()
 
-# Walk up the directory tree looking for packages
-current = cwd
-while current and current != "/":
-    if current not in added_paths:
-        sys.path.insert(0, current)
-        added_paths.add(current)
-    
-    # Check if this directory is a package (has __init__.py)
-    if os.path.isdir(current) and os.path.isfile(os.path.join(current, "__init__.py")):
-        # Add parent to potentially find sibling packages
-        parent = os.path.dirname(current)
-        if parent not in added_paths:
-            sys.path.insert(0, parent)
-            added_paths.add(parent)
-    
-    # Move up one level
-    parent = os.path.dirname(current)
-    if parent == current:  # Reached root
-        break
-    current = parent
-
-# Also add the directory containing the current working directory
-# This handles the case where cwd is inside a package (e.g., zoid6/api/)
-parent_dir = os.path.dirname(cwd)
-if parent_dir not in added_paths:
-    sys.path.insert(0, parent_dir)
 
 from bbsengine6 import io
 from bbsengine6.database import buildargs as databasebuildargs
