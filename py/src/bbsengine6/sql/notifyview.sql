@@ -28,7 +28,7 @@ select
     timezone(currentmember.tz, nr.dateread) as datereadlocal
 from engine.__notify n
 join engine.__notify_recipient nr on n.id = nr.notify_id
-left outer join engine.__member currentmember on (currentmember.loginid = current_user);
+left outer join engine.__member as currentmember on (currentmember.loginid = current_user);
 
 -- Unread notifications view
 create or replace view engine.notify_unread as
