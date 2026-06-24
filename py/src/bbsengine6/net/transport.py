@@ -5,6 +5,7 @@ import asyncio
 import inspect
 import json
 import logging
+import socket
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
@@ -572,7 +573,15 @@ class WebSocketServer:
                         del self._clients[path]
                 logger.info(f"Client disconnected from {path}")
 
-        self._server = await websockets.serve(on_connect, self.host, self.port)
+        # Create socket with SO_REUSEADDR/SO_REUSEPORT for faster restart
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, 'SO_REUSEPORT'):
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+        sock.bind((self.host, self.port))
+        sock.listen(128)
+
+        self._server = await websockets.serve(on_connect, sock=sock)
         logger.info(f"WebSocket server started on {self.host}:{self.port}")
 
     async def stop(self) -> None:
