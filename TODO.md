@@ -520,6 +520,25 @@ Create MemberServices for the BBS Engine Daemon (BED), leveraging bbsengine6's m
 
 ---
 
+## Package Data Helper (importlib.files style)
+
+- [x] Add `bbsengine6.module.files(module_ref) -> pathlib.Path` function
+  - Returns pathlib.Path to module's directory (like importlib.files)
+  - Uses existing `module.get()` to resolve module
+  - Location: bbsengine6/py/src/bbsengine6/module.py
+  
+- [x] Add `bbsengine6.module.folder(module_ref, name: str) -> pathlib.Path | None` function
+  - Returns pathlib.Path to module's subdirectory, or None if missing
+  - Generic: works with any subdirectory name (data, tpl, sql, etc.)
+  - Example: module.folder('bed', 'data') -> Path or None
+
+- [ ] Add tests for module.files() and module.folder()
+  - Test with bbsengine6 built-in module
+  - Test with external module (bed)
+  - Test folder() returns None for missing directories
+
+---
+
 ## Modular Architecture (See zoid6/TODO.md)
 
 ### Remove common.logentry

@@ -1,3 +1,4 @@
+import pathlib
 import sys
 import argparse
 import importlib
@@ -78,6 +79,38 @@ def get(module_input: Union[str, ModuleType], args: Any = None) -> ModuleType:
     raise ValueError(
         f"Expected module name (str) or module object, got {type(module_input)=}"
     )
+
+
+# @since 20250624
+def files(module_ref: Union[str, ModuleType]) -> pathlib.Path:
+    """
+    Return pathlib.Path to module's directory (like importlib.files).
+    
+    Args:
+        module_ref: Module name (str) or module object
+    
+    Returns:
+        pathlib.Path to the module's directory
+    """
+    m = get(module_ref)
+    return pathlib.Path(m.__file__).parent
+
+
+# @since 20250624
+def folder(module_ref: Union[str, ModuleType], name: str) -> pathlib.Path | None:
+    """
+    Return pathlib.Path to module's subdirectory, or None if missing.
+    
+    Args:
+        module_ref: Module name (str) or module object
+        name: Subdirectory name (e.g., "data", "tpl", "sql")
+    
+    Returns:
+        Path to subdirectory, or None if it doesn't exist
+    """
+    p = files(module_ref)
+    sub = p / name
+    return sub if sub.is_dir() else None
 
 
 # @since 20230510 copied from bbsengine5

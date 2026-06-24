@@ -20,6 +20,8 @@ from .module import (
     set_require_registration,
     get_require_registration,
     get_all_modules,
+    files,
+    folder,
 )
 
 __all__ = [
@@ -31,4 +33,6 @@ __all__ = [
     "set_require_registration",
     "get_require_registration",
     "get_all_modules",
+    "files",
+    "folder",
 ]
