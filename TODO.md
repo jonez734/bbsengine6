@@ -166,7 +166,7 @@ Add variable substitution in messages.
 
 ---
 
-### Phase 1F: Notify → message_delivery Rename
+### Phase 1F: Notify → message_delivery Rename ✓ DONE
 
 Rename the notify module to message_delivery, keeping notify as alias during transition.
 
