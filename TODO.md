@@ -470,3 +470,69 @@ Potential enhancements for the message system:
 - Message counts per user/channel
 - Activity dashboards
 - Popular channels
+
+---
+
+## MemberServices for BED
+
+Create MemberServices for the BBS Engine Daemon (BED), leveraging bbsengine6's member system for profile management, membership tiers, and referral tracking.
+
+### Implementation Tasks
+
+**bbsengine6:**
+- [x] Update bbsengine6/sql/memberview.sql - add tier column from attrs->>'tier'
+- [x] Update bbsengine6/startup.py to add: member.sql, refcode.sql (register existing tables/views)
+- [x] Create bbsengine6/services/member.py - MemberService class:
+  - get_profile(moniker) → Dict (from engine.member view)
+  - update_profile(moniker, attrs) → Dict (via member.setattrs)
+  - get_tier(moniker) → str (from engine.member.tier)
+  - set_tier(moniker, tier) → bool (via member.setattrs)
+  - get_referral_code(moniker) → str (from engine.__member.refcode)
+  - get_referrals(moniker) → List[Dict] (from engine.__member.parentmoniker)
+  - use_referral_code(moniker, code) → Dict (via engine.map_refcode_use)
+
+**casino:**
+- [x] Add MemberServiceHandler to casino/api/handler.py
+- [x] Register service in MessageRouter.register_all() with message types: member_profile, member_update, member_tier, member_referral_code, member_referrals
+- [x] Create comprehensive tests in casino/tests/test_member_services.py
+
+### Test Classes
+
+- [x] TestMemberServicesDAL - Integration tests with real database (zoid6test)
+- [x] TestMemberServicesBED - WebSocket tests via BED with mocked services
+- [x] TestMemberServicesMocked - Unit tests with mocked DAL
+
+### Database Schema (Existing + View Update)
+
+- engine.__member - member table (attrs JSONB, refcode, parentmoniker)
+- engine.member - view with all member columns + computed fields + tier
+- engine.__refcode - referral codes
+- engine.map_refcode_use - referral usage tracking
+
+---
+
+### Fix FK Column Types
+
+Fix inconsistent moniker column types in SQL schemas:
+
+- [ ] Fix `engine.__actionlog.moniker` - change from `text` to `citext` with FK constraint
+- [ ] Fix `engine.map_sigop_sigpath.createdbymoniker` - change from `bigint` to `citext` with FK constraint
+- [ ] Fix `engine.map_sigop_sigpath.approvedbymoniker` - change from `bigint` to `citext` with FK constraint
+- [ ] Fix `engine.__blocklist.createdbymoniker` - change from `bigint` to `citext` with FK constraint
+
+---
+
+## Modular Architecture (See zoid6/TODO.md)
+
+### Remove common.logentry
+
+The thread-safe version in `bbsengine6/util.py` is the canonical one. The duplicate in `common.py` should be removed.
+
+- Delete `logentry()` from `bbsengine6/common.py`
+- No external usage found in casino, empyre, murdermotel, asimov, or zoid6
+
+### Create bank subpackage
+
+Create `bbsengine6/bank/api/handler.py` for the modular architecture.
+
+See zoid6/TODO.md for full context.
