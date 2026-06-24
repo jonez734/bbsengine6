@@ -10,8 +10,15 @@ import os
 import signal
 import sys
 
-# Add current working directory to path for local router modules
-sys.path.insert(0, os.getcwd())
+# Add current working directory and parent to path for local router modules
+cwd = os.getcwd()
+sys.path.insert(0, cwd)
+
+# If cwd is inside a package (has __init__.py), also add parent
+if os.path.exists(os.path.join(cwd, "__init__.py")):
+    sys.path.insert(0, os.path.dirname(cwd))
+elif os.path.exists(os.path.join(cwd, "..", "__init__.py")):
+    sys.path.insert(0, os.path.dirname(cwd))
 
 from bbsengine6 import io
 from bbsengine6.database import buildargs as databasebuildargs
