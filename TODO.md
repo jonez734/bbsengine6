@@ -803,3 +803,581 @@ Test classes (function-scoped, with `test_args` + `test_pool` fixtures; autouse 
 - [ ] Only announcers can send messages to the channel
 - [ ] Anyone can subscribe and read (viewers)
 - [ ] Sysops are always announcers by default
+
+## Phase 7: Move `bank` package to `services/bank/` and split into focused services
+
+### 7.0 Decisions
+- Approach: **move + split** `BankService` into `AccountService`, `TransactionService`, `TransferService` (matches the single-domain shape of the other `services/*` modules)
+- Keep a **temporary shim** at `bbsengine6.bank` (and at the empyre/casino/mistermcfeely import paths they use) re-exporting the new services, so cross-repo consumers keep working
+- Add **back-compat re-exports** in `services/__init__.py`
+
+### 7.1 Relocate the package
+- [ ] `git mv bbsengine6/py/src/bbsengine6/bank/ bbsengine6/py/src/bbsengine6/services/bank/`
+  - [ ] `__init__.py`
+  - [ ] `account.py`
+  - [ ] `bank.py`
+  - [ ] `transaction.py`
+  - [ ] `transfer.py`
+  - [ ] `api/__init__.py`
+  - [ ] `api/handler.py`
+- [ ] Remove leftover `bbsengine6/py/src/bbsengine6/bank/__pycache__/`
+
+### 7.2 Split `BankService` into focused services
+- [ ] `services/bank/account.py` — promote `Account` class to `AccountService`; keep DAL-style methods (`get`, `get_or_create`, `update`, `get_balance`)
+- [ ] `services/bank/transaction.py` — promote `Transaction` class to `TransactionService`; keep `get_history` and the underlying `INSERT` helper
+- [ ] `services/bank/transfer.py` — promote `Transfer` class to `TransferService`; keep `create`, `approve`, `reject`, `get_pending`
+- [ ] Move `BankService.add_funds` / `remove_funds` / `get_balance` / `get_history` / `get_pending_transfers` / `transfer` / `approve_transfer` / `reject_transfer` onto the appropriate service:
+  - `AccountService`: `get_balance`, `add_funds`, `remove_funds`
+  - `TransactionService`: `get_history`
+  - `TransferService`: `transfer`, `approve_transfer`, `reject_transfer`, `get_pending`
+- [ ] Delete the umbrella `services/bank/bank.py` once methods are relocated
+- [ ] Update `services/bank/__init__.py` to re-export the three services and drop `BankService`
+
+### 7.2.1 Implement `AccountService` and `LedgerService`
+
+#### Decisions
+- `get_balance` lives on `AccountService` (not the umbrella)
+- Balance UPDATE SQL uses `balance = balance ± %s` with `RETURNING balance` to avoid lost-update races
+- `logentry(..., module="bank")` preserved across the move
+- `add_funds` / `remove_funds` move out of the umbrella into a new `LedgerService` that owns the `bank.__transaction` INSERT
+
+#### New / changed files
+- [ ] `services/bank/account.py` — rename class `Account` → `AccountService`; preserve `get`, `get_or_create`, `get_by_id`, `update`; add `get_balance(moniker) -> int` (returns `account["balance"]` or `0`)
+- [ ] `services/bank/ledger.py` (new) — `LedgerService` class:
+  - [ ] Constants: `MESSAGE_LEDGER_CREDIT = "ledger_credit"`, `MESSAGE_LEDGER_DEBIT = "ledger_debit"` (matches `InviteService` pattern)
+  - [ ] `__init__(args)` holds `self.accounts = AccountService(args)`
+  - [ ] `add_funds(moniker, amount, transaction_type="credit", description="", member_moniker="") -> dict`:
+    - [ ] Validate `amount > 0`; on failure, `logentry(..., action="add_funds_failed")` with `module="bank"`, return `{success: False, message: "Amount must be positive"}`
+    - [ ] Single `database.connect` block:
+      - [ ] `UPDATE bank.__account SET balance = balance + %s WHERE moniker = %s RETURNING id, balance`
+      - [ ] `INSERT INTO bank.__transaction (accountid, amount, transactiontype, description, membermoniker) VALUES (%s, %s, %s, %s, %s)` using the returned `id`
+    - [ ] On success, `logentry(..., action="add_funds", module="bank", ...)` and return `{success: True, message, new_balance}`
+  - [ ] `remove_funds(moniker, amount, transaction_type="debit", description="", member_moniker="") -> dict`:
+    - [ ] Validate `amount > 0`; return failure envelope
+    - [ ] `self.accounts.get(moniker)`; return "Account not found" with `action="remove_funds_failed"` if missing
+    - [ ] If `account["balance"] < amount`, return "Insufficient funds. Balance: …" with `action="remove_funds_failed"`, `level=WARNING`
+    - [ ] Single `database.connect` block:
+      - [ ] `UPDATE bank.__account SET balance = balance - %s WHERE moniker = %s RETURNING id, balance`
+      - [ ] `INSERT INTO bank.__transaction (...)` with the returned `id`
+    - [ ] On success, `logentry(..., action="remove_funds", module="bank", ...)` and return `{success, message, new_balance}`
+- [ ] `services/bank/__init__.py` — `from .account import AccountService; from .ledger import LedgerService; __all__ = ["AccountService", "LedgerService"]`
+- [ ] `services/bank/api/handler.py`:
+  - [ ] Top-of-file import: `from bbsengine6.bank import BankService` → `from bbsengine6.services.bank import AccountService, LedgerService`
+  - [ ] Constructor: `self.bank_service = BankService(args)` → `self.accounts = AccountService(args); self.ledger = LedgerService(args)`
+  - [ ] `_handle_balance`: `self.bank_service.get_balance(moniker)` → `self.accounts.get_balance(moniker)`; `self.bank_service.account.get(moniker)` → `self.accounts.get(moniker)`
+  - [ ] `_handle_add`: `self.bank_service.add_funds(...)` → `self.ledger.add_funds(...)`
+  - [ ] `_handle_remove`: `self.bank_service.remove_funds(...)` → `self.ledger.remove_funds(...)`
+  - [ ] Leave `_handle_history`, `_handle_pending`, `_handle_transfer_*`, `_handle_list_all` unchanged (handled in later 7.x subphases)
+  - [ ] SQL reference `cur.execute("SELECT * FROM bank.__account …")` (line 259) unchanged — schema namespace is independent of the Python path
+
+#### Shim (in-tree only)
+- [ ] `bbsengine6/bank/__init__.py` — temporary re-export:
+  ```python
+  # Deprecated shim — use bbsengine6.services.bank instead.
+  from bbsengine6.services.bank import AccountService as Account
+  __all__ = ["Account"]
+  ```
+  (`LedgerService` is new, no alias needed. `Transaction` / `Transfer` aliases land when those services are promoted.)
+
+#### Tests
+- [ ] `bbsengine6/py/tests/test_bank.py`:
+  - [ ] Update import to `from bbsengine6.services.bank import AccountService, LedgerService` (keep `Transaction` / `Transfer` lines for later subphases)
+  - [ ] Rewrite call sites currently written as `bank.account.get_or_create(...)` → `account_service.get_or_create(...)`
+  - [ ] Add minimal coverage for `LedgerService.add_funds` / `remove_funds` if not already present: happy path, `amount <= 0`, missing account, insufficient funds
+- [ ] `bbsengine6/py/tests/conftest.py` — unchanged (only references `bank.sql` schema)
+
+#### Verify
+- [ ] `rg -n "bbsengine6\.bank" bbsengine6/` returns only the shim file
+- [ ] `rg -n "BankService" bbsengine6/ empyre/ casino/ mistermcfeely/` returns no matches
+- [ ] `rg -n "bank\.account\." bbsengine6/` returns no matches
+- [ ] `pytest bbsengine6/py/tests/test_bank.py` passes
+- [ ] WebSocket smoke: `bank_balance` → `bank_add(10)` → `bank_balance` reflects +10
+- [ ] WebSocket smoke: `bank_remove` over current balance returns `Insufficient funds` and writes nothing to `bank.__account` or `bank.__transaction`
+- [ ] WebSocket smoke: `bank_add` with `amount <= 0` returns failure envelope, no DB writes
+- [ ] Logs show `module="bank"` preserved in `logentry` calls
+
+#### Out of scope (later 7.x subphases)
+- Promoting `Transaction` → `TransactionService` (owns `bank.__transaction` writes for transfers)
+- Promoting `Transfer` → `TransferService` and updating the transfer/approve/reject/pending handlers
+- Deleting `services/bank/bank.py`
+- DeprecationWarning on the shim, cross-repo migration, shim deletion (Phase 7.8)
+
+### 7.3 Update internal imports
+- [ ] `services/bank/api/handler.py:3` — `from bbsengine6.bank import BankService` → `from bbsengine6.services.bank import AccountService, TransactionService, TransferService`
+- [ ] `services/bank/api/handler.py:53` — `self.bank_service = BankService(args)` → `self.account = AccountService(args)`, `self.transaction = TransactionService(args)`, `self.transfer = TransferService(args)`; update each handler method to call the right service
+- [ ] `services/bank/api/handler.py:259` — `cur.execute("SELECT * FROM bank.__account …")` (SQL, **unchanged**)
+- [ ] In-file relative imports — adjust one extra level (`from ..util import logentry` → `from ...util import logentry`)
+- [ ] Leave SQL references (`bank.__account`, `bank.__transaction`, `bank.__transfer`) untouched — schema namespace is independent of the Python package path
+- [ ] Leave `startup.py` lines 56–61 (`("bank.__account", "bank.sql")` …) untouched
+
+### 7.4 Update in-tree consumers (`bbsengine6/`)
+- [ ] `bbsengine6/py/src/bbsengine6/member.py:9` — keep the `bank` import working via the shim (see 7.6) or switch to `from .services.bank import AccountService, TransferService` and update lines 287, 313
+- [ ] `bbsengine6/py/src/bbsengine6/console/member.py:543` — same
+- [ ] `bbsengine6/py/tests/test_bank.py:11` — update import to `from bbsengine6.services.bank import AccountService, TransactionService, TransferService` and rewrite call sites (currently `bank.account.get_or_create`, `bank.transfer(…)`) against the new service names
+
+### 7.5 Update cross-repo consumers
+- [ ] `empyre/` — point `empyre.bank` import (and the `bank.BankService(...)` calls) at the new path
+  - [ ] `empyre/src/empyre/lib.py` (lines 17, 26, 237)
+  - [ ] `empyre/src/empyre/sysopoptions.py:58`
+  - [ ] `empyre/src/empyre/yearlyreport.py:162`
+  - [ ] `empyre/src/empyre/combat/joust.py:75`
+  - [ ] `empyre/src/empyre/quests/zircon.py:148`
+  - [ ] `empyre/src/empyre/quests/raidpiratecamp.py:20`
+  - [ ] `empyre/src/empyre/town/lucifersden.py:59`
+  - [ ] `empyre/src/empyre/town/naturaldisasterbank.py:32`
+  - [ ] `empyre/src/empyre/api/handler.py:120, 578`
+  - [ ] `empyre/src/tests/test_bank_integration.py`
+  - [ ] `empyre/src/tests/test_town_naturaldisasterbank.py` (lines 76, 94)
+- [ ] `casino/src/casino/services/bank.py:8` — `from bbsengine6.bank import BankService as BankModule` → `from bbsengine6.services.bank import AccountService as BankModule` (or whichever subset it actually uses) and update downstream call sites
+- [ ] `mistermcfeely/src/postoffice/api/handler.py:100, 363` — switch from `bank.BankService(...)` to the focused service(s)
+
+### 7.6 Back-compat shim (temporary)
+- [ ] Replace `bbsengine6/py/src/bbsengine6/bank/__init__.py` with a thin re-export:
+  ```python
+  # Deprecated shim — use bbsengine6.services.bank instead.
+  from bbsengine6.services.bank import (
+      AccountService as Account,
+      TransactionService as Transaction,
+      TransferService as Transfer,
+  )
+  __all__ = ["Account", "Transaction", "Transfer"]
+  ```
+  - Note: `BankService` is **not** re-exported here, since 7.2 deletes it; the shim only covers the three DAL classes. Code that called `bank.BankService(...)` must switch to the focused service(s) — surface this in the commit message.
+- [ ] Add re-export to `bbsengine6/py/src/bbsengine6/services/__init__.py`:
+  ```python
+  from .bank import AccountService, TransactionService, TransferService  # noqa: F401
+  ```
+- [ ] Add a `DeprecationWarning` on import in the shim once call sites are migrated (deferred to 7.8)
+
+### 7.7 Verify
+- [ ] `rg -n "bbsengine6\.bank" bbsengine6/` returns only the shim file
+- [ ] `rg -n "BankService" bbsengine6/ empyre/ casino/ mistermcfeely/` returns no matches (umbrella is gone)
+- [ ] `rg -n "bank\.account\.|bank\.transfer\(|bank\.transaction\." bbsengine6/ empyre/ casino/ mistermcfeely/` returns no matches
+- [ ] `pytest bbsengine6/py/tests/test_bank.py` passes
+- [ ] Run project linter / typecheck
+- [ ] WebSocket smoke test for all bank message types: `bank_balance`, `bank_add`, `bank_remove`, `bank_transfer_request`, `bank_transfer_approve`, `bank_transfer_reject`, `bank_pending`, `bank_history`, `bank_list_all`
+
+### 7.8 Cleanup (follow-up, separate commit)
+- [ ] Delete `bbsengine6/py/src/bbsengine6/bank/` shim
+- [ ] Update any remaining direct imports of `bbsengine6.bank` to `bbsengine6.services.bank`
+- [ ] Remove the `services/__init__.py` re-exports if no longer needed
+
+## 8. Security Review: AuthService and PlayerService
+
+**Status:** Planning
+**Mode:** Read-only review. No code changes; no refactor sketches. Build phase is separate.
+
+**Decisions:**
+- Output: one report per class file (4 reports) + 1 cross-project consolidation addendum
+- Lens: security only (credential handling, secrets, session lifecycle, channel subscription, error responses). No DRY/code-quality findings.
+- Test gaps: list missing test cases by name only. No test bodies drafted.
+- Non-goals: no refactor proposal, no code changes, no deep dive into underlying credential validators (verifyMemberFound, checkpassword, etc.), no commentary on zoid6 TODO for future empyre PlayerService.
+- Cross-project AuthService duplication: noted in each per-class report (security-relevant differences only); full delta in consolidation addendum.
+
+### 8.1 Report: `casino.PlayerService`
+- [ ] Read `casino/src/casino/services/player.py` (70 lines)
+- [ ] Read constructor / instantiation sites
+- [ ] Read associated test files to map current security-relevant coverage
+- [ ] Draft report: Scope, Findings (severity-tagged), Test gaps (names only), Cross-project note
+- [ ] Write report to output location
+
+### 8.2 Report: `casino.AuthService`
+- [ ] Read `casino/src/casino/api/handler.py:101-171` (`AuthService` class)
+- [ ] Read `MessageRouter` instantiation site (`handler.py:1175`)
+- [ ] Read associated test files: `casino/src/casino/tests/test_api.py`, `test_channel_integration.py`, `test_player_observer.py`, `test_player_stats.py`, `test_player_stats_integration.py`
+- [ ] Draft report: Scope, Findings, Test gaps, Cross-project note (compare to mistermcfeely + empyre AuthService)
+- [ ] Write report to output location
+
+### 8.3 Report: `mistermcfeely.AuthService`
+- [ ] Read `mistermcfeely/src/postoffice/api/handler.py:58-126` (`AuthService` class)
+- [ ] Read `MessageRouter` instantiation site (`handler.py:486`)
+- [ ] Read associated test files: `mistermcfeely/tests/test_email_auth_integration.py`, `test_password_integration.py`, `test_audit_log.py`
+- [ ] Draft report: Scope, Findings, Test gaps, Cross-project note
+- [ ] Write report to output location
+
+### 8.4 Report: `empyre.AuthService`
+- [ ] Read `empyre/src/empyre/api/handler.py:69-148` (`AuthService` class)
+- [ ] Read `MessageRouter` instantiation site (`handler.py:701`)
+- [ ] Read associated test file: `empyre/src/tests/test_api_handler.py`
+- [ ] Draft report: Scope, Findings, Test gaps, Cross-project note
+- [ ] Write report to output location
+
+### 8.5 Cross-`AuthService` Consolidation Addendum
+- [ ] Compare the three `AuthService` implementations on security-relevant axes only:
+  - [ ] Credential helper differences (timing-attack surface, error semantics)
+  - [ ] Session registration differences (authz boundary location)
+  - [ ] Channel-subscription differences (who can subscribe, race conditions)
+  - [ ] Logging/audit differences (failure visibility)
+  - [ ] Response payload differences (what leaks to client post-auth)
+- [ ] No refactor proposal. Observations only.
+
+### 8.6 Severity Categories (used in all 4 reports)
+- [ ] `blocker` — must fix
+- [ ] `major` — should fix
+- [ ] `minor` — nice to fix
+- [ ] `nit` — style/clarity
+
+### 8.7 Test Gap Categories (security-relevant only, names only)
+- [ ] Bad-password paths
+- [ ] Unknown-moniker paths
+- [ ] DB-error paths
+- [ ] Double-auth / re-auth
+- [ ] Disconnect-during-auth
+- [ ] Channel-subscribe authz (cross-moniker)
+- [ ] Logging-on-failure (audit trail)
+- [ ] Constant-time password comparison (where testable)
+
+### 8.8 Follow-up (separate, post-review)
+- [ ] Code changes and refactor (deferred — will be planned after this review lands)
+
+---
+
+## `bbsengine6.io` sink infrastructure for thin-client BED conversion
+
+### Context and scope
+
+The thin-client BED conversion (planned across `empyre/TODO.md`,
+`bed/TODO.md`, and the per-game cross-references) needs a way to
+intercept every `bbsengine6.io` primitive call (`echo`, `inputchoice`,
+`inputstring`, `inputboolean`, `inputinteger`, `inputchar`, `inputdate`,
+`inputfilename`, `inputpassword`, `screen.setbottombar`,
+`screen.register_bottombar_fragment`,
+`screen.unregister_bottombar_fragment`) and dispatch it to a per-connection
+`BEDSink` that builds BED wire envelopes, instead of writing to stdout
+or reading from a TTY.
+
+The interception mechanism must be:
+- **Asyncio-native** (per-task isolation via `contextvars.ContextVar`).
+- **100% backward-compatible** (door mode with no sink installed is
+  byte-for-byte identical to today).
+- **Opt-in per connection** (the BED process installs a `BEDSink` at
+  `WebSocketServer.on_connect` time; door-mode processes never install
+  one).
+- **Reusable across all games** (empyre, casino, murdermotel,
+  mistermcfeely, zoid6, plus any future BED-hosted game).
+
+The work is split into six phases. Backward compat is verified at
+every phase boundary by running the door-mode test corpus against the
+refactored code and asserting byte-for-byte equality of the rendered
+output.
+
+### Door-mode test corpus (Phase 0a pre-flight)
+
+The door-mode test corpus is the set of `bbsengine6/tests/` files
+that exercise the `io` and `screen` modules in door-mode (no
+`WebSocketServer`, no BED). For each phase boundary, the corpus is
+run; any failure means the phase is not complete.
+
+Corpus files (read from `bbsengine6/py/tests/`):
+- `test_inputchoice_key_f2.py` — inputchoice F2 (cross-references the
+  `key_f2` work in `bed/TODO.md`).
+- `test_inputstring_enhancements.py` — inputstring.
+- `test_inputstring_key_f1.py` — inputstring F1.
+- `test_key_events.py` — keystroke handling.
+- `test_screen.py` — screen module.
+- `test_more_prompt.py` — more-prompt.
+- `test_terminal_title.py` — terminal.
+- `test_template.py`, `test_tmpl.py` — template/MCI tokens.
+- `test_md2tpl.py` — md → tpl.
+- `test_interactive_harness.py` — interactive.
+- `test_ed.py`, `test_ed_line.py`, `test_ed_integration.py` — editor.
+- `test_indent.py` — indent.
+- `test_buildrec.py` — buildrec.
+- `test_bank.py` — bank.
+- `test_bed_router_loading.py` — BED router loading (cross-references
+  the `MessageRouter` work in Phase 5 below).
+- `test_packet_codec.py` — packet codec.
+- `test_pluralize.py` — pluralize.
+
+The new `bbsengine6/tests/test_io_backward_compat.py` will run this
+corpus at every phase boundary and assert byte-for-byte equality of
+the rendered output for a fixed battery of inputs (plain text, MCI
+tokens, `{var:foo}` references, ANSI escapes).
+
+### Pre-flight grep: `io.echo` return-value usage (Phase 0a pre-flight)
+
+Pre-flight grep result: **zero matches** for any of:
+- `result = io.echo(`
+- `return io.echo(`
+- `if io.echo(`
+- `assert io.echo(`
+- `yield io.echo(`
+- `, io.echo(`
+
+The 6,665 `io.echo(...)` call sites across the monorepo are all bare
+calls (the return value is discarded). This means Phase 3 (changing
+`echo()` to return `str`) is safe — no existing caller will be
+surprised by the new return type.
+
+### Phase 0 — Sink infrastructure (no behavior change)
+
+- [ ] Add `bbsengine6/io/sink.py` with:
+  - `class Sink(Protocol)`: structural-typed protocol with one method
+    per primitive (`echo`, `inputchoice`, `inputstring`, `inputboolean`,
+    `inputinteger`, `inputchar`, `inputdate`, `inputfilename`,
+    `inputpassword`, `screen_setbottombar`,
+    `screen_register_bottombar_fragment`,
+    `screen_unregister_bottombar_fragment`).
+  - `class DefaultSink`: implements the protocol by delegating to the
+    current `bbsengine6.io` private `_impl` functions.
+  - `class IOSinkError(Exception)`: raised when a sink is missing a
+    primitive.
+  - Module-level `_active_sink: ContextVar[Optional[Sink]] =
+    ContextVar("bbsengine6_io_sink", default=None)`.
+  - `def set_io_sink(sink: Sink) -> Token`,
+    `def reset_io_sink(token: Token) -> None`,
+    `def get_active_sink() -> Optional[Sink]`,
+    `def require_active_sink() -> Sink`.
+- [ ] Refactor each `bbsengine6.io` primitive into:
+  - `def _impl_xxx(...)`: the current code path, unchanged.
+  - `def xxx(...)`: the public function. If
+    `_active_sink.get()` returns a non-`None` sink, dispatch to
+    `sink.xxx(...)`. Otherwise call `_impl_xxx(...)`.
+- [ ] Apply to: `echo`, `inputchoice`, `inputstring`, `inputboolean`,
+  `inputinteger`, `inputchar`, `inputdate`, `inputfilename`,
+  `inputpassword`, `screen.setbottombar`,
+  `screen.register_bottombar_fragment`,
+  `screen.unregister_bottombar_fragment`.
+- [ ] **Backward compat check**: all existing tests in
+  `bbsengine6/tests/` pass with zero changes. The default sink is
+  `None`, so the public functions take the `_impl` path, which is the
+  current code. `test_io_backward_compat.py` runs the door-mode
+  corpus and asserts byte-for-byte equality.
+- [ ] Add `bbsengine6/tests/test_io_sink.py`:
+  - `test_no_sink_uses_default`: no sink installed → `echo("hello")`
+    takes the `_impl` path.
+  - `test_set_io_sink_dispatches`: install a recording sink, call
+    `echo("hello")`, assert the sink received the call.
+  - `test_reset_io_sink_restores_default`: install a sink, reset,
+    call `echo("hello")`, assert default behavior.
+  - `test_nested_sinks`: install sink A, install sink B (returns a
+    token), reset B, assert A is active; reset A, assert default.
+  - `test_asyncio_task_isolation`: in two concurrent asyncio tasks,
+    install different sinks; each task sees its own sink (contextvar
+    semantics).
+  - `test_sink_missing_primitive_raises`: sink doesn't implement
+    `inputchoice`; `io.inputchoice(...)` raises `IOSinkError`.
+
+### Phase 1 — `echo_render()` public function (mod 2)
+
+- [ ] Add `bbsengine6/io/echo_render.py` with:
+  - `def echo_render(text: str, **kwargs) -> str`: pure function, no
+    I/O. Applies MCI token substitution (`{f6}`, `{labelcolor}`,
+    `{var:foo}`) and returns the rendered string. The kwargs are the
+    same as `echo()` today (`end`, `flush`, `fg`, `bg`, `bold`, etc.).
+  - This is the **single source of truth** for "what would the door
+    have rendered?".
+  - No contextvar lookup, no sink dispatch — purely a string
+    transformation.
+- [ ] Refactor `bbsengine6.io.echo` to call `echo_render(text, **kwargs)`
+  internally, then dispatch to the sink (or default `_impl_echo`) for
+  the actual I/O.
+- [ ] **Backward compat check**: existing tests pass with zero
+  changes. The rendered string for any input is byte-for-byte
+  identical to the pre-refactor output. `test_io_backward_compat.py`
+  passes.
+- [ ] Add `bbsengine6/tests/test_echo_render.py`:
+  - `test_echo_render_no_io`: `echo_render("hello {f6}world")` returns
+    the MCI-substituted string with no stdout output.
+  - `test_echo_render_matches_echo`: for a battery of inputs (plain
+    text, MCI tokens, `{var:foo}` references, ANSI escapes),
+    `echo_render(text)` returns the same string the original
+    `echo(text)` would have written to the terminal.
+  - `test_echo_render_kwargs`: `end=""`, `flush=True`, `fg=`, `bg=`,
+    `bold=` kwargs are all honored.
+  - `test_echo_render_pure`: same input always returns same output
+    (deterministic, no global state mutation).
+
+### Phase 2 — `mci.parse` / `mci.render` public functions (mod 3)
+
+- [ ] Add `bbsengine6/io/mci.py` with:
+  - `class MCITokenKind(Enum)`: `text`, `color`, `var_ref`,
+    `palette_ref`, `mci_code`, `ansi_escape`.
+  - `class MCIToken`: dataclass with `kind: MCITokenKind`,
+    `value: str`, and (for `var_ref`) `name: str`.
+  - `def parse(text: str) -> List[MCIToken]`: tokenizes the input.
+  - `def render(tokens: List[MCIToken], palette: Dict[str, str]) -> str`:
+    renders tokens back to a string using the given palette (which
+    maps `{var:foo}` names to color codes).
+- [ ] Refactor `echo_render` to use `mci.parse` + `mci.render`
+  internally (no behavior change, just structure).
+- [ ] Add a "Future: discriminated union" note in this section: if a
+  real need shows up (e.g. type-safe rendering, pattern matching on
+  token kind), the `MCIToken` dataclass can be replaced with a
+  `Union[MCIText, MCIColor, ...]`. v1 uses the dataclass for
+  simplicity and minimum invasive-ness.
+- [ ] **Backward compat check**: existing tests pass with zero
+  changes. `test_io_backward_compat.py` passes.
+- [ ] Add `bbsengine6/tests/test_mci.py`:
+  - `test_parse_plain_text`: `"hello world"` →
+    `[MCIToken(kind="text", value="hello world")]`.
+  - `test_parse_mci_code`: `"{f6}"` →
+    `[MCIToken(kind="mci_code", value="f6")]`.
+  - `test_parse_var_ref`: `"{var:promptcolor}"` →
+    `[MCIToken(kind="var_ref", name="promptcolor")]`.
+  - `test_parse_mixed`: `"Hello {f6}World {var:foo}"` → mixed list of
+    text, mci_code, var_ref.
+  - `test_render_roundtrip`:
+    `render(parse(text), default_palette) == text` for a battery of
+    inputs.
+  - `test_render_unknown_var`: `"{var:nonexistent}"` renders as a
+    literal `"{var:nonexistent}"` (preserves the original string on
+    lookup failure, matching door-mode behavior).
+  - `test_parse_ansi_escape`: `"\x1b[31m"` →
+    `MCIToken(kind="ansi_escape", value="\x1b[31m")`.
+
+### Phase 3 — `echo()` returns the rendered string (mod 1)
+
+- [ ] Change `bbsengine6.io.echo` signature:
+  `def echo(text, **kwargs) -> str`. Returns the rendered string.
+- [ ] The default behavior (no sink) calls
+  `_impl_echo(rendered, **kwargs)` which writes to stdout/screen
+  and returns the rendered string.
+- [ ] The sink-based behavior calls `sink.echo(rendered, **kwargs)`
+  and returns whatever the sink returns.
+- [ ] **Backward compat check**: every existing caller of `echo(...)`
+  that doesn't use the return value is unaffected. The pre-flight
+  grep (Phase 0a) found zero return-value usages, so no caller
+  fixes are needed. `test_io_backward_compat.py` passes.
+- [ ] Add `bbsengine6/tests/test_echo_return.py`:
+  - `test_echo_returns_rendered_string`: `echo("hello")` returns
+    `"hello"`.
+  - `test_echo_returns_mci_rendered`: `echo("{f6}hello")` returns the
+    MCI-substituted string.
+  - `test_echo_sink_return_propagates`: a sink that returns
+    `"sink-override"` → `echo("hello")` returns `"sink-override"`.
+
+### Phase 4 — Sink-based variants for the other primitives
+
+- [ ] `inputchoice(prompt, options, default="", **kwargs) -> str | None`:
+  if a sink is set, dispatch to `sink.inputchoice(...)`. Otherwise
+  call `_impl_inputchoice(...)`.
+- [ ] Same for `inputstring`, `inputboolean`, `inputinteger`,
+  `inputchar`, `inputdate`, `inputfilename`, `inputpassword`.
+- [ ] Same for `screen.setbottombar`,
+  `screen.register_bottombar_fragment`,
+  `screen.unregister_bottombar_fragment`.
+- [ ] **Backward compat check**: door-mode callers see zero behavior
+  change. `test_io_backward_compat.py` passes.
+- [ ] Add `bbsengine6/tests/test_io_sink_per_primitive.py`: one test
+  per primitive, asserting the sink is called when set, the default
+  is called when not set, and the return value propagates correctly.
+
+### Phase 5 — `MessageRouter` + `MessageRouterMixin` + `WebSocketServer.on_connect_hook`
+
+This is the integration point that ties the sink infrastructure
+(Phases 0–4) to the BED wire format. The `MessageRouter` is the
+per-process message dispatcher (one per BED daemon, loaded via
+`--router`). The `BEDSink` (defined in `bed/TODO.md`) is a
+per-connection adapter that uses the `MessageRouter`'s session API to
+manage per-connection state and pending-request futures.
+
+- [ ] Add `MessageRouter` and `MessageRouterMixin` to
+  `bbsengine6/net/router.py` (extended, alongside the existing
+  `InternetRouter`). The new class sits next to the existing
+  `InternetRouter`; both coexist.
+  - `class MessageRouter`: per-process message dispatcher. Owns
+    per-session state. Methods:
+    - `__init__(self, args)`: stores `args`, initializes
+      `self.sessions: Dict[int, Dict[str, Any]]` and
+      `self.pending_requests: Dict[int, Dict[int, asyncio.Future]]`.
+    - `get_session(self, websocket) -> Dict[str, Any]`: returns the
+      per-session state dict, creating it if needed.
+    - `get_pending_request(self, websocket, request_id: int) ->
+      asyncio.Future`: returns the future for a pending IO request,
+      creating it if needed.
+    - `resolve_pending_request(self, websocket, request_id: int,
+      value: Any) -> None`: resolves a pending request's future
+      with the given value. No-op (with logentry debug) on late
+      replies.
+    - `cleanup_session(self, websocket) -> None`: drops all
+      per-session state when a WebSocket disconnects.
+    - `next_request_id(self, websocket) -> int`: allocates the next
+      monotonic `request_id` for a session.
+  - `class MessageRouterMixin`: a mixin that adds the same API to
+    any class. Per-game routers (`DefaultRouter`,
+    `empyre.api.handler.MessageRouter`, etc.) inherit from this
+    mixin to gain the API without changing their existing class
+    hierarchy. Less invasive than a new base class.
+- [ ] Add `WebSocketServer.__init__` parameter
+  `on_connect_hook: Optional[Callable[[WebSocket, MessageRouter],
+  Awaitable[None]]] = None`. Default `None` = no hook.
+- [ ] Modify `WebSocketServer.start` so the inline `on_connect`
+  delegates the message loop to the hook when one is registered:
+  ```python
+  async def on_connect(websocket):
+      # ... existing handshake logic ...
+      if self._on_connect_hook is not None:
+          await self._on_connect_hook(websocket, self.router)
+          return
+      # Existing message loop (backward compat with no hook)
+      async for raw_message in websocket:
+          # ... existing dispatch logic ...
+  ```
+  The hook signature is `async def on_connect_hook(websocket,
+  router)`. The `router` is the per-process `MessageRouter` (passed
+  in by the `WebSocketServer`).
+- [ ] Add `MessageRouterMixin` to
+  `bbsengine6.net.defaultrouter.DefaultRouter` (one-line change to
+  its class declaration). The `DefaultRouter` gains
+  `get_session` / `get_pending_request` / `resolve_pending_request` /
+  `cleanup_session` / `next_request_id` via the mixin.
+- [ ] **Backward compat check**: the `on_connect_hook` is optional;
+  if not provided, the server behaves exactly as before. The
+  `MessageRouterMixin` is additive; existing per-game routers that
+  don't adopt it still work (they just don't have the session API).
+  The `MessageRouter` and `MessageRouterMixin` are additive additions
+  to `bbsengine6/net/router.py`; the existing `InternetRouter` is
+  unchanged. `test_io_backward_compat.py` passes.
+- [ ] Add `bbsengine6/tests/test_message_router_mixin.py`:
+  `get_session`, `get_pending_request`, `resolve_pending_request`,
+  `cleanup_session`, `next_request_id` work as expected on a class
+  that inherits from the mixin.
+- [ ] Add `bbsengine6/tests/test_web_socket_server_on_connect_hook.py`:
+  hook called after handshake, with `router` argument; hook owns
+  the message loop; hook raises → connection closed; no hook →
+  backward-compat behavior.
+- [ ] Add `bbsengine6/tests/test_message_router_session_api.py`:
+  `MessageRouter` (not the mixin) has the same API; the
+  `get_session` and `get_pending_request` methods are
+  per-connection (keyed by `id(websocket)`); `cleanup_session`
+  drops all state.
+
+### Adoption (cross-project)
+
+The new `MessageRouter` / `MessageRouterMixin` / sink infrastructure
+is consumed by:
+
+- **`bed`** (`bed/TODO.md`): the `BEDSink` (per-connection adapter)
+  holds a reference to the per-process `MessageRouter` and uses
+  `get_session` / `get_pending_request` / `next_request_id` to
+  build BED envelopes and await replies. The `BEDSink` is installed
+  via the `WebSocketServer.on_connect_hook` (option e: the hook
+  owns the message loop).
+- **`empyre`** (`empyre/TODO.md`): `empyre.api.handler.MessageRouter`
+  adds `MessageRouterMixin` to its class declaration (one-line
+  change). The empyre per-game router gains the session API.
+- **`casino`** (`casino/TODO.md`): cross-reference note (no code
+  change required; the casino `MessageRouter` can opt into the
+  mixin later if needed).
+- **`murdermotel`**, **`mistermcfeely`**, **`zoid6`**: cross-reference
+  notes (no code change required for v1).
+
+### Implementation order
+
+1. bbsengine6 Phase 0 (sink infrastructure + sink tests).
+2. bbsengine6 Phase 1 (`echo_render` + tests).
+3. bbsengine6 Phase 2 (`mci.parse` / `mci.render` + tests).
+4. bbsengine6 Phase 3 (`echo` returns str + tests).
+5. bbsengine6 Phase 4 (sink-based variants for other primitives +
+   tests).
+6. bbsengine6 Phase 5 (`MessageRouter` + mixin +
+   `WebSocketServer.on_connect_hook` + tests).
+7. `bed` Phase 0/1/3/4 (see `bed/TODO.md` "BED `Sink` integration
+   with `bbsengine6.io`" section).
+8. Game-repo cross-references in `empyre`, `casino`, `murdermotel`,
+   `mistermcfeely`, `zoid6` (see each repo's `TODO.md`).
+
+At every step (1–6), `test_io_backward_compat.py` runs the door-mode
+corpus and asserts byte-for-byte equality of the rendered output. If
+any test fails, the step is not complete.
