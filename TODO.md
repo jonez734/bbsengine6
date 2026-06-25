@@ -592,6 +592,103 @@ See zoid6/TODO.md for full context.
 
 ## Phase 4: Generic Invite Code System
 
+**Plan (2026-06-24):**
+
+Build a generic invite code system in `bbsengine6` that all modules (casino, empyre, murdermotel, member) can use to gate access to resources (tables, islands, rooms, etc.) via short alphanumeric codes.
+
+### Files to create
+
+1. **`bbsengine6/py/src/bbsengine6/sql/invite.sql`** — schema + view
+2. **`bbsengine6/py/src/bbsengine6/invite.py`** — DAL functions (functional style, mirrors `session.py`)
+3. **`bbsengine6/py/src/bbsengine6/services/invite.py`** — `InviteService` class (class style, mirrors `services/channel.py`)
+4. **`bbsengine6/py/tests/test_invite.py`** — tests
+
+### Files to update
+
+5. **`bbsengine6/py/src/bbsengine6/sql/bbsengine6.sql`** — add `\i invite.sql` to include chain (after `session.sql`)
+6. **`bbsengine6/py/tests/conftest.py`** — add `"invite.sql"` to `_get_notify_sql_files()` list
+
+### Schema (`invite.sql`)
+
+**Table `engine.__invite`:**
+- `id bigserial primary key`
+- `module text not null` — `'casino'`, `'empyre'`, `'murdermotel'`, `'member'`, etc.
+- `resourceid text not null`
+- `code text not null`
+- `createdbymoniker citext` → `engine.__member(moniker)` `on update cascade on delete set null`
+- `datecreated timestamptz`
+- `dateexpires timestamptz`
+- `dateused timestamptz` — set when code is redeemed
+- `usedbymoniker citext` → `engine.__member(moniker)` `on update cascade on delete set null`
+- `revoked timestamptz` — set when code is revoked (nullable; non-null = revoked)
+- `casinotablemoniker citext` → `casino.__table(moniker)` `on update cascade on delete cascade`
+  (populated only when `module='casino'`; allows FK cleanup when a table is deleted)
+- Unique index on `(module, resourceid, code)` to prevent duplicates
+- Partial unique index `WHERE revoked IS NULL AND dateused IS NULL` to prevent duplicate active codes per resource
+
+**View `engine.invite`:**
+Mirrors `session.sql:25-35` pattern:
+- Exposes `*epoch` (integer seconds) and `*local` (current user's timezone) for `datecreated`, `dateexpires`, `dateused`, `revoked`
+- Joined via `left outer join engine.__member as currentmember on (loginid = CURRENT_USER)`
+
+**Grants:**
+- `grant select, insert, update, delete on engine.__invite to web, term, sysop;`
+- `grant select on engine.invite to web, term, sysop;`
+
+### DAL (`bbsengine6/invite.py`)
+
+Functional style with `_work(conn)` + `kwargs.pop("conn")` pattern (matches `session.py`):
+
+- `create_invite(args, module, resourceid, createdbymoniker, dateexpires=None, code=None, **kwargs) -> Dict`
+  - If `code` is None, generate `secrets.token_urlsafe(6)` (8 chars, URL-safe, hard to guess)
+  - Returns `{success, message, id, code, datecreated, dateexpires}` or `{success: False, message: ...}`
+- `get_invites(args, module, resourceid, include_revoked=False, include_used=False, **kwargs) -> List[Dict]`
+  - Defaults to filtering out revoked and used invites
+  - Ordered by `datecreated desc`
+- `validate_invite(args, module, resourceid, code, **kwargs) -> Optional[Dict]`
+  - Returns invite dict if valid (not used, not revoked, not expired)
+  - Returns None otherwise
+- `mark_used(args, invite_id, usedbymoniker, **kwargs) -> bool`
+  - Sets `dateused=now()`, `usedbymoniker=...`
+  - Returns False if already used or revoked (idempotent guard)
+- `revoke_invite(args, invite_id, **kwargs) -> bool`
+  - Sets `revoked=now()` (soft delete via flag, per design decision)
+  - Returns False if already revoked, used, or not found
+
+Uses `database.query()` for safe identifier/value composition.
+
+### Service (`bbsengine6/services/invite.py`)
+
+`InviteService` class:
+- `__init__(self, args)`
+- Wraps DAL methods in `{success, message, ...}` envelopes (matches `services/channel.py:75-79`)
+- Message-type constants:
+  - `MESSAGE_INVITE_CREATE = "invite_create"`
+  - `MESSAGE_INVITE_LIST = "invite_list"`
+  - `MESSAGE_INVITE_REVOKE = "invite_revoke"`
+  - `MESSAGE_INVITE_VALIDATE = "invite_validate"`
+  - `MESSAGE_INVITE_USE = "invite_use"`
+
+### Tests (`test_invite.py`)
+
+Test classes (function-scoped, with `test_args` + `test_pool` fixtures; autouse rollback from conftest provides data isolation):
+- `TestCreateInvite` — default random code, explicit code, with expiry, duplicate detection
+- `TestGetInvites` — by module+resourceid, ordering, default filters out used/revoked, opt-in flags
+- `TestValidateInvite` — valid, wrong code, used, revoked, expired, wrong module
+- `TestMarkUsed` — success, idempotent on already-used, rejected on revoked
+- `TestRevokeInvite` — success, idempotent on already-revoked, on missing id
+- `TestInviteService` — checks return envelope shape, message-type constants
+- `TestCasinoFk` — invite FKs to `casino.__table`; deleting the table cascades
+
+### Out of scope (separate task)
+
+- Removing `casino.__table_invite`
+- Updating casino to use `bbsengine6.invite` module
+- Implementing `create_invite` / `list_invites` / `revoke_invite` message handlers in casino router
+- Module-specific invite validation logic (per-module)
+
+### Implementation tasks
+
 - [ ] Create `bbsengine6/sql/invite.sql` - shared invite code table:
   ```sql
   CREATE TABLE engine.__invite (
