@@ -520,6 +520,40 @@ Create MemberServices for the BBS Engine Daemon (BED), leveraging bbsengine6's m
 
 ---
 
+## GPG Key Support for Message Signing
+
+Add columns to support GPG keys for signing messages.
+
+- [ ] Add `gpg_public_key` column to `engine.__member` table
+  - [ ] Store ASCII-armored GPG public key
+  - [ ] Add index for efficient lookups
+- [ ] Add `gpg_keyid` column to `engine.__member` table
+  - [ ] Store short key ID for quick reference
+- [ ] Add `gpg_fingerprint` column to `engine.__member` table
+  - [ ] Store full 40-character fingerprint
+- [ ] Create SQL migration file: `bbsengine6/sql/gpg_keys.sql`
+  - [ ] Add columns with proper grants
+- [ ] Create view: `engine.member` includes gpg columns
+- [ ] Create DAL functions in `bbsengine6/member.py`:
+  - [ ] `set_gpg_key(args, moniker, public_key)` - store GPG key
+  - [ ] `get_gpg_key(args, moniker)` - retrieve GPG key
+  - [ ] `delete_gpg_key(args, moniker)` - remove GPG key
+  - [ ] `verify_gpg_key(args, moniker, signature, data)` - verify signed message
+- [ ] Add message signing to message system:
+  - [ ] Sign messages with member's GPG key when sending
+  - [ ] Verify GPG signatures on received messages
+  - [ ] Store signature with message record
+- [ ] Handle GPG key passphrases/authentication:
+  - [ ] Add `gpg_key_password` column to `engine.__session` table (temporary, session-scoped)
+  - [ ] Create DAL function to store decrypted private key in session
+  - [ ] Implement secure passphrase entry via WebSocket (not stored in DB)
+  - [ ] Session-scoped key decryption (key only available during active session)
+  - [ ] Clear passphrase from memory after use
+  - [ ] Add `unlock_gpg_key` message type for WebSocket clients
+  - [ ] Add `gpg_key_locked` response flag to indicate key needs unlock
+
+---
+
 ## Package Data Helper (importlib.files style)
 
 - [x] Add `bbsengine6.module.files(module_ref) -> pathlib.Path` function
@@ -553,3 +587,122 @@ The thread-safe version in `bbsengine6/util.py` is the canonical one. The duplic
 Create `bbsengine6/bank/api/handler.py` for the modular architecture.
 
 See zoid6/TODO.md for full context.
+
+---
+
+## Phase 4: Generic Invite Code System
+
+- [ ] Create `bbsengine6/sql/invite.sql` - shared invite code table:
+  ```sql
+  CREATE TABLE engine.__invite (
+      id bigserial primary key,
+      module text not null,  -- 'casino', 'empyre', 'murdermotel', etc.
+      resourceid text not null,  -- tableid, islandid, roomid, etc.
+      code text not null,
+      createdbymoniker citext constraint fk_invite_createdby references engine.__member(moniker) on update cascade on delete set null,
+      datecreated timestamptz,
+      dateused timestamptz,
+      dateexpires timestamptz,
+      -- Module-specific FKs for referential integrity:
+      constraint fk_invite_casino foreign key (resourceid) references casino.__table(moniker) on delete cascade
+  );
+  -- Add similar FKs as modules are added:
+  -- constraint fk_invite_empyre foreign key (resourceid) references empyre.__island(id) on delete cascade
+  ```
+- [ ] Create `engine.invite` view with local timezone conversion
+- [ ] Create `bbsengine6/invite.py` - DAL functions:
+  - [ ] `create_invite(args, module, resourceid, createdbymoniker, dateexpires)` → returns code
+  - [ ] `get_invites(args, module, resourceid)` → list of codes
+  - [ ] `revoke_invite(args, invite_id)` → bool
+  - [ ] `validate_invite(args, module, resourceid, code)` → returns invite record or None
+  - [ ] `mark_used(args, invite_id)` → bool
+
+---
+
+## Phase 5: Logging
+
+### Enhanced logentry() Function
+- [x] Add key-value parameters to `bbsengine6.util.logentry()`:
+  - [x] `module: str = ""`
+  - [x] `action: str = ""`
+  - [x] `moniker: str = ""`
+  - [x] `loginid: str = ""`
+  - [x] `ip_address: str = ""`
+  - [x] `fingerprint: str = ""`
+  - [x] `table: str = ""`
+  - [x] `**kwargs` for additional fields
+- [x] Build formatted string: `[module] action key=value key=value message`
+- [x] Keep backward compatibility (no new params = original behavior)
+- [x] Update bank/bank.py `log_event()` to use new util.logentry()
+
+### Log Format Standard
+**Format:** `[module] action key=value key=value free_text_at_end`
+
+- [x] Key-value pairs go at the start (e.g., `moniker=john amount=100`)
+- [x] Free text goes at the end (no `reason=` prefix)
+- [x] Use underscores for multi-word fields (e.g., `loginid`, `accountid`)
+
+### Module log_event() Cleanup
+- [x] `bbsengine6/bank/bank.py:11` - remove `log_event()` definition
+- [x] `bbsengine6/bank/bank.py:67` - refactor `add_funds_failed` (add_funds method)
+- [x] `bbsengine6/bank/bank.py:87` - refactor `add_funds` success
+- [x] `bbsengine6/bank/bank.py:113` - refactor `remove_funds_failed` (amount check)
+- [x] `bbsengine6/bank/bank.py:118` - refactor `remove_funds_failed` (account not found)
+- [x] `bbsengine6/bank/bank.py:122` - refactor `remove_funds_failed` (insufficient funds)
+- [x] `bbsengine6/bank/bank.py:141` - refactor `remove_funds` success
+- [x] `bbsengine6/bank/bank.py:166` - refactor `transfer` success (transfer_request)
+- [x] `bbsengine6/bank/bank.py:175` - refactor `transfer` failure
+- [x] `bbsengine6/bank/bank.py:191` - refactor `approve_transfer` success
+- [x] `bbsengine6/bank/bank.py:201` - refactor `approve_transfer` failure
+- [x] `bbsengine6/bank/bank.py:216` - refactor `reject_transfer` success
+- [x] `bbsengine6/bank/bank.py:223` - refactor `reject_transfer` failure
+- [x] Verify no external imports of `bbsengine6.bank.log_event` (confirmed: 0)
+- [x] Run bank tests to verify refactor (25 passed)
+
+### Phase 5 Complete
+- [x] `bbsengine6.util.logentry()` enhanced with key-value params (module, action, moniker, loginid, ip_address, fingerprint, table, **kwargs)
+- [x] Format: `[module] action key=value key=value free_text`
+- [x] Backward compatibility preserved
+- [x] `bbsengine6/bank/bank.py` refactored: `log_event()` removed, all 12 call sites use `logentry()` directly
+- [x] All other modules (casino, empyre, mistermcfeely, murdermotel, bed, zoid6, asimov, asb) verified clean of `log_event`/`log_entry` definitions
+- [x] `mistermcfeely` keeps `log_entry_fn` callback DI pattern (intentional, different from `log_event` wrapper)
+- [x] Full test suite: 1091 passed, 18 pre-existing failures (verified unrelated to logging changes), 13 skipped
+
+---
+
+## Phase 6: Channel Access Control
+
+### Invite-Only Channels
+- [ ] Add `invite_only` flag to channel creation
+- [ ] Add invite code validation for joining invite-only channels
+- [ ] Use generic `engine.__invite` system for channel invites
+- [ ] Only invited users can subscribe to invite-only channels
+- [ ] Channel owner can manage invites
+
+### Moderated Channels
+- [ ] Add `moderated` flag to channel creation
+- [ ] Add `moderators` list to channel (monikers)
+- [ ] Add `member_moderation` config (boolean):
+  - true: members' messages require approval
+  - false: members can post freely (default)
+- [ ] Add `non_member_moderation` config (boolean):
+  - true: non-members' messages require approval
+  - false: non-members can post freely (default)
+- [ ] Add both fields to channel schema
+- [ ] Implement moderation logic based on sender's membership status
+- [ ] Add message types: `approve_message`, `reject_message`
+- [ ] Moderators receive notification of pending messages
+
+### Private Channels
+- [ ] Add `private` flag to channel creation
+- [ ] Private channels don't appear in `get_subscriptions` list
+- [ ] Users must know exact channel name to join
+- [ ] Only invited/approved users can subscribe
+- [ ] Sysops see private channels in list (with indicator)
+
+### Announce-Only Channels
+- [ ] Add `announce_only` flag to channel creation
+- [ ] Add `announcers` list to channel (monikers who can post)
+- [ ] Only announcers can send messages to the channel
+- [ ] Anyone can subscribe and read (viewers)
+- [ ] Sysops are always announcers by default

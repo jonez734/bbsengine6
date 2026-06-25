@@ -323,28 +323,57 @@ def oxfordcomma(seq, conjunction: str = "and") -> Optional[str]:
 
 
 def logentry(
-    message: str,
+    message: str = "",
     *,
     level: object = logging.INFO,
     handler: Optional[logging.Handler] = None,
     formatter: Optional[logging.Formatter] = None,
     logger_name: str = LOGGER_NAME,
+    module: str = "",
+    action: str = "",
+    moniker: str = "",
+    loginid: str = "",
+    ip_address: str = "",
+    fingerprint: str = "",
+    table: str = "",
+    **kwargs: Any,
 ) -> None:
     """Log a message to the BBS engine logger.
 
     Thread-safe logging function that manages handler registration and log level mapping.
 
+    When any of the structured key-value parameters (module, action, moniker, loginid,
+    ip_address, fingerprint, table) or **kwargs are provided, the message is formatted
+    in the standard log format::
+
+        [module] action key=value key=value free_text_at_end
+
+    If no structured parameters are provided, the message is logged as-is (backward
+    compatible behavior).
+
     Args:
-        message: The message to log.
+        message: Free-text message (appended at end of formatted output). Defaults to "".
         level: Log level as int (logging.DEBUG, etc.) or string ("debug", "info", "warn",
                "warning", "error", "critical"). Default: logging.INFO.
         handler: Custom logging handler. If None, uses default syslog handler.
         formatter: Custom log formatter. If None, uses handler's formatter.
         logger_name: Name of the logger to use (default: "bbsengine6").
+        module: Source module name (e.g., "bank", "casino"). Bracketed in output.
+        action: Event action name (e.g., "add_funds", "transfer_request").
+        moniker: Member moniker.
+        loginid: Login session ID.
+        ip_address: Client IP address.
+        fingerprint: Client TLS fingerprint.
+        table: Table/resource name.
+        **kwargs: Additional key-value pairs to include in formatted output.
 
     Example:
+        >>> logentry("insufficient funds", module="bank", action="withdraw",
+        ...          moniker="alice", amount=100)
+        [bank] withdraw moniker=alice amount=100 insufficient funds
+
         >>> logentry("User logged in", level="info")
-        >>> logentry("Database error", level=logging.ERROR)
+        User logged in
     """
     h = handler or _get_default_handler()
     f = formatter or h.formatter
@@ -365,6 +394,33 @@ def logentry(
         "error": logging.ERROR,
         "critical": logging.CRITICAL,
     }
+
+    structured_fields = [
+        (module, "module"),
+        (action, "action"),
+        (moniker, "moniker"),
+        (loginid, "loginid"),
+        (ip_address, "ip_address"),
+        (fingerprint, "fingerprint"),
+        (table, "table"),
+    ]
+    has_structured = any(v for v, _ in structured_fields) or kwargs
+
+    if has_structured:
+        parts = []
+        if module:
+            parts.append(f"[{module}]")
+        if action:
+            parts.append(action)
+        for value, name in structured_fields[2:]:
+            if value:
+                parts.append(f"{name}={value}")
+        for key, value in kwargs.items():
+            if value is not None and value != "":
+                parts.append(f"{key}={value}")
+        if message:
+            parts.append(message)
+        message = " ".join(parts)
 
     if isinstance(level, int):
         logger.log(level, message)
