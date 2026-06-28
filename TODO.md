@@ -962,6 +962,29 @@ Test classes (function-scoped, with `test_args` + `test_pool` fixtures; autouse 
 - [ ] Update any remaining direct imports of `bbsengine6.bank` to `bbsengine6.services.bank`
 - [ ] Remove the `services/__init__.py` re-exports if no longer needed
 
+### 7.9 Per-member accounts for casino hand flow (cross-repo)
+
+Cross-reference. The full task list lives in
+`casino/TODO.md` "Rework: route per-hand money through the bank".
+bbsengine6 owns one decision: whether per-member accounts are
+added to the existing `bbsengine6.bank` package or a new
+`bank.__member_account` table is created.
+
+- [ ] **Schema decision (bbsengine6-owned).** Per-member
+  accounts in `bbsengine6.bank` (extend the existing package)
+  vs a new `bank.__member_account` table (parallel structure).
+  Document the decision in `bbsengine6/bank/` once made;
+  cross-reference from `casino/TODO.md` "Rework" tasks.
+- [ ] **Migration script.** Backfill existing
+  `engine.__member.credits` values into the chosen bank
+  structure. Reconcile against any `bank.__account` rows
+  already mapped to members.
+- [ ] **Transactional `LedgerService.credit` / `debit`.**
+  Extend the Phase 7.2.1 `LedgerService` so each credit/debit
+  is atomic across the `bank.__account` UPDATE and the
+  `bank.__transaction` INSERT. Required for the casino's
+  "one transaction per hand" requirement.
+
 ## 8. Security Review: AuthService and PlayerService
 
 **Status:** Planning
