@@ -68,8 +68,13 @@ def build(rec: dict) -> dict:
     return session
 
 
-def start(args: Namespace, **kwargs: Any) -> bool:
-    def _work(conn: Any) -> bool:
+def start(args: Namespace, **kwargs: Any) -> bool | None:
+    def _work(conn: Any) -> bool | None:
+        membercount = member.count(args, conn=conn)
+        if membercount is None or membercount == 0:
+            io.echo("no members, so not starting a session", level="warn")
+            return None
+
         currentsessionid = getcurrentsessionid()
 
         garbagecollect(args, conn=conn)

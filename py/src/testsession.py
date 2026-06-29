@@ -768,6 +768,7 @@ class TestSessionStartErrors(unittest.TestCase):
     def test_start_returns_false_when_buildsession_fails(
         self, mock_io: MagicMock, mock_member: MagicMock
     ) -> None:
+        mock_member.count.return_value = 1
         mock_member.getcurrentmoniker.return_value = None
 
         mock_conn = MagicMock()
@@ -780,13 +781,19 @@ class TestSessionStartErrors(unittest.TestCase):
 
         self.assertFalse(result)
 
+    @patch("bbsengine6.session.member")
     @patch("bbsengine6.session.getmembersession")
     @patch("bbsengine6.session.buildsession")
     @patch("bbsengine6.session.database")
     def test_start_creates_new_session_when_none_exists(
-        self, mock_database: MagicMock, mock_buildsession: MagicMock, mock_getmembersession: MagicMock
+        self,
+        mock_database: MagicMock,
+        mock_buildsession: MagicMock,
+        mock_getmembersession: MagicMock,
+        mock_member: MagicMock,
     ) -> None:
         session.setcurrentsessionid(None)
+        mock_member.count.return_value = 1
         mock_getmembersession.return_value = None
         mock_buildsession.return_value = {
             "id": "new-session-id",
@@ -810,12 +817,17 @@ class TestSessionStartErrors(unittest.TestCase):
 
         session.setcurrentsessionid(None)
 
+    @patch("bbsengine6.session.member")
     @patch("bbsengine6.session.getmembersession")
     @patch("bbsengine6.session.database")
     def test_start_returns_existing_session_when_valid(
-        self, mock_database: MagicMock, mock_getmembersession: MagicMock
+        self,
+        mock_database: MagicMock,
+        mock_getmembersession: MagicMock,
+        mock_member: MagicMock,
     ) -> None:
         session.setcurrentsessionid(None)
+        mock_member.count.return_value = 1
         mock_getmembersession.return_value = {
             "id": "existing-session-id",
             "expiry": datetime.now(timezone.utc) + timedelta(hours=1),
@@ -834,6 +846,36 @@ class TestSessionStartErrors(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(session.getcurrentsessionid(), "existing-session-id")
 
+        session.setcurrentsessionid(None)
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_start_returns_none_when_no_members(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        session.setcurrentsessionid(None)
+        mock_member.count.return_value = 0
+
+        mock_conn = MagicMock()
+        result = session.start(self.mock_args, conn=mock_conn)
+
+        self.assertIsNone(result)
+        self.assertIsNone(session.getcurrentsessionid())
+        session.setcurrentsessionid(None)
+
+    @patch("bbsengine6.session.member")
+    @patch("bbsengine6.session.io")
+    def test_start_returns_none_when_member_count_is_none(
+        self, mock_io: MagicMock, mock_member: MagicMock
+    ) -> None:
+        session.setcurrentsessionid(None)
+        mock_member.count.return_value = None
+
+        mock_conn = MagicMock()
+        result = session.start(self.mock_args, conn=mock_conn)
+
+        self.assertIsNone(result)
+        self.assertIsNone(session.getcurrentsessionid())
         session.setcurrentsessionid(None)
 
 
