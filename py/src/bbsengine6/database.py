@@ -105,17 +105,25 @@ def executemany(cur: Any, operation: str, seq_of_params: list) -> None:
         cur.execute(operation, converted)
 
 
-def _table_identifier(table: str):
+def _table_identifier(table: str, args: Any = None):
     """Create proper SQL identifier for schema-qualified table names.
 
     Args:
       table: Table name, optionally qualified with schema (e.g., 'empyre.__player')
+      args: Optional application args. When provided, a bare schema of 'engine'
+            is rewritten to args.databaseschema so callers do not have to know
+            the active schema at the call site.
 
     Returns:
       sql.Identifier for the table
     """
     if "." in table:
         schema, table_name = table.split(".", 1)
+        if schema == "engine" and args is not None:
+            try:
+                schema = args.databaseschema
+            except AttributeError:
+                pass
         return sql.Identifier(schema, table_name)
     return sql.Identifier(table)
 
@@ -563,7 +571,7 @@ def update(args: Any, table: str, pk: str, items: dict, **kwargs) -> bool:
         if primarykey in _items and updatepk is False:
             del _items[primarykey]
 
-        query = sql.SQL("update ") + _table_identifier(table) + sql.SQL(" set ")
+        query = sql.SQL("update ") + _table_identifier(table, args) + sql.SQL(" set ")
         params = []
         dat = []
         for k, v in _items.items():
@@ -652,8 +660,9 @@ def upsert(
             {"moniker": "jonez", "name": "APPROVED", "value": True},
             conflict_columns=["moniker", "name"],
             update_columns=["value"],
-            conn=conn
+            conn=conn,
         )
+        # The 'engine' schema is rewritten to args.databaseschema.
 
     Note:
         - All columns in items should be valid for the table
@@ -703,7 +712,7 @@ def upsert(
 
             # Build INSERT clause
             insert_clause = (
-                sql.SQL("INSERT INTO ") + _table_identifier(table) + sql.SQL(" (")
+                sql.SQL("INSERT INTO ") + _table_identifier(table, args) + sql.SQL(" (")
             )
             insert_clause += sql.SQL(", ").join(
                 [sql.Identifier(col) for col in columns]
@@ -789,7 +798,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
         if k == "datecreatedepoch":
             del items_copy[k]
 
-    query = sql.SQL("insert into ") + _table_identifier(table) + sql.SQL("(")
+    query = sql.SQL("insert into ") + _table_identifier(table, args) + sql.SQL("(")
     query = query + sql.SQL(", ").join([sql.Identifier(c) for c in columns])
     query = query + sql.SQL(") values (")
 
@@ -804,7 +813,7 @@ def insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool:
         query = (
             query
             + sql.SQL(" returning ")
-            + _table_identifier(table)
+            + _table_identifier(table, args)
             + sql.SQL(".")
             + sql.Identifier(primarykey)
         )
@@ -991,7 +1000,7 @@ def buildargs(
         "databasename", os.environ.get("BBSENGINE6_DBNAME", "zoid6")
     )
     databasehost = defaults.get(
-        "databasehost", os.environ.get("BBSENGINE6_DBHOST", "127.0.0.1")
+        "databasehost", os.environ.get("BBSENGINE6_DBHOST", "localhost")
     )
     databaseport = int(
         defaults.get(
@@ -1174,22 +1183,24 @@ def createrol(args: Any, name: str, **kwargs: Any) -> bool:
             value = kwargs.get(priv, default)
             options.append(enabled if value else disabled)
 
+        options_sql = sql.SQL(" ").join([sql.SQL(o) for o in options])
+
         if "password" in kwargs:
             query = sql.SQL(  # type: ignore
-                f"create role {sql.Identifier(name)} with {sql.SQL(' ').join([sql.SQL(o) for o in options])} password %s"
-            )
+                "create role {} with {} password %s"
+            ).format(sql.Identifier(name), options_sql)
             io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
             cur.execute(query, (kwargs["password"],))
         elif "expiration" in kwargs:
             query = sql.SQL(  # type: ignore
-                f"create role {sql.Identifier(name)} with {sql.SQL(' ').join([sql.SQL(o) for o in options])} valid until %s"
-            )
+                "create role {} with {} valid until %s"
+            ).format(sql.Identifier(name), options_sql)
             io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
             cur.execute(query, (kwargs["expiration"],))
         else:
             query = sql.SQL(  # type: ignore
-                f"create role {sql.Identifier(name)} with {sql.SQL(' ').join([sql.SQL(o) for o in options])}"
-            )
+                "create role {} with {}"
+            ).format(sql.Identifier(name), options_sql)
             io.echo(f"bbsengine.database.createrol.100: {query=}", level="debug")
             cur.execute(query)
         return False if cur.rowcount == 0 else True
@@ -1260,7 +1271,7 @@ def create(args: Any, name: str, **kwargs: Any) -> bool:
     def _work(cur):
         # Use psycopg.sql.Identifier to safely handle the database name
         try:
-            sql = SQL(f"CREATE DATABASE {Identifier(name)}")  # type: ignore
+            sql = SQL("CREATE DATABASE {}").format(Identifier(name))  # type: ignore
             cur.execute(sql)
         except Exception as e:
             io.echo_traceback(f"bbsengine6.database.create.200: {e}")
@@ -1530,8 +1541,8 @@ def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
     def _work(cur):
         try:
             sql = psycopg.sql.SQL(  # type: ignore
-                f"CREATE EXTENSION IF NOT EXISTS {psycopg.sql.Identifier(ext)}"
-            )
+                "CREATE EXTENSION IF NOT EXISTS {}"
+            ).format(psycopg.sql.Identifier(ext))
             #            sql = "create extension if not exists %s"
             cur.execute(sql)
         except psycopg.errors.InsufficientPrivilege:

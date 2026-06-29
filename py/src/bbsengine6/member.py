@@ -51,6 +51,24 @@ def _validate_fields(fields: str, allowed: frozenset = ALLOWED_MEMBER_COLUMNS) -
     return fields
 
 
+def _qualified(rel: str, args) -> str:
+    """Return a '$<schema>.<rel>' identifier string for use with database.query().
+
+    Resolves the schema from args.databaseschema when the caller passes the
+    default 'engine' schema, so callers can keep using 'engine.<rel>' as the
+    default table kwarg without hardcoding the active schema.
+    """
+    if "." in rel:
+        schema, name = rel.split(".", 1)
+        if schema == "engine":
+            try:
+                schema = args.databaseschema
+            except AttributeError:
+                pass
+        return f"${schema}.{name}"
+    return f"${args.databaseschema}.{rel}"
+
+
 # @since 20221113
 def buildrec(member):
     """Transform member dict for database operations.
@@ -154,9 +172,12 @@ def getcurrentmoniker(args, **kwargs):
             return None
         try:
             with database.cursor(conn) as cur:
-                sql = "select moniker from engine.member where loginid=%s"
-                dat = (loginid,)
-                cur.execute(sql, dat)
+                cur.execute(
+                    database.query(
+                        "select moniker from $engine.member where loginid=$1",
+                        loginid,
+                    )
+                )
                 if cur.rowcount == 0:
                     return None
                 row = cur.fetchone()
@@ -214,9 +235,12 @@ def getcurrentid(args, **kwargs):
         if loginid is None:
             return None
         try:
-            sql = "select moniker from engine.member where loginid=%s"
-            dat = (loginid,)
-            cur.execute(sql, dat)
+            cur.execute(
+                database.query(
+                    "select moniker from $engine.member where loginid=$1",
+                    loginid,
+                )
+            )
             if cur.rowcount == 0:
                 return None
             rec = cur.fetchone()
@@ -467,9 +491,12 @@ def getbymoniker(
         if moniker is None:
             return None
         validated_fields = _validate_fields(fields)
-        sql = f"select {validated_fields}, timezone(tz, lastlogin) from engine.member where moniker=%s"
-        dat = (moniker,)
-        cur.execute(sql, dat)
+        cur.execute(
+            database.query(
+                f"select {validated_fields}, timezone(tz, lastlogin) from $engine.member where moniker=$1",
+                moniker,
+            )
+        )
         if cur.rowcount == 0:
             return None
         rec = cur.fetchone()
@@ -496,9 +523,12 @@ def getbymoniker(
 def getbyid(args, memberid: int, fields: str = "*", **kwargs) -> dict | None:
     def _work(cur):
         validated_fields = _validate_fields(fields)
-        sql = f"select {validated_fields} from engine.member where id=%s"
-        dat = (memberid,)
-        cur.execute(sql, dat)
+        cur.execute(
+            database.query(
+                f"select {validated_fields} from $engine.member where id=$1",
+                memberid,
+            )
+        )
         if cur.rowcount == 0:
             io.echo("bbsengine6.member.getbyid: no rows returned")
             return None
@@ -525,10 +555,12 @@ def checkflag(
     def _work(conn):
         if moniker is None:
             return None
-        sql = "select * from engine.checkflag(%s, %s)"
-        dat = (flag, moniker)
         with database.cursor(conn) as cur:
-            cur.execute(sql, dat)
+            cur.execute(
+                database.query(
+                    "select * from $engine.checkflag($1, $2)", flag, moniker
+                )
+            )
             if cur.rowcount == 0:
                 return None
             return cur.fetchone()["checkflag"]
@@ -578,10 +610,10 @@ def getflags(args, moniker=None, **kwargs):
     io.echo(f"bbsengine.member.getflags.240: {moniker=}", level="debug")
 
     def _work(conn):
-        sql = "select * from engine.getflags(%s)"
-        dat = (moniker,)
         with database.cursor(conn) as cur:
-            cur.execute(sql, dat)
+            cur.execute(
+                database.query("select * from $engine.getflags($1)", moniker)
+            )
             flags = {
                 flag["name"]: {
                     "description": flag["description"],
@@ -807,9 +839,13 @@ def setflag(args, name, value, **kwargs) -> bool:
 
 def setpassword(args, plaintextpassword: str, moniker: str, **kwargs):
     def _setpw(cur):
-        sql = "update engine.__member set password=crypt(%s, gen_salt('bf')) where moniker=%s"
-        dat = (plaintextpassword, moniker)
-        cur.execute(sql, dat)
+        cur.execute(
+            database.query(
+                "update $engine.__member set password=crypt($1, gen_salt('bf')) where moniker=$2",
+                plaintextpassword,
+                moniker,
+            )
+        )
         if cur.rowcount == 0:
             return None
         return True
@@ -849,17 +885,25 @@ def checkpassword(
     def _work(cur):
         if membermoniker is None:
             return None
-        sql = "select password from engine.member where moniker=%s"
-        cur.execute(sql, (membermoniker,))
+        cur.execute(
+            database.query(
+                "select password from $engine.member where moniker=$1",
+                membermoniker,
+            )
+        )
         row = cur.fetchone()
         if row is None:
             return False
         stored_password = row["password"]
         if stored_password is None or stored_password == "":
             return plaintextpassword == ""
-        sql = "select 1 from engine.member where password=crypt(%s, password) and moniker=%s"
-        dat = (plaintextpassword, membermoniker)
-        cur.execute(sql, dat)
+        cur.execute(
+            database.query(
+                "select 1 from $engine.member where password=crypt($1, password) and moniker=$2",
+                plaintextpassword,
+                membermoniker,
+            )
+        )
         io.echo(f"{cur.rowcount=}", level="debug")
         return False if cur.rowcount == 0 else True
 
@@ -909,13 +953,20 @@ def setattrs(args, attrs: dict, moniker=None, **kwargs):
         return None
 
     if reset is False:
-        q = sql.SQL("update engine.__member set attrs=attrs||%s where moniker=%s")
+        q = database.query(
+            "update $engine.__member set attrs=attrs||$1 where moniker=$2",
+            database.Jsonb(attrs),
+            moniker,
+        )
     else:
-        q = sql.SQL("update engine.__member set attrs=%s where moniker=%s")
+        q = database.query(
+            "update $engine.__member set attrs=$1 where moniker=$2",
+            database.Jsonb(attrs),
+            moniker,
+        )
 
-    dat = (database.Jsonb(attrs), moniker)
     try:
-        return cur.execute(q, dat)
+        return cur.execute(q)
     except Exception:
         io.echo_traceback("bbsengine6.member.setattrs.100:")
         return None
@@ -927,9 +978,10 @@ def verifyMemberNotFound(args, name, column="loginid", **kwargs):
         with database.connect(args, readonly=True) as conn:
             with database.transaction(conn, readonly=True):
                 with database.cursor(conn) as cur:
-                    sql = f"select 1 from engine.member where {column}=%s"
-                    dat = (name,)
-                    cur.execute(sql, dat)
+                    q = sql.SQL("select 1 from ") + sql.Identifier(
+                        args.databaseschema, "member"
+                    ) + sql.SQL(" where ") + sql.Identifier(column) + sql.SQL("=$1")
+                    cur.execute(q, (name,))
                     if cur.rowcount == 0:
                         return True
                     return False
@@ -958,9 +1010,10 @@ def verifyMemberFound(args, name, **kwargs):
     def _work(conn):
         try:
             with database.cursor(conn) as cur:
-                sql = f"select 1 from engine.member where {column}=%s"
-                dat = (name,)
-                cur.execute(sql, dat)
+                q = sql.SQL("select 1 from ") + sql.Identifier(
+                    args.databaseschema, "member"
+                ) + sql.SQL(" where ") + sql.Identifier(column) + sql.SQL("=$1")
+                cur.execute(q, (name,))
                 return False if cur.rowcount == 0 else True
         except Exception:
             io.echo_traceback("bbsengine6.member.verifyMemberFound.100:")
@@ -1066,7 +1119,12 @@ def has_password(args, moniker: str, **kwargs) -> bool:
     def _work(conn):
         try:
             with database.cursor(conn) as cur:
-                cur.execute("SELECT password FROM engine.member WHERE moniker = %s", (moniker,))
+                cur.execute(
+                    database.query(
+                        "SELECT password FROM $engine.member WHERE moniker = $1",
+                        moniker,
+                    )
+                )
                 row = cur.fetchone()
                 if row is None:
                     return False
@@ -1168,8 +1226,7 @@ def insert(args, member, **kwargs):
 
 def count(args, **kwargs):
     def _work(cur):
-        sql = "select count(moniker) from engine.member"
-        cur.execute(sql)
+        cur.execute(database.query("select count(moniker) from $engine.member"))
         if cur.rowcount == 0:
             return None
         res = cur.fetchone()
@@ -1262,8 +1319,7 @@ def insert(args, member, **kwargs):
 
 def count(args, **kwargs):
     def _work(cur):
-        sql = "select count(moniker) from engine.member"
-        cur.execute(sql)
+        cur.execute(database.query("select count(moniker) from $engine.member"))
         if cur.rowcount == 0:
             return None
         res = cur.fetchone()
@@ -1338,9 +1394,12 @@ def group_exists(args, group_name: str, **kwargs) -> bool | None:
 
     try:
         with database.cursor(conn) as cur:
-            sql = "SELECT 1 FROM engine.__notify_group WHERE group_name=%s LIMIT 1"
-            dat = (group_name,)
-            cur.execute(sql, dat)
+            cur.execute(
+                database.query(
+                    "SELECT 1 FROM $engine.__notify_group WHERE group_name=$1 LIMIT 1",
+                    group_name,
+                )
+            )
             return cur.rowcount > 0
     except Exception:
         io.echo_traceback("bbsengine6.member.group_exists.100:")
@@ -1419,12 +1478,13 @@ def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
 
     try:
         with database.cursor(conn) as cur:
-            sql = (
-                "SELECT member_moniker FROM engine.__notify_group "
-                "WHERE group_name=%s ORDER BY member_moniker"
+            cur.execute(
+                database.query(
+                    "SELECT member_moniker FROM $engine.__notify_group "
+                    "WHERE group_name=$1 ORDER BY member_moniker",
+                    group_name,
+                )
             )
-            dat = (group_name,)
-            cur.execute(sql, dat)
 
             if cur.rowcount == 0:
                 return []
