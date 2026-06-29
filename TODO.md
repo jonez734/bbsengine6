@@ -18,6 +18,7 @@
 ## Python Issues
 
 - [x] Fix psycopg-pool 3.3.0 incompatibility
+- [x] Fix SQL composition bug in creatextension()/createrol()/create() — `sql.Identifier(...)` was interpolated via f-string into `sql.SQL(...)` instead of `.format(...)`, emitting literal `Identifier('...')` text. Affected: database.py creatextension (blocks stage-zero extension install), createrol (3 branches), create. 2026-06-29.
 
 ## Unified Pub/Sub Channel System
 
@@ -1496,3 +1497,159 @@ Triggers on `pg_roles` are not available (PG doesn't expose DDL
 triggers on `CREATE ROLE`), so audit calls would have to be
 explicit from the SQL functions (`engine.createpgrole`,
 `engine.deletepgrole`, etc.).
+
+---
+
+## Wire `bbsengine6.startup` into the `bbsengine6.console` boot path
+
+**Status:** Planned (not yet implemented)
+**Reported:** 2026-06-29
+**Symptom:** Hand-edits to `bbsengine6/py/src/bbsengine6/startup.py` (e.g.
+a `util.heading(...)` call) are never displayed when running
+`python -m bbsengine6.console`.
+
+### Problem
+
+`bbsengine6.console` does not invoke `bbsengine6.startup` from any code
+path:
+
+- `console/__main__.py:40` dispatches to `bbsengine6.console.main` via
+  `lib.runmodule(args, "main")`.
+- `console/main.py:main()` runs `stage_zero()` → `stage_one()` → menu
+  loop. There is no reference to `bbsengine6.startup` anywhere in
+  `console/`.
+- `console/lib.py:runmodule()` (line 140) only resolves submodules
+  under `bbsengine6.console.*` (`member`, `session`, `memberapproval`,
+  the `check*` modules). It does not dispatch to `bbsengine6.startup`.
+- `bbsengine6/__init__.py` does not re-export `startup`.
+- No `register_module("bbsengine6.startup", ...)` call exists
+  anywhere in the repo.
+- The only caller of `bbsengine6.startup.main` in the whole codebase
+  is `mistermcfeely/src/postoffice/startup_test.py:159`, which is a
+  one-off data-seeding test harness, not the engine boot path.
+
+Net effect: every edit to `startup.py` is dead code at runtime. The
+file's `init()` / `access()` / `buildargs()` stubs return immediately,
+and `main()` is never called, so all output inside `_work(conn)` (and
+the user's `util.heading(...)`) is silent.
+
+The `startup.py~` editor backup is unrelated to the symptom — its
+single-line diff vs. the live file is one extra debug `io.echo(...)`
+on the `member` role check (live file line 32). No `util.heading` call
+exists in either copy, which matches "call to `util.heading()` is
+never displayed" exactly.
+
+`talks/ray.md` ticking off `bbsengine6.startup` is misleading: the
+module *exists*, but the wire-up to the console boot path does not.
+
+### Approach
+
+Smallest correct change. Direct import + call from `console.main`
+(Option B). Not converting `startup.py` into a `bbsengine6/startup/`
+package and not registering it through `module.register_module` —
+both are larger refactors for no current benefit. The direct-import
+approach matches the precedent of `console/main.py:3` already
+importing `session`, `util`, `io`, `database`, `member` directly from
+`bbsengine6`.
+
+### Edit 1 — `bbsengine6/py/src/bbsengine6/console/main.py`
+
+- Add the import next to the existing `from bbsengine6 import ...` on
+  line 3:
+  ```python
+  from bbsengine6 import startup as bbsengine6_startup
+  ```
+- At the top of `main(args, **kwargs)` (line 132), immediately after
+  `args = parser.parse_args()` and the `require_registration` block,
+  and before `util.heading("engine checks")` (line 144), insert:
+  ```python
+  if bbsengine6_startup.main(args, **kwargs) is False:
+      io.echo("bbsengine6 startup failed", level="error")
+      return False
+  ```
+  Rationale: `bbsengine6.startup.main` already handles the `conn` /
+  `pool` branching internally (`startup.py:170-179`) and will obtain
+  its own pool via `database.getpool(args)` if `conn=` / `pool=` are
+  not supplied. Running before `stage_zero` ensures the `member`
+  role, the `engine` and `bank` schemas, and the core
+  `engine.__notify*` / `engine.__member*` / `engine.pgrole` /
+  `engine.__refcode` classes exist before
+  `checkroles` / `checksuperuser` / `checkfunctions` inspect them.
+
+### Edit 2 — `bbsengine6/py/src/bbsengine6/startup.py`
+
+- Extend the existing import on line 4 from
+  ```python
+  from bbsengine6 import database, io
+  ```
+  to
+  ```python
+  from bbsengine6 import database, io, util
+  ```
+- At the top of `_work(conn)` (line 20), above the existing
+  `io.echo("running bbsengine6 startup...")`, add:
+  ```python
+  util.heading("bbsengine6 startup")
+  ```
+  This is the call reported as never displaying. Placing it at the
+  top of `_work()` makes the banner appear on every console boot,
+  immediately above the role / schema / class output that follows.
+
+### Out of scope (this commit)
+
+- Deleting `bbsengine6/py/src/bbsengine6/startup.py~` (left alone;
+  cleanup is a separate concern).
+- Folding startup through `console.lib.runmodule` /
+  `module.register_module` (deferred — requires converting
+  `startup.py` into a package with `__init__.py` + `lib.py` + `main.py`
+  or adding an explicit `register_module("startup",
+  "bbsengine6.startup", ...)` call elsewhere).
+- Wiring `bbsengine6.startup` into other entry points (zoidoffice,
+  zoid6, zoidlan, asimov routines, the various daemons). Audit /
+  wiring for those is a separate task; for now, `console` is the
+  primary entry point and the only one being fixed.
+
+### Why this works for the existing test harness
+
+`mistermcfeely/src/postoffice/startup_test.py:15` already does
+`from bbsengine6.startup import main as bbsengine6_startup_main` and
+calls it directly at line 159. The Edit 1 wire-up does not change the
+function signature, return type, or side effects of
+`bbsengine6.startup.main`, so this caller continues to work as
+before. After Edit 2, the test harness will additionally print the
+`util.heading("bbsengine6 startup")` banner — which is the desired
+behavior.
+
+### Expected post-fix behavior
+
+- `python -m bbsengine6.console` prints a `util.heading("bbsengine6
+  startup")` banner, then the role / schema / class output already
+  in `_work`, then the existing `engine checks` heading and stages.
+- `python mistermcfeely/src/postoffice/startup_test.py` (and any
+  other direct caller of `bbsengine6.startup.main`) prints the same
+  banner + DB setup as before, plus the new heading.
+- Any future edit to `startup.py` (including a missing
+  `util.heading(...)` that the user re-adds, or further schema /
+  class / role additions) is visible on the next console boot.
+
+### Verification checklist
+
+- [ ] `python -m bbsengine6.console` shows the new heading before
+      `engine checks`.
+- [ ] `stage_zero` / `stage_one` still pass on a fresh DB.
+- [ ] `pytest bbsengine6/py/tests/` passes (no regressions from the
+      extra import in `console/main.py`).
+- [ ] `mistermcfeely/src/postoffice/startup_test.py` runs and
+      completes with the new heading present.
+- [ ] `rg -n "bbsengine6.startup" bbsengine6/ empyre/ casino/
+      mistermcfeely/ murdermotel/ zoid6/` shows at least
+      `mistermcfeely/src/postoffice/startup_test.py:15` and
+      `bbsengine6/py/src/bbsengine6/console/main.py:<new line>` as
+      import / call sites, confirming the wire-up.
+
+### Future cleanup (separate commits)
+
+- Decide whether `bbsengine6.startup` should be a true module
+  (package + `lib.py` + `module.run` registration) or stay a direct
+  import. If/when other entry points are wired in, revisit.
+- Remove `startup.py~` and other editor backups in the package.
