@@ -82,8 +82,39 @@ async def channel_publish(
     channel: str,
     message: Dict[str, Any],
     server: Optional["WebSocketServer"] = None,
+    sender_moniker: Optional[str] = None,
+    args: Optional[Any] = None,
 ) -> None:
-    """Publish message to all subscribers of a channel."""
+    """Publish message to all subscribers of a channel.
+
+    Args:
+        state: Channel state container.
+        channel: Channel name.
+        message: Message dict to publish.
+        server: Optional WebSocket server for fan-out.
+        sender_moniker: Optional moniker of the sender. When provided
+            together with ``args``, the channel is checked for
+            announce-only restrictions via ChannelService.can_publish.
+        args: Optional application args (required to perform the
+            announce-only check).
+    """
+    if sender_moniker is not None and args is not None:
+        from bbsengine6.services.channel import ChannelService
+
+        try:
+            channel_service = ChannelService(args)
+            verdict = channel_service.can_publish(channel, sender_moniker)
+        except Exception as e:
+            logger.error(f"channel_publish permission check failed: {e}")
+            return
+
+        if not verdict.get("allowed", False):
+            logger.warning(
+                f"channel_publish denied: channel={channel} "
+                f"sender={sender_moniker} reason={verdict.get('reason')}"
+            )
+            return
+
     # Send to WebSocket subscribers
     if server and channel in state.channels:
         await server.broadcast(message, path=f"channel:{channel}")
@@ -471,18 +502,48 @@ class WebSocketServer:
         if self._default_service:
             result["*default*"] = self._default_service.__class__.__name__
         return result
+
+    def _handle_list_services(self) -> Dict[str, Any]:
+        """Built-in `list_services` message handler.
+
+        Returns the live set of registered message types so a client
+        can probe the server's runtime surface area before
+        authenticating. Routers must not register their own
+        `list_services` handler; this is the canonical answer.
+
+        Wire shape: {"type": "services", "services": [str, ...]}.
+        Matches the legacy `_handle_list_services` in
+        `bbsengine6.net.defaultrouter.DefaultRouter` and
+        `zoid6.api.monikerrouter.MonikerAuthRouter`, but reports
+        the *actual* registered keys (sorted) rather than a
+        hardcoded list.
+        """
+        keys = list(self._services.keys())
+        if self._default_service is not None:
+            keys.append("*default*")
+        return {"type": "services", "services": sorted(keys)}
     
     async def dispatch_message(
         self, websocket: Any, path: str, message: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         """
         Dispatch message to appropriate service based on message type.
-        
+
+        The `list_services` message type is answered directly by the
+        server (returning the live keys of `self._services` plus the
+        default service) without consulting the service registry.
+        This is the canonical discovery primitive; routers must not
+        register their own `list_services` handler.
+
         Returns:
             Response dict, or None for broadcast
         """
         msg_type = message.get("type", "")
-        
+
+        # Built-in: list_services is answered by the server itself.
+        if msg_type == "list_services":
+            return self._handle_list_services()
+
         # Look up service for this message type
         service = self.get_service(msg_type)
         
