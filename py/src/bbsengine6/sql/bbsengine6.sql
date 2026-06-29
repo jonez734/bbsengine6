@@ -53,9 +53,13 @@
 \i manage_role_privs.sql
 \echo createrol
 \i createrol.sql
+\echo pgrole
+\i pgrole.sql
 \echo get_role_privs
 \i get_role_privs.sql
 \echo checkmemberflag
 \i checkmemberflag.sql
 \echo getmemberflags
 \i getmemberflags.sql
+\echo invite
+\i invite.sql

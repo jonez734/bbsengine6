@@ -1,9 +1,10 @@
 import copy
 
-from bbsengine6 import io, database, util, bank
+from bbsengine6 import io, database, util, bank, pgrole
 from bbsengine6 import member as libmember
 
 from . import lib
+from . import showpgrole
 
 
 def init(args, **kwargs):
@@ -469,6 +470,11 @@ def edit(args, **kwargs):
             io.echo(f"con.member.edit.100: calling setui()", level="debug")
             setui(args, loginid, ui, conn=conn, **kwargs)
 
+            # Provision or look up the l_<loginid> psql role, and sync
+            # its sysop/term/web group memberships to the current flags.
+            pgrole.ensure_role_for_member(args, loginid, conn=conn, **kwargs)
+            pgrole.sync_groups(args, loginid, conn=conn, **kwargs)
+
             if _m["email"] != m["email"]:
                 libmember.setflag(
                     args, "EMAILVERIFIED", False, moniker=m["moniker"], mogrify=True
@@ -551,6 +557,15 @@ def add(args, **kwargs) -> bool:
             **kwargs,
         )
 
+        # Provision the l_<loginid> psql role and sync group memberships
+        # to the member's current flags. If the member is being created
+        # already approved, the role is created with no password (ident
+        # auth); the welcome flow in showpgrole.py prompts for osuser.
+        pgrole.ensure_role_for_member(
+            args, member["loginid"], conn=conn, **kwargs
+        )
+        pgrole.sync_groups(args, member["loginid"], conn=conn, **kwargs)
+
         if (
             io.inputboolean(
                 f"{{var:promptcolor}}add member? {{var:optioncolor}}[Yn]: {{var:inputcolor}}",
@@ -586,10 +601,11 @@ def main(args, **kwargs):
         io.echo(f"{{var:optioncolor}}[E]{{var:labelcolor}} Edit")
         io.echo(f"{{var:optioncolor}}[N]{{var:labelcolor}} New Member")
         io.echo(f"{{var:optioncolor}}[A]{{var:labelcolor}} Approvals")
+        io.echo(f"{{var:optioncolor}}[P]{{var:labelcolor}} psql credentials")
         io.echo(f"{{f6}}{{var:optioncolor}}[Q]{{var:labelcolor}} Quit")
         ch = io.inputchoice(
             f"{{var:promptcolor}}member:{{var:inputcolor}} ",
-            "NAEQX",
+            "NAEPQX",
             "Q",
             **kwargs,
         )
@@ -605,6 +621,9 @@ def main(args, **kwargs):
                 io.echo(f"add aborted", level="error")
             else:
                 io.echo(f"add ok", level="ok")
+        elif ch == "P":
+            io.echo("psql credentials")
+            showpgrole.main(args, **kwargs)
         elif ch == "Q" or ch == "X":
             io.echo("Quit")
             done = True

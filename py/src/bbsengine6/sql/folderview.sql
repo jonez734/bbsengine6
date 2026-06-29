@@ -12,4 +12,4 @@ create view engine.folder as
 
 --create unique index idx_engine_sig_path on engine.__sig(path);
 
-grant select on engine.folder to web, term, sysop;
+grant select on engine.folder to web, term, sysop, member;

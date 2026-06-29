@@ -1404,3 +1404,95 @@ is consumed by:
 At every step (1–6), `test_io_backward_compat.py` runs the door-mode
 corpus and asserts byte-for-byte equality of the rendered output. If
 any test fails, the step is not complete.
+
+## Per-Member PostgreSQL Roles — Deferred Follow-Ups
+
+The ident-auth per-member-PG-role plan is implemented. The following
+follow-ups were intentionally deferred from that first pass.
+
+### Web → psql via ident or `SET LOCAL ROLE`
+
+The current implementation gives every approved member a PG `LOGIN`
+role for **terminal-side** psql use (ident auth on the DB host).
+The PHP webserver, which lives on a different machine, is unaffected:
+it still connects to PG as the privileged DSN user and the
+`l_<loginid>` roles are inert to web requests.
+
+The follow-up question: when a member is on the web, how do they
+issue psql-style queries as themselves? Two paths to evaluate:
+
+- **`SET LOCAL ROLE l_<loginid>` per request.** After
+  `engine/login.php` authenticates the member, every query on that
+  request runs `SET LOCAL ROLE l_<loginid>`. The member's grants
+  apply; the DSN user's grants are revoked for that transaction.
+  Requires RLS (see `bbsengine6/TODO_RLS.md`) for any meaningful
+  privacy enforcement, since otherwise the DSN user's
+  table-owner / `BYPASSRLS` access would still see everything.
+- **Webserver spawns `psql` as the member's OS user.** A
+  `engine/runpsql.php` (or similar) that does
+  `su <osuser> -c 'psql ...'`. Requires the member to have an OS
+  account on the webserver host too, plus careful output capture,
+  timeouts, audit logging, and abuse prevention
+  (e.g. blocking `COPY ... FROM PROGRAM`).
+
+Both designs are out of scope for the first pass. Tracked here so
+the work isn't lost.
+
+### Password fallback for `engine.createpgrole`
+
+Today `engine.createpgrole` creates a `LOGIN` role with **no
+password** — auth is by ident. The follow-up adds a password
+fallback for deployments where members don't have stable OS accounts:
+
+- Add `p_plaintext` parameter to `engine.createpgrole`, set
+  `PASSWORD` on the `CREATE ROLE`.
+- Add `engine.rotatepgrole(rolname, plaintext)` for rotation.
+- Restore the regenerate flow in `console/showpgrole.py`.
+- Restore the redaction list in `bbsengine6/io/echo.py` and
+  `bbsengine6/util.py` for the new plaintext-bearing fields
+  (`pgrole_password`).
+- Re-enable password-based psql access from any client host.
+
+### PHP web surface for psql credentials
+
+The current member-facing surface for psql access info is the
+nested `[P] psql credentials` entry in `console/member.py:main()`.
+A PHP equivalent — `engine/psql_credentials.php` plus
+`php/libmember.php` helpers (`getpgrole`, `acknowledgepgrole`,
+`regeneratepgrolepassword`, `syncpgrolegroups`) plus a route in
+`engine/router.php` plus a link in the profile skin — is deferred
+until the web machine is on the same host as the DB (or until the
+web-via-psql design above is picked back up, whichever comes
+first).
+
+### Email notification on psql access provisioning
+
+When a member is approved and a `l_<loginid>` role is created, no
+email is sent. Add an opt-in notification
+("psql access provisioned — see `show-pgrole` for details") via the
+existing `bbsengine6/notify` system.
+
+### Dedicated `engine.pgrole_event` audit table
+
+Today the `engine.actionlog` captures the approve action and that's
+the only audit trail. A dedicated table logging every `CREATE
+ROLE` / `ALTER ROLE ... PASSWORD` / `DROP ROLE` / `GRANT` /
+`REVOKE` against the `l_*` roles would give ops a tighter view.
+Schema sketch:
+
+```sql
+CREATE TABLE engine.pgrole_event (
+  id          BIGSERIAL PRIMARY KEY,
+  memberid    BIGINT REFERENCES engine.__member(id),
+  rolname     NAME,
+  event       TEXT NOT NULL,    -- 'create' / 'rotate' / 'drop' / 'grant' / 'revoke'
+  detail      JSONB,
+  actor_moniker TEXT,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+Triggers on `pg_roles` are not available (PG doesn't expose DDL
+triggers on `CREATE ROLE`), so audit calls would have to be
+explicit from the SQL functions (`engine.createpgrole`,
+`engine.deletepgrole`, etc.).

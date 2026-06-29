@@ -6,6 +6,7 @@ Requires SYSOP flag to access this module.
 """
 
 from bbsengine6 import util, member, database, io
+from bbsengine6 import pgrole
 
 
 def init(args, **kw: dict) -> bool:
@@ -114,6 +115,24 @@ def main(args, **kw):
                         except Exception as e:
                             io.echo_traceback(f"bbsengine6.console.memberapproval: {e}")
                             txn_conn.rollback()
+
+                    # Provision the l_<loginid> psql role.
+                    rolname = pgrole.ensure_role_for_member(
+                        args, m["loginid"], osuser=None
+                    )
+                    if rolname is not None:
+                        io.echo(
+                            f"{{var:labelcolor}}psql access provisioned: "
+                            f"{{var:valuecolor}}{rolname} "
+                            f"{{var:labelcolor}}(add a 'bbbsmap' line to "
+                            f"{{var:valuecolor}}pg_ident.conf{{var:labelcolor}} "
+                            f"and reload PG; see handbook/specs/pg-ident-auth.md)"
+                        )
+                    else:
+                        io.echo(
+                            "psql role provisioning failed; see logs",
+                            level="error",
+                        )
                 else:
                     with database.connect(args, **kw) as txn_conn:
                         try:

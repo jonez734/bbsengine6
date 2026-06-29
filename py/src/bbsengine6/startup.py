@@ -43,7 +43,7 @@ def main(args, **kwargs) -> bool:
         io.echo(" ok ", level="ok")
 
         # --- bank schema privs ---
-        for role in ("web", "term", "sysop"):
+        for role in ("web", "term", "sysop", "member"):
             database.manage_schema_priv(
                 args, "grant", "usage", "bank", role, conn=conn
             )
@@ -80,7 +80,7 @@ def main(args, **kwargs) -> bool:
                 io.echo("ok", level="ok")
 
         # --- schema privs ---
-        for role in ("web", "term", "sysop"):
+        for role in ("web", "term", "sysop", "member"):
             database.manage_schema_priv(
                 args, "grant", "usage", "engine", role, conn=conn
             )
@@ -100,6 +100,7 @@ def main(args, **kwargs) -> bool:
             ("engine.map_member_flag", "map_member_flag.sql"),
             ("engine.__member", "member.sql"),
             ("engine.member", "member.sql"),
+            ("engine.pgrole", "pgrole.sql"),
             ("engine.__refcode", "refcode.sql"),
             ("engine.refcode", "refcode.sql"),
             ("engine.map_refcode_use", "refcode.sql"),

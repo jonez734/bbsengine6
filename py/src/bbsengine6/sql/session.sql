@@ -16,6 +16,8 @@ CREATE TABLE engine.__session (
 );
 
 grant select, insert, update, delete on engine.__session to web, term, sysop;
+-- member is intentionally NOT granted write on __session; see pgrole.sql
+-- and handbook/specs/pg-ident-auth.md.
 
 --alter table engine.__session
 --add constraint "fk_session_memberid"
@@ -36,4 +38,4 @@ create view engine.session as
 
 create unique index idx_session_sessionid_unique on engine.__session(id);
 
-grant select on engine.session to web, term, sysop;
+grant select on engine.session to web, term, sysop, member;

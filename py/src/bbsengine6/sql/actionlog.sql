@@ -17,4 +17,4 @@ create or replace view engine.actionlog as
     left outer join engine.__member as currentmember on (currentmember.loginid = CURRENT_USER)
 ;
 
-grant select on engine.actionlog to web, term, sysop;
+grant select on engine.actionlog to web, term, sysop, member;
