@@ -361,9 +361,9 @@ Note: `validate_function()` is a standalone signature validator using `get_type_
 #### Text & Formatting Functions
 
 ```python
-def hr(acs: bool = True, width: int | None = None, end: str = "\n") 
-  -> str
-  "Return horizontal rule string (uses ACS characters if available)"
+def hr(acs: bool = True, width: int | None = None, color: str = "{boxcolor}", end: str = "\n")
+  -> None
+  "Display a horizontal rule (box-drawing or ASCII) to the terminal"
   
 def heading(title: str, **kwargs) 
   -> str

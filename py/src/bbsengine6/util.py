@@ -78,40 +78,64 @@ def _get_default_handler() -> logging.handlers.SysLogHandler:
     return _default_handler
 
 
-def hr(acs: bool = True, width: Optional[int] = None, end: str = "\n") -> bool:
-    """Display a horizontal rule using box-drawing characters.
+def hr(acs: bool = True, width: Optional[int] = None, color="{boxcolor}", end: str = "\n") -> None:
+    """Display a horizontal rule using box-drawing or ASCII characters.
+
+    Writes the rule via :func:`io.echo`, so it is subject to the BBS
+    color/template pipeline. A single leading space is always emitted,
+    making the visible width ``width + 1`` characters.
 
     Args:
-        acs: Use ASCII-compatible characters (currently unused, for future compatibility).
-        width: Width of the horizontal rule in characters. If None, uses terminal width minus HR_WIDTH_OFFSET.
-        end: String to output after the rule (default: newline).
+        acs: If ``True`` (default), emit a BBS color-tagged box-drawing
+            rule of the form `` {color}{hline:N}{/all}``; the terminal
+            renders the glyph via ACS. If ``False``, emit a plain ASCII
+            rule of ``-`` characters with no color markup.
+        width: Visible width of the rule in characters, including the
+            leading space. If ``None``, uses
+            ``io.terminal.width() - HR_WIDTH_OFFSET``.
+        color: BBS template tag wrapping the box-drawing rule when
+            ``acs=True``. Defaults to ``"{boxcolor}"``. Ignored when
+            ``acs=False`` (the ASCII branch emits no color markup).
+        end: String appended after the rule (passed to ``io.echo`` as
+            its ``end`` keyword). Defaults to ``"\\n"``.
 
     Returns:
-        Always returns True.
+        None.
 
-    Example:
-        >>> hr()  # Outputs horizontal line at terminal width
-        >>> hr(width=40)  # Outputs 40-character horizontal line
+    Examples:
+        >>> hr()                             # full-width box-drawing rule
+        >>> hr(width=40)                     # 40-char box-drawing rule
+        >>> hr(acs=False)                    # full-width ASCII '-' rule
+        >>> hr(width=40, acs=False)          # 40-char ASCII '-' rule
+        >>> hr(color="{titlecolor}")         # box-drawing rule, alt color
+        >>> hr(end="")                       # no trailing newline
     """
     if width is None:
         width = io.terminal.width() - HR_WIDTH_OFFSET  # type: ignore
-    io.echo(f" {{boxcolor}}{{hline:{width}}}{{/all}}", end=end)
-    return True
+    if acs is True:
+        io.echo(f" {color}{{hline:{width}}}{{/all}}", end=end)
+    else:
+        io.echo(f" {'-'*width}")
 
 
 def heading(title: str, **kwargs) -> None:
-    """Display a centered heading with box-drawing borders.
+    """Display a centered heading with BBS template-tag borders.
 
-    Creates a box with the title centered inside using terminal width.
-    The heading uses box-drawing characters and BBS color tags.
+    Renders a three-line box (top border, title row, bottom border) via
+    :func:`io.echo`, so the actual box-drawing glyphs are produced by
+    the terminal from BBS template tags (``{ulcorner}``, ``{hline}``,
+    ``{vline}``, ``{llcorner}``, ``{lrcorner}``). The title is centered
+    horizontally within the terminal width, padded to accommodate an
+    even or odd title length.
 
     Args:
-        title: The heading text to display (will be centered).
-        **kwargs: Additional keyword arguments (unused, for future compatibility).
+        title: The heading text to display; will be centered.
+        **kwargs: Accepted and ignored. Reserved for future keyword
+            arguments; pass-through is currently a no-op.
 
-    Example:
+    Examples:
         >>> heading("Main Menu")
-        # Displays:
+        # Renders (visually, via the terminal's ACS handler):
         # ┌────────────────────────┐
         # │      Main Menu         │
         # └────────────────────────┘
@@ -1141,7 +1165,23 @@ def get_safe_path(args, *components, **kwargs) -> str:
 def load_sql(args, resource_name: str, *, package: Optional[str] = None) -> str:
     """
     Loads an SQL resource file and returns its contents as a string.
+
+    Primary path uses module.file() (i.e. on-disk package data). Falls back
+    to importlib.resources for install layouts where __file__ is not a real
+    path (e.g. zip-installed wheels, namespace packages).
     """
+    from . import module
+
+    subdir = "sql"
+    module_ref = package if package is not None else "bbsengine6"
+
+    if "." in module_ref:
+        module_ref = module_ref.rsplit(".", 1)[0]
+
+    primary = module.file(module_ref, subdir, resource_name)
+    if primary is not None:
+        return primary.read_text(encoding="utf-8")
+
     try:
         from importlib.resources import files
     except ImportError:
@@ -1152,23 +1192,9 @@ def load_sql(args, resource_name: str, *, package: Optional[str] = None) -> str:
                 "load_sql requires 'importlib.resources' (Python 3.9+) or 'importlib_resources'"
             )
 
-    import pathlib
-
-    def _resolve_package(package: Optional[str]) -> str:
-        if package is not None:
-            return package
-        if __package__:
-            return __package__ + ".sql"
-
-        base_path = pathlib.Path(__file__).resolve()
-        while base_path.parent != base_path:
-            if (base_path / "__init__.py").exists():
-                return base_path.name + ".sql"
-            base_path = base_path.parent
-
-        raise ValueError("Unable to determine the package for resource loading")
-
-    resolved_package = _resolve_package(package)
+    resolved_package = (
+        package if package is not None else f"{module_ref}.{subdir}"
+    )
     return files(resolved_package).joinpath(resource_name).read_text(encoding="utf-8")
 
 

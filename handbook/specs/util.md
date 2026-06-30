@@ -45,7 +45,7 @@ dpkg-reconfigure locales
 ## Public API
 
 ```python
-hr(acs=True, width=None, end="\n") -> bool
+hr(acs: bool = True, width: Optional[int] = None, color: str = "{boxcolor}", end: str = "\n") -> None
 heading(title: str, **kwargs) -> None
 pluralize(amount: int, singular: str, plural: str, quantity=True, emoji="", determiner="a", **kw) -> str
 datestamp(t=None, format="%Y-%m-%d %I:%M%P %Z (%a)") -> str

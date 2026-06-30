@@ -181,8 +181,8 @@ _check_params(func_name, params, required, optional_kwargs=False) -> bool
 
 **Key Functions:**
 ```
-hr(acs=True, width=None) -> str
-  "Return horizontal rule string"
+hr(acs: bool = True, width: int | None = None, color: str = "{boxcolor}", end: str = "\n") -> None
+  "Display a horizontal rule (box-drawing or ASCII) to the terminal"
 
 heading(title, **kwargs) -> str
   "Format title as heading"
