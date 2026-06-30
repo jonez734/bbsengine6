@@ -145,6 +145,47 @@ module.run(args, "packagename")
 module.run(args, "packagename.submodule")
 ```
 
+### Cross-package calls via `package=`
+
+A module that lives in a different package (e.g. `bbsengine6.startup.main`
+calling `bbsengine6.backend.checkfunctions`) can pass `package=` to
+`module.run()` / `module.check()` / `module.load()` / `module.get()` so that
+a bare or relative submodule name resolves against the foreign package:
+
+```python
+from bbsengine6 import module
+
+# Bare name: resolved as bbsengine6.backend.checkfunctions
+module.run(args, "checkfunctions", package="bbsengine6.backend")
+
+# Relative name: resolved via importlib relative-import semantics
+module.run(args, ".backend.checkfunctions", package="bbsengine6")
+
+# Absolute (dotted) name: package= is ignored; same as no package= at all
+module.run(args, "bbsengine6.backend.checkfunctions",
+           package="bbsengine6.startup")  # package= ignored
+```
+
+Resolution rules in `module.load()` when `package` is set:
+
+| `modulepath` form | Behavior |
+|-------------------|----------|
+| bare (e.g. `"checkfunctions"`) | imports `f"{package}.{modulepath}"` |
+| leading-dot (e.g. `".backend.checkfunctions"`) | `importlib.import_module(modulepath, package=package)` |
+| absolute dotted (e.g. `"bbsengine6.backend.checkfunctions"`) | absolute import; `package=` is ignored |
+
+The `package=` kwarg is consumed by `module.run` and `module.check` and is
+**not** forwarded to the inner `init()`, `access()`, `buildargs()`, or
+`main()` callbacks. Other kwargs flow through unchanged.
+
+The recommended idiom for a package's own `lib.runmodule` is to default
+`package=` to that package and forward it:
+
+```python
+def runmodule(args, submodule, *, package="packagename", **kwargs):
+    return module.run(args, submodule, package=package, **kwargs)
+```
+
 ### Via lib.runmodule()
 
 ```python

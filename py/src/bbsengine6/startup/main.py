@@ -23,9 +23,23 @@ def main(args, **kwargs) -> bool:
         util.heading("bbsengine6 startup")
         failcount = 0
         for s in ("stage_zero", "stage_one", "engine", "bank"):
-            if _runstage(args, s, conn=conn, **kwargs) is False:
+            if lib.runmodule(args, s, conn=conn, **kwargs) is False:
                 failcount += 1
-                io.echo(f" module {s} failed ", level="error")
+                io.echo(f"bbsengine6.startup.200: module {s} failed ", level="error")
+                break
+
+        if failcount == 0:
+            if lib.runmodule(
+                args,
+                "checkfunctions",
+                conn=conn,
+                package="bbsengine6.backend",
+                **kwargs,
+            ) is False:
+                failcount += 1
+                io.echo(
+                    "bbsengine6.startup.210: checkfunctions failed", level="error"
+                )
 
         if failcount > 0:
             io.echo("bbsengine6 startup failed", level="error")
@@ -37,7 +51,7 @@ def main(args, **kwargs) -> bool:
         return True
 
     conn = kwargs.get("conn", None)
-    io.echo(f"{conn=}", level="debug")
+##    io.echo(f"{conn=}", level="debug")
     if conn is None:
         pool = kwargs.get("pool", None)
         if pool is None:

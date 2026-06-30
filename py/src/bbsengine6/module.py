@@ -4,7 +4,7 @@ import argparse
 import importlib
 import inspect
 import threading
-from typing import Callable, Union, Any
+from typing import Callable, Union, Any, Optional
 from types import ModuleType
 from dataclasses import dataclass
 
@@ -64,17 +64,24 @@ class SignatureError:
 
 
 # @since 20251221
-def get(module_input: Union[str, ModuleType], args: Any = None) -> ModuleType:
+def get(
+    module_input: Union[str, ModuleType],
+    args: Any = None,
+    package: Optional[str] = None,
+) -> ModuleType:
     """
     Utility to resolve a module reference.
     If input is a string, it loads the module via load().
     If it's already a module object, it returns it.
+
+    If ``package`` is provided, it is forwarded to ``load()`` so that bare
+    (non-dotted) module names resolve relative to that package.
     """
     if isinstance(module_input, ModuleType):
         return module_input
 
     if isinstance(module_input, str):
-        return load(args, module_input)
+        return load(args, module_input, package=package)
 
     raise ValueError(
         f"Expected module name (str) or module object, got {type(module_input)=}"
@@ -100,11 +107,11 @@ def files(module_ref: Union[str, ModuleType]) -> pathlib.Path:
 def folder(module_ref: Union[str, ModuleType], name: str) -> pathlib.Path | None:
     """
     Return pathlib.Path to module's subdirectory, or None if missing.
-    
+
     Args:
         module_ref: Module name (str) or module object
         name: Subdirectory name (e.g., "data", "tpl", "sql")
-    
+
     Returns:
         Path to subdirectory, or None if it doesn't exist
     """
@@ -113,11 +120,42 @@ def folder(module_ref: Union[str, ModuleType], name: str) -> pathlib.Path | None
     return sub if sub.is_dir() else None
 
 
+# @since 20260629
+def file(module_ref: Union[str, ModuleType], subdir: str, name: str) -> pathlib.Path | None:
+    """
+    Return pathlib.Path to module_ref/subdir/name, or None if missing.
+
+    Args:
+        module_ref: Module name (str) or module object
+        subdir: Subdirectory name (e.g., "data", "tpl", "sql")
+        name: File name inside subdir (e.g., "notify.sql")
+
+    Returns:
+        Path to the file, or None if the subdir or file does not exist
+    """
+    sub = folder(module_ref, subdir)
+    if sub is None:
+        return None
+    candidate = sub / name
+    return candidate if candidate.is_file() else None
+
+
 # @since 20230510 copied from bbsengine5
-def load(args: object, modulepath: str) -> ModuleType:
+def load(args: object, modulepath: str, package: Optional[str] = None) -> ModuleType:
     """
     Loads a module from a string path.
     Preserves BC and handles conditional reloading in debug mode.
+
+    If ``package`` is provided:
+      - a bare (non-dotted) ``modulepath`` like ``"checkfunctions"`` is
+        resolved as ``"{package}.{modulepath}"`` (absolute form, which
+        is equivalent to ``from {package} import {modulepath}``).
+      - a leading-dot relative ``modulepath`` like ``".backend.checkfunctions"``
+        is forwarded to ``importlib.import_module`` with ``package=`` so
+        it resolves relative to ``package``.
+
+    Dotted ``modulepath`` values without a leading dot are always treated
+    as absolute imports, and any ``package`` argument is ignored for them.
     """
     debug = getattr(args, "debug", False) if args else False
 
@@ -126,7 +164,16 @@ def load(args: object, modulepath: str) -> ModuleType:
         importlib.reload(sys.modules[modulepath])
 
     try:
-        m = importlib.import_module(modulepath)
+        if package is not None and "." not in modulepath:
+            # Bare name with package: qualify explicitly so the result is
+            # equivalent to "from {package} import {modulepath}".
+            m = importlib.import_module(f"{package}.{modulepath}")
+        elif package is not None and modulepath.startswith("."):
+            # Relative import (e.g. ".backend.checkfunctions"); importlib
+            # needs the package anchor to resolve a leading-dot name.
+            m = importlib.import_module(modulepath, package=package)
+        else:
+            m = importlib.import_module(modulepath)
         return m
     except Exception:
         io.echo_traceback(f"module {modulepath=} not importable")
@@ -160,7 +207,6 @@ def is_importable(modulepath: str) -> bool:
 # - No classes - just functions and dataclasses for data
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -499,7 +545,7 @@ def _check_params(
 
 
 # @since 20220826
-def check(args, modulename, op="run", **kwargs):
+def check(args, modulename, op="run", *, package: Optional[str] = None, **kwargs):
     debug = args.debug if args is not None and args.debug is True else False
     silent = kwargs.get("silent", True)
 
@@ -520,7 +566,7 @@ def check(args, modulename, op="run", **kwargs):
             return False
         io.echo(f"module.check: {modulename} is registered", level="debug")
 
-    m = get(actual_modpath, args)
+    m = get(actual_modpath, args, package=package)
 
     if debug is True:
         io.echo(f"bbsengine6.module.check.100: {modulename=}", level="debug")
@@ -697,6 +743,10 @@ def run(args, modulename, **kwargs):
     debug = args.debug if hasattr(args, "debug") and args.debug else False
     buildargs = True
 
+    # Pop package= so it isn't forwarded to callbacks (e.g. main(), init()).
+    # It is used to resolve bare submodule names against a parent package.
+    package = kwargs.pop("package", None)
+
     # Look up module_path from registry if module is registered
     module_info = get_module(modulename)
     if module_info is not None:
@@ -705,9 +755,9 @@ def run(args, modulename, **kwargs):
         actual_modpath = modulename
 
     # Use get() to resolve module
-    m = get(actual_modpath, args)
+    m = get(actual_modpath, args, package=package)
 
-    if check(args, modulename, **kwargs) is False:
+    if check(args, modulename, package=package, **kwargs) is False:
         io.echo(f"check of {modulename=} failed. module not run.", level="error")
         return False
 
