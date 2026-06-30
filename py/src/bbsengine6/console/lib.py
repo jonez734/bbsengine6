@@ -137,9 +137,9 @@ def buildargs(args=None, **kwargs):
 
 
 # @since 20230523
-def runmodule(args, submodule, **kwargs):
+def runmodule(args, submodule, *, package="bbsengine6.console", **kwargs):
     #  io.echo(f"con.lib.runmodule.100: {kwargs=}", level="debug")
-    return module.runmodule(args, f"bbsengine6.console.{submodule}", **kwargs)
+    return module.runmodule(args, f"{package}.{submodule}", **kwargs)
 
 
 # @since 20230523 copied from teos
@@ -179,10 +179,6 @@ def checkfunctions(args, **kwargs):
 
 def checkclasses(args, **kwargs):
     return runmodule(args, "checkclasses", **kwargs)
-
-
-def checkschema(args, **kwargs):
-    return runmodule(args, "checkschema", **kwargs)
 
 
 def checkflag(args, **kwargs):
@@ -258,35 +254,35 @@ an ArgumentParser with your custom arguments.
 Example module (bbsengine6/console/mytest.py):
 
     import argparse
-    
+
     def init(args, **kwargs):
         return True
-    
+
     def buildargs(args, **kwargs):
         '''My test module - does something useful'''
         parser = argparse.ArgumentParser(description=__doc__)
-        
+
         # Add module-specific arguments
         parser.add_argument('--filter', choices=['all', 'active', 'sysop'],
                           help='Filter results by type')
         parser.add_argument('--verbose', action='store_true',
                           help='Show detailed output')
-        
+
         return parser
-    
+
     def access(args, op, **kwargs):
         return True
-    
+
     def main(args, **kwargs):
         # Access custom arguments via args.filter, args.verbose
         filter_type = getattr(args, 'filter', 'all')
         verbose = getattr(args, 'verbose', False)
-        
+
         if verbose:
             print(f"Running with filter: {filter_type}")
-        
+
         # ... module logic
-    
+
     # Usage:
     # zoidoffice mytest --filter sysop --verbose
     # zoidoffice mytest --help  # Shows custom --filter and --verbose args
