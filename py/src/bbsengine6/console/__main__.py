@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # This allows modules to receive their own arguments after the subcommand name
     args, remaining_argv = parser.parse_known_args()
 
-    screen.init()
+    screen.init(args)
     lib.setbottombar(args, "con")
 
     try:

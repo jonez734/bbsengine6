@@ -25,9 +25,9 @@ def access(args, op, **kwargs) -> bool:
 def main(args, **kwargs):
     failcount = 0
     io.echo(f"{{var:labelcolor}}class {{var:valuecolor}}engine.flag: ", end="")
-    if database.classexists(args, "engine.flag", **kwargs) is False:
+    if database.classexists(args, "engine.member_flag", **kwargs) is False:
         io.echo("import ", end="")
-        if database.importsql(args, "flag.sql", **kwargs) is False:
+        if database.importsql(args, "member_flag.sql", **kwargs) is False:
             failcount += 1
             io.echo(" fail ", level="error")
             return False

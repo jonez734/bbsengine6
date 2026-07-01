@@ -4,7 +4,7 @@ import os
 
 from bbsengine6 import io, database, screen, module
 
-SQLDIR = "$HOME/projects/bbsengine6/sql/"
+#!## SQLDIR = "$HOME/projects/bbsengine6/sql/"
 
 # Module cache for dynamic discovery
 _discovered_modules_cache = None

@@ -11,6 +11,14 @@ from .state import EditorState
 _screen_initialized = False
 
 
+# Per-editor fragment tracking. The legacy `unregister_bottombar()` used
+# to call `screen.clear_bottombar_fragments()` which clobbered every
+# package's bottombar fragments (casino, empyre, etc.). We now keep a
+# list of the fragments this module registered and unregister only
+# those.
+_editor_fragments: list = []
+
+
 def init_screen() -> None:
     global _screen_initialized
     if not _screen_initialized:
@@ -92,7 +100,11 @@ def register_bottombar(state: EditorState, **kwargs) -> None:
         return editor_status_fragment(state=state)
 
     screen.register_bottombar_fragment(fragment)
+    _editor_fragments.append(fragment)
 
 
 def unregister_bottombar() -> None:
-    screen.clear_bottombar_fragments()
+    global _editor_fragments
+    for fn in _editor_fragments:
+        screen.unregister_bottombar_fragment(fn)
+    _editor_fragments = []

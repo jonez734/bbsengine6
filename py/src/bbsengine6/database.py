@@ -1022,6 +1022,7 @@ def buildargs(
     if suppress is False:
         group.add_argument(
             "--databasename",
+            "--database",
             dest="databasename",
             action="store",
             default=databasename,

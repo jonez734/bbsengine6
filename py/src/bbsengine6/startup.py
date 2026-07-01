@@ -1,8 +1,6 @@
 # startup.py
-# Initialises the engine schema, notify tables, and core bbsengine6 structures.
 
 from bbsengine6 import database, io
-
 
 def init(args, **kwargs) -> bool:
     return True
@@ -15,78 +13,52 @@ def access(args, op, **kwargs) -> bool:
 def buildargs(args, **kwargs):
     return None
 
-
 def main(args, **kwargs) -> bool:
     def _work(conn):
-        io.echo("running bbsengine6 startup...")
+        util.heading("engine checks")
+        if lib.runmodule(args, "stage_zero", **kwargs) is False:
+            io.echo(f"{{level.error}} fail ", level="error")
+            return False
+        else:
+            io.echo(f"{{level.ok}} stage_zero passes")
 
-        # --- schema ---
+        if stage_one(args, **kwargs) is False:
+            io.echo("fail", level="error")
+            return False
+
+        # --- 'member' group role ---
+        # pgrole.sql creates this, but it isn't processed until later in the
+        # class-import phase. Create it here so the schema-priv grants below
+        # can reference it on a fresh database.
+        io.echo(
+            f"{{var:labelcolor}}role {{var:valuecolor}}member{{var:labelcolor}}: ",
+            end="",
+        )
+
+        for r in ("member", "sysop", "web", "term"):
+            io.echo(f"{{labelcolor}}checking role {{valuecolor}}{r}{{labelcolor}}: {{/all}}")
+            if database.rolexists(args, r, conn=conn):
+                io.echo(f"{{level.ok}} ok ")
+            else:
+                io.echo(f"{{labelcolor}} create: ", end="")
+                if database.createrole(args, r, conn=conn, login=False, createdb=False, createrole=False, superuser=False):
+                    io.echo(f"{{level.ok}} ok ")
+                else:
+                    io.echo(f"{{level.error}} fail ")
+
+        # --- engine schema ---
         io.echo(
             f"{{var:labelcolor}}schema {{var:valuecolor}}engine{{var:labelcolor}}: ",
             end="",
         )
+
         if database.schemaexists(args, "engine", conn=conn) is False:
             if database.createschema(args, "engine", conn=conn) is False:
                 io.echo("fail", level="error")
                 return False
         io.echo(" ok ", level="ok")
 
-        # --- bank schema ---
-        io.echo(
-            f"{{var:labelcolor}}schema {{var:valuecolor}}bank{{var:labelcolor}}: ",
-            end="",
-        )
-        if database.schemaexists(args, "bank", conn=conn) is False:
-            if database.createschema(args, "bank", conn=conn) is False:
-                io.echo("fail", level="error")
-                return False
-        io.echo(" ok ", level="ok")
 
-        # --- bank schema privs ---
-        for role in ("web", "term", "sysop", "member"):
-            database.manage_schema_priv(
-                args, "grant", "usage", "bank", role, conn=conn
-            )
-        database.manage_schema_priv(
-            args, "grant", "create", "bank", "sysop", conn=conn
-        )
-
-        # --- bank classes ---
-        bank_classes = (
-            ("bank.__account", "bank.sql"),
-            ("bank.account", "bank.sql"),
-            ("bank.__transaction", "bank.sql"),
-            ("bank.transaction", "bank.sql"),
-            ("bank.__transfer", "bank.sql"),
-            ("bank.transfer", "bank.sql"),
-        )
-
-        for cls, sql in bank_classes:
-            io.echo(
-                f"{{var:labelcolor}}class {{var:valuecolor}}{cls}{{var:labelcolor}}: ",
-                end="",
-            )
-            if database.classexists(args, cls, conn=conn) is False:
-                io.echo("import ", end="")
-                if (
-                    database.importsql(args, sql, conn=conn, package="bbsengine6.sql")
-                    is False
-                ):
-                    io.echo("fail", level="error")
-                    failcount += 1
-                else:
-                    io.echo(" ok ", level="ok")
-            else:
-                io.echo("ok", level="ok")
-
-        # --- schema privs ---
-        for role in ("web", "term", "sysop", "member"):
-            database.manage_schema_priv(
-                args, "grant", "usage", "engine", role, conn=conn
-            )
-        database.manage_schema_priv(
-            args, "grant", "create", "engine", "sysop", conn=conn
-        )
 
         # --- classes in dependency order ---
         classes = (
@@ -106,7 +78,6 @@ def main(args, **kwargs) -> bool:
             ("engine.map_refcode_use", "refcode.sql"),
         )
 
-        failcount = 0
         for cls, sql in classes:
             io.echo(
                 f"{{var:labelcolor}}class {{var:valuecolor}}{cls}{{var:labelcolor}}: ",
@@ -115,7 +86,7 @@ def main(args, **kwargs) -> bool:
             if database.classexists(args, cls, conn=conn) is False:
                 io.echo("import ", end="")
                 if (
-                    database.importsql(args, sql, conn=conn, package="bbsengine6.sql")
+                    database.importsql(args, sql, conn=conn)
                     is False
                 ):
                     io.echo("fail", level="error")

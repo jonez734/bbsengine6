@@ -110,6 +110,8 @@ def schema_init(db_connection, request):
     - notify_rate_limit.sql
     - notifyview.sql
     - notifyd.sql
+    - channel.sql (Channel config: engine.__channel, engine.__channel_announcer)
+    - invite.sql (Generic invite code system: engine.__invite, engine.invite)
 
     Also loads bank schema:
     - bank.sql
@@ -278,6 +280,8 @@ def _get_notify_sql_files() -> list[Path]:
         "notify_rate_limit.sql",  # Depends on: engine.__notify_type
         "notifyview.sql",  # Depends on: all tables above
         "notifyd.sql",  # notifyd daemon tables: engine.__notify_imap_state, engine.__notify_history
+        "channel.sql",  # Channel config: engine.__channel, engine.__channel_announcer, engine.channel
+        "invite.sql",  # Generic invite code system: engine.__invite, engine.invite
     ]
 
     paths = [sql_dir / f for f in files]

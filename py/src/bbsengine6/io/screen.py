@@ -1,7 +1,25 @@
-from .echo import echo, rendered_length, echo_traceback
+from .echo import echo, echo_traceback, rendered_length
 from . import terminal
 
 import threading
+import warnings
+from typing import List
+
+
+def _warn_shim_deprecated(name: str) -> None:
+    """Emit a one-time-per-call-site DeprecationWarning for back-compat shims.
+
+    The bbsengine6.io.screen bottombar-fragment API (setbottombar,
+    register_bottombar_fragment, unregister_bottombar_fragment,
+    clear_bottombar_fragments, _render_bottombar_fragments) is a back-compat
+    shim. New code should import directly from bbsengine6.bottombar.
+    """
+    warnings.warn(
+        f"bbsengine6.io.screen.{name} is a back-compat shim; "
+        f"import from bbsengine6.bottombar instead.",
+        DeprecationWarning,
+        stacklevel=3,
+    )
 
 # terminal import lines as terminal_lines, columns as terminal_columns
 
@@ -10,9 +28,26 @@ import threading
 # screen related functions
 # ------------------------
 
+# Bottombar fragment handling now lives in bbsengine6.bottombar. The names
+# below are kept here as thin shims so that pre-existing call sites
+# (bbsengine6.io.screen.register_bottombar_fragment, _render_bottombar_fragments,
+# _bottombar_fragments, etc.) continue to work without modification.
+#
+# The legacy `_bottombar_fragments` global was a plain list. It is now a
+# `_LockedList` owned by the default FragmentRegistry, aliased here so
+# that test code (and any other caller) that does
+# `screen._bottombar_fragments.append(...)` / `.remove(...)` / `.clear()`
+# continues to work. Both this alias and the registry's `items` attribute
+# reference the same underlying list, so writes through one are visible
+# to the other.
+
+from .. import bottombar as _bottombar_mod
+
+_default_registry = _bottombar_mod.default_registry()
+_bottombar_fragments = _default_registry.items
+_bottombar_fragments_lock = _default_registry.lock
+
 bottombarstack = []
-_bottombar_fragments = []
-_bottombar_fragments_lock = threading.Lock()
 _bottombarstack_lock = threading.Lock()
 
 
@@ -41,56 +76,61 @@ def updatebottombar(buf: str) -> None:
     return
 
 
+# ---- Fragment registry back-compat shims --------------------------------
+#
+# _bottombar_fragments / _bottombar_fragments_lock are now aliases onto
+# the default FragmentRegistry's _LockedList (see bbsengine6.bottombar).
+# All mutating and reading ops go through that list's lock, so the
+# snapshot taken during render() doesn't see a torn state.
+
+
 def register_bottombar_fragment(item):
-    """Register a fragment for the bottombar right side.
+    """Back-compat shim — delegates to bbsengine6.bottombar.
 
-    Args:
-        item: str or callable. Callables receive **kwargs and should return str.
-
-    Returns:
-        The registered item (same as input).
+    Deprecated: import bbsengine6.bottombar.register_bottombar_fragment
+    directly. The shim will be removed in a future release.
     """
-    with _bottombar_fragments_lock:
-        if item not in _bottombar_fragments:
-            _bottombar_fragments.append(item)
-    return item
+    _warn_shim_deprecated("register_bottombar_fragment")
+    return _bottombar_mod.register_bottombar_fragment(item)
 
 
 def unregister_bottombar_fragment(item):
-    """Unregister a fragment from the bottombar right side.
+    """Back-compat shim — delegates to bbsengine6.bottombar.
 
-    Args:
-        item: str or callable to remove from the fragments list.
-
-    Returns:
-        True if item was found and removed, False otherwise.
+    Deprecated: import bbsengine6.bottombar.unregister_bottombar_fragment
+    directly. The shim will be removed in a future release.
     """
-    with _bottombar_fragments_lock:
-        if item in _bottombar_fragments:
-            _bottombar_fragments.remove(item)
-            return True
-    return False
+    _warn_shim_deprecated("unregister_bottombar_fragment")
+    return _bottombar_mod.unregister_bottombar_fragment(item)
 
 
 def _render_bottombar_fragments(**kwargs) -> str:
-    """Render all registered fragments for the bottombar right side.
+    """Back-compat shim — delegates to bbsengine6.bottombar.
 
-    Fragments are rendered in registration order, joined with ' | '.
-    Callables are invoked with **kwargs; strs are used directly.
-    Also includes notification status if there are unread messages.
+    Calls `get_notification_status` (this module's function) so existing
+    tests that `patch("bbsengine6.io.screen.get_notification_status")`
+    keep working. Without this, the patch would target the wrong module.
 
-    Returns:
-        Combined string like "F2: notify (3) | murdermotel: 5 moves" or empty str.
+    Deprecated: import bbsengine6.bottombar.default_registry().render
+    directly. The shim will be removed in a future release.
     """
-    with _bottombar_fragments_lock:
-        items_snapshot = list(_bottombar_fragments)
+    _warn_shim_deprecated("_render_bottombar_fragments")
+    items_snapshot = _default_registry.items.snapshot()
 
-    parts = []
+    merged = dict(kwargs)
+    if _default_registry.args is not None and "args" not in merged:
+        merged["args"] = _default_registry.args
+    if _default_registry.player is not None and "player" not in merged:
+        merged["player"] = _default_registry.player
+    if _default_registry.pool is not None and "pool" not in merged:
+        merged["pool"] = _default_registry.pool
+
+    parts: List[str] = []
 
     for item in items_snapshot:
         if callable(item):
             try:
-                result = item(**kwargs)
+                result = item(**merged)
                 if result:
                     parts.append(str(result))
             except Exception:
@@ -109,6 +149,21 @@ def _render_bottombar_fragments(**kwargs) -> str:
 # @since 20250517 rewrite
 # from wcwidth import wcswidth, wcwidth
 def setbottombar(left, right=None, **kwargs):
+    """Back-compat shim — delegates to bbsengine6.bottombar.
+
+    Preserves the original signature (left, right=None, **kwargs) used by
+    callers like bbsengine6/console/lib.py and bbsengine6/demo_bottombar_stack.py
+    that pass an explicit `right=...` callable or string. When `right` is
+    None, the registered fragments are used (unchanged).
+
+    Emits the result via the local `updatebottombar()` (not via
+    bbsengine6.bottombar) so existing test code that does
+    `patch("bbsengine6.io.screen.updatebottombar")` keeps working.
+
+    Deprecated: call bbsengine6.bottombar.setbottombar(args, left) instead.
+    The shim will be removed in a future release.
+    """
+    _warn_shim_deprecated("setbottombar")
     terminalwidth = terminal.width() - 2
 
     if callable(left) is True:
@@ -116,12 +171,15 @@ def setbottombar(left, right=None, **kwargs):
     else:
         left_buf = left
 
-    if right is None and _bottombar_fragments:
-        right_buf = _render_bottombar_fragments(**kwargs)
+    if right is None:
+        right_buf = _default_registry.render(**kwargs) if len(_default_registry) else ""
     elif callable(right) is True:
         right_buf = right(**kwargs)
     else:
         right_buf = right
+
+    if right_buf is None:
+        right_buf = ""
 
     left_len = rendered_length(left_buf)
     right_len = rendered_length(right_buf)
@@ -143,52 +201,22 @@ setarea = setbottombar
 def get_notification_status(**kwargs) -> str:
     """Get notification status string for bottombar right side.
 
-    Returns:
-        "F2: notify (N)" if notifications > 0, else empty string.
-    
-    Uses message system (Phase 1B+) if available, falls back to notify.
+    Back-compat shim — delegates to bbsengine6.bottombar._get_notification_status.
     """
-    try:
-        from bbsengine6.member import _threadlocal
-
-        moniker = getattr(_threadlocal, "moniker", None)
-        if not moniker:
-            return ""
-        
-        # Try message system first (Phase 1B+)
-        try:
-            from bbsengine6 import message as message_module
-            if message_module.is_enabled():
-                count = message_module.get_unread_count(moniker, **kwargs)
-                if count and count > 0:
-                    return f"F2: notify ({count})"
-                return ""
-        except Exception:
-            pass
-        
-        # Fall back to notify
-        from bbsengine6 import notify
-
-        if not notify.is_enabled():
-            return ""
-
-        count = notify.count(moniker, **kwargs)
-        if count and count > 0:
-            return f"F2: notify ({count})"
-    except Exception:
-        echo_traceback("bbsengine6.io.screen.91:")
-    return ""
+    args = kwargs.get("args", None)
+    pool = kwargs.get("pool", None)
+    return _bottombar_mod._get_notification_status(args=args, pool=pool, **kwargs)
 
 
 # @since 20230523 copied from bbsengine5
 def clear_bottombar_fragments() -> None:
-    """Remove all registered fragments from the bottombar right side.
+    """Back-compat shim — delegates to bbsengine6.bottombar.
 
-    Useful when exiting a mode (e.g. playground) that may have added
-    context-specific fragments, returning to a cleaner lobby state.
+    Deprecated: import bbsengine6.bottombar.clear_bottombar_fragments
+    directly. The shim will be removed in a future release.
     """
-    with _bottombar_fragments_lock:
-        _bottombar_fragments.clear()
+    _warn_shim_deprecated("clear_bottombar_fragments")
+    _bottombar_mod.clear_bottombar_fragments()
 
 
 def popbottombar():

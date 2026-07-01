@@ -23,17 +23,10 @@ def access(args, op, **kwargs):
     return True
 
 
-# def database_exists(connection, dbname):
-#    query = "SELECT 1 FROM pg_database WHERE datname = %s"
-#    with connection.cursor() as cur:
-#        cur.execute(query, (dbname,))
-#        return False if cur.rowcount == 0 else True
-
-
 def main(args, **kwargs):
     pool = kwargs.get("pool", None)
     if pool is None:
-        io.echo("database pool not available", level="error")
+        io.echo("bbsengine6.backend.checkdatabase.100: database pool not available", level="error")
         return False
     with database.connect(args, pool=pool) as conn:
         try:
@@ -44,8 +37,8 @@ def main(args, **kwargs):
             if database.exists(args, args.databasename, pool=pool) is True:
                 io.echo(" ok ", level="ok")
                 return True
-        except psycopg.Error as e:
-            io.echo(f"An error occurred: {e}", level="error")
+        except Exception as e:
+            io.echo_traceback(f"bbsengine6.backend.checkdatabase.120: {e}")
             raise
 
     io.echo("create ", end="")
@@ -60,7 +53,7 @@ def main(args, **kwargs):
             conn.commit()
             return True
 
-    for r in ("term", "web", "sysop"):
+    for r in ("term", "web", "sysop", "member"):
         io.echo(
             f"{{var:labelcolor}}grant {{var:valuecolor}}connect{{var:labelcolor}} on {{var:valuecolor}}{args.databasename}{{var:labelcolor}} to {{var:valuecolor}}{r}{{var:labelcolor}}: ",
             end="",

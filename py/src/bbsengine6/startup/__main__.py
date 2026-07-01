@@ -18,7 +18,7 @@ else:
 
 session.start(args)
 
-screen.init()
+screen.init(args)
 
 locale.setlocale(locale.LC_ALL, "")
 time.tzset()
@@ -26,10 +26,12 @@ time.tzset()
 # module.init(args)
 
 try:
-    lib.runmodule(args, "main", argv=sys.argv[1:])
+    lib.runmodule(args, "main", package=".startup", argv=sys.argv[1:])
 except KeyboardInterrupt:
     io.echo("{/all}{bold}INTR{bold}")
 except EOFError:
     io.echo("{/all}{bold}EOF{bold}")
+except Exception as e:
+    io.echo_traceback(f"bbsengine6.startup: {e}")
 finally:
-    io.echo("{decsc}{curpos:%d,0}{el}{decrc}{reset}{/all}" % (io.terminal.height()))
+    io.echo(f"{{decsc}}{{curpos:{io.terminal.height()},0}}{{el}}{{reset}}{{decrc}}{{/all}}")
