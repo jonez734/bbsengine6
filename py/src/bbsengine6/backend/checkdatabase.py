@@ -2,13 +2,15 @@
 Verify and create the main BBS database.
 
 Checks if the main database exists and creates it if necessary,
-initializing all required settings and permissions.
+then grants CONNECT to the standard roles (term, web, sysop, member).
 """
 
-import psycopg
 from bbsengine6 import io, database
 
 from bbsengine6.backend import lib
+
+
+ROLES = ("term", "web", "sysop", "member")
 
 
 def init(args, **kwargs):
@@ -24,43 +26,52 @@ def access(args, op, **kwargs):
 
 
 def main(args, **kwargs):
-    pool = kwargs.get("pool", None)
+    pool = database.getpool(args, dbname="postgres")
     if pool is None:
-        io.echo("bbsengine6.backend.checkdatabase.100: database pool not available", level="error")
+        io.echo(
+            "bbsengine6.backend.checkdatabase.100: "
+            "could not connect to 'postgres'",
+            level="error",
+        )
         return False
-    with database.connect(args, pool=pool) as conn:
+
+    with pool:
         try:
+            if database.exists(args, args.databasename, pool=pool) is True:
+                io.echo(
+                    f"{{var:labelcolor}}database "
+                    f"{{var:valuecolor}}{args.databasename}{{var:labelcolor}}: "
+                    f" ok ",
+                    level="ok",
+                )
+                return True
+
             io.echo(
-                f"{{var:labelcolor}}database {{var:valuecolor}}{args.databasename}{{var:labelcolor}}: ",
+                f"{{var:labelcolor}}database "
+                f"{{var:valuecolor}}{args.databasename}{{var:labelcolor}}: "
+                f"create ",
                 end="",
             )
-            if database.exists(args, args.databasename, pool=pool) is True:
-                io.echo(" ok ", level="ok")
-                return True
+            with database.connect(args, pool=pool) as conn:
+                conn.autocommit = True
+                if database.create(args, args.databasename, conn=conn) is False:
+                    return False
         except Exception as e:
             io.echo_traceback(f"bbsengine6.backend.checkdatabase.120: {e}")
-            raise
-
-    io.echo("create ", end="")
-    with database.connect(args, pool=pool) as conn:
-        conn.autocommit = True
-        if database.create(args, args.databasename, conn=conn) is False:
-            io.echo("fail", level="error")
-            conn.rollback()
             return False
-        else:
-            io.echo(" ok ", level="ok")
-            conn.commit()
-            return True
 
-    for r in ("term", "web", "sysop", "member"):
+    io.echo(" ok ", level="ok")
+
+    for role in ROLES:
         io.echo(
-            f"{{var:labelcolor}}grant {{var:valuecolor}}connect{{var:labelcolor}} on {{var:valuecolor}}{args.databasename}{{var:labelcolor}} to {{var:valuecolor}}{r}{{var:labelcolor}}: ",
+            f"{{var:labelcolor}}grant {{var:valuecolor}}connect{{var:labelcolor}} "
+            f"on {{var:valuecolor}}{args.databasename}{{var:labelcolor}} to "
+            f"{{var:valuecolor}}{role}{{var:labelcolor}}: ",
             end="",
         )
         if (
             database.manage_database_priv(
-                args, "grant", "connect", args.databasename, r, **kwargs
+                args, "grant", "connect", args.databasename, role, **kwargs
             )
             is False
         ):
