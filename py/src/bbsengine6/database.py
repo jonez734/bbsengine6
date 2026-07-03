@@ -384,12 +384,12 @@ def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
     Raises:
       ValueError: If DSN is empty or invalid (no connection parameters)
     """
-    if "database" in kwargs and "dbname" in kwargs:
-        kwargs.pop("dbname", None)
-    elif "dbname" in kwargs and "database" not in kwargs:
-        kwargs["database"] = kwargs.pop("dbname")
+    databasename = kwargs.pop("database", kwargs.pop("dbname", None))
 
-    dsn = make_dsn(args, **kwargs)
+    if databasename is not None:
+        dsn = make_dsn(args, dbname=databasename, **kwargs)
+    else:
+        dsn = make_dsn(args, **kwargs)
 
     if not dsn or dsn == "port=5432":
         raise ValueError(
@@ -1246,44 +1246,185 @@ def rolexists(args: Any, rolname: str, **kwargs: Any) -> bool:
 
 
 def exists(args: Any, databasename: str, **kwargs: Any) -> bool:
-    _mogrify = kwargs.get("mogrify", True)
+    """Check whether a PostgreSQL database exists in the cluster.
+
+    The check is cluster-wide (queries ``pg_database``) and case-insensitive
+    (matches PostgreSQL's unquoted-identifier folding). The caller may pass
+    either a connection (``conn=...``) or a pool (``pool=...``); if neither
+    is provided, the function returns ``False`` and logs an error. This
+    mirrors the pattern used by ``schemaexists``, ``tableexists``, etc.
+
+    Args:
+        args: Application args (for logging).
+        databasename: Database name to look up.
+        **kwargs: ``conn`` (caller-supplied connection) and/or ``pool``
+                  (used as a fallback when ``conn`` is not provided).
+
+    Returns:
+        ``True`` if the database exists, ``False`` otherwise (including
+        when the connection fails or the lookup raises).
+    """
+    query = (
+        "SELECT 1 FROM pg_database WHERE lower(datname) = lower(%s)"
+    )
+    dat = (databasename,)
+
+    def _work(conn: Any) -> bool:
+        with cursor(conn=conn) as cur:
+            cur.execute(query, dat)
+            return cur.fetchone() is not None
+
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        try:
+            return _work(conn)
+        except psycopg.DatabaseError as e:
+            io.echo_traceback(f"bbsengine6.database.exists.200: {e}")
+            return False
+
     pool = kwargs.get("pool", None)
     if pool is None:
-        io.echo("database.exists.200: no pool", level="error")
+        io.echo(
+            "bbsengine6.database.exists.180: conn and pool both None",
+            level="error",
+        )
         return False
-
     try:
         with connect(args, pool=pool) as conn:
-            sql = "SELECT datname FROM pg_catalog.pg_database WHERE lower(datname) = lower(%s)"
-            dat = (databasename,)
-            with cursor(conn=conn) as cur:
-                cur.execute(sql, dat)
-                result = False if cur.rowcount == 0 else True
-            conn.commit()
-            return result
+            return _work(conn)
     except psycopg.DatabaseError as e:
         io.echo_traceback(f"bbsengine6.database.exists.200: {e}")
         return False
 
 
-def create(args: Any, name: str, **kwargs: Any) -> bool:
-    from psycopg.sql import SQL, Identifier
+def create(
+    args: Any,
+    name: str,
+    *,
+    owner: str | None = None,
+    template: str | None = None,
+    encoding: str | None = None,
+    lc_collate: str | None = None,
+    lc_ctype: str | None = None,
+    **kwargs: Any,
+) -> bool:
+    """Create a new PostgreSQL database.
+
+    IMPORTANT - AUTOCOMMIT CONTRACT:
+        PostgreSQL rejects ``CREATE DATABASE`` inside an explicit transaction
+        block. When called with a caller-supplied ``conn``, the connection MUST
+        have ``conn.autocommit = True``. This function does NOT modify
+        autocommit for the caller-supplied ``conn`` path. If you obtained your
+        connection through ``database.connect()`` (which forces autocommit
+        off), flip it before calling, e.g.::
+
+            conn.autocommit = True
+            database.create(args, "mydb", conn=conn)
+            conn.autocommit = False
+
+        Failure to do so will surface a server-side "CREATE DATABASE cannot
+        run inside a transaction block" error, which this function catches
+        and reports as a return value of ``False`` (see below).
+
+    DUPLICATE-NAME BEHAVIOR:
+        PostgreSQL has no ``CREATE DATABASE IF NOT EXISTS``. If ``name``
+        already exists, the server raises ``psycopg.errors.DuplicateDatabase``
+        (SQLSTATE ``42P04``). This function catches that (and any other
+        exception), logs the traceback via ``io.echo_traceback``, and returns
+        ``False``. Callers wanting idempotent behavior should pre-check with
+        ``database.exists(args, name, pool=pool)``.
+
+    Args:
+        args: Application args (for debug logging).
+        name: Database name to create. Forwarded via ``sql.Identifier`` for
+              safe quoting.
+        owner: Optional role name to own the new database. ``sql.Identifier``.
+        template: Optional template database name. ``sql.Identifier``.
+        encoding: Optional character set encoding (e.g. ``"UTF8"``). Forwarded
+                  via ``sql.Literal`` (server-side string, not an identifier).
+        lc_collate: Optional LC_COLLATE locale. ``sql.Literal``.
+        lc_ctype: Optional LC_CTYPE locale. ``sql.Literal``.
+        **kwargs: Optional ``conn`` (caller-supplied connection, must be
+                  autocommit) and/or ``pool`` (used as a fallback when
+                  ``conn`` is not provided; the function will temporarily
+                  set ``autocommit = True`` on the pooled connection and
+                  restore the prior value on exit).
+
+    Returns:
+        ``True`` on success, ``False`` on any caught failure (including
+        duplicate names and the "cannot run inside a transaction block"
+        error when the autocommit contract is violated).
+    """
 
     def _work(cur):
-        # Use psycopg.sql.Identifier to safely handle the database name
+        clauses = [
+            sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name))
+        ]
+        opts: list[sql.Composable] = []
+        if owner is not None:
+            opts.append(sql.SQL("OWNER = {}").format(sql.Identifier(owner)))
+        if template is not None:
+            opts.append(sql.SQL("TEMPLATE = {}").format(sql.Identifier(template)))
+        if encoding is not None:
+            opts.append(sql.SQL("ENCODING = {}").format(sql.Literal(encoding)))
+        if lc_collate is not None:
+            opts.append(sql.SQL("LC_COLLATE = {}").format(sql.Literal(lc_collate)))
+        if lc_ctype is not None:
+            opts.append(sql.SQL("LC_CTYPE = {}").format(sql.Literal(lc_ctype)))
+        if opts:
+            clauses.append(sql.SQL("WITH"))
+            clauses.append(sql.SQL(" ").join(opts))
+        stmt = sql.SQL(" ").join(clauses)
         try:
-            sql = SQL("CREATE DATABASE {}").format(Identifier(name))  # type: ignore
-            cur.execute(sql)
+            cur.execute(stmt)
         except Exception as e:
             io.echo_traceback(f"bbsengine6.database.create.200: {e}")
             return False
         return True
 
+    if args and getattr(args, "debug", False) is True:
+        io.echo(
+            f"bbsengine6.database.create.100: name={name}, owner={owner}, "
+            f"template={template}, encoding={encoding}",
+            level="debug",
+        )
+
     conn = kwargs.get("conn", None)
     if conn is None:
-        io.echo(f"bbsengine.database.create.180: {conn=}", level="error")
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            io.echo(
+                "bbsengine6.database.create.180: conn and pool both None",
+                level="error",
+            )
+            return False
+        # Pool path: temporarily flip autocommit on for the duration of the
+        # call, then restore. This is the ONLY path in this function that
+        # modifies autocommit, per the documented autocommit contract.
+        prev_autocommit: Any = None
+        had_conn = False
+        try:
+            with connect(args, pool=pool) as conn:
+                had_conn = True
+                prev_autocommit = conn.autocommit
+                conn.autocommit = True
+                with cursor(conn=conn) as cur:
+                    return _work(cur)
+        finally:
+            if had_conn and prev_autocommit is not None:
+                try:
+                    conn.autocommit = prev_autocommit
+                except Exception:
+                    pass
         return False
-    io.echo(f"{conn=}", level="debug")
+
+    if args and getattr(args, "debug", False) is True:
+        io.echo(
+            f"bbsengine6.database.create.100: using caller conn id={id(conn)}, "
+            f"autocommit={conn.autocommit} (must be True)",
+            level="debug",
+        )
+
     with cursor(conn=conn) as cur:
         return _work(cur)
 
@@ -1627,7 +1768,7 @@ def functionexists(args: Any, name: str, **kwargs: Any) -> bool:
 
     try:
         conn = kwargs.get("conn", None)
-        io.echo(f"bbsengine.database.functionexists.100: {conn=}", level="debug")
+##        io.echo(f"bbsengine.database.functionexists.140: {conn=}", level="debug")
         if conn is None:
             return False
         return _work(conn)
