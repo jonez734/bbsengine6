@@ -181,7 +181,7 @@ _check_params(func_name, params, required, optional_kwargs=False) -> bool
 
 **Key Functions:**
 ```
-hr(acs: bool = True, width: int | None = None, color: str = "{boxcolor}", end: str = "\n") -> None
+hr(acs=True, width=None, end="\n", color="{boxcolor}") -> bool
   "Display a horizontal rule (box-drawing or ASCII) to the terminal"
 
 heading(title, **kwargs) -> str
