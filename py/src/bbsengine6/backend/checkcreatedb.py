@@ -5,8 +5,19 @@ This must run before checkdatabase, because checkdatabase may need to
 CREATE the target database (e.g. on a fresh install where the 'zoid6'
 database does not yet exist). If the role lacks CREATEDB, the
 CREATE DATABASE call will fail with InsufficientPrivilege. We probe
-pg_roles.rolcreatedb up front and abort with a clear two-line message
-when the privilege is missing.
+pg_roles up front and abort with a clear two-line message when the
+privilege is missing.
+
+PostgreSQL allows CREATE DATABASE if ANY of the following is true:
+
+  * the role is a superuser (rolsuper)
+  * the role has rolcreatedb set
+  * the role has been granted CREATE on the target database
+    (handled by has_database_privilege, not relevant here when the
+    target database does not yet exist)
+
+We check the first two: a superuser can always create a database
+even without rolcreatedb, so we must not reject superusers.
 """
 
 from bbsengine6 import database, io
@@ -33,7 +44,7 @@ def main(args, **kwargs):
     with database.connect(args, pool=pool) as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT rolcreatedb, rolname "
+                "SELECT rolcreatedb, rolsuper, rolname "
                 "FROM pg_roles WHERE rolname = current_user"
             )
             row = cur.fetchone()
@@ -45,8 +56,8 @@ def main(args, **kwargs):
         )
         return False
 
-    rolcreatedb, rolname = row
-    if not rolcreatedb:
+    rolcreatedb, rolsuper, rolname = row
+    if not (rolcreatedb or rolsuper):
         io.echo(
             f"current user '{rolname}' lacks CREATEDB privilege; "
             f"cannot create database '{args.databasename}'",
@@ -58,7 +69,13 @@ def main(args, **kwargs):
         )
         return False
 
-    io.echo(
-        f"checkcreatedb: user '{rolname}' has CREATEDB", level="ok"
-    )
+    if rolsuper:
+        io.echo(
+            f"checkcreatedb: user '{rolname}' is a superuser",
+            level="ok",
+        )
+    else:
+        io.echo(
+            f"checkcreatedb: user '{rolname}' has CREATEDB", level="ok"
+        )
     return True

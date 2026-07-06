@@ -448,6 +448,24 @@ class TestStartupMainZoid6MissingIntegration:
             row = cur.fetchone()
         return bool(row[0]) if row else False
 
+    @pytest.fixture(scope="class")
+    def runner_is_superuser(self, admin_conn: psycopg.Connection) -> bool:
+        """Detect whether the test runner is a PostgreSQL superuser.
+
+        A superuser can CREATE DATABASE even without rolcreatedb, so
+        checkcreatedb must not reject them. The mocked
+        test_createdb_present_succeeds covers the happy path
+        unconditionally; this integration test verifies the
+        superuser-specific branch in the production code.
+        """
+        with admin_conn.cursor() as cur:
+            cur.execute(
+                "SELECT rolsuper FROM pg_roles "
+                "WHERE rolname = current_user"
+            )
+            row = cur.fetchone()
+        return bool(row[0]) if row else False
+
     @pytest.fixture
     def missing_db_name(self, admin_conn: psycopg.Connection) -> Iterator[str]:
         """Yield a fresh unique DB name and drop it on teardown."""
@@ -611,6 +629,61 @@ class TestStartupMainZoid6MissingIntegration:
                         cur.execute(f'DROP ROLE IF EXISTS "{temp_role}"')
                 except Exception:
                     pass
+
+    def test_checkcreatedb_allows_superuser_without_createdb(
+        self,
+        admin_conn: psycopg.Connection,
+        missing_db_name: str,
+        caplog,
+        runner_is_superuser: bool,
+        runner_has_createdb: bool,
+    ):
+        """A superuser can CREATE DATABASE even without rolcreatedb.
+        checkcreatedb must NOT reject superusers.
+
+        We test checkcreatedb.main directly with the runner role (no
+        role juggling needed): if the runner is a superuser without
+        rolcreatedb, checkcreatedb must return True and emit the
+        'is a superuser' message.
+        """
+        from bbsengine6.backend import checkcreatedb
+        from bbsengine6 import database
+
+        if not runner_is_superuser:
+            pytest.skip(
+                "test runner is not a superuser; this integration "
+                "test verifies the superuser-specific branch"
+            )
+        if runner_has_createdb:
+            pytest.skip(
+                "test runner has CREATEDB; the rolcreatedb branch "
+                "would fire first and the superuser branch is not "
+                "exercised"
+            )
+
+        user = getpass.getuser()
+        args = _make_args(missing_db_name)
+        args.databaseuser = user
+
+        pool = database.getpool(args, dbname="postgres")
+        result = checkcreatedb.main(args, pool=pool)
+
+        all_log = "\n".join(r.message for r in caplog.records)
+
+        assert result is True, (
+            f"checkcreatedb must return True for superuser; "
+            f"got {result!r}, log:\n{all_log!r}"
+        )
+        assert "is a superuser" in all_log, (
+            f"superuser-specific ok message missing from log:\n"
+            f"{all_log!r}"
+        )
+        # The 'lacks CREATEDB privilege' error must NOT appear for
+        # a superuser, even when rolcreatedb is false.
+        assert "lacks CREATEDB privilege" not in all_log, (
+            f"superuser should not see 'lacks CREATEDB' error:\n"
+            f"{all_log!r}"
+        )
 
 
 if __name__ == "__main__":
