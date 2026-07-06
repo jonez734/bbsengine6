@@ -21,7 +21,7 @@ def main(args, **kwargs):
     io.echo(f"bbsengine6.backend.stage_one.100: {kwargs=}", level="debug")
     pool = database.getpool(args, database=args.databasename)  # zoid6
     with database.connect(args, pool=pool) as conn:
-        for m in ("checkengine", "checkfunctions", "checkclasses", "checkflag", "bank"):
+        for m in ("checkextensions", "checkfunctions", "checkclasses", "checkflag", "bank"):
             if lib.runmodule(
                 args,
                 m,
