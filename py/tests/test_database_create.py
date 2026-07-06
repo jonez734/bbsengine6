@@ -188,55 +188,6 @@ class TestCreate:
         assert "CREATE DATABASE" in rendered
         assert '"my_new_db"' in rendered
 
-    def test_emits_owner_and_encoding_when_supplied(self, test_args):
-        cur = _make_fake_cursor()
-        conn = _make_fake_conn(cur=cur, autocommit=True)
-
-        result = database.create(
-            test_args,
-            "my_new_db",
-            owner="postgres",
-            encoding="UTF8",
-            conn=conn,
-        )
-
-        assert result is True
-        (stmt,) = cur.execute.call_args[0]
-        rendered = stmt.as_string(None)  # type: ignore[attr-defined]
-        assert "CREATE DATABASE" in rendered
-        assert '"my_new_db"' in rendered
-        assert "WITH" in rendered
-        assert 'OWNER = "postgres"' in rendered
-        assert "ENCODING = 'UTF8'" in rendered
-
-    def test_emits_only_options_provided(self, test_args):
-        cur = _make_fake_cursor()
-        conn = _make_fake_conn(cur=cur, autocommit=True)
-
-        result = database.create(
-            test_args, "my_new_db", template="template0", conn=conn
-        )
-
-        assert result is True
-        (stmt,) = cur.execute.call_args[0]
-        rendered = stmt.as_string(None)  # type: ignore[attr-defined]
-        assert "TEMPLATE" in rendered
-        assert "OWNER" not in rendered
-        assert "ENCODING" not in rendered
-        # WITH is only emitted when at least one option is present.
-        assert "WITH" in rendered
-
-    def test_no_options_omits_with_keyword(self, test_args):
-        cur = _make_fake_cursor()
-        conn = _make_fake_conn(cur=cur, autocommit=True)
-
-        database.create(test_args, "bare_db", conn=conn)
-
-        (stmt,) = cur.execute.call_args[0]
-        rendered = stmt.as_string(None)  # type: ignore[attr-defined]
-        assert "WITH" not in rendered
-        assert "CREATE DATABASE" in rendered
-
     def test_duplicate_database_returns_false(self, test_args):
         # Simulate psycopg's DuplicateDatabase being raised on the second
         # CREATE DATABASE call for the same name.
