@@ -163,10 +163,18 @@ __all__ = ["init", "access", "buildargs", "main"]
 
 ## Pre-existing issues (deferred)
 
-- [ ] `backend/stage_zero.checkfunctions(stage=0)` runs against
-      the `postgres` maintenance DB where the `engine.*` schema
-      does not yet exist; will fail on a fresh cluster. Fix in
-      a follow-up commit.
+- [x] `backend/stage_one` did not call `checkengine` against the
+      target DB (it only ran in stage_zero against the `postgres`
+      maintenance DB), so `engine.*` lookups in
+      `checkfunctions` / `importsql` failed with
+      `schema "engine" does not exist` on a fresh cluster. Fixed
+      by adding `"checkengine"` to the stage 1 module loop in
+      `py/src/bbsengine6/backend/stage_one.py:24-31`, positioned
+      after `checkextensions` and before `checkfunctions`.
+      Covered by
+      `tests/integration/test_stage_one_checkengine.py` (7 tests:
+      loop membership, ordering, idempotency, conn/pool
+      propagation, fail-fast on create failure).
 - [ ] Top-level `bbsengine6/startup.py` is dead code (shadowed
       by the new `startup/` package). Cleanup is a separate
       concern.

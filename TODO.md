@@ -1647,7 +1647,10 @@ behavior.
 
 - [ ] `python -m bbsengine6.console` shows the new heading before
       `engine checks`.
-- [ ] `stage_zero` / `stage_one` still pass on a fresh DB.
+- [x] `stage_zero` / `stage_one` still pass on a fresh DB.
+      (See TODO_BACKEND.md — the stage_one `engine` schema fix
+      landed in commit 44b2e17 with
+      `tests/integration/test_stage_one_checkengine.py`.)
 - [ ] `pytest bbsengine6/py/tests/` passes (no regressions from the
       extra import in `console/main.py`).
 - [ ] `mistermcfeely/src/postoffice/startup_test.py` runs and
