@@ -33,6 +33,7 @@ def main(args, **kwargs) -> bool:
             if _runstage(args, s, conn=conn, **stage_kwargs) is False:
                 failcount += 1
                 io.echo(f" module {s} failed ", level="error")
+                break
 
         if failcount > 0:
             io.echo("bbsengine6 startup failed", level="error")

@@ -253,11 +253,10 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             f"{all_log!r}"
         )
 
-    def test_stage_failure_in_stage_zero_propagates(self):
-        """If stage_zero returns False, startup must return False at
-        the end. (Per the current _work loop, all three stages are
-        attempted even on partial failure; failcount just drives the
-        final True/False return.)"""
+    def test_stage_zero_failure_short_circuits(self):
+        """If stage_zero returns False, startup must short-circuit:
+        stage_one and bank must NOT run. The function still returns
+        False and the connection is rolled back."""
         from bbsengine6.startup import main as startup_module
 
         with _Harness(
@@ -268,10 +267,29 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         assert result is False, (
             f"startup must return False when a stage fails; got {result!r}"
         )
-        # All three stages are still attempted; failcount is what
-        # determines the final return value.
-        assert h.run_calls == ["stage_zero", "stage_one", "bank"], (
-            f"all stages should be attempted; got {h.run_calls!r}"
+        # stage_one and bank must NOT run after stage_zero fails.
+        assert h.run_calls == ["stage_zero"], (
+            f"only stage_zero should run on failure; got {h.run_calls!r}"
+        )
+
+    def test_stage_one_failure_short_circuits(self):
+        """If stage_one returns False, startup must short-circuit:
+        bank must NOT run. stage_zero still runs first (and
+        succeeds); only bank is short-circuited."""
+        from bbsengine6.startup import main as startup_module
+
+        with _Harness(
+            runmodule_per_submodule={"stage_one": False},
+        ) as h:
+            result = startup_module.main(h.args, conn=None, pool=None)
+
+        assert result is False, (
+            f"startup must return False when a stage fails; got {result!r}"
+        )
+        # stage_zero ran, stage_one ran and failed, bank must NOT run.
+        assert h.run_calls == ["stage_zero", "stage_one"], (
+            f"bank should not run after stage_one fails; "
+            f"got {h.run_calls!r}"
         )
 
     def test_createdb_missing_routes_through_checkcreatedb_in_stage_zero(self):
