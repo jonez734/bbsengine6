@@ -1,4 +1,4 @@
-from bbsengine6 import io, database, module, screen
+from bbsengine6 import io, database, module, screen, util
 
 
 def buildargs(args, **kwargs):
@@ -71,3 +71,17 @@ def checkwebserverrole(args, **kwargs):
 
 def checkbank(args, **kwargs):
     return runmodule(args, "bank", **kwargs)
+
+
+def ok():
+    io.echo(f"{{level.ok}}  ok  {{/all}}")
+    return
+
+
+def fail():
+    io.echo(f"{{level.fail}} fail {{/all}}")
+
+
+def hr(failcount: int = 0) -> None:
+    color = "{boxcolor}" if failcount == 0 else "{/all}{red}"
+    util.hr(color=color)
