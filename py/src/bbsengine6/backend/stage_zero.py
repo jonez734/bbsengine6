@@ -1,4 +1,3 @@
-import psycopg
 from bbsengine6 import io, database, util
 
 from . import lib
@@ -20,21 +19,25 @@ def main(args, **kwargs):
 
     failcount = 0
 
-    if lib.runmodule(args, "checkdatabase", **kwargs) is False:
-        failcount += 1
-        return False
-
+    # Build the admin pool against 'postgres' first; both
+    # checkdatabase and the inner sub-step loop need it. The caller
+    # (startup.main) only passes conn, so we build the pool here.
     pool = database.getpool(args, dbname="postgres")
     if pool is None:
         io.echo("could not connect to 'postgres'", level="error")
-        lib.hr(1)
         return False
 
     with pool:  # postgres
         try:
             with database.connect(args, pool=pool) as conn:
+                # checkcreatedb MUST run before checkdatabase so that
+                # a missing CREATEDB privilege is detected with a
+                # clear two-line error before we attempt CREATE
+                # DATABASE (which would surface as a raw psycopg
+                # InsufficientPrivilege traceback).
                 for m in (
                     "checkcreatedb",
+                    "checkdatabase",
                     "checkextensions",
                     "checkroles",
                     "checkfunctions",
@@ -60,5 +63,4 @@ def main(args, **kwargs):
             else:
                 io.echo(f"bbsengine6.backend.stage_zero.130: {failcount=}", level="error")
 
-    lib.hr(failcount)
     return True if failcount == 0 else False

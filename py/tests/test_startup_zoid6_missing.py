@@ -378,6 +378,20 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             f"checkcreatedb must be the first sub-step in stage_zero; "
             f"got {first_substep!r}"
         )
+        # checkdatabase must be the second sub-step (after checkcreatedb
+        # but before checkextensions, so a missing CREATEDB is caught
+        # before any other step runs).
+        second_match = re.search(
+            r"for m in \(\s*\"[^\"]+\",\s*\"([^\"]+)\"", src
+        )
+        assert second_match is not None, (
+            "could not locate second sub-step in stage_zero tuple"
+        )
+        second_substep = second_match.group(1)
+        assert second_substep == "checkdatabase", (
+            f"checkdatabase must be the second sub-step in stage_zero; "
+            f"got {second_substep!r}"
+        )
 
 
 # ---------------------------------------------------------------------------
