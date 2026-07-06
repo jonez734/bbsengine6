@@ -60,23 +60,23 @@ def main(args, **kwargs):
             io.echo_traceback(f"bbsengine6.backend.checkdatabase.120: {e}")
             return False
 
-    io.echo(" ok ", level="ok")
+        lib.ok()
 
-    for role in ROLES:
-        io.echo(
-            f"{{var:labelcolor}}grant {{var:valuecolor}}connect{{var:labelcolor}} "
-            f"on {{var:valuecolor}}{args.databasename}{{var:labelcolor}} to "
-            f"{{var:valuecolor}}{role}{{var:labelcolor}}: ",
-            end="",
-        )
-        if (
-            database.manage_database_priv(
-                args, "grant", "connect", args.databasename, role, **kwargs
+        for role in ROLES:
+            io.echo(
+                f"{{var:labelcolor}}grant {{var:valuecolor}}connect{{var:labelcolor}} "
+                f"on {{var:valuecolor}}{args.databasename}{{var:labelcolor}} to "
+                f"{{var:valuecolor}}{role}{{var:labelcolor}}: ",
+                end="",
             )
-            is False
-        ):
-            io.echo("fail", level="error")
-            return False
-        io.echo(" ok ", level="ok")
+            if (
+                database.manage_database_priv(
+                    args, "grant", "connect", args.databasename, role, pool=pool, **kwargs
+                )
+                is False
+            ):
+                lib.fail()
+                return False
+            lib.ok()
 
     return True

@@ -2,7 +2,7 @@ import time
 import locale
 import sys
 
-from bbsengine6 import io, screen, session
+from bbsengine6 import io, screen
 from . import lib
 
 parser = lib.buildargs()
@@ -16,7 +16,7 @@ if "--help" in sys.argv or "-h" in sys.argv:
 else:
     args = parser.parse_args() if parser is not None else None
 
-session.start(args)
+#session.start(args)
 
 screen.init(args)
 
@@ -26,11 +26,14 @@ time.tzset()
 # module.init(args)
 
 try:
-    lib.runmodule(args, "main", package=".startup", argv=sys.argv[1:])
+    if lib.runmodule(args, "main", package="bbsengine6.startup", argv=sys.argv[1:]) is False:
+        io.echo(f"{{level.error}} startup failed {{/all}}")
+    else:
+        io.echo(f"{{level.ok}} startup ok {{/all}}")
 except KeyboardInterrupt:
-    io.echo("{/all}{bold}INTR{bold}")
+    io.echo("{/all}{bold}INTR{/bold}")
 except EOFError:
-    io.echo("{/all}{bold}EOF{bold}")
+    io.echo("{/all}{bold}EOF{/bold}")
 except Exception as e:
     io.echo_traceback(f"bbsengine6.startup: {e}")
 finally:

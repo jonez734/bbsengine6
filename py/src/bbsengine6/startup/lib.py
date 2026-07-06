@@ -1,6 +1,6 @@
 import argparse
 
-from bbsengine6 import module, database, io, bottombar
+from bbsengine6 import module, database, io, bottombar, util
 
 #buildargs = _console_lib.buildargs
 #setbottombar = _console_lib.setbottombar
@@ -30,3 +30,14 @@ def buildargs(args=None, **kwargs):
     database.buildargs(parser, defaults)
 
     return parser
+
+def ok():
+    io.echo(  f"{{level.ok}}  ok  {{/all}}")
+    return
+
+def fail():
+    io.echo(f"{{level.fail}} fail {{/all}}")
+
+def hr(failcount=0):
+    color = "{boxcolor}" if failcount == 0 else "{/all}{red}"
+    util.hr(color=color)

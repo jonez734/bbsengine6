@@ -2,6 +2,8 @@
 
 from bbsengine6 import database, io
 
+from bbsengine6.backend import lib
+
 def init(args, **kwargs) -> bool:
     return True
 
@@ -15,15 +17,15 @@ def buildargs(args, **kwargs):
 
 def main(args, **kwargs) -> bool:
     def _work(conn):
-        util.heading("engine checks")
+        util.heading("startup")
         if lib.runmodule(args, "stage_zero", **kwargs) is False:
-            io.echo(f"{{level.error}} fail ", level="error")
+            lib.fail()
             return False
         else:
-            io.echo(f"{{level.ok}} stage_zero passes")
+            lib.ok()
 
         if stage_one(args, **kwargs) is False:
-            io.echo("fail", level="error")
+            lib.fail()
             return False
 
         # --- 'member' group role ---
@@ -38,13 +40,13 @@ def main(args, **kwargs) -> bool:
         for r in ("member", "sysop", "web", "term"):
             io.echo(f"{{labelcolor}}checking role {{valuecolor}}{r}{{labelcolor}}: {{/all}}")
             if database.rolexists(args, r, conn=conn):
-                io.echo(f"{{level.ok}} ok ")
+                lib.ok()
             else:
                 io.echo(f"{{labelcolor}} create: ", end="")
                 if database.createrole(args, r, conn=conn, login=False, createdb=False, createrole=False, superuser=False):
-                    io.echo(f"{{level.ok}} ok ")
+                    lib.ok()
                 else:
-                    io.echo(f"{{level.error}} fail ")
+                    lib.fail()
 
         # --- engine schema ---
         io.echo(
@@ -53,6 +55,7 @@ def main(args, **kwargs) -> bool:
         )
 
         if database.schemaexists(args, "engine", conn=conn) is False:
+            io.echo("create ", end="")
             if database.createschema(args, "engine", conn=conn) is False:
                 io.echo("fail", level="error")
                 return False
@@ -62,17 +65,20 @@ def main(args, **kwargs) -> bool:
 
         # --- classes in dependency order ---
         classes = (
-            ("engine.__notify", "notify.sql"),
-            ("engine.__notify_recipient", "notify_recipient.sql"),
-            ("engine.__notify_block", "notify_block.sql"),
-            ("engine.__notify_group", "notify_group.sql"),
-            ("engine.__notify_type", "notify_type.sql"),
-            ("engine.__notify_rate_limit", "notify_rate_limit.sql"),
+#            ("engine.__notify", "notify.sql"),
+#            ("engine.__notify_recipient", "notify_recipient.sql"),
+#            ("engine.__notify_block", "notify_block.sql"),
+#            ("engine.__notify_group", "notify_group.sql"),
+#            ("engine.__notify_type", "notify_type.sql"),
+#            ("engine.__notify_rate_limit", "notify_rate_limit.sql"),
+
             ("engine.member_flag", "flag.sql"),
             ("engine.map_member_flag", "map_member_flag.sql"),
             ("engine.__member", "member.sql"),
             ("engine.member", "member.sql"),
+
             ("engine.pgrole", "pgrole.sql"),
+
             ("engine.__refcode", "refcode.sql"),
             ("engine.refcode", "refcode.sql"),
             ("engine.map_refcode_use", "refcode.sql"),
@@ -89,12 +95,12 @@ def main(args, **kwargs) -> bool:
                     database.importsql(args, sql, conn=conn)
                     is False
                 ):
-                    io.echo("fail", level="error")
+                    lib.fail()
                     failcount += 1
                 else:
-                    io.echo(" ok ", level="ok")
+                    lib.ok()
             else:
-                io.echo("ok", level="ok")
+                lib.ok()
 
         if failcount > 0:
             io.echo("bbsengine6 startup failed", level="error")

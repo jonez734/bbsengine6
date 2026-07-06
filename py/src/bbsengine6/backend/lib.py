@@ -1,12 +1,11 @@
-from bbsengine6 import io, database, module, bottombar
-
+from bbsengine6 import io, database, module, bottombar, util
 
 def buildargs(args, **kwargs):
     return None
 
 
 # @since 20230630
-def runmodule(args, submodule, package=".backend", **kwargs):
+def runmodule(args, submodule, package="bbsengine6.backend", **kwargs):
     return module.runmodule(args, submodule, package=package, **kwargs)
 
 
@@ -60,3 +59,14 @@ def checkwebserverrole(args, **kwargs):
 
 def checkbank(args, **kwargs):
     return runmodule(args, "bank", **kwargs)
+
+def ok():
+    io.echo(  f"{{level.ok}}  ok  {{/all}}")
+    return
+
+def fail():
+    io.echo(f"{{level.fail}} fail {{/all}}")
+
+def hr(failcount=0):
+    color = "{boxcolor}" if failcount == 0 else "{/all}{red}"
+    util.hr(color=color)
