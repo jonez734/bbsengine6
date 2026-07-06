@@ -172,9 +172,22 @@ __all__ = ["init", "access", "buildargs", "main"]
       `py/src/bbsengine6/backend/stage_one.py:24-31`, positioned
       after `checkextensions` and before `checkfunctions`.
       Covered by
-      `tests/integration/test_stage_one_checkengine.py` (7 tests:
-      loop membership, ordering, idempotency, conn/pool
-      propagation, fail-fast on create failure).
+      `tests/integration/test_stage_one_checkengine.py`.
+- [x] Once `checkengine` started running in stage 1, the
+      `manage_schema_priv` grant loop failed with
+      `function manage_schema_priv(unknown, unknown, unknown, unknown)
+      does not exist` because stage 1's `checkfunctions` only
+      installs `engine.*` functions and never installs the
+      `public.*` admin helpers into the target DB. Fixed by
+      having `checkengine.main` install `manage_schema_priv.sql`
+      via `importsql()` if `functionexists("public.manage_schema_priv")`
+      is `False`, before the grant loop. `checkengine` is the
+      first module in both stage 0 and stage 1 that needs the
+      helper, so owning the install there is more robust than
+      trying to coordinate stage 0/1 ordering. Covered by
+      `tests/integration/test_stage_one_checkengine.py`
+      (`test_main_installs_manage_schema_priv_when_missing` and
+      `test_main_returns_false_when_manage_schema_priv_install_fails`).
 - [ ] Top-level `bbsengine6/startup.py` is dead code (shadowed
       by the new `startup/` package). Cleanup is a separate
       concern.

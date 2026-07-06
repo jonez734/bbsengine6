@@ -139,14 +139,20 @@ class TestCheckEngineIdempotency(unittest.TestCase):
         fake_conn = Mock()
         fake_pool = Mock()
 
-        with patch.object(self.checkengine.database, "schemaexists", return_value=True) as schemaexists, \
+        with patch.object(self.checkengine.database, "functionexists", return_value=True) as functionexists, \
+             patch.object(self.checkengine.database, "importsql") as importsql, \
+             patch.object(self.checkengine.database, "schemaexists", return_value=True) as schemaexists, \
              patch.object(self.checkengine.database, "createschema") as createschema, \
-             patch.object(self.checkengine.database, "manage_schema_priv", return_value=True):
+             patch.object(self.checkengine.database, "manage_schema_priv", return_value=True), \
+             patch.object(self.checkengine.database, "classexists", return_value=True):
             result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
 
         self.assertTrue(result)
         schemaexists.assert_called_once()
         createschema.assert_not_called()
+        # manage_schema_priv helper already present — no importsql call.
+        functionexists.assert_called_once()
+        importsql.assert_not_called()
 
     def test_main_creates_schema_when_missing(self):
         """
@@ -157,9 +163,12 @@ class TestCheckEngineIdempotency(unittest.TestCase):
         fake_conn = Mock()
         fake_pool = Mock()
 
-        with patch.object(self.checkengine.database, "schemaexists", return_value=False), \
+        with patch.object(self.checkengine.database, "functionexists", return_value=True), \
+             patch.object(self.checkengine.database, "importsql") as importsql, \
+             patch.object(self.checkengine.database, "schemaexists", return_value=False), \
              patch.object(self.checkengine.database, "createschema", return_value=True) as createschema, \
-             patch.object(self.checkengine.database, "manage_schema_priv", return_value=True):
+             patch.object(self.checkengine.database, "manage_schema_priv", return_value=True), \
+             patch.object(self.checkengine.database, "classexists", return_value=True):
             result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
 
         self.assertTrue(result)
@@ -175,6 +184,8 @@ class TestCheckEngineIdempotency(unittest.TestCase):
         # And the schema name must be the one we depend on elsewhere.
         args_list, _ = createschema.call_args
         self.assertEqual(args_list[1], "engine")
+        # helper already present — no install attempt.
+        importsql.assert_not_called()
 
     def test_main_returns_false_when_createschema_fails(self):
         """
@@ -185,8 +196,11 @@ class TestCheckEngineIdempotency(unittest.TestCase):
         fake_conn = Mock()
         fake_pool = Mock()
 
-        with patch.object(self.checkengine.database, "schemaexists", return_value=False), \
+        with patch.object(self.checkengine.database, "functionexists", return_value=True), \
+             patch.object(self.checkengine.database, "importsql"), \
+             patch.object(self.checkengine.database, "schemaexists", return_value=False), \
              patch.object(self.checkengine.database, "createschema", return_value=False), \
+             patch.object(self.checkengine.database, "classexists", return_value=True), \
              patch.object(self.checkengine, "lib") as fake_lib:
             fake_lib.fail = Mock()
             fake_lib.ok = Mock()
@@ -194,6 +208,87 @@ class TestCheckEngineIdempotency(unittest.TestCase):
 
         self.assertFalse(result)
         fake_lib.fail.assert_called_once()
+
+    def test_main_installs_manage_schema_priv_when_missing(self):
+        """
+        If the public.manage_schema_priv function isn't present in the
+        target DB (e.g. running in stage 1 against zoid6, where
+        checkfunctions only installs engine.* functions), checkengine
+        must install it via importsql('manage_schema_priv.sql', ...)
+        before using it. Without this, the grant loop below raises
+        `function manage_schema_priv(unknown, unknown, unknown, unknown)
+        does not exist`.
+        """
+        args = _make_args()
+        fake_conn = Mock()
+        fake_pool = Mock()
+
+        with patch.object(self.checkengine.database, "functionexists", return_value=False) as functionexists, \
+             patch.object(self.checkengine.database, "importsql", return_value=True) as importsql, \
+             patch.object(self.checkengine.database, "schemaexists", return_value=True), \
+             patch.object(self.checkengine.database, "createschema"), \
+             patch.object(self.checkengine.database, "manage_schema_priv", return_value=True) as manage, \
+             patch.object(self.checkengine.database, "classexists", return_value=True):
+            result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
+
+        self.assertTrue(result)
+        functionexists.assert_called_once()
+        # The function lookup must target the helper we depend on.
+        args_list, _ = functionexists.call_args
+        self.assertEqual(args_list[1], "public.manage_schema_priv")
+        # importsql must be called at least once with the SQL file
+        # that defines the helper, and the caller-supplied conn must
+        # be propagated so the helper is installed in the target DB,
+        # not a different one.
+        install_calls = [
+            c for c in importsql.call_args_list
+            if c[0][1] == "manage_schema_priv.sql"
+        ]
+        self.assertEqual(
+            len(install_calls), 1,
+            f"expected exactly one manage_schema_priv.sql install, "
+            f"got {len(install_calls)} in {importsql.call_args_list}",
+        )
+        install_call = install_calls[0]
+        is_args, is_kwargs = install_call
+        self.assertIn("conn", is_kwargs)
+        self.assertIs(is_kwargs["conn"], fake_conn)
+        self.assertIn("pool", is_kwargs)
+        self.assertIs(is_kwargs["pool"], fake_pool)
+        # And the grant loop must have run after the install.
+        manage.assert_called()
+
+    def test_main_returns_false_when_manage_schema_priv_install_fails(self):
+        """
+        If importsql('manage_schema_priv.sql') fails, checkengine must
+        return False without proceeding to the grant loop. This keeps
+        the stage loop fail-fast and prevents the misleading
+        `function ... does not exist` error from surfacing inside the
+        grant loop.
+        """
+        args = _make_args()
+        fake_conn = Mock()
+        fake_pool = Mock()
+
+        with patch.object(self.checkengine.database, "functionexists", return_value=False), \
+             patch.object(self.checkengine.database, "importsql", return_value=False) as importsql, \
+             patch.object(self.checkengine.database, "schemaexists") as schemaexists, \
+             patch.object(self.checkengine.database, "createschema"), \
+             patch.object(self.checkengine.database, "manage_schema_priv") as manage, \
+             patch.object(self.checkengine.database, "classexists", return_value=True):
+            result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
+
+        self.assertFalse(result)
+        # importsql was called at least once (for the helper install);
+        # what matters is that checkengine did NOT proceed past it.
+        install_calls = [
+            c for c in importsql.call_args_list
+            if c[0][1] == "manage_schema_priv.sql"
+        ]
+        self.assertEqual(len(install_calls), 1)
+        # Must NOT have proceeded to schema creation or grant loop.
+        schemaexists.assert_not_called()
+        manage.assert_not_called()
 
 
 class TestStageOneFailsFastWithoutCheckEngine(unittest.TestCase):
