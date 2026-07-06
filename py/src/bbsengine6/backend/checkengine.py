@@ -17,6 +17,7 @@ def buildargs(args, **kwargs):
 
 def main(args, **kwargs):
     conn = kwargs.get("conn", None)
+    pool = kwargs.get("pool", None)
 
     # --- engine schema ---
     io.echo(
@@ -24,36 +25,43 @@ def main(args, **kwargs):
         end="",
     )
 
-    if database.schemaexists(args, "engine", conn=conn) is False:
+    if database.schemaexists(args, "engine", pool=pool, conn=conn) is False:
         io.echo(f"create ", end="")
-        if database.createschema(args, "engine", conn=conn) is False:
-            io.echo("fail", level="error")
+        if database.createschema(args, "engine", pool=pool, conn=conn) is False:
+            lib.fail()
             return False
-        io.echo(" ok ", level="ok")
+        lib.ok()
     else:
-        io.echo("exists")
+        lib.ok()
 
     # --- schema privs ---
     for role in ("web", "term", "sysop", "member"):
-        database.manage_schema_priv(
-            args, "grant", "usage", "engine", role, conn=conn
-        )
+        if (database.manage_schema_priv(
+            args, "grant", "usage", "engine", role, conn=conn, pool=pool
+        ) is False):
+            break
+
     database.manage_schema_priv(
-        args, "grant", "create", "engine", "sysop", conn=conn
+        args, "grant", "create", "engine", "sysop", conn=conn, pool=pool
     )
 
     # --- classes in dependency order ---
     classes = (
-        ("engine.__notify", "notify.sql"),
-        ("engine.__notify_recipient", "notify_recipient.sql"),
-        ("engine.__notify_block", "notify_block.sql"),
-        ("engine.__notify_group", "notify_group.sql"),
-        ("engine.__notify_type", "notify_type.sql"),
-        ("engine.__notify_rate_limit", "notify_rate_limit.sql"),
-        ("engine.member_flag", "flag.sql"),
-        ("engine.map_member_flag", "map_member_flag.sql"),
         ("engine.__member", "member.sql"),
         ("engine.member", "member.sql"),
+        ("engine.member_flag", "member_flag.sql"),
+        ("engine.map_member_flag", "map_member_flag.sql"),
+
+        ("engine.__session", "session.sql"),
+        ("engine.session", "session_view.sql"),
+
+#        ("engine.__notify", "notify.sql"),
+#        ("engine.__notify_recipient", "notify_recipient.sql"),
+#        ("engine.__notify_block", "notify_block.sql"),
+#        ("engine.__notify_group", "notify_group.sql"),
+#        ("engine.__notify_type", "notify_type.sql"),
+#        ("engine.__notify_rate_limit", "notify_rate_limit.sql"),
+
         ("engine.pgrole", "pgrole.sql"),
         ("engine.__refcode", "refcode.sql"),
         ("engine.refcode", "refcode.sql"),
@@ -69,14 +77,17 @@ def main(args, **kwargs):
         if database.classexists(args, cls, conn=conn) is False:
             io.echo("import ", end="")
             if (
-                database.importsql(args, sql, conn=conn)
+                database.importsql(args, sql, conn=conn, pool=pool)
                 is False
             ):
-                io.echo("fail", level="error")
+                lib.fail()
                 failcount += 1
+                break
             else:
-                io.echo(" ok ", level="ok")
+                lib.ok()
         else:
-            io.echo("ok", level="ok")
+            lib.ok()
+
+    lib.hr(failcount)
 
     return True if failcount == 0 else False

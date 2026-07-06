@@ -16,18 +16,28 @@ def buildargs(args, **kwargs):
 
 
 def main(args, **kwargs):
-    with database.getpool(args, dbname=args.databasename) as pool:  # zoid6
-        with database.connect(args, pool=pool, **kwargs) as conn:
-            for m in ("checkextensions", "checkfunctions", "checkclasses", "checkflag"):
-                with database.connect(args, pool=pool, **kwargs) as conn:
-                    io.echo(f"{{labelcolor}}module '{{valuecolor}}{m}'{{labelcolor}}: ", end="", flush=True)
-                    if lib.runmodule(args, m, conn=conn, stage=1, **kwargs) is False:
-                        conn.rollback()
-                        io.echo(f"{{level.error}}fail")
-                    else:
-                        io.echo(f"{{level.ok}} ok ")
-            io.echo(f"bbsengine6.backend.stage_one.100: {conn=}", level="debug")
+    failcount = 0
 
-                conn.rollback()
-                return False
+    io.echo(f"bbsengine6.backend.stage_one.100: {kwargs=}", level="debug")
+    pool = database.getpool(args, database=args.databasename)  # zoid6
+    with database.connect(args, pool=pool) as conn:
+        for m in ("checkengine", "checkfunctions", "checkclasses", "checkflag", "bank"):
+            if lib.runmodule(
+                args,
+                m,
+                stage=1,
+                package="bbsengine6.backend",
+                pool=pool,
+                conn=conn,
+            ) is False:
+                failcount += 1
+                break
+            else:
+                lib.ok()
+        if failcount == 0:
+            conn.commit()
+        else:
+            conn.rollback()
 
+    lib.hr(failcount)
+    return True if failcount == 0 else False

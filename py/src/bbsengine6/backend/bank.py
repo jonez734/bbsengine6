@@ -17,28 +17,50 @@ def buildargs(args, **kwargs):
 
 def main(args, **kwargs):
     conn = kwargs.get("conn", None)
+    pool = kwargs.get("pool", None)
 
+    failcount = 0
     # --- bank schema ---
     io.echo(
         f"{{var:labelcolor}}schema {{var:valuecolor}}bank{{var:labelcolor}}: ",
         end="",
     )
-    if database.schemaexists(args, "bank", conn=conn) is False:
-        if database.createschema(args, "bank", conn=conn) is False:
-            io.echo(f"{{level.error}} fail ")
-            return False
-    io.echo(" ok ", level="ok")
+    if database.schemaexists(args, "bank", conn=conn, pool=pool) is False:
+        if database.createschema(args, "bank", conn=conn, pool=pool) is False:
+            failcount += 1
+            lib.fail()
+    else:
+        lib.ok()
+
+    if failcount > 0:
+        lib.hr(failcount)
+        return False
 
     # --- bank schema privs ---
-    io.echo(f"bank schema privs: ", end="", flush=True)
+    io.echo(f"{{labelcolor}}bank schema privs: {{/all}}", flush=True)
     for role in ("web", "term", "sysop", "member"):
+        io.echo(f"{{labelcolor}}role {{valuecolor}}{role}{{labelcolor}}: ", end="")
         if database.manage_schema_priv(
-            args, "grant", "usage", "bank", role, conn=conn
+            args, "grant", "usage", "bank", role, conn=conn, pool=pool
         ) is False:
-            io.echo(f"{{level.error}} fail ")
-    database.manage_schema_priv(
-        args, "grant", "create", "bank", "sysop", conn=conn
-    )
+            failcount += 1
+            lib.fail()
+            break
+        else:
+            lib.ok()
+
+    io.echo(f"{{labelcolor}}grant role '{{valuecolor}}sysop' create {{labelcolor}}on schema bank: ", end="", flush=True)
+    if (database.manage_schema_priv(
+        args, "grant", "create", "bank", "sysop", conn=conn, pool=pool
+    )) is False:
+        failcount += 1
+        lib.fail()
+    else:
+        lib.ok()
+
+    lib.hr(failcount)
+    if failcount > 0:
+        return False
 
     # --- bank classes ---
     bank_classes = (
@@ -59,14 +81,16 @@ def main(args, **kwargs):
         if database.classexists(args, cls, conn=conn) is False:
             io.echo("import ", end="")
             if (
-                database.importsql(args, sql, conn=conn)
+                database.importsql(args, sql, conn=conn, pool=pool)
                 is False
             ):
-                io.echo("fail", level="error")
                 failcount += 1
+                break
             else:
-                io.echo(" ok ", level="ok")
+                lib.ok()
         else:
-            io.echo("ok", level="ok")
+            lib.ok()
+
+    lib.hr(failcount)
 
     return True if failcount == 0 else False

@@ -23,23 +23,24 @@ def access(args, op, **kwargs):
 
 
 def main(args, **kwargs):
-    util.heading("checking for database superuser")
+    conn = kwargs.get("conn", None)
+    pool = kwargs.get("pool", None)
     currentloginid = util.getcurrentloginid(args)
-    if database.rolexists(args, currentloginid, mogrify=True, **kwargs) is False:
+    if database.rolexists(args, currentloginid, conn=conn, mogrify=True) is False:
         io.echo(
-            f"{{var:labelcolor}}role {{var:valuecolor}}{currentloginid}{{var:labelcolor}} does not exist"
+            f"{{var:labelcolor}}role '{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' does not exist"
         )
         return False
-    privs = database.get_role_privs(args, currentloginid, **kwargs)
+    privs = database.get_role_privs(args, currentloginid, conn=conn, pool=pool)
     io.echo(f"{privs=}", level="debug")
     if privs == {}:
         io.echo(
-            f"{{var:valuecolor}}{currentloginid}{{var:labelcolor}} does not have privs"
+            f"'{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' does not have correct privs"
         )
         return False
     if privs["rolsuper"] is True:
         io.echo(
-            f"{{var:valuecolor}}{currentloginid}{{var:labelcolor}} has correct privs (superuser)"
+            f"'{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' has correct privs (superuser)"
         )
         return True
     else:
@@ -49,7 +50,7 @@ def main(args, **kwargs):
             and privs["rolcreaterole"] is True
         ):
             io.echo(
-                f"{{var:valuecolor}}{currentloginid}{{var:labelcolor}} has correct privs (createdb, canlogin, createrole)"
+                f"{{var:valuecolor}}{currentloginid}{{var:labelcolor}} has correct privs (createdb, canlogin, and createrole)"
             )
             return True
     return False

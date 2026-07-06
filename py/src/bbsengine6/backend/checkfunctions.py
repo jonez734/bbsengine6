@@ -5,7 +5,7 @@ Creates and validates all required PostgreSQL stored procedures and functions
 that implement the business logic for the BBS engine.
 """
 
-from bbsengine6 import io, database
+from bbsengine6 import io, database, util
 
 from bbsengine6.backend import lib
 
@@ -23,12 +23,15 @@ def access(args, op, **kwargs) -> bool:
 
 
 def main(args, **kwargs):
+    io.echo(f"bbsengine6.backend.checkfunctions.100: {kwargs=}", level="debug")
+
     stage = kwargs.pop("stage", 0)
     conn = kwargs.get("conn", None)
+    pool = kwargs.get("pool", None)
 
-    failcount = 0
 
     def _work(conn):
+        failcount = 0
         if stage == 0: # postgres
             funcs = (
                 "public.get_role_privs",
@@ -40,7 +43,7 @@ def main(args, **kwargs):
         else: # zoid6
             funcs = (
                 "engine.getflags",
-                "engine.checkflag",
+                "engine.checkmemberflag",
             )
 
         for f in funcs:
@@ -54,18 +57,15 @@ def main(args, **kwargs):
                 f = f.replace("public.", "")
                 if not f.endswith(".sql"):
                     f += ".sql"
-                if database.importsql(args, f, **kwargs) is False:
-                    io.echo(f"{{level.error}} fail ")
-                    conn.rollback()
+                if database.importsql(args, f, pool=pool, conn=conn) is False:
+                    lib.fail()
+                    failcount += 1
+                    break
                 else:
-                    io.echo(f"{{level.ok}}  ok  ")
-                    conn.commit()
+                    lib.ok()
             else:
-                io.echo(f"{{level.ok}}exists")
-        if failcount == 0:
-            util.hr()
-        else:
-            util.hr(color="{level.error}")
+                lib.ok()
+        lib.hr(failcount)
         return True if failcount == 0 else False
 
     return _work(conn)
