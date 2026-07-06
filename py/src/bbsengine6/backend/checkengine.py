@@ -71,7 +71,7 @@ def main(args, **kwargs):
     # --- classes in dependency order ---
     classes = (
         ("engine.__member", "member.sql"),
-        ("engine.member", "member.sql"),
+        ("engine.member", "memberview.sql"),
         ("engine.member_flag", "member_flag.sql"),
         ("engine.map_member_flag", "map_member_flag.sql"),
 
