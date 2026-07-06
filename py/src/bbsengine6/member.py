@@ -1012,7 +1012,7 @@ def verifyMemberFound(args, name, **kwargs):
             with database.cursor(conn) as cur:
                 q = sql.SQL("select 1 from ") + sql.Identifier(
                     args.databaseschema, "member"
-                ) + sql.SQL(" where ") + sql.Identifier(column) + sql.SQL("=$1")
+                ) + sql.SQL(" where ") + sql.Identifier(column) + sql.SQL("=%s")
                 cur.execute(q, (name,))
                 return False if cur.rowcount == 0 else True
         except Exception:
