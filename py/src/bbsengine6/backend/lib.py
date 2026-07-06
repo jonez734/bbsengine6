@@ -1,4 +1,4 @@
-from bbsengine6 import io, database, module, screen, util
+from bbsengine6 import io, module, screen, util
 
 
 def buildargs(args, **kwargs):
