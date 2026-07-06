@@ -10,7 +10,7 @@ var bbsengine = (function() {
   let intervals = [];
 
   /** @type {RegExp} - Whitelist of valid request types */
-  const VALID_REQUESTS = /^(currentmember\.moniker|currentmember\.id|config\.topbarupdateinterval|config\.getengineurl|join|topbar\.credits|topbar\.loginlogout|topbar\.greetings|nav|alert\.list|alert\.count)$/;
+  const VALID_REQUESTS = /^(currentmember\.moniker|currentmember\.id|config\.topbarupdateinterval|config\.getengineurl|join|topbar\.credits|topbar\.loginlogout|topbar\.greetings|nav)$/;
 
   /** @type {number} - Minimum interval in milliseconds */
   const MIN_INTERVAL_MS = 100;

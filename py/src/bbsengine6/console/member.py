@@ -303,9 +303,6 @@ def _edit(args, mode, member, **kwargs):
         #        member["emailverified"] = False
         #        member["emailverifiedbymoniker"] = None
         #        member["dateemailverified"] = None
-        elif ch == "A":
-            io.echo("Alerts")
-            alerts(args)
         elif ch == "R":
             io.echo("Refcode")
             refcode = io.inputstring(

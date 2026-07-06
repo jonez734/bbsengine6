@@ -158,7 +158,7 @@ __all__ = ["init", "access", "buildargs", "main"]
       `util.py`, top-level `startup.py`.
 - [x] Do not change `console/main.py`, `console/__main__.py`,
       `console/__init__.py`, or any non-`check*` console module
-      (`alert.py`, `createdatabase.py`, `email.py`, `member.py`,
+      (`createdatabase.py`, `email.py`, `member.py`,
       `memberapproval.py`, `session.py`, `showpgrole.py`).
 
 ## Pre-existing issues (deferred)

@@ -15,7 +15,7 @@
 \i buildsiguri.sql
 \i member.sql
 \i session.sql
-\i alert.sql
+--\i alert.sql  -- legacy alert schema removed; see memberview.sql
 \echo notify
 \i notify.sql
 \echo notify_recipient

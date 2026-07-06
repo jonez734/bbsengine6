@@ -1058,7 +1058,6 @@ $smarty->assign(array(
 
 **Topbar Components:**
 - `js/topbar.js` - Main topbar container
-- `js/topbar-alert.js` - Alert notifications
 - `js/topbar-loginlogout.js` - Auth UI
 - `js/topbar-nav.js` - Navigation menu
 - `js/topbar-greetings.js` - User greeting

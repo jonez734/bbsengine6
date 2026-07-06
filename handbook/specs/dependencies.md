@@ -101,7 +101,6 @@ member.py (console)        → database.py, member.py (core)
 memberapproval.py          → database.py, member.py
 checkloginid.py            → member.py
 email.py                   → util.py
-alert.py                   → util.py
 ```
 
 ### PHP Modules
