@@ -6,8 +6,8 @@ create table engine.__refcode (
     dateactivated timestamptz
 );
 
-grant select,update on engine.__refcode to web, term;
-grant all on engine.__refcode to :sysop;
+grant select,update on engine.__refcode to web, term, member;
+grant all on engine.__refcode to sysop;
 
 create or replace view engine.refcode as
     select
@@ -18,8 +18,8 @@ create or replace view engine.refcode as
     left outer join engine.__member as currentmember on (currentmember.loginid = CURRENT_USER)
 ;
 
-grant select on engine.refcode to web, term;
-grant all on engine.refcode to :sysop;
+grant select on engine.refcode to web, term, member;
+grant all on engine.refcode to sysop;
 
 create table engine.map_refcode_use (
     code citext not null constraint fk_map_refcode_use references engine.__refcode(code) on update cascade on delete set null,

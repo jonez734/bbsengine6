@@ -1,6 +1,6 @@
 --\echo member.sql
 
-create table engine.__member (
+create table if not exists engine.__member (
 --  "id" bigserial unique not null primary key,
   "moniker" citext unique not null constraint chk_member_moniker_format check (moniker ~ '^[a-zA-Z0-9_]+$'),
   "email" text not null,

@@ -1,6 +1,6 @@
 grant select on engine.member to web, term;
 grant select,update,delete on engine.member_flag to web, term;
-grant insert on engine.member_flag to :sysop;
+grant insert on engine.member_flag to sysop;
 grant select on engine.sig to web, term;
 grant select,update,delete on engine.blurb_flag to web, term;
 grant select,update,delete on engine.blurb_read to web, term;

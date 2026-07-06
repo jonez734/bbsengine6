@@ -10,7 +10,7 @@
 -- each l_<loginid> role individually.
 
 create table engine.pgrole (
-  memberid     bigint primary key references engine.__member(id) on delete cascade,
+  membermoniker     citext primary key references engine.__member(moniker) on delete cascade,
   rolname      name not null unique,
   osuser       text,
   created_at   timestamptz not null default now(),
