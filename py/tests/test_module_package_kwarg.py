@@ -72,6 +72,33 @@ def test_load_relative_dotted_name_without_package_raises():
         module.load(None, ".backend.checkfunctions")
 
 
+def test_load_bare_name_with_relative_package_resolves():
+    """A bare modulepath with a leading-dot relative ``package=`` must
+    resolve to the absolute package using the calling frame's
+    ``__package__`` as the anchor. Regression: previously, passing
+    ``package='.backend'`` (a relative form) from a caller in
+    ``bbsengine6.backend`` would feed a relative name into
+    ``importlib.import_module()`` and raise
+    ``ModuleNotFoundError: No module named '.backend'``.
+    """
+    module = _import_module_pkg()
+    m = module.load(None, "checkfunctions", package=".backend")
+    assert m.__name__ == "bbsengine6.backend.checkfunctions"
+
+
+def test_load_relative_dotted_name_with_relative_package_resolves():
+    """A leading-dot dotted modulepath with a relative ``package=``
+    should also resolve: the relative package is first converted to its
+    absolute form, then ``importlib`` uses it as the anchor for the
+    dotted modulepath.
+    """
+    module = _import_module_pkg()
+    m = module.load(
+        None, ".checkfunctions", package=".backend"
+    )
+    assert m.__name__ == "bbsengine6.backend.checkfunctions"
+
+
 def test_run_with_package_resolves_and_does_not_leak_kwarg(monkeypatch):
     """module.run(args, 'checkfunctions', package='bbsengine6.backend', ...)
     must resolve the bare name AND must NOT forward ``package`` to the

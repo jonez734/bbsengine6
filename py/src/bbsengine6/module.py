@@ -140,6 +140,110 @@ def file(module_ref: Union[str, ModuleType], subdir: str, name: str) -> pathlib.
     return candidate if candidate.is_file() else None
 
 
+def _absolute_package_from_relative(caller_pkg: str, rel: str) -> str:
+    """
+    Convert a leading-dot relative package reference into an absolute
+    package name following PEP 328 import semantics, anchored at
+    ``caller_pkg``.
+
+    PEP 328 rules:
+      - ``"."``         means the caller's own package
+      - ``".x"``        means one level up from the caller, then ``x``
+      - ``".x.y"``      means one level up from the caller, then ``x.y``
+      - ``".."``        means two levels up from the caller
+      - ``"..x"``       means two levels up from the caller, then ``x``
+
+    Examples (caller_pkg="bbsengine6"):
+      "."              -> "bbsengine6"
+      ".backend"       -> "bbsengine6.backend"
+      ".startup"       -> "bbsengine6.startup"
+
+    Examples (caller_pkg="bbsengine6.backend"):
+      "."              -> "bbsengine6.backend"
+      ".stage_one"     -> "bbsengine6.backend.stage_one"
+
+    The caller is responsible for passing a ``caller_pkg`` deep enough
+    that the relative reference can be resolved; if the dots ask to go
+    above the top-level package, the empty string is returned.
+    """
+    if not rel.startswith("."):
+        return rel
+
+    leading_dots = 0
+    for ch in rel:
+        if ch == ".":
+            leading_dots += 1
+        else:
+            break
+
+    rest = rel[leading_dots:]
+    up = leading_dots - 1
+    if up < 0:
+        up = 0
+
+    if up == 0:
+        base = caller_pkg
+    else:
+        parts = caller_pkg.split(".")
+        if up >= len(parts):
+            base = ""
+        else:
+            base = ".".join(parts[: len(parts) - up])
+
+    if not rest:
+        return base
+    if not base:
+        return rest
+    return base + "." + rest
+
+
+def _caller_package() -> str:
+    """
+    Return the ``__package__`` of the frame that called into ``load()``,
+    walking past this module's internal frames (``get``, ``check``,
+    ``run``) to find the user's frame.
+
+    A frame is accepted only when its ``__name__`` is a real package —
+    i.e., its ``__package__`` is a non-empty string, the module is
+    importable, and ``__name__`` is consistent with ``__package__``.
+    This skips test modules (which are not real packages) and test
+    runner internals (pytest, unittest, ...).
+
+    Falls back to this module's own ``__package__`` (or its ``__name__``
+    if unset) when no qualifying caller frame is available — for
+    example, a REPL, an unscoped script, or a test invocation.
+    """
+    try:
+        frame = inspect.currentframe()
+    except AttributeError:
+        return sys.modules[__name__].__package__ or __name__
+
+    if frame is None:
+        return sys.modules[__name__].__package__ or __name__
+
+    internal_names = {__name__, f"{__name__}.get", f"{__name__}.check", f"{__name__}.run"}
+    internal_names.update({"get", "check", "run", "get_op", "check_func"})
+
+    test_runner_prefixes = ("_pytest", "pytest", "unittest", "_io", "codeop")
+    caller = frame.f_back
+    while caller is not None:
+        mod = caller.f_globals.get("__name__", "")
+        if any(mod.startswith(p) for p in test_runner_prefixes):
+            break
+        if mod and mod not in internal_names and not mod.startswith(f"{__name__}."):
+            caller_pkg = caller.f_globals.get("__package__")
+            if (
+                caller_pkg
+                and caller_pkg != ""
+                and mod in sys.modules
+                and (mod == caller_pkg or mod.startswith(caller_pkg + "."))
+            ):
+                return caller_pkg
+        caller = caller.f_back
+
+    return sys.modules[__name__].__package__ or __name__
+
+
 # @since 20230510 copied from bbsengine5
 def load(args: object, modulepath: str, package: Optional[str] = None) -> ModuleType:
     """
@@ -148,11 +252,17 @@ def load(args: object, modulepath: str, package: Optional[str] = None) -> Module
 
     If ``package`` is provided:
       - a bare (non-dotted) ``modulepath`` like ``"checkfunctions"`` is
-        resolved as ``"{package}.{modulepath}"`` (absolute form, which
-        is equivalent to ``from {package} import {modulepath}``).
+        resolved as ``"{package}.{modulepath}"``. If ``package`` is
+        absolute (no leading dot), the result is the absolute dotted name
+        (equivalent to ``from {package} import {modulepath}``). If
+        ``package`` is relative (leading dot, e.g. ``".backend"`` from a
+        caller in ``bbsengine6.backend``), the leading-dot form is
+        resolved against the calling frame's ``__package__`` to produce
+        the absolute anchor before the import.
       - a leading-dot relative ``modulepath`` like ``".backend.checkfunctions"``
         is forwarded to ``importlib.import_module`` with ``package=`` so
-        it resolves relative to ``package``.
+        it resolves relative to ``package``. As above, a relative
+        ``package=`` is first resolved to its absolute form.
 
     Dotted ``modulepath`` values without a leading dot are always treated
     as absolute imports, and any ``package`` argument is ignored for them.
@@ -165,14 +275,29 @@ def load(args: object, modulepath: str, package: Optional[str] = None) -> Module
 
     try:
         if package is not None and "." not in modulepath:
-            # Bare name with package: qualify explicitly so the result is
-            # equivalent to "from {package} import {modulepath}".
-            m = importlib.import_module(f"{package}.{modulepath}")
+            # Bare modulepath: qualify with the package anchor. If the
+            # anchor is relative (e.g., ".backend" from a caller in
+            # bbsengine6.backend), convert it to an absolute package by
+            # walking up the calling frame's __package__.
+            if package.startswith("."):
+                caller_pkg = _caller_package()
+                anchor = _absolute_package_from_relative(caller_pkg, package)
+                m = importlib.import_module(f"{anchor}.{modulepath}")
+            else:
+                m = importlib.import_module(f"{package}.{modulepath}")
         elif package is not None and modulepath.startswith("."):
-            # Relative import (e.g. ".backend.checkfunctions"); importlib
-            # needs the package anchor to resolve a leading-dot name.
-            m = importlib.import_module(modulepath, package=package)
+            # Relative dotted form (e.g. ".backend.checkfunctions"):
+            # importlib needs the package anchor to resolve a leading-dot
+            # name. If the anchor is itself relative, resolve it to an
+            # absolute package first; otherwise importlib will refuse.
+            if package.startswith("."):
+                caller_pkg = _caller_package()
+                anchor = _absolute_package_from_relative(caller_pkg, package)
+                m = importlib.import_module(modulepath, package=anchor)
+            else:
+                m = importlib.import_module(modulepath, package=package)
         else:
+            # Dotted absolute modulepath: package= is ignored.
             m = importlib.import_module(modulepath)
         return m
     except Exception:
