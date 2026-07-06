@@ -101,6 +101,7 @@ _skin = {
     "level.debug": "{bglightblue}{blue}",
     "level.warning": "{bgyellow}{black}",
     "level.error": "{bgred}{white}",
+    "level.fail": "{bgred}{black}",
     "level.ok": "{bggreen}{black}",
     "level.info": "{bgwhite}{blue}",
     "level.crit": "{bgblue}{white}",
@@ -1236,6 +1237,7 @@ def echo(
     wordwrap: bool = kwargs.get("wordwrap", True)
 
     level = kwargs.get("level", None)
+    original_text = text
     if level is not None:
         prefix = ""
         if level == "debug":
@@ -1244,6 +1246,8 @@ def echo(
             prefix = "{level.warning}W: "  # {bgyellow}{black}"
         elif level == "error":
             prefix = "{level.error}E: "  # {bgred}{white}"
+        elif level == "fail":
+            prefix = "{level.fail}F: "  # {bgred}{black}"
         elif level == "success" or level == "ok":
             prefix = "{level.ok}"  # {bggreen}{black}"
         elif level == "info":
@@ -1265,7 +1269,7 @@ def echo(
                 _terminal_state.cursor_row += 1
 
     if level is not None:
-        return logentry(text, level=level)
+        return logentry(original_text, level=level)
 
 
 def echo_file(

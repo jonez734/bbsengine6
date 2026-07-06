@@ -25,6 +25,7 @@ variables["sepcolor"] = "{lightgray}"  # @since 20220924
 variables["level.debug"] = "{bglightblue}{blue}"
 variables["level.warning"] = "{bgyellow}{black}"
 variables["level.error"] = "{bgred}{black}"
+variables["level.fail"] = "{bgred}{black}"
 variables["level.ok"] = "{bggreen}{black}"
 variables["level.info"] = "{bgwhite}{blue}"
 variables["level.crit"] = "{bgblue}{white}"
