@@ -78,64 +78,47 @@ def _get_default_handler() -> logging.handlers.SysLogHandler:
     return _default_handler
 
 
-def hr(acs: bool = True, width: Optional[int] = None, color="{boxcolor}", end: str = "\n") -> None:
-    """Display a horizontal rule using box-drawing or ASCII characters.
-
-    Writes the rule via :func:`io.echo`, so it is subject to the BBS
-    color/template pipeline. A single leading space is always emitted,
-    making the visible width ``width + 1`` characters.
+def hr(
+    acs: bool = True,
+    width: Optional[int] = None,
+    end: str = "\n",
+    color: str = "{boxcolor}",
+) -> bool:
+    """Display a horizontal rule using box-drawing characters.
 
     Args:
-        acs: If ``True`` (default), emit a BBS color-tagged box-drawing
-            rule of the form `` {color}{hline:N}{/all}``; the terminal
-            renders the glyph via ACS. If ``False``, emit a plain ASCII
-            rule of ``-`` characters with no color markup.
-        width: Visible width of the rule in characters, including the
-            leading space. If ``None``, uses
-            ``io.terminal.width() - HR_WIDTH_OFFSET``.
-        color: BBS template tag wrapping the box-drawing rule when
-            ``acs=True``. Defaults to ``"{boxcolor}"``. Ignored when
-            ``acs=False`` (the ASCII branch emits no color markup).
-        end: String appended after the rule (passed to ``io.echo`` as
-            its ``end`` keyword). Defaults to ``"\\n"``.
+        acs: Use ASCII-compatible characters (currently unused, for future compatibility).
+        width: Width of the horizontal rule in characters. If None, uses terminal width minus HR_WIDTH_OFFSET.
+        end: String to output after the rule (default: newline).
+        color: io.echo color spec applied to the rule (default: {boxcolor}).
 
     Returns:
-        None.
+        Always returns True.
 
-    Examples:
-        >>> hr()                             # full-width box-drawing rule
-        >>> hr(width=40)                     # 40-char box-drawing rule
-        >>> hr(acs=False)                    # full-width ASCII '-' rule
-        >>> hr(width=40, acs=False)          # 40-char ASCII '-' rule
-        >>> hr(color="{titlecolor}")         # box-drawing rule, alt color
-        >>> hr(end="")                       # no trailing newline
+    Example:
+        >>> hr()  # Outputs horizontal line at terminal width
+        >>> hr(width=40)  # Outputs 40-character horizontal line
+        >>> hr(color="{/all}{red}")  # Red rule (e.g. for failure summary)
     """
     if width is None:
         width = io.terminal.width() - HR_WIDTH_OFFSET  # type: ignore
-    if acs is True:
-        io.echo(f" {color}{{hline:{width}}}{{/all}}", end=end)
-    else:
-        io.echo(f" {'-'*width}")
+    io.echo(f" {color}{{hline:{width}}}{{/all}}", end=end)
+    return True
 
 
 def heading(title: str, **kwargs) -> None:
-    """Display a centered heading with BBS template-tag borders.
+    """Display a centered heading with box-drawing borders.
 
-    Renders a three-line box (top border, title row, bottom border) via
-    :func:`io.echo`, so the actual box-drawing glyphs are produced by
-    the terminal from BBS template tags (``{ulcorner}``, ``{hline}``,
-    ``{vline}``, ``{llcorner}``, ``{lrcorner}``). The title is centered
-    horizontally within the terminal width, padded to accommodate an
-    even or odd title length.
+    Creates a box with the title centered inside using terminal width.
+    The heading uses box-drawing characters and BBS color tags.
 
     Args:
-        title: The heading text to display; will be centered.
-        **kwargs: Accepted and ignored. Reserved for future keyword
-            arguments; pass-through is currently a no-op.
+        title: The heading text to display (will be centered).
+        **kwargs: Additional keyword arguments (unused, for future compatibility).
 
-    Examples:
+    Example:
         >>> heading("Main Menu")
-        # Renders (visually, via the terminal's ACS handler):
+        # Displays:
         # ┌────────────────────────┐
         # │      Main Menu         │
         # └────────────────────────┘
