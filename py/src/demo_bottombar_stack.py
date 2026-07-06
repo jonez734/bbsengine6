@@ -7,11 +7,6 @@ Shows:
 - Callable items that return dynamic strings
 - Automatic notification status from bbsengine6
 - Registration and unregistration
-
-This demo uses bbsengine6.bottombar (the centralized fragment registry
-introduced for cross-package reuse). The screen.register_bottombar_fragment
-/ unregister_bottombar_fragment shims are still available and are routed
-through the same registry under the hood.
 """
 
 import sys
@@ -20,7 +15,7 @@ import time
 sys.path.insert(0, "/home/opencode/data/work/bbsengine6/py/src")
 
 from bbsengine6.io.echo import echo
-from bbsengine6 import io, bottombar
+from bbsengine6 import io
 from bbsengine6.io import screen, terminal
 
 
@@ -67,8 +62,7 @@ def run(args=None):
     try:
         iteration = 0
         while True:
-            bottombar.setbottombar(
-                None,
+            screen.setbottombar(
                 f"demo iteration {iteration}",
                 player="TestPlayer",
             )
@@ -89,7 +83,7 @@ def run(args=None):
             if iteration == 8:
                 io.echo("")
                 io.echo("Clearing entire list...", level="notice")
-                bottombar.clear_bottombar_fragments()
+                screen.clear_bottombar_fragments()
                 screen.setbottombar("fragments cleared", "no more items")
                 break
 
