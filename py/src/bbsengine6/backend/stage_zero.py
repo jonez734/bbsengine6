@@ -34,6 +34,7 @@ def main(args, **kwargs):
         try:
             with database.connect(args, pool=pool) as conn:
                 for m in (
+                    "checkcreatedb",
                     "checkextensions",
                     "checkroles",
                     "checkfunctions",

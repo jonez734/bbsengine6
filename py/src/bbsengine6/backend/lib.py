@@ -1,16 +1,24 @@
-from bbsengine6 import io, database, module, bottombar, util
+from bbsengine6 import io, database, module, screen
+
 
 def buildargs(args, **kwargs):
     return None
 
 
-# @since 20230630
-def runmodule(args, submodule, package="bbsengine6.backend", **kwargs):
-    return module.runmodule(args, submodule, package=package, **kwargs)
+# @since 20230523
+def runmodule(args, submodule, **kwargs):
+    return module.runmodule(args, f"bbsengine6.backend.{submodule}", **kwargs)
 
 
-def setbottombar(args, buf, **kwargs) -> None:
-    return bottombar.setbottombar(args, buf, **kwargs)
+# @since 20230523 copied from teos
+def setbottombar(args, left, **kwargs):
+    def right():
+        help = " | F1: Help" if "help" in kwargs and kwargs["help"] is True else ""
+        debug = " | debug" if args.debug is True else ""
+        return f"con{debug}{help}"
+
+    screen.setbottombar(left, right, **kwargs)
+    return
 
 
 def checkroles(args, **kwargs):
@@ -23,6 +31,10 @@ def checkextensions(args, **kwargs):
 
 def checkdatabase(args, **kwargs):
     return runmodule(args, "checkdatabase", **kwargs)
+
+
+def checkcreatedb(args, **kwargs):
+    return runmodule(args, "checkcreatedb", **kwargs)
 
 
 def checksuperuser(args, **kwargs):
@@ -59,14 +71,3 @@ def checkwebserverrole(args, **kwargs):
 
 def checkbank(args, **kwargs):
     return runmodule(args, "bank", **kwargs)
-
-def ok():
-    io.echo(  f"{{level.ok}}  ok  {{/all}}")
-    return
-
-def fail():
-    io.echo(f"{{level.fail}} fail {{/all}}")
-
-def hr(failcount=0):
-    color = "{boxcolor}" if failcount == 0 else "{/all}{red}"
-    util.hr(color=color)
