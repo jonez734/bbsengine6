@@ -1,7 +1,6 @@
-import psycopg
+"""Interactive console menu for the BBS engine."""
 
-from bbsengine6 import session, util, io, database, member  # type: ignore
-# import bbsengine6 as bbsengine
+from bbsengine6 import session, util, io, database, member
 
 from . import lib
 
@@ -17,6 +16,7 @@ def buildargs(args, **kwargs):
 def access(args, op, **kwargs):
     return True
 
+
 def main(args, **kwargs):
     parser = buildargs(args)
     args = parser.parse_args()
@@ -31,34 +31,36 @@ def main(args, **kwargs):
 
     with database.getpool(args) as pool:
         io.echo(f"con.main.main.100: {pool=}", level="debug")
-        with database.connect(args, pool=pool) as conn:
+        with database.connect(args, pool=pool, auto_commit=False) as conn:
             io.echo(f"con.main.main.120: {pool=} {conn=}", level="debug")
-            conn.autocommit = False
             if session.start(args, conn=conn, **kwargs) is False:
-                io.echo(f"con.main.140: did not start session", level="error")
+                io.echo("con.main.140: did not start session", level="error")
                 return False
 
             done = False
             while not done:
                 membercount = member.count(args, conn=conn)
                 if membercount is not None and membercount > 0:
-                    sessionid = session.getcurrentsessionid()  # type: ignore
+                    sessionid = session.getcurrentsessionid()
                     if sessionid is not None:
-                        session.updatelastactivity(args, sessionid, conn=conn, **kwargs)  # type: ignore
+                        session.updatelastactivity(
+                            args, sessionid, conn=conn, **kwargs
+                        )
                 else:
-                    io.echo(f"no session", level="warn")
+                    io.echo("no session", level="warn")
 
                 util.heading("bbsengine6 console")
                 io.echo(
-                    f"{{f6}}{{var:labelcolor}}database: {{var:valuecolor}}{args.database} {{var:labelcolor}}host: {{var:valuecolor}}{args.databasehost}{{var:labelcolor}}:{{var:valuecolor}}{args.databaseport}{{f6}}"
+                    f"{{f6}}{{var:labelcolor}}database: {{var:valuecolor}}{args.databasename} {{var:labelcolor}}host: {{var:valuecolor}}{args.databasehost}{{var:labelcolor}}:{{var:valuecolor}}{args.databaseport}{{f6}}"
                 )
 
                 io.echo("{var:optioncolor}[M]{var:labelcolor} Members")
                 io.echo("{var:optioncolor}[S]{var:labelcolor} Sessions")
+                io.echo("{var:optioncolor}[A]{var:labelcolor} Approvals")
                 io.echo("{f6}{var:optioncolor}[X]{var:labelcolor} Exit{f6}")
                 ch = io.inputchoice(
                     "{var:promptcolor}console: {var:inputcolor}",
-                    "SMXQ",
+                    "ASMXQ",
                     "X",
                     conn=conn,
                     args=args,
@@ -75,12 +77,11 @@ def main(args, **kwargs):
                     continue
                 elif ch == "A":
                     io.echo("Member Approval")
-                    lib.runmodule(args, "memberapproval", **kwargs)
+                    lib.runmodule(args, "memberapproval", pool=pool, **kwargs)
                 elif ch == "Q" or ch == "X":
                     io.echo("Exit")
                     break
                 else:
                     io.echo("{bell}", end="", flush=True)
-                    done = True
-                    break
-        return True
+                    continue
+    return True

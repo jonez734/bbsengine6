@@ -311,7 +311,7 @@ def is_importable(modulepath: str) -> bool:
     Check if a module is importable.
 
     Args:
-        modulepath: Full module path (e.g., "zoidoffice.project")
+        modulepath: Full module path (e.g., "console.member")
 
     Returns:
         True if the module can be imported, False otherwise
@@ -332,6 +332,7 @@ def is_importable(modulepath: str) -> bool:
 # - No classes - just functions and dataclasses for data
 
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -936,6 +937,21 @@ def run(args, modulename, **kwargs):
                             "(argv empty, subparser info present)",
                             level="debug",
                         )
+                elif argv and _has_subparser_info(args):
+                    # Caller passed both pre-parsed args and a non-empty
+                    # argv. The two may disagree (the parent already
+                    # consumed some flags; the child will see them again
+                    # and may reject them). Surface this rather than
+                    # silently producing a different Namespace.
+                    io.echo(
+                        f"bbsengine6.module.run.140: WARNING: caller passed "
+                        f"both pre-parsed args and argv={argv!r}; the child "
+                        f"parser will re-parse argv and may reject flags "
+                        f"already consumed by the parent. Prefer passing "
+                        f"args only (no argv=) for child invocations.",
+                        level="warn",
+                    )
+                    prgargs = prgargparser.parse_args(argv)
                 else:
                     prgargs = prgargparser.parse_args(argv)
                 if debug is True:

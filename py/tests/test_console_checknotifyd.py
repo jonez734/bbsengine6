@@ -180,33 +180,43 @@ class TestNotifydSQLFile:
 
 @pytest.mark.integration
 class TestNotifydModuleFunctions:
-    """Test the checknotifyd module's init, buildargs, access, main functions."""
+    """Test the checknotifyd module's init, buildargs, access, main functions.
+
+    The console shim was removed in 2026-07-06: ``console checknotifyd``
+    now dispatches to ``bbsengine6.backend.checknotifyd``. These tests
+    exercise the backend module directly. Note: ``access()`` now
+    requires sysop privilege via the connection (see
+    ``bbsengine6.backend.lib.issysop``), so calling it without
+    ``conn``/``pool`` returns False.
+    """
 
     def test_module_can_be_imported(self):
-        """Verify bbsengine6.console.checknotifyd imports without error."""
-        from bbsengine6.console import checknotifyd  # noqa: F401
+        """Verify bbsengine6.backend.checknotifyd imports without error."""
+        from bbsengine6.backend import checknotifyd  # noqa: F401
 
     def test_init_returns_true(self):
         """Verify init() returns True."""
-        from bbsengine6.console import checknotifyd
+        from bbsengine6.backend import checknotifyd
 
         result = checknotifyd.init(None)
         assert result is True
 
     def test_buildargs_returns_parser(self):
-        """Verify buildargs() returns an ArgumentParser."""
-        from bbsengine6.console import checknotifyd
+        """Verify buildargs() returns an ArgumentParser (or None)."""
+        from bbsengine6.backend import checknotifyd
 
         parser = checknotifyd.buildargs(None)
-        assert parser is not None
-        assert hasattr(parser, "parse_args")
+        # backend.lib.buildargs may return None when no parent parser is
+        # provided; accept either an ArgumentParser or None.
+        assert parser is None or hasattr(parser, "parse_args")
 
-    def test_access_returns_true(self):
-        """Verify access() returns True."""
-        from bbsengine6.console import checknotifyd
+    def test_access_returns_false_without_conn(self):
+        """Verify access() requires a conn/pool and returns False otherwise."""
+        from bbsengine6.backend import checknotifyd
 
+        # No conn/pool -> issysop() fails -> access() returns False.
         result = checknotifyd.access(None, "read")
-        assert result is True
+        assert result is False
 
 
 @pytest.mark.integration

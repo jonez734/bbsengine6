@@ -10,7 +10,8 @@ needs to change which OS user they connect from, the welcome-flow
 prompt (or a sysop UPDATE on engine.pgrole) is the path.
 """
 
-from typing import Any, Optional
+import sys
+from typing import Optional
 
 from bbsengine6 import database, io, util
 from bbsengine6 import member as libmember
@@ -69,6 +70,15 @@ def main(args, loginid: Optional[str] = None, **kwargs):
             return True
 
         _render(row, target_loginid)
+
+        # Welcome flow is interactive; skip it when stdin is not a TTY
+        # (cron, scripts, etc.) so this module is safe in non-TTY contexts.
+        if not sys.stdin.isatty():
+            io.echo(
+                "{{var:labelcolor}}non-interactive session; skipping welcome/osuser prompts",
+                level="info",
+            )
+            return True
 
         # Welcome flow: if last_ack_at is NULL, require acknowledgment
         # and capture the osuser if it isn't set yet.

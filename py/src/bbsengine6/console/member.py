@@ -1,3 +1,5 @@
+"""Member admin: list/edit/add/configurerole/editflags/editui/setui."""
+
 import copy
 
 from bbsengine6 import io, database, util, bank, pgrole
@@ -20,14 +22,15 @@ def access(args, op, **kwargs):
 
 
 def editflags(args, moniker=None, **kwargs):
-    """Edits flags for a member.
+    """Toggle each flag in memory; persistence is the caller's responsibility.
 
-    Args:
-        args: An argparse.ArgumentParser object.
-        moniker (optional): The unique identifier of the member.
-            If None, returns the flags with default values.
+    Mutates ``flags`` dict in place to reflect the new desired state.
+    Returns ``None``; the in-memory state is read out of ``member['flags']``
+    by the caller and persisted only after the user confirms the surrounding
+    add/edit operation. The local ``conn`` (if any) is **not** used to write
+    here, even though it is accepted in ``kwargs`` for API symmetry with
+    ``libmember.getflags``.
     """
-
     conn = kwargs.get("conn", None)
     mode = kwargs.get("mode", "add")
     if mode == "add":
@@ -35,15 +38,10 @@ def editflags(args, moniker=None, **kwargs):
     else:
         flags = libmember.getflags(args, moniker, conn=conn)
     io.echo(f"bbsengine.con.member.100: {flags=}", level="debug")
-    updated_flags = {
-        flag_name: {"value": flag_data["value"]}
-        for flag_name, flag_data in flags.items()
-    }
 
     for flag_name, flag_data in flags.items():
         description = flag_data["description"]
         current_value = flag_data["value"]
-        #        default_value = "Y" if util.tobool(current_value) else "N"
         io.echo(f"{current_value=}", level="debug")
         prompt = f"{{var:promptcolor}}{description} "
         if current_value is True:
@@ -58,62 +56,15 @@ def editflags(args, moniker=None, **kwargs):
         default = "Y" if current_value is True else "N"
         new_value = io.inputboolean(prompt, default=default)
         io.echo("{/all}", end="")
-        if new_value != current_value:
-            # TODO: Implement logic to update the flag in the database
-            io.echo(
-                f"{{var:labelcolor}}Updating flag '{{var:valuecolor}}{flag_name}{{var:labelcolor}}' to {{var:valuecolor}}{new_value}{{/all}}"
-            )
-            updated_flags[flag_name] = {"value": new_value}
-    return updated_flags
+        flags[flag_name]["value"] = new_value
+    return flags
 
 
-def showui(args, ui, _ui):
-    io.echo(f"{ui=} {_ui=}", level="debug")
-    if ui is None or len(ui) == 0:
-        io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: None", end="")
-        if _ui is not None:
-            _ui.sort()
-            io.echo(f" (was: {', '.join(_ui)})")
-        else:
-            io.echo()
-        return
-
-    if ui is not None:
-        ui.sort()
-    if _ui is not None:
-        _ui.sort()
-
-    if ui != _ui:
-        if _ui is None:
-            io.echo(
-                f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: {', '.join(ui)} (was: None)"
-            )
-        else:
-            io.echo(
-                f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: {', '.join(ui)} (was: {', '.join(_ui)})"
-            )
-    else:
-        io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: {', '.join(ui)}")
-    return
-
-
-def help(args, **kwargs):
+def render_member(args, **kwargs):
     member = kwargs.get("member", {})
     _member = kwargs.get("_member", {})
-    conn = kwargs.get("conn", None)
 
     def _format_flags(flags):
-        """
-        Formats the flag names based on their values.
-        If the value is True, the name is wrapped with '**'.
-        If the value is False, the name is returned as is.
-
-        Args:
-            flags (dict): A dictionary of flags with 'description' and 'value' keys.
-
-        Returns:
-            str: A formatted string of flag names.
-        """
         formatted_flags = []
         for name, flag in flags.items():
             if flag["value"]:
@@ -179,6 +130,7 @@ def help(args, **kwargs):
             io.echo(f" (was: {', '.join(_ui)})")
         else:
             io.echo()
+        return
 
     if ui is not None:
         ui.sort()
@@ -198,8 +150,6 @@ def help(args, **kwargs):
         io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: {', '.join(ui)}")
 
     flags = member["flags"] or {}
-    # io.echo(f"bbsengine.con.member.help.100: {flags=} {member['flags']=}", level="debug")
-    # set_flags = [flag for flag, data in flags.items() if data["value"] is True]
     set_flags = _format_flags(flags)
     if len(set_flags) > 0:
         io.echo(
@@ -232,22 +182,26 @@ def help(args, **kwargs):
 
 
 def _edit(args, mode, member, **kwargs):
-    #  cur = kwargs.get("cur", None)
+    """Drive the per-field edit loop. Purely in-memory; no DB writes.
+
+    All side-effecting operations (``libmember.insert``,
+    ``libmember.update``, ``configurerole``, ``pgrole.*``,
+    ``bank.add_funds``) are the caller's responsibility and must only be
+    invoked after the user confirms the surrounding add/edit.
+    """
     _member = copy.deepcopy(member)
     io.echo(f"con.member._edit.100: {kwargs=}", level="debug")
 
     util.heading(f"{mode} member")
     conn = kwargs.get("conn", None)
-    pool = kwargs.get("pool", None)
     done = False
     while not done:
-        help(args, member=member, _member=_member)
-        #    flags = member["flags"]
+        render_member(args, member=member, _member=_member)
         ch = io.inputchoice(
             f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFURQ]{{var:promptcolor}}: {{var:inputcolor}}",
             "LMECPFURQ",
             "",
-            help=help,
+            help=render_member,
             member=member,
             _member=_member,
             **kwargs,
@@ -255,9 +209,7 @@ def _edit(args, mode, member, **kwargs):
         if ch == "M":
             io.echo("Moniker")
             _moniker = member["moniker"]
-            moniker = io.inputstring(
-                "moniker:", _moniker, args=args
-            )  # verify=bbsengine.member.verifyMemberFound, args=args)
+            moniker = io.inputstring("moniker:", _moniker, args=args)
             if _moniker != moniker:
                 if (
                     libmember.verifyMemberFound(
@@ -270,7 +222,9 @@ def _edit(args, mode, member, **kwargs):
                     member["moniker"] = moniker
         elif ch == "F":
             io.echo("Flags")
-            member["flags"] = editflags(args, member["moniker"], conn=conn, mode=mode)
+            member["flags"] = editflags(
+                args, member["moniker"], conn=conn, mode=mode
+            )
         elif ch == "L":
             io.echo("Loginid")
             member["loginid"] = io.inputstring(
@@ -287,9 +241,7 @@ def _edit(args, mode, member, **kwargs):
             )
         elif ch == "U":
             io.echo("User Interface")
-            member["ui"] = editui(
-                args, member["loginid"]
-            )  # io.inputstring("{var:promptcolor}ui: {var:inputcolor}", member["ui"], args=args, multiple=True)
+            member["ui"] = editui(args, member["loginid"])
         elif ch == "P":
             io.echo("Password")
             member["password"] = util.inputpassword("Password: ")
@@ -300,9 +252,11 @@ def _edit(args, mode, member, **kwargs):
             )
             if member["email"] != _member["email"]:
                 io.echo("FIXME: set emailverified flag to false", level="info")
-        #        member["emailverified"] = False
-        #        member["emailverifiedbymoniker"] = None
-        #        member["dateemailverified"] = None
+        elif ch == "A":
+            io.echo("Alerts")
+            # Alerts not yet implemented; the previous console/alert.py was
+            # removed because it referenced undefined names. No DB or UI
+            # action here; just acknowledge the choice.
         elif ch == "R":
             io.echo("Refcode")
             refcode = io.inputstring(
@@ -311,10 +265,8 @@ def _edit(args, mode, member, **kwargs):
             if refcode == "":
                 refcode = None
             member["refcode"] = refcode
-            done = False
         elif ch == "Q":
             io.echo("Quit")
-
             errcount = 0
             for f in ("loginid", "moniker", "email"):
                 if member[f] is None or member[f] == "":
@@ -332,7 +284,6 @@ def _edit(args, mode, member, **kwargs):
                     break
             else:
                 done = True
-
     return member
 
 
@@ -345,10 +296,7 @@ def editui(args, rolename):
         )
         is True
     ):
-        #    database.manage_secondary_role(args, rolename, "add", "web")
         ui += ["web"]
-    #  else:
-    #    database.manage_secondary_role(args, rolename, "remove", "web")
 
     if (
         io.inputboolean(
@@ -357,10 +305,7 @@ def editui(args, rolename):
         )
         is True
     ):
-        #    database.manage_secondary_role(args, rolename, "add", "term")
         ui += ["term"]
-    #  else:
-    #    database.manage_secondary_role(args, rolename, "remove", "term")
     return ui
 
 
@@ -386,7 +331,6 @@ def configurerole(args, rolename: str, sysop=False, **kwargs: dict) -> bool:
         return False
 
     io.echo(f"{{var:labelcolor}}checking for role {{var:valuecolor}}{rolename}")
-    io.echo(f"con.member.configurerole.100: {kwargs=}", level="debug")
     if database.rolexists(args, rolename, **kwargs) is False:
         if (
             io.inputboolean(
@@ -397,35 +341,30 @@ def configurerole(args, rolename: str, sysop=False, **kwargs: dict) -> bool:
         ):
             io.echo("role not created.")
             return False
-        io.echo(
-            f"bbsengine.con.configurerole.120: trying to create role", level="debug"
-        )
         database.createrol(args, rolename, **kwargs)
-
-        io.echo(
-            f"bbsengine.con.configurerole.140: calling manage_role_privs()",
-            level="debug",
-        )
         database.manage_role_privs(args, rolename, "grant", "login", **kwargs)
         database.manage_role_privs(args, rolename, "grant", "inherit", **kwargs)
 
     if sysop is True:
         database.manage_secondary_role(args, rolename, "grant", "sysop", **kwargs)
         database.manage_role_privs(args, rolename, "grant", "createdb", **kwargs)
-        # database.manage_role_privs(args, loginid, "grant", "superuser", **kwargs)
         database.manage_role_privs(args, rolename, "grant", "createrole", **kwargs)
     else:
         database.manage_secondary_role(args, rolename, "revoke", "sysop", **kwargs)
         database.manage_role_privs(args, rolename, "revoke", "createdb", **kwargs)
-        # database.manage_role_privs(args, loginid, "revoke", "superuser")
         database.manage_role_privs(args, rolename, "revoke", "createrole", **kwargs)
 
-    io.echo(f"con.member.configurerole.160: done", level="debug")
     return True
 
 
 def edit(args, **kwargs):
-    io.echo(f"bbsengine.con.member.100: {kwargs=}", level="debug")
+    """Edit an existing member. No DB writes happen before confirmation.
+
+    Reads the row, drives the in-memory edit loop, prompts for
+    confirmation, then commits all changes inside a single transaction.
+    Loginid renames are refused.
+    """
+    io.echo(f"bbsengine.con.member.edit.100: {kwargs=}", level="debug")
     buf = io.inputstring(
         "{var:promptcolor}loginid or moniker: {var:inputcolor}", "", noneok=True
     )
@@ -433,148 +372,198 @@ def edit(args, **kwargs):
     if buf is None:
         return None
 
-    pool = kwargs.get("pool", None)
-    if pool is None:
-        io.echo("bbsengine.con.member.200: {pool=}", level="error")
+    if "pool" not in kwargs or kwargs["pool"] is None:
+        io.echo("bbsengine.con.member.edit.200: pool missing", level="error")
         return None
 
-    with database.connect(args, **kwargs) as conn:
-        sql = "select * from engine.__member where loginid=%s or moniker=%s"
-        dat = (buf, buf)
-
-        with database.cursor(conn, **kwargs) as cur:
-            cur.execute(sql, dat)
+    with database.connect(args, pool=kwargs["pool"], auto_commit=False) as conn:
+        with database.cursor(conn=conn) as cur:
+            cur.execute(
+                "select * from engine.__member where loginid=%s or moniker=%s",
+                (buf, buf),
+            )
             if cur.rowcount == 0:
                 io.echo(f"{buf=} not found", level="error")
                 return False
-
             rec = cur.fetchone()
 
-            m = libmember.build(args, rec, conn=conn, **kwargs)
+        m = libmember.build(args, rec, conn=conn, **kwargs)
+        _baseline_loginid = m["loginid"]
+        _baseline_email = m["email"]
+        _baseline_flags = {
+            k: dict(v) for k, v in (m.get("flags") or {}).items()
+        }
+        _baseline_credits = m.get("credits")
 
-            io.echo(f"bbsengine6.con.member.edit.120: {rec=} {m=}", level="debug")
+        _edit(args, "edit", m, conn=conn, **kwargs)
 
-            _m = _edit(args, "edit", m, conn=conn, **kwargs)
-
-            loginid = m["loginid"]
-            moniker = m["moniker"]
-            #      memberid = m["id"]
-            password = m["password"]
-            ui = m["ui"]
-
-            configurerole(args, loginid, conn=conn, **kwargs)
-
-            io.echo(f"con.member.edit.100: calling setui()", level="debug")
-            setui(args, loginid, ui, conn=conn, **kwargs)
-
-            # Provision or look up the l_<loginid> psql role, and sync
-            # its sysop/term/web group memberships to the current flags.
-            pgrole.ensure_role_for_member(args, loginid, conn=conn, **kwargs)
-            pgrole.sync_groups(args, loginid, conn=conn, **kwargs)
-
-            if _m["email"] != m["email"]:
-                libmember.setflag(
-                    args, "EMAILVERIFIED", False, moniker=m["moniker"], mogrify=True
-                )
-
-            libmember.update(args, m, moniker, conn=conn, **kwargs)
-            libmember.setpassword(args, moniker, password, conn=conn, **kwargs)
-
-        if io.inputboolean(
+        # Confirmation gate. The user can say No and the transaction
+        # is rolled back with no DB state having changed.
+        if not io.inputboolean(
             f"{{var:promptcolor}}save changes? {{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
             "Y",
-            **kwargs,
         ):
-            io.echo("commiting member.")
-            conn.commit()
-        else:
             io.echo("changes not saved.")
-            conn.rollback()
+            return False
 
-            return True
+        # Loginid rename is not supported in the console: the psql
+        # role (l_<loginid>) is named for the old loginid, and there
+        # is no `database.renamerole` helper yet.
+        if m["loginid"] != _baseline_loginid:
+            io.echo(
+                f"loginid rename from {_baseline_loginid!r} to {m['loginid']!r} "
+                "is not supported in the console. Use psql to "
+                "ALTER ROLE ... RENAME TO.",
+                level="error",
+            )
+            # TODO: support rename via database.renamerole(args, old, new, conn=conn)
+            return False
+
+        # All side effects below run inside the open `with conn` block.
+        # Any exception rolls back; on success we commit at the end.
+        try:
+            libmember.update(args, m, m["moniker"], conn=conn, **kwargs)
+
+            for name, data in (m.get("flags") or {}).items():
+                if data.get("value") != _baseline_flags.get(name, {}).get("value"):
+                    libmember.setflag(
+                        args,
+                        name,
+                        data["value"],
+                        moniker=m["moniker"],
+                        conn=conn,
+                        **kwargs,
+                    )
+
+            if m["email"] != _baseline_email:
+                libmember.setflag(
+                    args,
+                    "EMAILVERIFIED",
+                    False,
+                    moniker=m["moniker"],
+                    conn=conn,
+                    **kwargs,
+                )
+
+            libmember.setpassword(
+                args, m["moniker"], m["password"], conn=conn, **kwargs
+            )
+
+            configurerole(
+                args,
+                m["loginid"],
+                m.get("flags", {}).get("SYSOP", {}).get("value", False),
+                conn=conn,
+                **kwargs,
+            )
+            setui(args, m["loginid"], m["ui"], conn=conn, **kwargs)
+            pgrole.ensure_role_for_member(
+                args, m["loginid"], conn=conn, **kwargs
+            )
+            pgrole.sync_groups(args, m["loginid"], conn=conn, **kwargs)
+
+            conn.commit()
+        except Exception as e:
+            io.echo_traceback(f"bbsengine6.console.member.edit: {e}")
+            conn.rollback()
+            return False
+    return True
 
 
 def add(args, **kwargs) -> bool:
+    """Add a new member. No DB writes happen before confirmation.
+
+    The user is asked to confirm the add before any side effects run.
+    All operations (insert, setflag, setpassword, bank grant,
+    configurerole, pgrole provisioning) share the same connection and
+    commit atomically at the end.
+    """
     io.echo(f"bbsengine.con.member.add.220: {kwargs=}", level="debug")
-    pool = kwargs.get("pool", None)
-    io.echo(f"bbsengine.con.member.200: {pool=}", level="debug")
-    if pool is None:
+    if "pool" not in kwargs or kwargs["pool"] is None:
+        io.echo("bbsengine.con.member.add.120: pool missing", level="error")
         return False
 
-    with database.connect(args, pool=pool) as conn:
+    with database.connect(args, pool=kwargs["pool"], auto_commit=False) as conn:
         _member = libmember.build(args, conn=conn, **kwargs)
-
         member = _edit(args, "add", _member, conn=conn, **kwargs)
-        io.echo(f"con.member.add.140: {member=}", level="debug")
         if member is None:
-            io.echo(f"con.member.add.180: _edit returned None", level="error")
+            io.echo("con.member.add.180: _edit returned None", level="error")
             return False
 
-        # pool = kwargs.get("pool", None)
         member["datecreated"] = "now()"
         member["createdbymoniker"] = libmember.getcurrentmoniker(
             args, conn=conn, **kwargs
         )
-        io.echo(f"con.member.add.100: {member=}", level="debug")
 
-        if args.debug is True:
-            io.echo(f"con.member.add.120: {member=}", level="debug")
-
-        moniker = libmember.insert(
-            args, member, primarykey="moniker", conn=conn, **kwargs
-        )  # =member, mogrify=True, returnid=True, primarykey="moniker")
-        if args.debug is True:
-            io.echo(f"{moniker=}", level="debug")
-
-        for name, data in member["flags"].items():
-            io.echo(f"{name=} {data=}", level="debug")
-            libmember.setflag(
-                args, name, data["value"], moniker=moniker, conn=conn, **kwargs
-            )
-
-        #    setui(args, member["loginid"], member["ui"], conn=conn, **kwargs)
-
-        #  for name, data in flags.items():
-        #    io.echo(f"{name=} {data=}", level="debug")
-        #    libmember.setflag(args, name, data["value"], membermoniker)
-
-        #    libmember.setattrs(args, {}, moniker, reset=True, conn=conn, **kwargs)
-        if member["password"] is not None and member["password"] != "":
-            libmember.setpassword(
-                args, member["password"], moniker, conn=conn, **kwargs
-            )
-        bank_service = bank.BankService(args)
-        bank_service.add_funds(moniker, 100, transaction_type="initial", description="New member bonus")
-
-        configurerole(
-            args,
-            member["loginid"],
-            member["flags"]["SYSOP"]["value"],
-            conn=conn,
-            **kwargs,
-        )
-
-        # Provision the l_<loginid> psql role and sync group memberships
-        # to the member's current flags. If the member is being created
-        # already approved, the role is created with no password (ident
-        # auth); the welcome flow in showpgrole.py prompts for osuser.
-        pgrole.ensure_role_for_member(
-            args, member["loginid"], conn=conn, **kwargs
-        )
-        pgrole.sync_groups(args, member["loginid"], conn=conn, **kwargs)
-
-        if (
-            io.inputboolean(
-                f"{{var:promptcolor}}add member? {{var:optioncolor}}[Yn]: {{var:inputcolor}}",
-                "Y",
-            )
-            is False
+        # Confirmation gate: no DB writes above this line on the
+        # success path; everything below this line is a side effect
+        # that is rolled back on user-cancel.
+        if not io.inputboolean(
+            f"{{var:promptcolor}}add member? {{var:optioncolor}}[Yn]: {{var:inputcolor}}",
+            "Y",
         ):
-            conn.rollback()
             return False
 
-        conn.commit()
-        io.echo("{/all}member added.")
+        # All side effects run inside the open `with conn` block.
+        # Any exception rolls back; on success we commit at the end.
+        try:
+            moniker = libmember.insert(
+                args, member, primarykey="moniker", conn=conn, **kwargs
+            )
+            if not moniker:
+                io.echo(
+                    "con.member.add.200: libmember.insert returned no moniker",
+                    level="error",
+                )
+                return False
+
+            for name, data in (member.get("flags") or {}).items():
+                libmember.setflag(
+                    args,
+                    name,
+                    data["value"],
+                    moniker=moniker,
+                    conn=conn,
+                    **kwargs,
+                )
+
+            if member.get("password"):
+                libmember.setpassword(
+                    args,
+                    member["password"],
+                    moniker,
+                    conn=conn,
+                    **kwargs,
+                )
+
+            bank_service = bank.BankService(args)
+            bank_service.add_funds(
+                moniker,
+                100,
+                transaction_type="initial",
+                description="New member bonus",
+                conn=conn,
+            )
+
+            configurerole(
+                args,
+                member["loginid"],
+                member.get("flags", {}).get("SYSOP", {}).get("value", False),
+                conn=conn,
+                **kwargs,
+            )
+            pgrole.ensure_role_for_member(
+                args, member["loginid"], conn=conn, **kwargs
+            )
+            pgrole.sync_groups(
+                args, member["loginid"], conn=conn, **kwargs
+            )
+
+            conn.commit()
+        except Exception as e:
+            io.echo_traceback(f"bbsengine6.console.member.add: {e}")
+            conn.rollback()
+            return False
     return True
 
 
@@ -582,12 +571,9 @@ def main(args, **kwargs):
     parser = lib.buildargs(args, **kwargs)
     args = parser.parse_args()
 
-    pool = kwargs.get("pool", None)
-    if pool is None:
-        io.echo(f"bbsengine.con.member.main.120: {pool=}", level="error")
+    if "pool" not in kwargs or kwargs["pool"] is None:
+        io.echo(f"bbsengine.con.member.main.120: pool missing", level="error")
         return False
-    #    conn = kwargs.get("conn", None)
-    #    io.echo(f"bbsengine.con.member.100: {conn=}", level="debug")
 
     done = False
     while not done:
@@ -609,19 +595,23 @@ def main(args, **kwargs):
         if ch == "E":
             io.echo("Edit")
             if edit(args, **kwargs) is False:
-                io.echo(f"edit aborted", level="error")
+                io.echo("edit aborted", level="error")
             else:
                 io.echo("edit ok", level="ok")
         elif ch == "N":
             io.echo("New")
             if add(args, **kwargs) is False:
-                io.echo(f"add aborted", level="error")
+                io.echo("add aborted", level="error")
             else:
-                io.echo(f"add ok", level="ok")
+                io.echo("add ok", level="ok")
+        elif ch == "A":
+            io.echo("Approvals")
+            if lib.runmodule(args, "memberapproval", **kwargs) is False:
+                io.echo("approvals aborted", level="error")
         elif ch == "P":
             io.echo("psql credentials")
-            showpgrole.main(args, **kwargs)
+            if showpgrole.main(args, **kwargs) is False:
+                io.echo("showpgrole failed", level="error")
         elif ch == "Q" or ch == "X":
             io.echo("Quit")
             done = True
-            break

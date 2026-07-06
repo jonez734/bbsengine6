@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from ..util import logentry
 from .account import Account
@@ -27,8 +27,21 @@ class BankService:
         transaction_type: str = "credit",
         description: str = "",
         member_moniker: str = "",
+        conn: Any = None,
     ) -> Dict[str, Any]:
-        """Add funds to an account."""
+        """Add funds to an account.
+
+        Args:
+            moniker: Account owner moniker.
+            amount: Positive integer amount to credit.
+            transaction_type: Transaction type label.
+            description: Free-text description.
+            member_moniker: Originating member moniker (audit trail).
+            conn: Optional caller-supplied DB connection. If provided, the
+                  caller owns the transaction; the function does not commit
+                  or close it. If None, a new connection is acquired via
+                  ``database.connect`` and committed on success.
+        """
         from bbsengine6 import database
 
         if amount <= 0:
@@ -44,7 +57,7 @@ class BankService:
         account = self.account.get_or_create(moniker)
         new_balance = account["balance"] + amount
 
-        with database.connect(self.args) as conn:
+        def _work(conn: Any) -> None:
             with database.cursor(conn) as cur:
                 cur.execute(
                     "UPDATE bank.__account SET balance = %s WHERE moniker = %s",
@@ -57,6 +70,12 @@ class BankService:
                        VALUES (%s, %s, %s, %s, %s)""",
                     (account["id"], amount, transaction_type, description, member_moniker)
                 )
+
+        if conn is not None:
+            _work(conn)
+        else:
+            with database.connect(self.args) as conn:
+                _work(conn)
 
         logentry(
             description or f"credit {transaction_type}",
@@ -80,8 +99,21 @@ class BankService:
         transaction_type: str = "debit",
         description: str = "",
         member_moniker: str = "",
+        conn: Any = None,
     ) -> Dict[str, Any]:
-        """Remove funds from an account."""
+        """Remove funds from an account.
+
+        Args:
+            moniker: Account owner moniker.
+            amount: Positive integer amount to debit.
+            transaction_type: Transaction type label.
+            description: Free-text description.
+            member_moniker: Originating member moniker (audit trail).
+            conn: Optional caller-supplied DB connection. If provided, the
+                  caller owns the transaction; the function does not commit
+                  or close it. If None, a new connection is acquired via
+                  ``database.connect`` and committed on success.
+        """
         from bbsengine6 import database
 
         if amount <= 0:
@@ -118,7 +150,7 @@ class BankService:
 
         new_balance = account["balance"] - amount
 
-        with database.connect(self.args) as conn:
+        def _work(conn: Any) -> None:
             with database.cursor(conn) as cur:
                 cur.execute(
                     "UPDATE bank.__account SET balance = %s WHERE moniker = %s",
@@ -131,6 +163,12 @@ class BankService:
                        VALUES (%s, %s, %s, %s, %s)""",
                     (account["id"], amount, transaction_type, description, member_moniker)
                 )
+
+        if conn is not None:
+            _work(conn)
+        else:
+            with database.connect(self.args) as conn:
+                _work(conn)
 
         logentry(
             description or f"debit {transaction_type}",
