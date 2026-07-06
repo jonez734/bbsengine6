@@ -128,7 +128,6 @@ Built-in variables:
 - `{level.debug}` - Debug log prefix color
 - `{level.warning}` - Warning log prefix color
 - `{level.error}` - Error log prefix color
-- `{level.fail}` - Failure log prefix color
 - `{level.ok}` - Success/OK log prefix color
 - `{level.info}` - Info log prefix color
 
@@ -142,7 +141,6 @@ Use with `echo(..., level="debug")` etc:
 echo("message", level="debug")   # Uses {level.debug} prefix
 echo("message", level="warning") # Uses {level.warning} prefix
 echo("message", level="error")   # Uses {level.error} prefix
-echo("message", level="fail")    # Uses {level.fail} prefix
 echo("message", level="ok")      # Uses {level.ok} prefix
 echo("message", level="info")    # Uses {level.info} prefix
 ```
