@@ -193,7 +193,7 @@ def build(args, rec, cur=None):
     ):
         blurb[k] = rec[k]
 
-    sql = "select flag.name, coalesce(map_blurb_flag.value, flag.defaultvalue) as value from engine.flag left outer join engine.map_blurb_flag on flag.name = engine.map_blurb_flag.name and engine.map_blurb_flag.memberid=%s"
+    sql = "select flag.name, coalesce(map_blurb_flag.value, flag.defaultvalue) as value from engine.member_flag left outer join engine.map_blurb_flag on flag.name = engine.map_blurb_flag.name and engine.map_blurb_flag.memberid=%s"
     if cur is None:
         dbh = database.connect(args)
         cur = dbh.cursor()
