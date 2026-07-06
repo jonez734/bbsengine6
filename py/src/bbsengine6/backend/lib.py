@@ -82,6 +82,21 @@ def fail():
     io.echo(f"{{level.fail}} fail {{/all}}")
 
 
+# Historical note (2026-07-06): commit 8a5d1c0 removed {level.fail} and the
+# level="fail" example from io/specs/echo_commands.spec on the assumption
+# that no caller used them. backend.lib.fail() above emits {{level.fail}}
+# fail {{/all}} and is called by checkdatabase, checkroles, checkwebserverrole,
+# checkflag, checksuperuser, and bank. Commit 7115e77 restored both lines
+# in the spec. If you ever consider removing {level.fail} again, also remove
+# backend.lib.fail() and migrate those callers to io.echo(level="error")
+# first; otherwise the spec will be out of sync with the live API.
+util.logentry(
+    "backend.lib: {level.fail} is in use by fail(); spec lists it",
+    module="backend.lib",
+    action="level_fail_in_use",
+)
+
+
 def hr(failcount: int = 0) -> None:
     color = "{boxcolor}" if failcount == 0 else "{/all}{red}"
     util.hr(color=color)
