@@ -125,9 +125,9 @@ BEGIN
     RETURN;  -- no role yet; nothing to sync
   END IF;
 
-  is_sysop := engine.checkflag('sysop', m_moniker);
-  is_term  := engine.checkflag('term',  m_moniker);
-  is_web   := engine.checkflag('web',   m_moniker);
+  is_sysop := engine.checkmemberflag('sysop', m_moniker);
+  is_term  := engine.checkmemberflag('term',  m_moniker);
+  is_web   := engine.checkmemberflag('web',   m_moniker);
 
   IF is_sysop THEN
     IF NOT pg_has_role(rname, 'sysop', 'MEMBER') THEN

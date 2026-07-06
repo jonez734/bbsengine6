@@ -5,7 +5,7 @@ Creates and validates all required PostgreSQL stored procedures and functions
 that implement the business logic for the BBS engine.
 """
 
-from bbsengine6 import io, database, util
+from bbsengine6 import io, database
 
 from bbsengine6.backend import lib
 
@@ -23,16 +23,11 @@ def access(args, op, **kwargs) -> bool:
 
 
 def main(args, **kwargs):
-    io.echo(f"bbsengine6.backend.checkfunctions.100: {kwargs=}", level="debug")
-
     stage = kwargs.pop("stage", 0)
     conn = kwargs.get("conn", None)
-    pool = kwargs.get("pool", None)
-
 
     def _work(conn):
-        failcount = 0
-        if stage == 0: # postgres
+        if stage == 0:
             funcs = (
                 "public.get_role_privs",
                 "public.manage_secondary_role",
@@ -40,12 +35,8 @@ def main(args, **kwargs):
                 "public.manage_database_priv",
                 "public.manage_schema_priv",
             )
-        else: # zoid6
-            funcs = (
-                "engine.getflags",
-                "engine.checkmemberflag",
-            )
-
+        else:
+            funcs = ("engine.getflags", "engine.checkmemberflag")
         for f in funcs:
             io.echo(
                 f"{{var:labelcolor}}function {{var:valuecolor}}{f}{{var:labelcolor}}: {{var:valuecolor}}",
@@ -57,15 +48,14 @@ def main(args, **kwargs):
                 f = f.replace("public.", "")
                 if not f.endswith(".sql"):
                     f += ".sql"
-                if database.importsql(args, f, pool=pool, conn=conn) is False:
-                    lib.fail()
-                    failcount += 1
-                    break
+                if database.importsql(args, f, **kwargs) is False:
+                    io.echo("fail", level="error")
+                    conn.rollback()
                 else:
-                    lib.ok()
+                    io.echo("ok", level="ok")
+                    conn.commit()
             else:
-                lib.ok()
-        lib.hr(failcount)
-        return True if failcount == 0 else False
+                io.echo("exists", level="ok")
+        return True
 
     return _work(conn)

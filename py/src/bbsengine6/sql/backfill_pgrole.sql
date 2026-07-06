@@ -20,7 +20,7 @@ begin
   for m in
     select mm.id, mm.loginid
       from engine.__member mm
-     where engine.checkflag('approved', mm.moniker) = true
+     where engine.checkmemberflag('approved', mm.moniker) = true
        and not exists (
          select 1 from engine.pgrole pr where pr.memberid = mm.id
        )

@@ -558,12 +558,12 @@ def checkflag(
         with database.cursor(conn) as cur:
             cur.execute(
                 database.query(
-                    "select * from $engine.checkflag($1, $2)", flag, moniker
+                    "select * from $engine.checkmemberflag($1, $2)", flag, moniker
                 )
             )
             if cur.rowcount == 0:
                 return None
-            return cur.fetchone()["checkflag"]
+            return cur.fetchone()["checkmemberflag"]
 
     if moniker is None:
         moniker = getcurrentmoniker(args, **kwargs)
@@ -1012,7 +1012,7 @@ def verifyMemberFound(args, name, **kwargs):
             with database.cursor(conn) as cur:
                 q = sql.SQL("select 1 from ") + sql.Identifier(
                     args.databaseschema, "member"
-                ) + sql.SQL(" where ") + sql.Identifier(column) + sql.SQL("=%s")
+                ) + sql.SQL(" where ") + sql.Identifier(column) + sql.SQL("=$1")
                 cur.execute(q, (name,))
                 return False if cur.rowcount == 0 else True
         except Exception:
