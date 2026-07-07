@@ -330,3 +330,245 @@ files modified here):
 - `tests/test_folder_create.py` — pre-existing setup errors.
 - `tests/test_notify_message_demo_*` — schema-availability
   failures (notify tables not bootstrapped in the test environment).
+
+---
+
+## Pass 3 — follow-up: SQL function rename, schema adjustments, startup dispatch, and untracked topbar/alert feature (2026-07-06)
+
+### Status: IN-FLIGHT (working-tree, not yet committed)
+
+Pass 3 is the working-tree work that was on disk at the time the
+Pass 1+Pass 2 TODO (`TODO_2026-07-06_review_and_hardening.md`) was
+merged into the submodule. It is tracked here so that the next
+reviewer can see what was on the working tree in addition to what
+made it into `f3ee7fe`. The changes are **not yet committed**; the
+intention is to keep them on the working tree until the next
+reviewer (or a Pass 4 commit) decides how to land them.
+
+The work falls into four loosely-related buckets. Some of the changes
+contradict or regress work described in Pass 1 / Pass 2 / the
+`TODO-BOTTOMBAR.md` design; those are called out explicitly.
+
+### Bucket A — SQL function renames and grant-target substitutions
+
+Renames the `checkmemberflag(...)` SQL function (used in
+`backfill_pgrole.sql` and `createrol.sql`) to `checkflag(...)`.
+The Python-side rename in `py/src/bbsengine6/member.py` and
+`py/src/bbsengine6/blurb.py` matches. There is also a
+`engine.member_flag` → `engine.flag` rename in
+`py/src/bbsengine6/blurb.py`'s SQL string.
+
+- [ ] `py/src/bbsengine6/sql/backfill_pgrole.sql` —
+  `engine.checkmemberflag` → `engine.checkflag`.
+- [ ] `py/src/bbsengine6/sql/createrol.sql` — same rename in
+  three call sites.
+- [ ] `py/src/bbsengine6/sql/bbsengine6.sql` — re-enables
+  `\i alert.sql` (was commented out, with a note that the legacy
+  alert schema was removed in favor of `memberview.sql`). This
+  *contradicts* the untracked `py/src/bbsengine6/sql/alert.sql`
+  in Bucket D below, which reintroduces the alert schema.
+- [ ] `py/src/bbsengine6/sql/grants.sql` — `sysop` → `:sysop`
+  (substitution variable).
+- [ ] `py/src/bbsengine6/sql/member_flag.sql` — `sysop` → `:sysop`
+  and `insert, delete, update` → `all`.
+- [ ] `py/src/bbsengine6/sql/refcode.sql` — `sysop` → `:sysop`
+  in two grant lines.
+- [ ] `py/src/bbsengine6/sql/roles.sql` — comment-only
+  `sysop` → `:sysop`.
+- [ ] `py/src/bbsengine6/sql/session.sql` — `sysop` → `:sysop`
+  in the grant line, and adds an `engine.session` view.
+- [ ] `py/src/bbsengine6/sql/member.sql` —
+  `create table if not exists` → `create table`. **Schema change:**
+  a re-run on an existing database will now fail at the
+  `engine.__member` create. Confirm whether the deployment path
+  uses idempotent imports or drops first.
+- [ ] `py/src/bbsengine6/sql/pgrole.sql` —
+  `membermoniker citext` → `memberid bigint references
+  engine.__member(id) on delete cascade`. **Schema change:**
+  data type and primary key of `engine.pgrole` change. Existing
+  data is incompatible. A backfill is required before this can
+  be deployed.
+- [ ] `py/src/bbsengine6/sql/memberview.sql` — adds four
+  alert-count subqueries (`alertcount`, `sentalertcount`,
+  `sentdeliveredcount`, `sentreadcount`). These reference
+  `engine.alert` and `engine.alert.status`, which depends on
+  the `alert.sql` reintroduction (Bucket D).
+
+### Bucket B — `database.py` and `io/screen.py` hardening follow-ups
+
+- [ ] `py/src/bbsengine6/database.py`:
+  - `database.create()` narrows `except Exception` →
+    `except psycopg.Error` so programming errors are no
+    longer reported as "database create failed".
+  - `database.get_role_privs()` normalizes return type to
+    `dict | None` (was `dict | bool`), removing the
+    `False`-on-failure ambiguity.
+  - `database.importsql()` adds a `rollback: bool = True`
+    kwarg and a `_ALLOWED_PACKAGES` allowlist for the
+    `package=` argument. The allowlist prevents a caller
+    from reading arbitrary `.sql` resources via
+    `util.load_sql(..., package=...)`.
+
+### Bucket C — startup dispatch rework
+
+The `bbsengine6.startup.{stage_zero,stage_one,bank}.py` shims
+that re-exported from `bbsengine6.backend.*` are emptied
+(empty placeholder file with a comment). Routing now goes
+through `startup.lib.runstage(...)` and a new
+`BACKEND_STAGE_NAMES` / `BACKEND_STAGES` table that maps each
+stage name to its `bbsengine6.backend` package anchor.
+
+- [ ] `py/src/bbsengine6/startup/lib.py` — adds
+  `BACKEND_STAGE_NAMES`, `BACKEND_STAGES`, and `runstage(...)`.
+- [ ] `py/src/bbsengine6/startup/main.py` —
+  - `access()` returns `lib.issysop(args, **kwargs)` (was
+    `return True`).
+  - `_runstage` uses `lib.runstage(...)` and treats only
+    literal `True` as success (was `is not False`, which
+    silently treated `None` as success).
+  - Iterates `lib.BACKEND_STAGE_NAMES` (was a hard-coded
+    tuple of three names).
+  - On stage failure, logs the package anchor.
+- [ ] `py/src/bbsengine6/startup/__main__.py`:
+  - Help-flag detection replaces a fragile
+    `in sys.argv` substring check with a proper
+    element-by-element scan (`_argv_has_help_flag`).
+  - `screen.init()` (was `screen.init(args)`).
+  - `lib.runmodule(args, "main")` (no `argv=sys.argv[1:]`).
+    The previous `argv=` forwarding caused `module.run` to
+    re-parse argv with every submodule's `buildargs`, leaking
+    the parent's flag surface into children.
+- [ ] `py/src/bbsengine6/startup/bank.py`,
+  `py/src/bbsengine6/startup/stage_one.py`,
+  `py/src/bbsengine6/startup/stage_zero.py` — emptied
+  (replaced by the `module.run(..., package=...)` route).
+- [ ] `py/src/bbsengine6/startup/engine.py` — deleted from
+  working tree. **Not in `git log`; this deletion is
+  independent of any previous `bbsengine6` refactor.** Confirm
+  that this is intentional and that no caller still imports
+  it.
+
+### Bucket D — untracked topbar / alert feature
+
+Three new files, not yet tracked:
+
+- [ ] `js/topbar-alert.js` (new) — IIFE-wrapped topbar
+  component that polls `alert.list` / `alert.count`. Listed
+  in `js/bbsengine6.js`'s `VALID_REQUESTS` regex.
+- [ ] `py/src/bbsengine6/sql/alert.sql` (new) — reintroduces
+  the `engine.__alert` table and presumably an
+  `engine.alert` view. **This contradicts `bbsengine6.sql`**
+  (Bucket A) which had previously commented out the alert
+  schema import with the note "legacy alert schema removed;
+  see memberview.sql". The two need to be reconciled before
+  the next bootstrap.
+- [ ] `skin/tmpl/topbar-alertcount.tmpl` (new) — topbar
+  template that renders `notifycount - sentreadcount` for
+  the current member.
+
+The complementary wiring is in tracked files:
+
+- [ ] `js/bbsengine6.js` — `VALID_REQUESTS` regex adds
+  `alert.list` and `alert.count`.
+- [ ] `skin/tmpl/topbar-content.tmpl` — one-line tweak to
+  embed the alert template.
+- [ ] `handbook/specs/{modules,web,dependencies}.md` —
+  documents the new topbar-alert component and the
+  `alert.py` console module (the latter references
+  `util.py`).
+
+### Bucket E — bottombar / spec / doc inconsistencies
+
+These are *regressions* relative to the design in
+`TODO-BOTTOMBAR.md`. They need to be either reverted or
+explicitly justified in Pass 4 before the next commit:
+
+- [ ] `py/src/bbsengine6/io/screen.py` (178 lines changed):
+  - Removes the `_warn_shim_deprecated(...)` helper and the
+    `DeprecationWarning` it emitted.
+  - Removes the `from .. import bottombar as _bottombar_mod`
+    alias; `_bottombar_fragments` is now a plain `list` again
+    (was a `_LockedList` owned by the default
+    `FragmentRegistry`).
+  - `register_bottombar_fragment` / `unregister_bottombar_fragment`
+    are reimplemented against the plain list and a fresh
+    `_bottombar_fragments_lock = threading.Lock()` — they no
+    longer delegate to `bbsengine6.bottombar`.
+  - **This undoes the back-compat shim work that
+    `TODO-BOTTOMBAR.md` describes as complete.** The tests
+    in `tests/test_bottombar.py` exercise
+    `bbsengine6.bottombar` directly, but anything that
+    imports through `bbsengine6.io.screen.register_bottombar_fragment`
+    (e.g. `casino.auth`, `casino.lib`) will now hit the
+    plain-list reimplementation, not the registry.
+- [ ] `py/src/bbsengine6/ed/common/ui.py` (14 lines changed):
+  - Removes the `_editor_fragments: list` tracking.
+  - `unregister_bottombar()` is now
+    `screen.clear_bottombar_fragments()` (was an
+    `unregister` per fragment). **`clear_bottombar_fragments`
+    is exactly the call that the new bottombar design is
+    supposed to avoid** — it clobbers every package's
+    fragments (casino, empyre, etc.). This is a regression
+    relative to `TODO-BOTTOMBAR.md` Phase 3.
+- [ ] `py/src/demo_bottombar_stack.py` — the clear step
+  uses `screen._bottombar_fragments.clear()` directly
+  (bypassing the registry). Acceptable as a test-only
+  scratch but the demo should not be teaching the wrong API.
+- [ ] `py/src/bbsengine6/io/specs/echo_commands.spec` —
+  removes the `{level.fail}` variable and the
+  `echo("message", level="fail")` example. The `level.fail`
+  color and the `fail` log level exist in code; this is a
+  doc-only regression.
+- [ ] `py/src/bbsengine6/module.spec` — removes the
+  `Cross-package calls via package=` section
+  (41 lines). **This contradicts the Pass 2 L change to
+  `module.py` that *restores* the `package=` kwarg.** The
+  spec was apparently edited before Pass 2 L was applied;
+  the spec needs to be restored alongside the code.
+
+### Bucket F — version and miscellaneous
+
+- [ ] `py/src/bbsengine6/_version.py` —
+  `0.0.1.dev202607061611` → `0.0.1.dev202606291622`. This
+  is a **version rollback** (newer SHA-less timestamp to an
+  older one). Confirm whether this is intentional (e.g. a
+  rebuild from an older checkout) or a mistake to revert.
+- [ ] `py/src/bbsengine6/util.py` — `hr()` loses its
+  `color="..."` parameter. The call site in `cli` / `console`
+  may still pass a color string; grep for callers.
+- [ ] `py/src/bbsengine6/blurb.py` —
+  `engine.member_flag` → `engine.flag` in the join string.
+  Verify that `engine.flag` is the correct table after
+  `member_flag.sql` is applied.
+- [ ] `py/src/bbsengine6/member.py` —
+  `engine.checkmemberflag` → `engine.checkflag` (matches
+  the SQL rename).
+- [ ] `py/src/bbsengine6/sql/memberview.sql` — adds the
+  alertcount subqueries (see Bucket A).
+- [ ] `bbsengine6/TODO.md` and `bbsengine6/TODO_BACKEND.md` —
+  trims and cross-references consistent with Pass 1 / Pass 2
+  work.
+- [ ] `handbook/specs/{architecture,util,web,dependencies,modules}.md` —
+  signature updates (`hr()` returns `str` per the diff
+  heading — note: code still returns `bool`; the spec may
+  be wrong, or the code is mid-edit), and the alert module
+  documentation.
+- [ ] `py/src/bbsengine6/backend/{bank,checkclasses,checkcreatedb,checkdatabase,checkengine,checkflag,checkfunctions,checknotify,checknotifyd,checkroles,checksuperuser,checkwebserverrole,database,lib,stage_one,stage_zero}.py` —
+  these are the Pass 1 follow-ups that were not captured
+  in `8a7ac4f`. They include the `issysop` / `_sanitize_sp`
+  additions in `backend/lib.py`, SAVEPOINT-wrapping in
+  `checkfunctions` / `checkclasses` / `checknotifyd`, and
+  the new `checkcreatedb` privilege check. **These are the
+  same Pass 1 changes the new TODO claims are COMPLETE;
+  they are in fact uncommitted.** A future Pass 4 should
+  commit them with the Pass 1 message.
+
+### Out of scope for Pass 3
+
+- `py/src/bbsengine6/io/screen.py`'s `_impl_*` private
+  functions (referenced by `py/src/bbsengine6/io/sink.py`
+  in Pass 4) are unchanged on disk but are required by
+  the bottombar design.
+- The Casino / empyre / bed per-package bottombar
+  migrations are tracked in `TODO-BOTTOMBAR.md` and are
+  *committed* in `casino/`.
