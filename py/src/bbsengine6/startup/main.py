@@ -11,6 +11,17 @@ def init(args, **kwargs) -> bool:
 
 
 def access(args, op, **kwargs) -> bool:
+    # The access check runs before any DB connection is established
+    # (e.g. casino's __main__ calls runmodule("startup", ...) before
+    # opening a pool). issysop needs a conn/pool to query pg_auth_members;
+    # without one it returns False and the whole startup aborts, which is
+    # wrong - the conn gets built later inside main(). Treat no-conn as
+    # "access granted" and defer the real sysop check to main() once the
+    # pool is up. If a conn/pool IS available, defer to issysop so
+    # the check still applies when called from a context that has one
+    # (e.g. the engine boot path).
+    if "conn" not in kwargs and "pool" not in kwargs:
+        return True
     return issysop(args, **kwargs)
 
 

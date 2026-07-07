@@ -193,6 +193,79 @@ class TestAccessDoesNotRaise:
             "bbsengine6.startup.lib.issysop"
         )
 
+    def test_main_access_returns_true_without_conn_or_pool(self):
+        """bbsengine6.startup.main.access() must NOT call issysop
+        (and therefore must NOT require a database connection) when
+        neither conn nor pool is supplied in kwargs.
+
+        The access check runs before any DB is connected (e.g. casino
+        __main__.py calls runmodule("startup", ...) before opening
+        a pool). issysop needs a conn/pool to query pg_auth_members;
+        if we forwarded to it without one, it would return False and
+        the whole startup aborts. Pin that we short-circuit to True
+        in the no-conn/pool case so startup is permitted to run.
+        """
+        import importlib
+
+        startup_main = importlib.import_module("bbsengine6.startup.main")
+
+        args = _make_args()
+
+        # Patch issysop so that if access() incorrectly calls it
+        # (instead of short-circuiting), the test fails with a
+        # clear "should not have been called" message rather than
+        # silently returning True.
+        with patch(
+            "bbsengine6.startup.main.issysop",
+            side_effect=AssertionError(
+                "issysop should not be called when neither conn "
+                "nor pool is supplied to startup.access()"
+            ),
+        ):
+            result = startup_main.access(args, "run")
+
+        assert result is True, (
+            f"startup.main.access() must return True when no "
+            f"conn/pool is supplied (defer the real sysop check "
+            f"to main() once the pool is up); got {result!r}"
+        )
+
+    def test_main_access_defers_to_issysop_when_pool_supplied(self):
+        """Pin that when a pool IS supplied to startup.access(),
+        we forward to issysop() (instead of unconditionally
+        returning True). This is the path the engine boot takes
+        after opening its admin pool.
+        """
+        import importlib
+
+        startup_main = importlib.import_module("bbsengine6.startup.main")
+
+        args = _make_args()
+        sentinel_pool = object()
+
+        with patch(
+            "bbsengine6.startup.main.issysop",
+            return_value=False,
+        ) as mock_issysop:
+            result = startup_main.access(args, "run", pool=sentinel_pool)
+
+        assert result is False, (
+            f"startup.main.access() must forward to issysop when "
+            f"a pool is supplied; got {result!r}"
+        )
+        assert mock_issysop.called, (
+            "issysop must be invoked when a pool is supplied"
+        )
+        # issysop should receive both args and the pool kwarg.
+        call = mock_issysop.call_args
+        assert call.args[0] is args, (
+            f"issysop must receive args as first positional; got "
+            f"{call.args!r}"
+        )
+        assert call.kwargs.get("pool") is sentinel_pool, (
+            f"issysop must receive pool kwarg; got {call.kwargs!r}"
+        )
+
 
 class TestModuleRunOnSubpackage:
     """Pin that module.run(args, 'bbsengine6.startup') works.
