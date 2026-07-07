@@ -19,6 +19,7 @@
 
 - [x] Fix psycopg-pool 3.3.0 incompatibility
 - [x] Fix SQL composition bug in creatextension()/createrol()/create() — `sql.Identifier(...)` was interpolated via f-string into `sql.SQL(...)` instead of `.format(...)`, emitting literal `Identifier('...')` text. Affected: database.py creatextension (blocks stage-zero extension install), createrol (3 branches), create. 2026-06-29.
+- [x] `bbsengine6.startup` failed `module.check` with "no init function" because the subpackage's `__init__.py` was empty and the entrypoints (`init`, `access`, `buildargs`, `main`) live in `bbsengine6.startup.main`. Fix: re-export the four entrypoints from `bbsengine6.startup.__init__` so the subpackage itself satisfies the checker's contract. `bbsengine6.startup.lib`, `.stage_zero`, `.bank` remain importable as before. Triggered by `python -m casino --debug` ("check of modulename='bbsengine6.startup' failed. module not run."). 2026-07-07.
 
 ## Unified Pub/Sub Channel System
 
