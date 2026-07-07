@@ -21,6 +21,39 @@
 - [x] Fix SQL composition bug in creatextension()/createrol()/create() — `sql.Identifier(...)` was interpolated via f-string into `sql.SQL(...)` instead of `.format(...)`, emitting literal `Identifier('...')` text. Affected: database.py creatextension (blocks stage-zero extension install), createrol (3 branches), create. 2026-06-29.
 - [x] `bbsengine6.startup` failed `module.check` with "no init function" because the subpackage's `__init__.py` was empty and the entrypoints (`init`, `access`, `buildargs`, `main`) live in `bbsengine6.startup.main`. Fix: re-export the four entrypoints from `bbsengine6.startup.__init__` so the subpackage itself satisfies the checker's contract. `bbsengine6.startup.lib`, `.stage_zero`, `.bank` remain importable as before. Triggered by `python -m casino --debug` ("check of modulename='bbsengine6.startup' failed. module not run."). 2026-07-07.
 
+- [ ] Make `bbsengine6.startup` runnable from both the CLI (`python -m bbsengine6.startup`) and from `bbsengine6.module.run()`. Two bugs:
+  1. `py/src/bbsengine6/startup/__init__.py` is empty in the committed state. The TODO entry above (2026-07-07) says the four entry points were added, but `git diff` shows the changes are uncommitted. Commit the current draft (init/access/buildargs/main defined in `__init__.py`).
+  2. `py/src/bbsengine6/startup/main.py:13` calls `lib.issysop(args, **kwargs)` but `bbsengine6.startup.lib` does NOT have an `issysop` function — it lives in `bbsengine6.backend.lib`. The current code throws `AttributeError: module 'bbsengine6.startup.lib' has no attribute 'issysop'` during `module.check`'s `m.access(args, op, **kwargs)` call. `check` catches the exception and returns None, so `module.run` logs "check of modulename='bbsengine6.startup.main' failed. module not run." with a traceback via `io.echo_traceback`. This is hit by BOTH invocation paths: CLI goes `__main__.py -> lib.runmodule(args, "main") -> module.run on bbsengine6.startup.main -> check fails`; programmatic `module.run(args, "bbsengine6.startup")` passes the subpackage check (the four entry points are present) but then `m.main` -> `lib.runmodule(args, "main")` -> same failure on the `.main` file. The user reports this as "unknown function init()" — a paraphrase of the traceback during the init/access phase of `check`.
+
+  Fix: in `py/src/bbsengine6/startup/main.py`, change
+  ```python
+  def access(args, op, **kwargs) -> bool:
+      return lib.issysop(args, **kwargs)
+  ```
+  to import from `bbsengine6.backend.lib` and use it directly:
+  ```python
+  from bbsengine6.backend.lib import issysop
+
+  def access(args, op, **kwargs) -> bool:
+      return issysop(args, **kwargs)
+  ```
+  Rationale for using `backend.lib.issysop` rather than `bbsengine6.member.issysop`: `backend.lib.issysop` queries `pg_auth_members`/`pg_roles` directly and is "safe to call on a brand-new database that has not yet been bootstrapped" (per the docstring at `backend/lib.py:166`). `member.issysop` queries the engine.member table's `sysop` flag, which requires the engine schema to exist and a logged-in user — neither of which is guaranteed at startup time.
+
+  While we're in this file, also:
+  - Delete the unused placeholder stubs `py/src/bbsengine6/startup/bank.py`, `engine.py`, `stage_zero.py`, `stage_one.py`. The dispatch in `startup/main.py:43-44` always sets `package="bbsengine6.backend"` via `lib.BACKEND_STAGES`, so these empty `startup/*` files are never actually loaded. The single-line comment in each is the only content.
+  - Delete `py/src/bbsengine6/startup/__init__.py~` (backup, no longer needed once `__init__.py` is committed).
+
+  Add tests in `py/tests/test_startup_subpackage.py` (new file) covering both invocation paths:
+  - `test_subpackage_has_entrypoints` — pin that `bbsengine6.startup.init`, `.access`, `.buildargs`, `.main` are present and callable (regression test for the TODO entry above).
+  - `test_module_run_startup_subpackage` — call `module.run(args, "bbsengine6.startup")` with `bbsengine6.startup.lib.runmodule` patched to return True; assert the call gets past `check` and into `m.main` without raising.
+  - `test_cli_startup_invocation` — invoke `bbsengine6.startup.__main__`'s logic with `bbsengine6.startup.lib.runmodule` patched; assert no AttributeError on `lib.issysop`.
+  - `test_subpackage_access_does_not_raise` — specifically pin that `bbsengine6.startup.access(args, "run")` does not raise `AttributeError` on `lib.issysop` (this is the exact failure mode the user is hitting).
+
+  Verification:
+  - `pytest py/tests/test_startup_zoid6_missing.py py/tests/test_startup_subpackage.py` — both files should pass.
+  - `python -m bbsengine6.startup --help` — should print startup help without AttributeError.
+  - `ruff check py/src/bbsengine6/startup/` — no unused imports after deletions.
+
 ## Unified Pub/Sub Channel System
 
 **Status:** Phases 1A-1E, Integration complete
