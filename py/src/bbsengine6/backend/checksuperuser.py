@@ -3,6 +3,14 @@ Verify database superuser permissions and role existence.
 
 Checks that the current user (based on login ID) exists as a database role
 with appropriate superuser permissions for BBS engine initialization.
+
+SECURITY: the previous version accepted any role that combined CREATEDB +
+CANLOGIN + CREATEROLE as superuser-equivalent. That is over-broad: a
+non-superuser role with those three flags can create databases, create
+roles, and log in, but cannot run SECURITY DEFINER functions as the
+owner. Granting such a role "superuser" status for bootstrap purposes
+lets it escalate by creating additional roles and grants. The check now
+requires `rolsuper` only.
 """
 
 from bbsengine6 import io, database, util
@@ -19,7 +27,7 @@ def buildargs(args, **kwargs):
 
 
 def access(args, op, **kwargs):
-    return True
+    return lib.issysop(args, **kwargs)
 
 
 def main(args, **kwargs):
@@ -33,24 +41,21 @@ def main(args, **kwargs):
         return False
     privs = database.get_role_privs(args, currentloginid, conn=conn, pool=pool)
     io.echo(f"{privs=}", level="debug")
-    if privs == {}:
+    if not privs:
         io.echo(
-            f"'{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' does not have correct privs"
+            f"'{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' does not have correct privs "
+            f"(or lookup failed)"
         )
         return False
-    if privs["rolsuper"] is True:
+    if privs.get("rolsuper") is True:
         io.echo(
             f"'{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' has correct privs (superuser)"
         )
         return True
-    else:
-        if (
-            privs["rolcreatedb"] is True
-            and privs["rolcanlogin"] is True
-            and privs["rolcreaterole"] is True
-        ):
-            io.echo(
-                f"{{var:valuecolor}}{currentloginid}{{var:labelcolor}} has correct privs (createdb, canlogin, and createrole)"
-            )
-            return True
+    io.echo(
+        f"'{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' is not a superuser; "
+        f"the BBS engine bootstrap requires rolsuper. "
+        f"Run 'ALTER ROLE {currentloginid} WITH SUPERUSER;' and retry.",
+        level="error",
+    )
     return False

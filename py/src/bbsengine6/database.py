@@ -1377,7 +1377,11 @@ def create(
         stmt = sql.SQL(" ").join(clauses)
         try:
             cur.execute(stmt)
-        except Exception as e:
+        except psycopg.Error as e:
+            # Catch only DB-level errors. A broad `except Exception`
+            # would also swallow programming errors (TypeError when
+            # sql.Identifier rejects a name, etc.) and report them as
+            # "database create failed", which is misleading.
             io.echo_traceback(f"bbsengine6.database.create.200: {e}")
             return False
         return True
@@ -1461,18 +1465,30 @@ def createschema(args: Any, name: str, **kwargs: Any) -> bool:
 
 def get_role_privs(
     args: Any, rolname: str, cur: Any = None, **kwargs: Any
-) -> dict | bool:
+) -> dict | None:
+    """Return the role-privs dict for ``rolname`` or ``None`` on failure.
+
+    The return type is normalized to ``dict | None``: callers can use
+    ``if not privs:`` to detect both "no privs" and "lookup failed",
+    avoiding the previous ``dict | bool`` ambiguity where the
+    no-conn/no-pool path returned ``False`` and a successful empty
+    privs lookup returned ``{}`` (which are different things).
+    """
+
     def _work(cur):
         sql = "SELECT get_role_privs(%s);"
         cur.execute(sql, (rolname,))
         result = cur.fetchone()
-        return result["get_role_privs"] if "get_role_privs" in result else {}
+        if result is None:
+            return None
+        privs = result.get("get_role_privs")
+        return privs if isinstance(privs, dict) else None
 
     conn = kwargs.get("conn", None)
     if conn is None:
         pool = kwargs.get("pool", None)
         if pool is None:
-            return False
+            return None
 
         with connect(args, pool=pool) as conn:
             with cursor(conn=conn) as cur:
@@ -1710,14 +1726,36 @@ def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
 
 
 # @since 20241212
-def importsql(args: Any, filename: str, **kwargs: Any) -> bool:
+def importsql(
+    args: Any, filename: str, *, rollback: bool = True, **kwargs: Any
+) -> bool:
+    # SECURITY: validate `package` against an allowlist. `package` is
+    # forwarded to util.load_sql, which uses it to resolve the on-disk
+    # SQL directory. An attacker (or buggy caller) that can pass
+    # `package="../../etc"` or similar would be able to read arbitrary
+    # .sql resources and execute them as the connecting DB role.
+    package = kwargs.get("package", None)
+    _ALLOWED_PACKAGES = {
+        None,
+        "bbsengine6",
+        "bbsengine6.backend",
+        "bbsengine6.startup",
+        "bbsengine6.engine",
+    }
+    if package not in _ALLOWED_PACKAGES:
+        io.echo(
+            f"bbsengine6.database.importsql.050: refusing to load SQL from "
+            f"package={package!r} (not in allowlist)",
+            level="error",
+        )
+        return False
+
     def _work(conn):
         #    io.echo(f"bbsengine.database.importsql.140: {conn=}", level="debug")
         #    fullpath = util.get_safe_path(args, *components, **kwargs)
         #    io.echo(f"bbsengine.database.importsql.120: {fullpath=}", level="debug")
 
         try:
-            package = kwargs.get("package", None)
             sql_script = util.load_sql(args, filename, package=package)
             #      with open(fullpath, 'r') as file:
             #        sql_script = file.read()
@@ -1726,17 +1764,19 @@ def importsql(args: Any, filename: str, **kwargs: Any) -> bool:
                     cur.execute(sql_script)
                 except psycopg.errors.Error as e:
                     io.echo_traceback(f"bbsengine6.database.importsql.200: {e}")
-                    try:
-                        conn.rollback()
-                    except Exception:
-                        pass
+                    if rollback:
+                        try:
+                            conn.rollback()
+                        except Exception:
+                            pass
                     return False
         except Exception as e:
             io.echo_traceback(f"bbsengine6.database.importsql.300: {e}")
-            try:
-                conn.rollback()
-            except Exception:
-                pass
+            if rollback:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
             return False
         return True
 
@@ -1745,6 +1785,81 @@ def importsql(args: Any, filename: str, **kwargs: Any) -> bool:
         pool = kwargs.get("pool", None)
         if pool is None:
             io.echo(f"importsql.100: no connection and no pool", level="error")
+            return False
+        with connect(args, pool=pool) as conn:
+            return _work(conn)
+    return _work(conn)
+
+
+def verify_function_owner(
+    args: Any,
+    name: str,
+    expected_owners: tuple[str, ...] | str,
+    **kwargs: Any,
+) -> bool:
+    """Check that the function ``name`` exists and is owned by one of
+    ``expected_owners``.
+
+    ``expected_owners`` may be a single role name (string) or a
+    tuple of acceptable role names. Returns True on success, False
+    otherwise (including the function not existing or the owner not
+    matching). Logs a clear error message when the check fails.
+
+    This is intended to gate calls to SECURITY DEFINER functions
+    installed by the BBS engine. If the function has been replaced
+    or its owner changed (e.g. by an attacker who obtained DDL on
+    the database), calls to it would execute as the new owner and
+    could escalate privileges. The check is a runtime guard
+    complement to the install-time checks in checkengine.py.
+    """
+
+    def _work(conn):
+        if "." in name:
+            schema, function_name = name.split(".", 1)
+        else:
+            schema, function_name = "public", name
+        sql = (
+            "SELECT r.rolname AS owner "
+            "FROM pg_proc p "
+            "JOIN pg_namespace n ON p.pronamespace = n.oid "
+            "JOIN pg_roles r ON p.proowner = r.oid "
+            "WHERE p.proname = %s AND n.nspname = %s"
+        )
+        with cursor(conn=conn) as cur:
+            cur.execute(sql, (function_name, schema))
+            row = cur.fetchone()
+        if row is None:
+            io.echo(
+                f"bbsengine6.database.verify_function_owner.100: "
+                f"function {name!r} does not exist",
+                level="error",
+            )
+            return False
+        owner = row["owner"] if isinstance(row, dict) else row[0]
+        if isinstance(expected_owners, str):
+            ok = owner == expected_owners
+        else:
+            ok = owner in expected_owners
+        if not ok:
+            io.echo(
+                f"bbsengine6.database.verify_function_owner.200: "
+                f"function {name!r} is owned by {owner!r}, expected one of "
+                f"{expected_owners!r}. Refusing to call it. "
+                f"Reinstall the function or update the expected owner.",
+                level="error",
+            )
+            return False
+        return True
+
+    conn = kwargs.get("conn", None)
+    if conn is None:
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            io.echo(
+                f"bbsengine6.database.verify_function_owner.300: "
+                f"no conn or pool supplied for {name!r}",
+                level="error",
+            )
             return False
         with connect(args, pool=pool) as conn:
             return _work(conn)

@@ -8,7 +8,7 @@ def init(args, **kwargs) -> bool:
 
 
 def access(args, op, **kwargs) -> bool:
-    return True
+    return lib.issysop(args, **kwargs)
 
 
 def buildargs(args, **kwargs):
@@ -29,18 +29,22 @@ def main(args, **kwargs):
             "checkflag",
             "bank",
         ):
-            if lib.runmodule(
+            result = lib.runmodule(
                 args,
                 m,
                 stage=1,
                 package="bbsengine6.backend",
                 pool=pool,
                 conn=conn,
-            ) is False:
+            )
+            if result is not True:
+                io.echo(
+                    f"stage_one: module {m!r} did not return True "
+                    f"(got {result!r}); aborting stage.",
+                    level="error",
+                )
                 failcount += 1
                 break
-            else:
-                lib.ok()
         if failcount == 0:
             conn.commit()
         else:

@@ -1,9 +1,13 @@
 """
 Verify and initialize notification system schema.
 
-Checks that all notification-related types and classes exist in the database,
-including notification tables, recipient mapping, and notification views.
+DEPRECATED: notify schema is being moved to the message_delivery subsystem.
+This module will be removed once console has migrated its callers. Until
+then the access() and savepoint plumbing is kept current; the SQL imports
+remain commented out in checkengine.py.
 """
+
+import warnings
 
 from bbsengine6 import io, database
 from bbsengine6.database import classexists, typeexists
@@ -20,7 +24,7 @@ def buildargs(args, **kwargs):
 
 
 def access(args, op, **kwargs) -> bool:
-    return True
+    return lib.issysop(args, **kwargs)
 
 
 enumlist = (("engine.notify_urgency_enum", "notify.sql"),)
@@ -41,6 +45,7 @@ classlist = (
 
 def main(args, **kwargs) -> bool:
     def _work(conn):
+        conn.autocommit = False
         failcount = 0
 
         for c, sql in enumlist:
@@ -50,13 +55,29 @@ def main(args, **kwargs) -> bool:
             )
             if typeexists(args, c, conn=conn) is False:
                 io.echo("import ", end="")
-                if database.importsql(args, sql, conn=conn) is False:
+                sp = lib._sanitize_sp(c, prefix="enum_")
+                with database.cursor(conn=conn) as cur:
+                    cur.execute(f"SAVEPOINT {sp}")
+                try:
+                    ok = lib.retry_on_transient(
+                        lambda: database.importsql(
+                            args, sql, conn=conn, rollback=False
+                        )
+                    )
+                except Exception as e:
+                    io.echo_traceback(
+                        f"checknotify: retry exhausted for enum {c}: {e}"
+                    )
+                    ok = False
+                if ok is False:
+                    with database.cursor(conn=conn) as cur:
+                        cur.execute(f"ROLLBACK TO SAVEPOINT {sp}")
                     io.echo(" fail ", level="error")
-                    conn.rollback()
                     failcount += 1
                 else:
+                    with database.cursor(conn=conn) as cur:
+                        cur.execute(f"RELEASE SAVEPOINT {sp}")
                     io.echo("ok", level="ok")
-                    conn.commit()
             else:
                 io.echo("ok", level="ok")
 
@@ -67,17 +88,56 @@ def main(args, **kwargs) -> bool:
             )
             if classexists(args, c, conn=conn) is False:
                 io.echo("import ", end="")
-                if database.importsql(args, sql, conn=conn) is False:
+                sp = lib._sanitize_sp(c, prefix="class_")
+                with database.cursor(conn=conn) as cur:
+                    cur.execute(f"SAVEPOINT {sp}")
+                try:
+                    ok = lib.retry_on_transient(
+                        lambda: database.importsql(
+                            args, sql, conn=conn, rollback=False
+                        )
+                    )
+                except Exception as e:
+                    io.echo_traceback(
+                        f"checknotify: retry exhausted for class {c}: {e}"
+                    )
+                    ok = False
+                if ok is False:
+                    with database.cursor(conn=conn) as cur:
+                        cur.execute(f"ROLLBACK TO SAVEPOINT {sp}")
                     io.echo(" fail ", level="error")
-                    conn.rollback()
                     failcount += 1
                 else:
+                    with database.cursor(conn=conn) as cur:
+                        cur.execute(f"RELEASE SAVEPOINT {sp}")
                     io.echo("ok", level="ok")
-                    conn.commit()
             else:
                 io.echo("ok", level="ok")
 
+        if failcount == 0:
+            conn.commit()
+        else:
+            conn.rollback()
         return True if failcount == 0 else False
 
     conn = kwargs.get("conn", None)
     return _work(conn)
+
+
+_WARNED = False
+
+
+def _warn_deprecated() -> None:
+    global _WARNED
+    if _WARNED:
+        return
+    _WARNED = True
+    warnings.warn(
+        "bbsengine6.backend.checknotify is deprecated; "
+        "use bbsengine6.message_delivery.* instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
+
+_warn_deprecated()

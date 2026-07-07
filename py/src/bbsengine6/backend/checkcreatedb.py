@@ -36,18 +36,34 @@ def access(args, op, **kwargs):
 
 
 def main(args, **kwargs):
+    # Accept either a pool (preferred, lets us open a short-lived
+    # connection) or a caller-supplied conn. Previously this required
+    # pool= and printed "pool not available" + returned False if
+    # called with only a conn, which was a silent failure: the caller
+    # already had a valid conn and the check could have run against
+    # it. Caller-supplied conn is used as-is.
     pool = kwargs.get("pool", None)
-    if pool is None:
-        io.echo("checkcreatedb: database pool not available", level="error")
+    conn = kwargs.get("conn", None)
+    if pool is None and conn is None:
+        io.echo(
+            "checkcreatedb: neither pool nor conn supplied; cannot check privs",
+            level="error",
+        )
         return False
 
-    with database.connect(args, pool=pool) as conn:
-        with conn.cursor() as cur:
+    def _work(c):
+        with c.cursor() as cur:
             cur.execute(
                 "SELECT rolcreatedb, rolsuper, rolname "
                 "FROM pg_roles WHERE rolname = current_user"
             )
-            row = cur.fetchone()
+            return cur.fetchone()
+
+    if pool is not None:
+        with database.connect(args, pool=pool) as c:
+            row = _work(c)
+    else:
+        row = _work(conn)
 
     if row is None:
         io.echo(

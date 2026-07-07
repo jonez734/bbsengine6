@@ -8,7 +8,7 @@ def init(args, **kwargs) -> bool:
 
 
 def access(args, op, **kwargs) -> bool:
-    return True
+    return lib.issysop(args, **kwargs)
 
 
 def buildargs(args, **kwargs):

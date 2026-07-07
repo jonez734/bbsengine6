@@ -1068,10 +1068,7 @@ intercept every `bbsengine6.io` primitive call (`echo`, `inputchoice`,
 `screen.register_bottombar_fragment`,
 `screen.unregister_bottombar_fragment`) and dispatch it to a per-connection
 `BEDSink` that builds BED wire envelopes, instead of writing to stdout
-or reading from a TTY. (The bottombar-specific facets of this work —
-`bbsengine6.bottombar.registry_for(name)`, `set_context_for`, the
-per-connection `ContextVar`, and the back-compat-shim plumbing — are
-tracked in `bbsengine6/TODO-BOTTOMBAR.md`.)
+or reading from a TTY.
 
 The interception mechanism must be:
 - **Asyncio-native** (per-task isolation via `contextvars.ContextVar`).
@@ -1283,20 +1280,12 @@ surprised by the new return type.
   `inputchar`, `inputdate`, `inputfilename`, `inputpassword`.
 - [ ] Same for `screen.setbottombar`,
   `screen.register_bottombar_fragment`,
-  `screen.unregister_bottombar_fragment` (bottombar-specific facets
-  tracked in `TODO-BOTTOMBAR.md`).
+  `screen.unregister_bottombar_fragment`.
 - [ ] **Backward compat check**: door-mode callers see zero behavior
   change. `test_io_backward_compat.py` passes.
 - [ ] Add `bbsengine6/tests/test_io_sink_per_primitive.py`: one test
   per primitive, asserting the sink is called when set, the default
   is called when not set, and the return value propagates correctly.
-
-> **Note:** Per-connection plumbing for the bottombar primitives
-> (Phase 4a — `bbsengine6.bottombar.registry_for(name)`,
-> `set_context_for`, `render_for`, and the per-connection
-> `ContextVar` wiring) is tracked in `TODO-BOTTOMBAR.md` rather than
-> here, because the work is bottombar-architecture-specific rather
-> than part of the general sink protocol.
 
 ### Phase 5 — `MessageRouter` + `MessageRouterMixin` + `WebSocketServer.on_connect_hook`
 
@@ -1647,10 +1636,7 @@ behavior.
 
 - [ ] `python -m bbsengine6.console` shows the new heading before
       `engine checks`.
-- [x] `stage_zero` / `stage_one` still pass on a fresh DB.
-      (See TODO_BACKEND.md — the stage_one `engine` schema fix
-      landed in commit 44b2e17 with
-      `tests/integration/test_stage_one_checkengine.py`.)
+- [ ] `stage_zero` / `stage_one` still pass on a fresh DB.
 - [ ] `pytest bbsengine6/py/tests/` passes (no regressions from the
       extra import in `console/main.py`).
 - [ ] `mistermcfeely/src/postoffice/startup_test.py` runs and

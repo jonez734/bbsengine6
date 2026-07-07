@@ -7,7 +7,7 @@ def init(args, **kwargs) -> bool:
 
 
 def access(args, op, **kwargs) -> bool:
-    return True
+    return lib.issysop(args, **kwargs)
 
 
 def buildargs(args, **kwargs):
@@ -45,18 +45,25 @@ def main(args, **kwargs):
                     "checkwebserverrole",
                     "checkengine",
                 ):
-                    if lib.runmodule(
+                    result = lib.runmodule(
                         args,
                         m,
                         package="bbsengine6.backend",
                         stage=0,
                         pool=pool,
                         conn=conn,
-                    ) is False:
+                    )
+                    if result is not True:
+                        io.echo(
+                            f"stage_zero: module {m!r} did not return True "
+                            f"(got {result!r}); aborting stage.",
+                            level="error",
+                        )
                         failcount += 1
                         break
         except Exception as e:
             io.echo_traceback(f"backend.stage_zero.100: error: {e}")
+            failcount += 1
         finally:
             if failcount == 0:
                 io.echo(f"bbsengine6.backend.stage_zero.120: complete", level="ok")

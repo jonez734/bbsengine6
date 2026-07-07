@@ -158,36 +158,15 @@ __all__ = ["init", "access", "buildargs", "main"]
       `util.py`, top-level `startup.py`.
 - [x] Do not change `console/main.py`, `console/__main__.py`,
       `console/__init__.py`, or any non-`check*` console module
-      (`createdatabase.py`, `email.py`, `member.py`,
+      (`alert.py`, `createdatabase.py`, `email.py`, `member.py`,
       `memberapproval.py`, `session.py`, `showpgrole.py`).
 
 ## Pre-existing issues (deferred)
 
-- [x] `backend/stage_one` did not call `checkengine` against the
-      target DB (it only ran in stage_zero against the `postgres`
-      maintenance DB), so `engine.*` lookups in
-      `checkfunctions` / `importsql` failed with
-      `schema "engine" does not exist` on a fresh cluster. Fixed
-      by adding `"checkengine"` to the stage 1 module loop in
-      `py/src/bbsengine6/backend/stage_one.py:24-31`, positioned
-      after `checkextensions` and before `checkfunctions`.
-      Covered by
-      `tests/integration/test_stage_one_checkengine.py`.
-- [x] Once `checkengine` started running in stage 1, the
-      `manage_schema_priv` grant loop failed with
-      `function manage_schema_priv(unknown, unknown, unknown, unknown)
-      does not exist` because stage 1's `checkfunctions` only
-      installs `engine.*` functions and never installs the
-      `public.*` admin helpers into the target DB. Fixed by
-      having `checkengine.main` install `manage_schema_priv.sql`
-      via `importsql()` if `functionexists("public.manage_schema_priv")`
-      is `False`, before the grant loop. `checkengine` is the
-      first module in both stage 0 and stage 1 that needs the
-      helper, so owning the install there is more robust than
-      trying to coordinate stage 0/1 ordering. Covered by
-      `tests/integration/test_stage_one_checkengine.py`
-      (`test_main_installs_manage_schema_priv_when_missing` and
-      `test_main_returns_false_when_manage_schema_priv_install_fails`).
+- [ ] `backend/stage_zero.checkfunctions(stage=0)` runs against
+      the `postgres` maintenance DB where the `engine.*` schema
+      does not yet exist; will fail on a fresh cluster. Fix in
+      a follow-up commit.
 - [ ] Top-level `bbsengine6/startup.py` is dead code (shadowed
       by the new `startup/` package). Cleanup is a separate
       concern.

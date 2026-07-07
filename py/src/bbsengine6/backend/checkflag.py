@@ -19,7 +19,7 @@ def buildargs(args, **kwargs):
 
 
 def access(args, op, **kwargs) -> bool:
-    return True
+    return lib.issysop(args, **kwargs)
 
 
 def main(args, **kwargs):

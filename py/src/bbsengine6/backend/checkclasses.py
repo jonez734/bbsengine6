@@ -19,7 +19,7 @@ def buildargs(args, **kwargs):
 
 
 def access(args, op, **kwargs) -> bool:
-    return True
+    return lib.issysop(args, **kwargs)
 
 
 classlist = (
@@ -32,6 +32,7 @@ classlist = (
 
 def main(args, **kwargs) -> bool:
     def _work(conn):
+        conn.autocommit = False
         failcount = 0
         for c, sql in classlist:
             io.echo(
@@ -40,16 +41,40 @@ def main(args, **kwargs) -> bool:
             )
             if database.classexists(args, c, conn=conn) is False:
                 io.echo("import ", end="")
-                if database.importsql(args, sql, conn=conn) is False:
+                sp = lib._sanitize_sp(c)
+                with database.cursor(conn=conn) as cur:
+                    cur.execute(f"SAVEPOINT {sp}")
+                # Bounded retry on transient DB errors (lock timeout,
+                # deadlock). The savepoint protects the outer
+                # transaction; a transient failure rolls back only the
+                # savepoint and we re-try the importsql call.
+                try:
+                    ok = lib.retry_on_transient(
+                        lambda: database.importsql(
+                            args, sql, conn=conn, rollback=False
+                        )
+                    )
+                except Exception as e:
+                    io.echo_traceback(
+                        f"checkclasses: retry exhausted for {c}: {e}"
+                    )
+                    ok = False
+                if ok is False:
+                    with database.cursor(conn=conn) as cur:
+                        cur.execute(f"ROLLBACK TO SAVEPOINT {sp}")
                     io.echo(" fail ", level="error")
-                    conn.rollback()
                     failcount += 1
                 else:
+                    with database.cursor(conn=conn) as cur:
+                        cur.execute(f"RELEASE SAVEPOINT {sp}")
                     io.echo("ok", level="ok")
-                    conn.commit()
             else:
                 io.echo("ok", level="ok")
 
+        if failcount == 0:
+            conn.commit()
+        else:
+            conn.rollback()
         return True if failcount == 0 else False
 
     conn = kwargs.get("conn", None)

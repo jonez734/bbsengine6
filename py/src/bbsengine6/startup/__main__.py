@@ -7,8 +7,17 @@ from . import lib
 
 parser = lib.buildargs()
 
-# Handle --help/--h without exiting (return to menu)
-if "--help" in sys.argv or "-h" in sys.argv:
+# Handle --help/-h as bare tokens (not as values to other flags).
+# The previous "in sys.argv" check matched substrings of any argv
+# element, which is fragile (e.g. a value containing "--help"
+# as a substring would trigger help).
+def _argv_has_help_flag(argv):
+    for a in argv:
+        if a == "--help" or a == "-h":
+            return True
+    return False
+
+if _argv_has_help_flag(sys.argv[1:]):
     if parser is not None:
         parser.print_help()
     # Don't call sys.exit() - let flow continue to menu
@@ -16,20 +25,18 @@ if "--help" in sys.argv or "-h" in sys.argv:
 else:
     args = parser.parse_args() if parser is not None else None
 
-#session.start(args)
-
-screen.init(args)
+screen.init()
 
 locale.setlocale(locale.LC_ALL, "")
 time.tzset()
 
-# module.init(args)
-
 try:
-    if lib.runmodule(args, "main", package="bbsengine6.startup", argv=sys.argv[1:]) is False:
-        io.echo(f"{{level.error}} startup failed {{/all}}")
-    else:
-        io.echo(f"{{level.ok}} startup ok {{/all}}")
+    # Pass the already-parsed `args` and DO NOT forward `argv=`.
+    # module.run re-parses argv with every submodule's buildargs,
+    # which leaks the parent's flag surface into children. The
+    # parent has already parsed; submodules should consume the
+    # parsed Namespace.
+    lib.runmodule(args, "main")
 except KeyboardInterrupt:
     io.echo("{/all}{bold}INTR{/bold}")
 except EOFError:

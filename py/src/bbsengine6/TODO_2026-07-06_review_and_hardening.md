@@ -14,13 +14,48 @@ performed 2026-07-06. It supersedes
   happen until the user confirms. **COMPLETE.**
 - **Pass 3** — follow-up: SQL renames, schema adjustments, startup
   dispatch rework, and the untracked topbar/alert feature. **IN-FLIGHT
-  (working-tree, not yet committed).** Bucket E (bottombar regressions)
-  has been partially fixed in this pass: `io/screen.py` restored to its
-  shim form, `ed/common/ui.py` re-imports `bbsengine6.bottombar` and
-  tracks its own fragments, and all in-tree callers of the screen shim
-  (`console/lib.py`, `backend/lib.py`, `ed/visual/render.py`,
-  `examples/ping_pong_demo.py`, `examples/notify_message_demo.py`,
-  `ed.spec`) now import `bbsengine6.bottombar` directly.
+  (working-tree, not yet committed).** Pass 3 was audited
+  2026-07-06 and split into two groups:
+
+  - **Safe subset kept on the working tree** (Bucket B + C + Pass 1
+    follow-ups that the new TODO claims were committed but were in
+    fact uncommitted): `database.py` hardening (narrow
+    `psycopg.Error`, normalize `get_role_privs` to `dict | None`,
+    `_ALLOWED_PACKAGES` allowlist on `importsql`); `startup.main`
+    `issysop` auth + tightened `_runstage` ("only literal True
+    succeeds"); `startup.lib.BACKEND_STAGE_NAMES` /
+    `BACKEND_STAGES` table; emptied `startup/{bank,stage_zero,
+    stage_one}.py` shims; deletion of unused `startup/engine.py`;
+    `startup.__main__` help-flag scan; `backend.checkengine` owner
+    verification of `SECURITY DEFINER` helpers via new
+    `database.verify_function_owner()`; `backend.checksuperuser`
+    tightened to `rolsuper` only; `backend.checkcreatedb` accepts
+    `conn=` in addition to `pool=`; `backend.checkdatabase`
+    restructured; SAVEPOINT-wrapped `checkclasses` /
+    `checkfunctions` / `checknotify` / `checknotifyd` /
+    `checkengine`; `access()` → `lib.issysop(args, **kwargs)` in 15
+    backend modules; `checknotify` DeprecationWarning.
+
+  - **Risky subset reverted** (see "Pass 3 reverted items" below):
+    the half-done `checkmemberflag→checkflag` and
+    `member_flag→flag` renames, `sysop→:sysop` substitution
+    variable (would fail under `cur.execute()`), schema-breaking
+    `create table` (was `if not exists`) and `pgrole.memberid`
+    type change, `bbsengine6.sql` `\i alert.sql` reintroduction
+    and the dependent `memberview` alert subqueries and
+    `js/topbar-alert.js` / `topbar-alertcount.tmpl` feature
+    (depends on `engine.alert` which is not in the schema),
+    `module.spec` 41-line "Cross-package calls via package="
+    section (contradicts the Pass 2 L restoration of the
+    `package=` kwarg), `echo_commands.spec` `{level.fail}`
+    removal, `_version.py` rollback, and 45 leftover editor
+    backup files (`*.py~`, `*.sql~`, `*.md~`).
+
+  Net: 1207 passed, 24 pre-existing failures (same set as on
+  `main` HEAD; one pre-existing `test_access_returns_false_without_conn`
+  now passes as well). 0 new test failures. `py_compile` clean.
+  `ruff check` shows only 1 pre-existing unused-import
+  (`asyncio` in `database.py:1958`, also present on HEAD).
 
 ---
 
