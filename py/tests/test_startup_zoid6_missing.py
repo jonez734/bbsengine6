@@ -182,7 +182,8 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         """When the target DB is missing, startup must invoke stage_zero
         (which is responsible for creating it), then stage_one, then
         bank. The function returns True on success."""
-        from bbsengine6.startup import main as startup_module
+        import importlib
+        startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness() as h:
             result = startup_module.main(h.args, conn=None, pool=None)
@@ -198,7 +199,8 @@ class TestStartupMainWhenZoid6DatabaseMissing:
     def test_existing_database_path_is_unchanged(self):
         """When the target DB already exists, startup still walks
         stage_zero -> stage_one -> bank and returns True."""
-        from bbsengine6.startup import main as startup_module
+        import importlib
+        startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness() as h:
             result = startup_module.main(h.args, conn=None, pool=None)
@@ -211,7 +213,8 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         target DB is missing, startup must NOT propagate the error.
         It must fall through to stage_zero so that checkdatabase can
         create the database."""
-        from bbsengine6.startup import main as startup_module
+        import importlib
+        startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness(
             getpool_raises=psycopg.OperationalError(
@@ -235,7 +238,8 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         pool are unavailable, startup must emit the legacy 'pool is
         None' error and return False. This is the legitimate
         'caller cannot connect to PostgreSQL at all' case."""
-        from bbsengine6.startup import main as startup_module
+        import importlib
+        startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness(
             getpool_raises=psycopg.OperationalError(
@@ -257,7 +261,8 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         """If stage_zero returns False, startup must short-circuit:
         stage_one and bank must NOT run. The function still returns
         False and the connection is rolled back."""
-        from bbsengine6.startup import main as startup_module
+        import importlib
+        startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness(
             runmodule_per_submodule={"stage_zero": False},
@@ -276,7 +281,8 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         """If stage_one returns False, startup must short-circuit:
         bank must NOT run. stage_zero still runs first (and
         succeeds); only bank is short-circuited."""
-        from bbsengine6.startup import main as startup_module
+        import importlib
+        startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness(
             runmodule_per_submodule={"stage_one": False},
@@ -302,7 +308,8 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         controlled value, we mimic stage_zero's loop: call
         bbsengine6.backend.checkcreatedb.main and propagate its result.
         """
-        from bbsengine6.startup import main as startup_module
+        import importlib
+        startup_module = importlib.import_module("bbsengine6.startup.main")
 
         sub_calls: List[str] = []
 
@@ -342,7 +349,8 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         """When checkcreatedb returns True, startup must proceed
         through stage_zero / stage_one / bank and return True. This
         pins the happy path of the new checkcreatedb sub-step."""
-        from bbsengine6.startup import main as startup_module
+        import importlib
+        startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with patch(
             "bbsengine6.backend.checkcreatedb.main",
@@ -503,7 +511,8 @@ class TestStartupMainZoid6MissingIntegration:
         test_existing_database_path_is_unchanged covers the same
         code path unconditionally.
         """
-        from bbsengine6.startup import main as startup_module
+        import importlib
+        startup_module = importlib.import_module("bbsengine6.startup.main")
 
         if not runner_has_createdb:
             pytest.skip(

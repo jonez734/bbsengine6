@@ -1,6 +1,7 @@
 import psycopg
 
 from bbsengine6 import io, database, util
+from bbsengine6.backend.lib import issysop
 
 from . import lib
 
@@ -10,7 +11,7 @@ def init(args, **kwargs) -> bool:
 
 
 def access(args, op, **kwargs) -> bool:
-    return lib.issysop(args, **kwargs)
+    return issysop(args, **kwargs)
 
 
 def buildargs(args, **kwargs):
