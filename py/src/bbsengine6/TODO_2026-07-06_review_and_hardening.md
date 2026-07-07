@@ -12,6 +12,15 @@ performed 2026-07-06. It supersedes
 - **Pass 2** — console + bank + module: review of `bbsengine6/console/`
   for robustness and completeness, with the rule that no DB writes
   happen until the user confirms. **COMPLETE.**
+- **Pass 3** — follow-up: SQL renames, schema adjustments, startup
+  dispatch rework, and the untracked topbar/alert feature. **IN-FLIGHT
+  (working-tree, not yet committed).** Bucket E (bottombar regressions)
+  has been partially fixed in this pass: `io/screen.py` restored to its
+  shim form, `ed/common/ui.py` re-imports `bbsengine6.bottombar` and
+  tracks its own fragments, and all in-tree callers of the screen shim
+  (`console/lib.py`, `backend/lib.py`, `ed/visual/render.py`,
+  `examples/ping_pong_demo.py`, `examples/notify_message_demo.py`,
+  `ed.spec`) now import `bbsengine6.bottombar` directly.
 
 ---
 
@@ -483,37 +492,55 @@ These are *regressions* relative to the design in
 `TODO-BOTTOMBAR.md`. They need to be either reverted or
 explicitly justified in Pass 4 before the next commit:
 
-- [ ] `py/src/bbsengine6/io/screen.py` (178 lines changed):
-  - Removes the `_warn_shim_deprecated(...)` helper and the
-    `DeprecationWarning` it emitted.
-  - Removes the `from .. import bottombar as _bottombar_mod`
+- [x] `py/src/bbsengine6/io/screen.py` (178 lines changed):
+  - ~~Removes the `_warn_shim_deprecated(...)` helper and the
+    `DeprecationWarning` it emitted.~~
+  - ~~Removes the `from .. import bottombar as _bottombar_mod`
     alias; `_bottombar_fragments` is now a plain `list` again
     (was a `_LockedList` owned by the default
-    `FragmentRegistry`).
-  - `register_bottombar_fragment` / `unregister_bottombar_fragment`
-    are reimplemented against the plain list and a fresh
+    `FragmentRegistry`).~~
+  - ~~`register_bottombar_fragment` /
+    `unregister_bottombar_fragment` are reimplemented against
+    the plain list and a fresh
     `_bottombar_fragments_lock = threading.Lock()` — they no
-    longer delegate to `bbsengine6.bottombar`.
-  - **This undoes the back-compat shim work that
-    `TODO-BOTTOMBAR.md` describes as complete.** The tests
-    in `tests/test_bottombar.py` exercise
-    `bbsengine6.bottombar` directly, but anything that
-    imports through `bbsengine6.io.screen.register_bottombar_fragment`
-    (e.g. `casino.auth`, `casino.lib`) will now hit the
-    plain-list reimplementation, not the registry.
-- [ ] `py/src/bbsengine6/ed/common/ui.py` (14 lines changed):
-  - Removes the `_editor_fragments: list` tracking.
-  - `unregister_bottombar()` is now
+    longer delegate to `bbsengine6.bottombar`.~~
+  - **Fixed in this pass** by restoring the file to its
+    `f3ee7fe` shim form: `register/unregister_bottombar_fragment`
+    and `setbottombar` again delegate to
+    `bbsengine6.bottombar`. New code should import
+    `bbsengine6.bottombar` directly; the shim remains for
+    back-compat callers.
+- [x] `py/src/bbsengine6/ed/common/ui.py` (14 lines changed):
+  - ~~Removes the `_editor_fragments: list` tracking.~~
+  - ~~`unregister_bottombar()` is now
     `screen.clear_bottombar_fragments()` (was an
-    `unregister` per fragment). **`clear_bottombar_fragments`
-    is exactly the call that the new bottombar design is
-    supposed to avoid** — it clobbers every package's
-    fragments (casino, empyre, etc.). This is a regression
-    relative to `TODO-BOTTOMBAR.md` Phase 3.
-- [ ] `py/src/demo_bottombar_stack.py` — the clear step
+    `unregister` per fragment).~~
+  - **Fixed in this pass.** The module now imports
+    `bbsengine6.bottombar` directly and unregisters only
+    the fragments it registered (per-fragment tracking
+    restored). `screen.clear_bottombar_fragments` is no
+    longer called from this path.
+- [x] `py/src/demo_bottombar_stack.py` — the clear step
   uses `screen._bottombar_fragments.clear()` directly
   (bypassing the registry). Acceptable as a test-only
   scratch but the demo should not be teaching the wrong API.
+  - **Fixed in this pass.** The demo now uses
+    `bottombar.register_bottombar_fragment` /
+    `unregister_bottombar_fragment` /
+    `clear_bottombar_fragments` directly. The `screen`
+    import is retained for `screen.init` only.
+- [x] In-tree callers using the screen shim — all migrated
+  to import `bbsengine6.bottombar` directly:
+  - [x] `py/src/bbsengine6/console/lib.py::setbottombar`
+  - [x] `py/src/bbsengine6/backend/lib.py::setbottombar`
+  - [x] `py/src/bbsengine6/ed/visual/render.py::render`
+  - [x] `py/src/bbsengine6/examples/ping_pong_demo.py`
+        (two `screen.setbottombar` call sites)
+  - [x] `py/src/bbsengine6/examples/notify_message_demo.py`
+        (one `screen.setbottombar` call site)
+  - [x] `py/src/bbsengine6/ed.spec` (doc reference:
+    `screen.register_bottombar_fragment()` →
+    `bbsengine6.bottombar.register_bottombar_fragment()`)
 - [ ] `py/src/bbsengine6/io/specs/echo_commands.spec` —
   removes the `{level.fail}` variable and the
   `echo("message", level="fail")` example. The `level.fail`

@@ -16,6 +16,7 @@ sys.path.insert(0, "/home/opencode/data/work/bbsengine6/py/src")
 
 from bbsengine6.io.echo import echo
 from bbsengine6 import io
+from bbsengine6 import bottombar
 from bbsengine6.io import screen, terminal
 
 
@@ -54,15 +55,16 @@ def run(args=None):
     io.echo("Press Ctrl+C to exit.")
     io.echo("")
 
-    screen.register_bottombar_fragment(static_item)
-    screen.register_bottombar_fragment("just a string")
-    screen.register_bottombar_fragment(dynamic_item)
-    screen.register_bottombar_fragment(lambda **kw: f"lambda: {1 + 1}")
+    bottombar.register_bottombar_fragment(static_item)
+    bottombar.register_bottombar_fragment("just a string")
+    bottombar.register_bottombar_fragment(dynamic_item)
+    bottombar.register_bottombar_fragment(lambda **kw: f"lambda: {1 + 1}")
 
     try:
         iteration = 0
         while True:
-            screen.setbottombar(
+            bottombar.setbottombar(
+                None,
                 f"demo iteration {iteration}",
                 player="TestPlayer",
             )
@@ -73,18 +75,18 @@ def run(args=None):
             if iteration == 3:
                 io.echo("")
                 io.echo("Removing dynamic_item from fragments...", level="notice")
-                screen.unregister_bottombar_fragment(dynamic_item)
+                bottombar.unregister_bottombar_fragment(dynamic_item)
 
             if iteration == 6:
                 io.echo("")
                 io.echo("Adding another static string...", level="notice")
-                screen.register_bottombar_fragment("added at runtime")
+                bottombar.register_bottombar_fragment("added at runtime")
 
             if iteration == 8:
                 io.echo("")
                 io.echo("Clearing entire list...", level="notice")
-                screen.clear_bottombar_fragments()
-                screen.setbottombar("fragments cleared", "no more items")
+                bottombar.clear_bottombar_fragments()
+                bottombar.setbottombar(None, "fragments cleared", player="TestPlayer")
                 break
 
     except KeyboardInterrupt:
@@ -100,11 +102,11 @@ def run(args=None):
 
     io.echo("")
     io.echo("Fragment contents at exit:")
-    for i, item in enumerate(screen._bottombar_fragments):
+    for i, item in enumerate(bottombar.default_registry()):
         kind = "callable" if callable(item) else "str"
         io.echo(f"  [{i}] {kind}: {item if isinstance(item, str) else item.__name__}")
 
-    screen._bottombar_fragments.clear()
+    bottombar.clear_bottombar_fragments()
 
     io.echo("")
     io.echo("Done!", level="success")

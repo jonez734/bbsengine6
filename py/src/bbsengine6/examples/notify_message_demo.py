@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Callable, Optional
 
 from bbsengine6 import database, member, group
+from bbsengine6 import bottombar
 from bbsengine6.io.echo import echo, echo_traceback
 from bbsengine6.io.inputstring import inputstring
 from bbsengine6.io import screen, terminal
@@ -527,7 +528,7 @@ def main() -> None:
     try:
         unread_count = demo_queue_size(args.user)
         if unread_count > 0:
-            screen.setbottombar(f"F2: Messages ({unread_count})")
+            bottombar.setbottombar(None, f"F2: Messages ({unread_count})")
     except Exception:
         pass
 

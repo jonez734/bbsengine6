@@ -64,14 +64,20 @@ def runmodule(args, submodule, *, package="bbsengine6.console", **kwargs):
 
 # @since 20230523 copied from teos
 def setbottombar(args, left, **kwargs):
-    from bbsengine6 import screen
+    from bbsengine6 import bottombar
 
-    def right():
-        help = " | F1: Help" if "help" in kwargs and kwargs["help"] is True else ""
-        debug = " | debug" if args.debug is True else ""
-        return f"con{debug}{help}"
+    def _console_right_fragment(**_kw):
+        help_suffix = (
+            " | F1: Help" if "help" in kwargs and kwargs["help"] is True else ""
+        )
+        debug_suffix = " | debug" if args is not None and args.debug is True else ""
+        return f"con{debug_suffix}{help_suffix}"
 
-    screen.setbottombar(left, right, **kwargs)
+    bottombar.register_bottombar_fragment(_console_right_fragment)
+    try:
+        bottombar.setbottombar(args, left, **kwargs)
+    finally:
+        bottombar.unregister_bottombar_fragment(_console_right_fragment)
     return
 
 

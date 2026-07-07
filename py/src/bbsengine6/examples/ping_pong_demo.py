@@ -23,6 +23,7 @@ try:
     from bbsengine6.io.echo import echo
     from bbsengine6.io.getch import getch_str
     from bbsengine6.io import screen
+    from bbsengine6 import bottombar
     from bbsengine6.member import _threadlocal
     from bbsengine6.notify import Notification, NotificationUrgency
 except ImportError as e:
@@ -113,7 +114,7 @@ def display_menu(
 
         # Set bottom bar with notification status
         try:
-            screen.setbottombar("", screen.get_notification_status)
+            bottombar.setbottombar(None, "", player=None)
         except Exception:
             pass  # Silently continue if bottom bar fails
 
@@ -154,7 +155,7 @@ def display_menu(
 
         # Re-set bottom bar after displaying menu content
         try:
-            screen.setbottombar("", screen.get_notification_status)
+            bottombar.setbottombar(None, "", player=None)
         except Exception:
             pass  # Silently continue if bottom bar fails
 

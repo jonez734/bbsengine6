@@ -3,7 +3,7 @@
 
 
 from bbsengine6 import io
-from bbsengine6.io import screen
+from bbsengine6 import bottombar
 
 from .state import EditorState
 
@@ -11,11 +11,9 @@ from .state import EditorState
 _screen_initialized = False
 
 
-# Per-editor fragment tracking. The legacy `unregister_bottombar()` used
-# to call `screen.clear_bottombar_fragments()` which clobbered every
-# package's bottombar fragments (casino, empyre, etc.). We now keep a
-# list of the fragments this module registered and unregister only
-# those.
+# Per-editor fragment tracking. unregister_bottombar() unregisters only
+# the fragments this module registered so casino / empyre / etc. bottombar
+# state is not clobbered on editor exit.
 _editor_fragments: list = []
 
 
@@ -99,12 +97,12 @@ def register_bottombar(state: EditorState, **kwargs) -> None:
     def fragment(**kwargs) -> str:
         return editor_status_fragment(state=state)
 
-    screen.register_bottombar_fragment(fragment)
+    bottombar.register_bottombar_fragment(fragment)
     _editor_fragments.append(fragment)
 
 
 def unregister_bottombar() -> None:
     global _editor_fragments
     for fn in _editor_fragments:
-        screen.unregister_bottombar_fragment(fn)
+        bottombar.unregister_bottombar_fragment(fn)
     _editor_fragments = []

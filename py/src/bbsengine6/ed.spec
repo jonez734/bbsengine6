@@ -186,7 +186,7 @@ def handler(state: EditorState) -> EditorState:
 
 ### Bottombar Fragment
 - Callable returning: `f"{filepath or '(new file)'}{' * ' if modified else ''} | F1:Help"`
-- Registered via screen.register_bottombar_fragment()
+- Registered via bbsengine6.bottombar.register_bottombar_fragment()
 - Notification status auto-prepended via get_notification_status()
 
 ## Rendering (visual/render.py)

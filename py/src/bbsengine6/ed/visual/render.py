@@ -2,7 +2,7 @@
 # Visual editor rendering
 
 from bbsengine6 import io
-from bbsengine6.io import screen
+from bbsengine6 import bottombar
 
 from ..common import EditorState, Justify
 
@@ -61,4 +61,4 @@ def render(state: EditorState, **kwargs) -> None:
         flush=True,
     )
 
-    screen.setbottombar("editor", state=state)
+    bottombar.setbottombar(kwargs.get("args"), "editor", state=state)
