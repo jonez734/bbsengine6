@@ -1,4 +1,4 @@
-from bbsengine6 import io, database, module, bottombar, util
+from bbsengine6 import io, database, module, screen, util
 
 
 def buildargs(args, **kwargs):
@@ -12,18 +12,12 @@ def runmodule(args, submodule, **kwargs):
 
 # @since 20230523 copied from teos
 def setbottombar(args, left, **kwargs):
-    def _backend_right_fragment(**_kw):
-        help_suffix = (
-            " | F1: Help" if "help" in kwargs and kwargs["help"] is True else ""
-        )
-        debug_suffix = " | debug" if args is not None and args.debug is True else ""
-        return f"con{debug_suffix}{help_suffix}"
+    def right():
+        help = " | F1: Help" if "help" in kwargs and kwargs["help"] is True else ""
+        debug = " | debug" if args.debug is True else ""
+        return f"con{debug}{help}"
 
-    bottombar.register_bottombar_fragment(_backend_right_fragment)
-    try:
-        bottombar.setbottombar(args, left, **kwargs)
-    finally:
-        bottombar.unregister_bottombar_fragment(_backend_right_fragment)
+    screen.setbottombar(left, right, **kwargs)
     return
 
 
@@ -160,6 +154,55 @@ def retry_on_transient(
 def _sanitize_sp(name: str, prefix: str = "") -> str:
     base = "sp_" + prefix + "".join(ch if ch.isalnum() else "_" for ch in name)
     return base[:60]
+
+
+# @since 20260707
+def _ensure_autocommit_off(conn) -> None:
+    """Defensively put ``conn`` into autocommit=False if it is safe to do so.
+
+    The four savepoint-wrapped check* modules (checkclasses, checkfunctions,
+    checknotify, checknotifyd) start their ``_work()`` with an
+    ``autocommit = False`` assignment so that a caller-supplied conn in
+    autocommit=True mode (e.g. from a wrapper that flipped it) still
+    participates in the outer transaction. ``database.connect()`` already
+    sets ``autocommit = False`` for pool-supplied conns, so the assignment
+    is normally a no-op.
+
+    psycopg forbids changing ``autocommit`` while the connection is in
+    ``INTRANS`` (or ``INERROR``). The conn handed to these modules is the
+    long-lived outer conn from ``stage_zero`` / ``stage_one``, which has
+    already run DDL/DQL through earlier modules in the stage loop
+    (``checkcreatedb``, ``checkengine``, ...). Those modules do not all
+    commit or rollback at the end, so by the time ``_work()`` runs the
+    conn is typically in ``INTRANS``. An unconditional
+    ``conn.autocommit = False`` then raises
+    ``psycopg.ProgrammingError: can't change 'autocommit' now: connection
+    in transaction status INTRANS`` and aborts the whole stage.
+
+    This helper only flips autocommit when:
+      * the conn is currently in autocommit=True mode (the only case the
+        defensive assignment exists to handle), AND
+      * the conn is ``IDLE`` (no transaction in progress), so psycopg
+        will accept the change.
+
+    In all other cases it is a no-op. The savepoint logic that follows
+    still works because psycopg treats autocommit=False as a transaction
+    boundary: the next statement opens one, and the explicit
+    ``conn.commit()`` / ``conn.rollback()`` at the end of ``_work()``
+    closes it.
+    """
+    if conn.autocommit is True:
+        try:
+            status = conn.pgconn.transaction_status
+        except Exception:
+            return
+        try:
+            import psycopg.pq
+            idle = psycopg.pq.TransactionStatus.IDLE
+        except Exception:
+            return
+        if status == idle:
+            conn.autocommit = False
 
 
 # @since 20260706

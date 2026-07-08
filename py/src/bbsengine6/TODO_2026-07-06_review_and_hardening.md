@@ -21,7 +21,7 @@ performed 2026-07-06. It supersedes
     follow-ups that the new TODO claims were committed but were in
     fact uncommitted): `database.py` hardening (narrow
     `psycopg.Error`, normalize `get_role_privs` to `dict | None`,
-    `_ALLOWED_PACKAGES` allowlist on `importsql`); `startup.main`
+    `_ALLOWED_PACKAGES` allowlist on `importsql` — **reverted 2026-07-07, see "Allowlist reversal" appendix**); `startup.main`
     `issysop` auth + tightened `_runstage` ("only literal True
     succeeds"); `startup.lib.BACKEND_STAGE_NAMES` /
     `BACKEND_STAGES` table; emptied `startup/{bank,stage_zero,
@@ -451,7 +451,11 @@ The Python-side rename in `py/src/bbsengine6/member.py` and
     kwarg and a `_ALLOWED_PACKAGES` allowlist for the
     `package=` argument. The allowlist prevents a caller
     from reading arbitrary `.sql` resources via
-    `util.load_sql(..., package=...)`.
+    `util.load_sql(..., package=...)`. **The allowlist
+    was subsequently removed on 2026-07-07**; see the
+    "Allowlist reversal" appendix for rationale and the
+    security TODOs that moved into the function's
+    docstring.
 
 ### Bucket C — startup dispatch rework
 
@@ -629,8 +633,149 @@ explicitly justified in Pass 4 before the next commit:
 
 - `py/src/bbsengine6/io/screen.py`'s `_impl_*` private
   functions (referenced by `py/src/bbsengine6/io/sink.py`
-  in Pass 4) are unchanged on disk but are required by
-  the bottombar design.
+  in Pass 4) are unchanged on disk but are required by the
+  bottombar design.
 - The Casino / empyre / bed per-package bottombar
   migrations are tracked in `TODO-BOTTOMBAR.md` and are
   *committed* in `casino/`.
+
+---
+
+## Pass 4 — autocommit-INTRANS fix in savepoint-wrapped check* modules (2026-07-07)
+
+### Status: COMPLETE
+
+### Bug
+
+`bbsengine6.startup` aborted during `stage_zero` with:
+
+```
+backend.stage_zero.100: error: can't change 'autocommit' now:
+  connection in transaction status INTRANS
+```
+
+The traceback was caught by the `try/except Exception` in
+`backend.stage_zero.main` (line 65), `failcount` was incremented,
+and the whole stage reported failure.
+
+### Root cause
+
+Pass 1 added a defensive `conn.autocommit = False` at the top of each
+savepoint-wrapped `_work()` (Pass 1 §2, last bullet). The defensive
+line was meant to handle a caller that handed the module a conn in
+autocommit=True mode.
+
+The conn handed to these modules is the long-lived outer conn opened
+in `stage_zero.main` / `stage_one.main`. Before `checkfunctions`
+runs, the same conn has been used by earlier modules in the stage
+loop (`checkcreatedb`, `checkdatabase`, `checkextensions`,
+`checkroles`, `checkengine` in stage 0; `checkextensions`,
+`checkengine` in stage 1). Those modules do not all `commit()` /
+`rollback()` at the end of their work on a caller-supplied conn, so
+by the time `checkfunctions._work(conn)` runs, the conn is in
+`INTRANS`. psycopg disallows changing `autocommit` while a
+transaction is in progress, so `conn.autocommit = False` raises
+`psycopg.ProgrammingError: can't change 'autocommit' now: connection
+in transaction status INTRANS` and the whole stage aborts.
+
+The same pattern affected three sibling modules with the same
+unconditional `conn.autocommit = False`:
+
+- `backend.checkclasses`
+- `backend.checknotify`
+- `backend.checknotifyd`
+
+### Fix
+
+Added a single helper to `bbsengine6.backend.lib`:
+
+```python
+def _ensure_autocommit_off(conn) -> None:
+    if conn.autocommit is True:
+        # only flip when psycopg will accept the change
+        if conn.pgconn.transaction_status == psycopg.pq.TransactionStatus.IDLE:
+            conn.autocommit = False
+```
+
+The helper is a no-op when autocommit is already False (the normal
+case after `database.connect()`) or when the conn is in any state
+other than IDLE. The savepoint logic that follows still works in
+autocommit=False mode.
+
+All four savepoint-wrapped `_work()` entry points now call
+`lib._ensure_autocommit_off(conn)` instead of the unconditional
+assignment.
+
+### Files modified (Pass 4)
+
+1. `py/src/bbsengine6/backend/lib.py` — added
+   `_ensure_autocommit_off(conn)` with full contract docstring.
+2. `py/src/bbsengine6/backend/checkfunctions.py` — use the helper.
+3. `py/src/bbsengine6/backend/checkclasses.py` — use the helper.
+4. `py/src/bbsengine6/backend/checknotify.py` — use the helper.
+5. `py/src/bbsengine6/backend/checknotifyd.py` — use the helper.
+6. `py/tests/test_checkfunctions.py` (new) — 12 tests covering:
+   - the helper itself (7 cases: autocommit × transaction_status
+     combinations + a status-access error),
+   - parametrized call-site tests for all four modules, confirming
+     that an INTRANS conn no longer aborts the stage,
+   - an integration test for `checkfunctions.main(args, conn=conn)`
+     with `stage=0` and `stage=1` on an INTRANS conn.
+
+### Verification
+
+- `python3 -m py_compile` clean on all six files.
+- `pytest tests/test_checkfunctions.py` — 12/12 passed.
+- `ruff check bbsengine6/backend/` clean.
+- Manual repro confirmed: with the original
+  `conn.autocommit = False`, the helper's INTRANS path raises
+  `psycopg.ProgrammingError`. With the helper, the same path is a
+  no-op.
+
+### Out of scope for Pass 4
+
+- The broader problem that `checkengine.main` / `checkroles.main` /
+  `checkextensions.main` etc. do not `commit()` / `rollback()` their
+  caller-supplied conn at the end of each module is a separate
+  Pass 5 cleanup. The current fix is local to the reported failure
+  and does not rely on those modules being transactional.
+- `database.connect()`'s own `conn.autocommit = False` line at
+  `database.py:486` is fine for the pool path (a fresh pooled conn
+  is always IDLE on first use); we did not need to touch it.
+
+## Allowlist reversal (2026-07-07)
+
+The `_ALLOWED_PACKAGES` allowlist added to `database.importsql`
+during Pass 3 was removed on 2026-07-07.
+
+Rationale: the hardcoded set required editing `bbsengine6` for
+every new project that wanted to ship its own `sql/` directory
+(e.g. `mhc`, per `mhc/SPEC.md:748,781,789`, which calls
+`database.importsql(..., package="mhc.sql")`). The structural
+path-traversal guard in `util.load_sql` is sufficient for the
+current trust model — `package` must name a real installed
+Python package, so strings like `"../../etc"` fail to resolve
+before any `.sql` is read.
+
+What changed in `py/src/bbsengine6/database.py`:
+- `importsql()` now carries a `"""docstring"""` describing the
+  trust model and what the code allows today (no allowlist;
+  relies on `util.load_sql` resolution, trusted callers, and
+  the low-privilege connecting role).
+- The two security TODOs that need revisiting if the trust
+  model changes live as inline comments at the top of
+  `importsql()`: (a) re-add a configurable allowlist if
+  `importsql` becomes reachable from untrusted input or a
+  plugin model is introduced, (b) add a runtime role check
+  if the connecting role is ever widened to superuser or
+  `BYPASSRLS`.
+
+Call sites that now work without further `bbsengine6` changes:
+- `casino/src/casino/startup.py` — `package="bbsengine6.sql"`,
+  `package="casino.sql"`.
+- `empyre/src/empyre/startup.py` — `package="empyre.sql"`.
+- `mistermcfeely/src/postoffice/startup.py` —
+  `package="postoffice"`.
+- `mhc/SPEC.md` (unblocked) — `package="mhc.sql"`.
+- All `bbsengine6/backend/check*` and `startup.*` call sites
+  that pass no `package=` (default `None` → `bbsengine6/sql/`).

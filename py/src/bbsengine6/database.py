@@ -1729,32 +1729,74 @@ def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
 def importsql(
     args: Any, filename: str, *, rollback: bool = True, **kwargs: Any
 ) -> bool:
-    # SECURITY: validate `package` against an allowlist. `package` is
-    # forwarded to util.load_sql, which uses it to resolve the on-disk
-    # SQL directory. An attacker (or buggy caller) that can pass
-    # `package="../../etc"` or similar would be able to read arbitrary
-    # .sql resources and execute them as the connecting DB role.
-    package = kwargs.get("package", None)
-    _ALLOWED_PACKAGES = {
-        None,
-        "bbsengine6",
-        "bbsengine6.backend",
-        "bbsengine6.startup",
-        "bbsengine6.engine",
-    }
-    if package not in _ALLOWED_PACKAGES:
-        io.echo(
-            f"bbsengine6.database.importsql.050: refusing to load SQL from "
-            f"package={package!r} (not in allowlist)",
-            level="error",
-        )
-        return False
+    """Load and execute a SQL resource from an installed package.
 
+    Reads the named ``.sql`` file from a package's on-disk ``sql/``
+    directory via :func:`bbsengine6.util.load_sql` and executes it
+    against the supplied (or pooled) connection. The ``package=``
+    keyword argument selects which installed Python package to read
+    from; if omitted, the SQL is read from ``bbsengine6/sql/``.
+
+    Both ``<pkg>`` and ``<pkg>.sql`` are accepted by ``util.load_sql``
+    as anchors for the same on-disk ``sql/`` directory, so callers
+    in ``casino`` / ``empyre`` / ``postoffice`` / ``bbsengine6``
+    itself may pass either form.
+
+    Args:
+        args: Application args (for debug logging and pool resolution).
+        filename: Name of the ``.sql`` resource to load.
+        rollback: If ``True`` (default), roll back the current
+            transaction when execution fails. Set to ``False`` for
+            callers that manage their own transaction boundary.
+        **kwargs: Recognized keys are ``package`` (installed Python
+            package name; defaults to ``None`` which resolves to
+            ``bbsengine6``), plus ``conn`` and ``pool`` for the
+            connection source.
+
+    Returns:
+        ``True`` on successful execution, ``False`` on any caught
+        failure (including ``psycopg.errors.Error`` from the server
+        and resource-resolution errors from ``util.load_sql``).
+
+    Security:
+        ``importsql`` does **not** restrict which ``package`` may be
+        loaded. Any installed Python package whose ``sql/<file>``
+        resolves via ``importlib.resources`` / ``module.file()`` can
+        be read and executed as the connecting DB role. There is no
+        allowlist. The caller fully controls the package name.
+
+        What the code allows today, and why this is currently safe:
+
+        1. ``util.load_sql`` resolves ``package`` against real
+           installed Python packages only, so path-traversal
+           strings like ``package="../../etc"`` fail to resolve
+           and ``load_sql`` raises before any SQL is read. That is
+           the only structural guard.
+        2. Callers of ``importsql`` are trusted application code:
+           the ``bbsengine6/backend/check*`` modules, the various
+           ``startup.*`` scripts across projects, and the
+           ``console``. None of these accept ``package=`` from
+           untrusted request input.
+        3. The connecting role is expected to be the low-privilege
+           BBS database role, not a superuser. The blast radius of
+           a malicious ``.sql`` is therefore bounded by that role's
+           grants.
+    """
+    # SECURITY TODO:
+    #   [ ] Reconsider a configurable allowlist (env var or
+    #       bbsengine6.conf) if importsql is ever reachable from
+    #       untrusted input, or if a plugin model is introduced
+    #       that lets third-party code register new SQL packages
+    #       at runtime.
+    #   [ ] If the connecting role is ever widened (e.g. a
+    #       superuser or BYPASSRLS role), add a runtime role
+    #       check here before executing arbitrary .sql.
     def _work(conn):
         #    io.echo(f"bbsengine.database.importsql.140: {conn=}", level="debug")
         #    fullpath = util.get_safe_path(args, *components, **kwargs)
         #    io.echo(f"bbsengine.database.importsql.120: {fullpath=}", level="debug")
 
+        package = kwargs.get("package", None)
         try:
             sql_script = util.load_sql(args, filename, package=package)
             #      with open(fullpath, 'r') as file:

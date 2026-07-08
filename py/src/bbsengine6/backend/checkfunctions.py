@@ -27,7 +27,7 @@ def main(args, **kwargs):
     conn = kwargs.get("conn", None)
 
     def _work(conn):
-        conn.autocommit = False
+        lib._ensure_autocommit_off(conn)
         if stage == 0:
             funcs = (
                 "public.get_role_privs",

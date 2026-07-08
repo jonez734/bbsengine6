@@ -45,7 +45,7 @@ classlist = (
 
 def main(args, **kwargs) -> bool:
     def _work(conn):
-        conn.autocommit = False
+        lib._ensure_autocommit_off(conn)
         failcount = 0
 
         for c, sql in enumlist:
@@ -124,20 +124,11 @@ def main(args, **kwargs) -> bool:
     return _work(conn)
 
 
-_WARNED = False
-
-
-def _warn_deprecated() -> None:
-    global _WARNED
-    if _WARNED:
-        return
-    _WARNED = True
+if not getattr(checknotify, "_warned", False):
     warnings.warn(
         "bbsengine6.backend.checknotify is deprecated; "
         "use bbsengine6.message_delivery.* instead.",
         DeprecationWarning,
         stacklevel=2,
     )
-
-
-_warn_deprecated()
+    checknotify._warned = True

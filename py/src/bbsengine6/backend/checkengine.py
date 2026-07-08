@@ -1,3 +1,5 @@
+import getpass
+
 from bbsengine6 import io, database
 
 from bbsengine6.backend import lib
@@ -50,7 +52,9 @@ def main(args, **kwargs):
     # (args.databaseuser). If a hostile or unexpected role owns
     # the function, the check fails loudly rather than silently
     # granting privileges through it.
-    install_role = getattr(args, "databaseuser", None) or "postgres"
+    install_role = (
+        getattr(args, "databaseuser", None) or getpass.getuser() or "postgres"
+    )
     acceptable_owners = tuple({install_role, "postgres"})
     for secdef_fn in (
         "public.manage_schema_priv",

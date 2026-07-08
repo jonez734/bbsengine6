@@ -31,7 +31,7 @@ classlist = (
 
 def main(args, **kwargs) -> bool:
     def _work(conn):
-        conn.autocommit = False
+        lib._ensure_autocommit_off(conn)
         failcount = 0
 
         for c, sql in classlist:

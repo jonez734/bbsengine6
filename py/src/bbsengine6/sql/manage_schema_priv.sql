@@ -1,6 +1,10 @@
+-- Run as a superuser (e.g. jam). The role switch only affects DDL,
+-- and only for the duration of the connection.
+SET ROLE postgres;
+
 CREATE OR REPLACE FUNCTION manage_schema_priv(
-    action TEXT,           -- 'grant' or 'revoke'
-    priv TEXT,             -- e.g., 'USAGE', 'CREATE'
+    action TEXT,
+    priv TEXT,
     target_schema TEXT,
     target_role TEXT
 )
@@ -19,6 +23,6 @@ BEGIN
 END;
 $$;
 
+RESET ROLE;
+
 grant execute on function public.manage_schema_priv to sysop;
-
-
