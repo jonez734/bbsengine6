@@ -443,15 +443,13 @@ class TestMonikerStartsWithAtSign:
             with pytest.raises(ValueError, match="cannot start with '@'"):
                 member.moniker_exists(None, bad_moniker, conn=None)
 
-    def test_at_sign_in_middle_is_allowed(self):
+    def test_at_sign_in_middle_is_allowed(self, pool):
         """Test that @ in the middle of a moniker is allowed (format-wise)."""
         # "@" is ASCII 0x40, which is in the printable range
-        # So "alice@domain" should pass validation (but fail lookup)
-        try:
-            member.moniker_exists(None, "alice@domain", conn=None)
-        except ValueError as e:
-            # Should not be about @ prefix
-            assert "cannot start with '@'" not in str(e)
+        # So "alice@domain" should pass validation and the DB lookup
+        # should return a real bool.
+        result = member.moniker_exists(None, "alice@domain", pool=pool)
+        assert isinstance(result, bool)
 
     def test_resolve_recipient_rejects_at_prefix(self):
         """Test that resolve_recipient handles @ prefix rejection."""
@@ -488,18 +486,15 @@ class TestMonikerNoSpaces:
             with pytest.raises(ValueError, match="cannot contain spaces"):
                 member.moniker_exists(None, bad_moniker, conn=None)
 
-    def test_moniker_without_spaces_allowed(self):
+    def test_moniker_without_spaces_allowed(self, pool):
         """Test that monikers without spaces pass space validation."""
-        # These should not raise ValueError about spaces
-        # (may fail on lookup but not on format validation)
+        # These should not raise ValueError about spaces, and the DB
+        # lookup should return a real bool.
         valid_monikers = ["alice", "bob123", "alice_bob", "alice-bob", "alice.bob"]
 
         for good_moniker in valid_monikers:
-            try:
-                member.moniker_exists(None, good_moniker, conn=None)
-            except ValueError as e:
-                # Should not be about spaces
-                assert "cannot contain spaces" not in str(e)
+            result = member.moniker_exists(None, good_moniker, pool=pool)
+            assert isinstance(result, bool)
 
     def test_resolve_recipient_rejects_spaces(self):
         """Test that resolve_recipient handles space rejection."""

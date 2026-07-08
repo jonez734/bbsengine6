@@ -34,7 +34,7 @@ class TestMonikerExistsFunction:
     """Tests for the member.moniker_exists() validation function."""
 
     def test_moniker_exists_valid_member_returns_true(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, pool, schema_init, create_test_users
     ):
         """Test that moniker_exists returns True for existing member."""
         # Setup: create_test_users fixture creates 'alice' and 'bob'
@@ -42,31 +42,31 @@ class TestMonikerExistsFunction:
         result = member.moniker_exists(
             None,  # args not needed with direct connection
             "alice",
-            conn=db_connection,
+            pool=pool,
         )
 
         # Assert
         assert result is True
 
     def test_moniker_exists_invalid_member_returns_false(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, pool, schema_init, create_test_users
     ):
         """Test that moniker_exists returns False for non-existent member."""
         # Act
-        result = member.moniker_exists(None, "baduser", conn=db_connection)
+        result = member.moniker_exists(None, "baduser", pool=pool)
 
         # Assert
         assert result is False
 
     def test_moniker_exists_case_insensitive(
-        self, db_connection, schema_init, create_test_users
+        self, db_connection, pool, schema_init, create_test_users
     ):
         """Test that moniker_exists is case-insensitive (citext column)."""
         # Test variations of 'alice'
         test_cases = ["alice", "ALICE", "Alice", "aLiCe"]
 
         for moniker in test_cases:
-            result = member.moniker_exists(None, moniker, conn=db_connection)
+            result = member.moniker_exists(None, moniker, pool=pool)
             assert result is True, f"Should find member with moniker '{moniker}'"
 
     def test_moniker_exists_empty_string_raises_valueerror(self):
@@ -85,15 +85,14 @@ class TestMonikerExistsFunction:
         with pytest.raises(ValueError, match="exceeds 50 characters"):
             member.moniker_exists(None, long_moniker, conn=None)
 
-    def test_moniker_exists_exactly_50_chars_allowed(self):
+    def test_moniker_exists_exactly_50_chars_allowed(self, pool):
         """Test that exactly 50 character moniker is allowed."""
-        # This will fail on database lookup (member doesn't exist)
-        # but should NOT fail on validation
+        # Validation passes (50 chars exactly, not > 50), so the DB
+        # lookup runs and returns False for a non-existent moniker.
         moniker_50_chars = "a" * 50
-        result = member.moniker_exists(None, moniker_50_chars, conn=None)
-        # Result will be None (connection error) but validation should pass
-        # We're testing that the 50-char limit is inclusive
-        assert isinstance(result, (bool, type(None)))
+        result = member.moniker_exists(None, moniker_50_chars, pool=pool)
+        # We're testing that the 50-char limit is inclusive.
+        assert isinstance(result, bool)
 
     def test_moniker_exists_unicode_character_raises_valueerror(self):
         """Test that unicode characters are rejected."""
@@ -121,7 +120,7 @@ class TestMonikerExistsFunction:
             member.moniker_exists(None, "alice\tbob", conn=None)
 
     def test_moniker_exists_special_ascii_chars_allowed(
-        self, db_connection, schema_init, create_test_users
+        self, pool, schema_init, create_test_users
     ):
         """Test that special ASCII characters (0x20-0x7E) are allowed."""
         # Create a member with special chars
@@ -135,12 +134,11 @@ class TestMonikerExistsFunction:
             "alice#123",  # Hash
         ]
 
-        # These should not raise errors (validation should pass)
-        # They might not exist in the database, but should pass validation
+        # These should not raise errors (validation should pass) and
+        # the DB lookup should return a real bool.
         for moniker in test_monikers:
-            # Should not raise ValueError during validation
-            result = member.moniker_exists(None, moniker, conn=db_connection)
-            assert isinstance(result, (bool, type(None)))
+            result = member.moniker_exists(None, moniker, pool=pool)
+            assert isinstance(result, bool)
 
     def test_moniker_exists_boundary_ascii_space_raises_valueerror(self):
         """Test that space (0x20, minimum printable ASCII) is rejected in moniker."""
@@ -148,10 +146,10 @@ class TestMonikerExistsFunction:
         with pytest.raises(ValueError, match="cannot contain spaces"):
             member.moniker_exists(None, " ", conn=None)
 
-    def test_moniker_exists_boundary_ascii_tilde_allowed(self):
+    def test_moniker_exists_boundary_ascii_tilde_allowed(self, pool):
         """Test that tilde (0x7E, maximum printable ASCII) is allowed."""
-        result = member.moniker_exists(None, "user~", conn=None)
-        assert isinstance(result, (bool, type(None)))
+        result = member.moniker_exists(None, "user~", pool=pool)
+        assert isinstance(result, bool)
 
     def test_moniker_exists_below_minimum_ascii_raises_valueerror(self):
         """Test that character below 0x20 (space) is rejected."""
