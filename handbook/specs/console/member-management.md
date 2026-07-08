@@ -160,8 +160,12 @@ symmetry but is not used to write here.
 - `NOCALUMNI` — NOC alumni
 
 **Returns:** the (possibly empty) flags dict after the user has been
-prompted for each flag. Returns `{}` if `getflags()` could not perform
-the lookup (e.g. no `pool=` was supplied and no `conn=` was provided).
+prompted for each flag. Raises `AttributeError` if `getflags()` returns
+`None` (which happens when `pool=` is missing from kwargs and the
+SQL function cannot be called). With the `pool=` chain intact in the
+production `add()`/`edit()` paths, this should never happen — a
+crash here signals an upstream bug in how `pool=` is being threaded
+through the call chain.
 
 ---
 
