@@ -623,18 +623,15 @@ def getflags(args, moniker=None, **kwargs):
 
     io.echo(f"bbsengine.member.getflags.140: {kwargs=}", level="debug")
     try:
-        conn = kwargs.get("conn", None)
-        if conn is None:
-            pool = kwargs.get("pool", None)
-            if pool is None:
-                io.echo(f"bbsengine.member.getflags.200: pool=None", level="error")
-                return None
-            with database.connect(args, pool=pool) as conn:
-                return _work(conn)
-        return _work(conn)
-    except Exception:
-        io.echo_traceback("bbsengine6.member.getflags.100:")
-        return None
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            io.echo(f"bbsengine.member.getflags.220: pool is None", level="error")
+            return {}
+        with database.connect(args, pool=pool) as conn:
+            return _work(conn)
+    except Exception as e:
+        io.echo_traceback("bbsengine6.member.getflags.100: {e}")
+        return {}
 
 
 def _update_member_flags(args, moniker, flags_dict, conn, commit=False) -> bool:
