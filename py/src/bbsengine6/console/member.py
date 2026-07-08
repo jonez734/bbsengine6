@@ -38,7 +38,6 @@ def editflags(args, moniker=None, **kwargs):
         flags = libmember.getflags(args, None, conn=conn, pool=pool)
     else:
         flags = libmember.getflags(args, moniker, conn=conn, pool=pool)
-    flags = flags or {}
     io.echo(f"bbsengine.con.member.100: {flags=}", level="debug")
 
     for flag_name, flag_data in flags.items():

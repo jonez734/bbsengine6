@@ -626,12 +626,12 @@ def getflags(args, moniker=None, **kwargs):
         pool = kwargs.get("pool", None)
         if pool is None:
             io.echo(f"bbsengine.member.getflags.220: pool is None", level="error")
-            return {}
+            return None
         with database.connect(args, pool=pool) as conn:
             return _work(conn)
     except Exception as e:
         io.echo_traceback("bbsengine6.member.getflags.100: {e}")
-        return {}
+        return None
 
 
 def _update_member_flags(args, moniker, flags_dict, conn, commit=False) -> bool:
@@ -1041,10 +1041,11 @@ def moniker_exists(args, moniker: str, **kwargs) -> bool | None:
     Args:
         args: Application args
         moniker: Member moniker to validate (case-insensitive via citext)
-        **kwargs: Optional - pool, conn
+        **kwargs: Required - pool=
 
     Returns:
         bool: True if moniker exists, False if not, None on error
+        (including when pool= is missing from kwargs)
 
     Raises:
         ValueError: If moniker format is invalid
@@ -1058,8 +1059,9 @@ def moniker_exists(args, moniker: str, **kwargs) -> bool | None:
         True
         >>> moniker_exists(args, "baduser", pool=pool)
         False
-        >>> moniker_exists(args, "café")  # raises ValueError
+        >>> moniker_exists(args, "café", pool=pool)  # raises ValueError
         ValueError: Invalid moniker: contains non-ASCII characters
+        >>> moniker_exists(args, "alice")  # no pool= -> None
     """
     # Validate moniker format and content
     if not moniker or not isinstance(moniker, str):

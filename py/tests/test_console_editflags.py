@@ -65,13 +65,14 @@ def test_args() -> argparse.Namespace:
 
 
 @pytest.mark.unit
-def test_editflags_handles_getflags_returning_none(test_args) -> None:
-    """editflags() must not crash when getflags() returns None.
+def test_editflags_propagates_getflags_none(test_args) -> None:
+    """editflags() does NOT tolerate getflags() returning None.
 
-    Previously the function did ``for ... in flags.items()`` on the
-    return value of getflags(), which is None whenever pool= is
-    missing (the add() path never threads pool= through). The fix
-    coerces None to {} so the for-loop is a no-op.
+    With the proper chain in place (add/edit forward pool=), this
+    should never happen in production. If it does, the AttributeError
+    on ``flags.items()`` is the loud signal that the chain is broken
+    somewhere upstream. Silent data loss (the prior {} band-aid
+    behavior) would be worse.
     """
     with pytest.MonkeyPatch.context() as mp:
         def fake_getflags(args, moniker=None, **kwargs):
@@ -80,20 +81,17 @@ def test_editflags_handles_getflags_returning_none(test_args) -> None:
         mp.setattr(console_member.libmember, "getflags", fake_getflags)
         mp.setattr(console_member.io, "inputboolean", lambda *a, **kw: True)
 
-        result = editflags(test_args, mode="add")
+        with pytest.raises(AttributeError) as excinfo:
+            editflags(test_args, mode="add")
 
-    assert result == {}, (
-        "editflags() should treat None from getflags() as an empty "
-        "flags dict and return {}"
-    )
+        assert "items" in str(excinfo.value)
 
 
 @pytest.mark.unit
-def test_editflags_handles_getflags_returning_none_for_edit_mode(
-    test_args,
-) -> None:
+def test_editflags_propagates_getflags_none_for_edit_mode(test_args) -> None:
     """Same coverage for the mode='edit' branch -- getflags() returns
-    None there too when pool= is missing."""
+    None there too when pool= is missing, and editflags() must not
+    swallow it."""
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(
             console_member.libmember, "getflags",
@@ -101,9 +99,8 @@ def test_editflags_handles_getflags_returning_none_for_edit_mode(
         )
         mp.setattr(console_member.io, "inputboolean", lambda *a, **kw: True)
 
-        result = editflags(test_args, moniker="some_member", mode="edit")
-
-    assert result == {}
+        with pytest.raises(AttributeError):
+            editflags(test_args, moniker="some_member", mode="edit")
 
 
 # ---------------------------------------------------------------------------
@@ -192,21 +189,20 @@ def test_getflags_returns_iterable_for_brand_new_member(test_args, pool) -> None
 
 
 @pytest.mark.unit
-def test_getflags_returns_empty_dict_when_pool_missing(test_args) -> None:
-    """getflags() must return ``{}`` (not None) when ``pool=`` is
-    missing. Callers like ``editflags()`` iterate the result with
-    ``for ... in flags.items()``; a None result crashes the caller.
-
-    This pins the fix at the source: getflags() never returns None,
-    it returns an empty dict when it can't perform the lookup.
+def test_getflags_returns_none_when_pool_missing(test_args) -> None:
+    """getflags() must return ``None`` (not ``{}``) when ``pool=`` is
+    missing. None is the honest signal that the lookup could not be
+    performed; callers must check for it and handle the failure
+    explicitly. Returning ``{}`` would silently drop data (e.g. the
+    default flags for a new member) which is worse than a loud
+    crash.
     """
     from bbsengine6.member import getflags
 
     flags = getflags(test_args, moniker="some_member")
-    assert flags == {}, (
-        f"getflags() must return {{}} when pool= is missing, got {flags!r}"
+    assert flags is None, (
+        f"getflags() must return None when pool= is missing, got {flags!r}"
     )
-    assert flags is not None, "getflags() must not return None"
 
 
 def test_getflags_returns_defaults_for_null_moniker(test_args, pool) -> None:
