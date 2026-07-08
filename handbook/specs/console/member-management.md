@@ -121,27 +121,47 @@ Confirm save? (Y/n)
 ### editflags()
 
 ```python
-def editflags(args, moniker, **kwargs) -> bool
+def editflags(args, moniker=None, *, conn=None, pool=None, mode="add") -> dict
 ```
 
 Interactive member flag editor. Displays all system flags with current state.
 
 **Behavior:**
-1. Loads all flags from `engine.flag` table
+1. Loads flags via `libmember.getflags()`:
+   - `mode="add"`: pass `moniker=None`; SQL returns the default flags from
+     `engine.member_flag` (e.g. SYSOP, MAGIC, EROS, AUTHENTICATED, ASIMOV,
+     NOCALUMNI, EMAILVERIFIED, APPROVED).
+   - `mode="edit"`: pass the existing member's moniker; SQL returns the
+     per-member flag values from `engine.map_member_flag`, falling back to
+     defaults from `engine.member_flag` for any flag the member has not
+     explicitly set.
 2. For each flag:
    - Displays flag name and description
    - Shows current state (set/unset)
    - Prompts to toggle
-3. Updates `engine.map_member_flag` junction table
+3. Mutates the flags dict in place; **does not** write to the database.
+   The caller (`add()` or `edit()`) is responsible for persisting the
+   new state via `libmember.setflag()` after the user confirms the
+   surrounding add/edit.
+
+**Required kwargs:** at least one of `pool=` or `conn=` must be supplied
+so `getflags()` can read from the database. The `add()` and `edit()`
+call paths pass `pool=` from the parent; `conn=` is accepted for API
+symmetry but is not used to write here.
 
 **Common Flags:**
 - `APPROVED` — Member account approved
 - `EMAILVERIFIED` — Email verified
 - `SYSOP` — System operator
-- `CHATMUTE` — Chat muted
-- `NEWMEMBER` — New member marker
+- `MAGIC` — Magician
+- `EROS` — Adult content
+- `AUTHENTICATED` — Authenticated member
+- `ASIMOV` — Project Asimov
+- `NOCALUMNI` — NOC alumni
 
-**Returns:** `True` on completion, `False` on database error
+**Returns:** the (possibly empty) flags dict after the user has been
+prompted for each flag. Returns `{}` if `getflags()` could not perform
+the lookup (e.g. no `pool=` was supplied and no `conn=` was provided).
 
 ---
 

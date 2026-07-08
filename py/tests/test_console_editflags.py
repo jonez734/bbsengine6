@@ -207,3 +207,75 @@ def test_getflags_returns_empty_dict_when_pool_missing(test_args) -> None:
         f"getflags() must return {{}} when pool= is missing, got {flags!r}"
     )
     assert flags is not None, "getflags() must not return None"
+
+
+def test_getflags_returns_defaults_for_null_moniker(test_args, pool) -> None:
+    """getflags(args, None, pool=pool) returns the 8 default flags
+    from engine.member_flag. This is the add() path's mode='add' call
+    inside editflags().
+
+    For a new member, editflags() should load these defaults so the
+    user can toggle them. If pool= is missing, editflags() used to
+    get an empty dict and the defaults were silently dropped.
+    """
+    from bbsengine6.member import getflags
+
+    flags = getflags(test_args, None, pool=pool)
+    assert flags is not None
+    assert isinstance(flags, dict)
+    # The schema seeds 8 default flags (SYSOP, MAGIC, EROS,
+    # AUTHENTICATED, ASIMOV, NOCALUMNI, EMAILVERIFIED, APPROVED).
+    # The exact list may grow over time, so just check there is a
+    # meaningful set of defaults to work with.
+    assert len(flags) >= 1, (
+        f"expected at least one default flag for new members, got {flags!r}"
+    )
+    for name, data in flags.items():
+        assert "description" in data
+        assert "value" in data
+        # New members get the default value (False for all current flags).
+        assert data["value"] is False, (
+            f"new-member default for {name} should be False, got {data['value']!r}"
+        )
+
+
+@pytest.mark.unit
+def test_editflags_loads_defaults_for_new_member_when_pool_supplied(
+    test_args,
+) -> None:
+    """editflags() must forward pool= to getflags() so the 8 default
+    flags are loaded for a new member (mode='add').
+
+    Previously editflags() only forwarded conn=, so getflags() saw
+    pool=None and returned {}. The defaults from engine.member_flag
+    were silently dropped, and the new member was added with no
+    flag entries.
+    """
+    defaults = {
+        "SYSOP": {"description": "SysOp Access", "value": False},
+        "MAGIC": {"description": "Magician", "value": False},
+        "APPROVED": {"description": "Account Approved", "value": False},
+    }
+    seen_prompts = []
+
+    def fake_getflags(args, moniker=None, **kwargs):
+        # Confirm pool= was forwarded (the actual fix).
+        assert "pool" in kwargs, "editflags() must forward pool= to getflags()"
+        return defaults
+
+    def fake_inputboolean(prompt, default):
+        seen_prompts.append(prompt)
+        return False  # user accepts all defaults
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(console_member.libmember, "getflags", fake_getflags)
+        mp.setattr(console_member.io, "inputboolean", fake_inputboolean)
+        mp.setattr(console_member.io, "echo", lambda *a, **kw: None)
+
+        result = editflags(test_args, mode="add", pool=object())
+
+    assert result is defaults
+    # One prompt per default flag -- the user is asked about each.
+    assert len(seen_prompts) == len(defaults)
+    for name in defaults:
+        assert all(d["value"] is False for d in result.values())

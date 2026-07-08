@@ -32,11 +32,12 @@ def editflags(args, moniker=None, **kwargs):
     ``libmember.getflags``.
     """
     conn = kwargs.get("conn", None)
+    pool = kwargs.get("pool", None)
     mode = kwargs.get("mode", "add")
     if mode == "add":
-        flags = libmember.getflags(args, None, conn=conn)
+        flags = libmember.getflags(args, None, conn=conn, pool=pool)
     else:
-        flags = libmember.getflags(args, moniker, conn=conn)
+        flags = libmember.getflags(args, moniker, conn=conn, pool=pool)
     flags = flags or {}
     io.echo(f"bbsengine.con.member.100: {flags=}", level="debug")
 
@@ -224,7 +225,7 @@ def _edit(args, mode, member, **kwargs):
         elif ch == "F":
             io.echo("Flags")
             member["flags"] = editflags(
-                args, member["moniker"], conn=conn, mode=mode
+                args, member["moniker"], conn=conn, pool=kwargs.get("pool"), mode=mode
             )
         elif ch == "L":
             io.echo("Loginid")
