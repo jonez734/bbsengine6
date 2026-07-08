@@ -168,16 +168,24 @@ Calls `_update_member_flags()` after member insert to handle flag creation. Retu
 ---
 
 ```python
-verifyMemberNotFound(args, name, column: str = "loginid", **kwargs)
+verifyMemberNotFound(args, name, *, column: str = "loginid", conn=None, pool=None)
 ```
 Return `True` if no member exists with the given name/column. Used for validation before creation.
+
+The caller must supply a `pool=` (CONN_POOL_PATTERN). The function borrows a connection from the pool, runs `SELECT 1 FROM engine.member WHERE "<column>" = $1`, and returns `True` if the row is absent.
+
+If `pool=` is not supplied, the function logs an error and returns `None`.
 
 ---
 
 ```python
-verifyMemberFound(args, name, **kwargs)
+verifyMemberFound(args, name, *, column: str = "loginid", conn=None, pool=None)
 ```
 Return `True` if a member exists with the given name. Column defaults to `loginid`.
+
+The caller must supply a `pool=` (CONN_POOL_PATTERN). The function borrows a connection from the pool, runs `SELECT 1 FROM engine.member WHERE "<column>" = $1`, and returns `True` if the row is present.
+
+If `pool=` is not supplied, the function logs an error and returns `None`.
 
 ---
 

@@ -3,9 +3,6 @@ from __future__ import annotations
 import copy
 import threading
 
-import psycopg
-from psycopg import sql
-
 from . import bank, database, io, util
 
 
@@ -972,79 +969,71 @@ def setattrs(args, attrs: dict, moniker=None, **kwargs):
         return None
 
 
-def verifyMemberNotFound(args, name, column="loginid", **kwargs):
-    io.echo(f"{args=}", level="debug")
-    try:
-        with database.connect(args, readonly=True) as conn:
-            with database.transaction(conn, readonly=True):
-                with database.cursor(conn) as cur:
-                    q = sql.SQL("select 1 from ") + sql.Identifier(
-                        args.databaseschema, "member"
-                ) + sql.SQL(" where ") + sql.Identifier(column) + sql.SQL("=%s")
-                    cur.execute(q, (name,))
-                    if cur.rowcount == 0:
-                        return True
-                    return False
-    except Exception:
-        io.echo_traceback("bbsengine6.member.verifyMemberNotFound.100:")
+def _verify_member(
+    fn_name: str,
+    args,
+    name,
+    column: str,
+    pool,
+    *,
+    expect_found: bool,
+):
+    """Shared implementation for verifyMemberFound / verifyMemberNotFound."""
+    if pool is None:
+        io.echo(f"bbsengine6.member._verify_member.100: pool is required ", level="error")
         return None
 
+    sql = f"select 1 from $engine.member where {column} = $1"
 
-def verifyMemberFound(args, name, **kwargs):
+    try:
+        with database.connect(args, pool=pool) as conn:
+            with database.cursor(conn) as cur:
+                cur.execute(database.query(sql, name))
+                return (cur.rowcount > 0) is expect_found
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.member._verifymember.200 ({fn_name}): {e}")
+        return None
+
+def verifyMemberNotFound(args, name, *, column="loginid", conn=None, pool=None):
+    """Check that a member does NOT exist in the database.
+
+    The function borrows a connection from ``pool`` (or from a pool
+    resolved via ``database.getpool(args)`` if ``pool`` is not given).
+    If no pool can be obtained, the function logs an error and
+    returns None.
+
+    Returns True if the member is absent, False if present, None on error.
+    """
+    return _verify_member(
+        "verifyMemberNotFound",
+        args,
+        name,
+        column,
+        pool,
+        expect_found=False,
+    )
+
+
+def verifyMemberFound(args, name, *, column="loginid", conn=None, pool=None):
     """Check if a member exists in the database.
 
-    CONN_POOL_PATTERN: Resolves connection from kwargs in priority order:
-    1. conn= - use caller's existing connection
-    2. pool= - borrow connection from caller's pool
-    3. args= - build/cache pool via database.getpool(args)
+    The function borrows a connection from ``pool`` (or from a pool
+    resolved via ``database.getpool(args)`` if ``pool`` is not given).
+    If no pool can be obtained, the function logs an error and
+    returns None.
 
-    Args:
-        args: Application args for pool resolution (used if pool/conn not provided)
-        name: Member moniker or loginid to find
-        **kwargs: Optional - column, conn, pool, args
+    Returns True if the member is present, False if absent, None on error.
     """
-    column = kwargs.get("column", "loginid")
-    conn = kwargs.get("conn", None)
-    pool = kwargs.get("pool", None)
+    return _verify_member(
+        "verifyMemberFound",
+        args,
+        name,
+        column=column,
+        pool=pool,
+        expect_found=True,
+    )
 
-    def _work(conn):
-        try:
-            with database.cursor(conn) as cur:
-                q = sql.SQL("select 1 from ") + sql.Identifier(
-                    args.databaseschema, "member"
-                ) + sql.SQL(" where ") + sql.Identifier(column) + sql.SQL("=$1")
-                cur.execute(q, (name,))
-                return False if cur.rowcount == 0 else True
-        except Exception:
-            io.echo_traceback("bbsengine6.member.verifyMemberFound.100:")
-            return None
 
-    if conn is not None:
-        return _work(conn)
-    elif pool is not None:
-        try:
-            with database.connect(args, pool=pool) as conn:
-                with database.transaction(conn):
-                    return _work(conn)
-        except Exception:
-            io.echo_traceback("bbsengine6.member.verifyMemberFound.200:")
-            return None
-    else:
-        # CONN_POOL_PATTERN: Try to get pool from args parameter
-        if args is not None:
-            try:
-                pool = database.getpool(args)
-                with database.connect(args, pool=pool) as conn:
-                    with database.transaction(conn):
-                        return _work(conn)
-            except Exception:
-                io.echo_traceback("bbsengine6.member.verifyMemberFound.300:")
-                return None
-        io.echo(
-            f"bbsengine6.member.verifyMemberFound.160: pool=None and conn=None",
-            level="error",
-        )
-        return None
 
 
 def moniker_exists(args, moniker: str, **kwargs) -> bool | None:
