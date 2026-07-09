@@ -49,12 +49,12 @@ def checkfunctions(args, **kwargs):
     return runmodule(args, "checkfunctions", **kwargs)
 
 
-def checkclasses(args, **kwargs):
-    return runmodule(args, "checkclasses", **kwargs)
+def checkmemberflag(args, **kwargs):
+    return runmodule(args, "checkmemberflag", **kwargs)
 
 
-def checkflag(args, **kwargs):
-    return runmodule(args, "checkflag", **kwargs)
+def checkmessage(args, **kwargs):
+    return runmodule(args, "checkmessage", **kwargs)
 
 
 def checknotify(args, **kwargs):
@@ -75,7 +75,7 @@ def checkbank(args, **kwargs):
 
 
 def ok():
-    io.echo(f"{{level.ok}}  ok  {{/all}}")
+    io.echo(  f"{{level.ok}}  ok  {{/all}}")
     return
 
 
@@ -83,11 +83,14 @@ def fail():
     io.echo(f"{{level.fail}} fail {{/all}}")
 
 
+def created():
+    io.echo(  f"{{level.ok}} created {{/all}}")
+
 # Historical note (2026-07-06): commit 8a5d1c0 removed {level.fail} and the
 # level="fail" example from io/specs/echo_commands.spec on the assumption
 # that no caller used them. backend.lib.fail() above emits {{level.fail}}
 # fail {{/all}} and is called by checkdatabase, checkroles, checkwebserverrole,
-# checkflag, checksuperuser, and bank. Commit 7115e77 restored both lines
+# checkmemberflag, checksuperuser, and bank. Commit 7115e77 restored both lines
 # in the spec. If you ever consider removing {level.fail} again, also remove
 # backend.lib.fail() and migrate those callers to io.echo(level="error")
 # first; otherwise the spec will be out of sync with the live API.

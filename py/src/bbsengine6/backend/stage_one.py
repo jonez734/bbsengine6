@@ -25,8 +25,8 @@ def main(args, **kwargs):
             "checkextensions",
             "checkengine",
             "checkfunctions",
-            "checkclasses",
-            "checkflag",
+            "checkmemberflag",
+            "checkmessage",
             "bank",
         ):
             result = lib.runmodule(
