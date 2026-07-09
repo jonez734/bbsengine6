@@ -37,7 +37,21 @@ def main(args, **kwargs):
                 "public.manage_schema_priv",
             )
         else:
-            funcs = ("engine.getflags", "engine.checkmemberflag")
+            # public.* helpers are needed in the target DB too:
+            # console/member.py calls manage_secondary_role and
+            # manage_role_privs against args.databasename (zoid6),
+            # not the admin DB. Stage 0 installs them in 'postgres';
+            # stage 1 installs them in the target DB. PostgreSQL
+            # functions are per-database, not cluster-wide.
+            funcs = (
+                "public.get_role_privs",
+                "public.manage_secondary_role",
+                "public.manage_role_privs",
+                "public.manage_database_priv",
+                "public.manage_schema_priv",
+                "engine.getflags",
+                "engine.checkmemberflag",
+            )
         failcount = 0
         for f in funcs:
             sp_name = f
