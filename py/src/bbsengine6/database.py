@@ -439,6 +439,7 @@ def connect(
     *,
     auto_commit: bool = True,
     wrapper: bool = False,
+    set_role: str | None = None,
     **kwargs: Any,
 ) -> Generator[Any, None, None]:
     """Context manager that safely gets a connection and returns it to the pool.
@@ -449,6 +450,8 @@ def connect(
       auto_commit: If True (default), commits before returning connection to pool.
                    Set to False for multi-statement transactions.
       wrapper: If True, yields DatabaseConnection wrapper with method-style API.
+      set_role: If provided, runs SET LOCAL ROLE <set_role> after acquiring the
+                connection. The role reverts automatically at transaction end.
       **kwargs: Additional arguments
 
     Yields:
@@ -493,10 +496,30 @@ def connect(
         io.echo_traceback(f"bbsengine6.database.connect.300: {e}")
         raise
 
+    if set_role is not None:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT rolname FROM pg_roles WHERE rolname = %s",
+                    (set_role,),
+                )
+                if cur.fetchone() is None:
+                    pool.putconn(conn)
+                    raise ValueError(
+                        f"database.connect: role {set_role!r} does not exist"
+                    )
+                cur.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(set_role)))
+        except ValueError:
+            raise
+        except Exception as e:
+            io.echo_traceback(f"bbsengine6.database.connect.310: {e}")
+            pool.putconn(conn)
+            raise
+
     exception_occurred = False
     try:
         if wrapper:
-            yield DatabaseConnection(conn, pool)
+            yield DatabaseConnection(conn, pool, set_role=set_role)
         else:
             yield conn
     except BaseException as e:
@@ -1051,7 +1074,10 @@ def buildargs(
             action="store",
             default=databaseuser,
             type=str,
-            help="database user (default: %(default)r)",
+            help=(
+                "database user (default: %(default)r). "
+                "Also reads BBSENGINE6_DBUSER / BED_DATABASE_USER env vars."
+            ),
         )
         group.add_argument(
             "--databasepassword",
@@ -1059,7 +1085,10 @@ def buildargs(
             action="store",
             default=databasepassword,
             type=str,
-            help="database password (default: %(default)r)",
+            help=(
+                "database password (default: %(default)r). "
+                "Also reads BBSENGINE6_DBPASSWORD / BED_DATABASE_PASSWORD env vars."
+            ),
         )
 
         group.add_argument(
@@ -1627,9 +1656,10 @@ class DatabaseCursor:
 class DatabaseConnection:
     """Wrapper around psycopg Connection providing DB-API compatible method interface."""
 
-    def __init__(self, conn: Any, pool: Any = None):
+    def __init__(self, conn: Any, pool: Any = None, set_role: str | None = None):
         self._conn = conn
         self._pool = pool
+        self._set_role = set_role
 
     def cursor(self, row_factory: Any = dict_row) -> DatabaseCursor:
         return DatabaseCursor(self._conn.cursor(row_factory=row_factory), self)
@@ -2111,6 +2141,7 @@ async def async_connect(
     pool: AsyncConnectionPool | None = None,
     *,
     auto_commit: bool = True,
+    set_role: str | None = None,
     database: str | None = None,
     dbname: str | None = None,
 ) -> AsyncDBConnection:
@@ -2120,6 +2151,8 @@ async def async_connect(
         args: Application args
         pool: AsyncConnectionPool instance (optional)
         auto_commit: If True (default), commits before returning connection
+        set_role: If provided, runs SET LOCAL ROLE <set_role> after acquiring the
+                  connection. The role reverts automatically at transaction end.
         database: Optional database name (preferred)
         dbname: Optional database name (legacy, for backward compatibility)
 
@@ -2133,15 +2166,34 @@ async def async_connect(
     if pool is None:
         pool = await get_async_pool(args, database, dbname)
 
+    async def _set_role(conn: Any) -> None:
+        if set_role is None:
+            return
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT rolname FROM pg_roles WHERE rolname = %s",
+                (set_role,),
+            )
+            row = await cur.fetchone()
+            if row is None:
+                raise ValueError(
+                    f"async_connect: role {set_role!r} does not exist"
+                )
+            await cur.execute(
+                sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(set_role))
+            )
+
     # psycopg-pool 3.3.0+ changed pool.connection() to return an async context manager
     # Handle both old (3.1.x) and new (3.3.0+) APIs
     try:
         # Try new 3.3.0+ API: async with pool.connection() as conn
         async with pool.connection() as conn:
+            await _set_role(conn)
             yield AsyncDBConnection(conn)
     except TypeError:
         # Fall back to old 3.1.x API: conn = await pool.connection()
         conn = await pool.connection()
+        await _set_role(conn)
         yield AsyncDBConnection(conn)
 
 

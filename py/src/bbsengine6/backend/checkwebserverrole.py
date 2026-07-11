@@ -45,5 +45,18 @@ def main(args, **kwargs):
     else:
         io.echo(f"{{level.ok}}  ok  {{/all}}")
 
+    if failcount == 0:
+        io.echo(
+            f"{{var:labelcolor}}  grant member to www-data: ", end=""
+        )
+        try:
+            with database.cursor(conn=conn) as cur:
+                cur.execute('GRANT member TO "www-data"')
+            io.echo(f"{{level.ok}}  ok  {{/all}}")
+        except Exception as e:
+            io.echo(f"{{var:level.error}}  fail  {{/all}}")
+            io.echo(f"  {{var:labelcolor}}{e}", level="error")
+            failcount += 1
+
     lib.hr(failcount)
     return True if failcount == 0 else False

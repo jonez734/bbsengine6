@@ -37,7 +37,7 @@ Create connection pool with DSN from args.
 
 ```python
 @contextmanager
-connect(args: Any, pool: Any = None, *, auto_commit: bool = True, wrapper: bool = False, **kwargs: Any)
+connect(args: Any, pool: Any = None, *, auto_commit: bool = True, wrapper: bool = False, set_role: str | None = None, **kwargs: Any)
 ```
 Context manager that gets a connection from the passed `pool` using `pool.getconn()`
 and returns it via `pool.putconn()` on exit. Raises `ValueError` if `pool is None`.
@@ -48,6 +48,7 @@ The `readonly` kwarg is stripped from kwargs (not supported by psycopg_pool).
 - `pool` - ConnectionPool instance
 - `auto_commit` (default: `True`) - Commit before returning connection to pool
 - `wrapper` (default: `False`) - If `True`, yield DatabaseConnection wrapper with method-style API
+- `set_role` (default: `None`) - If provided, validates the role exists in `pg_roles`, then runs `SET LOCAL ROLE <set_role>` after acquiring the connection. The role reverts automatically at transaction end. Requires the DSN user to be a member of the target role (or a superuser).
 
 **Note:** `args` parameter is optional and only used for debug logging. Can be `None` without affecting core functionality.
 
@@ -63,6 +64,14 @@ with database.connect(args, pool=pool, wrapper=True) as conn:
     cur = conn.cursor()
     cur.execute("SELECT * FROM foo")
     conn.commit()
+```
+
+Use (with role switching):
+```python
+# Run queries as the member group role
+with database.connect(args, pool=pool, set_role="member") as conn:
+    cur = conn.cursor(row_factory=dict_row)
+    cur.execute("SELECT * FROM engine.message ...")
 ```
 
 ---
@@ -391,6 +400,9 @@ A context manager that wraps a psycopg connection with method-style API.
 **Properties:**
 - `autocommit` (get/set) - Connection autocommit mode
 
+**Attributes:**
+- `_set_role` - The role name passed via `set_role` parameter (or `None`)
+
 **Methods:**
 
 ```python
@@ -502,6 +514,12 @@ with database.connect(args, pool=pool, wrapper=True) as conn:
     
     # Commit via connection method
     conn.commit()
+
+# With role switching
+with database.connect(args, pool=pool, set_role="member") as conn:
+    cur = conn.cursor(row_factory=dict_row)
+    cur.execute("SELECT * FROM engine.member")
+    rows = cur.fetchall()
 
 # Or use raw psycopg connection via _conn
 with database.connect(args, pool=pool, wrapper=True) as conn:

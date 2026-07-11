@@ -154,9 +154,17 @@ idempotent and cheap; safe to call on every edit.
 - **PHP web surface**: `engine/psql_credentials.php` plus helpers
   in `php/libmember.php`. Blocked on the web machine being on the
   same host as the DB.
-- **Web → psql via `SET LOCAL ROLE`**: would let a web-authenticated
-  request switch to the member's role per transaction. Requires
-  RLS — see `bbsengine6/TODO_RLS.md`.
+- **`SET LOCAL ROLE member` per request**: implemented in
+  `database.connect()` / `database.async_connect()` via the
+  `set_role` keyword argument. The `www-data` DSN user has been
+  granted membership in `member` (`checkwebserverrole.py`). Call
+  `database.connect(args, pool=pool, set_role="member")` to run a
+  transaction as the `member` group role. Per-member data isolation
+  still requires RLS — see `bbsengine6/TODO_RLS.md`.
+- **`SET LOCAL ROLE l_<loginid>` per request**: would switch to the
+  specific member's role. Requires RLS for meaningful privacy
+  enforcement, plus `GRANT l_<loginid> TO "www-data"` per member
+  (or a superuser DSN user).
 - **Email notification** on psql access provisioning.
 - **Audit table**: `engine.pgrole_event` for tighter tracking of
   every `CREATE ROLE` / `ALTER ROLE` / `DROP ROLE` / `GRANT` /

@@ -4,6 +4,16 @@ This document captures the RLS-related design from the per-member-PG-role plan
 that the implementer has decided **not** to build in the first pass. Kept here
 so the work is not lost.
 
+## What has been implemented
+
+`SET LOCAL ROLE` is now available in `database.connect()` and
+`database.async_connect()` via the `set_role` parameter. The `www-data` DSN
+user has been granted membership in the `member` group role
+(`checkwebserverrole.py`), so `SET LOCAL ROLE member` succeeds from web-side
+connections. Per-member data isolation via `SET LOCAL ROLE l_<loginid>` still
+requires RLS (see below) to be meaningful, since without RLS the DSN user's
+table-owner access sees all rows regardless of the current role.
+
 ## Why deferred
 
 The initial goal is to let every approved member `psql -U <rolname>` into the

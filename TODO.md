@@ -21,6 +21,8 @@
 - [x] Fix SQL composition bug in creatextension()/createrol()/create() — `sql.Identifier(...)` was interpolated via f-string into `sql.SQL(...)` instead of `.format(...)`, emitting literal `Identifier('...')` text. Affected: database.py creatextension (blocks stage-zero extension install), createrol (3 branches), create. 2026-06-29.
 - [x] `bbsengine6.startup` failed `module.check` with "no init function" because the subpackage's `__init__.py` was empty and the entrypoints (`init`, `access`, `buildargs`, `main`) live in `bbsengine6.startup.main`. Fix: re-export the four entrypoints from `bbsengine6.startup.__init__` so the subpackage itself satisfies the checker's contract. `bbsengine6.startup.lib`, `.stage_zero`, `.bank` remain importable as before. Triggered by `python -m casino --debug` ("check of modulename='bbsengine6.startup' failed. module not run."). 2026-07-07.
 
+- [x] Split monolithic `sql/bank.sql` into per-table files: `bank_schema.sql`, `bank_account.sql`, `bank_transaction.sql`, `bank_transfer.sql`. Updated `backend/bank.py` to reference the new filenames and moved inline schema/priv logic into `bank_schema.sql`. Updated `tests/conftest.py` to loop-load the 4 files. 25/25 tests pass. 2026-07-09.
+
 - [ ] Make `bbsengine6.startup` runnable from both the CLI (`python -m bbsengine6.startup`) and from `bbsengine6.module.run()`. Two bugs:
   1. `py/src/bbsengine6/startup/__init__.py` is empty in the committed state. The TODO entry above (2026-07-07) says the four entry points were added, but `git diff` shows the changes are uncommitted. Commit the current draft (init/access/buildargs/main defined in `__init__.py`).
   2. `py/src/bbsengine6/startup/main.py:13` calls `lib.issysop(args, **kwargs)` but `bbsengine6.startup.lib` does NOT have an `issysop` function — it lives in `bbsengine6.backend.lib`. The current code throws `AttributeError: module 'bbsengine6.startup.lib' has no attribute 'issysop'` during `module.check`'s `m.access(args, op, **kwargs)` call. `check` catches the exception and returns None, so `module.run` logs "check of modulename='bbsengine6.startup.main' failed. module not run." with a traceback via `io.echo_traceback`. This is hit by BOTH invocation paths: CLI goes `__main__.py -> lib.runmodule(args, "main") -> module.run on bbsengine6.startup.main -> check fails`; programmatic `module.run(args, "bbsengine6.startup")` passes the subpackage check (the four entry points are present) but then `m.main` -> `lib.runmodule(args, "main")` -> same failure on the `.main` file. The user reports this as "unknown function init()" — a paraphrase of the traceback during the init/access phase of `check`.
@@ -919,7 +921,7 @@ Test classes (function-scoped, with `test_args` + `test_pool` fixtures; autouse 
   - [ ] Update import to `from bbsengine6.services.bank import AccountService, LedgerService` (keep `Transaction` / `Transfer` lines for later subphases)
   - [ ] Rewrite call sites currently written as `bank.account.get_or_create(...)` → `account_service.get_or_create(...)`
   - [ ] Add minimal coverage for `LedgerService.add_funds` / `remove_funds` if not already present: happy path, `amount <= 0`, missing account, insufficient funds
-- [ ] `bbsengine6/py/tests/conftest.py` — unchanged (only references `bank.sql` schema)
+- [ ] `bbsengine6/py/tests/conftest.py` — updated to load 4 bank SQL files instead of monolithic `bank.sql`
 
 #### Verify
 - [ ] `rg -n "bbsengine6\.bank" bbsengine6/` returns only the shim file
@@ -943,7 +945,7 @@ Test classes (function-scoped, with `test_args` + `test_pool` fixtures; autouse 
 - [ ] `services/bank/api/handler.py:259` — `cur.execute("SELECT * FROM bank.__account …")` (SQL, **unchanged**)
 - [ ] In-file relative imports — adjust one extra level (`from ..util import logentry` → `from ...util import logentry`)
 - [ ] Leave SQL references (`bank.__account`, `bank.__transaction`, `bank.__transfer`) untouched — schema namespace is independent of the Python package path
-- [ ] Leave `startup.py` lines 56–61 (`("bank.__account", "bank.sql")` …) untouched
+- [ ] `backend/bank.py` — updated `bank_classes` tuples from `"bank.sql"` to per-file names (`"bank_account.sql"`, etc.)
 
 ### 7.4 Update in-tree consumers (`bbsengine6/`)
 - [ ] `bbsengine6/py/src/bbsengine6/member.py:9` — keep the `bank` import working via the shim (see 7.6) or switch to `from .services.bank import AccountService, TransferService` and update lines 287, 313
@@ -1447,31 +1449,41 @@ follow-ups were intentionally deferred from that first pass.
 
 ### Web → psql via ident or `SET LOCAL ROLE`
 
-The current implementation gives every approved member a PG `LOGIN`
-role for **terminal-side** psql use (ident auth on the DB host).
-The PHP webserver, which lives on a different machine, is unaffected:
-it still connects to PG as the privileged DSN user and the
-`l_<loginid>` roles are inert to web requests.
+**Status: `SET LOCAL ROLE` is implemented; RLS is not.**
 
-The follow-up question: when a member is on the web, how do they
-issue psql-style queries as themselves? Two paths to evaluate:
+The `database.connect()` and `database.async_connect()` context managers
+accept a `set_role` keyword argument. When provided, they validate the
+role exists in `pg_roles`, then execute `SET LOCAL ROLE <role>` after
+acquiring the connection. The role reverts automatically at transaction
+end (`SET LOCAL ROLE` is transaction-scoped). The `www-data` DSN user
+has been granted membership in the `member` group role
+(`checkwebserverrole.py`), so `SET LOCAL ROLE member` succeeds from
+web-side connections.
 
-- **`SET LOCAL ROLE l_<loginid>` per request.** After
-  `engine/login.php` authenticates the member, every query on that
-  request runs `SET LOCAL ROLE l_<loginid>`. The member's grants
-  apply; the DSN user's grants are revoked for that transaction.
-  Requires RLS (see `bbsengine6/TODO_RLS.md`) for any meaningful
-  privacy enforcement, since otherwise the DSN user's
-  table-owner / `BYPASSRLS` access would still see everything.
+The PHP webserver connects to PG as the `www-data` DSN user. The
+`l_<loginid>` roles are inert to web requests unless the code path
+explicitly sets the role.
+
+Two paths for web → psql remain:
+
+- **`SET LOCAL ROLE member` per request (implemented).** Call
+  `database.connect(args, pool=pool, set_role="member")` after
+  authenticating the member. The `member` group role's grants
+  (SELECT on engine/bank tables, USAGE on schemas) apply for that
+  transaction. For per-member data isolation, RLS is still required
+  (see `bbsengine6/TODO_RLS.md`).
+- **`SET LOCAL ROLE l_<loginid>` per request.** Would switch to the
+  specific member's role. Requires RLS for meaningful privacy
+  enforcement, since otherwise the DSN user's table-owner /
+  `BYPASSRLS` access still sees everything. Also requires either
+  `GRANT l_<loginid> TO "www-data"` per member, or the DSN user
+  being a superuser.
 - **Webserver spawns `psql` as the member's OS user.** A
   `engine/runpsql.php` (or similar) that does
   `su <osuser> -c 'psql ...'`. Requires the member to have an OS
   account on the webserver host too, plus careful output capture,
   timeouts, audit logging, and abuse prevention
   (e.g. blocking `COPY ... FROM PROGRAM`).
-
-Both designs are out of scope for the first pass. Tracked here so
-the work isn't lost.
 
 ### Password fallback for `engine.createpgrole`
 
