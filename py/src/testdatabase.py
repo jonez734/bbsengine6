@@ -952,6 +952,89 @@ class TestExecute(_TestCaseWithPoolCleanup):
                 self.assertEqual(result["type_str"], "<class 'int'>")
 
 
+class TestSetRole(_TestCaseWithPoolCleanup):
+    @classmethod
+    def setUpClass(cls):
+        cls.args = get_real_args()
+        cls.pool = database.getpool(cls.args)
+        _tracked_pools.append(cls.pool)
+
+    def test_set_role_success(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            result = database.set_role(self.args, "opencode", conn=conn)
+            self.assertTrue(result)
+
+    def test_set_role_nonexistent(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            result = database.set_role(self.args, "nonexistent_role_xyz", conn=conn)
+            self.assertFalse(result)
+
+    def test_set_role_no_conn(self):
+        result = database.set_role(self.args, "opencode")
+        self.assertFalse(result)
+
+    def test_connect_set_role_refactored(self):
+        with database.connect(
+            self.args, pool=self.pool, set_role="opencode"
+        ) as conn:
+            self.assertIsNotNone(conn)
+
+
+class TestSwitchRole(_TestCaseWithPoolCleanup):
+    @classmethod
+    def setUpClass(cls):
+        cls.args = get_real_args()
+        cls.pool = database.getpool(cls.args)
+        _tracked_pools.append(cls.pool)
+
+    def test_switch_role_restores(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            with database.cursor(conn=conn) as cur:
+                cur.execute("SELECT current_role")
+                original = cur.fetchone()["current_role"]
+
+            with database.switch_role(self.args, "opencode", conn=conn):
+                with database.cursor(conn=conn) as cur:
+                    cur.execute("SELECT current_role")
+                    switched = cur.fetchone()["current_role"]
+                self.assertEqual(switched, "opencode")
+
+            with database.cursor(conn=conn) as cur:
+                cur.execute("SELECT current_role")
+                restored = cur.fetchone()["current_role"]
+            self.assertEqual(restored, original)
+
+    def test_switch_role_restores_on_exception(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            with database.cursor(conn=conn) as cur:
+                cur.execute("SELECT current_role")
+                original = cur.fetchone()["current_role"]
+
+            try:
+                with database.switch_role(self.args, "opencode", conn=conn):
+                    raise ValueError("test exception")
+            except ValueError:
+                pass
+
+            with database.cursor(conn=conn) as cur:
+                cur.execute("SELECT current_role")
+                restored = cur.fetchone()["current_role"]
+            self.assertEqual(restored, original)
+
+    def test_switch_role_nonexistent_raises(self):
+        with database.connect(self.args, pool=self.pool) as conn:
+            with self.assertRaises(ValueError):
+                with database.switch_role(
+                    self.args, "nonexistent_role_xyz", conn=conn
+                ):
+                    pass
+
+    def test_switch_role_no_conn_or_pool(self):
+        with self.assertRaises(ValueError):
+            with database.switch_role(self.args, "opencode"):
+                pass
+
+
 if __name__ == "__main__":
     import sys
 

@@ -498,17 +498,16 @@ def connect(
 
     if set_role is not None:
         try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT rolname FROM pg_roles WHERE rolname = %s",
-                    (set_role,),
+            if not rolexists(args, set_role, conn=conn):
+                pool.putconn(conn)
+                raise ValueError(
+                    f"database.connect: role {set_role!r} does not exist"
                 )
-                if cur.fetchone() is None:
-                    pool.putconn(conn)
-                    raise ValueError(
-                        f"database.connect: role {set_role!r} does not exist"
-                    )
-                cur.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(set_role)))
+            with conn.cursor() as cur:
+                stmt = sql.SQL("SET LOCAL ROLE {}").format(
+                    sql.Identifier(set_role)
+                )
+                cur.execute(stmt)
         except ValueError:
             raise
         except Exception as e:
@@ -1568,6 +1567,104 @@ def manage_secondary_role(
     except psycopg.DatabaseError as e:
         io.echo_traceback(f"bbsengine6.database.manage_secondary_role.200: {e}")
         return False
+
+
+def set_role(args: Any, role_name: str, **kwargs: Any) -> bool:
+    """Switch the current role on a connection via SET LOCAL ROLE.
+
+    The role reverts automatically at transaction end (SET LOCAL ROLE is
+    transaction-scoped). Use switch_role() as a context manager if you
+    need to restore the original role before the transaction ends.
+
+    Args:
+        args: Application args (for logging)
+        role_name: PostgreSQL role name to switch to
+        **kwargs: conn= (connection, required)
+
+    Returns:
+        True on success, False on failure
+    """
+    conn = kwargs.get("conn", None)
+    if conn is None:
+        io.echo(
+            "bbsengine6.database.set_role.120: conn is None",
+            level="error",
+        )
+        return False
+
+    if not rolexists(args, role_name, conn=conn):
+        io.echo(
+            f"bbsengine6.database.set_role.100: role {role_name!r} does not exist",
+            level="error",
+        )
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role_name))
+            )
+        return True
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.database.set_role.200: {e}")
+        return False
+
+
+@contextmanager
+def switch_role(
+    args: Any, role_name: str, **kwargs: Any
+) -> Generator[Any, None, None]:
+    """Context manager to temporarily switch roles within a transaction.
+
+    Saves the current role, switches via SET LOCAL ROLE, yields, then
+    restores the original role on exit via RESET ROLE.
+
+    Args:
+        args: Application args (for logging)
+        role_name: PostgreSQL role name to switch to
+        **kwargs: conn= (connection) or pool= (ConnectionPool fallback)
+
+    Yields:
+        None
+    """
+    conn = kwargs.get("conn", None)
+    pool = kwargs.get("pool", None)
+    own_conn = False
+
+    if conn is None:
+        if pool is None:
+            io.echo(
+                "bbsengine6.database.switch_role.100: conn and pool both None",
+                level="error",
+            )
+            raise ValueError("switch_role: conn and pool both None")
+        conn = pool.getconn()
+        own_conn = True
+
+    original_role = None
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT current_role")
+            row = cur.fetchone()
+            if row is not None:
+                original_role = row["current_role"] if isinstance(row, dict) else row[0]
+
+        if not set_role(args, role_name, conn=conn):
+            raise ValueError(f"switch_role: role {role_name!r} does not exist")
+
+        yield
+    finally:
+        if original_role is not None:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        sql.SQL("SET LOCAL ROLE {}").format(
+                            sql.Identifier(original_role)
+                        )
+                    )
+            except Exception:
+                pass
+        if own_conn and pool is not None:
+            pool.putconn(conn)
 
 
 def cursor(conn: Any = None, row_factory: Any = dict_row, **kwargs: Any) -> Any:
