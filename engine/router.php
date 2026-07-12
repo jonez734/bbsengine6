@@ -40,6 +40,69 @@ function router_get_teosdir(): string
   return getenv('TEOSDIR') ?: (defined('TEOSDIR') ? TEOSDIR : '');
 }
 
+function router_buildBreadcrumbs(string $uri): array
+{
+  $segments = array_values(array_filter(explode("/", trim($uri, "/"))));
+  if (empty($segments)) {
+    return [];
+  }
+
+  $teosurl = rtrim(router_get_teosurl(), '/');
+
+  // Build auto-generated breadcrumbs as fallback
+  $autoCrumbs = [];
+  $path = '';
+  foreach ($segments as $segment) {
+    $path = $path === '' ? $segment : $path . '.' . $segment;
+    $title = ucwords(str_replace(['-', '_'], ' ', $segment));
+    $uri_path = $teosurl . '/' . implode('/', array_slice($segments, 0, count($autoCrumbs) + 1)) . '/';
+    $autoCrumbs[] = [
+      'title' => $title,
+      'path' => $path,
+      'uri' => $uri_path,
+    ];
+  }
+
+  // Try to query DB for richer breadcrumb data
+  try {
+    $dbh = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
+    $sigpath = str_replace("-", "_", implode(".", $segments));
+    $stmt = \bbsengine6\database\query($dbh,
+      'SELECT title, path, uri FROM $engine.sig WHERE path @> :sigpath ORDER BY path ASC',
+      [":sigpath" => $sigpath]);
+
+    if ($stmt !== false && $stmt->rowCount() > 0) {
+      $dbSigs = $stmt->fetchAll();
+      // Build a map of DB sigs keyed by path (converting underscores back to hyphens
+      // to match auto-generated paths)
+      $dbMap = [];
+      foreach ($dbSigs as $sig) {
+        $dbMap[str_replace("_", "-", $sig['path'])] = $sig;
+      }
+
+      // Merge: use DB title/uri where available, fall back to auto-generated
+      $crumbs = [];
+      foreach ($autoCrumbs as $crumb) {
+        $dbSig = $dbMap[$crumb['path']] ?? null;
+        if ($dbSig !== null) {
+          $crumbs[] = [
+            'title' => !empty($dbSig['title']) ? $dbSig['title'] : $crumb['title'],
+            'path' => $crumb['path'],
+            'uri' => !empty($dbSig['uri']) ? $dbSig['uri'] : $crumb['uri'],
+          ];
+        } else {
+          $crumbs[] = $crumb;
+        }
+      }
+      return $crumbs;
+    }
+  } catch (\Throwable $e) {
+    // Fall through to auto-generated breadcrumbs
+  }
+
+  return $autoCrumbs;
+}
+
 function router_gethandlers(): array
 {
   return [
@@ -187,10 +250,15 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
     bbsengine6\setcurrentpage(router_get_teosurl() . $uri);
   }
 
+  $uri_parts = explode("/", $uri);
+  array_pop($uri_parts);
+  $breadcrumbs = router_buildBreadcrumbs(implode("/", $uri_parts));
+
   $data = [
     'title' => $title,
     'date' => $date,
     'content' => $html,
+    'breadcrumbs' => $breadcrumbs,
   ];
 
   if (function_exists('bbsengine6\displaypage')) {
@@ -286,12 +354,38 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   }
 
   if (function_exists('bbsengine6\displaypage')) {
+    $breadcrumbs = router_buildBreadcrumbs($uri);
+
+    $sigs = [];
+    $teosbase = rtrim($teosurl, '/');
+    foreach ($items as $item) {
+      $reluri = ltrim(substr($item['uri'], strlen($teosbase)), '/');
+      $sigs[] = [
+        'title' => $item['title'],
+        'uri' => $reluri,
+        'icon' => isset($item['is_dir']) && $item['is_dir'] ? 'fa-folder' : 'fa-file-alt',
+        'intro' => null,
+        'actions' => [],
+      ];
+    }
+
+    $currentsig = [
+      'title' => $title,
+      'uri' => $uri,
+      'intro' => null,
+      'sigs' => $sigs,
+      'links' => [],
+      'actions' => [],
+    ];
+
     bbsengine6\displaypage([
       'title' => $title,
       'items' => $items,
       'uri' => $uri,
       'hidden' => $hidden,
-    ], 'directory-listing.tmpl');
+      'currentsig' => $currentsig,
+      'breadcrumbs' => $breadcrumbs,
+    ], 'browse.tmpl');
     return '';
   }
 
@@ -343,10 +437,11 @@ if (php_sapi_name() !== 'cli') {
   set_include_path(get_include_path()
     . PATH_SEPARATOR . "/srv/www/vhosts/zoidtechnologies.com/html/teos"
     . PATH_SEPARATOR . "/srv/www/bbsengine6/php"
+    . PATH_SEPARATOR . "/srv/www/markdown/"
     . PATH_SEPARATOR . "/srv/www/zoid6/php"
     . PATH_SEPARATOR . "/srv/www/zoid6/markdown");
 
-  if (!defined('TEOSURL')) define('TEOSURL', '/teos');
+  if (!defined('TEOSURL')) define('TEOSURL', '/teos/');
   if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
 
   @require_once('PEAR.php');

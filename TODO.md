@@ -15,6 +15,12 @@
 [ ] Fix /handbook/6/ 500 internal server error - add default mode=index when no mode is specified in handbook.php (@since 20250623)
 [ ] SETBOTTOMBAR packet type (12) - server-to-client UI update for bottom bar (e.g., casino module can update client status bar) (@since 20250621)
 
+## TEOS Router Breadcrumbs
+
+- [x] Add DB fallback to `router_buildBreadcrumbs()` — try querying `engine.sig` for each path segment; use DB title/URI if found, fall back to auto-generated values for filesystem-only folders. 2026-07-12.
+- [x] Fix router.php include path: replaced non-existent `/srv/www/bbsengine6/vendor/erusev/parsedown-extra` with `/srv/www/markdown/` (where ParsedownExtra.php actually lives). 2026-07-12.
+- [x] Add blurb.php `display()` fallback: when `buildbreadcrumbs()` returns empty, use `router_buildBreadcrumbs()` for path-segment breadcrumbs. 2026-07-12.
+
 ## Python Issues
 
 - [x] Fix psycopg-pool 3.3.0 incompatibility

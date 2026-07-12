@@ -274,10 +274,16 @@ function display($uri, $filepath)
     }
 
     $parts = explode(".", $blurbid);
+    array_pop($parts);
     $sigpath = implode(".", $parts);
     $breadcrumbs = function_exists('bbsengine6\blurb\buildbreadcrumbs')
         ? \bbsengine6\blurb\buildbreadcrumbs($sigpath)
         : [];
+
+    // Fall back to router's path-segment breadcrumbs if DB returned empty
+    if (empty($breadcrumbs) && function_exists('router_buildBreadcrumbs')) {
+        $breadcrumbs = router_buildBreadcrumbs(str_replace(".", "/", $sigpath));
+    }
 
     \bbsengine6\setcurrentpage("teos/" . $uri);
 
@@ -285,6 +291,7 @@ function display($uri, $filepath)
     $data["content"] = $content;
     $data["blurb"] = $blurb ?? [];
     $data["breadcrumbs"] = $breadcrumbs ?? [];
+    $data["uri"] = $uri;
 
     $parsed = parseMarkdownSections($content);
 
