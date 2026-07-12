@@ -266,36 +266,64 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
     return null;
   }
 
-  $files = glob($safeDir . "/*.md");
-  sort($files);
+  $entries = scandir($safeDir);
+  if ($entries === false)
+  {
+    router_log("router.026: scandir failed for dirpath=" . var_export($safeDir, true), "warning");
+    return null;
+  }
 
-  $title = htmlspecialchars(basename($uri));
+  $title = htmlspecialchars(basename($uri) ?: $uri);
   $items = [];
 
-  foreach ($files as $filepath)
+  foreach ($entries as $entry)
   {
-    $filename = basename($filepath, '.md');
-    $fileuri = $uri . "/" . $filename;
-
-    $metadata = [];
-    $displayTitle = $filename;
-
-    $filecontent = file_get_contents($filepath);
-    if (preg_match('/^---\s*\n(.*?)\n---/s', $filecontent, $matches))
+    if ($entry === '.' || $entry === '..')
     {
-      $metadata = router_parseYamlFrontmatter($matches[1]);
-      if (isset($metadata['title']))
+      continue;
+    }
+
+    $fullpath = $safeDir . '/' . $entry;
+    if (!is_file($fullpath))
+    {
+      continue;
+    }
+
+    $ext = strtolower(pathinfo($entry, PATHINFO_EXTENSION));
+    $name = pathinfo($entry, PATHINFO_FILENAME);
+    $fileuri = rtrim($uri, '/') . '/' . $entry;
+
+    $displayTitle = $name;
+    $metadata = [];
+
+    if ($ext === 'md')
+    {
+      $filecontent = file_get_contents($fullpath);
+      if (preg_match('/^---\s*\n(.*?)\n---/s', $filecontent, $matches))
       {
-        $displayTitle = htmlspecialchars($metadata['title']);
+        $metadata = router_parseYamlFrontmatter($matches[1]);
+        if (isset($metadata['title']))
+        {
+          $displayTitle = htmlspecialchars($metadata['title']);
+        }
       }
+    }
+    else
+    {
+      $displayTitle = htmlspecialchars($name);
     }
 
     $items[] = [
       'title' => $displayTitle,
       'uri' => TEOSURL . $fileuri,
-      'filename' => $filename,
+      'filename' => $entry,
+      'ext' => $ext,
+      'size' => filesize($fullpath),
+      'modified' => filemtime($fullpath),
     ];
   }
+
+  usort($items, fn($a, $b) => strcasecmp($a['filename'], $b['filename']));
 
   if (function_exists('\bbsengine6\setcurrentpage')) {
     \bbsengine6\setcurrentpage(TEOSURL . $uri);
@@ -311,7 +339,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
     return \bbsengine6\displaypage($data, "directory-listing.tmpl");
   }
 
-  $lockIcon = $hidden ? " 🔒" : "";
+  $lockIcon = $hidden ? " [hidden]" : "";
   return "<html><head><title>$title</title></head><body><h1>$title$lockIcon</h1><ul>" .
     implode("", array_map(fn($i) => "<li><a href=\"{$i['uri']}\">{$i['title']}</a></li>", $items)) .
     "</ul></body></html>";
