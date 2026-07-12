@@ -70,7 +70,7 @@ function toboolean($value, $label="label", $default=false)
 /**
  * @since 20221116
  */
-function displaypage($data=[], $pagetemplate="page.tmpl")
+function displaypage($data=[], $pagetemplate="page.tmpl", $escapehtml=true)
 {
 //  util\logentry("displaypage called");
 //  $pagetemplate = isset($data["pagetemplate"]) ? $data["pagetemplate"] : "page.tmpl";
@@ -85,6 +85,7 @@ function displaypage($data=[], $pagetemplate="page.tmpl")
 //  util\logentry("bbsengine6.displaypage.100: choices=".var_export($choices, true));
 
   $tmpl = getsmarty();
+  $tmpl->setEscapeHtml($escapehtml);
   $tmpl->assign("data", $data);
 //  $tmpl->assign("currentpage", \bbsengine6\getcurrrentpage());
   $tmpl->display($pagetemplate);

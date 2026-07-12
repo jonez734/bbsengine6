@@ -8,14 +8,13 @@
 
 namespace bbsengine6\blurb {
 
-require_once("/srv/www/zoid6/php/bootstrap.php");
-\bbsengine6\bootstrap();
+require_once(__DIR__ . "/../../zoid6/php/bootstrap.php");
+\zoid6\bootstrap();
 
 require_once("zoid6config.php");
 require_once("zoid6.php");
 
 require_once("engine.php");
-require_once("zoid6config.php");
 // require_once("database.php");
 
 /**
@@ -297,7 +296,7 @@ function display($uri, $filepath)
     $choices = [];
     $data["choices"] = \zoid6\buildchoices($choices);
 
-    return \bbsengine6\displaypage($data, "page-markdown-sections.tmpl");
+    return \bbsengine6\displaypage($data, "page-markdown-sections.tmpl", false);
 }
 function parseMarkdownSections(string $markdown): array
 {
