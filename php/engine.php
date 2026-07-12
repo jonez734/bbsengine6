@@ -84,8 +84,7 @@ function displaypage($data=[], $pagetemplate="page.tmpl", $escapehtml=true)
   $data["sidebar"] = $data["sidebar"] ?? [];
 //  util\logentry("bbsengine6.displaypage.100: choices=".var_export($choices, true));
 
-  $tmpl = getsmarty();
-  $tmpl->setEscapeHtml($escapehtml);
+  $tmpl = getsmarty(["escapehtml" => $escapehtml]);
   $tmpl->assign("data", $data);
 //  $tmpl->assign("currentpage", \bbsengine6\getcurrrentpage());
   $tmpl->display($pagetemplate);
@@ -366,16 +365,18 @@ function accessfortune($op, $data=null, $memberid=null)
 
 function getsmarty($options=null)
 {
-  $options = [];
-  $options["pluginsdir"] = defined('\config\SMARTYPLUGINSDIR') ? \config\SMARTYPLUGINSDIR : [];
-  $options["templatedir"] = defined('\config\SMARTYTEMPLATESDIR') ? \config\SMARTYTEMPLATESDIR : [];
-  $options["compiledir"] = defined('\config\SMARTYCOMPILEDTEMPLATESDIR') ? \config\SMARTYCOMPILEDTEMPLATESDIR : null;
-  $options["compileid"] = defined('\config\LOGENTRYPREFIX') ? \config\LOGENTRYPREFIX : 'bbsengine6';
+  $options = $options ?? [];
+  $options["pluginsdir"] = $options["pluginsdir"] ?? (defined('\config\SMARTYPLUGINSDIR') ? \config\SMARTYPLUGINSDIR : []);
+  $options["templatedir"] = $options["templatedir"] ?? (defined('\config\SMARTYTEMPLATESDIR') ? \config\SMARTYTEMPLATESDIR : []);
+  $options["compiledir"] = $options["compiledir"] ?? (defined('\config\SMARTYCOMPILEDTEMPLATESDIR') ? \config\SMARTYCOMPILEDTEMPLATESDIR : null);
+  $options["escapehtml"] = $options["escapehtml"] ?? true;
+  $baseCompileId = $options["compileid"] ?? (defined('\config\LOGENTRYPREFIX') ? \config\LOGENTRYPREFIX : 'bbsengine6');
+  $options["compileid"] = $baseCompileId . ($options["escapehtml"] ? '' : '-noescape');
 
   // logentry("getsmarty.100: options=".var_export($options, true));
 
   $s = new \Smarty();
-  $s->setEscapeHtml(true);
+  $s->setEscapeHtml($options["escapehtml"]);
 
 /*
   $currentcart = [];
