@@ -54,7 +54,7 @@ function router_buildBreadcrumbs(string $uri): array
   $path = '';
   foreach ($segments as $segment) {
     $path = $path === '' ? $segment : $path . '.' . $segment;
-    $title = ucwords(str_replace(['-', '_'], ' ', $segment));
+    $title = str_replace(['-', '_'], ' ', $segment);
     $uri_path = $teosurl . '/' . implode('/', array_slice($segments, 0, count($autoCrumbs) + 1)) . '/';
     $autoCrumbs[] = [
       'title' => $title,

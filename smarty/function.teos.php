@@ -53,8 +53,21 @@ function smarty_function_teos($options, Smarty_Internal_Template $template)
     $stmt->execute($dat);
     if ($stmt->rowcount() === 0)
     {
-      \bbsengine6\util\logentry("zoidweb6.teos.smarty_function_teos.100: path ".var_export($path, true)." not found.");
-      return "TEOS.PATHNOTFOUND";
+      // Path not in engine.sig — render a fallback link using the path itself
+      $segments = array_filter(explode(".", $path));
+      $title = end($segments) ?: $path;
+      $title = str_replace(["-", "_"], " ", $title);
+      $uri = implode("/", $segments) . "/";
+
+      $title = smarty_modifier_escape($title);
+      $title = smarty_modifier_wpprop($title);
+
+      $tmpl = \bbsengine6\getsmarty();
+      $tmpl->assign("uri", $uri);
+      $tmpl->assign("title", $title);
+      $tmpl->assign("itemprop", $itemprop);
+
+      return $tmpl->fetch("function.teos.tmpl");
     }
     
     $res = $stmt->fetch();

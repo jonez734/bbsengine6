@@ -47,6 +47,15 @@ function buildbreadcrumbs($sigpath, $skiptop = true, $hidepath = null)
 
             $crumbs[] = $sig;
         }
+
+        // Prepend "teos" crumb
+        $teosurl = defined('TEOSURL') ? TEOSURL : '';
+        array_unshift($crumbs, [
+            'title' => 'teos',
+            'path' => 'teos',
+            'uri' => rtrim($teosurl, '/') . '/',
+        ]);
+
         return $crumbs;
     } catch (\Throwable $e) {
         \bbsengine6\util\echo_traceback("blurb.buildbreadcrumbs.100: " . $e->getMessage());

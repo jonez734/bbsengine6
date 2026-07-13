@@ -90,6 +90,23 @@ if ($run_db) {
 
 echo "\n";
 
+// Run breadcrumb regression tests
+echo "--- Breadcrumb Regression Tests ---\n";
+echo "Running tests...\n";
+$output = [];
+$return = 0;
+exec("php " . __DIR__ . "/test_breadcrumbs.php 2>&1", $output, $return);
+if ($return === 0) {
+    echo "  ✓ test_breadcrumbs.php PASSED\n";
+    $passed++;
+} else {
+    echo "  ✗ test_breadcrumbs.php FAILED\n";
+    echo "    " . implode("\n    ", array_slice($output, 0, 10)) . "\n";
+    $failed++;
+}
+
+echo "\n";
+
 // Run folder tests
 echo "--- Folder Tests ---\n";
 if ($run_mock) {

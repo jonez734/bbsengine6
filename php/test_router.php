@@ -196,28 +196,28 @@ if (!defined('TEOSURL')) {
 // Test: router_buildBreadcrumbs with path segments
 echo "Test 13: router_buildBreadcrumbs builds correct crumbs\n";
 $breadcrumbs = router_buildBreadcrumbs("rec/arts/star-trek");
-if (count($breadcrumbs) === 3) {
-    echo "  ✓ PASS: 3 breadcrumbs for rec/arts/star-trek\n";
+if (count($breadcrumbs) === 4) {
+    echo "  ✓ PASS: 4 breadcrumbs for rec/arts/star-trek\n";
 } else {
-    echo "  ✗ FAIL: expected 3 breadcrumbs, got " . count($breadcrumbs) . "\n";
+    echo "  ✗ FAIL: expected 4 breadcrumbs, got " . count($breadcrumbs) . "\n";
     exit(1);
 }
 
 // Test: breadcrumb titles
 echo "Test 14: breadcrumb titles are title-cased\n";
-if ($breadcrumbs[0]['title'] === 'Rec' && $breadcrumbs[1]['title'] === 'Arts' && $breadcrumbs[2]['title'] === 'Star Trek') {
-    echo "  ✓ PASS: titles = Rec, Arts, Star Trek\n";
+if ($breadcrumbs[1]['title'] === 'rec' && $breadcrumbs[2]['title'] === 'arts' && $breadcrumbs[3]['title'] === 'star trek') {
+    echo "  ✓ PASS: titles = rec, arts, star trek\n";
 } else {
-    echo "  ✗ FAIL: titles = " . $breadcrumbs[0]['title'] . ", " . $breadcrumbs[1]['title'] . ", " . $breadcrumbs[2]['title'] . "\n";
+    echo "  ✗ FAIL: titles = " . $breadcrumbs[1]['title'] . ", " . $breadcrumbs[2]['title'] . ", " . $breadcrumbs[3]['title'] . "\n";
     exit(1);
 }
 
 // Test: breadcrumb URIs
 echo "Test 15: breadcrumb URIs have trailing slash\n";
-if ($breadcrumbs[0]['uri'] === '/teos/rec/' && $breadcrumbs[2]['uri'] === '/teos/rec/arts/star-trek/') {
-    echo "  ✓ PASS: URIs = /teos/rec/, /teos/rec/arts/star-trek/\n";
+if ($breadcrumbs[0]['uri'] === '/teos/' && $breadcrumbs[3]['uri'] === '/teos/rec/arts/star-trek/') {
+    echo "  ✓ PASS: URIs = /teos/, /teos/rec/arts/star-trek/\n";
 } else {
-    echo "  ✗ FAIL: uri[0]=" . $breadcrumbs[0]['uri'] . " uri[2]=" . $breadcrumbs[2]['uri'] . "\n";
+    echo "  ✗ FAIL: uri[0]=" . $breadcrumbs[0]['uri'] . " uri[3]=" . $breadcrumbs[3]['uri'] . "\n";
     exit(1);
 }
 
@@ -235,13 +235,15 @@ if (empty($empty)) {
 echo "Test 17: breadcrumbs auto-generate without DB connection\n";
 // This tests that router_buildBreadcrumbs returns valid crumbs even when DB is unavailable
 $crumbs_no_db = router_buildBreadcrumbs("comp/lang/python");
-if (count($crumbs_no_db) === 3
-    && $crumbs_no_db[0]['path'] === 'comp'
-    && $crumbs_no_db[1]['path'] === 'comp.lang'
-    && $crumbs_no_db[2]['path'] === 'comp.lang.python'
-    && $crumbs_no_db[0]['uri'] === '/teos/comp/'
-    && $crumbs_no_db[1]['uri'] === '/teos/comp/lang/'
-    && $crumbs_no_db[2]['uri'] === '/teos/comp/lang/python/') {
+if (count($crumbs_no_db) === 4
+    && $crumbs_no_db[0]['path'] === 'teos'
+    && $crumbs_no_db[1]['path'] === 'comp'
+    && $crumbs_no_db[2]['path'] === 'comp.lang'
+    && $crumbs_no_db[3]['path'] === 'comp.lang.python'
+    && $crumbs_no_db[0]['uri'] === '/teos/'
+    && $crumbs_no_db[1]['uri'] === '/teos/comp/'
+    && $crumbs_no_db[2]['uri'] === '/teos/comp/lang/'
+    && $crumbs_no_db[3]['uri'] === '/teos/comp/lang/python/') {
     echo "  ✓ PASS: auto-generated breadcrumbs correct\n";
 } else {
     echo "  ✗ FAIL: auto-generated breadcrumbs incorrect\n";
@@ -251,10 +253,13 @@ if (count($crumbs_no_db) === 3
 // Test: single segment produces one crumb
 echo "Test 18: single segment URI produces one crumb\n";
 $crumbs_single = router_buildBreadcrumbs("rec");
-if (count($crumbs_single) === 1
-    && $crumbs_single[0]['path'] === 'rec'
-    && $crumbs_single[0]['title'] === 'Rec'
-    && $crumbs_single[0]['uri'] === '/teos/rec/') {
+if (count($crumbs_single) === 2
+    && $crumbs_single[0]['path'] === 'teos'
+    && $crumbs_single[0]['title'] === 'teos'
+    && $crumbs_single[0]['uri'] === '/teos/'
+    && $crumbs_single[1]['path'] === 'rec'
+    && $crumbs_single[1]['title'] === 'rec'
+    && $crumbs_single[1]['uri'] === '/teos/rec/') {
     echo "  ✓ PASS: single crumb correct\n";
 } else {
     echo "  ✗ FAIL: single crumb incorrect\n";
@@ -264,20 +269,20 @@ if (count($crumbs_single) === 1
 // Test: hyphens in segments are title-cased with spaces
 echo "Test 19: hyphens in segments become spaces in title\n";
 $crumbs_hyphen = router_buildBreadcrumbs("rec/arts/star-trek");
-if ($crumbs_hyphen[2]['title'] === 'Star Trek' && $crumbs_hyphen[2]['path'] === 'rec.arts.star-trek') {
-    echo "  ✓ PASS: star-trek → 'Star Trek', path = rec.arts.star-trek\n";
+if ($crumbs_hyphen[3]['title'] === 'star trek' && $crumbs_hyphen[3]['path'] === 'rec.arts.star-trek') {
+    echo "  ✓ PASS: star-trek → 'star trek', path = rec.arts.star-trek\n";
 } else {
-    echo "  ✗ FAIL: title=" . $crumbs_hyphen[2]['title'] . " path=" . $crumbs_hyphen[2]['path'] . "\n";
+    echo "  ✗ FAIL: title=" . $crumbs_hyphen[3]['title'] . " path=" . $crumbs_hyphen[3]['path'] . "\n";
     exit(1);
 }
 
 // Test: trailing slash in URI is handled
 echo "Test 20: trailing slash in URI is handled\n";
 $crumbs_trail = router_buildBreadcrumbs("rec/arts/");
-if (count($crumbs_trail) === 2) {
-    echo "  ✓ PASS: trailing slash ignored, 2 crumbs\n";
+if (count($crumbs_trail) === 3) {
+    echo "  ✓ PASS: trailing slash ignored, 3 crumbs\n";
 } else {
-    echo "  ✗ FAIL: expected 2 crumbs, got " . count($crumbs_trail) . "\n";
+    echo "  ✗ FAIL: expected 3 crumbs, got " . count($crumbs_trail) . "\n";
     exit(1);
 }
 
