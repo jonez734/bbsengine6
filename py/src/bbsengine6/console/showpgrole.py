@@ -90,8 +90,9 @@ def main(args, loginid: Optional[str] = None, **kwargs):
             io.inputstring("{{var:promptcolor}}{{var:inputcolor}}", "", noneok=True)
             with database.cursor(conn=conn) as cur:
                 cur.execute(
-                    "UPDATE engine.pgrole SET last_ack_at = now() WHERE memberid = %s",
-                    (row["memberid"],),
+                    "UPDATE engine.pgrole SET last_ack_at = now() "
+                    "WHERE membermoniker = %s",
+                    (row["membermoniker"],),
                 )
             conn.commit()
             io.echo("{{var:okcolor}}acknowledged.")
@@ -107,8 +108,9 @@ def main(args, loginid: Optional[str] = None, **kwargs):
             if osuser:
                 with database.cursor(conn=conn) as cur:
                     cur.execute(
-                        "UPDATE engine.pgrole SET osuser = %s WHERE memberid = %s",
-                        (osuser, row["memberid"]),
+                        "UPDATE engine.pgrole SET osuser = %s "
+                        "WHERE membermoniker = %s",
+                        (osuser, row["membermoniker"]),
                     )
                 conn.commit()
                 io.echo(
@@ -125,15 +127,14 @@ def _fetch(args, loginid: str, *, conn) -> Optional[dict]:
     with database.cursor(conn=conn) as cur:
         cur.execute(
             """
-            SELECT mm.id AS memberid,
-                   mm.moniker,
+            SELECT mm.moniker AS membermoniker,
                    mm.loginid,
                    pr.rolname,
                    pr.osuser,
                    pr.created_at,
                    pr.last_ack_at
               FROM engine.__member mm
-              LEFT JOIN engine.pgrole pr ON pr.memberid = mm.id
+              LEFT JOIN engine.pgrole pr ON pr.membermoniker = mm.moniker
              WHERE mm.loginid = %s
             """,
             (loginid,),

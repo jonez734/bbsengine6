@@ -18,11 +18,11 @@ declare
   m record;
 begin
   for m in
-    select mm.id, mm.loginid
+    select mm.moniker, mm.loginid
       from engine.__member mm
      where engine.checkmemberflag('approved', mm.moniker) = true
        and not exists (
-         select 1 from engine.pgrole pr where pr.memberid = mm.id
+         select 1 from engine.pgrole pr where pr.membermoniker = mm.moniker
        )
   loop
     begin

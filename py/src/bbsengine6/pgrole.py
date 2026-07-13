@@ -4,14 +4,14 @@ Per-member PostgreSQL role provisioning for direct psql access.
 Auth is by ident (see handbook/specs/pg-ident-auth.md); the
 l_<loginid> roles are created with no password.
 
-Public surface:
+  Public surface:
 
   ensure_role_for_member(args, loginid, *, osuser=None) -> str
       Idempotent. Returns the rolname. Creates the role via
       engine.createpgrole if it doesn't exist yet; updates osuser
       if a row already exists and osuser is provided.
 
-  sync_groups(args, memberid) -> bool
+  sync_groups(args, loginid) -> bool
       Calls engine.syncpgrolegroups to bring the member's l_<loginid>
       role's sysop/term/web group memberships in line with the
       member's current flags.
@@ -35,7 +35,7 @@ def ensure_role_for_member(
     Returns the rolname, or None on failure (in which case a logentry
     is written with the error).
 
-    If a row already exists in engine.pgrole for this memberid, the
+    If a row already exists in engine.pgrole for this member, the
     osuser is updated when one is provided. The existing rolname is
     returned; the role is not recreated.
 
@@ -45,7 +45,7 @@ def ensure_role_for_member(
         pg_roles.rolname
       - CREATE ROLE l_xxx LOGIN INHERIT (no password; ident auth)
       - GRANT member TO l_xxx
-      - INSERT INTO engine.pgrole (memberid, rolname, osuser)
+      - INSERT INTO engine.pgrole (membermoniker, rolname, osuser)
     """
     util.logentry(f"bbsengine6.pgrole.ensure_role_for_member.100: {loginid=!r}")
 
@@ -68,10 +68,11 @@ def _ensure_role(
     *,
     conn: Any,
 ) -> Optional[str]:
-    # 1. Resolve memberid from loginid.
+    # 1. Resolve moniker from loginid. engine.__member's natural key
+    #    is moniker (citext); engine.pgrole.membermoniker references it.
     with database.cursor(conn=conn) as cur:
         cur.execute(
-            "SELECT id FROM engine.__member WHERE loginid = %s",
+            "SELECT moniker FROM engine.__member WHERE loginid = %s",
             (loginid,),
         )
         row = cur.fetchone()
@@ -80,12 +81,12 @@ def _ensure_role(
                 f"bbsengine6.pgrole._ensure_role.120: no member for loginid={loginid!r}"
             )
             return None
-        memberid = row["id"]
+        moniker = row["moniker"]
 
         # 2. Already have a row?
         cur.execute(
-            "SELECT rolname, osuser FROM engine.pgrole WHERE memberid = %s",
-            (memberid,),
+            "SELECT rolname, osuser FROM engine.pgrole WHERE membermoniker = %s",
+            (moniker,),
         )
         existing = cur.fetchone()
 
@@ -94,8 +95,8 @@ def _ensure_role(
         if osuser is not None and osuser != existing["osuser"]:
             with database.cursor(conn=conn) as cur:
                 cur.execute(
-                    "UPDATE engine.pgrole SET osuser = %s WHERE memberid = %s",
-                    (osuser, memberid),
+                    "UPDATE engine.pgrole SET osuser = %s WHERE membermoniker = %s",
+                    (osuser, moniker),
                 )
             util.logentry(
                 f"bbsengine6.pgrole._ensure_role.140: updated osuser for {loginid=}"
@@ -146,14 +147,14 @@ def sync_groups(args: Any, loginid: str, **kwargs: Any) -> bool:
 
 
 def _sync_groups(args: Any, loginid: str, *, conn: Any) -> bool:
-    # Look up the memberid and the rolename. If either is missing
+    # Look up the membermoniker and the rolename. If either is missing
     # there's nothing to sync.
     with database.cursor(conn=conn) as cur:
         cur.execute(
             """
-            SELECT mm.id AS memberid, pr.rolname
+            SELECT mm.moniker AS membermoniker, pr.rolname
               FROM engine.__member mm
-              JOIN engine.pgrole pr ON pr.memberid = mm.id
+              JOIN engine.pgrole pr ON pr.membermoniker = mm.moniker
              WHERE mm.loginid = %s
             """,
             (loginid,),
@@ -169,7 +170,7 @@ def _sync_groups(args: Any, loginid: str, *, conn: Any) -> bool:
         with database.cursor(conn=conn) as cur:
             cur.execute(
                 "SELECT engine.syncpgrolegroups(%s)",
-                (row["memberid"],),
+                (row["membermoniker"],),
             )
         conn.commit()
         return True

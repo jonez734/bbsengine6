@@ -30,41 +30,42 @@ grant execute on function engine.createrol to sysop;
 -- engine.createpgrole: derive 'l_' + sanitized(p_loginid),
 -- collision-suffixed, CREATE ROLE ... LOGIN (no password),
 -- GRANT member TO l_xxx, INSERT INTO engine.pgrole, return rolname.
--- Idempotent: if engine.pgrole already has a row for this memberid,
+-- Idempotent: if engine.pgrole already has a row for this member,
 -- the existing rolname is returned (and osuser is updated if provided).
 CREATE OR REPLACE FUNCTION engine.createpgrole(
   p_loginid TEXT,
   p_osuser  TEXT DEFAULT NULL
 ) RETURNS TEXT AS $$
 DECLARE
+  mmon     CITEXT;
   base     TEXT;
   rname    TEXT;
   n        INT := 0;
-  mid      BIGINT;
   existing TEXT;
 BEGIN
   IF p_loginid IS NULL OR btrim(p_loginid) = '' THEN
     RAISE EXCEPTION 'createpgrole: loginid is required';
   END IF;
 
-  -- Look up the member.
-  SELECT id INTO mid FROM engine.__member WHERE loginid = p_loginid;
-  IF mid IS NULL THEN
+  -- Look up the member. engine.__member's natural key is moniker
+  -- (citext); engine.pgrole.membermoniker references it.
+  SELECT moniker INTO mmon FROM engine.__member WHERE loginid = p_loginid;
+  IF mmon IS NULL THEN
     RAISE EXCEPTION 'createpgrole: no engine.__member row for loginid=%', p_loginid;
   END IF;
 
-  -- Idempotency: if a row already exists for this memberid, return
+  -- Idempotency: if a row already exists for this member, return
   -- the existing rolname (and update osuser if a non-NULL one was
   -- provided).
-  SELECT rolname INTO existing FROM engine.pgrole WHERE memberid = mid;
+  SELECT rolname INTO existing FROM engine.pgrole WHERE membermoniker = mmon;
   IF existing IS NOT NULL THEN
     IF p_osuser IS NOT NULL THEN
-      UPDATE engine.pgrole SET osuser = p_osuser WHERE memberid = mid;
+      UPDATE engine.pgrole SET osuser = p_osuser WHERE membermoniker = mmon;
     END IF;
     RETURN existing;
   END IF;
 
-  -- No existing row. Derive a fresh rolename.
+  -- No existing row. Derive a fresh rolname.
   base := 'l_' || lower(regexp_replace(p_loginid, '[^a-zA-Z0-9_]', '_', 'g'));
   rname := base;
 
@@ -81,8 +82,8 @@ BEGIN
   -- The 'member' group is created in pgrole.sql.
   EXECUTE format('GRANT member TO %I', rname);
 
-  INSERT INTO engine.pgrole (memberid, rolname, osuser)
-  VALUES (mid, rname, p_osuser);
+  INSERT INTO engine.pgrole (membermoniker, rolname, osuser)
+  VALUES (mmon, rname, p_osuser);
 
   RETURN rname;
 END;
@@ -106,7 +107,7 @@ grant execute on function engine.deletepgrole(name) to sysop;
 -- engine.syncpgrolegroups: keep a member's l_<loginid> role's group
 -- memberships (sysop, term, web) in sync with the member's flags.
 -- Called from console/member.py:edit() after flag changes.
-CREATE OR REPLACE FUNCTION engine.syncpgrolegroups(p_memberid BIGINT)
+CREATE OR REPLACE FUNCTION engine.syncpgrolegroups(p_membermoniker CITEXT)
 RETURNS VOID AS $$
 DECLARE
   rname     NAME;
@@ -118,8 +119,8 @@ BEGIN
   SELECT pr.rolname, mm.moniker
     INTO rname, m_moniker
     FROM engine.pgrole pr
-    JOIN engine.__member mm ON mm.id = pr.memberid
-   WHERE pr.memberid = p_memberid;
+    JOIN engine.__member mm ON mm.moniker = pr.membermoniker
+   WHERE pr.membermoniker = p_membermoniker;
 
   IF rname IS NULL THEN
     RETURN;  -- no role yet; nothing to sync
@@ -161,4 +162,4 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-grant execute on function engine.syncpgrolegroups(bigint) to sysop;
+grant execute on function engine.syncpgrolegroups(citext) to sysop;
