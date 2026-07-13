@@ -33,12 +33,12 @@ def main(args, **kwargs):
             if database.extensionavailable(args, ext, cur=cur) is True:
                 if database.extensioninstalled(args, ext, cur=cur) is False:
                     if database.creatextension(args, ext, cur=cur) is False:
-                        io.echo(f"fail")
+                        lib.fail()
                         return False
                     else:
-                        io.echo(f"created")
+                        lib.created()
                 else:
-                    io.echo(f" ok ", level="ok")
+                    lib.ok()
             else:
                 io.echo(f"not available")
                 return False

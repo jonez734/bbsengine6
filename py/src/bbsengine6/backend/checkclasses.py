@@ -1,11 +1,20 @@
 """
-Verify and initialize required database classes (tables/views).
+Verify and initialize core engine schema classes.
 
-Checks that all necessary table and view definitions exist in the engine schema
-and creates them if needed with appropriate structure and permissions.
+Creates the fundamental engine schema objects in dependency order:
+  - engine.__member (table)
+  - engine.member (view, depends on engine.__member)
+  - engine.__session (table, FK to engine.__member)
+  - engine.session (view, depends on engine.__session and engine.__member)
+  - engine.__refcode (table, FK to engine.__member)
+  - engine.refcode (view, depends on engine.__refcode and engine.__member)
+  - engine.map_refcode_use (table, FK to engine.__member and engine.__refcode)
+  - engine.__folder (table, FK to engine.__member)
+  - engine.folder (view, depends on engine.__folder and engine.__member)
 """
 
 from bbsengine6 import io, database
+from bbsengine6.database import classexists
 
 from bbsengine6.backend import lib
 
@@ -24,9 +33,17 @@ def access(args, op, **kwargs) -> bool:
 
 classlist = (
     ("engine.__member", "member.sql"),
-    ("engine.__session", "session.sql"),
-    ("engine.__folder", "folder.sql"),
     ("engine.member", "memberview.sql"),
+
+    ("engine.__session", "session.sql"),
+    ("engine.session", "session_view.sql"),
+
+    ("engine.__refcode", "refcode.sql"),
+    ("engine.refcode", "refcode.sql"),
+    ("engine.map_refcode_use", "refcode.sql"),
+
+    ("engine.__folder", "folder.sql"),
+    ("engine.folder", "folderview.sql"),
 )
 
 
@@ -34,20 +51,17 @@ def main(args, **kwargs) -> bool:
     def _work(conn):
         lib._ensure_autocommit_off(conn)
         failcount = 0
-        for c, sql in classlist:
+
+        for cls, sql in classlist:
             io.echo(
-                f"{{var:labelcolor}}class {{var:valuecolor}}{c}{{var:labelcolor}}: ",
+                f"{{var:labelcolor}}class {{var:valuecolor}}{cls}{{var:labelcolor}}: ",
                 end="",
             )
-            if database.classexists(args, c, conn=conn) is False:
+            if classexists(args, cls, conn=conn) is False:
                 io.echo("import ", end="")
-                sp = lib._sanitize_sp(c)
+                sp = lib._sanitize_sp(cls)
                 with database.cursor(conn=conn) as cur:
                     cur.execute(f"SAVEPOINT {sp}")
-                # Bounded retry on transient DB errors (lock timeout,
-                # deadlock). The savepoint protects the outer
-                # transaction; a transient failure rolls back only the
-                # savepoint and we re-try the importsql call.
                 try:
                     ok = lib.retry_on_transient(
                         lambda: database.importsql(
@@ -56,7 +70,7 @@ def main(args, **kwargs) -> bool:
                     )
                 except Exception as e:
                     io.echo_traceback(
-                        f"checkclasses: retry exhausted for {c}: {e}"
+                        f"checkclasses: retry exhausted for {cls}: {e}"
                     )
                     ok = False
                 if ok is False:

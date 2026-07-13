@@ -43,7 +43,6 @@ def main(args, **kwargs):
                     "checkfunctions",
                     "checksuperuser",
                     "checkwebserverrole",
-                    "checkengine",
                 ):
                     result = lib.runmodule(
                         args,
