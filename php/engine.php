@@ -367,6 +367,10 @@ function getsmarty($options=null)
 {
   $options = $options ?? [];
   $options["pluginsdir"] = $options["pluginsdir"] ?? (defined('\config\SMARTYPLUGINSDIR') ? \config\SMARTYPLUGINSDIR : []);
+  $bbsengine6smarty = "/srv/www/bbsengine6/smarty/";
+  if (is_array($options["pluginsdir"]) && !in_array($bbsengine6smarty, $options["pluginsdir"])) {
+      $options["pluginsdir"][] = $bbsengine6smarty;
+  }
   $options["templatedir"] = $options["templatedir"] ?? (defined('\config\SMARTYTEMPLATESDIR') ? \config\SMARTYTEMPLATESDIR : []);
   $options["compiledir"] = $options["compiledir"] ?? (defined('\config\SMARTYCOMPILEDTEMPLATESDIR') ? \config\SMARTYCOMPILEDTEMPLATESDIR : null);
   $options["escapehtml"] = $options["escapehtml"] ?? true;

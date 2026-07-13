@@ -1,0 +1,9 @@
+@import "vars";
+
+.youarehere {
+  background-color: $blurb-backgroundcolor;
+  color: $blurb-body-textcolor;
+  margin: 0.5em;
+  border: $blurb-border;
+  padding: 0.25em;
+}

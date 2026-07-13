@@ -1,8 +1,11 @@
 {extends file="page.tmpl"}
 {block name="title"}{$data.title}{/block}
+{block name="head" append}
+<link rel="stylesheet" type="text/css" href="{$smarty.const.ENGINESKINURL}css/youarehere.css" media="screen">
+{/block}
 {block name="content"}
   {if $data.uri !== null && $data.uri !== "" && $data.uri !== "/"}
-  {include file="teos-breadcrumbs.tmpl" breadcrumbs=$data.breadcrumbs linklast=False}
+  {include file="youarehere.tmpl" breadcrumbs=$data.breadcrumbs}
   {/if}
   {foreach $data.sections as $section}
   <div class="blurb">

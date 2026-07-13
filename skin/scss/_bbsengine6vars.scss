@@ -2,7 +2,7 @@ $page-backgroundcolor: #3a5a40;
 $page-textcolor: #dad7cd; // lightest of the palette
 $page-margin: 0em;
 
-$blurb-margin: 0.25em;
+$blurb-margin: 0.0125em;
 $blurb-backgroundcolor: #344e41;
 $blurb-textcolor: $page-textcolor;
 
@@ -52,8 +52,8 @@ $blurb-a-hover-backgroundcolor: gray;
 
 //$blurb-border-size: 0.125em;
 //$blurb-border-style: solid;
-$blurb-border-color: #4a4a4a; // dark gray
-$blurb-border: 0.125em solid $blurb-border-color;
+$blurb-border-color: #000; // #4a4a4a; // dark gray
+$blurb-border: 0.0125em solid $blurb-border-color;
 
 $body-fontsize: 1.5em;
 

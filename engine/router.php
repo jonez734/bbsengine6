@@ -49,7 +49,7 @@ function router_buildBreadcrumbs(string $uri): array
 
   $teosurl = rtrim(router_get_teosurl(), '/');
 
-  // Build auto-generated breadcrumbs as fallback
+  // Build breadcrumbs from URI segments
   $autoCrumbs = [];
   $path = '';
   foreach ($segments as $segment) {
@@ -61,43 +61,6 @@ function router_buildBreadcrumbs(string $uri): array
       'path' => $path,
       'uri' => $uri_path,
     ];
-  }
-
-  // Try to query DB for richer breadcrumb data
-  try {
-    $dbh = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
-    $sigpath = str_replace("-", "_", implode(".", $segments));
-    $stmt = \bbsengine6\database\query($dbh,
-      'SELECT title, path, uri FROM $engine.sig WHERE path @> :sigpath ORDER BY path ASC',
-      [":sigpath" => $sigpath]);
-
-    if ($stmt !== false && $stmt->rowCount() > 0) {
-      $dbSigs = $stmt->fetchAll();
-      // Build a map of DB sigs keyed by path (converting underscores back to hyphens
-      // to match auto-generated paths)
-      $dbMap = [];
-      foreach ($dbSigs as $sig) {
-        $dbMap[str_replace("_", "-", $sig['path'])] = $sig;
-      }
-
-      // Merge: use DB title/uri where available, fall back to auto-generated
-      $crumbs = [];
-      foreach ($autoCrumbs as $crumb) {
-        $dbSig = $dbMap[$crumb['path']] ?? null;
-        if ($dbSig !== null) {
-          $crumbs[] = [
-            'title' => !empty($dbSig['title']) ? $dbSig['title'] : $crumb['title'],
-            'path' => $crumb['path'],
-            'uri' => !empty($dbSig['uri']) ? $dbSig['uri'] : $crumb['uri'],
-          ];
-        } else {
-          $crumbs[] = $crumb;
-        }
-      }
-      $autoCrumbs = $crumbs;
-    }
-  } catch (\Throwable $e) {
-    // Fall through to auto-generated breadcrumbs
   }
 
   // Prepend "teos" crumb
