@@ -19,7 +19,7 @@ BACKEND_SUBCOMMANDS = {
     "checkdatabase",
     "checkengine",
     "checkextensions",
-    "checkflag",
+    "checkmemberflag",
     "checkfunctions",
     "checkloginid",
     "checknotify",

@@ -71,7 +71,11 @@ def checkwebserverrole(args, **kwargs):
 
 
 def checkbank(args, **kwargs):
-    return runmodule(args, "bank", **kwargs)
+    return runmodule(args, "checkbank", **kwargs)
+
+
+def checkclasses(args, **kwargs):
+    return runmodule(args, "checkclasses", **kwargs)
 
 
 def ok():
@@ -90,7 +94,7 @@ def created():
 # level="fail" example from io/specs/echo_commands.spec on the assumption
 # that no caller used them. backend.lib.fail() above emits {{level.fail}}
 # fail {{/all}} and is called by checkdatabase, checkroles, checkwebserverrole,
-# checkmemberflag, checksuperuser, and bank. Commit 7115e77 restored both lines
+# checkmemberflag, checksuperuser, and checkbank. Commit 7115e77 restored both lines
 # in the spec. If you ever consider removing {level.fail} again, also remove
 # backend.lib.fail() and migrate those callers to io.echo(level="error")
 # first; otherwise the spec will be out of sync with the live API.

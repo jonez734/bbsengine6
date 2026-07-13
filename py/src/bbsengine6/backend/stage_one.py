@@ -24,10 +24,11 @@ def main(args, **kwargs):
         for m in (
             "checkextensions",
             "checkengine",
+            "checkclasses",
             "checkfunctions",
             "checkmemberflag",
             "checkmessage",
-            "bank",
+            "checkbank",
         ):
             result = lib.runmodule(
                 args,

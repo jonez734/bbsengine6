@@ -18,7 +18,7 @@ def runmodule(args, submodule, package="bbsengine6.startup", **kwargs):
 # iterates this tuple in order, so adding a stage here is sufficient.
 #
 # Python dicts preserve insertion order (3.7+ language guarantee).
-BACKEND_STAGE_NAMES = ("stage_zero", "stage_one", "bank")
+BACKEND_STAGE_NAMES = ("stage_zero", "stage_one")
 
 BACKEND_STAGES = {name: "bbsengine6.backend" for name in BACKEND_STAGE_NAMES}
 
