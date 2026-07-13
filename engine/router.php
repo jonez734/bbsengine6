@@ -94,11 +94,18 @@ function router_buildBreadcrumbs(string $uri): array
           $crumbs[] = $crumb;
         }
       }
-      return $crumbs;
+      $autoCrumbs = $crumbs;
     }
   } catch (\Throwable $e) {
     // Fall through to auto-generated breadcrumbs
   }
+
+  // Prepend "teos" crumb
+  array_unshift($autoCrumbs, [
+    'title' => 'teos',
+    'path' => 'teos',
+    'uri' => $teosurl . '/',
+  ]);
 
   return $autoCrumbs;
 }
@@ -295,7 +302,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   $items = [];
 
   foreach ($entries as $entry) {
-    if ($entry === '.' || $entry === '..') continue;
+    if ($entry[0] === '.') continue;
     $fullpath = $safedir . '/' . $entry;
 
     if (is_dir($fullpath)) {
