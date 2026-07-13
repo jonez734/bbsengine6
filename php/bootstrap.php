@@ -45,6 +45,8 @@ function bootstrap(array $paths = []): bool
 }
 
 namespace {
+require_once('Log.php');
+
 // Backward compatibility: auto-run when included directly
 if (function_exists('bbsengine6\bootstrap')) {
     bbsengine6\bootstrap();

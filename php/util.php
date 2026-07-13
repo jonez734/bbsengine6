@@ -10,7 +10,7 @@ namespace bbsengine6\util
      * @param string
      * @param enum
      */
-    function logentry(string $message, int $priority=PEAR_LOG_DEBUG)
+    function logentry(string $message, int $priority=\PEAR_LOG_DEBUG)
     {
 
       if (defined("LOGENTRYPREFIX") === false)
@@ -18,7 +18,7 @@ namespace bbsengine6\util
         define("LOGENTRYPREFIX", "bbsengine6");
       }
 
-      $logger = \Log::factory("syslog", "", LOGENTRYPREFIX, [], PEAR_LOG_DEBUG);
+      $logger = \Log::factory("syslog", "", LOGENTRYPREFIX, [], \PEAR_LOG_DEBUG);
     //  $logger->log("bbsengine5.logentry.100: _SERVER=".var_export($_SERVER, true), $priority);
       $ip = getremoteaddr(); // $_SERVER["REMOTE_ADDR"];
 
