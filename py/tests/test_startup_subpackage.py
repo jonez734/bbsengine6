@@ -288,7 +288,7 @@ class TestModuleRunOnSubpackage:
           1. Load the bbsengine6.startup subpackage.
           2. Pass module.check (init/access/buildargs/main all present).
           3. Call m.main() on the subpackage, which iterates the
-             stage pipeline (stage_zero, stage_one, bank) by calling
+             stage pipeline (stage_zero, stage_one) by calling
              lib.runmodule for each.
 
         Without the __init__.py fix, step 2 fails with
@@ -315,7 +315,7 @@ class TestModuleRunOnSubpackage:
 
         # The call must not have returned False (= check failure)
         # and must not have raised AttributeError. Once check passes,
-        # m.main() iterates the three stages; the first lib.runmodule
+        # m.main() iterates the stages; the first lib.runmodule
         # call is for "stage_zero".
         assert result is not False, (
             f"module.run should not have returned False (check "
@@ -335,9 +335,9 @@ class TestModuleRunOnSubpackage:
             f"lib.runmodule(args, 'stage_zero'); got args="
             f"{first_call.args!r}"
         )
-        # All three stages should be dispatched in order.
+        # All stages should be dispatched in order.
         called_names = [c.args[1] for c in mock_runmodule.call_args_list]
-        assert called_names == ["stage_zero", "stage_one", "bank"], (
+        assert called_names == ["stage_zero", "stage_one"], (
             f"unexpected stage order: {called_names!r}"
         )
 

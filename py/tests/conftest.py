@@ -114,7 +114,13 @@ def schema_init(db_connection, request):
     - invite.sql (Generic invite code system: engine.__invite, engine.invite)
 
     Also loads bank schema:
-    - bank.sql
+    - bank_schema.sql
+    - bank_account.sql
+    - bank_account_view.sql
+    - bank_transaction.sql
+    - bank_transaction_view.sql
+    - bank_transfer.sql
+    - bank_transfer_view.sql
 
     Skips: schema, extensions, roles, member, session (already exist)
     """
@@ -152,29 +158,48 @@ def schema_init(db_connection, request):
     yield
 
 
-def _load_bank_schema(db_connection):
-    """Load bank schema SQL file."""
+def _get_bank_sql_files() -> list[Path]:
+    """Return paths to bank SQL files in correct execution order."""
     sql_dir = Path(__file__).parent.parent / "src" / "bbsengine6" / "sql"
-    bank_sql = sql_dir / "bank.sql"
 
-    if not bank_sql.exists():
-        logger.warning(f"  ⊘ bank.sql not found, skipping")
-        return
+    files = [
+        "bank_schema.sql",
+        "bank_account.sql",
+        "bank_account_view.sql",
+        "bank_transaction.sql",
+        "bank_transaction_view.sql",
+        "bank_transfer.sql",
+        "bank_transfer_view.sql",
+    ]
 
-    try:
-        sql_content = _read_sql_file(bank_sql)
-        _execute_sql_file(db_connection, sql_content, "bank.sql")
-        logger.info(f"  ✓ Loaded bank.sql")
-    except (psycopg.errors.DuplicateObject, psycopg.errors.DuplicateTable):
-        db_connection.rollback()
-        logger.info(f"  ⊘ bank.sql already exists, skipping")
-    except psycopg.errors.InsufficientPrivilege:
-        db_connection.rollback()
-        logger.warning(f"  ⊘ bank.sql - insufficient privileges, skipping")
-    except Exception as e:
-        logger.error(f"  ✗ Failed to load bank.sql: {e}")
-        db_connection.rollback()
-        raise pytest.fail(f"Schema initialization failed loading bank.sql: {e}")
+    paths = [sql_dir / f for f in files]
+
+    for path in paths:
+        if not path.exists():
+            raise FileNotFoundError(f"SQL file not found: {path}")
+
+    return paths
+
+
+def _load_bank_schema(db_connection):
+    """Load bank schema SQL files."""
+    sql_files = _get_bank_sql_files()
+
+    for filepath in sql_files:
+        try:
+            sql_content = _read_sql_file(filepath)
+            _execute_sql_file(db_connection, sql_content, filepath.name)
+            logger.info(f"  ✓ Loaded {filepath.name}")
+        except (psycopg.errors.DuplicateObject, psycopg.errors.DuplicateTable):
+            db_connection.rollback()
+            logger.info(f"  ⊘ {filepath.name} already exists, skipping")
+        except psycopg.errors.InsufficientPrivilege:
+            db_connection.rollback()
+            logger.warning(f"  ⊘ {filepath.name} - insufficient privileges, skipping")
+        except Exception as e:
+            logger.error(f"  ✗ Failed to load {filepath.name}: {e}")
+            db_connection.rollback()
+            raise pytest.fail(f"Schema initialization failed loading {filepath.name}: {e}")
 
     db_connection.commit()
 

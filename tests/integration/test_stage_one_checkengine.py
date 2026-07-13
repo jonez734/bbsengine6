@@ -113,7 +113,7 @@ class TestStageOneModuleLoop(unittest.TestCase):
             "checkengine",
             "checkfunctions",
             "checkclasses",
-            "checkflag",
+            "checkmemberflag",
             "bank",
         ):
             self.assertIn(required, names)
@@ -144,14 +144,19 @@ class TestCheckEngineIdempotency(unittest.TestCase):
              patch.object(self.checkengine.database, "schemaexists", return_value=True) as schemaexists, \
              patch.object(self.checkengine.database, "createschema") as createschema, \
              patch.object(self.checkengine.database, "manage_schema_priv", return_value=True), \
-             patch.object(self.checkengine.database, "classexists", return_value=True):
+             patch.object(self.checkengine.database, "classexists", return_value=True), \
+             patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
             result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
 
         self.assertTrue(result)
         schemaexists.assert_called_once()
         createschema.assert_not_called()
         # manage_schema_priv helper already present — no importsql call.
-        functionexists.assert_called_once()
+        # functionexists is also called by the SECDEF owner-verification
+        # loop, so we just check the first call was the helper install.
+        self.assertGreaterEqual(functionexists.call_count, 1)
+        first_args, _ = functionexists.call_args_list[0]
+        self.assertEqual(first_args[1], "public.manage_schema_priv")
         importsql.assert_not_called()
 
     def test_main_creates_schema_when_missing(self):
@@ -168,7 +173,8 @@ class TestCheckEngineIdempotency(unittest.TestCase):
              patch.object(self.checkengine.database, "schemaexists", return_value=False), \
              patch.object(self.checkengine.database, "createschema", return_value=True) as createschema, \
              patch.object(self.checkengine.database, "manage_schema_priv", return_value=True), \
-             patch.object(self.checkengine.database, "classexists", return_value=True):
+             patch.object(self.checkengine.database, "classexists", return_value=True), \
+             patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
             result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
 
         self.assertTrue(result)
@@ -201,6 +207,7 @@ class TestCheckEngineIdempotency(unittest.TestCase):
              patch.object(self.checkengine.database, "schemaexists", return_value=False), \
              patch.object(self.checkengine.database, "createschema", return_value=False), \
              patch.object(self.checkengine.database, "classexists", return_value=True), \
+             patch.object(self.checkengine.database, "verify_function_owner", return_value=True), \
              patch.object(self.checkengine, "lib") as fake_lib:
             fake_lib.fail = Mock()
             fake_lib.ok = Mock()
@@ -228,14 +235,16 @@ class TestCheckEngineIdempotency(unittest.TestCase):
              patch.object(self.checkengine.database, "schemaexists", return_value=True), \
              patch.object(self.checkengine.database, "createschema"), \
              patch.object(self.checkengine.database, "manage_schema_priv", return_value=True) as manage, \
-             patch.object(self.checkengine.database, "classexists", return_value=True):
+             patch.object(self.checkengine.database, "classexists", return_value=True), \
+             patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
             result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
 
         self.assertTrue(result)
-        functionexists.assert_called_once()
-        # The function lookup must target the helper we depend on.
-        args_list, _ = functionexists.call_args
-        self.assertEqual(args_list[1], "public.manage_schema_priv")
+        # First call is the helper-install check; subsequent calls are
+        # the SECDEF owner-verification loop in checkengine.main.
+        self.assertGreaterEqual(functionexists.call_count, 1)
+        first_args, _ = functionexists.call_args_list[0]
+        self.assertEqual(first_args[1], "public.manage_schema_priv")
         # importsql must be called at least once with the SQL file
         # that defines the helper, and the caller-supplied conn must
         # be propagated so the helper is installed in the target DB,
@@ -275,7 +284,8 @@ class TestCheckEngineIdempotency(unittest.TestCase):
              patch.object(self.checkengine.database, "schemaexists") as schemaexists, \
              patch.object(self.checkengine.database, "createschema"), \
              patch.object(self.checkengine.database, "manage_schema_priv") as manage, \
-             patch.object(self.checkengine.database, "classexists", return_value=True):
+             patch.object(self.checkengine.database, "classexists", return_value=True), \
+             patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
             result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
 
         self.assertFalse(result)

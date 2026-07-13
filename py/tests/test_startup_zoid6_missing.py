@@ -192,13 +192,13 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             f"startup.main should return True when missing DB is recovered; "
             f"got {result!r}, run_calls={h.run_calls!r}"
         )
-        assert h.run_calls == ["stage_zero", "stage_one", "bank"], (
+        assert h.run_calls == ["stage_zero", "stage_one"], (
             f"unexpected stage order: {h.run_calls!r}"
         )
 
     def test_existing_database_path_is_unchanged(self):
         """When the target DB already exists, startup still walks
-        stage_zero -> stage_one -> bank and returns True."""
+        stage_zero -> stage_one and returns True."""
         import importlib
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
@@ -206,7 +206,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             result = startup_module.main(h.args, conn=None, pool=None)
 
         assert result is True
-        assert h.run_calls == ["stage_zero", "stage_one", "bank"]
+        assert h.run_calls == ["stage_zero", "stage_one"]
 
     def test_getpool_operational_error_does_not_abort(self):
         """If getpool() raises psycopg.OperationalError because the
@@ -259,8 +259,8 @@ class TestStartupMainWhenZoid6DatabaseMissing:
 
     def test_stage_zero_failure_short_circuits(self):
         """If stage_zero returns False, startup must short-circuit:
-        stage_one and bank must NOT run. The function still returns
-        False and the connection is rolled back."""
+        stage_one must NOT run. The function still returns False
+        and the connection is rolled back."""
         import importlib
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
@@ -272,15 +272,15 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         assert result is False, (
             f"startup must return False when a stage fails; got {result!r}"
         )
-        # stage_one and bank must NOT run after stage_zero fails.
+        # stage_one must NOT run after stage_zero fails.
         assert h.run_calls == ["stage_zero"], (
             f"only stage_zero should run on failure; got {h.run_calls!r}"
         )
 
     def test_stage_one_failure_short_circuits(self):
-        """If stage_one returns False, startup must short-circuit:
-        bank must NOT run. stage_zero still runs first (and
-        succeeds); only bank is short-circuited."""
+        """If stage_one returns False, startup must short-circuit.
+        stage_zero still runs first (and succeeds); stage_one fails
+        and no further stages run."""
         import importlib
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
@@ -292,9 +292,9 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         assert result is False, (
             f"startup must return False when a stage fails; got {result!r}"
         )
-        # stage_zero ran, stage_one ran and failed, bank must NOT run.
+        # stage_zero ran, stage_one ran and failed; no further stages run.
         assert h.run_calls == ["stage_zero", "stage_one"], (
-            f"bank should not run after stage_one fails; "
+            f"no stages should run after stage_one fails; "
             f"got {h.run_calls!r}"
         )
 
@@ -340,14 +340,14 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         assert "stage_zero" in sub_calls, (
             f"stage_zero must have been attempted; got {sub_calls!r}"
         )
-        # Production: stage_one / bank still run after stage_zero
-        # failure (failcount is what drives the final return). The
-        # key behavior is the final False.
+        # Production: stage_one still runs after stage_zero failure
+        # (failcount is what drives the final return). The key
+        # behavior is the final False.
         assert result is False
 
     def test_createdb_present_succeeds(self):
         """When checkcreatedb returns True, startup must proceed
-        through stage_zero / stage_one / bank and return True. This
+        through stage_zero / stage_one and return True. This
         pins the happy path of the new checkcreatedb sub-step."""
         import importlib
         startup_module = importlib.import_module("bbsengine6.startup.main")
@@ -363,9 +363,9 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             result = startup_module.main(args, conn=None, pool=None)
 
         assert result is True
-        # All three top-level stages were attempted.
+        # All top-level stages were attempted.
         called = [c.args[1] for c in mock_runmodule.call_args_list]
-        assert called == ["stage_zero", "stage_one", "bank"], (
+        assert called == ["stage_zero", "stage_one"], (
             f"unexpected stage order: {called!r}"
         )
 
