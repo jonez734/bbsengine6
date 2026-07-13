@@ -376,6 +376,7 @@ function getsmarty($options=null)
   // logentry("getsmarty.100: options=".var_export($options, true));
 
   $s = new \Smarty();
+  umask(0002);
   $s->setEscapeHtml($options["escapehtml"]);
 
 /*
