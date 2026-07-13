@@ -22,7 +22,7 @@
 ## Files to edit
 
 6. **`bbsengine6/php/blurb.php`** — `display()` loads `replies` and assigns `$data["replies"]`; `parseMarkdownSections()` extracts `parent-blurb` and `attributes` from frontmatter and includes them on the returned data (so the template can show parent-blurb link in footer).
-7. **`bbsengine6/skin/tmpl/page-markdown-sections.tmpl`** — include `blurb_replies.tmpl`; render parent-blurb link in the section footer.
+7. **`bbsengine6/skin/tmpl/page-markdown-sections.tmpl`** — include `blurb_replies.tmpl`; ~~render parent-blurb link in the section footer.~~ *Parent folder link (href="..") is now implemented, gated on `$data.uri`.*
 8. **`bbsengine6/skin/tmpl/blurb.tmpl`** — extend `metadata` block to show reply count (mirroring `socrates_post.tmpl:60-65`); leave the existing `footer` block extension intact for the replies partial.
 
 ## SQL (new, in `blurb.sql`)

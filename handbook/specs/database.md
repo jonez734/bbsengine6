@@ -2,7 +2,7 @@
 
 ## Overview
 
-`database.py` is a PostgreSQL database utility module providing connection pooling, CRUD operations, schema/role/extension management, and SQL execution helpers for the BBS engine.
+`database.py` is a PostgreSQL database utility module providing connection pooling, CRUD operations, schema/role/extension management, and SQL execution helpers for bbsengine6.
 
 ## Core Architecture
 

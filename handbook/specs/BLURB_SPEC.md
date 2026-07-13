@@ -90,6 +90,15 @@ function isBlurb(string $uri): bool;
  * @param string $uri The URI path
  * @param string|null $filepath Optional filepath (unused, for signature consistency)
  * @return void Outputs the rendered page
+ *
+ * Template data includes:
+ *   - content: raw markdown
+ *   - blurb: database record (or empty array)
+ *   - breadcrumbs: ancestor sigs (may be empty)
+ *   - uri: the blurb URI (used by template for parent folder link)
+ *   - title: parsed from frontmatter or first <h1>
+ *   - sections: array of {header, content, date, author}
+ *   - choices: navigation choices
  */
 function display(string $uri, ?string $filepath): void;
 
