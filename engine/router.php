@@ -254,11 +254,17 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   array_pop($uri_parts);
   $breadcrumbs = router_buildBreadcrumbs(implode("/", $uri_parts));
 
+  $choices = [];
+  if (function_exists('\zoid6\buildchoices')) {
+    $choices = \zoid6\buildchoices($choices);
+  }
+
   $data = [
     'title' => $title,
     'date' => $date,
     'content' => $html,
     'breadcrumbs' => $breadcrumbs,
+    'choices' => $choices,
   ];
 
   if (function_exists('bbsengine6\displaypage')) {
@@ -378,6 +384,11 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
       'actions' => [],
     ];
 
+    $choices = [];
+    if (function_exists('\zoid6\buildchoices')) {
+      $choices = \zoid6\buildchoices($choices);
+    }
+
     bbsengine6\displaypage([
       'title' => $title,
       'items' => $items,
@@ -385,6 +396,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
       'hidden' => $hidden,
       'currentsig' => $currentsig,
       'breadcrumbs' => $breadcrumbs,
+      'choices' => $choices,
     ], 'browse.tmpl');
     return '';
   }
