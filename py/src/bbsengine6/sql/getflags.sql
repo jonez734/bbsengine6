@@ -9,7 +9,7 @@ BEGIN
             f.description AS description,
             f.defaultvalue AS value
         FROM
-            engine.flag f;
+            engine.member_flag f;
     ELSE
         -- Return specific values when moniker is provided
         RETURN QUERY

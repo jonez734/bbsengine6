@@ -78,13 +78,12 @@ def main(args, **kwargs) -> bool:
         pool = kwargs.pop("pool", None)
         if pool is None:
             io.echo(
-                "bbsengine6.startup.110: no conn or pool supplied; "
-                "attempting admin pool against 'postgres' to recover "
-                "missing database",
+                f"bbsengine6.startup.110: no conn or pool supplied; "
+                f"attempting pool against {args.databasename!r}",
                 level="debug",
             )
             try:
-                pool = database.getpool(args, dbname="postgres")
+                pool = database.getpool(args, dbname=args.databasename)
             except (
                 ConnectionError, TimeoutError, OSError, psycopg.OperationalError
             ) as e:
