@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import threading
 
-from . import bank, database, io, util
+from bbsengine6 import bank, database, io, util
 
 
 _threadlocal = threading.local()
