@@ -80,16 +80,30 @@ def make_dsn(args: object, **kwargs)
 
 ---
 
-### session.py - User Session Management
+### bbsengine6.session — Session Management Package
 
-**Purpose:** Manages user session lifecycle, persistence, and retrieval
+**Purpose:** Manages both in-memory WebSocket sessions and DB-backed session lifecycle
 
-**File Size:** ~313 lines
+**Package Structure:**
+```
+bbsengine6/session/
+├── __init__.py    # Re-export facade: from .lib import *
+├── lib.py         # SessionManager class + DB session functions
+└── api/
+    └── __init__.py
+```
 
-**Global Variables:**
+**In-Memory SessionManager (WebSocket):**
 ```python
-currentsessionid: str | None = None
-  "Current session ID for logged-in user"
+class SessionManager:
+    """Generic base for WebSocket session management.
+    Extended by game-specific subclasses (CasinoSessionManager, EmpyreSessionManager).
+    """
+    register_session(session_id, moniker, is_sysop=False)
+    unregister_session(session_id)
+    get_session(session_id) -> dict | None
+    get_moniker(session_id) -> str | None
+    get_is_sysop(session_id) -> bool
 ```
 
 #### Functions

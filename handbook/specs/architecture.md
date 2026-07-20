@@ -77,8 +77,9 @@ make_dsn(args, **kwargs) -> str
 
 **Primary Modules:**
 
-#### 2a. Session Management (`session.py`)
-- User session lifecycle (create, read, update, delete)
+#### 2a. Session Management (`bbsengine6.session`)
+- **In-memory WebSocket sessions:** `SessionManager` class in `session/lib.py` — generic base for mapping session IDs to auth state. Extended by game-specific subclasses (`CasinoSessionManager`, `EmpyreSessionManager`).
+- **DB-backed sessions:** Functions in `session/lib.py` (`start`, `read`, `write`, `garbagecollect`) — PostgreSQL-backed session lifecycle for CLI/web.
 - Session expiration and garbage collection
 - Member session tracking
 
@@ -630,7 +631,7 @@ bbsengine6 can also be viewed as a collection of **feature domains**, each with 
 **Purpose:** Manage user session lifecycle and persistence
 
 **Modules:**
-- `session.py` (primary)
+- `bbsengine6.session` (package: `session/lib.py`)
 - `database.py` (persistence)
 - `member.py` (session member info)
 - `io.echo` (logging)
@@ -828,7 +829,7 @@ PostgreSQL
   ↓ (return member record)
 Data Layer (database.py)
   ↓ (return dict)
-Business Logic (session.py)
+Business Logic (session/lib.py)
   ↓ (create new session)
 Data Layer (database.py)
   ↓ (insert session)
@@ -836,7 +837,7 @@ PostgreSQL
   ↓ (confirm insert)
 Data Layer (database.py)
   ↓ (return session ID)
-Business Logic (session.py)
+Business Logic (session/lib.py)
   ↓ (store currentsessionid)
 Terminal I/O (io.echo)
   ↓ (display success message)
@@ -989,7 +990,7 @@ mymodule/
 │         Python Backend (Core Business Logic)            │
 │                                                          │
 │ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│ │   session.py │  │   member.py  │  │  module.py   │  │
+│ │session/lib.py│  │   member.py  │  │  module.py   │  │
 │ │              │  │              │  │              │  │
 │ │  blurb.py    │  │   folder.py  │  │   util.py    │  │
 │ │  listbox.py  │  │   menu.py    │  │   form.py    │  │
@@ -1037,7 +1038,7 @@ Layer 3: PRESENTATION
   │ Depends on Layers 1-2
   │
 Layer 2: BUSINESS LOGIC
-  ├─ session.py, member.py, blurb.py, folder.py
+  ├─ session/lib.py, member.py, blurb.py, folder.py
   ├─ util.py (shared utilities)
   └─ input.py
   │ Depends on Layer 1
@@ -1068,7 +1069,7 @@ Module System (module.py)
     ▼
 Business Logic Layer
     │
-    ├─ Session (session.py)
+    ├─ Session (session/lib.py)
     ├─ Member (member.py)
     ├─ Messages (blurb.py)
     └─ Utilities (util.py)
@@ -1120,7 +1121,7 @@ User's Terminal Display
 - Database queries validated before execution
 
 **State Management:**
-- Global `currentsessionid` in `session.py`
+- Global `currentsessionid` in `session/lib.py`
 - Global `currentmoniker` in `member.py`
 - JSONB fields in PostgreSQL for flexible attributes
 

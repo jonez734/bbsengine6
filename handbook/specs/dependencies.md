@@ -24,7 +24,7 @@ This document describes module dependencies, their rationale, and how modules re
 Legend: → means "depends on"
 
 database.py        → psycopg, psycopg_pool, io.echo
-session.py         → database.py, member.py, io.echo
+session/lib.py      → database.py, member.py, io.echo
 member.py          → database.py, util.py, io.echo
 module.py          → database.py, io.echo, importlib
 util.py            → io.echo, logging, hashlib
@@ -48,7 +48,7 @@ screen.py          → io.screen
 PostgreSQL
     ↑
     │
-database.py ←────── session.py
+database.py ←────── session/lib.py
     ↑                   ↑
     │                   │
     │              member.py ←─ util.py ←─ io.echo ←─ terminal.py
@@ -136,7 +136,7 @@ database.py
 ### Business Logic Layer → Data Layer
 
 ```
-session.py ──────┐
+session/lib.py ────┐
                  ├──→ database.py
 member.py ───────┘
 module.py ───────┘
@@ -205,11 +205,11 @@ etc.
 
 ### Session ↔ Member Bidirectional
 
-**session.py depends on member.py:**
+**session/lib.py depends on member.py:**
 - Calls `member.getcurrentmoniker()` during session operations
 - Needs member info for session validation
 
-**member.py depends on session.py:**
+**member.py depends on session/lib.py:**
 - No direct dependency, but uses shared session globals
 
 **Rationale:**
@@ -238,7 +238,7 @@ etc.
 **Many modules depend on util.py:**
 
 ```
-session.py   ──┐
+session/lib.py   ──┐
 member.py    ──┤
 blurb.py     ──┤──→ util.py
 folder.py    ──┤
@@ -384,7 +384,7 @@ database.connect() → mysql.connector
 menu.py, listbox.py, form.py, all benefit
 ```
 
-### Why session.py and member.py are separate
+### Why session/lib.py and member.py are separate
 
 **Benefit:**
 - Can test member authentication independently
@@ -395,7 +395,7 @@ menu.py, listbox.py, form.py, all benefit
 **Example:**
 ```
 If adding OAuth:
-  ├─ Keep session.py unchanged
+  ├─ Keep session/lib.py unchanged
   ├─ Modify member.py to support OAuth
   └─ No ripple effects in session code
 ```
@@ -489,10 +489,10 @@ When adding new modules:
    # Good: lower depends on upper
    util.py → nothing
    database.py → util.py
-   session.py → database.py
+   session/lib.py → database.py
    
    # Bad: upper depends on lower (AVOID)
-   database.py → session.py  # DON'T DO THIS
+   database.py → session/lib.py  # DON'T DO THIS
    ```
 
 2. **Use message passing instead of direct calls**
@@ -529,7 +529,7 @@ When adding new modules:
 - io modules: only depend on other io modules
 
 **Medium Coupling (Acceptable):**
-- session.py: depends on database, member
+- session/lib.py: depends on database, member
 - menu.py: depends on database, io, util
 - module.py: depends on database, io, importlib
 
@@ -543,7 +543,7 @@ When adding new modules:
 1. database.py - used by everything
 2. util.py - used by most modules
 3. io modules - core for terminal interface
-4. session.py - critical for auth
+4. session/lib.py - critical for auth
 
 **Medium Reusability:**
 5. member.py - auth
@@ -563,7 +563,7 @@ When adding new modules:
 Required modules:
 ```
 database.py          (database access)
-session.py, member.py (auth)
+session/lib.py, member.py (auth)
 module.py             (plugin system)
 util.py               (utilities)
 io/*                  (terminal I/O)
