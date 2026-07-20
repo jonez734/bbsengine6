@@ -1341,7 +1341,10 @@ manage per-connection state and pending-request futures.
 - [ ] Add `MessageRouter` and `MessageRouterMixin` to
   `bbsengine6/net/router.py` (extended, alongside the existing
   `InternetRouter`). The new class sits next to the existing
-  `InternetRouter`; both coexist.
+  `InternetRouter`; both coexist. Note: `bbsengine6.session.core`
+  now provides the base in-memory `SessionManager` class. The
+  `MessageRouter` should compose it (`self.sessions = SessionManager()`)
+  rather than defining its own `self.sessions` dict.
   - `class MessageRouter`: per-process message dispatcher. Owns
     per-session state. Methods:
     - `__init__(self, args)`: stores `args`, initializes

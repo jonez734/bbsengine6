@@ -3,13 +3,37 @@ import uuid
 import threading
 from argparse import Namespace
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Dict, Optional
 
 import copy
 
 from psycopg import sql
 
-from . import database, member, io
+from bbsengine6 import database, member, io
+
+
+class SessionManager:
+    """Manages WebSocket sessions and authentication state."""
+
+    def __init__(self):
+        self._sessions: Dict[int, Dict[str, Any]] = {}
+
+    def register_session(self, session_id: int, moniker: str, is_sysop: bool = False) -> None:
+        self._sessions[session_id] = {"moniker": moniker, "is_sysop": is_sysop}
+
+    def unregister_session(self, session_id: int) -> None:
+        self._sessions.pop(session_id, None)
+
+    def get_session(self, session_id: int) -> Optional[Dict[str, Any]]:
+        return self._sessions.get(session_id)
+
+    def get_moniker(self, session_id: int) -> Optional[str]:
+        session = self._sessions.get(session_id)
+        return session.get("moniker") if session else None
+
+    def get_is_sysop(self, session_id: int) -> bool:
+        session = self._sessions.get(session_id)
+        return session.get("is_sysop", False) if session else False
 
 
 _threadlocal = threading.local()
