@@ -276,3 +276,14 @@ class BankService:
     def get_pending_transfers(self, moniker: str = "", is_sysop: bool = False) -> List[Dict[str, Any]]:
         """Get pending transfers."""
         return self.transfer_obj.get_pending(moniker, is_sysop)
+
+    def list_all(self) -> List[Dict[str, Any]]:
+        """List all accounts with balances."""
+        from bbsengine6 import database
+
+        with database.connect(self.args) as conn:
+            with database.cursor(conn) as cur:
+                cur.execute(
+                    "SELECT moniker, balance FROM bank.__account ORDER BY moniker"
+                )
+                return [{"moniker": row["moniker"], "balance": int(row["balance"])} for row in cur]

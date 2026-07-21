@@ -9,7 +9,7 @@
 -- baseline SELECT/usage grants are issued to 'member' rather than to
 -- each l_<loginid> role individually.
 
-create table engine.pgrole (
+create table if not exists engine.pgrole (
   membermoniker     citext primary key references engine.__member(moniker) on delete cascade,
   rolname      name not null unique,
   osuser       text,

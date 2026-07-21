@@ -447,7 +447,7 @@ def edit(args, **kwargs):
                 )
 
             libmember.setpassword(
-                args, m["moniker"], m["password"], conn=conn, **kwargs
+                args, m["password"], m["moniker"], conn=conn, **kwargs
             )
 
             configurerole(
@@ -458,8 +458,8 @@ def edit(args, **kwargs):
                 **kwargs,
             )
             setui(args, m["loginid"], m["ui"], conn=conn, **kwargs)
-            pgrole.ensure_role_for_member(
-                args, m["loginid"], conn=conn, **kwargs
+            pgrole.ensure_login_role(
+                args, m["moniker"], conn=conn, **kwargs
             )
             pgrole.sync_groups(args, m["loginid"], conn=conn, **kwargs)
 
@@ -553,8 +553,8 @@ def add(args, **kwargs) -> bool:
                 conn=conn,
                 **kwargs,
             )
-            pgrole.ensure_role_for_member(
-                args, member["loginid"], conn=conn, **kwargs
+            pgrole.ensure_login_role(
+                args, moniker, conn=conn, **kwargs
             )
             pgrole.sync_groups(
                 args, member["loginid"], conn=conn, **kwargs

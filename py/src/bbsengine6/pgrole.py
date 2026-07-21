@@ -1,15 +1,13 @@
 """
-Per-member PostgreSQL role provisioning for direct psql access.
+Per-member PostgreSQL role provisioning.
 
-Auth is by ident (see handbook/specs/pg-ident-auth.md); the
-l_<loginid> roles are created with no password.
+Public surface:
 
-  Public surface:
-
-  ensure_role_for_member(args, loginid, *, osuser=None) -> str
-      Idempotent. Returns the rolname. Creates the role via
-      engine.createpgrole if it doesn't exist yet; updates osuser
-      if a row already exists and osuser is provided.
+  ensure_login_role(args, moniker, **kwargs) -> str
+      Idempotent. Creates a LOGIN PostgreSQL role named after the
+      member's moniker. Grants the 'member' group role and USAGE
+      on the engine schema. Inserts a tracking row into engine.pgrole.
+      Returns the rolname on success.
 
   sync_groups(args, loginid) -> bool
       Calls engine.syncpgrolegroups to bring the member's l_<loginid>
@@ -22,103 +20,90 @@ from typing import Any, Optional
 from bbsengine6 import database, util
 
 
-def ensure_role_for_member(
-    args: Any,
-    loginid: str,
-    *,
-    osuser: Optional[str] = None,
-    **kwargs: Any,
-) -> Optional[str]:
+def ensure_login_role(args: Any, moniker: str, **kwargs: Any) -> Optional[str]:
     """
-    Provision or look up the l_<loginid> role for a member.
+    Create a LOGIN PostgreSQL role named after the member's moniker.
 
-    Returns the rolname, or None on failure (in which case a logentry
-    is written with the error).
+    Idempotent: if the role already exists or a pgrole row exists, this
+    is a no-op.  Grants the 'member' group role and USAGE on the engine
+    schema.  Inserts a tracking row into engine.pgrole with
+    rolname = moniker.
 
-    If a row already exists in engine.pgrole for this member, the
-    osuser is updated when one is provided. The existing rolname is
-    returned; the role is not recreated.
-
-    New rows go through engine.createpgrole, which:
-      - derives the rolname as 'l_' + sanitized(loginid)
-      - appends a numeric suffix on collision with any existing
-        pg_roles.rolname
-      - CREATE ROLE l_xxx LOGIN INHERIT (no password; ident auth)
-      - GRANT member TO l_xxx
-      - INSERT INTO engine.pgrole (membermoniker, rolname, osuser)
+    Returns the rolname on success, or None on failure.
     """
-    util.logentry(f"bbsengine6.pgrole.ensure_role_for_member.100: {loginid=!r}")
+    util.logentry(f"bbsengine6.pgrole.ensure_login_role.100: {moniker=!r}")
 
     conn = kwargs.get("conn")
     if conn is None:
         pool = kwargs.get("pool")
         if pool is None:
-            util.logentry("bbsengine6.pgrole.ensure_role_for_member.110: no conn/pool")
-            return None
-        with database.connect(args, pool=pool) as conn:
-            return _ensure_role(args, loginid, osuser, conn=conn)
-
-    return _ensure_role(args, loginid, osuser, conn=conn)
-
-
-def _ensure_role(
-    args: Any,
-    loginid: str,
-    osuser: Optional[str],
-    *,
-    conn: Any,
-) -> Optional[str]:
-    # 1. Resolve moniker from loginid. engine.__member's natural key
-    #    is moniker (citext); engine.pgrole.membermoniker references it.
-    with database.cursor(conn=conn) as cur:
-        cur.execute(
-            "SELECT moniker FROM engine.__member WHERE loginid = %s",
-            (loginid,),
-        )
-        row = cur.fetchone()
-        if row is None:
             util.logentry(
-                f"bbsengine6.pgrole._ensure_role.120: no member for loginid={loginid!r}"
+                "bbsengine6.pgrole.ensure_login_role.110: no conn/pool"
             )
             return None
-        moniker = row["moniker"]
+        with database.connect(args, pool=pool) as conn:
+            return _ensure_login_role(args, moniker, conn=conn)
 
-        # 2. Already have a row?
+    return _ensure_login_role(args, moniker, conn=conn)
+
+
+def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
+    rolname = moniker
+
+    # 1. Check if a pgrole row already exists for this member.
+    with database.cursor(conn=conn) as cur:
         cur.execute(
-            "SELECT rolname, osuser FROM engine.pgrole WHERE membermoniker = %s",
+            "SELECT rolname FROM engine.pgrole WHERE membermoniker = %s",
             (moniker,),
         )
         existing = cur.fetchone()
 
     if existing is not None:
-        rolname = existing["rolname"]
-        if osuser is not None and osuser != existing["osuser"]:
-            with database.cursor(conn=conn) as cur:
-                cur.execute(
-                    "UPDATE engine.pgrole SET osuser = %s WHERE membermoniker = %s",
-                    (osuser, moniker),
-                )
-            util.logentry(
-                f"bbsengine6.pgrole._ensure_role.140: updated osuser for {loginid=}"
-            )
-        return rolname
+        util.logentry(
+            f"bbsengine6.pgrole._ensure_login_role.140: "
+            f"pgrole row exists for {moniker=}, rolname={existing['rolname']}"
+        )
+        return existing["rolname"]
 
-    # 3. New row. engine.createpgrole handles role-name derivation,
-    #    collision-suffixing, CREATE ROLE, GRANT member, INSERT.
+    # 2. Check if the PostgreSQL role already exists (e.g. created via psql).
+    if not database.rolexists(args, rolname, conn=conn):
+        ok = database.createrol(
+            args,
+            rolname,
+            conn=conn,
+            login=True,
+            superuser=False,
+            createdb=False,
+            createrole=False,
+        )
+        if not ok:
+            util.logentry(
+                f"bbsengine6.pgrole._ensure_login_role.160: "
+                f"createrol failed for {rolname=}"
+            )
+            return None
+
+    # 3. Grant the 'member' group role.
+    with database.cursor(conn=conn) as cur:
+        cur.execute(f'GRANT member TO "{rolname}"')
+
+    # 4. Grant USAGE on the engine schema.
+    database.manage_schema_priv(
+        args, "grant", "usage", "engine", rolname, conn=conn
+    )
+
+    # 5. Insert tracking row into engine.pgrole.
     with database.cursor(conn=conn) as cur:
         cur.execute(
-            "SELECT engine.createpgrole(%s, %s) AS rolname",
-            (loginid, osuser),
+            "INSERT INTO engine.pgrole (membermoniker, rolname, created_at) "
+            "VALUES (%s, %s, now()) "
+            "ON CONFLICT (membermoniker) DO NOTHING",
+            (moniker, rolname),
         )
-        row = cur.fetchone()
-    if row is None or row.get("rolname") is None:
-        util.logentry(
-            f"bbsengine6.pgrole._ensure_role.160: createpgrole returned NULL for {loginid=}"
-        )
-        return None
-    rolname = row["rolname"]
+
     util.logentry(
-        f"bbsengine6.pgrole._ensure_role.180: created {rolname=} for {loginid=}"
+        f"bbsengine6.pgrole._ensure_login_role.180: "
+        f"created {rolname=} for {moniker=}"
     )
     return rolname
 
@@ -166,17 +151,9 @@ def _sync_groups(args: Any, loginid: str, *, conn: Any) -> bool:
         )
         return False
 
-    try:
-        with database.cursor(conn=conn) as cur:
-            cur.execute(
-                "SELECT engine.syncpgrolegroups(%s)",
-                (row["membermoniker"],),
-            )
-        conn.commit()
-        return True
-    except Exception as e:
-        util.logentry(
-            f"bbsengine6.pgrole._sync_groups.200: {loginid=!r} error={e}"
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            "SELECT engine.syncpgrolegroups(%s)",
+            (row["membermoniker"],),
         )
-        conn.rollback()
-        return False
+    return True

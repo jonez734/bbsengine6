@@ -167,8 +167,8 @@ def main(args, **kw):
                         )
                     conn.commit()
 
-                    rolname = pgrole.ensure_role_for_member(
-                        args, m["loginid"], osuser=None, conn=conn
+                    rolname = pgrole.ensure_login_role(
+                        args, moniker, conn=conn
                     )
                     if rolname is not None:
                         io.echo(
