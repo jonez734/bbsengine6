@@ -2,90 +2,89 @@
 @import "mixins";
 
 div#topbar {
-    box-sizing: border-box;
-    display: flex;
-    // align-items: center; // stretch;
-    // justify-content: space-between;
-    flex-direction: row;
-    // padding: 0.50em;
-    flex: 0 1 auto; // stretch h but not v
-    font-size: 1.0em;
+  box-sizing: border-box;
 
-    color: $topbar-textcolor; // /* #303030; */
+  background-color: $topbar-backgroundcolor;
+  color: $topbar-textcolor;
+  border: $topbar-border;
+  overflow: hidden;
 
-    background-color: $topbar-backgroundcolor; // #ababab;
+  @include textshadow();
 
-    border: 0;
-    border: $topbar-border;
-    margin: 0.5em;
+  margin: $topbar-margin;
+  padding: $topbar-padding;
+
+  display: flex;
+  flex-direction: row;
+  flex: 0 1 auto;
+  font-size: 1.0em;
+
+  ul {
     padding: 0;
+    margin: 0;
+  }
 
-    ul {
-        padding: 0;
-        margin: 0;
-    }
-    
-    p {
-        padding: 0.25em;
-        margin: 0;
-    }
+  p {
+    padding: 0.25em;
+    margin: 0;
+  }
 
-    .start, .end {
-        padding: 0.50em;
-    }
+  .start, .end {
+    padding: 0.50em;
+  }
 
-    .start { 
-        border: 0;
-        border-right: $topbar-border;
-        justify-content: flex-start;
-        order: -1;
-    }
+  .start {
+    border: 0;
+    border-right: $topbar-border;
+    justify-content: flex-start;
+    order: -1;
+  }
 
-    .body {
-        display: flex;
-        flex-direction: row;
-        flex: 1;
-    }
+  .body {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+  }
 
-    .middle { 
-        flex: 1;
-        flex-grow: 1;
-        padding: 0.50em;
-    }
+  .middle {
+    flex: 1;
+    flex-grow: 1;
+    padding: 0.50em;
+  }
 
-    .end {
-        border: 0em;
-        border-left: $topbar-border;
-        justify-content: flex-end;
-        order: 1;
-    }
-    
-    #clock {
-        display: inline;
-    }
+  .end {
+    border: 0em;
+    border-left: $topbar-border;
+    justify-content: flex-end;
+    order: 1;
+  }
 
-	a {
-		color: $blurb-textcolor;
-		text-decoration-color: yellowgreen;
-		text-decoration: underline;
-		@include transition(all 0.25s);
-        
-		&:hover {
-			color: $blurb-body-textcolor;
-			background-color: invert($blurb-body-textcolor);
-		}
-	}
-    &.fixed {
-            position: sticky;
-            top: 0; // -5px;
-            left: 0;
-            width: 100%;
-            z-index: 10;
-            opacity: 1.00;
-            margin-left: 0;
+  #clock {
+    display: inline;
+  }
 
-            box-shadow: 0 0 1.0em rgba(0, 0, 0, 0.2);
+  a {
+    color: $blurb-textcolor;
+    text-decoration-color: yellowgreen;
+    text-decoration: underline;
+    @include transition(all 0.25s);
+
+    &:hover {
+      color: $blurb-body-textcolor;
+      background-color: invert($blurb-body-textcolor);
     }
-    transition: all 0.5s ease;
+  }
+
+  &.fixed {
+    position: sticky;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 10;
+    opacity: 1.00;
+    margin-left: 0;
+    box-shadow: 0 0 1.0em rgba(0, 0, 0, 0.2);
+  }
+
+  transition: all 0.5s ease;
 }
-

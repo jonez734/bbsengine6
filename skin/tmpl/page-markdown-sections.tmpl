@@ -5,7 +5,7 @@
 {/block}
 {block name="content"}
   {if $data.uri !== null && $data.uri !== "" && $data.uri !== "/"}
-  {include file="youarehere.tmpl" breadcrumbs=$data.breadcrumbs}
+  {include file="youarehere.tmpl" breadcrumbs=$data.breadcrumbs linklast=true}
   {/if}
   {foreach $data.sections as $section}
   <div class="blurb">

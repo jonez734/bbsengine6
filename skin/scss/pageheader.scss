@@ -1,10 +1,8 @@
 // pageheader.scss
-// bbsengine6 version - imports from zoid6/shared with est2002 disabled
+// bbsengine6 version
 
 @import "vars";
 @import "mixins";
-@import "fonts";
-
-$pageheader-enable-est2002: false;
 
 @import "pageheader-core";
+@import "est2002";
