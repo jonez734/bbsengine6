@@ -264,3 +264,61 @@ class TestCheckfunctionsIntegrationIntransConn:
 
         assert checkfunctions.main(test_args, conn=conn, stage=0) is True
         assert checkfunctions.main(test_args, conn=conn, stage=1) is True
+
+
+class TestPgroleFunctionProvisioning:
+    """Pin that the pgrole helpers are installed by stage-1
+    checkfunctions and are imported from createrol.sql.
+
+    Regression: engine.syncpgrolegroups lives in createrol.sql, not
+    syncpgrolegroups.sql, and was never registered in the stage-1
+    function list, so console/member.py flag changes failed with
+    ``function engine.syncpgrolegroups(unknown) does not exist``.
+    """
+
+    def test_overrides_map_pgrole_funcs_to_createrol_sql(self):
+        for fn in (
+            "engine.createpgrole",
+            "engine.deletepgrole",
+            "engine.syncpgrolegroups",
+        ):
+            assert checkfunctions.SQL_FILE_OVERRIDES.get(fn) == "createrol.sql"
+
+    def test_stage1_imports_createrol_for_missing_pgrole_funcs(
+        self, test_args, monkeypatch
+    ):
+        conn = _make_fake_conn(
+            autocommit=False,
+            status=psycopg.pq.TransactionStatus.INTRANS,
+        )
+
+        def _ok_cursor(*_a, **_kw):
+            cur = MagicMock(name="cur")
+            cur.__enter__ = MagicMock(return_value=cur)
+            cur.__exit__ = MagicMock(return_value=False)
+            cur.execute = MagicMock(return_value=None)
+            cur.fetchone = MagicMock(return_value=None)
+            cur.fetchall = MagicMock(return_value=[])
+            cur.rowcount = -1
+            return cur
+
+        # syncpgrolegroups is the only missing function; everything
+        # else already exists.
+        def _functionexists(_args, name, **_kw):
+            return name != "engine.syncpgrolegroups"
+
+        imported = []
+
+        def _importsql(_args, filename, **_kw):
+            imported.append(filename)
+            return True
+
+        monkeypatch.setattr(database, "cursor", _ok_cursor)
+        monkeypatch.setattr(database, "functionexists", _functionexists)
+        monkeypatch.setattr(database, "importsql", _importsql)
+
+        assert checkfunctions.main(test_args, conn=conn, stage=1) is True
+        assert imported == ["createrol.sql"], (
+            "missing engine.syncpgrolegroups must be provisioned from "
+            f"createrol.sql, got {imported!r}"
+        )

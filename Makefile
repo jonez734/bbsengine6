@@ -132,7 +132,7 @@ log:
 	git log --graph --pretty=format:"%h %ad %s%d [%an]%n%B" --date=short > LOG_FULL.md
 	git log --pretty=format:"%ad|%h %s%d [%an]" --date=short | awk -F'|' '{if ($$1!=date) {print "## " $$1; date=$$1} print "  " $$2}' > LOG_SUMMARY.md
 
-.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod
+.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy
 
 
 
@@ -156,3 +156,13 @@ markdown-deploy:
 
 markdown-deploy-prod: parsedown-deploy
 	$(RSYNC) /srv/www/markdown/ merlin:/srv/www/markdown/
+
+deploy:
+	$(MAKE) -C engine stage
+	$(MAKE) -C engine deploy-engine
+	$(MAKE) -C skin stage
+	$(MAKE) php-deploy
+	mkdir -p $(ENGINESTAGE)smarty/
+	$(RSYNC) smarty/*.php $(ENGINESTAGE)smarty/
+	$(RSYNC) $(ENGINESTAGE) $(ENGINEPROD)
+	$(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT)

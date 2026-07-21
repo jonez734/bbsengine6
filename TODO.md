@@ -1555,6 +1555,34 @@ explicit from the SQL functions (`engine.createpgrole`,
 
 ---
 
+## Member moniker rename in `bbsengine6.console`
+
+**Status:** Planned
+**Note:** `moniker` is the primary key of `engine.__member` (`member.sql:5`,
+declared `unique not null`; the `id` serial PK was commented out and the
+`libmember` helpers use `primarykey="moniker"`). It is referenced by many
+child tables via `on update cascade` (e.g. `map_member_flag`, `actionlog`,
+`blurb.*bymoniker`, `session`, etc.).
+
+**Symptom:** In `console/member.py`, the edit loop offers a `[M]` option to
+change a member's moniker (lines 210–223), but saving calls
+`libmember.update(args, m, m["moniker"], ...)` using the *new* moniker as the
+primary key (line 426). Because the row still carries the old moniker, the
+update matches no row and the rename fails. (Loginid rename is already refused
+explicitly at lines 410–421 with a `TODO: support rename via
+database.renamerole` comment.)
+
+Pick one:
+
+- [ ] **Fix moniker rename:** implement `database.renamerole(args, old, new,
+      conn=conn)` plus a PK-rename path that cascades to the `on update cascade`
+      child tables, then call it from `edit()` before `libmember.update`.
+- [ ] **Disable the feature:** remove the `[M] Moniker` option from the edit
+      menu in `_edit()` (lines 210–223) and treat a moniker change like the
+      unsupported loginid rename (refuse at save, lines 410–421).
+
+---
+
 ## Wire `bbsengine6.startup` into the `bbsengine6.console` boot path
 
 **Status:** Planned (not yet implemented)

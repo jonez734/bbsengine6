@@ -467,6 +467,11 @@ class WebSocketServer:
         
         # Channel state for pub/sub
         self._channel_state = ChannelState()
+
+        # Optional pre-dispatch hook: async callable(websocket) invoked
+        # before every service handler.  Used by BED to set the
+        # per-request PostgreSQL role from the session.
+        self._pre_dispatch: Optional[Callable] = None
     
     def register_service(self, service: Any, message_types: Optional[list[str]] = None) -> None:
         """
@@ -552,6 +557,8 @@ class WebSocketServer:
         
         if service:
             try:
+                if self._pre_dispatch is not None:
+                    await self._pre_dispatch(websocket)
                 return await service.handle_message(self, websocket, path, message)
             except Exception as e:
                 logger.error(f"Service {service.__class__.__name__} error: {e}")

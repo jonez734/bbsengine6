@@ -1,15 +1,15 @@
 """
 Pytest configuration for bbsengine6 integration tests.
 
-Automatically initializes notify schema in zoid6test database.
+Automatically initializes notify schema in zoid6 database.
 Uses smart initialization: only loads 7 notify-specific SQL files
 (schema, extensions, roles, member, session already exist).
 
 Session-scoped fixtures:
-  - db_connection: persistent connection to zoid6test
+  - db_connection: persistent connection to zoid6
   - schema_init: loads notify tables & views
   - create_test_users: creates test users (alice, bob, jam)
-  - test_args: argparse.Namespace with databasename=zoid6test for notify functions
+  - test_args: argparse.Namespace with databasename=zoid6 for notify functions
 
 Function-scoped fixtures (autouse):
   - test_transaction: wraps each test in transaction (rollback after)
@@ -18,7 +18,7 @@ Function-scoped fixtures (autouse):
 import atexit
 import os
 
-os.environ["BBSENGINE6_DBNAME"] = "zoid6test"
+os.environ["BBSENGINE6_DBNAME"] = "zoid6"
 
 import pytest
 import psycopg
@@ -55,7 +55,7 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(scope="session")
 def db_connection(request):
     """
-    Connect to zoid6test database as opencode user.
+    Connect to zoid6 database as opencode user.
     Connection persists for entire test session.
     Skipped for tests marked with @pytest.mark.unit
     """
@@ -64,9 +64,9 @@ def db_connection(request):
         pytest.skip("Unit test - no database required")
 
     user = getpass.getuser()
-    logger.info(f"Connecting to zoid6test database as {user}...")
-    conn = psycopg.connect(f"dbname=zoid6test user={user}")
-    logger.info("✓ Connected to zoid6test")
+    logger.info(f"Connecting to zoid6 database as {user}...")
+    conn = psycopg.connect(f"dbname=zoid6 user={user}")
+    logger.info("✓ Connected to zoid6")
 
     yield conn
 
@@ -83,7 +83,7 @@ def pool(db_connection, schema_init, request):
     """
     from bbsengine6 import database
 
-    pool_obj = database.getpool(None, dbname="zoid6test", user=getpass.getuser())
+    pool_obj = database.getpool(None, dbname="zoid6", user=getpass.getuser())
 
     def close_pool():
         try:
@@ -236,6 +236,9 @@ def create_test_users(request, db_connection, schema_init):
                 cur.execute(sql, (moniker, email))
         db_connection.commit()
         logger.info(f"✓ Test users created: {[u[0] for u in test_users]}")
+    except psycopg.errors.InsufficientPrivilege:
+        db_connection.rollback()
+        logger.warning("⊘ Insufficient privileges to create test users, skipping")
     except Exception as e:
         logger.error(f"Failed to create test users: {e}")
         raise

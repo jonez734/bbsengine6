@@ -1,3 +1,4 @@
+import contextvars
 import copy
 import os
 from contextlib import contextmanager
@@ -18,6 +19,25 @@ from psycopg_pool import ConnectionPool
 from . import io, util
 
 DEFAULTDATABASE = "postgres"
+
+_current_db_role: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "current_db_role", default=None
+)
+
+
+def set_current_role(role: str | None) -> None:
+    """Set the PostgreSQL role for subsequent database.connect() calls.
+
+    When set, database.connect() will automatically issue
+    ``SET LOCAL ROLE <role>`` on every borrowed connection unless the
+    caller supplies an explicit ``set_role`` argument.
+    """
+    _current_db_role.set(role)
+
+
+def get_current_role() -> str | None:
+    """Return the current per-request PostgreSQL role, or None."""
+    return _current_db_role.get()
 
 # CONVENTION: Connection and cursor objects are passed via **kwargs, NOT as positional or
 # keyword arguments. All database functions accept **kwargs and extract conn/cur from it.
@@ -495,6 +515,9 @@ def connect(
     except Exception as e:
         io.echo_traceback(f"bbsengine6.database.connect.300: {e}")
         raise
+
+    if set_role is None:
+        set_role = _current_db_role.get()
 
     if set_role is not None:
         try:
