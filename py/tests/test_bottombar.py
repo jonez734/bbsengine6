@@ -33,8 +33,13 @@ from bbsengine6.bottombar import (
 
 
 @pytest.fixture(autouse=True)
-def _clean_default_registry():
-    """Save and restore the default registry's state around each test."""
+def _clean_bottombar_state():
+    """Save and restore bottombar module state around each test.
+
+    Resets the default registry, the named-registry cache, the
+    `_DEFAULT_REGISTRY` global, and the per-connection ContextVar
+    so tests don't bleed.
+    """
     reg = default_registry()
     saved_items = list(reg.items)
     saved_args = reg.args
@@ -44,7 +49,21 @@ def _clean_default_registry():
     reg.args = None
     reg.player = None
     reg.pool = None
+
+    saved_cache = dict(bottombar._REGISTRY_CACHE)
+    saved_default = bottombar._DEFAULT_REGISTRY
+    bottombar._REGISTRY_CACHE.clear()
+    bottombar._DEFAULT_REGISTRY = None
+    token = bottombar._active_registry.set(None)
+
     yield
+
+    bottombar._active_registry.reset(token)
+    bottombar._REGISTRY_CACHE.clear()
+    bottombar._DEFAULT_REGISTRY = None
+    bottombar._REGISTRY_CACHE.update(saved_cache)
+    bottombar._DEFAULT_REGISTRY = saved_default
+
     reg.clear()
     for item in saved_items:
         reg.register(item)
@@ -431,3 +450,349 @@ class TestScreenShimRoutesThroughBottombar:
         with patch("bbsengine6.io.screen.get_notification_status") as mock_notif:
             mock_notif.return_value = ""
             assert "item1" in screen._render_bottombar_fragments()
+
+
+# ---------------------------------------------------------------------------
+# Phase 4a: registry_for(name) factory
+# ---------------------------------------------------------------------------
+
+
+class TestRegistryFor:
+    def test_registry_for_creates_named_registry(self):
+        from bbsengine6.bottombar import registry_for
+
+        reg = registry_for("empyre")
+        assert isinstance(reg, FragmentRegistry)
+        assert reg.name == "empyre"
+
+    def test_registry_for_caches(self):
+        from bbsengine6.bottombar import registry_for
+
+        a = registry_for("empyre")
+        b = registry_for("empyre")
+        assert a is b
+
+    def test_registry_for_different_names(self):
+        from bbsengine6.bottombar import registry_for
+
+        a = registry_for("empyre")
+        b = registry_for("casino")
+        assert a is not b
+        assert a.name == "empyre"
+        assert b.name == "casino"
+
+    def test_registry_for_default_returns_default_registry(self):
+        from bbsengine6.bottombar import registry_for
+
+        assert registry_for("default") is default_registry()
+
+    def test_registry_for_does_not_pollute_default(self):
+        from bbsengine6.bottombar import registry_for
+
+        registry_for("empyre").register("empyre-only")
+        assert "empyre-only" not in default_registry()
+        assert "empyre-only" in registry_for("empyre")
+
+    def test_registry_for_bypasses_contextvar(self):
+        from bbsengine6.bottombar import (
+            registry_for,
+            set_active_registry,
+            reset_active_registry,
+        )
+
+        sentinel = FragmentRegistry(name="sentinel")
+        token = set_active_registry(sentinel)
+        try:
+            reg = registry_for("empyre")
+            assert reg is not sentinel
+            assert reg.name == "empyre"
+        finally:
+            reset_active_registry(token)
+
+    def test_registry_for_independent_state(self):
+        from bbsengine6.bottombar import registry_for
+
+        empyre = registry_for("empyre")
+        casino = registry_for("casino")
+        empyre.register("e1")
+        casino.register("c1")
+        assert "e1" in empyre
+        assert "e1" not in casino
+        assert "c1" in casino
+        assert "c1" not in empyre
+
+
+# ---------------------------------------------------------------------------
+# Phase 4a: set_context_for and render_for
+# ---------------------------------------------------------------------------
+
+
+class TestSetContextForAndRenderFor:
+    def test_set_context_for_stashes_player(self):
+        from bbsengine6.bottombar import set_context_for, registry_for
+
+        sentinel = object()
+        set_context_for("empyre", player=sentinel)
+        assert registry_for("empyre").player is sentinel
+
+    def test_set_context_for_stashes_args_and_pool(self):
+        from bbsengine6.bottombar import set_context_for, registry_for
+
+        sentinel_args = object()
+        sentinel_pool = object()
+        set_context_for("empyre", args=sentinel_args, pool=sentinel_pool)
+        reg = registry_for("empyre")
+        assert reg.args is sentinel_args
+        assert reg.pool is sentinel_pool
+
+    def test_render_for_uses_named_registry(self):
+        from bbsengine6.bottombar import render_for, registry_for
+
+        registry_for("empyre").register("e-frag")
+        assert "e-frag" in render_for("empyre")
+        assert "e-frag" not in render_for("casino")
+
+    def test_render_for_passes_named_context(self):
+        from bbsengine6.bottombar import render_for, set_context_for
+
+        captured = {}
+
+        def frag(**kw):
+            captured.update(kw)
+            return "ok"
+
+        set_context_for("empyre", player="sentinel-player")
+        registry_for = __import__(
+            "bbsengine6.bottombar", fromlist=["registry_for"]
+        ).registry_for
+        registry_for("empyre").register(frag)
+        render_for("empyre")
+        assert captured.get("player") == "sentinel-player"
+
+    def test_render_for_empty_returns_empty(self):
+        from bbsengine6.bottombar import render_for
+
+        assert render_for("empyre") == ""
+
+
+# ---------------------------------------------------------------------------
+# Phase 4a: ContextVar routing
+# ---------------------------------------------------------------------------
+
+
+class TestContextVarRouting:
+    def test_default_routes_to_default_registry(self):
+        from bbsengine6.bottombar import (
+            register_bottombar_fragment,
+            setbottombar,
+            unregister_bottombar_fragment,
+        )
+
+        sentinel_args = object()
+        with patch("bbsengine6.bottombar._render_bottombar"):
+            setbottombar(sentinel_args, "left")
+        assert default_registry().args is sentinel_args
+
+    def test_active_registry_routes_setbottombar(self):
+        from bbsengine6.bottombar import (
+            reset_active_registry,
+            set_active_registry,
+            setbottombar,
+        )
+
+        sentinel = FragmentRegistry(name="per-conn")
+        sentinel_args = object()
+        token = set_active_registry(sentinel)
+        try:
+            with patch("bbsengine6.bottombar._render_bottombar"):
+                setbottombar(sentinel_args, "left")
+            assert sentinel.args is sentinel_args
+            assert default_registry().args is None
+        finally:
+            reset_active_registry(token)
+
+    def test_active_registry_routes_register(self):
+        from bbsengine6.bottombar import (
+            register_bottombar_fragment,
+            reset_active_registry,
+            set_active_registry,
+            unregister_bottombar_fragment,
+        )
+
+        sentinel = FragmentRegistry(name="per-conn")
+        token = set_active_registry(sentinel)
+        try:
+            register_bottombar_fragment("pinned")
+            assert "pinned" in sentinel
+            assert "pinned" not in default_registry()
+            unregister_bottombar_fragment("pinned")
+            assert "pinned" not in sentinel
+        finally:
+            reset_active_registry(token)
+
+    def test_active_registry_routes_clear(self):
+        from bbsengine6.bottombar import (
+            clear_bottombar_fragments,
+            reset_active_registry,
+            set_active_registry,
+        )
+
+        sentinel = FragmentRegistry(name="per-conn")
+        sentinel.register("keep-default")
+        default_registry().register("would-be-cleared")
+        token = set_active_registry(sentinel)
+        try:
+            clear_bottombar_fragments()
+            assert len(sentinel) == 0
+            assert "would-be-cleared" in default_registry()
+        finally:
+            reset_active_registry(token)
+
+    def test_reset_token_restores_default(self):
+        from bbsengine6.bottombar import (
+            reset_active_registry,
+            set_active_registry,
+            setbottombar,
+        )
+
+        sentinel = FragmentRegistry(name="per-conn")
+        token = set_active_registry(sentinel)
+        with patch("bbsengine6.bottombar._render_bottombar"):
+            setbottombar(None, "while-set")
+        assert sentinel.args is None
+        reset_active_registry(token)
+        sentinel_args = object()
+        with patch("bbsengine6.bottombar._render_bottombar"):
+            setbottombar(sentinel_args, "after-reset")
+        assert default_registry().args is sentinel_args
+        assert sentinel.args is None
+
+    def test_explicit_name_resolves_to_named_registry(self):
+        from bbsengine6.bottombar import (
+            reset_active_registry,
+            set_active_registry,
+            set_context_for,
+        )
+
+        sentinel = FragmentRegistry(name="per-conn")
+        token = set_active_registry(sentinel)
+        try:
+            sentinel_player = object()
+            set_context_for("empyre", player=sentinel_player)
+            empyre = __import__(
+                "bbsengine6.bottombar", fromlist=["registry_for"]
+            ).registry_for("empyre")
+            assert empyre.player is sentinel_player
+            assert sentinel.player is None
+        finally:
+            reset_active_registry(token)
+
+    def test_active_registry_none_falls_back_to_default(self):
+        from bbsengine6.bottombar import (
+            reset_active_registry,
+            set_active_registry,
+            setbottombar,
+        )
+
+        token = set_active_registry(None)
+        try:
+            sentinel_args = object()
+            with patch("bbsengine6.bottombar._render_bottombar"):
+                setbottombar(sentinel_args, "left")
+            assert default_registry().args is sentinel_args
+        finally:
+            reset_active_registry(token)
+
+
+# ---------------------------------------------------------------------------
+# Phase 4a: io.screen shim honors the ContextVar
+# ---------------------------------------------------------------------------
+
+
+class TestScreenShimContextVarRouting:
+    def test_setbottombar_uses_default_when_no_contextvar(self):
+        from bbsengine6.io import screen
+
+        screen.register_bottombar_fragment("door-frag")
+        with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
+            screen.setbottombar("left")
+            rendered = mock_update.call_args[0][0]
+            assert "door-frag" in rendered
+
+    def test_setbottombar_uses_active_registry_when_set(self):
+        from bbsengine6.bottombar import (
+            FragmentRegistry as _FR,
+            reset_active_registry,
+            set_active_registry,
+        )
+        from bbsengine6.io import screen
+
+        per_conn = _FR(name="per-conn")
+        per_conn.register("per-conn-frag")
+        default_registry().register("door-frag")
+        token = set_active_registry(per_conn)
+        try:
+            with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
+                screen.setbottombar("left")
+                rendered = mock_update.call_args[0][0]
+                assert "per-conn-frag" in rendered
+                assert "door-frag" not in rendered
+        finally:
+            reset_active_registry(token)
+
+    def test_register_uses_active_registry(self):
+        from bbsengine6.bottombar import (
+            FragmentRegistry as _FR,
+            reset_active_registry,
+            set_active_registry,
+        )
+        from bbsengine6.io import screen
+
+        per_conn = _FR(name="per-conn")
+        token = set_active_registry(per_conn)
+        try:
+            screen.register_bottombar_fragment("sc-frag")
+            assert "sc-frag" in per_conn
+            assert "sc-frag" not in default_registry()
+        finally:
+            reset_active_registry(token)
+
+    def test_unregister_uses_active_registry(self):
+        from bbsengine6.bottombar import (
+            FragmentRegistry as _FR,
+            reset_active_registry,
+            set_active_registry,
+        )
+        from bbsengine6.io import screen
+
+        per_conn = _FR(name="per-conn")
+        per_conn.register("sc-frag")
+        default_registry().register("sc-frag")
+        token = set_active_registry(per_conn)
+        try:
+            screen.unregister_bottombar_fragment("sc-frag")
+            assert "sc-frag" not in per_conn
+            assert "sc-frag" in default_registry()
+        finally:
+            reset_active_registry(token)
+
+    def test_render_bottombar_fragments_uses_active_registry(self):
+        from bbsengine6.bottombar import (
+            FragmentRegistry as _FR,
+            reset_active_registry,
+            set_active_registry,
+        )
+        from bbsengine6.io import screen
+
+        per_conn = _FR(name="per-conn")
+        per_conn.register("per-conn-render")
+        default_registry().register("door-render")
+        token = set_active_registry(per_conn)
+        try:
+            with patch("bbsengine6.io.screen.get_notification_status") as mock_n:
+                mock_n.return_value = ""
+                rendered = screen._render_bottombar_fragments()
+                assert "per-conn-render" in rendered
+                assert "door-render" not in rendered
+        finally:
+            reset_active_registry(token)

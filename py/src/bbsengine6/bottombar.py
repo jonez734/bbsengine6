@@ -27,10 +27,29 @@
 #   register_bottombar_fragment(item) / unregister_bottombar_fragment(item) /
 #   clear_bottombar_fragments() -> None
 #       Module-level convenience bound to default_registry() for back-compat
-#       with the old bbsengine6.io.screen API.
+#       with the old bbsengine6.io.screen API. Honor the ContextVar
+#       set_active_registry() if one is set (BED per-connection override).
 #
-# NOTE: registry_for(name) is intentionally NOT exposed yet — see TODO.md.
+#   registry_for(name) -> FragmentRegistry
+#       Factory that returns a cached, named FragmentRegistry. The default
+#       registry is cached under the key "default" and is the same object
+#       as default_registry(). Per-package code (e.g. empyre.lib) can call
+#       registry_for("empyre") to get a private registry without going
+#       through the ContextVar.
+#
+#   set_context_for(name, **ctx) / render_for(name, **kwargs) -> None / str
+#       Convenience wrappers that look up registry_for(name) and stash
+#       context / render. BED-sink code that already has a name in hand
+#       can use these without first calling registry_for(name).
+#
+#   set_active_registry(reg) -> token
+#   reset_active_registry(token) -> None
+#       ContextVar plumbing for BED per-connection setup/teardown. When
+#       set, every module-level helper and every io.screen back-compat
+#       shim routes to the supplied registry instead of the default.
+#       Door mode (no ContextVar set) is unchanged.
 
+import contextvars
 import threading
 from typing import Any, Callable, Iterable, List, Optional, Union
 
@@ -41,12 +60,11 @@ FragmentItem = Union[str, Callable[..., Optional[str]]]
 
 
 def _get_notification_status(args: Any = None, pool: Any = None, **kwargs) -> str:
-    """Return the notification status string, e.g. 'F2: notify (3)' or ''.
+    """Return the message status string, e.g. 'F2: messages (3)' or ''.
 
     Imported here (rather than at module load time) to avoid an import cycle
-    with bbsengine6.member / bbsengine6.notify / bbsengine6.message, and to
-    match the lazy-import behavior the old io.screen.get_notification_status
-    already used.
+    with bbsengine6.member / bbsengine6.message, and to match the lazy-import
+    behavior the old io.screen.get_notification_status already used.
     """
     try:
         from bbsengine6.member import _threadlocal
@@ -55,27 +73,21 @@ def _get_notification_status(args: Any = None, pool: Any = None, **kwargs) -> st
         if not moniker:
             return ""
 
-        try:
-            from bbsengine6 import message as message_module
+        from bbsengine6 import message as message_module
 
-            if message_module.is_enabled():
-                count = message_module.get_unread_count(
-                    moniker, args=args, pool=pool, **kwargs
-                )
-                if count and count > 0:
-                    return f"F2: notify ({count})"
-                return ""
-        except Exception:
-            pass
-
-        from bbsengine6 import notify
-
-        if not notify.is_enabled():
+        if not message_module.is_enabled():
             return ""
 
-        count = notify.count(moniker, args=args, pool=pool, **kwargs)
+        cached = message_module.get_local_unread_count(moniker)
+        if cached < 0:
+            count = message_module.get_unread_count(
+                moniker, args=args, pool=pool, **kwargs
+            )
+            message_module.set_local_unread_count(moniker, count or 0)
+        else:
+            count = cached
         if count and count > 0:
-            return f"F2: notify ({count})"
+            return f"F2: messages ({count})"
     except Exception:
         echo_traceback("bbsengine6.bottombar._get_notification_status:")
     return ""
@@ -237,29 +249,137 @@ class FragmentRegistry:
 
 
 _DEFAULT_REGISTRY: Optional[FragmentRegistry] = None
+_REGISTRY_CACHE: dict = {}
+_REGISTRY_CACHE_LOCK = threading.Lock()
+
+# BED per-connection routing. When set, every module-level helper and
+# every io.screen back-compat shim routes against this registry instead
+# of the process-global default. Door mode leaves this at its default
+# (None), preserving the pre-Phase-4a behavior bit-for-bit.
+_active_registry: "contextvars.ContextVar[Optional[FragmentRegistry]]" = (
+    contextvars.ContextVar(
+        "bbsengine6.bottombar.active_registry", default=None
+    )
+)
 
 
 def default_registry() -> FragmentRegistry:
-    """Return the process-global FragmentRegistry, creating it on first use."""
+    """Return the process-global FragmentRegistry, creating it on first use.
+
+    The default registry is also cached in `_REGISTRY_CACHE` under the
+    key "default" so `registry_for("default")` and `default_registry()`
+    return the same object. This keeps `_REGISTRY_CACHE` and the
+    `_DEFAULT_REGISTRY` global in sync.
+    """
     global _DEFAULT_REGISTRY
     if _DEFAULT_REGISTRY is None:
-        _DEFAULT_REGISTRY = FragmentRegistry(name="default")
+        with _REGISTRY_CACHE_LOCK:
+            if _DEFAULT_REGISTRY is None:
+                reg = FragmentRegistry(name="default")
+                _DEFAULT_REGISTRY = reg
+                _REGISTRY_CACHE["default"] = reg
     return _DEFAULT_REGISTRY
 
 
+def _resolve_registry(name: Optional[str] = None) -> FragmentRegistry:
+    """Pick the registry to use for the current call.
+
+    Priority:
+      1. The ContextVar-set registry, if any (BED per-connection override).
+      2. The named registry from the cache, if `name` is not None.
+      3. default_registry().
+
+    `registry_for(name)` bypasses this helper and the ContextVar: the
+    name is always explicit.
+    """
+    active = _active_registry.get()
+    if active is not None:
+        return active
+    if name is not None:
+        with _REGISTRY_CACHE_LOCK:
+            reg = _REGISTRY_CACHE.get(name)
+            if reg is None:
+                reg = FragmentRegistry(name=name)
+                _REGISTRY_CACHE[name] = reg
+            return reg
+    return default_registry()
+
+
+def registry_for(name: str) -> FragmentRegistry:
+    """Return a cached FragmentRegistry for `name`.
+
+    Always returns the same instance for the same `name` within this
+    process. Bypasses the ContextVar — the name is explicit. The
+    default registry is cached under the key "default" and is the same
+    object as default_registry(); both are stored in `_REGISTRY_CACHE`
+    so iterating the cache surfaces them too.
+    """
+    if name == "default":
+        return default_registry()
+    with _REGISTRY_CACHE_LOCK:
+        reg = _REGISTRY_CACHE.get(name)
+        if reg is None:
+            reg = FragmentRegistry(name=name)
+            _REGISTRY_CACHE[name] = reg
+        return reg
+
+
+def set_context_for(
+    name: str,
+    *,
+    args: Any = None,
+    player: Any = None,
+    pool: Any = None,
+) -> None:
+    """Stash args/player/pool on registry_for(name)."""
+    registry_for(name).set_context(args=args, player=player, pool=pool)
+
+
+def render_for(name: str, **kwargs) -> str:
+    """Render registry_for(name)."""
+    return registry_for(name).render(**kwargs)
+
+
+def set_active_registry(reg: Optional[FragmentRegistry]):
+    """Set the per-connection active registry. Returns a token suitable
+    for reset_active_registry().
+
+    Intended for BED connection setup. Door mode (no ContextVar set)
+    is unaffected.
+    """
+    return _active_registry.set(reg)
+
+
+def reset_active_registry(token) -> None:
+    """Reset the per-connection active registry to the ContextVar default."""
+    _active_registry.reset(token)
+
+
 def register_bottombar_fragment(item: FragmentItem) -> FragmentItem:
-    """Register an item on the default registry. Returns the item unchanged."""
-    return default_registry().register(item)
+    """Register an item on the active registry. Returns the item unchanged.
+
+    Routes through the ContextVar if one is set (BED per-connection),
+    otherwise the default registry.
+    """
+    return _resolve_registry().register(item)
 
 
 def unregister_bottombar_fragment(item: FragmentItem) -> bool:
-    """Unregister an item from the default registry."""
-    return default_registry().unregister(item)
+    """Unregister an item from the active registry.
+
+    Routes through the ContextVar if one is set, otherwise the default
+    registry.
+    """
+    return _resolve_registry().unregister(item)
 
 
 def clear_bottombar_fragments() -> None:
-    """Remove every item from the default registry."""
-    default_registry().clear()
+    """Remove every item from the active registry.
+
+    Routes through the ContextVar if one is set, otherwise the default
+    registry.
+    """
+    _resolve_registry().clear()
 
 
 def setbottombar(args: Any, buf: str, **kwargs) -> bool:
@@ -280,7 +400,7 @@ def setbottombar(args: Any, buf: str, **kwargs) -> bool:
     Returns:
         True (matches the previous bbsengine6.io.screen.setbottombar contract).
     """
-    registry = default_registry()
+    registry = _resolve_registry()
     player = kwargs.get("player", None)
     pool = kwargs.get("pool", None)
     registry.set_context(args=args, player=player, pool=pool)
@@ -341,6 +461,11 @@ __all__ = [
     "FragmentRegistry",
     "_LockedList",
     "default_registry",
+    "registry_for",
+    "set_context_for",
+    "render_for",
+    "set_active_registry",
+    "reset_active_registry",
     "register_bottombar_fragment",
     "unregister_bottombar_fragment",
     "clear_bottombar_fragments",

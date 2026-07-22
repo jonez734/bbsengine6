@@ -1,5 +1,15 @@
 # TODO: `bbsengine6.bottombar` architecture and per-connection plumbing
 
+> **STATUS (2026-07-22): Phase 0–3 complete; Phase 4a (per-connection
+> plumbing) implemented.** The `bbsengine6.bottombar` module lives
+> as a single file (`py/src/bbsengine6/bottombar.py`). The
+> per-connection plumbing described in Phase 4a (`registry_for(name)`,
+> `set_context_for`, `render_for`, `set_active_registry`,
+> `reset_active_registry`, `ContextVar` routing in
+> `_resolve_registry`) is implemented. Door mode (no ContextVar set)
+> is unchanged. See the Phase 4a section below for the final list of
+> checkboxes.
+
 The bottombar is the BBS-style status bar at the bottom of the terminal.
 It has a left side (free-form text from the current game/mode) and a
 right side (a list of "fragments" — small str or callable(**kwargs) -> str
@@ -49,9 +59,7 @@ needs to register/unregister fragments **per connection** instead of
 process-globally, so that one player's editor status fragment doesn't
 bleed into another player's bottombar.
 
-The remaining work is:
-
-- [ ] Add `bbsengine6.bottombar.registry_for(name: str) -> FragmentRegistry`:
+- [x] Add `bbsengine6.bottombar.registry_for(name: str) -> FragmentRegistry`:
   a module-level factory that returns a named, cached `FragmentRegistry`
   instance. The default registry lives at the key `"default"`. Calling
   `registry_for("empyre")` from inside empyre gives empyre a private
@@ -59,22 +67,49 @@ The remaining work is:
   connection a private registry. Pre-implementation test
   (`test_bottombar.py::TestPerPackageRegistries`) already exercises
   the underlying independence.
-- [ ] Add `bbsengine6.bottombar.set_context_for(name, **ctx)` and
+- [x] Add `bbsengine6.bottombar.set_context_for(name, **ctx)` and
   `bbsengine6.bottombar.render_for(name, **kwargs)` so BED-sink code
   can stash args/player/pool and render against a named registry
   without going through the default.
-- [ ] Wire `screen.setbottombar` and `screen.register/unregister_bottombar_fragment`
+- [x] Wire `screen.setbottombar` and `screen.register/unregister_bottombar_fragment`
   (the deprecated back-compat shims) to look up the per-connection
   registry from a `contextvars.ContextVar` set by the BED connection
   layer, falling back to `default_registry()` for door mode. This is
   the per-connection plumbing that the BED-sink work in the main
   `TODO.md` (Phase 4) implicitly assumes but does not spell out.
-- [ ] Update `bbsengine6.bottombar.setbottombar` and the shim
+- [x] Update `bbsengine6.bottombar.setbottombar` and the shim
   to read the per-connection ContextVar first, default registry
-  second, so door mode is unchanged.
-- [ ] **Backward compat check**: door-mode callers see zero behavior
+  second, so door mode is unchanged. Also added
+  `set_active_registry(reg)` / `reset_active_registry(token)` so BED
+  connection setup/teardown can manage the ContextVar.
+- [x] **Backward compat check**: door-mode callers see zero behavior
   change because no `ContextVar` is set. `test_screen.py` and
   `test_bottombar.py` pass unchanged.
+
+### Phase 4a new tests
+
+Added to `py/tests/test_bottombar.py`:
+
+- `TestRegistryFor` — `registry_for(name)` returns a named
+  `FragmentRegistry`, caches by name, returns the same object for
+  `"default"` and `default_registry()`, does not pollute the default,
+  and bypasses the ContextVar.
+- `TestSetContextForAndRenderFor` — `set_context_for(name, ...)`
+  stashes context on the named registry; `render_for(name)` renders
+  the named registry and passes the stashed context to callables.
+- `TestContextVarRouting` — without a ContextVar, `setbottombar`,
+  `register/unregister_bottombar_fragment`, and
+  `clear_bottombar_fragments` route to `default_registry()`; with a
+  ContextVar set, they route to the supplied registry; explicit
+  `set_context_for(name, ...)` still goes to the named registry even
+  while the ContextVar is set; `reset_active_registry(token)`
+  restores door-mode behavior.
+- `TestScreenShimContextVarRouting` — `screen.setbottombar`,
+  `screen.register_bottombar_fragment`,
+  `screen.unregister_bottombar_fragment`, and
+  `screen._render_bottombar_fragments` route to the active registry
+  when the ContextVar is set, and to the default registry when it
+  is not.
 
 ## Sink-integration facets (mirrored from the main `TODO.md`)
 
@@ -126,3 +161,14 @@ extracted:
 - `empyre/TODO.md`, `bed/TODO.md` — per-game bottombar push
   work; the thin-client BED conversion uses the per-connection
   registry plumbing from Phase 4a above.
+- `casino/src/casino/lib.py::_casino_registry` — migrated to
+  `bbsengine6.bottombar.registry_for("casino")` (2026-07-22). The
+  per-package `_casino_registry` instance is now the same object as
+  `bottombar.registry_for("casino")` (cache-backed). Empyre's
+  `_empyre_registry` is still constructed directly as
+  `FragmentRegistry(name="empyre")`; it can be migrated to
+  `registry_for("empyre")` in a follow-up pass.
+- `bed/TODO.md` (Streams section) — updated with concrete
+  `set_active_registry` / `reset_active_registry` usage for the
+  per-connection routing that BED's eventual connection layer
+  will need.

@@ -1,5 +1,15 @@
 # bottombar
 
+> **STATUS (2026-07-22): design notes; partly historical.** This
+> is a design sketch, not a stable spec. The live implementation
+> is in `py/src/bbsengine6/bottombar.py` (single file) and is
+> described in `bbsengine6/TODO-BOTTOMBAR.md`. The listbox-key
+> integration, `KEY_F2` for unread notifications, the str/list/
+> callable union, and the per-connection plumbing
+> (`registry_for(name)`, `set_context_for`, `render_for`,
+> `set_active_registry`, `reset_active_registry`, `ContextVar`
+> routing) all landed (Phase 4a complete).
+
 - there is currently a io.screen.setbottombar() function, which accepts a
   'left', 'right', and **kwargs
 

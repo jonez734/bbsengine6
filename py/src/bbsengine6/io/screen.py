@@ -43,6 +43,13 @@ def _warn_shim_deprecated(name: str) -> None:
 
 from .. import bottombar as _bottombar_mod
 
+# Back-compat aliases onto the default registry's underlying list and lock.
+# These are read by callers (and tests) that still touch
+# `screen._bottombar_fragments` directly. They intentionally point at the
+# *default* registry, not the ContextVar-routed one — door mode is the
+# only mode that ever reads this alias. Per-connection routing goes
+# through the shim functions below, which call
+# `_bottombar_mod._resolve_registry()`.
 _default_registry = _bottombar_mod.default_registry()
 _bottombar_fragments = _default_registry.items
 _bottombar_fragments_lock = _default_registry.lock
@@ -107,23 +114,29 @@ def unregister_bottombar_fragment(item):
 def _render_bottombar_fragments(**kwargs) -> str:
     """Back-compat shim — delegates to bbsengine6.bottombar.
 
-    Calls `get_notification_status` (this module's function) so existing
-    tests that `patch("bbsengine6.io.screen.get_notification_status")`
-    keep working. Without this, the patch would target the wrong module.
+    Resolves the active registry through the bottombar ContextVar (BED
+    per-connection override) or the named cache, falling back to the
+    default registry. Calls `get_notification_status` (this module's
+    function) so existing tests that
+    `patch("bbsengine6.io.screen.get_notification_status")` keep
+    working. Without this, the patch would target the wrong module.
 
-    Deprecated: import bbsengine6.bottombar.default_registry().render
-    directly. The shim will be removed in a future release.
+    Deprecated: import bbsengine6.bottombar.render_for(name) or
+    bbsengine6.bottombar.default_registry().render() directly. The
+    shim will be removed in a future release.
     """
     _warn_shim_deprecated("_render_bottombar_fragments")
-    items_snapshot = _default_registry.items.snapshot()
+    registry = _bottombar_mod._resolve_registry()
 
     merged = dict(kwargs)
-    if _default_registry.args is not None and "args" not in merged:
-        merged["args"] = _default_registry.args
-    if _default_registry.player is not None and "player" not in merged:
-        merged["player"] = _default_registry.player
-    if _default_registry.pool is not None and "pool" not in merged:
-        merged["pool"] = _default_registry.pool
+    if registry.args is not None and "args" not in merged:
+        merged["args"] = registry.args
+    if registry.player is not None and "player" not in merged:
+        merged["player"] = registry.player
+    if registry.pool is not None and "pool" not in merged:
+        merged["pool"] = registry.pool
+
+    items_snapshot = registry.items.snapshot()
 
     parts: List[str] = []
 
@@ -171,8 +184,9 @@ def setbottombar(left, right=None, **kwargs):
     else:
         left_buf = left
 
+    registry = _bottombar_mod._resolve_registry()
     if right is None:
-        right_buf = _default_registry.render(**kwargs) if len(_default_registry) else ""
+        right_buf = registry.render(**kwargs) if len(registry) else ""
     elif callable(right) is True:
         right_buf = right(**kwargs)
     else:
