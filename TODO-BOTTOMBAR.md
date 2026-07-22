@@ -164,10 +164,39 @@ extracted:
 - `casino/src/casino/lib.py::_casino_registry` — migrated to
   `bbsengine6.bottombar.registry_for("casino")` (2026-07-22). The
   per-package `_casino_registry` instance is now the same object as
-  `bottombar.registry_for("casino")` (cache-backed). Empyre's
-  `_empyre_registry` is still constructed directly as
-  `FragmentRegistry(name="empyre")`; it can be migrated to
-  `registry_for("empyre")` in a follow-up pass.
+  `bottombar.registry_for("casino")` (cache-backed).
+- `empyre/src/empyre/lib.py::_empyre_registry` — **pending migration.**
+  Still constructed directly as `bottombar.FragmentRegistry(name="empyre")`
+  (line 99). The Phase 4a-equivalent swap is a one-liner:
+  ```python
+  _empyre_registry = bottombar.registry_for("empyre")
+  ```
+  The cached instance is the same object, so `_empyre_registry.args`,
+  `_empyre_registry.player`, the `__contains__` / `__iter__` /
+  `__len__` reads in the three fragment callables
+  (`_empyre_turns_fragment`, `_empyre_player_fragment`,
+  `_empyre_coins_fragment`), and the `_current_args` /
+  `_current_player` legacy globals all continue to work unchanged.
+  Empyre's `setbottombar` calls `bottombar.setbottombar` (not
+  `bottombar.registry_for("empyre").setbottombar`), so the central
+  shim routes through `_resolve_registry()` — which falls through to
+  the default registry in door mode. After the swap, the central
+  shim still falls through to the default; if the goal is to push
+  empyre's context into a per-connection registry too, the call
+  sites in `empyre.lib.setbottombar` (and the call sites in
+  `empyre.player`, `empyre.main`, `empyre.market`,
+  `empyre.combat.joust`, `empyre.combat.main`,
+  `empyre.town.main`, `empyre.town.lucifersden`,
+  `empyre.town.naturaldisasterbank`, `empyre.maint.main`,
+  `empyre.generatenpc`, `empyre.quests.main`,
+  `empyre.ship.lib`, `empyre.sysopoptions`) should be reviewed to
+  decide whether they should call
+  `bottombar.set_context_for("empyre", ...)` /
+  `bottombar.registry_for("empyre").set_context(...)` first to
+  ensure the right registry gets the stashed context, then call
+  `bottombar.setbottombar` (which now routes through
+  `_resolve_registry()`). This is a follow-up pass; the casino
+  migration is the prototype.
 - `bed/TODO.md` (Streams section) — updated with concrete
   `set_active_registry` / `reset_active_registry` usage for the
   per-connection routing that BED's eventual connection layer
