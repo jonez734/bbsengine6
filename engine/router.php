@@ -260,7 +260,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
     return router_handleError($uri);
   }
 
-  $title = htmlspecialchars(basename($uri) ?: $uri);
+  $title = basename($uri) ?: $uri;
   $teosurl = router_get_teosurl();
   $items = [];
 
@@ -276,7 +276,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
         $href = $dir_base . '/' . $entry . '/';
       }
       $items[] = [
-        'title' => htmlspecialchars(ucfirst($entry)),
+        'title' => $entry,
         'uri' => $href,
         'is_dir' => true,
         'filename' => $entry,
@@ -297,7 +297,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
       if (preg_match('/^---\s*\n(.*?)\n---/s', $filecontent, $matches)) {
         $metadata = router_parseYamlFrontmatter($matches[1]);
         if (isset($metadata['title'])) {
-          $displayTitle = htmlspecialchars($metadata['title']);
+          $displayTitle = $metadata['title'];
         }
       }
       $filename = $name;
@@ -376,7 +376,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   $html = "<html><head><title>$title</title></head><body><h1>$title$lock</h1><ul>";
   foreach ($items as $i) {
     $s = isset($i['is_dir']) && $i['is_dir'] ? '/' : '';
-    $html .= '<li><a href="' . htmlspecialchars($i['uri']) . '">' . $i['title'] . '</a>' . $s . '</li>';
+    $html .= '<li><a href="' . htmlspecialchars($i['uri']) . '">' . htmlspecialchars($i['title']) . '</a>' . $s . '</li>';
   }
   $html .= '</ul></body></html>';
   return $html;
