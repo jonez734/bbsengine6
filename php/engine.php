@@ -892,6 +892,7 @@ function getsig($labelpath, $subsigs=true)
    return null;
   }
   $sig = $stmt->fetch();
+  $sig["title"] = html_entity_decode($sig["title"] ?? "");
   if ($sig["uri"] === null)
   {
    $sig["uri"] = util\ltreeToPath($sig["path"]); 
