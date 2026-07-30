@@ -150,13 +150,6 @@ try:
 except ImportError:
     _has_member_module = False
 
-try:
-    from bbsengine6 import notify
-
-    _has_notify_module = True
-except ImportError:
-    _has_notify_module = False
-
 # Track if bell has been emitted this session (emit only once)
 _notified_this_session = False
 _notified_this_session_lock = threading.Lock()
@@ -466,25 +459,34 @@ def clear_key_event_history() -> None:
 
 def _check_notifications(moniker: str, **kwargs) -> tuple[bool, int]:
     """Check for pending notifications. Returns (has_notifications, count).
-    
-    Uses message system (Phase 1B+) if available, falls back to notify.
+
+    Reads the in-process local cache first (populated by past DB hits
+    in this session); on cache miss, issues a message.get_unread_count()
+    query and primes the cache. The bed server-push fast path is not
+    wired in this build: bed subscription lives in
+    bbsengine6.startup.message_subscription (currently only present in
+    installed venv copies, not in this source tree) and is dormant.
+    Until bed push is wired into the live source tree, the
+    poll-while-idle loop in getch_str is the active notification
+    delivery mechanism.
     """
     try:
         from .. import message as message_module
         if message_module.is_enabled():
-            count = message_module.get_unread_count(moniker, **kwargs)
+            cached = message_module.get_local_unread_count(moniker)
+            if cached >= 0:
+                return cached > 0, cached
+            count = message_module.get_unread_count(
+                moniker,
+                args=kwargs.get("args"),
+                pool=kwargs.get("pool"),
+                conn=kwargs.get("conn"),
+            )
+            message_module.set_local_unread_count(moniker, count or 0)
             return (count or 0) > 0, count or 0
     except Exception:
-        pass
-    
-    if not _has_notify_module:
-        return False, 0
-    try:
-        count = notify.count(moniker, **kwargs)
-        return (count or 0) > 0, count or 0
-    except Exception:
         echo_traceback("bbsengine6.io.getch.333:")
-        return False, 0
+    return False, 0
 
 
 def _emit_notification_bell_once() -> bool:
@@ -535,15 +537,17 @@ def _update_bottombar_on_notification() -> bool:
 
 def _get_urgency_color(urgency) -> str:
     """Get color code for urgency level using echo var."""
-    from bbsengine6.notify import NotificationUrgency
+    from ..message import MessageUrgency
 
     mapping = {
-        NotificationUrgency.CRITICAL: "{var:notify.criticalcolor}",
-        NotificationUrgency.URGENT: "{var:notify.urgentcolor}",
-        NotificationUrgency.IMPORTANT: "{var:notify.importantcolor}",
-        NotificationUrgency.ROUTINE: "{var:notify.routinecolor}",
+        MessageUrgency.CRITICAL: "{var:message.criticalcolor}",
+        MessageUrgency.URGENT: "{var:message.urgentcolor}",
+        MessageUrgency.IMPORTANT: "{var:message.importantcolor}",
+        MessageUrgency.ROUTINE: "{var:message.routinecolor}",
     }
-    return mapping.get(urgency, "{var:notify.routinecolor}")
+    if hasattr(urgency, "name"):
+        urgency = MessageUrgency[urgency.name] if urgency.name in MessageUrgency.__members__ else urgency
+    return mapping.get(urgency, "{var:message.routinecolor}")
 
 
 def _show_pending_notifications(moniker: str) -> None:
@@ -553,37 +557,44 @@ def _show_pending_notifications(moniker: str) -> None:
     It does NOT wait for user input—that is the caller's responsibility.
     This avoids recursive calls and keeps input handling simple.
     """
-    if not _has_notify_module:
-        echo("{var:normalcolor}Notifications unavailable.{/all}")
-        return
-
     try:
-        queue = notify.get_queue(moniker)
-        notifications = queue.get_all()
+        from .. import message as message_module
+        if not message_module.is_enabled():
+            echo("{var:normalcolor}Messages unavailable.{/all}")
+            return
+
+        notifications = message_module.get_queue(moniker)
 
         if not notifications:
-            echo("{var:normalcolor}No pending notifications.{/all}")
+            echo("{var:normalcolor}No pending messages.{/all}")
             return
 
         # Display each notification with colors from echo vars
         for n in notifications:
-            urgency_color = _get_urgency_color(n.urgency)
-            timestamp = datetime.fromtimestamp(n.timestamp).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
-            recipient = n.recipients[0] if n.recipients else "Unknown"
+            urgency_str = n.get("urgency", "ROUTINE")
+            urgency_color = _get_urgency_color(urgency_str)
+            timestamp = n.get("datestamp")
+            if timestamp:
+                if isinstance(timestamp, str):
+                    timestamp_str = timestamp
+                else:
+                    timestamp_str = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                timestamp_str = ""
+            recipient = n.get("sender_moniker", "Unknown")
+            content = n.get("content", "")
 
             echo(
-                f"{urgency_color}[{n.urgency.value}]{{/all}} {{var:notify.datestampcolor}}{timestamp}{{/all}}"
+                f"{urgency_color}[{urgency_str}]{{/all}} {{var:message.datestampcolor}}{timestamp_str}{{/all}}"
             )
-            echo(f"{{var:notify.recipientcolor}}To:{{/all}} {recipient}")
-            echo(f"{n.message}")
+            echo(f"{{var:message.recipientcolor}}From:{{/all}} {recipient}")
+            echo(f"{content}")
             echo("{var:normalcolor}" + "─" * 40 + "{/all}")
 
         echo("{var:normalcolor}Press any key to continue...{/all}")
 
     except Exception as e:
-        echo(f"{{var:normalcolor}}Error displaying notifications: {e}{{/all}}")
+        echo(f"{{var:normalcolor}}Error displaying messages: {e}{{/all}}")
 
 
 # ============================================================================
@@ -722,7 +733,16 @@ def getch_str(
 
     Timeout Accuracy:
         Timeout is measured using wall-clock time (time.time()) to ensure precision.
-        The function checks for notifications every 100ms during idle waits.
+        During an open-ended wait (timeout=None) the function polls
+        message.get_unread_count() every 2s so the bottombar's "(N)"
+        indicator stays fresh without hammering the DB. For finite
+        timeouts, no mid-wait poll is performed: the outer wait itself
+        is the bound, and the next keypress triggers a fresh check via
+        the pre-wait path. A future change could swap the open-ended-wait
+        poll for bed server-push (see bbsengine6.startup.message_subscription);
+        that integration is not wired
+        in the live source tree today, so the open-ended-wait poll above
+        is the active mechanism.
     """
     global _notified_this_session
 
@@ -731,7 +751,7 @@ def getch_str(
     if _has_member_module:
         moniker = getattr(_threadlocal, "moniker", None)
 
-    if check_notifications and moniker and _has_notify_module:
+    if check_notifications and moniker:
         has_notifications, notification_count = _check_notifications(moniker, **kwargs)
         if has_notifications:
             _emit_notification_bell_once()
@@ -764,7 +784,16 @@ def getch_str(
         # 2. Wait for input using wall-clock timeout for accuracy
         # Lock is released during select() to allow other threads (like echo) to proceed
         start_time = time.time()
-        poll_interval = 0.1  # Check notifications every 100ms
+        # Notification poll cadence. 2.0s is intentionally loose: the goal
+        # is to keep the bottombar's "(N)" indicator fresh during a long
+        # idle wait (timeout=None) without hammering the DB. When the
+        # caller passes a finite timeout, we just block for the whole
+        # timeout -- no mid-wait poll -- because the outer wait is short
+        # and a notification check at the next keypress is sufficient.
+        # The pre-wait check above (before this loop) covers the
+        # "first wait" case so a notification that arrived before the
+        # user pressed any key still lights up the bottombar.
+        poll_interval = 2.0
         ready = []
 
         while True:
@@ -781,7 +810,7 @@ def getch_str(
                 select_timeout = poll_interval
             else:
                 remaining = timeout - elapsed
-                select_timeout = min(poll_interval, remaining) if remaining > 0 else 0
+                select_timeout = remaining if remaining > 0 else 0
 
             # Wait for input with calculated timeout (LOCK RELEASED HERE)
             ready, _, _ = select.select([_current_input_stream], [], [], select_timeout)
@@ -789,8 +818,12 @@ def getch_str(
             if ready:
                 break
 
-            # No input yet - check for notification updates during idle
-            if check_notifications and moniker and _has_notify_module:
+            # No input yet - check for notification updates during idle.
+            # Only relevant when timeout is None (infinite wait); the
+            # finite-timeout branch above returns before reaching here
+            # for any non-trivial timeout because select_timeout == the
+            # full remaining budget.
+            if timeout is None and check_notifications and moniker:
                 has_notifications, _ = _check_notifications(moniker, **kwargs)
                 if has_notifications:
                     _update_bottombar_on_notification()

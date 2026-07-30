@@ -65,6 +65,13 @@ def _get_notification_status(args: Any = None, pool: Any = None, **kwargs) -> st
     Imported here (rather than at module load time) to avoid an import cycle
     with bbsengine6.member / bbsengine6.message, and to match the lazy-import
     behavior the old io.screen.get_notification_status already used.
+
+    The `cached` value below is the last DB-derived unread count seen by
+    this process for this moniker (sentinel -1 means "never read"). It is
+    NOT a bed server-push cache in the current build: the bed subscription
+    in bbsengine6.startup.message_subscription is only present in installed
+    venv copies and is not wired into the live source tree, so the
+    poll-while-idle loop in getch_str is what actually keeps this fresh.
     """
     try:
         from bbsengine6.member import _threadlocal
@@ -78,6 +85,7 @@ def _get_notification_status(args: Any = None, pool: Any = None, **kwargs) -> st
         if not message_module.is_enabled():
             return ""
 
+        # Last DB-derived count seen in this process; -1 sentinel = never read.
         cached = message_module.get_local_unread_count(moniker)
         if cached < 0:
             count = message_module.get_unread_count(
