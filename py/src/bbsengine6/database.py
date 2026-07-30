@@ -360,11 +360,11 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
     else:
         try:
             defaults = {
-                "dbname": args.databasename,
-                "user": args.databaseuser,
-                "password": args.databasepassword,
-                "host": args.databasehost,
-                "port": args.databaseport,
+                "dbname": getattr(args, "databasename", None),
+                "user": getattr(args, "databaseuser", None),
+                "password": getattr(args, "databasepassword", None),
+                "host": getattr(args, "databasehost", None),
+                "port": getattr(args, "databaseport", None),
                 "autocommit": False,
             }
         except AttributeError:
