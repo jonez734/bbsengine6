@@ -1,5 +1,7 @@
 # @since 20230801 it's about time
 import os
+import shlex
+import subprocess
 import tempfile
 from . import util, screen, io, member
 
@@ -83,18 +85,20 @@ def line(args, **kwargs):
                 io.echo(f"editing line {editline=}", level="debug")
             elif ch == "s":
                 filename = io.inputstring(
-                    f"Save. {{var:promptcolor}}filename: {{var:inputcolor}}"
+                    "Save. {{var:promptcolor}}filename: {{var:inputcolor}}"
                 )
             elif ch == "d":
                 if len(buf) == 0:
                     io.echo("{bell}")
                     continue
-                deleteline = io.inputstring(f"Delete. Range: {var:inputcolor}")
+                deleteline = io.inputstring(
+                    "Delete. Range: {{var:promptcolor}}start{{var:inputcolor}}-{{var:promptcolor}}end: "
+                )
             else:
                 io.echo("{bell}", flush=True, end="")
         else:
             if pos < terminalwidth - 2:
-                io.echo(ch, end="", flush=True, interpret=False)
+                io.echo(ch, end="", flush=True)
                 linebuf += ch
                 pos += 1
             else:
@@ -104,25 +108,34 @@ def line(args, **kwargs):
 
 def visual(args, text: str = "", suffix: str = "noteupdate"):
     filefp, fn = tempfile.mkstemp(suffix=suffix)
+    notes = ""
+    try:
+        with os.fdopen(filefp, "w") as fp:
+            fp.write(text)
 
-    with open(fn, "w") as fp:
-        fp.writelines(text)
+        if "VISUAL" in os.environ:
+            editor = os.environ["VISUAL"]
+        elif "EDITOR" in os.environ:
+            editor = os.environ["EDITOR"]
+        else:
+            editor = "joe -r"
 
-    if "VISUAL" in os.environ:
-        editor = os.environ["VISUAL"]
-    elif "EDITOR" in os.environ:
-        editor = os.environ["EDITOR"]
-    else:
-        editor = "joe -r"
+        try:
+            cmd = shlex.split(editor) + [fn]
+            subprocess.run(cmd, check=False)
+        except (OSError, ValueError) as e:
+            io.echo(f"editor launch failed: {e}", level="error")
 
-    os.system(f"{editor} {diaryfn}")
-    if os.access(diaryfn, os.F_OK | os.R_OK | os.W_OK):
-        fp = open(diaryfn, "r")
-        notes = fp.readlines()
-        fp.close()
-
-    notes = "\n".join(notes)
-    notes = notes.strip()
+        try:
+            with open(fn, "r") as fp:
+                notes = "".join(fp.readlines()).strip()
+        except OSError as e:
+            io.echo(f"read {fn}: {e}", level="error")
+    finally:
+        try:
+            os.unlink(fn)
+        except OSError:
+            pass
 
     diary = {}
     diary["lastmodified"] = "now()"

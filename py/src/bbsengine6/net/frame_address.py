@@ -1,7 +1,6 @@
 # bbsengine6/net/frame_address.py
 # Frame address parser: RFC 3986 DSN-like URI scheme with hybrid query parameter handling
 
-import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Optional, Union

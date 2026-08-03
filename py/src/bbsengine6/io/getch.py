@@ -9,7 +9,6 @@ import queue
 import threading
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any, Callable, Dict, Optional, List
 
 # Global state for tty recovery

@@ -3,24 +3,19 @@
 
 from __future__ import annotations
 
-import logging
 import os
-from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
-from functools import wraps
 
 from psycopg import sql
 from psycopg import errors as psycopg_errors
 
-from . import database, io
+from . import io
 from .database import getpool
 
 _message_enabled: bool = True
-_message_queues = {}
-_message_queues_lock = defaultdict(dict)
 
 
 class MessageUrgency(Enum):
@@ -49,6 +44,33 @@ class Message:
     @property
     def recipients(self) -> List[str]:
         return _get_message_recipients(self.id, self.channel)
+
+
+def _get_message_recipients(message_id: int, channel: str) -> List[str]:
+    """
+    Return the list of recipient monikers for a stored message.
+
+    Falls back to [] when the message has no recipient rows or no DB pool
+    is available (e.g. during partial-migration bring-up). Never raises.
+    """
+    try:
+        pool = getpool(None)
+    except Exception:
+        return []
+    if pool is None:
+        return []
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT recipient_moniker FROM engine.__message_recipient "
+                    "WHERE message_id = %s ORDER BY recipient_moniker",
+                    (message_id,),
+                )
+                rows = cur.fetchall()
+        return [r[0] for r in rows]
+    except Exception:
+        return []
 
 
 def is_enabled() -> bool:

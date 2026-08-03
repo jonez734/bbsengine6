@@ -59,7 +59,7 @@ class Menu(object):
         self.pagesize = pagesize
         self.currentpage = 0
 
-        self.items.append(Item("X", "eXit menu", None, width=io.getterminalwidth()))
+        self.items.append(Item("X", "eXit menu", None))
 
     # @see https://stackoverflow.com/questions/11469025/how-to-implement-a-subscriptable-class-in-python-subscriptable-class-not-subsc
     def __getitem__(self, name: str) -> object:
@@ -143,13 +143,13 @@ class Menu(object):
         num = 0
         for item in self.items:
             if item.result is False:
-                io.setvariable("cic", "{var:engine.menu.resultfailedcolor}")
+                io.setvar("cic", "{var:engine.menu.resultfailedcolor}")
             elif self.resolverequires(item) is False:
-                io.setvariable("cic", "{var:engine.menu.disableditemcolor}")
+                io.setvar("cic", "{var:engine.menu.disableditemcolor}")
             elif self.currentitem.key == item.key:
                 io.setvar("cic", "{var:currentitemcolor}")
             else:
-                io.setvariable("cic", "{var:itemcolor}")
+                io.setvar("cic", "{var:itemcolor}")
 
             num += 1
             #      x = mi.tostr().ljust(terminalwidth-8, " ")
@@ -203,7 +203,11 @@ class Menu(object):
         while not done:
             #      self.currentmenuitem = self.items[self.pos]
 
-            ch = io.getch(noneok=False).upper()
+            ch = io.getch(noneok=False)
+            if ch is None:
+                io.echo("{bell}", end="", flush=True)
+                continue
+            ch = ch.upper()
             io.setvar("cic", "{var:itemcolor}")
             self.currentitem.display()
 
@@ -245,7 +249,8 @@ class Menu(object):
             #      elif ch == "KEY_LEFT" or ch == "KEY_RIGHT":
             #        ttyio.echo("{bell}", flush=True, end="")
             elif ch == "?" or ch == "KEY_HELP":
-                return Op("help", self.items[self.pos - 1])
+                help_index = max(0, self.pos - 1)
+                return Op("help", self.items[help_index])
             #        return Op("help", mi)
             elif len(ch) == 1:
                 for mi in self.items:

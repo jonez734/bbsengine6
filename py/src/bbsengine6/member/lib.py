@@ -3,6 +3,8 @@ from __future__ import annotations
 import copy
 import threading
 
+import psycopg
+
 from bbsengine6 import bank, database, io, util
 
 

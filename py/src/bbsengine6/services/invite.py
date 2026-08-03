@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 from argparse import Namespace
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from bbsengine6 import invite as invite_dal
 

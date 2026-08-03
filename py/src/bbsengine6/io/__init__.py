@@ -28,6 +28,13 @@ with warnings.catch_warnings():
     from .getch import install_signal_handlers
 
 
+def getterminalwidth() -> int:
+    """Return the current terminal width in columns (back-compat shim)."""
+    from . import terminal
+
+    return terminal.width()
+
+
 # For backwards compatibility, also expose as module attributes via __getattr__
 def __getattr__(name):
     if name == "terminal":
@@ -42,6 +49,13 @@ def __getattr__(name):
         from . import screen
 
         return screen
+    if name == "getterminalwidth":
+        return getterminalwidth
+    if name == "setvariable":
+        # Legacy alias for setvar.
+        from .echo import setvar
+
+        return setvar
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -56,6 +70,7 @@ __all__ = [
     "rendered_length",
     "get_cursor_position",
     "setvar",
+    "setvariable",
     "getvar",
     "register_emoji",
     "register_emojis",
@@ -67,5 +82,6 @@ __all__ = [
     "inputchoice",
     "inputchar",
     "getch",
+    "getterminalwidth",
     "install_signal_handlers",
 ]

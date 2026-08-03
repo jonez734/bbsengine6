@@ -2147,7 +2147,6 @@ def manage_schema_priv(
 # @since 20250622
 # ============================================================
 
-import asyncio
 from contextlib import asynccontextmanager
 from psycopg_pool import AsyncConnectionPool
 

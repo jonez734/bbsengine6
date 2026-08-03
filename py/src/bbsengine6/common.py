@@ -98,12 +98,24 @@ def safe_path(
 
 get_safe_path = safe_path
 
-# default syslog handler
-default_handler = logging.handlers.SysLogHandler(address="/dev/log")
-default_formatter = logging.Formatter(
-    "%(name)s[%(process)d]: %(levelname)s %(message)s"
-)
-default_handler.setFormatter(default_formatter)
+# default syslog handler — created lazily so importing common.py does not
+# crash on hosts without a syslog socket at /dev/log.
+default_handler = None
+default_formatter = None
+
+
+def _get_default_handler() -> logging.Handler:
+    global default_handler, default_formatter
+    if default_handler is None:
+        try:
+            default_handler = logging.handlers.SysLogHandler(address="/dev/log")
+        except (OSError, FileNotFoundError):
+            default_handler = logging.StreamHandler()
+        default_formatter = logging.Formatter(
+            "%(name)s[%(process)d]: %(levelname)s %(message)s"
+        )
+        default_handler.setFormatter(default_formatter)
+    return default_handler
 
 
 def logentry(
@@ -121,12 +133,12 @@ def logentry(
         message (str): The log message.
         level (int): Logging level (default=logging.INFO).
         handler (logging.Handler, optional): Custom logging handler.
-        formatter (logging.Formatter, optional): Custom formatter.
+        formatter (logging.Formatter, optional): Custom logging formatter.
         logger_name (str): Name for the logger (default="myapp").
     """
 
-    h = handler or default_handler
-    f = formatter or default_formatter
+    h = handler or _get_default_handler()
+    f = formatter or h.formatter
 
     # Ensure formatter is applied
     h.setFormatter(f)
