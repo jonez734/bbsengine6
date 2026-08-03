@@ -85,8 +85,14 @@ def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
             return None
 
     # 3. Grant the 'member' group role.
+    # rolname is regex-sanitized to [A-Za-z0-9_]+ so it's safe to splice,
+    # but use sql.Identifier for defense in depth.
+    from psycopg import sql as pg_sql
+
     with database.cursor(conn=conn) as cur:
-        cur.execute(f'GRANT member TO "{rolname}"')
+        cur.execute(
+            pg_sql.SQL("GRANT member TO {}").format(pg_sql.Identifier(rolname))
+        )
 
     # 4. Grant USAGE on the engine schema.
     database.manage_schema_priv(

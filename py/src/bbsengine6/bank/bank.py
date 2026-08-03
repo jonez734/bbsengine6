@@ -54,28 +54,42 @@ class BankService:
             )
             return {"success": False, "message": "Amount must be positive"}
 
-        account = self.account.get_or_create(moniker)
-        new_balance = account["balance"] + amount
-
-        def _work(conn: Any) -> None:
+        def _work(conn: Any) -> int:
             with database.cursor(conn) as cur:
+                # Ensure account exists; race-safe via ON CONFLICT DO NOTHING.
                 cur.execute(
-                    "UPDATE bank.__account SET balance = %s WHERE moniker = %s",
-                    (new_balance, moniker)
+                    "INSERT INTO bank.__account (moniker, balance) VALUES (%s, 0) "
+                    "ON CONFLICT (moniker) DO NOTHING",
+                    (moniker,),
                 )
-
+                # Atomic credit (no read-then-write TOCTOU).
+                cur.execute(
+                    "UPDATE bank.__account SET balance = balance + %s "
+                    "WHERE moniker = %s RETURNING balance",
+                    (amount, moniker),
+                )
+                row = cur.fetchone()
+                if row is None:
+                    raise RuntimeError("account vanished after upsert")
+                new_balance = int(row["balance"])
+                cur.execute(
+                    "SELECT id FROM bank.__account WHERE moniker = %s",
+                    (moniker,),
+                )
+                acc = cur.fetchone()
                 cur.execute(
                     """INSERT INTO bank.__transaction
                        (accountid, amount, transactiontype, description, membermoniker)
                        VALUES (%s, %s, %s, %s, %s)""",
-                    (account["id"], amount, transaction_type, description, member_moniker)
+                    (acc["id"], amount, transaction_type, description, member_moniker),
                 )
+                return new_balance
 
         if conn is not None:
-            _work(conn)
+            new_balance = _work(conn)
         else:
             with database.connect(self.args) as conn:
-                _work(conn)
+                new_balance = _work(conn)
 
         logentry(
             description or f"credit {transaction_type}",
@@ -126,49 +140,55 @@ class BankService:
             )
             return {"success": False, "message": "Amount must be positive"}
 
-        account = self.account.get(moniker)
-        if not account:
-            logentry(
-                "account not found",
-                module="bank",
-                action="remove_funds_failed",
-                moniker=moniker,
-                amount=amount,
-            )
-            return {"success": False, "message": "Account not found"}
-
-        if account["balance"] < amount:
-            logentry(
-                "insufficient funds",
-                module="bank",
-                action="remove_funds_failed",
-                moniker=moniker,
-                amount=amount,
-                balance=account["balance"],
-            )
-            return {"success": False, "message": f"Insufficient funds. Balance: {account['balance']}"}
-
-        new_balance = account["balance"] - amount
-
-        def _work(conn: Any) -> None:
+        def _work(conn: Any) -> tuple[bool, int | None, str | None]:
             with database.cursor(conn) as cur:
+                # Atomic debit guarded by sufficient balance.
                 cur.execute(
-                    "UPDATE bank.__account SET balance = %s WHERE moniker = %s",
-                    (new_balance, moniker)
+                    "UPDATE bank.__account "
+                    "SET balance = balance - %s "
+                    "WHERE moniker = %s AND balance >= %s "
+                    "RETURNING id, balance",
+                    (amount, moniker, amount),
                 )
-
+                row = cur.fetchone()
+                if row is None:
+                    # Either no account, or balance < amount.
+                    cur.execute(
+                        "SELECT balance FROM bank.__account WHERE moniker = %s",
+                        (moniker,),
+                    )
+                    acc = cur.fetchone()
+                    if acc is None:
+                        return (False, None, "Account not found")
+                    return (False, int(acc["balance"]), "Insufficient funds")
+                account_id = row["id"]
+                new_balance = int(row["balance"])
                 cur.execute(
                     """INSERT INTO bank.__transaction
                        (accountid, amount, transactiontype, description, membermoniker)
                        VALUES (%s, %s, %s, %s, %s)""",
-                    (account["id"], amount, transaction_type, description, member_moniker)
+                    (account_id, amount, transaction_type, description, member_moniker),
                 )
+                return (True, new_balance, None)
 
         if conn is not None:
-            _work(conn)
+            ok, new_balance, msg = _work(conn)
         else:
             with database.connect(self.args) as conn:
-                _work(conn)
+                ok, new_balance, msg = _work(conn)
+
+        if not ok:
+            logentry(
+                msg or "remove_funds failed",
+                module="bank",
+                action="remove_funds_failed",
+                moniker=moniker,
+                amount=amount,
+                balance=new_balance,
+            )
+            if new_balance is None:
+                return {"success": False, "message": msg}
+            return {"success": False, "message": f"Insufficient funds. Balance: {new_balance}"}
 
         logentry(
             description or f"debit {transaction_type}",

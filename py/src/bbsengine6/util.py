@@ -1124,8 +1124,12 @@ def getcurrentloginid(args, **kwargs) -> str | None:
 
 def get_safe_path(args, *components, **kwargs) -> str:
     """
-    Constructs a safe path by joining multiple path components.
-    Expands environment variables and user home directory and normalizes.
+    Construct a safe path by joining multiple components and verifying the
+    result stays inside the first component (treated as the base directory).
+
+    Expands ~ and environment variables, resolves to absolute paths on both
+    sides so the containment check cannot be bypassed by a relative base or
+    sibling-prefix collisions.
     """
     if not components:
         raise ValueError("At least one path component must be provided.")
@@ -1135,11 +1139,15 @@ def get_safe_path(args, *components, **kwargs) -> str:
     ]
 
     joined_path = os.path.join(*components)
+    safe_path = os.path.abspath(os.path.normpath(joined_path))
+    base_dir = os.path.abspath(os.path.normpath(components[0]))
 
-    safe_path = os.path.normpath(joined_path)
-
-    base_dir = os.path.abspath(components[0])
-    if not safe_path.startswith(base_dir):
+    try:
+        safe_path_rel = os.path.relpath(safe_path, base_dir)
+    except ValueError:
+        # Different drives on Windows etc.
+        raise ValueError("Invalid path: directory traversal detected.")
+    if safe_path_rel.startswith("..") or os.path.isabs(safe_path_rel):
         raise ValueError("Invalid path: directory traversal detected.")
 
     return safe_path

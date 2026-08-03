@@ -27,6 +27,7 @@ PACKET_TYPE_MESSAGE = 11
 # Size constraints
 MAX_BLOCK_SIZE = 1_048_576  # 1 MB per block
 MAX_PAYLOAD_SIZE = 1_048_576  # 1 MB total per-packet payload
+_MAX_PACKET_PAYLOAD = MAX_PAYLOAD_SIZE
 
 # Checksum settings
 CHECKSUM_ALGORITHM = "sha256"
@@ -80,6 +81,15 @@ class Packet:
         if len(data) < 16:
             raise ValueError("Packet data too short")
         ptype, timestamp, payload_len = struct.unpack("!IdI", data[:16])
+        if payload_len < 0:
+            raise ValueError(f"Packet payload length negative: {payload_len}")
+        if payload_len > _MAX_PACKET_PAYLOAD:
+            raise ValueError(f"Packet payload length exceeds {_MAX_PACKET_PAYLOAD}")
+        if 16 + payload_len > len(data):
+            raise ValueError(
+                f"Packet truncated: header claims {payload_len} payload bytes "
+                f"but only {len(data) - 16} remain"
+            )
         payload = data[16 : 16 + payload_len]
         return Packet(ptype, payload, timestamp)
 

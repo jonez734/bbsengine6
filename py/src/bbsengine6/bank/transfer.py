@@ -56,59 +56,97 @@ class Transfer:
                 }
 
     def approve(self, transfer_id: int, responded_by: str) -> Dict[str, Any]:
-        """Approve a pending transfer."""
+        """Approve a pending transfer.
+
+        Performed in a single transaction with SELECT ... FOR UPDATE on both
+        account rows so concurrent approvals cannot double-spend. Responders
+        may not approve their own transfer request.
+        """
         with database.connect(self.args) as conn:
             with database.cursor(conn) as cur:
                 cur.execute(
-                    """SELECT t.*, a1.moniker as from_moniker, a1.balance as from_balance, a2.moniker as to_moniker, a2.balance as to_balance
-                       FROM bank.__transfer t
-                       JOIN bank.__account a1 ON a1.id = t.fromaccountid
-                       JOIN bank.__account a2 ON a2.id = t.toaccountid
-                       WHERE t.id = %s AND t.status = 'pending'""",
-                    (transfer_id,)
+                    "SELECT * FROM bank.__transfer WHERE id = %s AND status = 'pending'",
+                    (transfer_id,),
                 )
                 row = cur.fetchone()
                 if not row:
                     return {"success": False, "message": "Transfer not found or already processed"}
 
-                from_balance = int(row["from_balance"])
-                to_balance = int(row["to_balance"])
+                if row.get("requestedby") and responded_by and row["requestedby"] == responded_by:
+                    return {"success": False, "message": "Cannot approve your own transfer"}
+
+                # Lock both account rows in a deterministic order to avoid
+                # cross-transaction deadlocks.
+                from_id = int(row["fromaccountid"])
+                to_id = int(row["toaccountid"])
+                first, second = (from_id, to_id) if from_id < to_id else (to_id, from_id)
+                cur.execute(
+                    "SELECT id, moniker, balance FROM bank.__account WHERE id IN (%s, %s) ORDER BY id FOR UPDATE",
+                    (first, second),
+                )
+                accounts = {r["id"]: r for r in cur.fetchall()}
+                from_acc = accounts[from_id]
+                to_acc = accounts[to_id]
                 amount = int(row["amount"])
 
-                if from_balance < amount:
+                if int(from_acc["balance"]) < amount:
                     cur.execute(
-                        "UPDATE bank.__transfer SET status = 'rejected', respondedby = %s, respondedat = now() WHERE id = %s",
-                        (responded_by, transfer_id)
+                        "UPDATE bank.__transfer "
+                        "SET status = 'rejected', respondedby = %s, respondedat = now() "
+                        "WHERE id = %s",
+                        (responded_by, transfer_id),
                     )
                     return {"success": False, "message": "Insufficient funds"}
 
-                new_from_balance = from_balance - amount
-                new_to_balance = to_balance + amount
-
-                cur.execute("UPDATE bank.__account SET balance = %s WHERE id = %s", (new_from_balance, row["fromaccountid"]))
-                cur.execute("UPDATE bank.__account SET balance = %s WHERE id = %s", (new_to_balance, row["toaccountid"]))
+                # Atomic balance moves within the locked transaction.
+                cur.execute(
+                    "UPDATE bank.__account SET balance = balance - %s "
+                    "WHERE id = %s AND balance >= %s "
+                    "RETURNING balance",
+                    (amount, from_id, amount),
+                )
+                row_from = cur.fetchone()
+                if row_from is None:
+                    # Lost the race after taking the lock; should be rare.
+                    cur.execute(
+                        "UPDATE bank.__transfer "
+                        "SET status = 'rejected', respondedby = %s, respondedat = now() "
+                        "WHERE id = %s",
+                        (responded_by, transfer_id),
+                    )
+                    return {"success": False, "message": "Insufficient funds at commit"}
+                cur.execute(
+                    "UPDATE bank.__account SET balance = balance + %s "
+                    "WHERE id = %s RETURNING balance",
+                    (amount, to_id),
+                )
+                row_to = cur.fetchone()
 
                 cur.execute(
-                    """INSERT INTO bank.__transaction (accountid, amount, transactiontype, description, relatedmoniker, membermoniker)
+                    """INSERT INTO bank.__transaction
+                       (accountid, amount, transactiontype, description, relatedmoniker, membermoniker)
                        VALUES (%s, %s, 'debit', 'Transfer out', %s, %s)""",
-                    (row["fromaccountid"], amount, row["to_moniker"], responded_by)
+                    (from_id, amount, to_acc["moniker"], responded_by),
                 )
                 cur.execute(
-                    """INSERT INTO bank.__transaction (accountid, amount, transactiontype, description, relatedmoniker, membermoniker)
+                    """INSERT INTO bank.__transaction
+                       (accountid, amount, transactiontype, description, relatedmoniker, membermoniker)
                        VALUES (%s, %s, 'credit', 'Transfer in', %s, %s)""",
-                    (row["toaccountid"], amount, row["from_moniker"], responded_by)
+                    (to_id, amount, from_acc["moniker"], responded_by),
                 )
 
                 cur.execute(
-                    "UPDATE bank.__transfer SET status = 'approved', respondedby = %s, respondedat = now() WHERE id = %s",
-                    (responded_by, transfer_id)
+                    "UPDATE bank.__transfer "
+                    "SET status = 'approved', respondedby = %s, respondedat = now() "
+                    "WHERE id = %s",
+                    (responded_by, transfer_id),
                 )
 
                 return {
                     "success": True,
                     "message": f"Transfer of {amount} approved",
-                    "from_balance": new_from_balance,
-                    "to_balance": new_to_balance,
+                    "from_balance": int(row_from["balance"]),
+                    "to_balance": int(row_to["balance"]),
                 }
 
     def reject(self, transfer_id: int, responded_by: str) -> Dict[str, Any]:

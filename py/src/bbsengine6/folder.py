@@ -310,12 +310,33 @@ def delete(args, path: str, **kwargs) -> bool:
 class foldercompleter(object):
     def __init__(self, args=None):
         self.args = args
-        self.dbh = database.connect(args)
+        # database.connect() is a contextmanager — enter it immediately so
+        # self.dbh is a real connection and close it when the completer is
+        # released.  Callers that previously stored the un-entered context
+        # manager would crash on .cursor() and leak the connection.
+        self._dbh_cm = database.connect(args)
+        self.dbh = self._dbh_cm.__enter__()
         self.matches = []
 
         self.debug = args.debug
         if self.debug is True:
             io.echo("init foldercompleter object", level="debug")
+
+    def close(self) -> None:
+        cm = getattr(self, "_dbh_cm", None)
+        if cm is not None:
+            try:
+                cm.__exit__(None, None, None)
+            except Exception:
+                pass
+            self._dbh_cm = None
+            self.dbh = None
+
+    def __del__(self) -> None:
+        try:
+            self.close()
+        except Exception:
+            pass
 
     def getmatches(self, text):
         sql = "select distinct path from engine.folder where path ~ %s"

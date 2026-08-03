@@ -828,11 +828,19 @@ def runcallback(
         )
 
     if modpath is None or modpath == "":
+        # Bare-name callback (e.g. "main"): look up *fname* in the immediate
+        # caller's globals rather than eval()-ing arbitrary expressions.
+        func = None
         try:
-            func = eval(fname)
-            io.echo(f"runcallback.320: func={func!r}")
-        except NameError:
-            io.echo(f"runcallback.340: {fname!r} not found.", level="error")
+            caller_frame = inspect.stack()[1].frame
+            func = caller_frame.f_globals.get(fname)
+        except (IndexError, AttributeError):
+            func = None
+        if func is None:
+            io.echo(
+                f"runcallback.340: {fname!r} not found in caller globals.",
+                level="error",
+            )
             return None
 
         if callable(func) is True:

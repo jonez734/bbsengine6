@@ -968,6 +968,9 @@ def setattrs(args, attrs: dict, moniker=None, **kwargs):
         return None
 
 
+_VERIFY_MEMBER_COLUMNS = frozenset({"loginid", "moniker", "email", "name"})
+
+
 def _verify_member(
     fn_name: str,
     args,
@@ -982,6 +985,14 @@ def _verify_member(
         io.echo(f"bbsengine6.member._verify_member.100: pool is required ", level="error")
         return None
 
+    if column not in _VERIFY_MEMBER_COLUMNS:
+        io.echo(
+            f"bbsengine6.member._verify_member.110: column {column!r} not whitelisted",
+            level="error",
+        )
+        return None
+
+    # column is whitelisted, safe to interpolate into the identifier slot.
     sql = f"select 1 from $engine.member where {column} = $1"
 
     try:
@@ -1364,68 +1375,81 @@ def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
 
     visited.add(group_name)
 
-    # Get group members
+    # Open the connection (or use the caller-supplied one) inside a `with`
+    # so it is always closed on return — previously this assigned the
+    # context-manager object without entering it, leaking the connection and
+    # crashing on .cursor().
     conn = kwargs.get("conn", None)
+    own_conn = False
     if conn is None:
         pool = kwargs.get("pool", None)
         if pool is None:
             io.echo("bbsengine6.member.get_group_members.100: pool=None", level="error")
             return None
-        conn = database.connect(args, pool=pool)
+        conn_cm = database.connect(args, pool=pool)
+        conn = conn_cm.__enter__()
+        own_conn = True
 
     try:
-        with database.cursor(conn) as cur:
-            cur.execute(
-                database.query(
-                    "SELECT gm.member_moniker FROM $engine.__message_group_member gm "
-                    "JOIN $engine.__message_group g ON g.id = gm.group_id "
-                    "WHERE g.name=$1 ORDER BY gm.member_moniker",
-                    group_name,
-                )
-            )
-
-            if cur.rowcount == 0:
-                return []
-
-            members = []
-            for row in cur.fetchall():
-                if isinstance(row, dict):
-                    member_moniker = row.get("member_moniker")
-                else:
-                    member_moniker = row[0]
-
-                if not member_moniker:
-                    continue
-
-                # Check if this member is itself a group
-                is_nested_group = group_exists(args, member_moniker, conn=conn)
-
-                if is_nested_group:
-                    # Recursively expand nested group with cycle detection
-                    nested_members = get_group_members(
-                        args,
-                        member_moniker,
-                        conn=conn,
-                        _visited=visited,
+        try:
+            with database.cursor(conn) as cur:
+                cur.execute(
+                    database.query(
+                        "SELECT gm.member_moniker FROM $engine.__message_group_member gm "
+                        "JOIN $engine.__message_group g ON g.id = gm.group_id "
+                        "WHERE g.name=$1 ORDER BY gm.member_moniker",
+                        group_name,
                     )
-                    if nested_members is not None:
-                        members.extend(nested_members)
-                else:
-                    # Regular member (moniker)
-                    members.append(member_moniker)
+                )
 
-            # Remove duplicates while preserving order
-            seen = set()
-            unique_members = []
-            for member in members:
-                if member not in seen:
-                    seen.add(member)
-                    unique_members.append(member)
+                if cur.rowcount == 0:
+                    return []
 
-            return unique_members
-    except ValueError:
-        # Re-raise validation errors (like circular reference detection)
-        raise
-    except Exception:
-        io.echo_traceback("bbsengine6.member.get_group_members.100:")
-        return None
+                members = []
+                for row in cur.fetchall():
+                    if isinstance(row, dict):
+                        member_moniker = row.get("member_moniker")
+                    else:
+                        member_moniker = row[0]
+
+                    if not member_moniker:
+                        continue
+
+                    # Check if this member is itself a group
+                    is_nested_group = group_exists(args, member_moniker, conn=conn)
+
+                    if is_nested_group:
+                        # Recursively expand nested group with cycle detection
+                        nested_members = get_group_members(
+                            args,
+                            member_moniker,
+                            conn=conn,
+                            _visited=visited,
+                        )
+                        if nested_members is not None:
+                            members.extend(nested_members)
+                    else:
+                        # Regular member (moniker)
+                        members.append(member_moniker)
+
+                # Remove duplicates while preserving order
+                seen = set()
+                unique_members = []
+                for member in members:
+                    if member not in seen:
+                        seen.add(member)
+                        unique_members.append(member)
+
+                return unique_members
+        except ValueError:
+            # Re-raise validation errors (like circular reference detection)
+            raise
+        except Exception:
+            io.echo_traceback("bbsengine6.member.get_group_members.100:")
+            return None
+    finally:
+        if own_conn:
+            try:
+                conn_cm.__exit__(None, None, None)
+            except Exception:
+                pass

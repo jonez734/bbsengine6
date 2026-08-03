@@ -4,8 +4,6 @@ from pathlib import Path
 from . import database, member, io
 from .io.echo import echo
 
-from psycopg2.extras import Json
-
 
 def get_content_dir(args) -> Path:
     content_dir = getattr(args, "blurb_content_dir", None)
@@ -14,6 +12,29 @@ def get_content_dir(args) -> Path:
             "BBSENGINE6_BLURB_CONTENT_DIR", "/var/bbsengine6/blurb_content"
         )
     return Path(content_dir)
+
+
+def _safe_content_path(args, contentpath: str) -> Path | None:
+    """Resolve contentpath and verify it stays inside the blurb content
+    directory. Returns None if the path is unsafe or unreadable.
+
+    Database-stored contentpath comes from member-controlled JSON attributes,
+    so it must never escape the configured blurb content dir.
+    """
+    if not contentpath:
+        return None
+    try:
+        base = get_content_dir(args).resolve()
+        candidate = Path(contentpath).resolve()
+    except (OSError, ValueError):
+        return None
+    try:
+        candidate.relative_to(base)
+    except ValueError:
+        return None
+    if not candidate.is_file():
+        return None
+    return candidate
 
 
 def insert(
@@ -26,7 +47,9 @@ def insert(
     mogrify: bool = False,
 ):
     blurb["prg"] = prg
-    blurb["attributes"] = Json(blurb["attributes"])
+    if "attributes" in blurb:
+        # psycopg3 adapts dict to jsonb automatically; pass-through.
+        blurb["attributes"] = blurb["attributes"]
     blurb["datecreated"] = "now()"
     blurb["createdbymoniker"] = member.getcurrentid(args)
     if args.debug is True:
@@ -103,39 +126,6 @@ def update_with_content(
     return blurbid
 
 
-def updatesigs(
-    args, blurbid: int, sigpaths, completerdelims=", ", mogrify: bool = False
-):
-    if sigpaths is None or len(sigpaths) == 0:
-        return None
-
-    # FIXME: buildsiglist is not defined - function needs to be implemented or removed
-    # io.echo(f"bbsengine6.blurb.updatesigs.100: sigpaths={sigpaths!r}", level="debug")
-    # sigpaths = buildsiglist(sigpaths)
-    # if type(sigpaths) == str:
-    #   sigpaths = re.split("|".join(completerdelims), sigpaths)
-    #   sigpaths = [s.strip() for s in sigpaths]
-    #   sigpaths = [s for s in sigpaths if s]
-    return None
-
-    dbh = database.connect(args)
-    cur = dbh.cursor()
-    sql = "delete from engine.map_blurb_sig where blurbid=%s"
-    dat = (blurbid,)
-    if mogrify is True:
-        io.echo(cur.mogrify(sql, dat), level="debug")
-
-    cur.execute(sql, dat)
-    for sigpath in sigpaths:
-        io.echo("bbsengine6.blurb.updatesigs.100: sigpath=%r" % (sigpath))
-        sigmap = {"blurbid": blurbid, "sigpath": sigpath}
-        database.insert(
-            args, "engine.map_blurb_sig", sigmap, returnid=False, mogrify=mogrify
-        )
-    #  dbh.commit()
-    return None
-
-
 def updateattributes(
     args,
     blurbid: int,
@@ -145,22 +135,24 @@ def updateattributes(
     mogrify: bool = False,
 ):
     if reset is False:
-        sql = "update %s set attributes=attributes||%%s where id=%s" % (table, blurbid)
+        sql = "update %s set attributes=attributes||%%s where id=%%s" % (table,)
     else:
-        sql = "update %s set attributes=%%s where id=%s" % (table, blurbid)
+        sql = "update %s set attributes=%%s where id=%%s" % (table,)
 
     if args.debug is True:
         io.echo("updateblurbattributes.120: sql=%s" % (sql), level="debug")
 
-    dat = (Json(attributes),)
+    dat = (attributes, blurbid)
 
-    dbh = database.connect(args)
-    cur = dbh.cursor()
-    if mogrify is True:
-        io.echo(
-            "updateblurbattributes.100: %r" % (cur.mogrify(sql, dat)), level="debug"
-        )
-    return cur.execute(sql, dat)
+    with database.connect(args) as dbh:
+        with database.cursor(dbh) as cur:
+            if mogrify is True:
+                io.echo(
+                    "updateblurbattributes.100: %r"
+                    % (cur.mogrify(sql, dat)),
+                    level="debug",
+                )
+            cur.execute(sql, dat)
 
 
 def update(args, id: int, blurb: dict, reset=False, mogrify=False):
@@ -169,7 +161,8 @@ def update(args, id: int, blurb: dict, reset=False, mogrify=False):
     attr = blurb["attributes"] if "attributes" in blurb else {}
     if len(attr) > 0:
         updateattributes(args, id, attr, reset=reset, mogrify=mogrify)
-        del blurb["attributes"]
+        if "attributes" in blurb:
+            del blurb["attributes"]
     return database.update(args, "engine.__blurb", id, blurb, mogrify=mogrify)
 
 
@@ -191,38 +184,43 @@ def build(args, rec, cur=None):
         "dateapproved",
         "approvedbymoniker",
     ):
-        blurb[k] = rec[k]
+        if k in rec:
+            blurb[k] = rec[k]
 
-    sql = "select flag.name, coalesce(map_blurb_flag.value, flag.defaultvalue) as value from engine.member_flag left outer join engine.map_blurb_flag on flag.name = engine.map_blurb_flag.name and engine.map_blurb_flag.memberid=%s"
-    if cur is None:
-        dbh = database.connect(args)
-        cur = dbh.cursor()
-    dat = (rec.get("id"),)
-    cur.execute(sql, dat)
-    if cur.rowcount == 0:
-        return blurb
-
-    res = cur.fetchall()
-    flag = {}
-    for f in res:
-        flag = {}
-        flag[f] = res[f]
-    blurb["flags"] = cur.fetchone()
+    own_cur = cur is None
+    if own_cur:
+        with database.connect(args) as dbh:
+            with database.cursor(dbh) as cur:
+                blurb["flags"] = _fetch_flags(cur, rec.get("id"))
+    else:
+        blurb["flags"] = _fetch_flags(cur, rec.get("id"))
 
     return blurb
+
+
+def _fetch_flags(cur, blurbid) -> dict:
+    if blurbid is None:
+        return {}
+    sql = (
+        "SELECT flag.name, "
+        "       coalesce(map_blurb_flag.value, flag.defaultvalue) AS value "
+        "FROM engine.member_flag "
+        "LEFT OUTER JOIN engine.map_blurb_flag "
+        "  ON flag.name = engine.map_blurb_flag.name "
+        " AND engine.map_blurb_flag.memberid = %s"
+    )
+    cur.execute(sql, (blurbid,))
+    return {row["name"]: row["value"] for row in cur.fetchall()}
 
 
 def get(args, id: int):
-    sql = "select * from engine.__blurb where id=%s"
-    dat = (id,)
-    dbh = database.connect(args)
-    cur = dbh.cursor()
-    cur.execute(sql, dat)
-    if cur.rowcount == 0:
-        return None
-    rec = cur.fetchone()
-    blurb = build(args, rec, cur)
-    return blurb
+    with database.connect(args) as dbh:
+        with database.cursor(dbh) as cur:
+            cur.execute("select * from engine.__blurb where id=%s", (id,))
+            rec = cur.fetchone()
+            if rec is None:
+                return None
+            return build(args, rec, cur=cur)
 
 
 def get_with_content(args, id: int) -> dict | None:
@@ -231,15 +229,33 @@ def get_with_content(args, id: int) -> dict | None:
         return None
 
     contentpath = blurb.get("attributes", {}).get("contentpath")
-    if contentpath and Path(contentpath).exists():
-        blurb["content"] = Path(contentpath).read_text()
+    safe = _safe_content_path(args, contentpath) if contentpath else None
+    if safe is not None:
+        blurb["content"] = safe.read_text()
     else:
         blurb["content"] = load_content(args, id)
 
     return blurb
 
 
-def approve(args, id: int, value: str = True):
-    blurb = get(args, id)
-    blurb["flags"]["approved"] = value
-    return True
+def approve(args, id: int, value: bool = True) -> bool:
+    """Set the approved flag on blurb ``id``.
+
+    Persists via engine.map_blurb_flag (the same table build() reads).
+    Returns True on success, False on failure.
+    """
+    approved_str = "true" if value else "false"
+    try:
+        with database.connect(args) as dbh:
+            with database.cursor(dbh) as cur:
+                cur.execute(
+                    "INSERT INTO engine.map_blurb_flag (memberid, name, value) "
+                    "VALUES (%s, 'approved', %s) "
+                    "ON CONFLICT (memberid, name) "
+                    "DO UPDATE SET value = EXCLUDED.value",
+                    (id, approved_str),
+                )
+        return True
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.blurb.approve.100: {e}")
+        return False
