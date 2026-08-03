@@ -453,8 +453,10 @@ def _render_bottombar(
     right_len = rendered_length(right_buf)
     max_left_len = terminalwidth - right_len
     if left_len > max_left_len:
-        left_buf = left_buf[: max_left_len - 5] + "..."
-    padding = " " * (terminalwidth - left_len - right_len)
+        truncate_to = max(0, max_left_len - 5)
+        left_buf = left_buf[:truncate_to] + "..."
+        left_len = rendered_length(left_buf)
+    padding = " " * max(0, terminalwidth - left_len - right_len)
     echo(
         f"{{savecursor}}{{bottombarcolor}}{{curpos:{terminal.lines()},0}}"
         f"{left_buf}{padding}{right_buf}{{/all}}{{restorecursor}}",

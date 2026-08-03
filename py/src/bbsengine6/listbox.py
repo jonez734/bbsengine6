@@ -476,9 +476,11 @@ class Listbox:
             io.echo(f"{{cursorup:{cursor_up}}}{{cha}}", end="", flush=True)
             self._display_item(page_items[old_idx], highlighted=False)
             io.echo("{cha}", end="", flush=True)
-            diff = last_idx - old_idx - 1
+            # +1 accounts for the cursor sitting one row below the item line
+            # after the unhighlight redraw, matching the _handle_key_home math.
+            diff = (last_idx - old_idx + 1) * self.itemheight
             io.echo(
-                f"{{cursordown:{diff * self.itemheight}}}{{cha}}", end="", flush=True
+                f"{{cursordown:{diff}}}{{cha}}", end="", flush=True
             )
             self._currentindex = last_idx
             self._display_item(page_items[last_idx], highlighted=True)

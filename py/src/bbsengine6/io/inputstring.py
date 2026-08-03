@@ -462,6 +462,7 @@ def handle_help(
     help: str | Callable[[], str] | None = None,
 ) -> Tuple[str, int, int]:
     """Display F1 help text as simple vertical list below current input line."""
+    global _input_dirty
     help_text = f1_help if f1_help is not None else help
     if help_text is None:
         return buffer, curpos, scroll_offset
@@ -1011,6 +1012,7 @@ def inputstring(
     max_width: int = kwargs.pop("max_width", 80)
     mask: str = kwargs.pop("mask", None)
     completer = kwargs.pop("completer", None)
+    filter_fn = kwargs.pop("filter", None)
 
     verify = kwargs.pop("verify", None)
     args = kwargs.pop("args", None)  # argparse.Namespace()

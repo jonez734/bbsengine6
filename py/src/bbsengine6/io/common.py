@@ -1,6 +1,7 @@
 import os
 import re
 import sys
+import select
 import tty
 import fcntl
 import termios
@@ -143,8 +144,6 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
     Raises:
         TimeoutError if no complete response is received in time.
     """
-    import time
-
     if mode == "curpos":
         code = "6"
     elif mode == "status":
@@ -162,13 +161,30 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
         tty.setraw(fd)
         _write_current_output_stream(f"{ESC}[{code}n", flush=True)
 
-        start_time = time.time()
         buffer = ""
+        encoding = _current_input_stream.encoding or "utf-8"
 
-        while True:
-            chunk = _read_current_input_stream(1)
-            buffer += chunk
+        # Use select() for real timeout instead of fixed byte count.
+        # Read whatever bytes arrive within the timeout window and look
+        # for the DSR terminator ('R' for curpos / 'n' for status).
+        terminator = "R" if mode == "curpos" else "n"
 
+        deadline_loops = max(1, int(timeout * 20))  # 50ms polling slices
+        while deadline_loops > 0:
+            rlist, _, _ = select.select([fd], [], [], 0.05)
+            if rlist:
+                try:
+                    chunk = os.read(fd, 64).decode(encoding, errors="replace")
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                buffer += chunk
+                if terminator in buffer:
+                    break
+            deadline_loops -= 1
+
+        if mode == "curpos":
             match = DSR_CURPOS_RE.search(buffer)
             if match:
                 row, col = map(int, match.groups())
@@ -178,12 +194,9 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
                     _input_queue.clear()
                     _input_queue.extend(leftover)
                 return (row, col)
-
-            if (time.time() - start_time) > timeout:
-                raise TimeoutError(
-                    f"DSR response not received in {timeout}s: {buffer!r}"
-                )
-
+            raise TimeoutError(
+                f"DSR response not received in {timeout}s: {buffer!r}"
+            )
         return buffer
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)

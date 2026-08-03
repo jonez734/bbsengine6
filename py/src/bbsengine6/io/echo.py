@@ -79,6 +79,7 @@ _emoji_lock = threading.Lock()
 _state_lock = threading.Lock()  # Protects: _raw, _previous_token, _first_line_after_f6
 
 _raw = False  # Global state - whether to output raw (without command processing)
+_raw_lock = threading.Lock()
 _previous_token = Token("UNKNOWN")
 _first_line_after_f6 = False  # Don't reduce width on first line after F6
 
@@ -338,7 +339,7 @@ def _handle_word(token, **kwargs):
     Emits an F6 (newline) if word would exceed available width.
     Updates cursor position in terminal state.
     """
-    global _terminal_state, _raw
+    global _terminal_state
 
     width = kwargs.get("width", terminal.columns())
 
@@ -348,7 +349,9 @@ def _handle_word(token, **kwargs):
     token.repeat = 1
 
     # ACS is a rendering concern → emit before word if needed
-    if not _raw:
+    with _raw_lock:
+        raw_now = _raw
+    if not raw_now:
         yield from _acs_off()
 
     emit_f6 = False
@@ -394,9 +397,9 @@ def _handle_whitespace(token):
     For example, a run of 3 newlines becomes:
         Token(kind="WHITESPACE", value="\n", repeat=3, text="\n\n\n")
     """
-    global _raw
-
-    if not _raw:
+    with _raw_lock:
+        raw_now = _raw
+    if not raw_now:
         yield from _acs_off()
 
     run = token.value
@@ -560,7 +563,9 @@ def _handle_acs(token):
     with _current_stream_lock:
         _terminal_state.cursor_col += repeat
 
-    if not _raw:
+    with _raw_lock:
+        raw_now = _raw
+    if not raw_now:
         yield from _acs_on()
 
     token.kind = "ACS_CHAR"
@@ -750,7 +755,9 @@ def _handle_reset(token):
     if len(token.args) > 0:
         return iter()
 
-    if not _raw:
+    with _raw_lock:
+        raw_now = _raw
+    if not raw_now:
         yield from _acs_off()
 
     yield Token("INDENT", value=0, repeat=1, text="", raw="")
@@ -1129,10 +1136,12 @@ def _write_token(token: Token, flush: bool = True, stream=None):
     - F6: hard newline
     - COMMANDS: processed via _handle_command()
     """
-    global _raw, _current_output_stream, _current_stream_lock
+    global _current_output_stream, _current_stream_lock
     ##    print(f"_write_token.100: {token.kind=} {token.repeat=} {token.value=}", flush=True)
     repeat = int(token.repeat) or 1
-    if not _raw:
+    with _raw_lock:
+        raw_now = _raw
+    if not raw_now:
         text = str(token.text) * repeat
     else:
         text = (str(token.raw) or str(token.text)) * repeat
@@ -1155,9 +1164,10 @@ def echo_iter(
     Generator that yields tokens for rendering.
     Handles WORD, WHITESPACE, F6 (hard newline), attributes, and commands.
     """
-    global _runtime_vars, _raw, _previous_token
+    global _runtime_vars, _previous_token
 
-    _raw = raw
+    with _raw_lock:
+        _raw = raw
     _terminal_state.wordwrap = wordwrap
 
     if width is None:
@@ -1222,9 +1232,8 @@ def echo(
     raw: if True, commands are treated as literal text
     flush: if True, flush after writing
     """
-    global _raw
-
-    _raw = kwargs.get("raw", False)
+    with _raw_lock:
+        _raw = kwargs.get("raw", False)
 
     palette: dict = kwargs.get("palette", None)
     width: int = kwargs.get("width", terminal.width())
