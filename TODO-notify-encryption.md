@@ -1,5 +1,25 @@
 # TODO: GnuPG signing/encryption for `__notify` body (follow-up to TODO-notify.md)
 
+> **STATUS (2026-07-22): SUPERSEDED / MOOT.** The notify→message.py
+> migration is complete. The `bbsengine6/notify/` and
+> `bbsengine6/message_delivery/` packages, the
+> `engine.__notify*` tables, and the `engine.notify*` views were
+> all deleted in Phase 7 of `TODO-message-migration.md`. Every
+> item in this document refers to a `__notify` table, a
+> `__notify_recipient` row, or a `message_delivery/lib.py`
+> function that no longer exists.
+>
+> GPG signing/encryption is still a desirable feature, but the
+> schema for it must be reworked against `bbsengine6.message`
+> (`engine.__message`, `engine.__message_recipient`) and the
+> `bbsengine6.member` GPG-key work in
+> `bbsengine6/TODO.md` "GPG Key Support for Message Signing"
+> (which itself is still pending). This file is preserved for
+> the **decisions** captured below (privacy via encryption at
+> rest, client-side crypto, single key per user, MIME-wrapped
+> PGP payload, no HMAC for encrypted rows) but **no checklist
+> item below is actionable** until the new schema is decided.
+
 Work item: provide end-to-end privacy and integrity for `__notify`
 message bodies using GnuPG-compatible keys. The same keypair used
 to sign and/or encrypt `__notify` messages is also the user's email

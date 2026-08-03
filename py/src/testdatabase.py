@@ -285,7 +285,7 @@ class TestBuildArgs(unittest.TestCase):
 class TestBuildArgsEnvVars(unittest.TestCase):
     """Verify that buildargs() reads BBSENGINE6_* env vars as a fallback
     layer between explicit defaults and hardcoded fallbacks.  This keeps
-    the bbsengine6.notify subsystem (which always reads BBSENGINE6_DBNAME
+    the bbsengine6.message subsystem (which always reads BBSENGINE6_DBNAME
     at fallback time) consistent with the args registered here."""
 
     ENV_VARS = (

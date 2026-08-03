@@ -16,8 +16,10 @@ that only flips ``autocommit`` to False when the conn is currently in
 The test suite covers:
   * the helper itself (all four (autocommit, transaction_status) cases
     that matter);
-  * the three call sites (checkfunctions, checknotify,
-    checknotifyd) so the helper is wired in everywhere;
+  * the two remaining call sites (checkfunctions, checkmessage)
+    that use the helper; ``checknotify`` / ``checknotifyd`` were
+    deleted in Phase 7 of ``TODO-message-migration.md`` and are
+    no longer wired in;
   * an integration test that drives a fake conn through the same
     sequence ``stage_zero`` does, ending in ``INTRANS``, and confirms
     ``checkfunctions.main`` no longer raises.
@@ -37,7 +39,7 @@ import pytest
 from bbsengine6 import database
 from bbsengine6.backend import lib
 from bbsengine6.backend import checkfunctions
-from bbsengine6.backend import checknotifyd
+from bbsengine6.backend import checkmessage
 
 
 # ---------------------------------------------------------------------------
@@ -171,8 +173,7 @@ class TestCallSitesUseHelper:
         "mod_name",
         [
             "bbsengine6.backend.checkfunctions",
-            "bbsengine6.backend.checknotify",
-            "bbsengine6.backend.checknotifyd",
+            "bbsengine6.backend.checkmessage",
         ],
     )
     def test_module_does_not_change_autocommit_on_intrans_conn(

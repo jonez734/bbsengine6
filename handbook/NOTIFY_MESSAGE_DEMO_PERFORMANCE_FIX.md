@@ -1,5 +1,10 @@
 # notify_message_demo Performance Fix
 
+> **STATUS (2026-07-22): SUPERSEDED.** The notify_message_demo
+> was deleted in Phase 7 of `TODO-message-migration.md`; this
+> bugfix is no longer relevant. Preserved for historical
+> reference only.
+
 ## Problem
 The interactive demo was slow when responding to keypresses, especially control characters like CTRL_U.
 

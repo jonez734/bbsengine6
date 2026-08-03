@@ -1,6 +1,16 @@
 # bbsengine6 notifyd - Architecture
 
-Status: NOT YET IMPLEMENTED
+> **STATUS (2026-07-22): SUPERSEDED.** See
+> `BBSENGINE6_NOTIFYD_OVERVIEW.md` for the full context.
+> The `notifyd` daemon was never built; this spec documents
+> a system that depends on the deleted `bbsengine6.notify`
+> package. The actual daemon is `py/src/bbsengine6/bed.py`
+> (BED = "BBS Engine Daemon"); see
+> `py/src/bbsengine6/net/SPEC.md` for the live transport
+> spec and `TODO.md` "Phase 1G: Postoffice Service" for the
+> postoffice work that survived.
+
+Status: NOT YET IMPLEMENTED (and superseded)
 Last Updated: 2026-05-18 13:43:46
 
 ---

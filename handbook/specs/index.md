@@ -4,6 +4,18 @@
 **Last Updated:** 2026-02-23  
 **Target Audience:** Developers & Architects
 
+> **Note on spec accuracy (2026-07-22):** This master spec and its
+> sibling "core" specs (`architecture.md`, `decisions.md`,
+> `dependencies.md`, `flows.md`, `web.md`, `modules.md`) are
+> the **2026-02-23 baseline**. Some specific claims have drifted
+> from the live code (e.g. `util.py` is ~1,394 lines, not 16,001;
+> `engine.php` is ~1,471 lines, not 1,506; `editor.py` is deprecated
+> in favor of the `ed/` package). See the topic-specific specs
+> (`util.md`, `web.md`, `NOTIFY_MESSAGING.md`, etc.) and the live
+> code for the current ground truth. Topic-specific specs are
+> maintained independently and are generally more current than this
+> bundle.
+
 ## Overview
 
 bbsengine6 is a comprehensive Bulletin Board System (BBS) engine written in Python, PHP, and JavaScript with a PostgreSQL database backend. It provides both terminal-based and web-based interfaces for running bulletin board systems with features including user authentication, messaging, forums, and a modular plugin system for extensibility.

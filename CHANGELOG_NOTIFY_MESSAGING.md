@@ -1,6 +1,17 @@
 # Notify Messaging System Changelog
 
-## Version 1.0.0 - 2026-05-20
+> **STATUS (2026-07-22): HISTORICAL.** The notify messaging system
+> described in this changelog was deleted in Phase 7 of
+> `TODO-message-migration.md`. The `moniker_exists`,
+> `group_exists`, and `get_group_members` functions documented
+> here **survived** the migration and are still live in
+> `py/src/bbsengine6/member/lib.py` — see
+> `handbook/specs/member.md` "Recipient Validation & Group
+> Management (v1.0)" for the current spec. Everything else in
+> this changelog (the notify `MessageHandler`, the demo, the
+> 132-test suite, the 5 listed commits) is gone.
+
+## Version 1.0.0 - 2026-05-20 (historical)
 
 ### New Features
 

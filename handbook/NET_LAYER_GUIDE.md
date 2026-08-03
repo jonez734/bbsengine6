@@ -21,7 +21,7 @@ from bbsengine6.net import send_with_internet
 
 # Send to local and remote users
 result = send_with_internet(
-    notification_type="greeting",
+    channel="greeting",
     recipients=[
         "alice@local",          # Local user
         "bob@remote_machine",   # Remote user
@@ -50,7 +50,7 @@ registry.register(
 
 ```python
 result = send_with_internet(
-    notification_type="test",
+    channel="test",
     recipients=["alice@local", "bob@remote_machine"],
     template="Test message",
 )
@@ -92,7 +92,7 @@ for machine in machines:
     recipients.append(f"user@{machine.machine_name}")
 
 send_with_internet(
-    notification_type="system_alert",
+    channel="system_alert",
     recipients=recipients,
     template="System maintenance at {time}",
     template_vars={"time": "2026-05-20 22:00"},
@@ -103,7 +103,7 @@ send_with_internet(
 
 ```python
 result = send_with_internet(
-    notification_type="message",
+    channel="message",
     recipients=["alice@local", "bob@machine1", "invalid"],
     template="New message",
 )
@@ -129,13 +129,13 @@ recipients = ["alice@local", "bob@machine1"]
 local, remote, errors = route_recipients(recipients)
 
 if local:
-    # Send to local via existing notify
-    from bbsengine6 import notify
-    notify.send(
-        notification_type="urgent",
-        recipients=local,
-        template="Urgent: {msg}",
-        template_vars={"msg": "Action required"},
+    # Send to local via the message system
+    from bbsengine6 import message
+    message.store_message(
+        channel="urgent",
+        sender_moniker="system",
+        content="Urgent: Action required",
+        recipient_monikers=local,
     )
 
 if remote:
@@ -152,7 +152,7 @@ if remote:
 from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
-    notification_type="string",
+    channel="string",
     recipients=["user@machine", ...],
     template="message with {vars}",
     template_vars={"vars": "..."},
@@ -212,7 +212,7 @@ from bbsengine6.net import NotifyIntegration
 integration = NotifyIntegration()
 
 result = integration.send(
-    notification_type="test",
+    channel="test",
     recipients=["alice@local"],
     template="Test",
 )

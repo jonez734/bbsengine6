@@ -1,3 +1,12 @@
+<!--
+GENERATED FILE — DO NOT EDIT BY HAND.
+
+Produced by the `log` Makefile target (`make log`). Equivalent
+to LOG.md (same `git log --pretty=...` output, full commit
+bodies) except this file's leading commit is from a different
+branch tip at regeneration time. The companion file
+LOG_SUMMARY.md is the same history grouped by date, subject-only.
+-->
 * f416127 2026-03-30 Group LOG_SUMMARY by date with date headers (HEAD -> main) [J (eff)]
 | Group LOG_SUMMARY by date with date headers
 | 

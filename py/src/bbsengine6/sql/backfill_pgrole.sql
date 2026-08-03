@@ -1,6 +1,6 @@
 --\echo backfill_pgrole.sql
 --
--- One-shot migration: provision engine.pgrole rows and l_<loginid>
+-- One-shot migration: provision engine.pgrole rows and m_<moniker>
 -- PostgreSQL roles for every currently-approved member that doesn't
 -- already have one.
 --
@@ -26,10 +26,10 @@ begin
        )
   loop
     begin
-      perform engine.createpgrole(m.loginid, null);
-      raise notice 'backfill_pgrole: created role for loginid=%', m.loginid;
+      perform engine.createpgrole(m.moniker, null);
+      raise notice 'backfill_pgrole: created role for moniker=%', m.moniker;
     exception when others then
-      raise warning 'backfill_pgrole: failed for loginid=%: %', m.loginid, sqlerrm;
+      raise warning 'backfill_pgrole: failed for moniker=%: %', m.moniker, sqlerrm;
     end;
   end loop;
 end $$;

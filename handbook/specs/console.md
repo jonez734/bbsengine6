@@ -298,10 +298,16 @@ Add new console commands by:
 
 ## Incomplete Features
 
-**notify.py** — Stub implementation
-- Database schema exists in `checknotify.py`
-- Module discoverable but no functional implementation
-- Design: Display/manage notifications and preferences
+**notify.py** — REMOVED (2026-07-22)
+- The `bbsengine6/console/notify.py` module and the
+  `bbsengine6/console/checknotify.py` /
+  `checknotifyd.py` helpers were **deleted** in Phase 7 of
+  `TODO-message-migration.md`. The replacement notification
+  system lives in `bbsengine6/message.py` (see
+  `handbook/specs/NOTIFY_MESSAGING.md` and the Phase 8 / Phase 9
+  entries in `TODO-message-migration.md`).
+- The "Incomplete Features" note that previously called this a
+  "stub" is now outdated; the subsystem is gone, not stubbed.
 
 **email.py** — Incomplete implementation
 - Stub module structure in place

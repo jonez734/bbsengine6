@@ -73,8 +73,7 @@ entry point:
 | `createdatabase`        | `bbsengine6.backend.database` |
 | `checkfunctions`        | `bbsengine6.backend.checkfunctions` |
 | `checkmemberflag`       | `bbsengine6.backend.checkmemberflag` |
-| `checknotify`           | `bbsengine6.backend.checknotify` (DEPRECATED) |
-| `checknotifyd`          | `bbsengine6.backend.checknotifyd` |
+| `checkmessage`          | `bbsengine6.backend.checkmessage` |
 | `checkwebserverrole`    | `bbsengine6.backend.checkwebserverrole` |
 | `checkbank`             | `bbsengine6.backend.checkbank` |
 
@@ -161,15 +160,14 @@ Three modules wrap each row in a savepoint and roll back to it on
 failure rather than aborting the whole transaction:
 
 - `checkfunctions`
-- `checknotify`
-- `checknotifyd`
+- `checkmessage`
 
-The protocol is uniform across all four:
+The protocol is uniform across all three:
 
 1. At the top of `_work(conn)` call `lib._ensure_autocommit_off(conn)`.
 2. For each row, take a savepoint named `lib._sanitize_sp(row_key)`
    (functions/classes use the qualified name; enum types in
-   `checknotify` use the qualified name with `prefix="enum_"`).
+   `checkmessage` use the qualified name with `prefix="enum_"`).
 3. If the work fails, call `database.importsql(...)` with
    `rollback=False` and wrap the call in `lib.retry_on_transient`.
 4. On `False`, `ROLLBACK TO SAVEPOINT <sp>`, print
@@ -350,10 +348,10 @@ on error):
 
 The notify-related classes (`__notify`, `__notify_recipient`,
 `__notify_block`, `__notify_group`, `__notify_type`,
-`__notify_rate_limit`) are **commented out** in the shipped file
-because the notify schema is migrating to `message_delivery.*`.
-The same classes are still listed in `checknotify.py` for the
-duration of the migration.
+`__notify_rate_limit`) have been **migrated to the unified message
+system** in `checkmessage.py`. The `__message*` tables and views
+provide equivalent functionality and are the canonical schema going
+forward.
 
 Returns `True` iff `failcount == 0` after the class loop.
 
@@ -416,50 +414,47 @@ For each function:
 
 Returns `True` iff `failcount == 0` after the loop.
 
-## `checknotifyd.py`
+## `checkmessage.py`
 
-Bootstrap for the notifyd daemon's state tables. Class list:
-
-| Class                          | SQL file    |
-|--------------------------------|-------------|
-| `engine.__notify_imap_state`   | `notifyd.sql` |
-| `engine.__notify_history`      | `notifyd.sql` |
-
-Uses the savepoint protocol with `lib.retry_on_transient`. Both
-rows can import the same `notifyd.sql` file (it contains both
-definitions); the second `importsql` is a no-op as soon as the
-first has succeeded. Requires `conn=`.
-
-## `checknotify.py` (DEPRECATED)
-
-Bootstrap for the `engine.notify*` classes. **Deprecated**: the
-notify schema is being moved to `bbsengine6.message_delivery.*`;
-this module is retained only until console has migrated its
-callers. SQL imports for the notify classes are also commented
-out in `checkengine.py` for the same reason. A `DeprecationWarning`
-is emitted exactly once per interpreter (gated on the
-`_warned` attribute on the module object) the first time
-`checknotify` is referenced.
-
-The class list (kept here for the migration window):
+Bootstrap for the unified message system (`engine.__message*` classes
+and views). Replaces the legacy `checknotify.py`.
 
 | Class                              | SQL file             |
 |------------------------------------|----------------------|
-| `engine.__notify`                  | `notify.sql`         |
-| `engine.__notify_type`             | `notify_type.sql`    |
-| `engine.__notify_recipient`        | `notify_recipient.sql`|
-| `engine.__notify_block`            | `notify_block.sql`   |
-| `engine.__notify_group`            | `notify_group.sql`   |
-| `engine.__notify_rate_limit`       | `notify_rate_limit.sql`|
-| `engine.notify`                    | `notifyview.sql`     |
-| `engine.notify_unread`             | `notifyview.sql`     |
-| `engine.notify_urgent`             | `notifyview.sql`     |
-| `engine.notify_blocked`            | `notifyview.sql`     |
+| `engine.__message`                 | `message.sql`        |
+| `engine.__message_recipient`       | `message.sql`        |
+| `engine.__message_group`           | `message_groups.sql` |
+| `engine.__message_group_member`    | `message_groups.sql` |
+| `engine.__message_block`           | `message_groups.sql` |
+| `engine.__message_type`            | `message_groups.sql` |
+| `engine.__message_rate_limit`      | `message_groups.sql` |
+| `engine.message`                   | `messageview.sql`    |
+| `engine.message_unread`            | `messageview.sql`    |
+| `engine.message_urgent`            | `messageview.sql`    |
+| `engine.message_blocked`           | `messageview.sql`    |
 
 Also installs the enum `engine.notify_urgency_enum` from
-`notify.sql` (with savepoint prefix `enum_`).
+`message_enum.sql` (with savepoint prefix `enum_`).
 
 Uses the savepoint protocol. Requires `conn=`.
+
+**Server-push integration:** `message.sql` also installs the
+`engine.__message_recipient_notify()` PL/pgSQL function and two
+triggers on `engine.__message_recipient`:
+
+- `trg_message_recipient_insert` (AFTER INSERT) — fires
+  `pg_notify('engine_message_recipient', json payload)` with
+  `message_id`, `recipient_id`, `recipient_moniker`, `status`,
+  `urgency`, `datestamp`.
+- `trg_message_recipient_update` (AFTER UPDATE of
+  status/datedelivered/dateread) — same payload, fires only when
+  one of those columns actually changes.
+
+The `bed.api.message.MessageService` LISTENs on this channel via a
+dedicated `psycopg.AsyncConnection` and fans out to subscribed
+WebSocket clients by `recipient_moniker`. The bbsengine6 TUI
+subscribes during `bbsengine6.startup.main()` via
+`startup.message_subscription.subscribe_to_bed_sync()`.
 
 ## `checkroles.py`
 

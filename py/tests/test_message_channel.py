@@ -1,13 +1,14 @@
 # test_message_channel.py
 # Tests for the message system channel subscription functionality (Phase 1A)
 
-import pytest
 from bbsengine6.net.transport import (
     ChannelState,
     channel_subscribe,
     channel_unsubscribe,
     channel_unsubscribe_all,
     channel_register_callback,
+    channel_unregister_callback,
+    channel_unregister_all_callbacks,
     channel_get_subscribers,
     channel_get_session_channels,
     channel_publish,
@@ -233,83 +234,164 @@ class TestMemberChannel:
         assert received[0]["content"] == "hello alice"
 
 
-# =============================================================================
-# Phase 1B: Persistence Tests
-# These tests require database tables that will be created in Phase 1B
-# =============================================================================
+class TestSharedChannelState:
+    """Regression: WebSocketServer must use the same ChannelState as
+    subscribers so server.publish(...) reaches them.
 
-pytest.mark.skip(reason="Phase 1B: Requires engine.__message table")
+    Pre-fix: WebSocketServer constructed its own ChannelState
+    internally; the ChannelServiceHandler had a separate one. As a
+    result, server.publish(...) saw zero subscribers.
+    """
 
+    def test_server_uses_passed_state(self):
+        """A state passed to the server is the one publish() uses."""
+        from bbsengine6.net.transport import WebSocketServer
 
-class TestMessagePersistence:
-    """Tests for message persistence (Phase 1B)."""
+        state = ChannelState()
+        server = WebSocketServer(host="127.0.0.1", port=18765, channel_state=state)
+        assert server._channel_state is state
 
-    def test_message_persistence(self):
-        """Messages stored in DB, delivered to offline users."""
-        pytest.skip("Requires engine.__message table")
+    def test_server_creates_state_when_none_passed(self):
+        """Default behavior (no shared state) creates an internal one."""
+        from bbsengine6.net.transport import WebSocketServer
 
-    def test_message_delivery_tracking(self):
-        """Automatic delivery tracking on connect."""
-        pytest.skip("Requires engine.__message_recipient table")
+        server = WebSocketServer(host="127.0.0.1", port=18766)
+        assert server._channel_state is not None
+        assert isinstance(server._channel_state, ChannelState)
 
-    def test_message_read_receipt(self):
-        """Client acknowledges receipt."""
-        pytest.skip("Requires engine.__message table")
+    def test_publish_uses_shared_state(self):
+        """Publish reaches subscribers registered against the shared state."""
+        from bbsengine6.net.transport import WebSocketServer
 
+        async def run():
+            state = ChannelState()
+            server = WebSocketServer(host="127.0.0.1", port=18767, channel_state=state)
+            # Subscriber registers against the shared state directly.
+            channel_subscribe(state, session_id=42, channel="test:chan")
+            received = []
 
-# =============================================================================
-# Phase 1C: Groups, Blocking, Rate Limiting Tests
-# These tests require database tables that will be created in Phase 1C
-# =============================================================================
+            def cb(msg):
+                received.append(msg)
 
-pytest.mark.skip(reason="Phase 1C: Requires message group/block tables")
+            channel_register_callback(state, "test:chan", cb)
+            await server.publish("test:chan", {"hello": "world"})
+            return received
 
+        import asyncio
 
-class TestMessageGroups:
-    """Tests for message groups (Phase 1C)."""
-
-    def test_message_groups(self):
-        """@everyone and custom groups."""
-        pytest.skip("Requires engine.__message_group table")
-
-    def test_message_rate_limiting(self):
-        """Per-sender, per-channel rate limits."""
-        pytest.skip("Requires engine.__message_rate_limit table")
-
-    def test_message_blocking(self):
-        """Sender blocked by recipient."""
-        pytest.skip("Requires engine.__message_block table")
-
-    def test_message_urgency(self):
-        """Priority levels (ROUTINE, IMPORTANT, URGENT, CRITICAL)."""
-        pytest.skip("Requires urgency column in engine.__message table")
+        result = asyncio.run(run())
+        assert result == [{"hello": "world"}]
 
 
-# =============================================================================
-# Phase 1D: Multi-Channel Delivery Tests
-# =============================================================================
+class TestCallbackLifecycle:
+    """Callback registration must be idempotent and reversible."""
 
-pytest.mark.skip(reason="Phase 1D: Requires delivery handlers")
+    def test_register_same_callback_twice_dedupes(self):
+        """Re-registering the same callable does not double-invoke."""
+        state = ChannelState()
+        received = []
+
+        def cb(msg):
+            received.append(msg)
+
+        channel_register_callback(state, "c", cb)
+        channel_register_callback(state, "c", cb)
+        channel_register_callback(state, "c", cb)
+
+        import asyncio
+
+        asyncio.run(channel_publish(state, channel="c", message={"x": 1}))
+        assert len(received) == 1
+
+    def test_unregister_callback_removes(self):
+        """After unregister, callback is not invoked."""
+        state = ChannelState()
+        received = []
+
+        def cb(msg):
+            received.append(msg)
+
+        channel_register_callback(state, "c", cb)
+        removed = channel_unregister_callback(state, "c", cb)
+        assert removed is True
+
+        import asyncio
+
+        asyncio.run(channel_publish(state, channel="c", message={"x": 1}))
+        assert received == []
+
+    def test_unregister_unknown_callback_returns_false(self):
+        state = ChannelState()
+        removed = channel_unregister_callback(state, "c", lambda m: None)
+        assert removed is False
+
+    def test_unregister_unknown_channel_returns_false(self):
+        state = ChannelState()
+        removed = channel_unregister_callback(state, "missing", lambda m: None)
+        assert removed is False
+
+    def test_unregister_all_callbacks_for_channel(self):
+        state = ChannelState()
+        channel_register_callback(state, "c1", lambda m: None)
+        channel_register_callback(state, "c1", lambda m: None)
+        channel_register_callback(state, "c2", lambda m: None)
+
+        n = channel_unregister_all_callbacks(state, "c1")
+        assert n == 2
+        assert "c1" not in state.callbacks
+        assert "c2" in state.callbacks
+
+    def test_unregister_all_callbacks_all_channels(self):
+        state = ChannelState()
+        channel_register_callback(state, "c1", lambda m: None)
+        channel_register_callback(state, "c2", lambda m: None)
+        channel_register_callback(state, "c2", lambda m: None)
+
+        n = channel_unregister_all_callbacks(state)
+        assert n == 3
+        assert state.callbacks == {}
 
 
-class TestMessageMultiChannel:
-    """Tests for multi-channel delivery (Phase 1D)."""
+class TestSessionIdAllocation:
+    """The server must allocate a monotonic session id per connection."""
 
-    def test_message_multi_channel(self):
-        """Email, SMS delivery via subscribed handlers."""
-        pytest.skip("Requires delivery handler implementation")
+    def test_alloc_session_id_is_monotonic(self):
+        from bbsengine6.net.transport import WebSocketServer
 
+        server = WebSocketServer(host="127.0.0.1", port=18768)
+        ids = [server._alloc_session_id() for _ in range(5)]
+        assert ids == sorted(ids)
+        assert len(set(ids)) == 5
+        assert all(i > 0 for i in ids)
 
-# =============================================================================
-# Phase 1E: Templating Tests
-# =============================================================================
+    def test_session_id_does_not_collide_after_release(self):
+        """Even after a high id, the next allocation continues monotonically."""
+        from bbsengine6.net.transport import WebSocketServer
 
-pytest.mark.skip(reason="Phase 1E: Requires templating implementation")
+        server = WebSocketServer(host="127.0.0.1", port=18769)
+        a = server._alloc_session_id()
+        b = server._alloc_session_id()
+        assert a != b
+        c = server._alloc_session_id()
+        assert c > b
 
+    def test_session_manager_allocates_ids(self):
+        """SessionManager.alloc_session_id returns monotonic ids."""
+        from bbsengine6.session import SessionManager
 
-class TestMessageTemplating:
-    """Tests for message templating (Phase 1E)."""
+        sm = SessionManager()
+        ids = [sm.alloc_session_id() for _ in range(3)]
+        assert ids == sorted(ids)
+        assert len(set(ids)) == 3
+        assert all(i > 0 for i in ids)
 
-    def test_message_templating(self):
-        """Variable substitution in messages."""
-        pytest.skip("Requires template rendering in message system")
+    def test_server_uses_provided_session_manager(self):
+        """A SessionManager passed to the server is reused for ids."""
+        from bbsengine6.net.transport import WebSocketServer
+        from bbsengine6.session import SessionManager
+
+        sm = SessionManager()
+        server = WebSocketServer(host="127.0.0.1", port=18770, session_manager=sm)
+        assert server._sessions is sm
+        sid = server._alloc_session_id()
+        assert sm.get_moniker(sid) is None  # not registered yet

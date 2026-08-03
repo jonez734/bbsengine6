@@ -4,30 +4,31 @@ Per-member PostgreSQL role provisioning.
 Public surface:
 
   ensure_login_role(args, moniker, **kwargs) -> str
-      Idempotent. Creates a LOGIN PostgreSQL role named after the
-      member's moniker. Grants the 'member' group role and USAGE
-      on the engine schema. Inserts a tracking row into engine.pgrole.
+      Idempotent. Creates a LOGIN PostgreSQL role named m_<moniker>.
+      Grants the 'member' group role and USAGE on the engine schema.
+      Inserts a tracking row into engine.pgrole.
       Returns the rolname on success.
 
   sync_groups(args, loginid) -> bool
-      Calls engine.syncpgrolegroups to bring the member's l_<loginid>
+      Calls engine.syncpgrolegroups to bring the member's m_<moniker>
       role's sysop/term/web group memberships in line with the
       member's current flags.
 """
 
 from typing import Any, Optional
+import re
 
 from bbsengine6 import database, util
 
 
 def ensure_login_role(args: Any, moniker: str, **kwargs: Any) -> Optional[str]:
     """
-    Create a LOGIN PostgreSQL role named after the member's moniker.
+    Create a LOGIN PostgreSQL role named m_<moniker>.
 
     Idempotent: if the role already exists or a pgrole row exists, this
     is a no-op.  Grants the 'member' group role and USAGE on the engine
     schema.  Inserts a tracking row into engine.pgrole with
-    rolname = moniker.
+    rolname = m_<moniker>.
 
     Returns the rolname on success, or None on failure.
     """
@@ -48,7 +49,7 @@ def ensure_login_role(args: Any, moniker: str, **kwargs: Any) -> Optional[str]:
 
 
 def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
-    rolname = moniker
+    rolname = "m_" + re.sub(r"[^a-zA-Z0-9_]", "_", moniker).lower()
 
     # 1. Check if a pgrole row already exists for this member.
     with database.cursor(conn=conn) as cur:
@@ -110,7 +111,7 @@ def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
 
 def sync_groups(args: Any, loginid: str, **kwargs: Any) -> bool:
     """
-    Sync the l_<loginid> role's group memberships (sysop, term, web)
+    Sync the m_<moniker> role's group memberships (sysop, term, web)
     to the member's current flags. Idempotent and safe to call after
     any flag change.
 

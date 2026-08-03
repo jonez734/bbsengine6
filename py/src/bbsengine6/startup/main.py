@@ -4,10 +4,49 @@ from bbsengine6 import io, database, util
 from bbsengine6.backend.lib import issysop
 
 from . import lib
+from .message_subscription import subscribe_to_bed_sync
 
 
 def init(args, **kwargs) -> bool:
     return True
+
+
+def _maybe_subscribe_to_bed(args, **kwargs) -> bool:
+    """Subscribe the current session to bed's server-push messages.
+
+    Reads the current moniker from bbsengine6.member._threadlocal
+    (set elsewhere by the auth flow) and, if present, attempts a
+    `message_subscribe` against the local bed daemon. Failure is
+    non-fatal: getch.py/bottombar.py will fall back to direct DB
+    reads on a cold local cache.
+    """
+    try:
+        from bbsengine6.member import _threadlocal
+        moniker = getattr(_threadlocal, "moniker", None)
+        if not moniker:
+            return False
+    except Exception:
+        io.echo_traceback("bbsengine6.startup.main._maybe_subscribe_to_bed.moniker:")
+        return False
+
+    try:
+        ok = subscribe_to_bed_sync(args, moniker)
+        if ok:
+            io.echo(
+                f"bbsengine6 startup: subscribed to bed message pushes "
+                f"for {moniker!r}",
+                level="info",
+            )
+        else:
+            io.echo(
+                "bbsengine6 startup: bed unreachable; using DB-polling "
+                "fallback for messages",
+                level="debug",
+            )
+        return ok
+    except Exception:
+        io.echo_traceback("bbsengine6.startup.main._maybe_subscribe_to_bed:")
+        return False
 
 
 def access(args, op, **kwargs) -> bool:
@@ -66,6 +105,8 @@ def main(args, **kwargs) -> bool:
 
         io.echo("bbsengine6 startup complete", level="ok")
         conn.commit()
+
+        _maybe_subscribe_to_bed(args)
         return True
 
     io.echo(f"bbsengine6.startup.120: trace", level="debug")

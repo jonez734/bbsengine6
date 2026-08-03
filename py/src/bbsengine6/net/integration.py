@@ -1,5 +1,5 @@
 # internet/integration.py
-# Integration layer between internet addressing and bbsengine6.notify.
+# Integration layer between internet addressing and bbsengine6.message.
 
 from __future__ import annotations
 
@@ -16,17 +16,17 @@ logger = logging.getLogger(__name__)
 
 class NotifyIntegration:
     """
-    Integrate internet addressing with bbsengine6.notify.
+    Integrate internet addressing with bbsengine6.message.
 
-    Extends notify.send() to support SMTP-like addresses (user@machine)
-    by routing local recipients to notify.send() and remote recipients
+    Extends message.store_message() to support SMTP-like addresses (user@machine)
+    by routing local recipients to message.store_message() and remote recipients
     to WebSocket transport.
     """
 
     def __init__(
         self,
         local_machine: str = "local",
-        notify_module: Optional[Any] = None,
+        message_module: Optional[Any] = None,
         registry: Optional[MachineRegistry] = None,
     ):
         """
@@ -34,7 +34,7 @@ class NotifyIntegration:
 
         Args:
             local_machine: Local machine identifier
-            notify_module: bbsengine6.notify module (auto-imported if None)
+            message_module: bbsengine6.message module (auto-imported if None)
             registry: MachineRegistry for remote machine configs
         """
         self.local_machine = local_machine
@@ -42,65 +42,65 @@ class NotifyIntegration:
         self.router = InternetRouter(local_machine, self.registry)
         self.parser = AddressParser(local_machine)
         self.transport = WebSocketTransport()
-        self.notify_module = notify_module
+        self.message_module = message_module
 
-        # Auto-import notify module if not provided
-        if self.notify_module is None:
-            self._try_import_notify()
+        # Auto-import message module if not provided
+        if self.message_module is None:
+            self._try_import_message()
 
-    def _try_import_notify(self) -> None:
-        """Try to import bbsengine6.notify module."""
+    def _try_import_message(self) -> None:
+        """Try to import bbsengine6.message module."""
         try:
-            from bbsengine6 import notify
+            from bbsengine6 import message as message_module
 
-            self.notify_module = notify
+            self.message_module = message_module
         except ImportError:
-            self.notify_module = None
+            self.message_module = None
 
     def send(
         self,
-        notification_type: str,
+        channel: str,
         recipients: List[str],
-        template: str,
+        content: str,
+        template: Optional[str] = None,
         template_vars: Optional[Dict[str, Any]] = None,
         sender_moniker: Optional[str] = None,
         data: Optional[Dict[str, Any]] = None,
-        urgency: Optional[Any] = None,
-        should_persist: bool = True,
+        urgency: Optional[str] = None,
         conn: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
-        Send notification to recipients (local and/or remote).
+        Send message to recipients (local and/or remote).
 
         Automatically detects internet addresses and routes appropriately:
-        - Local recipients: send via bbsengine6.notify.send()
+        - Local recipients: send via bbsengine6.message.store_message()
         - Remote recipients: send via WebSocket transport
 
         Args:
-            notification_type: Type of notification
+            channel: Message channel (e.g. "member:direct", "system:announcements")
             recipients: List of recipients (can be mixed local and internet addresses)
-            template: Notification template
+            content: Message content
+            template: Optional template string
             template_vars: Template variables
             sender_moniker: Sender's moniker
-            data: Additional notification data
-            urgency: Notification urgency level
-            should_persist: Whether to persist notification
+            data: Additional message data
+            urgency: Message urgency level
             conn: Database connection
 
         Returns:
             Dict with results:
             {
-                "local": Notification (from notify.send()),
+                "local": message_id (from message.store_message()),
                 "remote": Dict[machine] -> (success, message),
                 "errors": Dict[address] -> error message,
                 "summary": (total_success, total_failed)
             }
         """
-        if not self.notify_module:
+        if not self.message_module:
             return {
                 "local": None,
                 "remote": {},
-                "errors": {"all": "bbsengine6.notify not available"},
+                "errors": {"all": "bbsengine6.message not available"},
                 "summary": (0, len(recipients)),
             }
 
@@ -115,25 +115,35 @@ class NotifyIntegration:
             "errors": errors,
         }
 
-        # Send to local recipients via notify.send()
+        # Send to local recipients via message.store_message_with_checks()
         if local_recipients:
             try:
-                result["local"] = self.notify_module.send(
-                    notification_type=notification_type,
-                    recipients=local_recipients,
-                    template=template,
-                    template_vars=template_vars,
+                store_result = self.message_module.store_message_with_checks(
+                    channel=channel,
                     sender_moniker=sender_moniker,
+                    content=content,
+                    recipient_monikers=local_recipients,
                     data=data,
                     urgency=urgency,
-                    should_persist=should_persist,
-                    conn=conn,
+                    template=template,
+                    template_vars=template_vars,
                 )
+                result["local"] = store_result.get("message_id", 0)
+                result["local_stored"] = store_result.get("recipients_stored", [])
+                result["local_blocked"] = store_result.get("recipients_blocked", [])
+                if not store_result.get("rate_limit_ok", True):
+                    result["errors"]["rate_limit"] = (
+                        f"Local rate limit exceeded for sender={sender_moniker} "
+                        f"on channel={channel}"
+                    )
                 logger.info(
-                    f"Internet integration: sent to {len(local_recipients)} local recipients"
+                    f"Internet integration: sent to "
+                    f"{len(store_result.get('recipients_stored', []))} "
+                    f"local recipients "
+                    f"({len(store_result.get('recipients_blocked', []))} blocked)"
                 )
             except Exception as e:
-                result["errors"]["local"] = f"Failed to send local notifications: {e}"
+                result["errors"]["local"] = f"Failed to send local messages: {e}"
                 logger.error(f"Internet integration: local send failed: {e}")
 
         # Send to remote recipients via WebSocket
@@ -150,19 +160,20 @@ class NotifyIntegration:
                     logger.warning(f"Internet integration: no config for {machine}")
                     continue
 
-                # Prepare notification data
-                notification_data = {
-                    "type": notification_type,
+                # Prepare message data
+                message_data = {
+                    "channel": channel,
+                    "content": content,
                     "template": template,
                     "template_vars": template_vars or {},
                     "sender_moniker": sender_moniker,
                     "data": data or {},
-                    "urgency": urgency.value if urgency else None,
+                    "urgency": urgency,
                 }
 
                 # Send via WebSocket (async)
                 success, message = self.transport.send_to_remote_sync(
-                    host, port, recipients_list, notification_data, auth_token
+                    host, port, recipients_list, message_data, auth_token
                 )
 
                 result["remote"][machine] = (success, message)
@@ -194,10 +205,10 @@ class NotifyIntegration:
         """
         Check if integration can send to all recipients.
 
-        Returns False if notify module is unavailable and there are local recipients.
+        Returns False if message module is unavailable and there are local recipients.
         """
         local_recipients, _, _, _ = self.router.route(recipients)
-        if local_recipients and not self.notify_module:
+        if local_recipients and not self.message_module:
             return False
         return True
 
@@ -208,18 +219,20 @@ _default_integration: Optional[NotifyIntegration] = None
 
 def get_integration(
     local_machine: str = "local",
-    notify_module: Optional[Any] = None,
+    message_module: Optional[Any] = None,
     registry: Optional[MachineRegistry] = None,
 ) -> NotifyIntegration:
     """Get or create default integration instance."""
     global _default_integration
     if _default_integration is None:
-        _default_integration = NotifyIntegration(local_machine, notify_module, registry)
+        _default_integration = NotifyIntegration(
+            local_machine, message_module, registry
+        )
     return _default_integration
 
 
 def send_with_internet(
-    notification_type: str,
+    channel: str,
     recipients: List[str],
     template: str,
     template_vars: Optional[Dict[str, Any]] = None,
@@ -230,10 +243,15 @@ def send_with_internet(
     conn: Optional[Any] = None,
     local_machine: str = "local",
 ) -> Dict[str, Any]:
-    """Convenience function for sending with internet addressing."""
+    """Convenience function for sending with internet addressing.
+
+    ``channel`` is the channel/topic name (e.g. ``"member:direct"`` or
+    ``"system:announcements"``). It is forwarded to
+    :meth:`NotifyIntegration.send` as its ``channel`` argument.
+    """
     integration = get_integration(local_machine)
     return integration.send(
-        notification_type=notification_type,
+        channel=channel,
         recipients=recipients,
         template=template,
         template_vars=template_vars,

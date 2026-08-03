@@ -1,6 +1,14 @@
 # Notify Message Demo - Database Integration Complete
 
-**Status:** ✅ **PRODUCTION READY**  
+> **STATUS (2026-07-22): SUPERSEDED.** This is an interim "complete"
+> report; the project it describes (`notify_message_demo` and
+> the `bbsengine6/notify/` package it was built on) was deleted
+> in Phase 7 of `TODO-message-migration.md`. The final report
+> is in `NOTIFY_MESSAGE_DEMO_FINAL_SUMMARY.md` (also now
+> historical). Both files are preserved for the historical
+> record only.
+
+**Status:** ✅ **PRODUCTION READY** (historical)  
 **Date:** May 18, 2026  
 **Total Tests:** 71/71 Passing (100%)
 

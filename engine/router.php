@@ -13,6 +13,11 @@
  * No handler may ever produce a WSOD.
  * The error handler must always produce either a return string or end the request.
  *
+ * Directory listings (router_collectDirectoryItems + router_dedupeItems)
+ * filter out editor backup files and case-variant duplicates via
+ * router_isIgnoredEntry(). See handbook/ROUTER.md and
+ * teos/SPEC.md section 9.6 for the policy and patterns covered.
+ *
  * @since 2026
  */
 
@@ -246,26 +251,46 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   return "<html><head><title>$title</title></head><body>$date_html$html</body></html>";
 }
 
-function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidden = false): string
+function router_isIgnoredEntry(string $entry): bool
+{
+  if ($entry === '' || $entry === '.' || $entry === '..') return true;
+
+  if ($entry[0] === '.') {
+    return true;
+  }
+
+  if (preg_match('/~+$/', $entry) === 1) {
+    return true;
+  }
+
+  if (preg_match('/(^|\.)(swp|swo|swn|bak|orig|rej|tmp|temp|save)$/i', $entry) === 1) {
+    return true;
+  }
+
+  if (preg_match('/^#.*#$/', $entry) === 1) {
+    return true;
+  }
+
+  return false;
+}
+
+function router_collectDirectoryItems(string $dirpath, string $uri): array
 {
   $safedir = realpath($dirpath);
   if ($safedir === false) {
-    router_log('directory resolution failed', 'warning');
-    return router_handleError($uri);
+    return [];
   }
 
   $entries = scandir($safedir);
   if ($entries === false) {
-    router_log('scandir failed', 'warning');
-    return router_handleError($uri);
+    return [];
   }
 
-  $title = basename($uri) ?: $uri;
   $teosurl = router_get_teosurl();
   $items = [];
 
   foreach ($entries as $entry) {
-    if ($entry[0] === '.') continue;
+    if (router_isIgnoredEntry($entry)) continue;
     $fullpath = $safedir . '/' . $entry;
 
     if (is_dir($fullpath)) {
@@ -324,6 +349,36 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   }
 
   usort($items, fn($a, $b) => strcasecmp($a['filename'], $b['filename']));
+
+  return $items;
+}
+
+function router_dedupeItems(array $items): array
+{
+  $seen = [];
+  $out = [];
+  foreach ($items as $item) {
+    $key = strtolower($item['filename'] ?? '');
+    if ($key === '' || isset($seen[$key])) continue;
+    $seen[$key] = true;
+    $out[] = $item;
+  }
+  return $out;
+}
+
+function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidden = false): string
+{
+  $safedir = realpath($dirpath);
+  if ($safedir === false) {
+    router_log('directory resolution failed', 'warning');
+    return router_handleError($uri);
+  }
+
+  $items = router_collectDirectoryItems($dirpath, $uri);
+  $items = router_dedupeItems($items);
+
+  $title = basename($uri) ?: $uri;
+  $teosurl = router_get_teosurl();
 
   if (function_exists('bbsengine6\setcurrentpage')) {
     bbsengine6\setcurrentpage($teosurl . $uri);

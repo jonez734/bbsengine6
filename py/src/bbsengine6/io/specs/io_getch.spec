@@ -49,8 +49,9 @@ Reads a single keypress and returns a key name or character.
 - When pending notifications are detected, a system bell (`{bel}`) is emitted once per session
 - When F2 key is pressed, `"KEY_F2"` is returned to the caller (caller can handle notifications if desired)
 - Notification display (via `_show_pending_notifications()`) shows: urgency level, timestamp, recipient, and message
-- Colors for notifications are configurable via echo vars: `notify.criticalcolor`, `notify.urgentcolor`, `notify.importantcolor`, `notify.routinecolor`, `notify.datestampcolor`, `notify.recipientcolor`
+- Colors for notifications are configurable via echo vars: `message.criticalcolor`, `message.urgentcolor`, `message.importantcolor`, `message.routinecolor`, `message.datestampcolor`, `message.recipientcolor` (legacy `notify.*color` aliases still recognized for back-compat)
 - Caller is responsible for displaying notifications after receiving F2 key event
+- **Server-push read path:** notification counts are read from `bbsengine6.message.get_local_unread_count(moniker)`, populated by bed's `MessageService` via PostgreSQL `LISTEN`/`NOTIFY` on `engine_message_recipient` (triggers fire on `__message_recipient` INSERT/UPDATE in `sql/message.sql`). On a cold cache the first call falls back to a DB count via `message.get_unread_count()`. See `bed.api.message.MessageService` and `bbsengine6.startup.message_subscription` for the wiring.
 
 ---
 

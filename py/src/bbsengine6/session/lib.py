@@ -1,5 +1,6 @@
 import os
 import uuid
+import itertools
 import threading
 from argparse import Namespace
 from datetime import datetime, timedelta, timezone
@@ -17,8 +18,26 @@ class SessionManager:
 
     def __init__(self):
         self._sessions: Dict[int, Dict[str, Any]] = {}
+        # Monotonic counter for session id allocation. itertools.count
+        # is atomic under the CPython GIL, so no lock is required.
+        self._id_counter = itertools.count(1)
 
-    def register_session(self, session_id: int, moniker: str, is_sysop: bool = False) -> None:
+    def alloc_session_id(self) -> int:
+        """Allocate a fresh session id.
+
+        Returns small positive integers starting at 1. The id is not
+        registered; callers are expected to follow up with
+        ``register_session`` once the connection is authenticated.
+
+        ids are unique process-wide. They are never recycled, so a
+        connection that disconnects will not see its id reused, even
+        if a different connection obtains a later id.
+        """
+        return next(self._id_counter)
+
+    def register_session(
+        self, session_id: int, moniker: str, is_sysop: bool = False
+    ) -> None:
         self._sessions[session_id] = {"moniker": moniker, "is_sysop": is_sysop}
 
     def unregister_session(self, session_id: int) -> None:

@@ -1,5 +1,33 @@
 # bbsengine6.notify Specification
 
+> **STATUS (2026-07-22): SUPERSEDED.** The `bbsengine6.notify` package
+> was **deleted** in Phase 7 of `TODO-message-migration.md`. The
+> `engine.__notify*` tables, `engine.notify*` views,
+> `checknotify.py` / `checknotifyd.py` modules, and the entire
+> `notify` / `message_delivery` Python package have all been
+> removed. The replacement is `bbsengine6/message.py`; see
+> `TODO-message-migration.md` Phase 8 for the live behavior.
+>
+> The recipient-validation / group-management features documented
+> in `NOTIFY_MESSAGING.md` (and the `moniker_exists` /
+> `group_exists` / `get_group_members` functions) were preserved
+> and live in `py/src/bbsengine6/member/lib.py` (see
+> `handbook/specs/member.md` "Recipient Validation & Group
+> Management (v1.0)").
+>
+> **Confusingly-named sibling project:** the `BBSENGINE6_NOTIFYD_*.md`
+> files in `handbook/specs/` describe a separate "notifyd"
+> daemon that was never built. They are also marked SUPERSEDED.
+> The actual bbsengine6 daemon is `py/src/bbsengine6/bed.py`
+> (BED = "BBS Engine Daemon"), a generic WebSocket server that
+> loads a router module via `--router`; see
+> `py/src/bbsengine6/net/SPEC.md` "BED Daemon" for the live
+> reference.
+>
+> This spec is preserved for historical reference only. **Do not
+> implement against this spec** — the tables, the Python package,
+> and the SQL files referenced here no longer exist.
+
 ## Summary
 
 `notify.py` provides a robust, thread-safe user notification system for broadcasting events to specific users or groups with templating, urgency levels, rate limiting, and blocking support. Notifications are delivered both live (in-memory queues) and persistently (database storage).

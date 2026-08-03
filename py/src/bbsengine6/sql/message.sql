@@ -43,3 +43,50 @@ grant all on engine.__message to web, sysop, term;
 grant all on engine.__message_id_seq to web, sysop, term;
 grant all on engine.__message_recipient to web, sysop, term;
 grant all on engine.__message_recipient_id_seq to web, sysop, term;
+
+-- Phase: server-push notifications via PG LISTEN/NOTIFY
+-- Triggers fire pg_notify('engine_message_recipient', json payload) on
+-- INSERT and UPDATE of __message_recipient, allowing bed (and any other
+-- listener) to fan out to connected WebSocket clients by recipient_moniker.
+
+create or replace function engine.__message_recipient_notify()
+returns trigger
+language plpgsql
+as $$
+declare
+    payload jsonb;
+    msg_urgency engine.notify_urgency_enum;
+begin
+    select urgency into msg_urgency
+    from engine.__message
+    where id = NEW.message_id;
+
+    payload := jsonb_build_object(
+        'message_id', NEW.message_id,
+        'recipient_id', NEW.id,
+        'recipient_moniker', NEW.recipient_moniker,
+        'status', NEW.status,
+        'urgency', msg_urgency,
+        'datestamp', coalesce(NEW.datedelivered, now())
+    );
+
+    perform pg_notify('engine_message_recipient', payload::text);
+    return NEW;
+end;
+$$;
+
+create trigger trg_message_recipient_insert
+    after insert on engine.__message_recipient
+    for each row
+    execute function engine.__message_recipient_notify();
+
+create trigger trg_message_recipient_update
+    after update of status, datedelivered, dateread
+        on engine.__message_recipient
+    for each row
+    when (OLD.status is distinct from NEW.status
+          or OLD.datedelivered is distinct from NEW.datedelivered
+          or OLD.dateread is distinct from NEW.dateread)
+    execute function engine.__message_recipient_notify();
+
+grant execute on function engine.__message_recipient_notify() to web, sysop, term;

@@ -873,6 +873,16 @@ function getsubsigs($labelpath)
   }
   return $subsigs;
 }
+function decode_entities($str)
+{
+  do {
+    $decoded = html_entity_decode($str, ENT_QUOTES, 'UTF-8');
+    if ($decoded === $str) { break; }
+    $str = $decoded;
+  } while (true);
+  return $str;
+}
+
 /**
  * @since 20240626 copied from bbsengine4
  *
@@ -892,7 +902,7 @@ function getsig($labelpath, $subsigs=true)
    return null;
   }
   $sig = $stmt->fetch();
-  $sig["title"] = html_entity_decode($sig["title"] ?? "");
+  $sig["title"] = \bbsengine6\decode_entities($sig["title"] ?? "");
   if ($sig["uri"] === null)
   {
    $sig["uri"] = util\ltreeToPath($sig["path"]); 

@@ -3,7 +3,7 @@ Show a member's psql access info (rolname, osuser, connect command).
 
 Auth is by ident: members connect to PostgreSQL as the OS user
 recorded in engine.pgrole.osuser, and pg_ident.conf on the DB host
-maps that OS user to the l_<loginid> PG role.
+maps that OS user to the m_<moniker> PG role.
 
 No password is ever displayed or stored by this module. If the member
 needs to change which OS user they connect from, the welcome-flow

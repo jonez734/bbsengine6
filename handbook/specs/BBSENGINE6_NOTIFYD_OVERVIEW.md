@@ -1,6 +1,31 @@
 # bbsengine6 notifyd - IMAP & Event Notification System
 
-Status: NOT YET IMPLEMENTED
+> **STATUS (2026-07-22): SUPERSEDED.** The `notifyd` daemon
+> described in this and the other 9 `BBSENGINE6_NOTIFYD_*.md`
+> files was never built. Every implementation path in these
+> specs routes through `bbsengine6.notify`, which was
+> **deleted** in Phase 7 of `TODO-message-migration.md`
+> (2026-07-22). The IMAP monitoring subsystem, the EventBus,
+> the daemon process, the systemd unit, the CLI, and the
+> claimed 193 tests do not exist in the codebase.
+>
+> **The actual bbsengine6 daemon is `bed.py` (BED = "BBS
+> Engine Daemon")**, a generic WebSocket server that loads a
+> router module via `--router`. See
+> `py/src/bbsengine6/bed.py` (the source) and
+> `py/src/bbsengine6/net/SPEC.md` (the underlying transport
+> spec) for the current state.
+>
+> **Postoffice / IMAP work** (the closest thing to a
+> replacement) is in `TODO.md` "Phase 1G: Postoffice Service
+> (IMAP Polling) ✓ bed.json DONE" — that phase ships the
+> `bed.json` config and the `casino/config.py` loader, but
+> the actual IMAP poller is still pending.
+>
+> This file is preserved for historical reference only. **Do
+> not implement against this spec.**
+
+Status: NOT YET IMPLEMENTED (and superseded)
 Last Updated: 2026-05-18 13:43:46
 
 ---

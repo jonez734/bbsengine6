@@ -124,16 +124,43 @@ class ChannelService:
                     return None
                 return dict(row)
 
-    def list_channels(self) -> List[Dict[str, Any]]:
-        """List all configured channels."""
+    def list_channels(
+        self,
+        limit: int = 100,
+        offset: int = 0,
+        announce_only: Optional[bool] = None,
+    ) -> List[Dict[str, Any]]:
+        """List configured channels with pagination and optional filtering.
+
+        Args:
+            limit: Maximum number of channels to return (default 100).
+            offset: Number of channels to skip (default 0).
+            announce_only: When True, only return announce-only channels;
+                when False, only return open channels; when None, return
+                all.
+
+        Returns:
+            List of channel dicts ordered by name.
+        """
+        clauses = []
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        if announce_only is not None:
+            clauses.append("announce_only = :announce_only")
+            params["announce_only"] = announce_only
+
+        where_sql = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
         with database.connect(self.args) as conn:
             with database.cursor(conn) as cur:
                 cur.execute(
                     database.query(
-                        """SELECT id, name, description, announce_only,
-                                  createdby, datecreated, datemodified, announcers
-                           FROM $engine.channel
-                           ORDER BY name"""
+                        f"""SELECT id, name, description, announce_only,
+                                   createdby, datecreated, datemodified, announcers
+                            FROM $engine.channel
+                            {where_sql}
+                            ORDER BY name
+                            LIMIT :limit OFFSET :offset""",
+                        **params,
                     )
                 )
                 return [dict(row) for row in cur.fetchall()]
@@ -151,9 +178,7 @@ class ChannelService:
         Returns:
             Dict with success status.
         """
-        if not member_module.verifyMemberFound(
-            self.args, by_moniker, column="moniker"
-        ):
+        if not member_module.verifyMemberFound(self.args, by_moniker, column="moniker"):
             return {"success": False, "message": "Member not found"}
 
         with database.connect(self.args) as conn:
@@ -180,13 +205,9 @@ class ChannelService:
         Returns:
             Dict with success status.
         """
-        if not member_module.verifyMemberFound(
-            self.args, moniker, column="moniker"
-        ):
+        if not member_module.verifyMemberFound(self.args, moniker, column="moniker"):
             return {"success": False, "message": "Member not found"}
-        if not member_module.verifyMemberFound(
-            self.args, addedby, column="moniker"
-        ):
+        if not member_module.verifyMemberFound(self.args, addedby, column="moniker"):
             return {"success": False, "message": "Adding member not found"}
 
         with database.connect(self.args) as conn:
@@ -215,9 +236,7 @@ class ChannelService:
                 )
                 return {"success": True, "message": "Announcer added"}
 
-    def remove_announcer(
-        self, channel_name: str, moniker: str
-    ) -> Dict[str, Any]:
+    def remove_announcer(self, channel_name: str, moniker: str) -> Dict[str, Any]:
         """Remove a moniker from a channel's announcer list.
 
         Returns:

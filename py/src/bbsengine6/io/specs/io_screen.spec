@@ -71,10 +71,17 @@ Display progress bar in bottom bar.
 Get notification status string for bottombar right side.
 
 **Parameters:**
-- `**kwargs`: Passed to `notify.count()` (supports `args`, `conn`, `pool`)
+- `**kwargs`: Passed to `message.get_unread_count()` (supports `args`, `conn`, `pool`)
 
 **Returns:**
-- `"F2: notify (N)"` if notifications > 0, else empty string
+- `"F2: messages (N)"` if notifications > 0, else empty string
+
+**Read path:**
+- Reads from `bbsengine6.message.get_local_unread_count(moniker)` if the
+  local cache is warm (populated by bed's server-push notifications via
+  PG `LISTEN`/`NOTIFY` on `engine_message_recipient`).
+- Falls back to `message.get_unread_count(moniker)` (DB query) on a cold
+  cache, then seeds the local cache with the result.
 
 ## Known Issues
 

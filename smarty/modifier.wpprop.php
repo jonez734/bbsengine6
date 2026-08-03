@@ -323,7 +323,6 @@ function wp_prop_eval($str)
               '/m';
 
    
-    $str = htmlentities($str, ENT_QUOTES, "utf-8", False);
     return preg_replace_callback($pattern, "_wp_prop_callback_func", $str);
 //   return nl2br(preg_replace_callback($pattern, '_wp_prop_callback_func', htmlentities($str)));
 }

@@ -408,7 +408,7 @@ def edit(args, **kwargs):
             return False
 
         # Loginid rename is not supported in the console: the psql
-        # role (l_<loginid>) is named for the old loginid, and there
+        # role (m_<moniker>) is named for the moniker, and there
         # is no `database.renamerole` helper yet.
         if m["loginid"] != _baseline_loginid:
             io.echo(

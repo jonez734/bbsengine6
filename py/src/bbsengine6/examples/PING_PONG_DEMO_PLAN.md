@@ -1,10 +1,32 @@
 # Ping/Pong Demo - Implementation Plan
 
-**Status:** Ready for implementation  
+> **STATUS (2026-07-22): SUPERSEDED.** This plan
+> depends on `bbsengine6/notifyd/GETCH_INTEGRATION.md`
+> and `bbsengine6/notifyd/GETCH_MULTI_USER.md`, neither
+> of which exists. The notifyd daemon was never built,
+> and the `bbsengine6.notify` package that this demo
+> would use was deleted in Phase 7 of
+> `TODO-message-migration.md` (2026-07-22).
+>
+> A live ping/pong demo is straightforward to implement
+> against the current `py/src/bbsengine6/message.py`
+> channel pub/sub system (see
+> `py/src/bbsengine6/net/SPEC.md` "BED Daemon" for the
+> transport) but should be re-scoped from scratch — the
+> "two concurrent threads" model in this plan maps to
+> "two `BED` processes talking over a shared
+> `ChannelState`" in the live system, not to per-member
+> notification queues.
+>
+> The actual daemon to use as a reference is
+> `py/src/bbsengine6/bed.py`; the closest live message
+> client is in `py/src/bbsengine6/startup/message_subscription.py`.
+
+**Status:** Ready for implementation (and superseded)
 **Date Created:** 2026-05-18  
-**References:** 
-- [GETCH_INTEGRATION.md](../notifyd/GETCH_INTEGRATION.md) - getch() idle loop notification checking
-- [GETCH_MULTI_USER.md](../notifyd/GETCH_MULTI_USER.md) - multi-member notification isolation
+**Original references (DO NOT FOLLOW):** 
+- ~~[GETCH_INTEGRATION.md](../notifyd/GETCH_INTEGRATION.md)~~ — file does not exist (never built)
+- ~~[GETCH_MULTI_USER.md](../notifyd/GETCH_MULTI_USER.md)~~ — file does not exist (never built)
 
 ## Overview
 

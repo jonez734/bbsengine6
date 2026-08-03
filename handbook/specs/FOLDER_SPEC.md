@@ -222,6 +222,35 @@ Content starts here...
 2. Fall back to filename (without .md extension)
 3. Never apply any case transformation (no ucfirst, ucase)
 
+### 4.5 Backup and Junk File Filtering
+
+`scandir()` returns every visible entry in the directory, which includes
+leftovers from editors and patch tools. If any of those are siblings of a
+real blurb (e.g. `major-characters.md` and `major-characters.md~` left
+behind by an editor crash or a half-finished `make deploy`), the listing
+will show them as duplicates of the real entry.
+
+`router_isIgnoredEntry()` in `engine/router.php` filters out the following
+patterns before an entry is added to a listing:
+
+| Pattern | Example | Source |
+|---------|---------|--------|
+| `.`-prefixed entries | `.hidden`, `..` | dotfiles |
+| Trailing `~` (one or more) | `foo.md~`, `foo.md.~~`, `foo~~` | emacs backup |
+| `.swp`, `.swo`, `.swn` | `foo.swp` | vim swap |
+| `.bak`, `.orig`, `.rej` | `foo.bak` | patch / backup tools |
+| `.tmp`, `.temp`, `.save` | `foo.tmp` | scratch files |
+| `#name#` | `#foo.md#` | emacs lockfile |
+
+The filter is case-insensitive for the suffix patterns. New patterns can be
+added in `router_isIgnoredEntry()`; the filter is covered by
+`/home/opencode/data/work/teos/www/php/test_www_mash_no_duplicates.php`.
+
+**Note**: This filter is applied by the *router*'s directory listing path.
+The older `bbsengine6\folder\display()` API is a separate code path; if
+folder listings from that API ever leak backup files, the same pattern
+should be applied there.
+
 ## 5. Testing
 
 Run tests:

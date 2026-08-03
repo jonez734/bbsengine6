@@ -5,6 +5,14 @@
 **Test Coverage**: 9 tests, 100% passing  
 **Code Quality**: PHP syntax validated
 
+> **NOTE:** This spec is the **PHP handler** spec (filesystem-based
+> content with `text` PKs). There is a separate `blurb.md` in this
+> directory that documents an older Python-side entity model with
+> `bigserial` PKs; that model is **not the live implementation** and
+> is preserved only for historical reference to the schema
+> relationships. When in doubt, this spec (`BLURB_SPEC.md`) and the
+> live SQL in `py/src/bbsengine6/sql/blurb.sql` are authoritative.
+
 ## 1. Overview
 
 The Blurb module provides filesystem-based content pages with database metadata. Blurbs are markdown files stored in a directory structure that maps to URI paths, with metadata stored in the `engine.__blurb` table.

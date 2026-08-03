@@ -57,15 +57,6 @@ def checkmessage(args, **kwargs):
     return runmodule(args, "checkmessage", **kwargs)
 
 
-def checknotify(args, **kwargs):
-    """DEPRECATED: use bbsengine6.message_delivery.* instead."""
-    return runmodule(args, "checknotify", **kwargs)
-
-
-def checknotifyd(args, **kwargs):
-    return runmodule(args, "checknotifyd", **kwargs)
-
-
 def checkwebserverrole(args, **kwargs):
     return runmodule(args, "checkwebserverrole", **kwargs)
 
@@ -167,8 +158,8 @@ def _sanitize_sp(name: str, prefix: str = "") -> str:
 def _ensure_autocommit_off(conn) -> None:
     """Defensively put ``conn`` into autocommit=False if it is safe to do so.
 
-    The four savepoint-wrapped check* modules (checkclasses, checkfunctions,
-    checknotify, checknotifyd) start their ``_work()`` with an
+    The three savepoint-wrapped check* modules (checkclasses, checkfunctions,
+    checkmessage) start their ``_work()`` with an
     ``autocommit = False`` assignment so that a caller-supplied conn in
     autocommit=True mode (e.g. from a wrapper that flipped it) still
     participates in the outer transaction. ``database.connect()`` already

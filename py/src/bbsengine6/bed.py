@@ -10,10 +10,9 @@ import signal
 import sys
 
 
-
 from bbsengine6 import io
 from bbsengine6.database import buildargs as databasebuildargs
-from bbsengine6.net import WebSocketServer
+from bbsengine6.net import WebSocketServer, ChannelState
 from bbsengine6.net.defaultrouter import DefaultRouter
 
 
@@ -29,9 +28,15 @@ class BED:
 
     async def start(self) -> None:
         """Start the daemon."""
+        # Construct a single, shared channel state so that
+        # subscriptions registered through the router and publishes
+        # made via server.publish(...) see the same data.
+        channel_state = ChannelState()
+
         self.server = WebSocketServer(
             host=self.args.host,
             port=self.args.port,
+            channel_state=channel_state,
         )
 
         db_args = argparse.Namespace()
@@ -42,14 +47,26 @@ class BED:
         db_args.databasepassword = self.args.databasepassword
         db_args.debug = getattr(self.args, "debug", False)
 
-        self.router = self.MessageRouterClass(db_args)
+        # Pass the shared state and the server to the router. Routers
+        # that don't accept these kwargs keep working via *args/**kwargs
+        # or by ignoring extra args.
+        self.router = self.MessageRouterClass(
+            db_args, channel_state=channel_state, server=self.server
+        )
         self.router.register_all(self.server)
+        # Belt-and-suspenders: ensure the server knows about the router
+        # for disconnect cleanup even if the router's register_all
+        # didn't call it (older routers).
+        self.server.register_router(self.router)
 
         await self.server.start()
         self._running = True
 
         io.echo(f"BED started on {self.args.host}:{self.args.port}", level="info")
-        io.echo(f"Router: {self.MessageRouterClass.__module__}.{self.MessageRouterClass.__name__}", level="info")
+        io.echo(
+            f"Router: {self.MessageRouterClass.__module__}.{self.MessageRouterClass.__name__}",
+            level="info",
+        )
 
         try:
             while self._running:
@@ -91,7 +108,8 @@ def parse_args() -> argparse.Namespace:
         help="Enable debug logging",
     )
     parser.add_argument(
-        "--foreground", "-f",
+        "--foreground",
+        "-f",
         action="store_true",
         help="Run in foreground (don't daemonize)",
     )
@@ -118,8 +136,8 @@ def main() -> None:
         # Handle 'module.path.MessageRouter' format
         from bbsengine6 import module as bbsmodule
 
-        parts = args.router.split('.')
-        module_path = '.'.join(parts[:-1])
+        parts = args.router.split(".")
+        module_path = ".".join(parts[:-1])
         attr_name = parts[-1]
 
         router_module = bbsmodule.get(module_path, args)

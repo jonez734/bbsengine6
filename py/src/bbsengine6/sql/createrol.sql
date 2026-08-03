@@ -27,46 +27,38 @@ grant execute on function engine.createrol to sysop;
 -- Per-member psql access roles (ident auth, no password).
 -- See handbook/specs/pg-ident-auth.md.
 
--- engine.createpgrole: derive 'l_' + sanitized(p_loginid),
+-- engine.createpgrole: derive 'm_' + sanitized(p_moniker),
 -- collision-suffixed, CREATE ROLE ... LOGIN (no password),
--- GRANT member TO l_xxx, INSERT INTO engine.pgrole, return rolname.
+-- GRANT member TO m_xxx, INSERT INTO engine.pgrole, return rolname.
 -- Idempotent: if engine.pgrole already has a row for this member,
 -- the existing rolname is returned (and osuser is updated if provided).
 CREATE OR REPLACE FUNCTION engine.createpgrole(
-  p_loginid TEXT,
+  p_moniker TEXT,
   p_osuser  TEXT DEFAULT NULL
 ) RETURNS TEXT AS $$
 DECLARE
-  mmon     CITEXT;
   base     TEXT;
   rname    TEXT;
   n        INT := 0;
   existing TEXT;
 BEGIN
-  IF p_loginid IS NULL OR btrim(p_loginid) = '' THEN
-    RAISE EXCEPTION 'createpgrole: loginid is required';
-  END IF;
-
-  -- Look up the member. engine.__member's natural key is moniker
-  -- (citext); engine.pgrole.membermoniker references it.
-  SELECT moniker INTO mmon FROM engine.__member WHERE loginid = p_loginid;
-  IF mmon IS NULL THEN
-    RAISE EXCEPTION 'createpgrole: no engine.__member row for loginid=%', p_loginid;
+  IF p_moniker IS NULL OR btrim(p_moniker) = '' THEN
+    RAISE EXCEPTION 'createpgrole: moniker is required';
   END IF;
 
   -- Idempotency: if a row already exists for this member, return
   -- the existing rolname (and update osuser if a non-NULL one was
   -- provided).
-  SELECT rolname INTO existing FROM engine.pgrole WHERE membermoniker = mmon;
+  SELECT rolname INTO existing FROM engine.pgrole WHERE membermoniker = p_moniker;
   IF existing IS NOT NULL THEN
     IF p_osuser IS NOT NULL THEN
-      UPDATE engine.pgrole SET osuser = p_osuser WHERE membermoniker = mmon;
+      UPDATE engine.pgrole SET osuser = p_osuser WHERE membermoniker = p_moniker;
     END IF;
     RETURN existing;
   END IF;
 
   -- No existing row. Derive a fresh rolname.
-  base := 'l_' || lower(regexp_replace(p_loginid, '[^a-zA-Z0-9_]', '_', 'g'));
+  base := 'm_' || lower(regexp_replace(p_moniker, '[^a-zA-Z0-9_]', '_', 'g'));
   rname := base;
 
   -- Collision loop against any existing pg_roles.rolname.
@@ -83,7 +75,7 @@ BEGIN
   EXECUTE format('GRANT member TO %I', rname);
 
   INSERT INTO engine.pgrole (membermoniker, rolname, osuser)
-  VALUES (mmon, rname, p_osuser);
+  VALUES (p_moniker, rname, p_osuser);
 
   RETURN rname;
 END;
@@ -104,7 +96,7 @@ $$ LANGUAGE plpgsql;
 
 grant execute on function engine.deletepgrole(name) to sysop;
 
--- engine.syncpgrolegroups: keep a member's l_<loginid> role's group
+-- engine.syncpgrolegroups: keep a member's m_<moniker> role's group
 -- memberships (sysop, term, web) in sync with the member's flags.
 -- Called from console/member.py:edit() after flag changes.
 CREATE OR REPLACE FUNCTION engine.syncpgrolegroups(p_membermoniker CITEXT)

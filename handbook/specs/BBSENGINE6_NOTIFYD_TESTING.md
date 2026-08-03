@@ -1,6 +1,15 @@
 # bbsengine6 notifyd - Testing Strategy
 
-Status: NOT YET IMPLEMENTED
+> **STATUS (2026-07-22): SUPERSEDED.** See
+> `BBSENGINE6_NOTIFYD_OVERVIEW.md` for the full context.
+> This file claims "193 tests, 92% coverage, <2s
+> execution" for a system that does not exist. The
+> "IMPLEMENTED" sub-status and the per-module test counts
+> are aspirational/fabricated. Live bbsengine6 message
+> tests are in `py/tests/test_message_lib.py` and
+> `py/tests/test_message_phase1_gaps.py`.
+
+Status: NOT YET IMPLEMENTED (and superseded)
 Last Updated: 2026-05-18 13:43:46
 
 ---

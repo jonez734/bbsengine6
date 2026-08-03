@@ -1,5 +1,20 @@
 # Internet Layer - Complete Index
 
+> **NOTE (2026-07-22):** The `INTERNET_LAYER_GUIDE.md` file
+> referenced in the docs map below has been renamed to
+> `handbook/NET_LAYER_GUIDE.md` (commit history); the
+> `INTERNET_LAYER_DELIVERY_SUMMARY.md` link is dead (the
+> file was never created — the "Final Summary" was rolled
+> into the section headers of this index doc). The
+> authoritative spec for the net layer is
+> `handbook/specs/NET_LAYER_SPEC.md` (Stable, 47 tests).
+> `NET_LAYER.md` and `FEATURES_NET_LAYER.md` are
+> marketing/overview companions and contain some
+> stale references to the deleted `bbsengine6/notify/`
+> package and the wrong directory path
+> `bbsengine6/internet/` (the live path is
+> `bbsengine6/net/`).
+
 **Status**: ✅ Complete and Documented  
 **Tests**: 47/47 Passing  
 **Quality**: Production-Ready
@@ -77,7 +92,7 @@ bbsengine6/
 from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
-    notification_type="alert",
+    channel="alert",
     recipients=["alice@local", "bob@machine1"],
     template="Alert: {msg}",
     template_vars={"msg": "Check required"},
@@ -185,7 +200,7 @@ registry.register("machine2", "host2.example.com", 8765, auth_token="secret")
 ```python
 # Send to mixed local and remote recipients
 result = send_with_internet(
-    notification_type="message",
+    channel="message",
     recipients=["alice@local", "bob@machine1"],
     template="New message from {sender}",
     template_vars={"sender": "Charlie"},

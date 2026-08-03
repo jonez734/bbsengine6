@@ -2,12 +2,12 @@
 --
 -- Per-member PostgreSQL role tracking for direct psql access.
 -- Auth is by ident (see handbook/specs/pg-ident-auth.md); the
--- l_<loginid> roles are created here with no password.
+-- m_<moniker> roles are created here with no password.
 --
 -- The 'member' group role below is the "every approved member" floor.
--- All l_<loginid> roles are GRANTed membership in 'member', and the
+-- All m_<moniker> roles are GRANTed membership in 'member', and the
 -- baseline SELECT/usage grants are issued to 'member' rather than to
--- each l_<loginid> role individually.
+-- each m_<moniker> role individually.
 
 create table if not exists engine.pgrole (
   membermoniker     citext primary key references engine.__member(moniker) on delete cascade,
@@ -20,7 +20,7 @@ create table if not exists engine.pgrole (
 grant select, insert, update, delete on engine.pgrole to web;
 
 -- 'member' group role. NOLOGIN, NOINHERIT so grants don't accidentally
--- chain through l_* roles to DSN users.
+-- chain through m_* roles to DSN users.
 do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'member') then
     create role member nologin noinherit nosuperuser nocreatedb nocreaterole;

@@ -1,6 +1,16 @@
 # bbsengine6 notifyd - Configuration
 
-Status: NOT YET IMPLEMENTED
+> **STATUS (2026-07-22): SUPERSEDED.** See
+> `BBSENGINE6_NOTIFYD_OVERVIEW.md` for the full context.
+> The JSON schema documented here is for a never-built
+> daemon that depended on the deleted `bbsengine6.notify`
+> package. The actual bbsengine6 daemon
+> (`py/src/bbsengine6/bed.py`) takes CLI args, not a JSON
+> config file; the closest JSON config in the live
+> codebase is `bed.json` (the external `bed` package
+> config, see `TODO.md` "Phase 1G: Postoffice Service").
+
+Status: NOT YET IMPLEMENTED (and superseded)
 Last Updated: 2026-05-18 13:43:46
 
 ---

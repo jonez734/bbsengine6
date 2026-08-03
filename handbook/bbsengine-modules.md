@@ -1,3 +1,11 @@
+> **STATUS (2026-07-22): PARTIALLY OBSOLETE.** This document
+> predates the current bbsengine6 module API. The "required
+> functions" section (init/access/buildargs/main) and the
+> `bbsengine6.module` reference are still accurate; everything
+> else has been superseded. See
+> `handbook/module.md` and `handbook/specs/module.md` for the
+> current, complete spec.
+
 version: python bbsengine5
 
 modules

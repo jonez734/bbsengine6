@@ -8,7 +8,7 @@ schema.
 Dependencies:
   - engine schema (checkengine)
   - engine.__member (checkclasses)
-  - engine.notify_urgency_enum (installed here idempotently from notify.sql)
+  - engine.notify_urgency_enum (installed here from message_enum.sql)
 """
 
 from bbsengine6 import io, database
@@ -29,7 +29,7 @@ def access(args, op, **kwargs) -> bool:
     return lib.issysop(args, **kwargs)
 
 
-enumlist = (("engine.notify_urgency_enum", "notify.sql"),)
+enumlist = (("engine.notify_urgency_enum", "message_enum.sql"),)
 
 classlist = (
     ("engine.__message", "message.sql"),
@@ -39,6 +39,10 @@ classlist = (
     ("engine.__message_block", "message_groups.sql"),
     ("engine.__message_type", "message_groups.sql"),
     ("engine.__message_rate_limit", "message_groups.sql"),
+    ("engine.message", "messageview.sql"),
+    ("engine.message_unread", "messageview.sql"),
+    ("engine.message_urgent", "messageview.sql"),
+    ("engine.message_blocked", "messageview.sql"),
 )
 
 

@@ -1,3 +1,11 @@
+> **STATUS (2026-07-22): OBSOLETE.** This document is from the
+> bbsengine5 era. bbsengine6 uses the `engine.__blurb` /
+> `engine.blurb` table pair (see
+> `handbook/specs/BLURB_SPEC.md`) for threaded content; the
+> `engine.node` / `socrates.post` pattern documented here is
+> not part of the live schema. Kept for historical reference
+> only; do not implement against it.
+
 version: python, php bbsengine5
 
 node table

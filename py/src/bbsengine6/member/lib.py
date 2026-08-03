@@ -207,19 +207,19 @@ def clear_current_moniker_cache() -> None:
 
 
 def notifycount(args, **kwargs) -> int | None:
-    """Get total unread notification count for current user.
+    """Get total unread message count for current user.
 
     Returns:
-        Number of unread notifications (queue + database), or 0 if not logged in.
+        Number of unread messages, or 0 if not logged in.
         Returns None if no database connection available.
     """
-    from bbsengine6 import notify
+    from bbsengine6 import message as message_module
 
     moniker = getcurrentmoniker(args, **kwargs)
     if not moniker:
         return 0
 
-    return notify.count(moniker, args=args, **kwargs)
+    return message_module.get_unread_count(moniker, args=args, **kwargs)
 
 
 def getcurrentid(args, **kwargs):
@@ -1236,7 +1236,7 @@ def count(args, **kwargs):
 def group_exists(args, group_name: str, **kwargs) -> bool | None:
     """Check if a group exists in the database.
 
-    Validates group name format and checks existence in engine.__notify_group.
+    Validates group name format and checks existence in engine.__message_group.
 
     Args:
         args: Application args
@@ -1291,7 +1291,7 @@ def group_exists(args, group_name: str, **kwargs) -> bool | None:
         with database.cursor(conn) as cur:
             cur.execute(
                 database.query(
-                    "SELECT 1 FROM $engine.__notify_group WHERE group_name=$1 LIMIT 1",
+                    "SELECT 1 FROM $engine.__message_group WHERE name=$1 LIMIT 1",
                     group_name,
                 )
             )
@@ -1304,7 +1304,7 @@ def group_exists(args, group_name: str, **kwargs) -> bool | None:
 def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
     """Get all member monikers in a group, recursively expanding nested groups.
 
-    Retrieves all members of a notification group from engine.__notify_group,
+    Retrieves all members of a message group from engine.__message_group_member,
     recursively expanding any nested groups. Includes cycle detection to prevent
     infinite loops from circular group references.
 
@@ -1375,8 +1375,9 @@ def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
         with database.cursor(conn) as cur:
             cur.execute(
                 database.query(
-                    "SELECT member_moniker FROM $engine.__notify_group "
-                    "WHERE group_name=$1 ORDER BY member_moniker",
+                    "SELECT gm.member_moniker FROM $engine.__message_group_member gm "
+                    "JOIN $engine.__message_group g ON g.id = gm.group_id "
+                    "WHERE g.name=$1 ORDER BY gm.member_moniker",
                     group_name,
                 )
             )

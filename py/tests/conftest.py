@@ -99,17 +99,12 @@ def pool(db_connection, schema_init, request):
 @pytest.fixture(scope="session")
 def schema_init(db_connection, request):
     """
-    Initialize notify and bank schema tables.
+    Initialize message and bank schema tables.
 
-    Only loads notify-specific SQL files:
-    - notify.sql
-    - notify_recipient.sql
-    - notify_block.sql
-    - notify_group.sql
-    - notify_type.sql
-    - notify_rate_limit.sql
-    - notifyview.sql
-    - notifyd.sql
+    Only loads message-specific SQL files:
+    - message.sql
+    - message_groups.sql
+    - messageview.sql
     - channel.sql (Channel config: engine.__channel, engine.__channel_announcer)
     - invite.sql (Generic invite code system: engine.__invite, engine.invite)
 
@@ -123,10 +118,13 @@ def schema_init(db_connection, request):
     - bank_transfer_view.sql
 
     Skips: schema, extensions, roles, member, session (already exist)
-    """
-    logger.info("Initializing notify schema tables...")
 
-    sql_files = _get_notify_sql_files()
+    Note: This uses the new unified message system. For tests that require
+    the old notify system, they should load _get_notify_sql_files() explicitly.
+    """
+    logger.info("Initializing message schema tables...")
+
+    sql_files = _get_message_sql_files()
 
     for filepath in sql_files:
         try:
@@ -150,7 +148,7 @@ def schema_init(db_connection, request):
             )
 
     db_connection.commit()
-    logger.info("✓ All notify tables initialized")
+    logger.info("✓ All message tables initialized")
 
     logger.info("Initializing bank schema tables...")
     _load_bank_schema(db_connection)
@@ -270,10 +268,7 @@ def test_transaction(db_connection):
     Also clears _types to prevent cross-test pollution of notification type
     registrations between tests.
     """
-    from bbsengine6.notify import _types, _types_lock
-
-    with _types_lock:
-        _types.clear()
+    from bbsengine6.message import _message_enabled
 
     yield  # Test runs here
 
@@ -292,10 +287,13 @@ def test_transaction(db_connection):
 
 def _get_notify_sql_files() -> list[Path]:
     """
-    Return paths to 7 notify SQL files in correct execution order.
+    Return paths to notify SQL files in correct execution order.
     Path is relative to conftest.py location.
 
     Order matters: depends on foreign keys between tables.
+    
+    Note: These are used for tests that require the notify system.
+          The message system uses separate SQL files via checkmessage.py.
     """
     sql_dir = Path(__file__).parent.parent / "src" / "bbsengine6" / "sql"
 
@@ -308,8 +306,33 @@ def _get_notify_sql_files() -> list[Path]:
         "notify_rate_limit.sql",  # Depends on: engine.__notify_type
         "notifyview.sql",  # Depends on: all tables above
         "notifyd.sql",  # notifyd daemon tables: engine.__notify_imap_state, engine.__notify_history
-        "channel.sql",  # Channel config: engine.__channel, engine.__channel_announcer, engine.channel
-        "invite.sql",  # Generic invite code system: engine.__invite, engine.invite
+    ]
+
+    paths = [sql_dir / f for f in files]
+
+    # Verify all files exist
+    for path in paths:
+        if not path.exists():
+            raise FileNotFoundError(f"SQL file not found: {path}")
+
+    return paths
+
+
+def _get_message_sql_files() -> list[Path]:
+    """
+    Return paths to message SQL files in correct execution order.
+    Path is relative to conftest.py location.
+
+    Order matters: depends on foreign keys between tables.
+    """
+    sql_dir = Path(__file__).parent.parent / "src" / "bbsengine6" / "sql"
+
+    files = [
+        "message.sql",  # Core message tables
+        "message_groups.sql",  # Groups, blocking, rate limiting, types
+        "messageview.sql",  # Views
+        "channel.sql",  # Channel config
+        "invite.sql",  # Invite codes
     ]
 
     paths = [sql_dir / f for f in files]

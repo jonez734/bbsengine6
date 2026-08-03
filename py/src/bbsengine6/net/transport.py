@@ -19,9 +19,15 @@ logger = logging.getLogger(__name__)
 class ChannelState:
     """State container for channel subscriptions."""
 
-    channels: Dict[str, Set[int]] = field(default_factory=dict)  # channel -> session_ids
-    callbacks: Dict[str, List[Callable]] = field(default_factory=dict)  # channel -> callbacks
-    session_channels: Dict[int, Set[str]] = field(default_factory=dict)  # session_id -> channels
+    channels: Dict[str, Set[int]] = field(
+        default_factory=dict
+    )  # channel -> session_ids
+    callbacks: Dict[str, List[Callable]] = field(
+        default_factory=dict
+    )  # channel -> callbacks
+    session_channels: Dict[int, Set[str]] = field(
+        default_factory=dict
+    )  # session_id -> channels
 
 
 def channel_subscribe(state: ChannelState, session_id: int, channel: str) -> None:
@@ -60,11 +66,55 @@ def channel_unsubscribe_all(state: ChannelState, session_id: int) -> None:
     del state.session_channels[session_id]
 
 
-def channel_register_callback(state: ChannelState, channel: str, callback: Callable) -> None:
-    """Register a callback for a channel (for in-process bots)."""
+def channel_register_callback(
+    state: ChannelState, channel: str, callback: Callable
+) -> None:
+    """Register a callback for a channel (for in-process bots).
+
+    Re-registering the same callable for the same channel is a no-op
+    (dedup by identity). This prevents accidental double-invocation
+    when a bot reconnects without first unregistering.
+    """
     if channel not in state.callbacks:
         state.callbacks[channel] = []
+    if callback in state.callbacks[channel]:
+        return
     state.callbacks[channel].append(callback)
+
+
+def channel_unregister_callback(
+    state: ChannelState, channel: str, callback: Callable
+) -> bool:
+    """Remove a single callback from a channel.
+
+    Returns True if the callback was found and removed, False otherwise.
+    """
+    callbacks = state.callbacks.get(channel)
+    if not callbacks:
+        return False
+    try:
+        callbacks.remove(callback)
+    except ValueError:
+        return False
+    if not callbacks:
+        del state.callbacks[channel]
+    return True
+
+
+def channel_unregister_all_callbacks(
+    state: ChannelState, channel: Optional[str] = None
+) -> int:
+    """Remove every callback for a channel (or all channels if None).
+
+    Returns the number of callbacks removed. Useful for test teardown
+    and for "stop the bot" handlers.
+    """
+    if channel is None:
+        total = sum(len(cbs) for cbs in state.callbacks.values())
+        state.callbacks.clear()
+        return total
+    callbacks = state.callbacks.pop(channel, None)
+    return len(callbacks) if callbacks else 0
 
 
 def channel_get_subscribers(state: ChannelState, channel: str) -> Set[int]:
@@ -130,10 +180,13 @@ async def channel_publish(
             except Exception as e:
                 logger.error(f"Error in channel callback: {e}")
 
+
 # Callback type for handling incoming WebSocket messages
 # signature: async def handler(websocket, path, message: dict) -> Optional[dict]
 # Return value is sent back to client, or None for broadcast
-WebSocketMessageHandler = Callable[["WebSocketServer", Any, str, Dict[str, Any]], Optional[Dict[str, Any]]]
+WebSocketMessageHandler = Callable[
+    ["WebSocketServer", Any, str, Dict[str, Any]], Optional[Dict[str, Any]]
+]
 
 
 class WebSocketTransport:
@@ -165,45 +218,69 @@ class WebSocketTransport:
         machine_host: str,
         machine_port: int,
         recipients: List[str],
-        notification_data: Dict[str, Any],
+        message_data: Dict[str, Any],
         auth_token: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """
-        Send notification to remote machine via WebSocket.
+        Send message to remote machine via WebSocket.
+
+        Opens a real ``websockets.connect`` session, sends the JSON
+        payload, and reads at most one frame back as an ack. Returns
+        ``(True, ...)`` on a successful round-trip, or ``(False, ...)``
+        with a human-readable error on any failure (timeout, refused
+        connection, invalid URL, send error, etc).
 
         Args:
             machine_host: Remote machine hostname/IP
             machine_port: Remote machine WebSocket port
             recipients: List of recipients on remote machine
-            notification_data: Notification payload
+            message_data: Message payload
             auth_token: Optional authentication token
 
         Returns:
             (success, message) tuple
         """
+        import websockets
+
+        ws_url = f"ws://{machine_host}:{machine_port}/message"
+
+        payload: Dict[str, Any] = {
+            "type": "message",
+            "recipients": recipients,
+            "data": message_data,
+        }
+        if auth_token:
+            payload["auth_token"] = auth_token
+
         try:
-            ws_url = f"ws://{machine_host}:{machine_port}/notify"
-
-            payload = {
-                "type": "notify",
-                "recipients": recipients,
-                "data": notification_data,
-            }
-
-            if auth_token:
-                payload["auth_token"] = auth_token
-
             async with asyncio.timeout(self.timeout):
                 logger.info(
-                    f"WebSocket transport: {ws_url} with {len(recipients)} recipients"
+                    f"WebSocket transport: connecting {ws_url} "
+                    f"for {len(recipients)} recipients"
                 )
-                await asyncio.sleep(0)
+                async with websockets.connect(ws_url) as ws:
+                    await ws.send(json.dumps(payload))
+                    logger.info(f"WebSocket transport: sent payload to {ws_url}")
+                    # Best-effort ack: read one frame if the server
+                    # sends one, but don't block if it doesn't.
+                    try:
+                        ack = await asyncio.wait_for(ws.recv(), timeout=1.0)
+                        logger.info(
+                            f"WebSocket transport: ack from {ws_url}: {ack!r:.200}"
+                        )
+                    except asyncio.TimeoutError:
+                        pass
 
-                return True, f"Notification sent to {len(recipients)} recipients"
+                return True, f"Message sent to {len(recipients)} recipients"
 
         except asyncio.TimeoutError:
             return False, f"WebSocket timeout after {self.timeout}s"
+        except websockets.exceptions.WebSocketException as e:
+            return False, f"WebSocket error: {e}"
+        except OSError as e:
+            return False, f"WebSocket connection error: {e}"
         except Exception as e:
+            logger.error(f"send_to_remote failed for {ws_url}: {e}")
             return False, f"WebSocket error: {e}"
 
     def send_to_remote_sync(
@@ -211,7 +288,7 @@ class WebSocketTransport:
         machine_host: str,
         machine_port: int,
         recipients: List[str],
-        notification_data: Dict[str, Any],
+        message_data: Dict[str, Any],
         auth_token: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """
@@ -231,7 +308,7 @@ class WebSocketTransport:
                     machine_host,
                     machine_port,
                     recipients,
-                    notification_data,
+                    message_data,
                     auth_token,
                 )
             )
@@ -347,29 +424,27 @@ class WebSocketProtocol:
 
     async def handle_notification(self, payload: Dict[str, Any]) -> Tuple[bool, str]:
         """
-        Handle incoming notification from remote machine.
+        Handle incoming message from remote machine.
 
         Args:
-            payload: Notification payload
+            payload: Message payload
 
         Returns:
             (success, message) tuple
         """
         try:
-            if payload.get("type") != "notify":
+            if payload.get("type") != "message":
                 return False, "Invalid payload type"
 
             recipients = payload.get("recipients")
             if not isinstance(recipients, list):
                 return False, "Invalid recipients list"
 
-            logger.info(
-                f"Received remote notification for {len(recipients)} recipients"
-            )
-            return True, "Notification processed"
+            logger.info(f"Received remote message for {len(recipients)} recipients")
+            return True, "Message processed"
 
         except Exception as e:
-            logger.error(f"Error handling notification: {e}")
+            logger.error(f"Error handling message: {e}")
             return False, f"Error: {e}"
 
     async def handle_packet(
@@ -419,14 +494,14 @@ class WebSocketProtocol:
 class WebSocketServer:
     """
     WebSocket server for accepting client connections and handling messages.
-    
+
     Usage:
         async def handler(server, websocket, path, message):
             msg_type = message.get("type")
             if msg_type == "ping":
                 return {"type": "pong", "timestamp": message.get("timestamp")}
             return None  # broadcast this response to all clients
-        
+
         server = WebSocketServer(host="0.0.0.0", port=8765, handler=handler)
         await server.start()
     """
@@ -437,10 +512,12 @@ class WebSocketServer:
         port: int = 8765,
         handler: Optional[WebSocketMessageHandler] = None,
         secret_key: Optional[bytes] = None,
+        channel_state: Optional["ChannelState"] = None,
+        session_manager: Optional[Any] = None,
     ):
         """
         Initialize WebSocket server.
-        
+
         Args:
             host: Host to bind to
             port: Port to listen on
@@ -448,6 +525,17 @@ class WebSocketServer:
                     Should accept (server, websocket, path, message) and return
                     a response dict (sent to sender) or None (broadcast to all).
             secret_key: Optional HMAC secret for authenticating packets.
+            channel_state: Optional shared ChannelState. When provided, the server
+                    uses it for pub/sub so that subscribers registered through
+                    handlers (e.g. ChannelServiceHandler) and publishers calling
+                    server.publish(...) see the same state. When None, the server
+                    creates its own state (legacy default; subscribers will not
+                    be visible to other components).
+            session_manager: Optional bbsengine6.session.SessionManager.
+                    When provided, the server uses it to allocate session ids
+                    and to look up moniker by session. When None, the server
+                    constructs its own SessionManager (used for routing via
+                    ``router.unregister_session`` cleanup).
         """
         self.host = host
         self.port = port
@@ -456,27 +544,45 @@ class WebSocketServer:
         self._server: Optional[asyncio.Server] = None
         self._clients: Dict[Any, Set] = {}  # path -> set of websockets
         self._running = False
-        
+
         # Service registry for handling message types
         # Format: {message_type: service_instance}
         # Each service should have an async handle_message(server, websocket, path, message) method
         self._services: Dict[str, Any] = {}
-        
+
         # Default service (catches unhandled messages)
         self._default_service: Optional[Any] = None
-        
-        # Channel state for pub/sub
-        self._channel_state = ChannelState()
 
-        # Optional pre-dispatch hook: async callable(websocket) invoked
-        # before every service handler.  Used by BED to set the
+        # Channel state for pub/sub. Accept shared state so BED and the
+        # router (and any bot callbacks) all see the same subscriptions.
+        self._channel_state = (
+            channel_state if channel_state is not None else ChannelState()
+        )
+
+        # Optional router reference for disconnect cleanup. When set,
+        # the server calls router.unregister_session(session_id) on
+        # disconnect. Set via register_router() or pass via BED.
+        self._router: Optional[Any] = None
+
+        # Pre-dispatch hook: async callable(websocket) invoked
+        # before every service handler. Used by BED to set the
         # per-request PostgreSQL role from the session.
         self._pre_dispatch: Optional[Callable] = None
-    
-    def register_service(self, service: Any, message_types: Optional[list[str]] = None) -> None:
+
+        # Session manager used for id allocation and moniker lookup.
+        if session_manager is not None:
+            self._sessions = session_manager
+        else:
+            from bbsengine6.session import SessionManager
+
+            self._sessions = SessionManager()
+
+    def register_service(
+        self, service: Any, message_types: Optional[list[str]] = None
+    ) -> None:
         """
         Register a service to handle specific message types.
-        
+
         Args:
             service: Service instance with async handle_message(server, websocket, path, message) method
             message_types: List of message types this service handles (e.g., ["auth", "bet", "hit"])
@@ -488,17 +594,39 @@ class WebSocketServer:
         else:
             for msg_type in message_types:
                 self._services[msg_type] = service
-            logger.info(f"Registered service {service.__class__.__name__} for: {message_types}")
-    
+            logger.info(
+                f"Registered service {service.__class__.__name__} for: {message_types}"
+            )
+
     def unregister_service(self, message_types: list[str]) -> None:
         """Unregister a service by message types."""
         for msg_type in message_types:
             self._services.pop(msg_type, None)
-    
+
+    def register_router(self, router: Any) -> None:
+        """Register a router for disconnect-time session cleanup.
+
+        The router must expose ``unregister_session(session_id: int)``.
+        When set, ``on_connect`` will look up the session id from the
+        websocket and call this on disconnect. Allows the shared
+        ``ChannelState`` to be cleaned up automatically without each
+        router subclass duplicating cleanup logic.
+        """
+        self._router = router
+        logger.info(f"Registered router: {router.__class__.__name__}")
+
+    def _alloc_session_id(self) -> int:
+        """Allocate a monotonic session id for a new connection.
+
+        Delegates to the underlying SessionManager, which uses
+        ``itertools.count`` (atomic under the CPython GIL).
+        """
+        return self._sessions.alloc_session_id()
+
     def get_service(self, message_type: str) -> Optional[Any]:
         """Get the service that handles a specific message type."""
         return self._services.get(message_type)
-    
+
     def list_services(self) -> Dict[str, str]:
         """List all registered services and their message types."""
         result = {}
@@ -527,7 +655,7 @@ class WebSocketServer:
         if self._default_service is not None:
             keys.append("*default*")
         return {"type": "services", "services": sorted(keys)}
-    
+
     async def dispatch_message(
         self, websocket: Any, path: str, message: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
@@ -551,10 +679,10 @@ class WebSocketServer:
 
         # Look up service for this message type
         service = self.get_service(msg_type)
-        
+
         if service is None and self._default_service:
             service = self._default_service
-        
+
         if service:
             try:
                 if self._pre_dispatch is not None:
@@ -563,75 +691,112 @@ class WebSocketServer:
             except Exception as e:
                 logger.error(f"Service {service.__class__.__name__} error: {e}")
                 return {"type": "error", "code": "service_error", "message": str(e)}
-        
+
         # No service found
-        return {"type": "error", "code": "no_handler", "message": f"No handler for message type: {msg_type}"}
+        return {
+            "type": "error",
+            "code": "no_handler",
+            "message": f"No handler for message type: {msg_type}",
+        }
 
     async def start(self) -> None:
         """Start the WebSocket server."""
         import websockets
-        
+
         self._running = True
-        
+
         async def on_connect(websocket):
             """Handle new WebSocket connection."""
             # Extract path from websocket - websockets 16+ changed API
             # Path is available via websocket.path or we use "default"
             try:
-                path = getattr(websocket, 'path', None)
+                path = getattr(websocket, "path", None)
                 if path:
                     path = path.strip("/") or "default"
                 else:
                     path = "default"
             except Exception:
                 path = "default"
-            
+
+            # Allocate a stable session id for this connection. Stashed on
+            # the websocket so service handlers and disconnect cleanup can
+            # use the same id without depending on id(websocket), which
+            # can be reused after garbage collection.
+            session_id = self._alloc_session_id()
+            try:
+                websocket._bbsengine6_session_id = session_id
+            except Exception:
+                # Some websocket test doubles don't allow attribute set.
+                # Fall back to id() and log a warning.
+                logger.warning(
+                    "Could not set _bbsengine6_session_id on websocket; "
+                    "falling back to id(websocket)"
+                )
+
             if path not in self._clients:
                 self._clients[path] = set()
             self._clients[path].add(websocket)
-            
-            logger.info(f"Client connected to {path}, total: {len(self._clients[path])}")
-            
+
+            logger.info(
+                f"Client connected to {path} (session_id={session_id}), total: {len(self._clients[path])}"
+            )
+
             try:
                 async for raw_message in websocket:
                     try:
                         message = json.loads(raw_message)
                     except json.JSONDecodeError as e:
-                        error_resp = {"type": "error", "code": "invalid_json", "message": str(e)}
+                        error_resp = {
+                            "type": "error",
+                            "code": "invalid_json",
+                            "message": str(e),
+                        }
                         await websocket.send(json.dumps(error_resp))
                         continue
-                    
+
                     # Call user handler if provided, or use service registry
                     if self.handler:
                         try:
-                            response = await self.handler(self, websocket, path, message)
-                            
+                            response = await self.handler(
+                                self, websocket, path, message
+                            )
+
                             # Send response to sender only
                             if response is not None:
                                 await websocket.send(json.dumps(response))
                             # If handler returns None, it will handle broadcasting itself
                             # (useful for chat, game state updates, etc.)
-                            
+
                         except Exception as e:
                             logger.error(f"Handler error: {e}")
-                            error_resp = {"type": "error", "code": "handler_error", "message": str(e)}
+                            error_resp = {
+                                "type": "error",
+                                "code": "handler_error",
+                                "message": str(e),
+                            }
                             await websocket.send(json.dumps(error_resp))
                     elif self._services or self._default_service:
                         # Use service registry
                         try:
-                            response = await self.dispatch_message(websocket, path, message)
-                            
+                            response = await self.dispatch_message(
+                                websocket, path, message
+                            )
+
                             if response is not None:
                                 await websocket.send(json.dumps(response))
-                                
+
                         except Exception as e:
                             logger.error(f"Service dispatch error: {e}")
-                            error_resp = {"type": "error", "code": "dispatch_error", "message": str(e)}
+                            error_resp = {
+                                "type": "error",
+                                "code": "dispatch_error",
+                                "message": str(e),
+                            }
                             await websocket.send(json.dumps(error_resp))
                     else:
                         # No handler - echo back
                         await websocket.send(json.dumps(message))
-                        
+
             except Exception as e:
                 logger.error(f"WebSocket error: {e}")
             finally:
@@ -639,12 +804,22 @@ class WebSocketServer:
                     self._clients[path].remove(websocket)
                     if not self._clients[path]:
                         del self._clients[path]
-                logger.info(f"Client disconnected from {path}")
+                # Notify the router so it can clean up channel
+                # subscriptions, session state, and finalize any
+                # in-progress games.
+                if self._router is not None:
+                    try:
+                        self._router.unregister_session(session_id)
+                    except Exception as e:
+                        logger.error(f"Router unregister_session error: {e}")
+                logger.info(
+                    f"Client disconnected from {path} (session_id={session_id})"
+                )
 
         # Create socket with SO_REUSEADDR/SO_REUSEPORT for faster restart
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, 'SO_REUSEPORT'):
+        if hasattr(socket, "SO_REUSEPORT"):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         sock.bind((self.host, self.port))
         sock.listen(128)
@@ -660,19 +835,21 @@ class WebSocketServer:
             await self._server.wait_closed()
             logger.info("WebSocket server stopped")
 
-    async def broadcast(self, message: Dict[str, Any], path: Optional[str] = None) -> None:
+    async def broadcast(
+        self, message: Dict[str, Any], path: Optional[str] = None
+    ) -> None:
         """
         Broadcast message to all connected clients.
-        
+
         Args:
             message: Message dict to broadcast
             path: Optional path to restrict broadcast. If None, broadcasts to all paths.
         """
         if not self._clients:
             return
-            
+
         msg_json = json.dumps(message)
-        
+
         if path:
             # Send to specific path only
             if path in self._clients:
@@ -709,6 +886,7 @@ class WebSocketServer:
     async def publish(self, channel: str, message: Dict[str, Any]) -> None:
         """Publish message to a channel using the pub/sub system."""
         from bbsengine6.net import channel_publish
+
         await channel_publish(self._channel_state, channel, message, self)
 
     @property

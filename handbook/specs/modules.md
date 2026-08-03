@@ -370,7 +370,7 @@ Note: `validate_function()` is a standalone signature validator using `get_type_
 
 **Purpose:** Shared utilities used across all modules
 
-**File Size:** ~16,001 lines
+**File Size:** ~1,394 lines (as of 2026-07-22; the older "~16,001 lines" figure was a transcription error)
 
 #### Text & Formatting Functions
 

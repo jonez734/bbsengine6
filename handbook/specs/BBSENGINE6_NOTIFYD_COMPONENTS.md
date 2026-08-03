@@ -1,6 +1,14 @@
 # bbsengine6 notifyd - Component Specifications
 
-Status: NOT YET IMPLEMENTED
+> **STATUS (2026-07-22): SUPERSEDED.** See
+> `BBSENGINE6_NOTIFYD_OVERVIEW.md` for the full context.
+> Every component in this spec routes through the deleted
+> `bbsengine6.notify` package. The actual daemon is
+> `py/src/bbsengine6/bed.py` (BED = "BBS Engine Daemon");
+> the net layer it wraps is in `py/src/bbsengine6/net/` and
+> documented in `py/src/bbsengine6/net/SPEC.md`.
+
+Status: NOT YET IMPLEMENTED (and superseded)
 Last Updated: 2026-05-18 13:43:46
 
 ---

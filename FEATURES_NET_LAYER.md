@@ -1,5 +1,16 @@
 # Internet Layer - New Feature
 
+> **STATUS (2026-07-22): Largely current; one stale path
+> reference.** The "File Structure" section later in this
+> document shows the package at `bbsengine6/internet/`. The
+> **live** package is at `bbsengine6/net/` (the import path
+> `bbsengine6.net` has always been correct). Also, the
+> `bbsengine6.notify` references in the "Integration" section
+> below should now read `bbsengine6.message` (notify was
+> deleted in `TODO-message-migration.md` Phase 7). See
+> `handbook/specs/NET_LAYER_SPEC.md` for the authoritative
+> spec.
+
 ## Overview
 
 The Internet Layer adds **SMTP-like inter-machine messaging** to bbsengine6's notification system.
@@ -10,7 +21,7 @@ Send notifications to users across multiple machines using familiar email-style 
 from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
-    notification_type="alert",
+    channel="alert",
     recipients=[
         "alice@local",           # Local user
         "bob@remote_machine",    # Remote user
@@ -61,7 +72,7 @@ result = send_with_internet(
 from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
-    notification_type="message",
+    channel="message",
     recipients=["alice@local", "bob@machine1"],
     template="You have a new message",
 )
@@ -142,7 +153,7 @@ pytest py/src/bbsengine6/tests/test_internet*.py -v
 from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
-    notification_type="string",
+    channel="string",
     recipients=["user@machine", ...],
     template="Message with {variables}",
     template_vars={"variables": "values"},
@@ -201,7 +212,7 @@ for machine in registry.list_all():
     recipients.append(f"user@{machine.machine_name}")
 
 send_with_internet(
-    notification_type="broadcast",
+    channel="broadcast",
     recipients=recipients,
     template="Message for everyone",
 )
@@ -268,18 +279,18 @@ e1ff6a0 Phase 2: Integration with bbsengine6.notify
 
 ```
 bbsengine6/
-├── INTERNET_LAYER_SPEC.md              # Complete spec
-├── INTERNET_LAYER.md                   # Architecture overview
+├── INTERNET_LAYER_SPEC.md              # Complete spec (renamed handbook/specs/NET_LAYER_SPEC.md)
+├── INTERNET_LAYER.md                   # Architecture overview (this dir, NET_LAYER.md)
 ├── FEATURES_INTERNET_LAYER.md           # This file
 ├── handbook/
-│   └── INTERNET_LAYER_GUIDE.md          # Quick start guide
+│   └── INTERNET_LAYER_GUIDE.md          # Quick start guide (renamed handbook/NET_LAYER_GUIDE.md)
 └── py/src/bbsengine6/
-    ├── internet/                        # Module
+    ├── net/                             # Module (live path; older docs wrote `internet/`)
     │   ├── __init__.py
     │   ├── address.py                   # Address parsing
     │   ├── router.py                    # Routing logic
     │   ├── transport.py                 # WebSocket protocol
-    │   ├── integration.py               # notify integration
+    │   ├── integration.py               # message.py integration (was notify integration)
     │   └── registry.py                  # Machine registry
     └── tests/
         ├── test_internet.py             # Phase 1 tests (20)

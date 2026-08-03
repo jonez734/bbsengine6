@@ -1,6 +1,15 @@
 # bbsengine6 notifyd - Deployment & Multi-User Guide
 
-Status: NOT YET IMPLEMENTED
+> **STATUS (2026-07-22): SUPERSEDED.** See
+> `BBSENGINE6_NOTIFYD_OVERVIEW.md` for the full context.
+> The deployment steps are for a never-built daemon. Live
+> deployment of the actual `py/src/bbsengine6/bed.py`
+> daemon is via `python -m bbsengine6.bed --host ... --port
+> ...` (see `py/src/bbsengine6/bed.py:90-125` for the
+> `parse_args` surface) and is documented in
+> `handbook/PRODUCTION_DEPLOYMENT.md`.
+
+Status: NOT YET IMPLEMENTED (and superseded)
 Last Updated: 2026-05-18 13:43:46
 
 ---

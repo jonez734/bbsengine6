@@ -1,5 +1,15 @@
 # bbsengine6.blurb Specification
 
+> **STATUS (2026-07-22): PARTIALLY STALE.** This spec describes a
+> Python-side blurb entity model with `bigserial` PKs and JSONB
+> attributes, but the actual implementation (`py/src/bbsengine6/blurb.py`
+> + `sql/blurb.sql`) uses `text` PKs and a hybrid approach where the
+> body is stored on the filesystem (matching the PHP-side
+> `BLURB_SPEC.md`). The spec is preserved for the schema
+> relationships (`map_blurb_sig`, `blurb_flag`, etc.) which are still
+> accurate, but the `__blurb` table definition here is out of date.
+> See `BLURB_SPEC.md` for the live PHP handler spec.
+
 ## Summary
 
 A **blurb** is a content node in the BBS engine that represents a post, page, or article. Blurbs can be nested (parent/child relationships), categorized by sigpath (forum/section location), and tagged. They serve as the core content entity for the bulletin board system.

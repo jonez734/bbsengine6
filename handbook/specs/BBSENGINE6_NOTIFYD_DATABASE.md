@@ -1,7 +1,34 @@
 # bbsengine6 notifyd - Database Schema
 
-Status: IMPLEMENTED
-Last Updated: 2026-06-01
+> **STATUS (2026-07-22): PARTIALLY ORPHANED.** Unlike the
+> other 9 `BBSENGINE6_NOTIFYD_*.md` files, the schema
+> described here IS implemented: `sql/notifyd.sql`
+> (referenced in `backend/checkfunctions.py:67-72` as the
+> source for `engine.createpgrole` /
+> `engine.deletepgrole` /
+> `engine.syncpgrolegroups`) defines `engine.__notify_imap_state`
+> and `engine.__notify_history`, and `console/checknotifyd.py`
+> is a real shipped stage module.
+>
+> However: the daemon that would write to these tables was
+> never built, and the `notify` package that the daemon
+> would emit through was deleted in Phase 7 of
+> `TODO-message-migration.md` (2026-07-22). The two tables
+> are now **orphaned** — defined in the engine schema but
+> never written to by any live code path.
+>
+> **Recommended action:** drop the two tables, the
+> `notifyd.sql` file, and the `checknotifyd.py` /
+> `checknotifyd` console stage in a future cleanup. Not
+> done in this revision because dropping a table is a
+> schema migration that needs an explicit decision. See
+> `TODO.md` "Phase 1G: Postoffice Service" for the related
+> postoffice work that DOES ship (the `bed.json` config
+> and the `casino/config.py` loader).
+>
+> This file is preserved as the spec for the orphan tables.
+
+Status: IMPLEMENTED (but orphaned)
 
 ---
 

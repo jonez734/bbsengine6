@@ -58,12 +58,12 @@ The `bbsengine6.net` module provides SMTP-style addressing (`user@machine`) for 
 ## Module Structure
 
 ```
-bbsengine6/internet/
+bbsengine6/net/                 # directory on disk; import path is bbsengine6.net
 ├── __init__.py          # Public API exports
 ├── address.py           # Address parsing and validation
 ├── router.py            # Routing logic with registry resolution
 ├── transport.py         # WebSocket protocol and delivery
-├── integration.py       # Integration with bbsengine6.notify
+├── integration.py       # Integration with bbsengine6.message
 └── registry.py          # Machine registry for configurations
 
 tests/
@@ -71,6 +71,15 @@ tests/
 ├── test_internet_integration.py   # Phase 2 tests (14 cases)
 └── test_internet_registry.py      # Phase 3 tests (13 cases)
 ```
+
+> **Note (2026-07-22):** The live code is at
+> `py/src/bbsengine6/net/`, not `py/src/bbsengine6/internet/`. The
+> `internet/` path shown in older versions of this doc is wrong.
+> All imports use `bbsengine6.net` (e.g.
+> `from bbsengine6.net import send_with_internet`). The
+> `NotifyIntegration` class now bridges to
+> `bbsengine6.message.store_message(...)` (the notify system is
+> gone as of `TODO-message-migration.md` Phase 7).
 
 ## Usage
 
@@ -81,7 +90,7 @@ from bbsengine6.net import send_with_internet
 
 # Send to mixed local and remote recipients
 result = send_with_internet(
-    notification_type="message_received",
+    channel="message_received",
     recipients=[
         "alice@local",           # Local moniker
         "bob@machine1",          # Remote machine
@@ -155,9 +164,11 @@ CREATE TABLE postoffice.machine_registry (
 
 ## Test Coverage
 
-- **Total Tests**: 46 passing, 1 skipped
+- **Total Tests**: 47 passed (per `py/tests/test_net_frames/` count
+  as of 2026-07-22; this doc's "46 passing, 1 skipped" is an
+  older snapshot that has since been consolidated)
 - **Phase 1**: 20 tests (address parsing, routing, transport)
-- **Phase 2**: 14 tests (integration with notify, error handling)
+- **Phase 2**: 14 tests (integration with message, error handling)
 - **Phase 3**: 13 tests (registry, WebSocket protocol, configuration)
 
 All tests are fully isolated, use proper mocking, and cover both success and error paths.

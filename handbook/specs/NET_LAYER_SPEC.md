@@ -5,9 +5,23 @@
 **Test Coverage**: 47 tests, 100% passing  
 **Code Quality**: All checks pass (ruff, type hints, linting)
 
+> **STATUS (2026-07-22):** Two stale references in this spec were
+> fixed in this revision:
+>
+> 1. Section 2.1 "Module Structure" showed the package at
+>    `bbsengine6/internet/`. The **live** package is at
+>    `bbsengine6/net/` (the import path `bbsengine6.net` has
+>    always been correct).
+> 2. The integration layer in section 2.2 ("Processing
+>    Pipeline") and elsewhere refers to `bbsengine6.notify`.
+>    The `notify` package was deleted in Phase 7 of
+>    `TODO-message-migration.md`; the live integration is
+>    `bbsengine6.message.store_message(...)` via
+>    `NotifyIntegration` in `py/src/bbsengine6/net/integration.py`.
+
 ## 1. Overview
 
-The Internet Layer provides SMTP-like inter-machine messaging for bbsengine6. It extends the existing notification system (`bbsengine6.notify`) to support addressing users across multiple machines using a familiar `user@machine` format.
+The Internet Layer provides SMTP-like inter-machine messaging for bbsengine6. It extends the existing notification system (`bbsengine6.message`, previously `bbsengine6.notify` before the Phase 7 deletion) to support addressing users across multiple machines using a familiar `user@machine` format.
 
 ### 1.1 Problem Statement
 
@@ -29,12 +43,12 @@ Previously, the notification system was local-only, working within a single mach
 ### 2.1 Module Structure
 
 ```
-bbsengine6/internet/
+bbsengine6/net/                       # live path (was `bbsengine6/internet/` in older revisions)
 ├── __init__.py           # Public API exports
 ├── address.py            # Address parsing and classification
 ├── router.py             # Routing logic with registry integration
 ├── transport.py          # WebSocket protocol (async/sync)
-├── integration.py        # Integration with bbsengine6.notify
+├── integration.py        # Integration with bbsengine6.message (was bbsengine6.notify)
 └── registry.py           # Machine configuration management
 ```
 
@@ -51,7 +65,7 @@ NotifyIntegration.send()
     │        ↓
     │   InternetRouter.route()
     │        ↓
-    ├─→ Local Recipients → notify.send()
+    ├─→ Local Recipients → message.store_message() (was notify.send())
     │
     └─→ Remote Recipients
              ↓
@@ -80,7 +94,7 @@ Three address types are automatically detected:
 from bbsengine6.net import send_with_internet
 
 result = send_with_internet(
-    notification_type: str,
+    channel: str,                       # Channel/topic name (was: notification_type)
     recipients: List[str],              # ["alice@local", "bob@machine1"]
     template: str,
     template_vars: Optional[Dict] = None,
@@ -96,7 +110,7 @@ result = send_with_internet(
 **Returns**:
 ```python
 {
-    "local": Notification | None,           # Result from notify.send()
+    "local": Notification | None,           # Result from message.store_message() (was notify.send())
     "remote": Dict[str, Tuple[bool, str]],  # {machine: (success, message)}
     "errors": Dict[str, str],               # {address: error_message}
     "summary": Tuple[int, int],             # (success_count, failure_count)
@@ -195,7 +209,7 @@ integration = NotifyIntegration(
 
 # Send notifications
 result = integration.send(
-    notification_type="test",
+    channel="test",
     recipients=["alice@local", "bob@machine1"],
     template="Hello {name}",
     template_vars={"name": "World"},
@@ -283,7 +297,7 @@ Invalid addresses are collected in the `errors` dict:
 
 ```python
 result = send_with_internet(
-    notification_type="test",
+    channel="test",
     recipients=["alice@local", "invalid", "@nomachine"],
     template="Test",
 )
@@ -305,13 +319,14 @@ result["remote"]["machine1"] = (
 )
 ```
 
-### 6.3 Missing notify Module
+### 6.3 Missing `message` module
 
-If bbsengine6.notify is not available:
+If `bbsengine6.message` is not available (historical:
+"missing `notify` module"):
 
 ```python
 result["local"] = None
-result["errors"]["all"] = "bbsengine6.notify not available"
+result["errors"]["all"] = "bbsengine6.message not available"
 result["summary"] = (0, num_recipients)
 ```
 
@@ -411,14 +426,22 @@ registry.register("machine2", "other.example.com", 8765)
 
 ## 10. Migration Guide
 
-### 10.1 From notify.send() to send_with_internet()
+### 10.1 From `message.store_message()` to `send_with_internet()`
+
+> **Note (2026-07-22):** The "Before" example originally showed
+> `from bbsengine6 import notify; notify.send(...)`. The notify
+> package was deleted in Phase 7 of
+> `TODO-message-migration.md`; the live equivalent is
+> `from bbsengine6 import message; message.store_message(...)`.
+> The structure of the migration (one local call → unified
+> local+remote call) is unchanged.
 
 **Before** (local only):
 ```python
-from bbsengine6 import notify
+from bbsengine6 import message
 
-notify.send(
-    notification_type="message",
+message.store_message(
+    channel="message",
     recipients=["alice", "bob"],
     template="New message",
 )
@@ -429,7 +452,7 @@ notify.send(
 from bbsengine6.net import send_with_internet
 
 send_with_internet(
-    notification_type="message",
+    channel="message",
     recipients=["alice@local", "bob@machine1"],
     template="New message",
 )
@@ -497,7 +520,7 @@ registry.register("mobile", "mobile.company.com", 8765)
 
 # Send message to multiple machines
 result = send_with_internet(
-    notification_type="alert",
+    channel="alert",
     recipients=[
         "alice@local",           # Local user
         "bob@support-desk",      # Remote user on support-desk

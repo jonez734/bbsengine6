@@ -129,7 +129,7 @@ PHP Endpoints (JSON responses)
 
 **Purpose:** Central request handler, page rendering, template integration
 
-**File Size:** 1506 lines
+**File Size:** ~1,471 lines (as of 2026-07-22; the older "1506 lines" figure is slightly out of date)
 
 **Namespace:** `bbsengine6`
 

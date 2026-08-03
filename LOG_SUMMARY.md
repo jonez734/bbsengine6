@@ -1,3 +1,11 @@
+<!--
+GENERATED FILE — DO NOT EDIT BY HAND.
+
+Produced by the `log` Makefile target (`make log`). This is the
+date-grouped, subject-only view of the same history that LOG.md
+and LOG_FULL.md show in full. Handy for skimming the project
+timeline.
+-->
 ## 2026-03-30
   f416127 Group LOG_SUMMARY by date with date headers (HEAD -> main) [J (eff)]
   523cda2 Add Makefile log target to generate LOG_FULL.md and LOG_SUMMARY.md (github/main) [J (eff)]

@@ -1,6 +1,15 @@
 # bbsengine6 notifyd - Design Decisions
 
-Status: NOT YET IMPLEMENTED
+> **STATUS (2026-07-22): SUPERSEDED.** See
+> `BBSENGINE6_NOTIFYD_OVERVIEW.md` for the full context.
+> The design decisions recorded here are for a never-built
+> daemon. The "use getch() integration, not a daemon"
+> recommendation at the end of this file IS the pattern
+> that bbsengine6 already follows — see
+> `py/src/bbsengine6/io/getch.py:_check_notifications` and
+> `py/src/bbsengine6/bottombar.py:_get_notification_status`.
+
+Status: NOT YET IMPLEMENTED (and superseded)
 Last Updated: 2026-05-18 13:43:46
 
 ---

@@ -1,3 +1,25 @@
+<!--
+GENERATED FILE — DO NOT EDIT BY HAND.
+
+This file is produced by the `log` Makefile target (see
+`Makefile`). It is a `git log --pretty=...` snapshot of the
+repository at the time of regeneration. To refresh, run
+`make log` from the project root. The two other log views are:
+
+  - LOG_FULL.md   — same as this file, with full commit bodies
+                    (and the same Makefile target generates it
+                    in a single `git log` pass; this file and
+                    LOG_FULL.md are byte-for-byte equivalent in
+                    their first ~2900 lines, the only difference
+                    being the leading commit's hash — this file
+                    was generated against a slightly different
+                    branch tip at the time of the last `make log`)
+  - LOG_SUMMARY.md — same history grouped by date, subject only
+                     (handy for skimming)
+
+If you want to remove the redundancy between this file and
+LOG_FULL.md, delete one of them and update the Makefile target.
+-->
 * 474cbc3 2026-03-30 security: remove hardcoded reCAPTCHA keys, use environment variables instead (HEAD -> main, github/main) [J (eff)]
 | security: remove hardcoded reCAPTCHA keys, use environment variables instead
 | 

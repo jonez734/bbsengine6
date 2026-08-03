@@ -1,5 +1,18 @@
 # TODO: `datedelivered` audit completion + `deliverymethod` for `__notify_recipient`
 
+> **STATUS (2026-07-22): SUPERSEDED.** The notify→message.py migration
+> is complete. The `bbsengine6/notify/` and `bbsengine6/message_delivery/`
+> packages, the `engine.__notify*` tables, the `engine.notify` view,
+> the `engine._append_delivery_method` SQL helper, and the
+> `checknotify.py` / `checknotifyd.py` backend modules have all been
+> deleted in Phase 7 of `TODO-message-migration.md`. Every item below
+> this banner is therefore moot: the columns, views, and stored
+> procedures it describes no longer exist.
+>
+> The work item is preserved here for historical reference only. The
+> new notification system lives in `bbsengine6/message.py` and is
+> documented in `TODO-message-migration.md` Phase 8.
+
 Work item: add per-recipient delivery-method audit fields to the notify
 subsystem and clean up the dead `should_persist` parameter. No rename
 of the `message_delivery` module.

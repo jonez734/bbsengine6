@@ -1,6 +1,12 @@
 # bbsengine6 notifyd - Dependencies
 
-Status: NOT YET IMPLEMENTED
+> **STATUS (2026-07-22): SUPERSEDED.** See
+> `BBSENGINE6_NOTIFYD_OVERVIEW.md` for the full context.
+> The dependency list is for a daemon that was never built.
+> Live bbsengine6 dependencies are in
+> `py/setup.py` / `py/pyproject.toml` (not in this spec).
+
+Status: NOT YET IMPLEMENTED (and superseded)
 Last Updated: 2026-05-18 13:43:46
 
 ---

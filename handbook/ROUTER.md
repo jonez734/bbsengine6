@@ -82,6 +82,39 @@ RewriteRule ^teos/(.+)$ php/teos.php?path=$1 [last,QSA]
 4. If found: display content
 5. If not found: show bbsengine6 404 error page
 
+## Directory Listing
+
+When the folder handler renders a TEOS directory (e.g. `/rec/arts/tv/mash/`),
+`router_collectDirectoryItems()` in `engine/router.php` walks the on-disk
+contents via `scandir()` and turns each entry into an item record. The result
+is sorted by filename (case-insensitive) and then passed through
+`router_dedupeItems()` to collapse any remaining case-variant duplicates
+before the data is handed to the `browse.tmpl` template.
+
+### Skipping backup and junk files
+
+`scandir()` returns every visible filesystem entry, which includes leftovers
+from editors and patch tools. If any of those are siblings of a real blurb
+(e.g. `major-characters.md` and `major-characters.md~` left behind by an
+editor crash or `make deploy` race), they show up in the folder listing as
+duplicates of the real entry.
+
+`router_isIgnoredEntry()` filters out the following patterns before an entry
+is added to the listing:
+
+- `.`-prefixed entries (dotfiles), including `..` and `.`
+- Anything ending in one or more `~` (emacs backup, multi-tilde like `.~~`)
+- vim swap files: `.swp`, `.swo`, `.swn` (case-insensitive)
+- `.bak`, `.orig`, `.rej` (patch rejects)
+- `.tmp`, `.temp`, `.save` (case-insensitive)
+- emacs lockfiles: `#name#`
+
+This list is centralized in `router_isIgnoredEntry()` so additional patterns
+can be added in one place. The companion test
+`/home/opencode/data/work/teos/www/php/test_www_mash_no_duplicates.php`
+covers the filter and the regression scenario (real mash directory + leftover
+`~` files yields exactly the 7 real blurbs, not 9).
+
 ## Static Site Prefixes
 
 These paths are handled by their own directories/code and should be processed BEFORE the router:
@@ -130,6 +163,11 @@ engine/
 
 ## History
 
+- **2026-07-29**: Directory listing skips editor backup / junk files
+  (`router_isIgnoredEntry`) and dedupes case-variant filenames
+  (`router_dedupeItems`). Fixes the `/rec/arts/tv/mash/` regression where
+  `major-characters.md~` and `special-episodes.md~` were rendered as
+  duplicates of the real blurbs.
 - **2026-06-15**: Security fixes + modernization (path traversal, functional style)
 - **2025-06-15**: Router moved to `/engine/router.php` for clean URL support
 - **Prior**: Router was at `/router.php` (web root) with shim file

@@ -1,5 +1,13 @@
 # Notify Message Demo - Implementation Plan
 
+> **STATUS (2026-07-22): SUPERSEDED.** The notify_message_demo
+> (`bbsengine6/examples/notify_message_demo.py`) was deleted
+> along with the rest of the notify package in Phase 7 of
+> `TODO-message-migration.md`. This plan is preserved for
+> historical reference only. The final state of the demo is
+> captured in `NOTIFY_MESSAGE_DEMO_FINAL_SUMMARY.md` (also
+> now historical).
+
 ## Overview
 
 A multi-user interactive message system demo built on top of bbsengine6's notify system. Users can run separate instances in different terminals and exchange messages using templates with variable substitution.

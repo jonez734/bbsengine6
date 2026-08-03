@@ -1,6 +1,16 @@
 # bbsengine6 notifyd - Integration Points
 
-Status: NOT YET IMPLEMENTED
+> **STATUS (2026-07-22): SUPERSEDED.** See
+> `BBSENGINE6_NOTIFYD_OVERVIEW.md` for the full context.
+> This is the file most heavily affected: every integration
+> point in this spec is a direct import of the deleted
+> `bbsengine6.notify` package. Live integration paths are
+> in `py/src/bbsengine6/io/getch.py` (notification
+> checking), `py/src/bbsengine6/bottombar.py` (status
+> display), and `py/src/bbsengine6/startup/message_subscription.py`
+> (bed client subscription hook).
+
+Status: NOT YET IMPLEMENTED (and superseded)
 Last Updated: 2026-05-18 13:43:46
 
 ---

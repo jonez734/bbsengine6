@@ -33,6 +33,15 @@
   1. `py/src/bbsengine6/startup/__init__.py` is empty in the committed state. The TODO entry above (2026-07-07) says the four entry points were added, but `git diff` shows the changes are uncommitted. Commit the current draft (init/access/buildargs/main defined in `__init__.py`).
   2. `py/src/bbsengine6/startup/main.py:13` calls `lib.issysop(args, **kwargs)` but `bbsengine6.startup.lib` does NOT have an `issysop` function — it lives in `bbsengine6.backend.lib`. The current code throws `AttributeError: module 'bbsengine6.startup.lib' has no attribute 'issysop'` during `module.check`'s `m.access(args, op, **kwargs)` call. `check` catches the exception and returns None, so `module.run` logs "check of modulename='bbsengine6.startup.main' failed. module not run." with a traceback via `io.echo_traceback`. This is hit by BOTH invocation paths: CLI goes `__main__.py -> lib.runmodule(args, "main") -> module.run on bbsengine6.startup.main -> check fails`; programmatic `module.run(args, "bbsengine6.startup")` passes the subpackage check (the four entry points are present) but then `m.main` -> `lib.runmodule(args, "main")` -> same failure on the `.main` file. The user reports this as "unknown function init()" — a paraphrase of the traceback during the init/access phase of `check`.
 
+  > **2026-07-22 verification:** `py/src/bbsengine6/startup/__init__.py`
+  > exists and re-exports the four entry points (`init`, `access`,
+  > `buildargs`, `main`). Item 1 is therefore *already fixed in
+  > code* but the changes are uncommitted, matching the TODO
+  > text. Item 2 (the `issysop` AttributeError) is still open
+  > — the live `startup/main.py` still calls
+  > `lib.issysop(...)` and `bbsengine6.startup.lib` still has no
+  > such symbol.
+
   Fix: in `py/src/bbsengine6/startup/main.py`, change
   ```python
   def access(args, op, **kwargs) -> bool:
@@ -296,6 +305,64 @@ Add postoffice service to BED (via casino) that polls IMAP servers for new email
 
 ---
 
+### Bed Disconnect: No Auto-Reconnect (Known Limitation, 2026-07-22)
+
+`bbsengine6.startup.message_subscription._maybe_subscribe_to_bed()`
+is called once at the end of `bbsengine6.startup.main()` after the
+backend bootstrap succeeds. If bed is reachable, it opens a
+`BedConnection`, subscribes via `BedMessageServiceClient`, and the
+bed websocket fans PG `NOTIFY` payloads into
+`bbsengine6.message._local_unread_cache` so `getch.py` /
+`bottombar.py` can show unread counts without a DB hit.
+
+If the websocket to bed **drops mid-session**, the subscription
+dies silently:
+
+- `BedConnection._recv_loop` (`bed/src/bed/client/connection.py:252-273`)
+  breaks on `_is_closed()` and only logs a warning on exception
+  — no restart, no reconnect.
+- `BedConnection._ensure_recv_loop` (line 234) only dials a fresh
+  socket; nothing in the bbsengine6 startup client ever calls it
+  after the initial connection.
+- `BedMessageServiceClient` (`bed/src/bed/client/messageservice.py:23-95`)
+  still believes it is subscribed (it just holds a
+  `_subscribed_moniker` string and never polls the connection),
+  so `get_local_unread_count(moniker)` returns the last cached
+  value (or falls back to a DB count) — no detection, no
+  resubscribe, no error.
+
+**Net effect:** a dropped bed websocket = silently dead
+subscription for the rest of the process lifetime. The user
+sees the bottombar `F2: messages (N)` count freeze until they
+restart the TUI.
+
+**Workarounds (none currently in code):**
+
+1. **Server-side reconnect via bearer token** — `bed.api.auth.AuthService`
+   handles `reconnect` messages over a *new* socket
+   (`bed/src/bed/api/auth.py:236-296`). The bbsengine6 startup
+   client does not call that flow; it would need a `reset()` /
+   `reconnect()` method on `BedMessageServiceClient` that mints a
+   new `BedConnection` and re-issues the `subscribe` against the
+   old subscription.
+2. **Heartbeat + watchdog** — add a periodic ping/pong to
+   `BedConnection`, raise on missed heartbeats, and have
+   `_maybe_subscribe_to_bed` run a background task that
+   re-subscribes when the heartbeat dies.
+3. **Logout/login** — the cheapest fix; tell the user to
+   `/logout` and `/login` to pick up a fresh subscription.
+
+This is a `bed`-package limitation, not a `bbsengine6` one.
+The right place to fix it is `bed/src/bed/client/connection.py`
+(add a `reconnect()` method that dials a new socket and
+restarts `_recv_loop`) and
+`bed/src/bed/client/messageservice.py` (expose
+`reconnect_subscribe(moniker)` that wraps the new connection).
+Then add a bbsengine6 wrapper that calls them on a watchdog
+timer.
+
+---
+
 ### Integration (Games) ✓ DONE
 
 1. Add channel subscription message handlers in `api/handler.py`
@@ -346,26 +413,48 @@ Keep existing `broadcast()` and path-based messaging for backward compatibility.
 
 ### Replace Notify System
 
+> **STATUS (2026-07-22): MIGRATION COMPLETE; PHASE 1 GAPS REMAIN.**
+> The notify→message.py migration is functionally complete. The
+> `bbsengine6/notify/` and `bbsengine6/message_delivery/`
+> packages have been deleted; all consumers (getch.py, bottombar.py,
+> member/lib.py, net/integration.py, net/router.py) have been
+> migrated to `bbsengine6.message`. Notify tables are kept as a
+> read-only archive (no data loss; `sql/migrate_notify_to_message.sql`
+> provided for opt-in migration). See `TODO-message-migration.md`
+> for the full plan and Phase 8 for the channel/sub system quality
+> fixes that landed alongside the migration.
+>
+> **However, a 2026-07-22 code audit found that 6 of the 10
+> "Phase 1 gap-fills" in `TODO-message-migration.md` are
+> checked off in that doc but absent from the code
+> (`remove_from_group`, `get_blocked`, `get_urgent`, `expunge`,
+> `@group`/`@everyone` expansion in `store_message()`,
+> `set_rate_limit`, `register_type`/`get_types`). No current
+> consumer depends on the missing functions, so the migration
+> is not functionally broken, but the Phase 1 checklist is
+> inaccurate. Either implement the gaps or strike the items
+> from the checklist before the next migration planning pass.
+
 When message system is complete, it replaces notify entirely:
 
 **Client changes (bbsengine6/io/getch.py):**
-- Replace `notify.count(moniker)` with message count query
-- Replace `notify.get_queue(moniker)` with message queue query
-- Replace notification display with message display
-- Update `get_notification_status()` to use message tables
+- Replace `notify.count(moniker)` with message count query — DONE
+- Replace `notify.get_queue(moniker)` with message queue query — DONE
+- Replace notification display with message display — DONE
+- Update `get_notification_status()` to use message tables — DONE
 
 **Database:**
 - Migrate existing `engine.__notify` data to `engine.__message` if needed
-- Or keep notify tables as read-only archive, new messages go to message tables
+- Or keep notify tables as read-only archive, new messages go to message tables — DONE (read-only archive)
 
 **What notify module becomes:**
 - Deprecated (read-only for historical data)
-- Or removed after migration
+- Or removed after migration — DONE (removed in Phase 7)
 
 **Client integration points:**
-- `bbsengine6/io/getch.py:_check_notifications()` - poll for messages
-- `bbsengine6/io/getch.py:_show_pending_notifications()` - display messages
-- `bbsengine6/io/screen.py:get_notification_status()` - bottombar status
+- `bbsengine6/io/getch.py:_check_notifications()` - poll for messages — DONE
+- `bbsengine6/io/getch.py:_show_pending_notifications()` - display messages — DONE
+- `bbsengine6/io/screen.py:get_notification_status()` - bottombar status — DONE
 
 ### Benefits
 - Single unified system for all real-time messaging across all games
@@ -565,6 +654,21 @@ Create MemberServices for the BBS Engine Daemon (BED), leveraging bbsengine6's m
 
 ## GPG Key Support for Message Signing
 
+> **STATUS (2026-07-22): All items still pending — verified
+> that the GPG key columns (`gpg_public_key`, `gpg_keyid`,
+> `gpg_fingerprint`) are NOT defined in `py/src/bbsengine6/sql/member.sql`.
+> `__member` columns as of 2026-07-22: `moniker`, `email`,
+> `password`, `credits`, `parentmoniker`, `datecreated`/
+> `createdbymoniker`, `dateupdated`/`updatedbymoniker`,
+> `approvedbymoniker`/`dateapproved`, `lastlogin`,
+> `lastloginfrom`, `loginid`, `ui`, `tz`, `attrs`, `refcode`.**
+>
+> The GPG key work is also entangled with the now-moot
+> `TODO-notify-encryption.md` plan; the per-row encryption
+> work there was scoped against the deleted `__notify` table
+> and will need to be reworked against `__message` before the
+> message-signing side of this work can land.
+
 Add columns to support GPG keys for signing messages.
 
 - [ ] Add `gpg_public_key` column to `engine.__member` table
@@ -732,7 +836,7 @@ Test classes (function-scoped, with `test_args` + `test_pool` fixtures; autouse 
 
 ### Implementation tasks
 
-- [ ] Create `bbsengine6/sql/invite.sql` - shared invite code table:
+- [x] Create `bbsengine6/sql/invite.sql` - shared invite code table:
   ```sql
   CREATE TABLE engine.__invite (
       id bigserial primary key,
@@ -749,13 +853,24 @@ Test classes (function-scoped, with `test_args` + `test_pool` fixtures; autouse 
   -- Add similar FKs as modules are added:
   -- constraint fk_invite_empyre foreign key (resourceid) references empyre.__island(id) on delete cascade
   ```
-- [ ] Create `engine.invite` view with local timezone conversion
+  **VERIFIED 2026-07-22: done.** `py/src/bbsengine6/sql/invite.sql`
+  (85 lines) defines the table per the plan, with the
+  `(module, resourceid, code)` partial-unique index, the
+  `casinotablemoniker` FK to `casino.__table`, and the
+  `engine.invite` view with local-tz conversions.
+- [x] Create `engine.invite` view with local timezone conversion
+  **VERIFIED 2026-07-22: done** (same file, lines after the
+  table DDL).
 - [ ] Create `bbsengine6/invite.py` - DAL functions:
   - [ ] `create_invite(args, module, resourceid, createdbymoniker, dateexpires)` → returns code
   - [ ] `get_invites(args, module, resourceid)` → list of codes
   - [ ] `revoke_invite(args, invite_id)` → bool
   - [ ] `validate_invite(args, module, resourceid, code)` → returns invite record or None
   - [ ] `mark_used(args, invite_id)` → bool
+  **VERIFIED 2026-07-22: still pending.** The
+  `py/src/bbsengine6/invite.py` module and
+  `py/src/bbsengine6/services/invite.py` service class do
+  not yet exist. SQL is in place; Python DAL is not.
 
 ---
 
