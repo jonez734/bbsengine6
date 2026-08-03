@@ -282,18 +282,45 @@ def test_users():
 
 
 @pytest.fixture(autouse=True)
-def test_transaction(request, db_connection):
+def test_create_test_users(request):
+    """
+    Populate test users (test_{user}_1..3) for any non-unit test.
+
+    Skipped for tests marked with @pytest.mark.unit. Made autouse so that
+    tests like test_member_verify_found.py which exercise the live
+    members table get the test data they need without each test having
+    to declare ``create_test_users`` explicitly.
+
+    NOTE: create_test_users is fetched lazily via request.getfixturevalue
+    so unit-only sessions don't cascade the DB fixture's skip.
+    """
+    if request.node.get_closest_marker("unit"):
+        yield
+        return
+
+    request.getfixturevalue("create_test_users")
+    yield
+
+
+@pytest.fixture(autouse=True)
+def test_transaction(request):
     """
     Wrap each non-unit test in its own transaction.
     Rolls back after the test to keep data clean.
 
     Skipped for tests marked with @pytest.mark.unit (so unit tests never
     trigger DB session fixtures).
+
+    NOTE: db_connection is fetched lazily via request.getfixturevalue so
+    unit-only sessions don't cascade the DB fixture's skip to this autouse
+    fixture.
     """
     if request.node.get_closest_marker("unit"):
         yield
         return
 
+    db_connection = request.getfixturevalue("db_connection")
+
     yield  # Test runs here
 
     try:
@@ -304,142 +331,6 @@ def test_transaction(request, db_connection):
 
 
 # ===== Helper Functions =====
-
-
-def _get_message_sql_files() -> list[Path]:
-    """
-    Return paths to message SQL files in correct execution order.
-    Path is relative to conftest.py location.
-
-    Order matters: depends on foreign keys between tables.
-    """
-    sql_dir = Path(__file__).parent.parent / "src" / "bbsengine6" / "sql"
-
-    files = [
-        "message.sql",  # Core message tables
-        "message_groups.sql",  # Groups, blocking, rate limiting, types
-        "messageview.sql",  # Views
-        "channel.sql",  # Channel config
-        "invite.sql",  # Invite codes
-    ]
-
-    paths = [sql_dir / f for f in files]
-
-    # Verify all files exist
-    for path in paths:
-        if not path.exists():
-            raise FileNotFoundError(f"SQL file not found: {path}")
-
-    return paths
-
-
-def _read_sql_file(filepath: Path) -> str:
-    r"""
-    Read SQL file and remove psql metacommands.
-
-    Lines starting with backslash (\set, \echo, \i) are psql-only
-    metacommands and should be removed before executing with Python.
-    """
-    with open(filepath) as f:
-        lines = f.readlines()
-
-    # Keep only actual SQL (remove lines starting with \)
-    cleaned = [
-        line for line in lines if line.strip() and not line.strip().startswith("\\")
-    ]
-
-    return "".join(cleaned)
-
-
-def _execute_sql_file(conn, sql_content: str, filename: str) -> None:
-    """
-    Execute SQL content.
-
-    On "already exists" error: raise (caller handles with logging)
-    On other errors: raise immediately
-    """
-    try:
-        with conn.cursor() as cur:
-            cur.execute(sql_content)
-    except Exception:
-        # Re-raise - let caller decide how to handle
-        raise
-
-    yield
-
-
-@pytest.fixture
-def test_users():
-    """Return the list of dynamic test user monikers."""
-    user = getpass.getuser()
-    return [f"test_{user}_1", f"test_{user}_2", f"test_{user}_3"]
-
-
-# ===== Function-Scoped Fixtures =====
-
-
-@pytest.fixture(autouse=True)
-def test_transaction(db_connection):
-    """
-    Wrap each test in its own transaction.
-    Rolls back after test to keep data clean.
-
-    Schema persists (session scope), test data is isolated.
-
-    Uses psycopg's built-in autocommit=False (default) behavior.
-    Each test's inserts/deletes are rolled back automatically.
-
-    Also clears _types to prevent cross-test pollution of notification type
-    registrations between tests.
-    """
-    from bbsengine6.message import _message_enabled
-
-    yield  # Test runs here
-
-    # Rollback after test - all inserts/deletes are undone.
-    # Only try rollback on real psycopg connections (skip for mock connections
-    # used in pure unit tests that don't connect to the database).
-    try:
-        if db_connection and hasattr(db_connection, "rollback"):
-            db_connection.rollback()
-    except Exception:
-        pass
-
-
-# ===== Helper Functions =====
-
-
-def _get_notify_sql_files() -> list[Path]:
-    """
-    Return paths to notify SQL files in correct execution order.
-    Path is relative to conftest.py location.
-
-    Order matters: depends on foreign keys between tables.
-    
-    Note: These are used for tests that require the notify system.
-          The message system uses separate SQL files via checkmessage.py.
-    """
-    sql_dir = Path(__file__).parent.parent / "src" / "bbsengine6" / "sql"
-
-    files = [
-        "notify.sql",  # Core table: engine.__notify
-        "notify_recipient.sql",  # Depends on: engine.__notify
-        "notify_block.sql",  # Depends on: engine.__member, engine.__notify
-        "notify_group.sql",  # Depends on: engine.__member
-        "notify_type.sql",  # Independent
-        "notify_rate_limit.sql",  # Depends on: engine.__notify_type
-        "notifyview.sql",  # Depends on: all tables above
-        "notifyd.sql",  # notifyd daemon tables: engine.__notify_imap_state, engine.__notify_history
-    ]
-
-    paths = [sql_dir / f for f in files]
-
-    # Verify all files exist
-    for path in paths:
-        if not path.exists():
-            raise FileNotFoundError(f"SQL file not found: {path}")
-
-    return paths
 
 
 def _get_message_sql_files() -> list[Path]:
