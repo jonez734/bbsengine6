@@ -23,6 +23,7 @@ function smarty_function_teos($options, Smarty_Internal_Template $template)
   require_once(buildpluginfilepath($template->smarty, "modifier.wpprop.php"));
 
   $path = isset($options["path"]) ? $options["path"] : null;
+  $title = isset($options["title"]) ? $options["title"] : null;
   $itemprop = isset($options["itemprop"]) ? $options["itemprop"] : false;
 
   // Path is a dot-separated label: "rec.arts.tv.the-a-team"
@@ -31,12 +32,14 @@ function smarty_function_teos($options, Smarty_Internal_Template $template)
 
   $uri = \bbsengine6\joinpath(TEOSURL, implode("/", $uriSegments)) . "/";
 
-  if (count($uriSegments) > 0) {
-    $title = end($uriSegments);
-  } else {
-    $title = $path;
+  if ($title === null) {
+    if (count($uriSegments) > 0) {
+      $title = end($uriSegments);
+    } else {
+      $title = $path;
+    }
+    $title = str_replace(["-", "_"], " ", $title);
   }
-  $title = str_replace(["-", "_"], " ", $title);
 
   $title = smarty_modifier_escape($title);
   $title = smarty_modifier_wpprop($title);
