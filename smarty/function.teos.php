@@ -30,7 +30,7 @@ function smarty_function_teos($options, Smarty_Internal_Template $template)
   $segments = array_values(array_filter(explode(".", $path)));
   $uriSegments = array_map(function($s) { return str_replace("_", "-", $s); }, $segments);
 
-  $uri = \bbsengine6\joinpath(TEOSURL, implode("/", $uriSegments)) . "/";
+  $uri = implode("/", $uriSegments) . "/";
 
   if ($title === null) {
     if (count($uriSegments) > 0) {
