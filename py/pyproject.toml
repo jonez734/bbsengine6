@@ -59,6 +59,7 @@ bbsengine6 = ["sql/*.sql", "sql/Makefile"]
 markers = [
     "unit: marks tests as unit tests (no database required)",
     "integration: marks tests as integration tests (require networking)",
+    "requires_db: marks tests that require a database connection",
 ]
 
 [tool.pyright]

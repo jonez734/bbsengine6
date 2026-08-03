@@ -1,18 +1,19 @@
 """
-Pytest configuration for bbsengine6 integration tests.
+Pytest configuration for bbsengine6 tests.
 
-Automatically initializes notify schema in zoid6 database.
-Uses smart initialization: only loads 7 notify-specific SQL files
-(schema, extensions, roles, member, session already exist).
+Behavior:
+  - Tests marked with @pytest.mark.unit run with NO database connection.
+  - All other tests use the live `zoid6` database (must be reachable as the
+    current OS user), loading message/bank schema and creating dynamic
+    test users under the OS username.
 
 Session-scoped fixtures:
   - db_connection: persistent connection to zoid6
-  - schema_init: loads notify tables & views
-  - create_test_users: creates test users (alice, bob, jam)
-  - test_args: argparse.Namespace with databasename=zoid6 for notify functions
+  - schema_init: loads message + bank tables
+  - create_test_users: creates test_{user}_1..3 with approved=TRUE
 
-Function-scoped fixtures (autouse):
-  - test_transaction: wraps each test in transaction (rollback after)
+Function-scoped fixtures (autouse, integration only):
+  - test_transaction: rolls back after each test
 """
 
 import atexit
@@ -44,24 +45,42 @@ def _close_test_pools():
 atexit.register(_close_test_pools)
 
 
-# ===== Session-Scoped Fixtures =====
+# ===== Collection-time decision: does this session need a DB? =====
 
 
 def pytest_collection_modifyitems(config, items):
-    """No-op: session fixtures handle their own skip logic per-test."""
-    pass
+    """
+    Decide once per session whether any collected test needs the database.
+    A test needs a DB unless it is marked @pytest.mark.unit.
+
+    The result is stored on config so that session-scoped DB fixtures can
+    skip cleanly when the entire run is unit-only (avoids the "first test
+    decides for everyone" pitfall of session-scoped skip fixtures).
+    """
+    needs_db = any(
+        not item.get_closest_marker("unit") for item in items
+    )
+    config._bbsengine6_session_needs_db = needs_db
+    if not needs_db:
+        logger.info("Session is unit-only: all DB fixtures will skip")
+
+
+# ===== Session-Scoped Fixtures =====
+
+
+def _session_needs_db(request) -> bool:
+    """True if any test in this session is not marked @pytest.mark.unit."""
+    return bool(getattr(request.config, "_bbsengine6_session_needs_db", True))
 
 
 @pytest.fixture(scope="session")
 def db_connection(request):
     """
-    Connect to zoid6 database as opencode user.
-    Connection persists for entire test session.
-    Skipped for tests marked with @pytest.mark.unit
+    Connect to zoid6 database as the current OS user. Skipped for unit-only
+    sessions.
     """
-    if request.node.get_closest_marker("unit"):
-        logger.info("Skipping database connection for unit tests")
-        pytest.skip("Unit test - no database required")
+    if not _session_needs_db(request):
+        pytest.skip("unit-only session: no database required")
 
     user = getpass.getuser()
     logger.info(f"Connecting to zoid6 database as {user}...")
@@ -118,11 +137,18 @@ def schema_init(db_connection, request):
     - bank_transfer_view.sql
 
     Skips: schema, extensions, roles, member, session (already exist)
-
-    Note: This uses the new unified message system. For tests that require
-    the old notify system, they should load _get_notify_sql_files() explicitly.
     """
     logger.info("Initializing message schema tables...")
+
+    # Ensure messageview.sql's predicates can reference engine.__member.approved.
+    # member.sql's CREATE TABLE IF NOT EXISTS will not retro-add columns to a
+    # pre-existing table; this ALTER is idempotent and safe on fresh DBs.
+    with db_connection.cursor() as cur:
+        cur.execute(
+            "ALTER TABLE engine.__member "
+            "ADD COLUMN IF NOT EXISTS approved boolean NOT NULL DEFAULT false"
+        )
+    db_connection.commit()
 
     sql_files = _get_message_sql_files()
 
@@ -195,28 +221,25 @@ def _load_bank_schema(db_connection):
             db_connection.rollback()
             logger.warning(f"  ⊘ {filepath.name} - insufficient privileges, skipping")
         except Exception as e:
-            logger.error(f"  ✗ Failed to load {filepath.name}: {e}")
+            logger.error(f"Failed to load {filepath.name}: {e}")
             db_connection.rollback()
             raise pytest.fail(f"Schema initialization failed loading {filepath.name}: {e}")
 
     db_connection.commit()
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def create_test_users(request, db_connection, schema_init):
     """
     Create minimal test users dynamically based on OS username.
     Uses test_{user}_1, test_{user}_2, test_{user}_3 pattern.
 
-    Required fields: moniker, email
+    Required fields: moniker, email, approved=TRUE (so messageview includes them).
 
-    autouse=True: This fixture always runs, ensuring test users exist
-    Skipped for tests marked with @pytest.mark.unit
+    Tests that need these users list `create_test_users` or `test_users` as a
+    fixture parameter. The fixture is no longer autouse, so unit-marked tests
+    do not trigger schema initialization.
     """
-    if request.node.get_closest_marker("unit"):
-        logger.info("Skipping database fixtures for unit tests")
-        return
-
     user = getpass.getuser()
     test_users = [
         (f"test_{user}_1", f"test_{user}_1@test.local"),
@@ -226,7 +249,11 @@ def create_test_users(request, db_connection, schema_init):
 
     logger.info(f"Creating dynamic test users for {user}...")
 
-    sql = "INSERT INTO engine.__member (moniker, email) VALUES (%s, %s) ON CONFLICT DO NOTHING"
+    sql = (
+        "INSERT INTO engine.__member (moniker, email, approved) "
+        "VALUES (%s, %s, TRUE) "
+        "ON CONFLICT (moniker) DO UPDATE SET approved = TRUE"
+    )
 
     try:
         with db_connection.cursor() as cur:
@@ -239,6 +266,103 @@ def create_test_users(request, db_connection, schema_init):
         logger.warning("⊘ Insufficient privileges to create test users, skipping")
     except Exception as e:
         logger.error(f"Failed to create test users: {e}")
+        raise
+
+    yield
+
+
+@pytest.fixture
+def test_users():
+    """Return the list of dynamic test user monikers."""
+    user = getpass.getuser()
+    return [f"test_{user}_1", f"test_{user}_2", f"test_{user}_3"]
+
+
+# ===== Function-Scoped Fixtures =====
+
+
+@pytest.fixture(autouse=True)
+def test_transaction(request, db_connection):
+    """
+    Wrap each non-unit test in its own transaction.
+    Rolls back after the test to keep data clean.
+
+    Skipped for tests marked with @pytest.mark.unit (so unit tests never
+    trigger DB session fixtures).
+    """
+    if request.node.get_closest_marker("unit"):
+        yield
+        return
+
+    yield  # Test runs here
+
+    try:
+        if db_connection and hasattr(db_connection, "rollback"):
+            db_connection.rollback()
+    except Exception:
+        pass
+
+
+# ===== Helper Functions =====
+
+
+def _get_message_sql_files() -> list[Path]:
+    """
+    Return paths to message SQL files in correct execution order.
+    Path is relative to conftest.py location.
+
+    Order matters: depends on foreign keys between tables.
+    """
+    sql_dir = Path(__file__).parent.parent / "src" / "bbsengine6" / "sql"
+
+    files = [
+        "message.sql",  # Core message tables
+        "message_groups.sql",  # Groups, blocking, rate limiting, types
+        "messageview.sql",  # Views
+        "channel.sql",  # Channel config
+        "invite.sql",  # Invite codes
+    ]
+
+    paths = [sql_dir / f for f in files]
+
+    # Verify all files exist
+    for path in paths:
+        if not path.exists():
+            raise FileNotFoundError(f"SQL file not found: {path}")
+
+    return paths
+
+
+def _read_sql_file(filepath: Path) -> str:
+    r"""
+    Read SQL file and remove psql metacommands.
+
+    Lines starting with backslash (\set, \echo, \i) are psql-only
+    metacommands and should be removed before executing with Python.
+    """
+    with open(filepath) as f:
+        lines = f.readlines()
+
+    # Keep only actual SQL (remove lines starting with \)
+    cleaned = [
+        line for line in lines if line.strip() and not line.strip().startswith("\\")
+    ]
+
+    return "".join(cleaned)
+
+
+def _execute_sql_file(conn, sql_content: str, filename: str) -> None:
+    """
+    Execute SQL content.
+
+    On "already exists" error: raise (caller handles with logging)
+    On other errors: raise immediately
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(sql_content)
+    except Exception:
+        # Re-raise - let caller decide how to handle
         raise
 
     yield

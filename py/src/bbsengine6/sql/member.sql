@@ -13,6 +13,7 @@ create table if not exists engine.__member (
   "updatedbymoniker" citext constraint fk_member_updatedbyid references engine.__member(moniker) on update cascade on delete set null,
   "approvedbymoniker" citext constraint fk_member_approvedbyid references engine.__member(moniker) on update cascade on delete set null,
   "dateapproved" timestamptz,
+  "approved" boolean NOT NULL DEFAULT false,
 --  "emailverified" boolean,
 --  "emailverifiedbymoniker" text constraint fk_member_emailverifiedbyid references engine.__member(moniker) on update cascade on delete set null,
 --  "dateemailverified" timestamptz,

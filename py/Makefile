@@ -2,7 +2,7 @@ PROJECT = bbsengine6
 VERSION = $(shell date +%Y%m%d%H%M)
 USER = $(shell whoami)
 
-.PHONY: all version clean
+.PHONY: all version clean test test-unit test-integration lint
 
 all:
 
@@ -14,3 +14,15 @@ version:
 
 clean:
 	-rm *~
+
+test:
+	cd $(CURDIR) && python3 -m pytest tests/ -p no:cacheprovider
+
+test-unit:
+	cd $(CURDIR) && python3 -m pytest tests/ -m unit -p no:cacheprovider
+
+test-integration:
+	cd $(CURDIR) && python3 -m pytest tests/ -m integration -p no:cacheprovider
+
+lint:
+	cd $(CURDIR)/src && python3 -m ruff check .
