@@ -274,7 +274,7 @@ function getrandomfortune($dsn=null)
   $pdo = \bbsengine6\database\connect($dsn);
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
-  $fortuneid = $stmt->fetch();
+  $fortuneid = $stmt->fetchColumn();
   return getfortune($fortuneid);
 }
 
@@ -421,7 +421,7 @@ function getsmarty($options=null)
   $currentmoniker = member\lib\getcurrentmoniker();
   $currentmemberid = member\lib\getcurrentid();
   $currentmember = member\lib\getbymoniker($currentmoniker);
-  
+
 /*
   if ($currentmemberid > 0)
   {
@@ -433,7 +433,7 @@ function getsmarty($options=null)
     $currentmember["id"] = null;
   }
 */
-  $flags = member\lib\getflags($currentmemberid);
+  $flags = $currentmoniker !== null ? member\lib\getflags($currentmoniker) : [];
   $currentmember["flags"] = $flags;
 
 //  \bbsengine6\logentry("engine.getsmarty.100: currentmember=".var_export($currentmember, true));
@@ -1214,7 +1214,7 @@ function handleform($form, $callback)
 // now done in getquickform()
 //    $form->addRecursiveFilter("trim");
     $values = $form->getValue();
-    util\logentry("handleform.120: values=".var_export($values, true));
+    util\logentry("handleform.120: values=".var_export(\bbsengine6\util\redact_secrets($values), true));
     if (is_callable($callback) === true)
     {
       util\logentry("handleform.150: calling form callback with form values");
@@ -1336,12 +1336,11 @@ function handleform($form, $callback)
    {
     case "add":
     {
-     return true;
-
      if ($auth === true)
      {
       return true;
      }
+     return false;
     }
     case "view":
     {

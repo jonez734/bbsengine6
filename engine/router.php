@@ -213,9 +213,11 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   if (class_exists('Parsedown', false)) {
     $p = new Parsedown();
     $p->setBreaksEnabled(true);
+    $p->setSafeMode(true);
+    $p->setMarkupEscaped(true);
     $html = $p->text($content);
   } else {
-    $html = $content;
+    $html = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
   }
 
   $title = isset($metadata['title']) ? htmlspecialchars($metadata['title']) : basename($filepath, '.md');

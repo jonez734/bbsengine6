@@ -278,7 +278,7 @@ function getRow(\PDO $dbh, string $sql, array $params = []): array|false
   }
 }
 
-function autoExecute(\PDO $dbh, string $table, array $data, int $mode, ?string $where = null): bool
+function autoExecute(\PDO $dbh, string $table, array $data, int $mode, ?string $where = null, array $whereParams = []): bool
 {
   if (!validateTableName($table)) {
     \bbsengine6\util\echo_traceback("database.autoExecute.100: Invalid table name: " . $table);
@@ -287,39 +287,55 @@ function autoExecute(\PDO $dbh, string $table, array $data, int $mode, ?string $
 
   $quotedTable = quoteIdentifier($table);
 
+  if ($mode === \bbsengine6\database\MDB2_AUTOQUERY_UPDATE || $mode === \bbsengine6\database\MDB2_AUTOQUERY_DELETE) {
+    if (!is_string($where) || trim($where) === "") {
+      \bbsengine6\util\logentry("database.autoExecute.110: empty WHERE clause rejected for mode=$mode");
+      return false;
+    }
+    if (strpos($where, '?') === false && empty($whereParams)) {
+      \bbsengine6\util\logentry("database.autoExecute.120: WHERE clause has no placeholders rejected for mode=$mode");
+      return false;
+    }
+  }
+
   try {
     if ($mode === \bbsengine6\database\MDB2_AUTOQUERY_INSERT) {
       $cols = [];
       $placeholders = [];
+      $values = [];
       foreach ($data as $col => $val) {
         if (!validateColumnName($col)) {
           continue;
         }
         $cols[] = quoteIdentifier($col);
         $placeholders[] = "?";
+        $values[] = $val;
       }
       $sql = "INSERT INTO $quotedTable (" . implode(", ", $cols) . ") VALUES (" . implode(", ", $placeholders) . ")";
       $stmt = $dbh->prepare($sql);
-      return $stmt->execute(array_values($data));
+      return $stmt->execute($values);
     }
 
     if ($mode === \bbsengine6\database\MDB2_AUTOQUERY_UPDATE) {
       $set = [];
+      $values = [];
       foreach ($data as $col => $val) {
         if (!validateColumnName($col)) {
           continue;
         }
         $set[] = quoteIdentifier($col) . " = ?";
+        $values[] = $val;
       }
+      $values = array_merge($values, array_values($whereParams));
       $sql = "UPDATE $quotedTable SET " . implode(", ", $set) . " WHERE " . $where;
       $stmt = $dbh->prepare($sql);
-      return $stmt->execute(array_values($data));
+      return $stmt->execute($values);
     }
 
     if ($mode === \bbsengine6\database\MDB2_AUTOQUERY_DELETE) {
       $sql = "DELETE FROM $quotedTable WHERE " . $where;
       $stmt = $dbh->prepare($sql);
-      return $stmt->execute();
+      return $stmt->execute(array_values($whereParams));
     }
 
     return false;

@@ -18,7 +18,7 @@ use bbsengine6\member\lib as memberlib;
 
 function login_checklogin(array $args): bool
 {
-    logentry("checklogin.50: args=" . var_export($args, true));
+    logentry("checklogin.50: args=" . var_export(\bbsengine6\util\redact_secrets($args), true));
 
     $login = $args["login"];
     $password = $args["password"];
@@ -64,7 +64,7 @@ function login_validate(array $values): bool
     $login = $values["login"] ?? null;
     $password = $values["password"] ?? null;
 
-    logentry("login.100: login=" . var_export($login, true) . " password=" . var_export($password, true));
+    logentry("login.100: login=" . var_export($login, true) . " password=***");
     
     $sql = "select * from engine.member where (loginid=:login or moniker=:login or email=:login) and password=crypt(:password, password)";
     $dat = ["login" => $login, "password" => $password];

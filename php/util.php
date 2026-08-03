@@ -281,7 +281,9 @@ namespace bbsengine6\util
     if ($showToUser) {
       echo "<pre style='background:#fee;border:1px solid red;padding:10px;'>Error: " . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . "\n" . htmlspecialchars($formatted, ENT_QUOTES, 'UTF-8') . "</pre>";
     } else {
-      echo "Error: " . $message;
+      $safe = preg_replace('/SQLSTATE\[[A-Z0-9]+\]:[^\n]*/', 'SQLSTATE[xxxxx]: [details suppressed]', $message);
+      $safe = preg_replace('/PDOException[^\n]*/', '[PDOException suppressed]', $safe);
+      echo "Error: " . htmlspecialchars($safe, ENT_QUOTES, 'UTF-8');
     }
   }
 
@@ -572,13 +574,44 @@ function safe_path_web(array $components, array $opts = [])
 }
 
 /**
- * Append paths to the PHP include_path if they are not already present.
- *
- * @param array $paths  Array of directory paths to add.
- * @return void
- * @since 20251223
- */
-function add_include_paths(array $paths): void
+   * Recursively redact secret-looking values from an array so it is safe
+   * to pass through var_export / logentry / error_log.
+   *
+   * Replaces any key matching /password|passwd|repeat|secret|token|api[_-]?key|credential|hash/i
+   * with the string '***'. Walks nested arrays; leaves non-array scalars untouched.
+   *
+   * @param mixed $value
+   * @return mixed
+   * @since 20260802
+   */
+  function redact_secrets($value)
+  {
+    if (!is_array($value)) {
+      return $value;
+    }
+
+    $pattern = '/(password|passwd|repeat|secret|token|api[_-]?key|credential|hash)/i';
+    $out = [];
+    foreach ($value as $k => $v) {
+      if (is_string($k) && preg_match($pattern, $k) === 1) {
+        $out[$k] = '***';
+      } elseif (is_array($v)) {
+        $out[$k] = redact_secrets($v);
+      } else {
+        $out[$k] = $v;
+      }
+    }
+    return $out;
+  }
+
+  /**
+   * Append paths to the PHP include_path if they are not already present.
+   *
+   * @param array $paths  Array of directory paths to add.
+   * @return void
+   * @since 20251223
+   */
+  function add_include_paths(array $paths): void
 {
     $separator = PATH_SEPARATOR;
 

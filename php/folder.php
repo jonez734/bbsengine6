@@ -136,7 +136,10 @@ function getteospath(): string
 function isFolder($uri)
 {
     $teospath = getteospath();
-    $filepath = $teospath . $uri;
+    $filepath = \bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath, 'must_exist' => false]);
+    if ($filepath === false) {
+        return false;
+    }
     return is_dir($filepath);
 }
 
@@ -167,8 +170,8 @@ function isFolderVisible(string $uri): bool
 
     // Fallback: check .folder.json in filesystem
     $teospath = getteospath();
-    $folderJsonPath = $teospath . $uri . '/.folder.json';
-    if (file_exists($folderJsonPath)) {
+    $folderJsonPath = \bbsengine6\util\safe_path_web([$uri, '.folder.json'], ['base_dir' => $teospath]);
+    if ($folderJsonPath !== false && file_exists($folderJsonPath)) {
         $json = json_decode(file_get_contents($folderJsonPath), true);
         if (isset($json['visible'])) {
             return (bool) $json['visible'];
@@ -277,9 +280,8 @@ function getDirectoryTitle(string $uri): string
 function display($uri)
 {
     $teospath = getteospath();
-    $filepath = $teospath . $uri;
-
-    if (!is_dir($filepath)) {
+    $filepath = \bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath, 'must_exist' => false]);
+    if ($filepath === false || !is_dir($filepath)) {
         return null;
     }
 

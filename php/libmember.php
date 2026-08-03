@@ -143,7 +143,7 @@ SQL;
         \bbsengine6\util\logentry("query for flag {$name} for moniker {$moniker} failed.");
         return null;
       }
-      $value = $stmt->fetchColumn()["checkflag"];
+      $value = $stmt->fetchColumn();
       if ($value === null) // invalid flag
       {
         \bbsengine6\util\logentry("invalid flag {$name} for moniker {$moniker} requested");

@@ -32,12 +32,22 @@ function getDSN(): string
 function start()
 {
 //  logentry("startsession.50: expire=".var_export(SESSIONCOOKIEEXPIRE, true)." domain=".var_export(SESSIONCOOKIEDOMAIN, true));
-  
+
   // Use defined constants with fallback defaults if not set by config
   $expire = defined('\config\SESSIONCOOKIEEXPIRE') ? \config\SESSIONCOOKIEEXPIRE : (12*60*60);
   $domain = defined('\config\SESSIONCOOKIEDOMAIN') ? \config\SESSIONCOOKIEDOMAIN : '';
-  
-  session_set_cookie_params($expire, "/", $domain, false, true);
+
+  $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+         || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+
+  session_set_cookie_params([
+    'lifetime' => $expire,
+    'path'     => "/",
+    'domain'   => $domain,
+    'secure'   => $secure,
+    'httponly' => true,
+    'samesite' => 'Lax',
+  ]);
   session_set_save_handler(
     "\\bbsengine6\\session\\open",
     "\\bbsengine6\\session\\close",
@@ -56,8 +66,14 @@ function start()
   $sessionname = defined('\config\SESSIONNAME') ? \config\SESSIONNAME : 'PHPSESSID';
   session_name($sessionname);
   session_start();
-  $lifetime = 0;
-  setcookie(session_name(),session_id(),time()+$lifetime, false, true);
+  setcookie(session_name(), session_id(), [
+    'expires'  => time() + $expire,
+    'path'     => "/",
+    'domain'   => $domain,
+    'secure'   => $secure,
+    'httponly' => true,
+    'samesite' => 'Lax',
+  ]);
 
   \bbsengine6\util\logentry("completed session start");
 
@@ -158,14 +174,29 @@ function write($sessionid, $data)
     $dbh = \bbsengine6\database\connect(getDSN());
 
     $moniker = \bbsengine6\member\lib\getcurrentmoniker();
-    
+
     $validsession = validate($sessionid);
     \bbsengine6\util\logentry("bbsengine6.session.write.120: validsession=".var_export($validsession, true));
 
     if ($validsession === false)
     {
       \bbsengine6\util\logentry("bbsengine6.session.write.130: validsession is false");
-      $sessionid = session_create_id();
+      $newsid = session_create_id();
+      session_id($newsid);
+      $sessionid = $newsid;
+
+      $expire = defined('\config\SESSIONCOOKIEEXPIRE') ? \config\SESSIONCOOKIEEXPIRE : (12*60*60);
+      $domain = defined('\config\SESSIONCOOKIEDOMAIN') ? \config\SESSIONCOOKIEDOMAIN : '';
+      $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+             || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https');
+      setcookie(session_name(), $sessionid, [
+        'expires'  => time() + $expire,
+        'path'     => "/",
+        'domain'   => $domain,
+        'secure'   => $secure,
+        'httponly' => true,
+        'samesite' => 'Lax',
+      ]);
       \bbsengine6\util\logentry("bbsengine6.session.write.140: new sessionid=$sessionid");
       insert($sessionid, $_SESSION);
     }
@@ -176,9 +207,9 @@ function write($sessionid, $data)
       $session = [];
       $session["data"] = \bbsengine6\util\encodejson($_SESSION);
       $session["moniker"] = $moniker;
-      $session["dateupdated"] = "now()";
-      $session["lastactivity"] = "now()";
-      
+      $session["dateupdated"] = date("Y-m-d H:i:s");
+      $session["lastactivity"] = date("Y-m-d H:i:s");
+
       $result = \bbsengine6\database\update($dbh, "engine.__session", $sessionid, $session);
       if ($result === false) {
         \bbsengine6\util\logentry("bbsengine6.session.write.160: update failed");
@@ -242,7 +273,11 @@ function garbagecollect($maxlifetime)
 
 function validate($sessionid)
 {
-  \bbsengine6\util\logentry("bbsengine6.session.validate.100: sessionid=".var_export($sessionid, true));
+  if (!is_string($sessionid) || !preg_match('/^[A-Za-z0-9,\-]{1,128}$/', $sessionid)) {
+    \bbsengine6\util\logentry("bbsengine6.session.validate.100: rejecting malformed sessionid");
+    return false;
+  }
+  \bbsengine6\util\logentry("bbsengine6.session.validate.110: sessionid=".var_export($sessionid, true));
 
   try {
     $dbh = \bbsengine6\database\connect(getDSN());
@@ -283,18 +318,18 @@ function insert($sessionid, $data=[])
       $session["id"] = $sessionid;
       $session["data"] = \bbsengine6\util\encodejson($data);
       $cookieExpire = defined('\config\SESSIONCOOKIEEXPIRE') ? \config\SESSIONCOOKIEEXPIRE : (12*60*60);
-      $session["expiry"] = \date(DATE_RFC822, time() + $cookieExpire);
+      $session["expiry"] = \date("Y-m-d H:i:s", time() + $cookieExpire);
       $session["ipaddress"] = \bbsengine6\util\getremoteaddr() ?? '';
       $session["useragent"] = isset($_SERVER["HTTP_USER_AGENT"]) ? $_SERVER["HTTP_USER_AGENT"] : "";
       $session["moniker"] = \bbsengine6\member\lib\getcurrentmoniker();
-      $session["datecreated"] = "now()";
+      $session["datecreated"] = date("Y-m-d H:i:s");
 
       $result = \bbsengine6\database\insert($dbh, "engine.__session", $session, false, "id", false, false);
       if ($result === false) {
         \bbsengine6\util\logentry("bbsengine6.session.insert.200: insert failed");
         return false;
       }
-      
+
       return true;
     } catch (\Throwable $e) {
       \bbsengine6\util\echo_traceback("bbsengine6.session.insert.300: " . $e->getMessage());

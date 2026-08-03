@@ -18,11 +18,27 @@ use bbsengine6\member\lib as memberlib;
 
 function logout_run(array $args = []): void
 {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST')
+    {
+        header('Allow: POST');
+        http_response_code(405);
+        echo 'Method Not Allowed';
+        return;
+    }
+
     \bbsengine6\session\start();
-    
+
+    if (!\bbsengine6\util\csrfCheckRequest())
+    {
+        logentry("logout: CSRF validation failed");
+        http_response_code(403);
+        echo 'Forbidden';
+        return;
+    }
+
     $moniker = $_SESSION["currentmoniker"] ?? null;
     $memberid = $_SESSION["currentmemberid"] ?? null;
-    
+
     logentry("logout: OK for moniker " . var_export($moniker, true));
 
     if ($memberid !== null)
@@ -33,15 +49,23 @@ function logout_run(array $args = []): void
     \bbsengine6\util\actionlog(action: "logout");
 
     $name = session_name();
-    setcookie($name, "", 1);
-    setcookie($name, false);
+    $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+    $cookieParams = session_get_cookie_params();
+    setcookie($name, '', [
+        'expires' => time() - 3600,
+        'path' => $cookieParams['path'] ?? '/',
+        'domain' => $cookieParams['domain'] ?? '',
+        'secure' => $secure,
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
     unset($_COOKIE[$name]);
 
-    session_regenerate_id(true);
+    $_SESSION = [];
 
-    $_SESSION["currentid"] = null;
-    $_SESSION["currentmoniker"] = null;
-    $_SESSION["currentmemberid"] = null;
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_destroy();
+    }
 
     \bbsengine6\page\redirect("OK -- logged out");
 }
