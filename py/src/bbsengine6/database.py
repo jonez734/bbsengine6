@@ -345,11 +345,11 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
 
     if args is None:
         defaults = {
-            "dbname": None,
-            "user": None,
-            "password": None,
-            "host": None,
-            "port": 5432,
+            "dbname": os.environ.get("BBSENGINE6_DBNAME", "zoid6"),
+            "user": os.environ.get("BBSENGINE6_DBUSER"),
+            "password": os.environ.get("BBSENGINE6_DBPASSWORD"),
+            "host": os.environ.get("BBSENGINE6_DBHOST", "localhost"),
+            "port": int(os.environ.get("BBSENGINE6_DBPORT", "5432")),
             "autocommit": False,
         }
         if not any(kwargs.get(k) for k in ("dbname", "user", "password", "host")):
@@ -360,21 +360,36 @@ def make_dsn(args: Any, **kwargs: Any) -> str:
     else:
         try:
             defaults = {
-                "dbname": getattr(args, "databasename", None),
-                "user": getattr(args, "databaseuser", None),
-                "password": getattr(args, "databasepassword", None),
-                "host": getattr(args, "databasehost", None),
-                "port": getattr(args, "databaseport", None),
+                "dbname": (
+                    getattr(args, "databasename", None)
+                    or os.environ.get("BBSENGINE6_DBNAME", "zoid6")
+                ),
+                "user": (
+                    getattr(args, "databaseuser", None)
+                    or os.environ.get("BBSENGINE6_DBUSER")
+                ),
+                "password": (
+                    getattr(args, "databasepassword", None)
+                    or os.environ.get("BBSENGINE6_DBPASSWORD")
+                ),
+                "host": (
+                    getattr(args, "databasehost", None)
+                    or os.environ.get("BBSENGINE6_DBHOST", "localhost")
+                ),
+                "port": (
+                    getattr(args, "databaseport", None)
+                    or int(os.environ.get("BBSENGINE6_DBPORT", "5432"))
+                ),
                 "autocommit": False,
             }
         except AttributeError:
             io.echo_traceback("bbsengine6.database.make_dsn.100:")
             defaults = {
-                "dbname": None,
-                "user": None,
-                "password": None,
-                "host": None,
-                "port": None,
+                "dbname": os.environ.get("BBSENGINE6_DBNAME", "zoid6"),
+                "user": os.environ.get("BBSENGINE6_DBUSER"),
+                "password": os.environ.get("BBSENGINE6_DBPASSWORD"),
+                "host": os.environ.get("BBSENGINE6_DBHOST", "localhost"),
+                "port": int(os.environ.get("BBSENGINE6_DBPORT", "5432")),
                 "autocommit": False,
             }
 
@@ -405,6 +420,10 @@ def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
       ValueError: If DSN is empty or invalid (no connection parameters)
     """
     databasename = kwargs.pop("database", kwargs.pop("dbname", None))
+    if databasename is None and args is not None:
+        databasename = getattr(args, "databasename", None) or os.environ.get(
+            "BBSENGINE6_DBNAME", "zoid6"
+        )
 
     if databasename is not None:
         dsn = make_dsn(args, dbname=databasename, **kwargs)
