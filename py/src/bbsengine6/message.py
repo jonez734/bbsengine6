@@ -88,7 +88,7 @@ def disable() -> None:
 
 
 def _default_db() -> str:
-    return os.environ.get("BBSENGINE6_DBNAME", "bbsengine6")
+    return os.environ.get("BBSENGINE6_DBNAME", "zoid6")
 
 
 def _resolve_db(database: Optional[str] = None, args: Any = None) -> str:

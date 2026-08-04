@@ -111,7 +111,7 @@ class TestResolveDbFallsBackToArgs:
         from bbsengine6 import message
 
         monkeypatch.delenv("BBSENGINE6_DBNAME", raising=False)
-        assert message._resolve_db(None, None) == "bbsengine6"
+        assert message._resolve_db(None, None) == "zoid6"
 
     def test_falls_back_to_env_var_when_args_has_no_db(self, monkeypatch):
         from bbsengine6 import message
