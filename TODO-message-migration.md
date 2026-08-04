@@ -154,12 +154,25 @@ Remove the try-message/fall-back-to-notify pattern. **STATUS: COMPLETE**
   - [ ] `test_notify_message_demo*.py` → drop in Phase 7
   - [ ] `test_notify_message_f2_*.py` → drop in Phase 7
 - [x] **Existing message.py tests remain** — `test_message_lib.py`,
-      `test_message_persistence.py`, `test_message_delivery.py`,
       `test_message_channel.py` are the source of truth going forward.
+- [x] **`test_message_phase1_gaps.py`** — covers all 10 Phase 1
+      gap-fills (`remove_from_group`, `get_blocked`, `get_urgent`,
+      `expunge`, `get_queue`, `resolve_recipients`, `set_rate_limit`,
+      `register_type`, `get_types`, `@group`/`@everyone` expansion
+      in `store_message`). 23 tests.
+- [x] **`test_message_local_cache.py`** — covers the local unread
+      count cache used by `bed.api.message.MessageService` and
+      `bed.client.messageservice`.
+- [x] **`test_message_send.py`** (added in Phase 10) — covers the
+      `send()` shim and `register_type_compat()` adapter that
+      replace the deleted `bbsengine6.message_delivery` public API
+      for downstream consumers. 31 tests, all passing.
 
 **Note:** The notify test files were deleted in Phase 7 along with the
-notify package. Only `test_message_lib.py`, `test_message_channel.py`
-remain from the message-side tests, and these are the source of truth.
+notify package. The remaining message-side test files
+(`test_message_lib.py`, `test_message_channel.py`,
+`test_message_local_cache.py`, `test_message_phase1_gaps.py`,
+`test_message_send.py`) are the source of truth going forward.
 
 ## Phase 6: Data migration (optional)
 
@@ -207,8 +220,12 @@ remain from the message-side tests, and these are the source of truth.
 - **TUI** (`notify/tui.py`, `notify/main.py`) — if a message TUI is needed,
   write it against message.py from scratch.
 - **`bed` involvement** — `bed` is a WebSocket daemon with no terminal. It
-  does not touch notifications today. The migration is a data-layer swap in
-  `getch.py` / `bottombar.py` / `member/lib.py`. `bed` stays untouched.
+  does not directly use the notify system, but the router it loads
+  (e.g. `zoid6.api.handler.MessageRouter`) may dynamically load game
+  packages (e.g. `casino.api.handler`) that historically imported
+  `bbsengine6.notify` / `bbsengine6.message_delivery`. Phase 10 documents
+  the shim functions added to `bbsengine6.message` to keep those
+  consumers working after Phase 7 deleted the subpackage.
 
 ## Phase 8: Channel/Sub system fixes
 
@@ -294,6 +311,17 @@ addressed:
       priority mapping, per-recipient failure isolation, and a
       regression test that the legacy notify module is never called.
 
+      *Footnote (2026-08-04, Phase 10):* At Phase 9 close-out this
+      was the last known `bbsengine6.notify` / `message_delivery`
+  call site. A 2026-08-04 audit found two further call sites in
+  the `casino` package —
+  `casino/src/casino/api/handler.py:15` (an unconditional top-level
+  `from bbsengine6.message_delivery import ...`) and
+  `casino/src/casino/services/bank.py:11-16, 285` (wrapped in
+  `try/except ImportError`, so they degraded silently to
+  `HAS_NOTIFY = False` once the subpackage was deleted). Both
+  are addressed in Phase 10.
+
 - [x] **Mark `TODO-notify.md` as superseded** — added a banner
       noting the work item is moot (Phase 7 deleted the underlying
       tables and the `bbsengine6/notify/` package).
@@ -306,6 +334,169 @@ addressed:
       message_delivery packages deleted). The canonical `message.*`
       keys remain.
 
+## Phase 10: Bed/zoid6 startup fallout (2026-08-04)
+
+Status: COMPLETE.
+
+After Phase 7 deleted `bbsengine6.notify` and
+`bbsengine6.message_delivery`, the zoid6 daemon (which uses
+`bed.json` to enable the casino service at
+`zoid6/src/zoid6/data/bed.json:29-54`) aborts startup with::
+
+    ModuleNotFoundError: No module named 'bbsengine6.message_delivery'
+    E: MessageRouter: failed to import casino: No module named 'bbsengine6.message_delivery'
+    BED error: required service 'casino' failed to import (casino.api.handler):
+    No module named 'bbsengine6.message_delivery'
+
+The error is a casualty of the migration, not a bug in the message
+system. The zoid6 `MessageRouter` (in `zoid6/src/zoid6/api/handler.py`)
+calls `bbsengine6.module.load(...)` for every enabled service in
+`bed.json`, which imports `casino.api.handler`. That module's
+top-level `from bbsengine6.message_delivery import ...` blows up
+because Phase 7 deleted the subpackage.
+
+### Resolution: shim functions in `bbsengine6.message`
+
+Two new public functions were added to `py/src/bbsengine6/message.py`
+so consumers that previously imported from the deleted subpackage
+can route to the new API without re-introducing the old code paths
+or re-creating the `message_delivery/` package.
+
+- **`send(notification_type, recipients, template, template_vars=None,
+  sender_moniker=None, data=None, urgency=None, should_persist=True,
+  args=None, **kwargs) -> int`** — thin wrapper over `store_message`
+  that accepts the legacy `message_delivery.send` kwargs. Behavior:
+
+  * `notification_type` is used verbatim as the `channel` of the
+    stored message (the `__message_type.type_name` and
+    `__message.channel` columns are the same string in the new
+    schema; see `sql/migrate_notify_to_message.sql`). No
+    `notify:` prefix is added — the new world treats the type
+    name as the channel directly.
+  * `template` is rendered via the existing
+    `bbsengine6.message.render_template` helper to produce the
+    stored `content`.
+  * `urgency` is coerced from a `MessageUrgency` enum, a string
+    ("ROUTINE" / "IMPORTANT" / "URGENT" / "CRITICAL"), or `None` /
+    unknown to the string form `store_message` expects, via the
+    private `_coerce_urgency` helper (defaults to "ROUTINE").
+  * `args.databasename` (or `args.database` if set) is used to
+    resolve the target DB via the private `_db_from_args` helper.
+  * Returns the new `engine.__message.id` (an `int`), or `0` if
+    the message system is disabled, the sender is rate-limited,
+    or no recipient survived blocking/expansion. The old
+    `message_delivery.send` returned a `Notification` object —
+    none of the surviving call sites used the return value.
+  * `should_persist` and any unknown `**kwargs` (e.g. legacy
+    `pool` / `conn`) are accepted for API parity with the old
+    signature but ignored.
+
+- **`register_type_compat(type_name, urgency=None,
+  max_per_user_per_hour=0, persist_by_default=True, args=None,
+  **kwargs) -> bool`** — adapter that accepts the legacy
+  `message_delivery.register_type` positional signature
+  `(type_name, urgency, max_per_user_per_hour, persist_by_default, args)`
+  and forwards to the existing `bbsengine6.message.register_type`.
+  It also accepts the new-schema kwargs (`description`,
+  `rate_limit_per_hour`, `requires_approval`, `database`) for
+  callers that already migrated. Column mapping:
+
+  * `type_name` → `type_name` (unchanged)
+  * `urgency` (MessageUrgency enum or str) → `description` —
+    serialized as `"default_urgency=<X>"`. The new schema has no
+    `default_urgency` column; per-message urgency is captured at
+    send time.
+  * `max_per_user_per_hour` → `rate_limit_per_hour`
+  * `persist_by_default` → ignored (the new system always
+    persists; per-message `should_persist` is also not honored)
+  * `args` → `database` via `_db_from_args`
+  * New-schema kwargs (when supplied) win over the legacy
+    positional args.
+
+### Call sites updated
+
+- **`casino/src/casino/api/handler.py:15-16`** — replaced
+  `from bbsengine6.message_delivery import send as notify_send,
+  NotificationUrgency` with::
+
+      from bbsengine6.message import MessageUrgency as NotificationUrgency
+      from bbsengine6.message import send as notify_send
+
+  The local `NotificationUrgency` alias keeps the call site at
+  line 388 (`urgency=NotificationUrgency.IMPORTANT`) unchanged.
+
+- **`casino/src/casino/services/bank.py:9-10, 247-275`** — same
+  import swap. Dropped the `try/except ImportError` /
+  `HAS_NOTIFY` / `if NotificationUrgency else None` scaffolding
+  (the import is now guaranteed to succeed and `MessageUrgency`
+  is a real enum). `_ensure_house_notification_type` (line 274)
+  now calls `bbsengine6.message.register_type_compat(...)` (the
+  inner import is on line 273) instead of the deleted
+  `bbsengine6.message_delivery.register_type`.
+
+### Tests
+
+`py/tests/test_message_send.py` (new, 31 tests) covers:
+
+- module presence of `send`, `register_type_compat`, and the
+  private helpers
+- `_coerce_urgency`: `None`, empty string, `MessageUrgency` enum
+  members (all four), string passthrough, unknown string falls
+  back to "ROUTINE"
+- `_db_from_args`: `None`, `args.database` only, legacy
+  `args.databasename`, `database` wins over `databasename`, empty
+  `database` falls back to `databasename`, no attributes → `None`
+- `send()` input validation: empty `notification_type`,
+  empty/non-list `recipients`, non-string `template` all raise
+  `ValueError`
+- `send()` honors the `_message_enabled` flag (returns 0 when
+  disabled)
+- `send()` routes to `store_message` with the legacy kwargs
+  (`notification_type` → `channel`, `recipients` →
+  `recipient_monikers`, template rendered, urgency coerced,
+  database from `args`, `data` passthrough)
+- `send()` template rendering with and without `template_vars`
+- `send()` urgency coercion: enum → string, string passthrough,
+  `None` → "ROUTINE"
+- `send()` `should_persist` kwarg accepted but not forwarded
+- `send()` unknown `**kwargs` swallowed (forward-compat)
+- `register_type_compat()` honors the `_message_enabled` flag
+- `register_type_compat()` legacy positional signature routes to
+  `register_type` with the documented column mapping
+- `register_type_compat()` new-schema kwargs (`description`,
+  `rate_limit_per_hour`, `requires_approval`, `database`) work
+  for callers that already migrated
+- `register_type_compat()` without `urgency` produces an empty
+  `description`
+
+### Verification
+
+- `python -c "import casino.api.handler"` — succeeds (was the
+  original failure).
+- `python -c "import casino.services.bank"` — succeeds.
+- `python -c "import zoid6.api.handler"` — succeeds.
+- `python -c "import bed; import bed.api.message; import bed.api.auth"`
+  — succeeds.
+- `MessageRouter(args).register_all(server)` with a mock server
+  registers casino alongside the other zoid6 services.
+- 137 message tests pass (133 + 4 pre-existing skips).
+- All 31 new `test_message_send.py` tests pass.
+- The 5 pre-existing zoid6 router test failures are unrelated
+  (they test error-handling paths with simulated missing modules,
+  verified via `git stash`).
+
+### Why shims, not a re-export shim package
+
+A `message_delivery/__init__.py` that re-exports from `bbsengine6.message`
+would have been the smallest possible change, but it would
+re-introduce the "two parallel systems" problem Phase 7 explicitly
+resolved (two separate DB tables, two `register_type` definitions,
+two enums). The shim approach keeps `bbsengine6.message` as the
+single source of truth and makes the legacy call sites call
+directly into the new code path. The shims are documented in
+`py/src/bbsengine6/message.py` with a clear note that they exist
+solely to bridge the deletion of the subpackage.
+
 ## Dependencies
 
 - Phase 1 must complete before Phase 3 (consumers need the new API).
@@ -317,3 +508,7 @@ addressed:
 - Phase 8 (channel/sub quality) is independent of the migration phases.
 - Phase 9 (close-out) depends on Phases 1-8 being complete.
 - Phase 8 is independent and addresses channel/sub system quality.
+- Phase 10 (bed/zoid6 fallout) is independent of the migration
+  phases and is itself a follow-up to Phase 7: it documents the
+  shims that keep downstream game packages (casino, etc.)
+  importable after Phase 7 deleted `bbsengine6.message_delivery`.

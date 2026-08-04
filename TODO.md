@@ -434,6 +434,15 @@ Keep existing `broadcast()` and path-based messaging for backward compatibility.
 > is not functionally broken, but the Phase 1 checklist is
 > inaccurate. Either implement the gaps or strike the items
 > from the checklist before the next migration planning pass.
+>
+> **STATUS (2026-08-04): Phase 10 added. The 10-item Phase 1
+> gap-fill checklist in `TODO-message-migration.md` is now
+> accurate (all items implemented; see `py/tests/test_message_phase1_gaps.py`).
+> Phase 10 added `bbsengine6.message.send()` and
+> `bbsengine6.message.register_type_compat()` shims (see
+> `TODO-message-migration.md` Phase 10) so the zoid6 → casino →
+> `message_delivery` import chain does not break bed startup
+> after Phase 7 deleted the subpackage.**
 
 When message system is complete, it replaces notify entirely:
 

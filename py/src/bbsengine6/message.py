@@ -1596,6 +1596,193 @@ def register_type(
             return True
 
 
+def _coerce_urgency(urgency: Any) -> str:
+    """Coerce a ``MessageUrgency`` enum (or its string value) to the
+    string form accepted by :func:`store_message`.
+
+    Accepts a ``MessageUrgency`` member, the literal string ("ROUTINE",
+    "IMPORTANT", "URGENT", "CRITICAL"), or ``None``/empty. Falls back
+    to "ROUTINE" for unknown values.
+    """
+    if urgency is None or urgency == "":
+        return "ROUTINE"
+    if isinstance(urgency, MessageUrgency):
+        return urgency.value
+    s = str(urgency)
+    valid = {m.value for m in MessageUrgency}
+    return s if s in valid else "ROUTINE"
+
+
+def _db_from_args(args: Any) -> Optional[str]:
+    """Extract the database name from a bed-style ``args`` namespace.
+
+    Returns the explicit ``database`` attribute if set, else
+    ``databasename`` (the legacy attribute used by bank/auth/bbs
+    services), else ``None`` so the caller falls back to env/default.
+    """
+    if args is None:
+        return None
+    db = getattr(args, "database", None)
+    if db:
+        return db
+    return getattr(args, "databasename", None)
+
+
+def send(
+    notification_type: str,
+    recipients: List[str],
+    template: str,
+    template_vars: Optional[Dict[str, Any]] = None,
+    sender_moniker: Optional[str] = None,
+    data: Optional[Dict[str, Any]] = None,
+    urgency: Any = None,
+    should_persist: bool = True,
+    args: Optional[Any] = None,
+    **kwargs: Any,
+) -> int:
+    """Send a notification through the unified message system.
+
+    Thin shim over :func:`store_message` that accepts the legacy
+    ``message_delivery.send`` kwarg names so existing call sites
+    (``casino.api.handler`` ``notify_send`` and
+    ``casino.services.bank`` ``_send_house_alert``) can migrate
+    without rewrites.
+
+    The new system has no separate ``notification_type`` column: the
+    type name IS the channel on ``engine.__message`` (the
+    ``__message_type`` table's ``type_name`` matches the channel).
+    Rate limiting is keyed on this same string in
+    ``__message_rate_limit``.
+
+    Args:
+        notification_type: Type/channel name (e.g. ``"casino_kick"``,
+            ``"casino.bankalert"``). Becomes the ``channel`` of the
+            stored message.
+        recipients: List of recipient monikers. Must be non-empty.
+        template: Template body rendered via :func:`render_template`
+            into the stored ``content``.
+        template_vars: Dict of substitutions for the template.
+        sender_moniker: Sender moniker (``None`` for system).
+        data: Optional JSON payload merged into the stored ``data``
+            column. (No back-compat preservation of ``notification_type``
+            here — the type lives in the channel column.)
+        urgency: A :class:`MessageUrgency` enum member, the literal
+            string, or ``None`` for ROUTINE. Coerced via
+            :func:`_coerce_urgency`.
+        should_persist: Accepted for API parity with the old
+            ``message_delivery.send``; the new system always persists,
+            so this argument is currently ignored.
+        args: bed-style args namespace. ``args.databasename`` or
+            ``args.database`` is used to resolve the target DB.
+        **kwargs: Ignored. Reserved for forward-compat with any future
+            notify-era options (e.g. ``pool``, ``conn``).
+
+    Returns:
+        The new ``engine.__message.id`` (an ``int``), or ``0`` if the
+        message system is disabled, the sender is rate-limited, or no
+        recipient survived blocking/expansion.
+    """
+    if not _message_enabled:
+        return 0
+
+    if not notification_type:
+        raise ValueError("notification_type is required")
+    if not recipients or not isinstance(recipients, list):
+        raise ValueError("recipients must be a non-empty list")
+    if not isinstance(template, str):
+        raise ValueError("template must be a string")
+
+    rendered = render_template(template, template_vars or {})
+    db = _db_from_args(args)
+
+    return store_message(
+        channel=notification_type,
+        sender_moniker=sender_moniker,
+        content=rendered,
+        recipient_monikers=list(recipients),
+        data=data,
+        urgency=_coerce_urgency(urgency),
+        template=template,
+        template_vars=template_vars,
+        database=db,
+    )
+
+
+def register_type_compat(
+    type_name: str,
+    urgency: Any = None,
+    max_per_user_per_hour: int = 0,
+    persist_by_default: bool = True,
+    args: Optional[Any] = None,
+    **kwargs: Any,
+) -> bool:
+    """Adapter that accepts the legacy ``message_delivery.register_type``
+    positional signature and forwards to :func:`register_type`.
+
+    The legacy schema (``engine.__notify_type``) tracked four knobs:
+    ``default_urgency``, ``max_per_user_per_hour``,
+    ``persist_by_default``, and ``dateregistered``. The new schema
+    (``engine.__message_type``) tracks ``description``,
+    ``rate_limit_per_hour``, ``requires_approval``, ``datemodified``.
+
+    Mapping:
+
+    * ``type_name`` -> ``type_name`` (unchanged)
+    * ``urgency`` (MessageUrgency enum or str) -> ``description`` (the
+      new schema has no default_urgency column; the urgency is captured
+      per-message at send time)
+    * ``max_per_user_per_hour`` -> ``rate_limit_per_hour``
+    * ``persist_by_default`` -> ignored (the new system always
+      persists; per-message ``should_persist`` is not honored either —
+      see :func:`send`)
+    * ``args`` -> ``database`` via :func:`_db_from_args`
+    * extra ``kwargs`` are ignored for forward-compat
+
+    Args:
+        type_name: Unique type name (becomes the channel).
+        urgency: Legacy default urgency; serialized into the
+            ``description`` column if ``description`` is not supplied
+            via kwargs.
+        max_per_user_per_hour: Per-sender hourly rate limit; used only
+            if ``rate_limit_per_hour`` is not supplied via kwargs.
+        persist_by_default: Ignored.
+        args: bed-style args namespace.
+        **kwargs: New-schema passthrough. The compat layer honors
+            ``description``, ``rate_limit_per_hour``,
+            ``requires_approval``, and ``database`` when supplied as
+            keyword arguments, so callers that already migrated to
+            the new schema can use the same function. Other kwargs
+            are ignored for forward-compat.
+
+    Returns:
+        ``True`` on success, ``False`` if the message system is
+        disabled.
+    """
+    if not _message_enabled:
+        return False
+
+    if "description" in kwargs:
+        description = kwargs["description"]
+    elif urgency is not None:
+        description = f"default_urgency={_coerce_urgency(urgency)}"
+    else:
+        description = ""
+
+    rate_limit_per_hour = int(
+        kwargs.get("rate_limit_per_hour", max_per_user_per_hour)
+    )
+    requires_approval = bool(kwargs.get("requires_approval", False))
+    database = kwargs.get("database", _db_from_args(args))
+
+    return register_type(
+        type_name=type_name,
+        description=description,
+        rate_limit_per_hour=rate_limit_per_hour,
+        requires_approval=requires_approval,
+        database=database,
+    )
+
+
 def get_types(
     database: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
