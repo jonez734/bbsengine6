@@ -1,11 +1,15 @@
 PROJECT = bbsengine6
 OUTDIR = ../dist/ # /srv/repo/$(PROJECT)/
-VERSION = $(shell date +%Y%m%d%H%M)
+VERSION := $(shell date +%Y%m%d%H%M)
 
-PYTHON = python3
+PYTHON ?= python3
+PIP ?= $(PYTHON) -m pip
 
-.PHONY: build version
-.PHONY: clean build rename-sdist sign release all
+.PHONY: install build version
+.PHONY: clean rename-sdist sign release all install
+
+install: version
+	cd .. && $(PIP) install --no-cache-dir -e .
 
 build: version
 	cd .. && $(PYTHON) -m build --outdir $(OUTDIR)
