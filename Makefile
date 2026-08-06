@@ -8,9 +8,9 @@ export datestamp = $(shell date +%Y%m%d-%H%M)
 export archivename = $(PROJECT)-$(datestamp)
 export PROJECTRELEASEDIR = /srv/repo/$(PROJECT)/
 export PROJECTBUILDDIR = /home/jam/projects/$(PROJECT)/releases/$(archivename)/
-export RSYNC = rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --times --verbose \
+export RSYNC = rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --verbose \
 	--exclude '*~' \
-	--archive --update --backup --recursive \
+	--archive --times --no-group --update --backup --recursive \
 	--human-readable --checksum --rsh=ssh \
 	--delete-after --mkpath \
 	--exclude 'captchas'
