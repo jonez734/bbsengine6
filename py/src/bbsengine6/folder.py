@@ -293,12 +293,11 @@ def delete(args, path: str, **kwargs) -> bool:
         return cur.rowcount > 0
 
     if conn is None:
-        with database.connect(args) as conn:
-            with database.cursor(conn) as cur:
-                result = _work(cur)
-                if commit:
-                    conn.commit()
-                return result
+        with database.connect(args) as conn, database.cursor(conn) as cur:
+            result = _work(cur)
+            if commit:
+                conn.commit()
+            return result
     else:
         with database.cursor(conn) as cur:
             result = _work(cur)
@@ -423,9 +422,8 @@ def noneexist(buf: str, **kwargs: dict) -> bool:
     if pool is None:
         io.echo(f"engine.folder.noneexist.150: {pool=}", level="error")
         return False
-    with database.connect(args, pool=pool) as conn:
-        with database.cursor(conn) as cur:
-            return _work(cur)
+    with database.connect(args, pool=pool) as conn, database.cursor(conn) as cur:
+        return _work(cur)
 
 
 def allexist(buf, **kwargs):
@@ -458,9 +456,8 @@ def allexist(buf, **kwargs):
     if pool is None:
         io.echo(f"engine.folder.allexist.150: {pool=}", level="error")
         return False
-    with database.connect(args, pool=pool) as conn:
-        with database.cursor(conn) as cur:
-            return _work(cur)
+    with database.connect(args, pool=pool) as conn, database.cursor(conn) as cur:
+        return _work(cur)
 
 
 def getchfoldercompleter(word, **kwargs):
@@ -573,9 +570,8 @@ def exists(args, buf: str, **kwargs: dict) -> bool:
     if pool is None:
         io.echo(f"engine.folder.exists.150: {pool=}", level="error")
         return False
-    with database.connect(args, pool=pool) as conn:
-        with database.cursor(conn) as cur:
-            return _work(cur)
+    with database.connect(args, pool=pool) as conn, database.cursor(conn) as cur:
+        return _work(cur)
 
 
 def uriexists(args, buf: str, **kwargs: dict) -> bool:
@@ -610,9 +606,8 @@ def uriexists(args, buf: str, **kwargs: dict) -> bool:
     if pool is None:
         io.echo(f"engine.folder.uriexists.150: {pool=}", level="error")
         return False
-    with database.connect(args, pool=pool) as conn:
-        with database.cursor(conn) as cur:
-            return _work(cur)
+    with database.connect(args, pool=pool) as conn, database.cursor(conn) as cur:
+        return _work(cur)
 
 
 # @since 20240624

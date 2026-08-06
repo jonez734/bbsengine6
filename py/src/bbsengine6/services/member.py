@@ -21,21 +21,20 @@ class MemberService:
         Returns:
             Dict with member profile or None if not found
         """
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        """SELECT moniker, email, credits, tier, attrs, refcode, 
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    """SELECT moniker, email, credits, tier, attrs, refcode, 
                                   parentmoniker, lastlogin, datecreated, tz, ui
                            FROM engine.member 
                            WHERE moniker = :moniker""",
-                        moniker=moniker
-                    )
+                    moniker=moniker
                 )
-                row = cur.fetchone()
-                if row:
-                    return dict(row)
-                return None
+            )
+            row = cur.fetchone()
+            if row:
+                return dict(row)
+            return None
 
     def update_profile(self, moniker: str, attrs: Dict[str, Any]) -> Dict[str, Any]:
         """Update member attributes.
@@ -50,10 +49,9 @@ class MemberService:
         if not member_module.verifyMemberFound(self.args, moniker):
             return {"success": False, "message": "Member not found"}
 
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                member_module.setattrs(self.args, attrs, moniker=moniker, cur=cur)
-                return {"success": True, "message": "Profile updated"}
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            member_module.setattrs(self.args, attrs, moniker=moniker, cur=cur)
+            return {"success": True, "message": "Profile updated"}
 
     def get_tier(self, moniker: str) -> Optional[str]:
         """Get member tier from engine.member view.
@@ -64,16 +62,15 @@ class MemberService:
         Returns:
             Tier string or None if not set
         """
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        "SELECT tier FROM engine.member WHERE moniker = :moniker",
-                        moniker=moniker
-                    )
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    "SELECT tier FROM engine.member WHERE moniker = :moniker",
+                    moniker=moniker
                 )
-                row = cur.fetchone()
-                return row["tier"] if row else None
+            )
+            row = cur.fetchone()
+            return row["tier"] if row else None
 
     def set_tier(self, moniker: str, tier: str) -> bool:
         """Set member tier in attrs.
@@ -88,12 +85,11 @@ class MemberService:
         if not member_module.verifyMemberFound(self.args, moniker):
             return False
 
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                member_module.setattrs(
-                    self.args, {"tier": tier}, moniker=moniker, cur=cur
-                )
-                return True
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            member_module.setattrs(
+                self.args, {"tier": tier}, moniker=moniker, cur=cur
+            )
+            return True
 
     def get_referral_code(self, moniker: str) -> Optional[str]:
         """Get member's referral code.
@@ -104,16 +100,15 @@ class MemberService:
         Returns:
             Referral code or None if not set
         """
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        "SELECT refcode FROM engine.__member WHERE moniker = :moniker",
-                        moniker=moniker
-                    )
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    "SELECT refcode FROM engine.__member WHERE moniker = :moniker",
+                    moniker=moniker
                 )
-                row = cur.fetchone()
-                return row["refcode"] if row else None
+            )
+            row = cur.fetchone()
+            return row["refcode"] if row else None
 
     def get_referrals(self, moniker: str) -> List[Dict[str, Any]]:
         """Get list of members referred by this member.
@@ -126,19 +121,18 @@ class MemberService:
         Returns:
             List of dicts with referred member info
         """
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        """SELECT moniker, email, tier, datecreated as referral_date
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    """SELECT moniker, email, tier, datecreated as referral_date
                            FROM engine.member 
                            WHERE parentmoniker = :moniker
                            ORDER BY datecreated DESC""",
-                        moniker=moniker
-                    )
+                    moniker=moniker
                 )
-                rows = cur.fetchall()
-                return [dict(row) for row in rows]
+            )
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
 
     def use_referral_code(self, moniker: str, code: str) -> Dict[str, Any]:
         """Record referral code usage.

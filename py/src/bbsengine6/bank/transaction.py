@@ -42,17 +42,16 @@ class Transaction:
 
     def get_history(self, moniker: str, limit: int = 50) -> List[Dict[str, Any]]:
         """Get transaction history for an account."""
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    """SELECT t.* FROM bank.__transaction t
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                """SELECT t.* FROM bank.__transaction t
                        JOIN bank.__account a ON a.id = t.accountid
                        WHERE a.moniker = %s
                        ORDER BY t.dateposted DESC
                        LIMIT %s""",
-                    (moniker, limit)
-                )
-                return [self._row_to_dict(row) for row in cur]
+                (moniker, limit)
+            )
+            return [self._row_to_dict(row) for row in cur]
 
     def _row_to_dict(self, row: Dict[str, Any]) -> Dict[str, Any]:
         return {

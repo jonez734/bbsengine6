@@ -263,9 +263,8 @@ def getoid(args: Any, typ: str, cur: Any = None) -> int | None:
 
     try:
         if cur is None:
-            with connect(args) as conn:
-                with cursor(conn=conn) as cur:
-                    return _work(cur)
+            with connect(args) as conn, cursor(conn=conn) as cur:
+                return _work(cur)
         else:
             return _work(cur)
     except Exception as e:
@@ -1560,9 +1559,8 @@ def get_role_privs(
         if pool is None:
             return None
 
-        with connect(args, pool=pool) as conn:
-            with cursor(conn=conn) as cur:
-                return _work(cur)
+        with connect(args, pool=pool) as conn, cursor(conn=conn) as cur:
+            return _work(cur)
     else:
         with cursor(conn=conn) as cur:
             return _work(cur)
@@ -1834,9 +1832,8 @@ def extensionavailable(args: Any, ext: str, **kwargs: Any) -> bool:
     cur = kwargs.get("cur", None)
     if cur is None:
         pool = kwargs.get("pool", None)
-        with connect(args, pool=pool) as conn:
-            with cursor(conn=conn) as cur:
-                return _work(cur)
+        with connect(args, pool=pool) as conn, cursor(conn=conn) as cur:
+            return _work(cur)
     else:
         return _work(cur)
 
@@ -1857,9 +1854,8 @@ def extensioninstalled(args: Any, ext: str, **kwargs: Any) -> bool:
     cur = kwargs.get("cur", None)
     if cur is None:
         pool = kwargs.get("pool", None)
-        with connect(args, pool=pool) as conn:
-            with cursor(conn=conn) as cur:
-                return _work(cur)
+        with connect(args, pool=pool) as conn, cursor(conn=conn) as cur:
+            return _work(cur)
     else:
         return _work(cur)
 
@@ -1887,9 +1883,8 @@ def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
     cur = kwargs.get("cur", None)
     if cur is None:
         pool = kwargs.get("pool", None)
-        with connect(args, pool=pool) as conn:
-            with cursor(conn=conn) as cur:
-                return _work(cur)
+        with connect(args, pool=pool) as conn, cursor(conn=conn) as cur:
+            return _work(cur)
     else:
         return _work(cur)
 

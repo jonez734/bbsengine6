@@ -144,15 +144,14 @@ def updateattributes(
 
     dat = (attributes, blurbid)
 
-    with database.connect(args) as dbh:
-        with database.cursor(dbh) as cur:
-            if mogrify is True:
-                io.echo(
-                    "updateblurbattributes.100: %r"
-                    % (cur.mogrify(sql, dat)),
-                    level="debug",
-                )
-            cur.execute(sql, dat)
+    with database.connect(args) as dbh, database.cursor(dbh) as cur:
+        if mogrify is True:
+            io.echo(
+                "updateblurbattributes.100: %r"
+                % (cur.mogrify(sql, dat)),
+                level="debug",
+            )
+        cur.execute(sql, dat)
 
 
 def update(args, id: int, blurb: dict, reset=False, mogrify=False):
@@ -189,9 +188,8 @@ def build(args, rec, cur=None):
 
     own_cur = cur is None
     if own_cur:
-        with database.connect(args) as dbh:
-            with database.cursor(dbh) as cur:
-                blurb["flags"] = _fetch_flags(cur, rec.get("id"))
+        with database.connect(args) as dbh, database.cursor(dbh) as cur:
+            blurb["flags"] = _fetch_flags(cur, rec.get("id"))
     else:
         blurb["flags"] = _fetch_flags(cur, rec.get("id"))
 
@@ -214,13 +212,12 @@ def _fetch_flags(cur, blurbid) -> dict:
 
 
 def get(args, id: int):
-    with database.connect(args) as dbh:
-        with database.cursor(dbh) as cur:
-            cur.execute("select * from engine.__blurb where id=%s", (id,))
-            rec = cur.fetchone()
-            if rec is None:
-                return None
-            return build(args, rec, cur=cur)
+    with database.connect(args) as dbh, database.cursor(dbh) as cur:
+        cur.execute("select * from engine.__blurb where id=%s", (id,))
+        rec = cur.fetchone()
+        if rec is None:
+            return None
+        return build(args, rec, cur=cur)
 
 
 def get_with_content(args, id: int) -> dict | None:
@@ -246,15 +243,14 @@ def approve(args, id: int, value: bool = True) -> bool:
     """
     approved_str = "true" if value else "false"
     try:
-        with database.connect(args) as dbh:
-            with database.cursor(dbh) as cur:
-                cur.execute(
-                    "INSERT INTO engine.map_blurb_flag (memberid, name, value) "
-                    "VALUES (%s, 'approved', %s) "
-                    "ON CONFLICT (memberid, name) "
-                    "DO UPDATE SET value = EXCLUDED.value",
-                    (id, approved_str),
-                )
+        with database.connect(args) as dbh, database.cursor(dbh) as cur:
+            cur.execute(
+                "INSERT INTO engine.map_blurb_flag (memberid, name, value) "
+                "VALUES (%s, 'approved', %s) "
+                "ON CONFLICT (memberid, name) "
+                "DO UPDATE SET value = EXCLUDED.value",
+                (id, approved_str),
+            )
         return True
     except Exception as e:
         io.echo_traceback(f"bbsengine6.blurb.approve.100: {e}")

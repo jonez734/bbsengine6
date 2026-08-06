@@ -425,19 +425,18 @@ def _handle_whitespace(token):
 def _handle_decsc(token):
     global _terminal_state_stack, _terminal_state
     cursor_row, cursor_col = get_cursor_position()
-    with _terminal_state_lock:
-        with _terminal_state_stack_lock:
-            if not _terminal_state_stack_enabled and len(_terminal_state_stack) >= 1:
-                _terminal_state_stack.pop()
-            _terminal_state_stack.append(
-                TerminalState(
-                    cursor_row=cursor_row,
-                    cursor_col=cursor_col,
-                    wordwrap=_terminal_state.wordwrap,
-                    has_color=_terminal_state.has_color,
-                    hidden=_terminal_state.hidden,
-                )
+    with _terminal_state_lock, _terminal_state_stack_lock:
+        if not _terminal_state_stack_enabled and len(_terminal_state_stack) >= 1:
+            _terminal_state_stack.pop()
+        _terminal_state_stack.append(
+            TerminalState(
+                cursor_row=cursor_row,
+                cursor_col=cursor_col,
+                wordwrap=_terminal_state.wordwrap,
+                has_color=_terminal_state.has_color,
+                hidden=_terminal_state.hidden,
             )
+        )
 
 
 def _handle_decrc(token):

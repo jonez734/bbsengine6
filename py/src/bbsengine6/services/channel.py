@@ -47,60 +47,59 @@ class ChannelService:
         if not name:
             return {"success": False, "message": "Channel name required"}
 
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        "SELECT id FROM $engine.__channel WHERE name = :name",
-                        name=name,
-                    )
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    "SELECT id FROM $engine.__channel WHERE name = :name",
+                    name=name,
                 )
-                if cur.fetchone():
-                    return {"success": False, "message": "Channel already exists"}
+            )
+            if cur.fetchone():
+                return {"success": False, "message": "Channel already exists"}
 
-                cur.execute(
-                    database.query(
-                        """INSERT INTO $engine.__channel
+            cur.execute(
+                database.query(
+                    """INSERT INTO $engine.__channel
                                (name, description, announce_only, createdby)
                            VALUES (:name, :description, :announce_only, :createdby)
                            RETURNING id, name, description, announce_only,
                                      createdby, datecreated""",
-                        name=name,
-                        description=description,
-                        announce_only=announce_only,
-                        createdby=createdby,
-                    )
+                    name=name,
+                    description=description,
+                    announce_only=announce_only,
+                    createdby=createdby,
                 )
-                row = cur.fetchone()
-                if not row:
-                    return {"success": False, "message": "Failed to create channel"}
-                channel_id = row["id"]
+            )
+            row = cur.fetchone()
+            if not row:
+                return {"success": False, "message": "Failed to create channel"}
+            channel_id = row["id"]
 
-                if announce_only and announcers:
-                    for moniker in announcers:
-                        cur.execute(
-                            database.query(
-                                """INSERT INTO $engine.__channel_announcer
+            if announce_only and announcers:
+                for moniker in announcers:
+                    cur.execute(
+                        database.query(
+                            """INSERT INTO $engine.__channel_announcer
                                        (channel_id, moniker, addedby)
                                    VALUES (:channel_id, :moniker, :addedby)
                                    ON CONFLICT DO NOTHING""",
-                                channel_id=channel_id,
-                                moniker=moniker,
-                                addedby=createdby,
-                            )
+                            channel_id=channel_id,
+                            moniker=moniker,
+                            addedby=createdby,
                         )
+                    )
 
-                return {
-                    "success": True,
-                    "channel": {
-                        "id": channel_id,
-                        "name": row["name"],
-                        "description": row["description"],
-                        "announce_only": row["announce_only"],
-                        "createdby": row["createdby"],
-                        "datecreated": row["datecreated"],
-                    },
-                }
+            return {
+                "success": True,
+                "channel": {
+                    "id": channel_id,
+                    "name": row["name"],
+                    "description": row["description"],
+                    "announce_only": row["announce_only"],
+                    "createdby": row["createdby"],
+                    "datecreated": row["datecreated"],
+                },
+            }
 
     def get_channel(self, name: str) -> Optional[Dict[str, Any]]:
         """Get a channel by name from the engine.channel view.
@@ -108,21 +107,20 @@ class ChannelService:
         Returns:
             Dict with channel fields (including the announcers list) or None.
         """
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        """SELECT id, name, description, announce_only,
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    """SELECT id, name, description, announce_only,
                                   createdby, datecreated, datemodified, announcers
                            FROM $engine.channel
                            WHERE name = :name""",
-                        name=name,
-                    )
+                    name=name,
                 )
-                row = cur.fetchone()
-                if not row:
-                    return None
-                return dict(row)
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return dict(row)
 
     def list_channels(
         self,
@@ -150,20 +148,19 @@ class ChannelService:
 
         where_sql = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        f"""SELECT id, name, description, announce_only,
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    f"""SELECT id, name, description, announce_only,
                                    createdby, datecreated, datemodified, announcers
                             FROM $engine.channel
                             {where_sql}
                             ORDER BY name
                             LIMIT :limit OFFSET :offset""",
-                        **params,
-                    )
+                    **params,
                 )
-                return [dict(row) for row in cur.fetchall()]
+            )
+            return [dict(row) for row in cur.fetchall()]
 
     def set_announce_only(
         self, name: str, announce_only: bool, by_moniker: str
@@ -181,21 +178,20 @@ class ChannelService:
         if not member_module.verifyMemberFound(self.args, by_moniker, column="moniker"):
             return {"success": False, "message": "Member not found"}
 
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        """UPDATE $engine.__channel
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    """UPDATE $engine.__channel
                            SET announce_only = :announce_only,
                                datemodified = NOW()
                            WHERE name = :name""",
-                        announce_only=announce_only,
-                        name=name,
-                    )
+                    announce_only=announce_only,
+                    name=name,
                 )
-                if cur.rowcount == 0:
-                    return {"success": False, "message": "Channel not found"}
-                return {"success": True, "message": "Updated"}
+            )
+            if cur.rowcount == 0:
+                return {"success": False, "message": "Channel not found"}
+            return {"success": True, "message": "Updated"}
 
     def add_announcer(
         self, channel_name: str, moniker: str, addedby: str
@@ -210,31 +206,30 @@ class ChannelService:
         if not member_module.verifyMemberFound(self.args, addedby, column="moniker"):
             return {"success": False, "message": "Adding member not found"}
 
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        "SELECT id FROM $engine.__channel WHERE name = :name",
-                        name=channel_name,
-                    )
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    "SELECT id FROM $engine.__channel WHERE name = :name",
+                    name=channel_name,
                 )
-                row = cur.fetchone()
-                if not row:
-                    return {"success": False, "message": "Channel not found"}
-                channel_id = row["id"]
+            )
+            row = cur.fetchone()
+            if not row:
+                return {"success": False, "message": "Channel not found"}
+            channel_id = row["id"]
 
-                cur.execute(
-                    database.query(
-                        """INSERT INTO $engine.__channel_announcer
+            cur.execute(
+                database.query(
+                    """INSERT INTO $engine.__channel_announcer
                                (channel_id, moniker, addedby)
                            VALUES (:channel_id, :moniker, :addedby)
                            ON CONFLICT DO NOTHING""",
-                        channel_id=channel_id,
-                        moniker=moniker,
-                        addedby=addedby,
-                    )
+                    channel_id=channel_id,
+                    moniker=moniker,
+                    addedby=addedby,
                 )
-                return {"success": True, "message": "Announcer added"}
+            )
+            return {"success": True, "message": "Announcer added"}
 
     def remove_announcer(self, channel_name: str, moniker: str) -> Dict[str, Any]:
         """Remove a moniker from a channel's announcer list.
@@ -242,23 +237,22 @@ class ChannelService:
         Returns:
             Dict with success status.
         """
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        """DELETE FROM $engine.__channel_announcer
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    """DELETE FROM $engine.__channel_announcer
                            WHERE moniker = :moniker
                              AND channel_id = (
                                  SELECT id FROM $engine.__channel
                                  WHERE name = :name
                              )""",
-                        moniker=moniker,
-                        name=channel_name,
-                    )
+                    moniker=moniker,
+                    name=channel_name,
                 )
-                if cur.rowcount == 0:
-                    return {"success": False, "message": "Announcer not found"}
-                return {"success": True, "message": "Announcer removed"}
+            )
+            if cur.rowcount == 0:
+                return {"success": False, "message": "Announcer not found"}
+            return {"success": True, "message": "Announcer removed"}
 
     def can_publish(
         self, channel_name: str, moniker: str, is_sysop: Optional[bool] = None

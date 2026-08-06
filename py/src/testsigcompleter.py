@@ -20,16 +20,15 @@ class Completer(object):
         else:
             dat = (text + "*",)
 
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                if self.debug is True:
-                    io.echo(f"{database.sqlmogrify(sql,dat)=}", level="debug")
-                cur.execute(sql, dat)
-                if cur.rowcount == 0:
-                    return None
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            if self.debug is True:
+                io.echo(f"{database.sqlmogrify(sql,dat)=}", level="debug")
+            cur.execute(sql, dat)
+            if cur.rowcount == 0:
+                return None
 
-                for rec in database.resultiter(cur):
-                    yield rec["path"]
+            for rec in database.resultiter(cur):
+                yield rec["path"]
         return None
 
     def complete(self, word, state):

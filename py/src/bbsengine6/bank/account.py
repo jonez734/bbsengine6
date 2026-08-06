@@ -11,40 +11,37 @@ class Account:
 
     def get_or_create(self, moniker: str, initial_balance: int = 0) -> Dict[str, Any]:
         """Get existing account or create new one."""
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute("SELECT * FROM bank.__account WHERE moniker = %s", (moniker,))
-                row = cur.fetchone()
-                if row:
-                    return self._row_to_dict(row)
-
-                cur.execute(
-                    """INSERT INTO bank.__account (moniker, balance) VALUES (%s, %s)
-                       RETURNING *""",
-                    (moniker, initial_balance)
-                )
-                row = cur.fetchone()
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute("SELECT * FROM bank.__account WHERE moniker = %s", (moniker,))
+            row = cur.fetchone()
+            if row:
                 return self._row_to_dict(row)
+
+            cur.execute(
+                """INSERT INTO bank.__account (moniker, balance) VALUES (%s, %s)
+                       RETURNING *""",
+                (moniker, initial_balance)
+            )
+            row = cur.fetchone()
+            return self._row_to_dict(row)
 
     def get(self, moniker: str) -> Optional[Dict[str, Any]]:
         """Get account by moniker."""
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute("SELECT * FROM bank.__account WHERE moniker = %s", (moniker,))
-                row = cur.fetchone()
-                if row:
-                    return self._row_to_dict(row)
-                return None
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute("SELECT * FROM bank.__account WHERE moniker = %s", (moniker,))
+            row = cur.fetchone()
+            if row:
+                return self._row_to_dict(row)
+            return None
 
     def get_by_id(self, account_id: int) -> Optional[Dict[str, Any]]:
         """Get account by ID."""
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute("SELECT * FROM bank.__account WHERE id = %s", (account_id,))
-                row = cur.fetchone()
-                if row:
-                    return self._row_to_dict(row)
-                return None
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute("SELECT * FROM bank.__account WHERE id = %s", (account_id,))
+            row = cur.fetchone()
+            if row:
+                return self._row_to_dict(row)
+            return None
 
     def get_balance(self, moniker: str) -> int:
         """Get current balance for an account."""
@@ -53,13 +50,12 @@ class Account:
 
     def update_balance(self, moniker: str, new_balance: int) -> bool:
         """Update account balance."""
-        with database.connect(self.args) as conn:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    "UPDATE bank.__account SET balance = %s WHERE moniker = %s",
-                    (new_balance, moniker)
-                )
-                return cur.rowcount > 0
+        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                "UPDATE bank.__account SET balance = %s WHERE moniker = %s",
+                (new_balance, moniker)
+            )
+            return cur.rowcount > 0
 
     def update_settings(self, moniker: str, **settings) -> Optional[Dict[str, Any]]:
         """Update account settings (minbalance, maxtransfer, attrs)."""

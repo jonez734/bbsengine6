@@ -918,14 +918,13 @@ def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
     io.echo(f"getencryptedpassword.100: {plaintextpassword=}", level="debug")
     sql = "select crypt(%s, gen_salt('md5'))"
     dat = (plaintextpassword,)
-    with database.connect(args) as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, dat)
-            if cur.rowcount == 0:
-                return None
+    with database.connect(args) as conn, conn.cursor() as cur:
+        cur.execute(sql, dat)
+        if cur.rowcount == 0:
+            return None
 
-            res = cur.fetchone()
-            return res["crypt"]
+        res = cur.fetchone()
+        return res["crypt"]
 
 
 def init(args=None, **kw) -> None:

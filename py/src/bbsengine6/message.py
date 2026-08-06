@@ -60,14 +60,13 @@ def _get_message_recipients(message_id: int, channel: str) -> List[str]:
     if pool is None:
         return []
     try:
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT recipient_moniker FROM engine.__message_recipient "
-                    "WHERE message_id = %s ORDER BY recipient_moniker",
-                    (message_id,),
-                )
-                rows = cur.fetchall()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT recipient_moniker FROM engine.__message_recipient "
+                "WHERE message_id = %s ORDER BY recipient_moniker",
+                (message_id,),
+            )
+            rows = cur.fetchall()
         return [r[0] for r in rows]
     except Exception:
         return []
@@ -348,10 +347,9 @@ def get_pending_messages(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT
                     m.id, m.channel, m.sender_moniker, m.content, m.data,
                     m.urgency, m.template, m.template_vars, m.datestamp,
@@ -362,30 +360,30 @@ def get_pending_messages(
                 ORDER BY m.datestamp DESC
                 LIMIT %s
                 """,
-                (moniker, limit),
+            (moniker, limit),
+        )
+        rows = cur.fetchall()
+
+        messages = []
+        for row in rows:
+            messages.append(
+                {
+                    "id": row[0],
+                    "channel": row[1],
+                    "sender_moniker": row[2],
+                    "content": row[3],
+                    "data": row[4],
+                    "urgency": row[5],
+                    "template": row[6],
+                    "template_vars": row[7],
+                    "datestamp": row[8],
+                    "status": row[9],
+                    "datedelivered": row[10],
+                    "dateread": row[11],
+                }
             )
-            rows = cur.fetchall()
 
-            messages = []
-            for row in rows:
-                messages.append(
-                    {
-                        "id": row[0],
-                        "channel": row[1],
-                        "sender_moniker": row[2],
-                        "content": row[3],
-                        "data": row[4],
-                        "urgency": row[5],
-                        "template": row[6],
-                        "template_vars": row[7],
-                        "datestamp": row[8],
-                        "status": row[9],
-                        "datedelivered": row[10],
-                        "dateread": row[11],
-                    }
-                )
-
-            return messages
+        return messages
 
 
 def get_pending_messages_prioritized(
@@ -408,10 +406,9 @@ def get_pending_messages_prioritized(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT
                     m.id, m.channel, m.sender_moniker, m.content, m.data,
                     m.urgency, m.template, m.template_vars, m.datestamp,
@@ -430,30 +427,30 @@ def get_pending_messages_prioritized(
                     m.datestamp DESC
                 LIMIT %s
                 """,
-                (moniker, limit),
+            (moniker, limit),
+        )
+        rows = cur.fetchall()
+
+        messages = []
+        for row in rows:
+            messages.append(
+                {
+                    "id": row[0],
+                    "channel": row[1],
+                    "sender_moniker": row[2],
+                    "content": row[3],
+                    "data": row[4],
+                    "urgency": row[5],
+                    "template": row[6],
+                    "template_vars": row[7],
+                    "datestamp": row[8],
+                    "status": row[9],
+                    "datedelivered": row[10],
+                    "dateread": row[11],
+                }
             )
-            rows = cur.fetchall()
 
-            messages = []
-            for row in rows:
-                messages.append(
-                    {
-                        "id": row[0],
-                        "channel": row[1],
-                        "sender_moniker": row[2],
-                        "content": row[3],
-                        "data": row[4],
-                        "urgency": row[5],
-                        "template": row[6],
-                        "template_vars": row[7],
-                        "datestamp": row[8],
-                        "status": row[9],
-                        "datedelivered": row[10],
-                        "dateread": row[11],
-                    }
-                )
-
-            return messages
+        return messages
 
 
 def mark_delivered(
@@ -475,17 +472,16 @@ def mark_delivered(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 UPDATE engine.__message_recipient 
                 SET status = 'delivered', datedelivered = now()
                 WHERE message_id = %s AND recipient_moniker = %s
                 """,
-                (message_id, moniker),
-            )
-            conn.commit()
+            (message_id, moniker),
+        )
+        conn.commit()
 
 
 def mark_read(
@@ -507,17 +503,16 @@ def mark_read(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 UPDATE engine.__message_recipient 
                 SET status = 'read', dateread = now()
                 WHERE message_id = %s AND recipient_moniker = %s
                 """,
-                (message_id, moniker),
-            )
-            conn.commit()
+            (message_id, moniker),
+        )
+        conn.commit()
 
 
 def get_unread_count(
@@ -561,16 +556,15 @@ def get_unread_count(
             args = _make_args(database)
             pool = getpool(args)
 
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
                     SELECT COUNT(*) FROM engine.__message_recipient
                     WHERE recipient_moniker = %s AND status = 'pending'
                     """,
-                    (moniker,),
-                )
-                return cur.fetchone()[0]
+                (moniker,),
+            )
+            return cur.fetchone()[0]
     except psycopg_errors.UndefinedTable:
         db_label = database
         if db_label is None and args is not None:
@@ -698,19 +692,18 @@ def create_message_group(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 INSERT INTO engine.__message_group (name, description, createdby)
                 VALUES (%s, %s, %s)
                 RETURNING id
                 """,
-                (name, description, createdby),
-            )
-            group_id = cur.fetchone()[0]
-            conn.commit()
-            return group_id
+            (name, description, createdby),
+        )
+        group_id = cur.fetchone()[0]
+        conn.commit()
+        return group_id
 
 
 def add_to_message_group(
@@ -771,16 +764,15 @@ def get_message_group_members(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT member_moniker FROM engine.__message_group_member
                 WHERE group_id = %s
                 """,
-                (group_id,),
-            )
-            return [row[0] for row in cur.fetchall()]
+            (group_id,),
+        )
+        return [row[0] for row in cur.fetchall()]
 
 
 def get_user_groups(
@@ -803,27 +795,26 @@ def get_user_groups(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT g.id, g.name, g.description, g.datecreated
                 FROM engine.__message_group g
                 JOIN engine.__message_group_member m ON m.group_id = g.id
                 WHERE m.member_moniker = %s
                 """,
-                (moniker,),
-            )
-            rows = cur.fetchall()
-            return [
-                {
-                    "id": row[0],
-                    "name": row[1],
-                    "description": row[2],
-                    "datecreated": row[3],
-                }
-                for row in rows
-            ]
+            (moniker,),
+        )
+        rows = cur.fetchall()
+        return [
+            {
+                "id": row[0],
+                "name": row[1],
+                "description": row[2],
+                "datecreated": row[3],
+            }
+            for row in rows
+        ]
 
 
 def block_sender(
@@ -848,18 +839,17 @@ def block_sender(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 INSERT INTO engine.__message_block (blocker_moniker, blocked_moniker)
                 VALUES (%s, %s)
                 ON CONFLICT DO NOTHING
                 """,
-                (blocker_moniker, blocked_moniker),
-            )
-            conn.commit()
-            return True
+            (blocker_moniker, blocked_moniker),
+        )
+        conn.commit()
+        return True
 
 
 def unblock_sender(
@@ -884,17 +874,16 @@ def unblock_sender(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 DELETE FROM engine.__message_block
                 WHERE blocker_moniker = %s AND blocked_moniker = %s
                 """,
-                (blocker_moniker, blocked_moniker),
-            )
-            conn.commit()
-            return True
+            (blocker_moniker, blocked_moniker),
+        )
+        conn.commit()
+        return True
 
 
 def is_blocked(
@@ -918,16 +907,15 @@ def is_blocked(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT 1 FROM engine.__message_block
                 WHERE blocker_moniker = %s AND blocked_moniker = %s
                 """,
-                (blocker_moniker, blocked_moniker),
-            )
-            return cur.fetchone() is not None
+            (blocker_moniker, blocked_moniker),
+        )
+        return cur.fetchone() is not None
 
 
 def check_rate_limit(
@@ -952,36 +940,35 @@ def check_rate_limit(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT rate_limit_per_hour FROM engine.__message_type
                 WHERE type_name = %s
                 """,
-                (message_type,),
-            )
-            row = cur.fetchone()
+            (message_type,),
+        )
+        row = cur.fetchone()
 
-            if not row or row[0] == 0:
-                return True, 999
+        if not row or row[0] == 0:
+            return True, 999
 
-            rate_limit = row[0]
-            hour_bucket = datetime.now().replace(minute=0, second=0, microsecond=0)
+        rate_limit = row[0]
+        hour_bucket = datetime.now().replace(minute=0, second=0, microsecond=0)
 
-            cur.execute(
-                """
+        cur.execute(
+            """
                 SELECT message_count FROM engine.__message_rate_limit
                 WHERE sender_moniker = %s AND message_type = %s AND hour_bucket = %s
                 """,
-                (sender_moniker, message_type, hour_bucket),
-            )
-            row = cur.fetchone()
+            (sender_moniker, message_type, hour_bucket),
+        )
+        row = cur.fetchone()
 
-            current_count = row[0] if row else 0
-            remaining = max(0, rate_limit - current_count)
+        current_count = row[0] if row else 0
+        remaining = max(0, rate_limit - current_count)
 
-            return current_count < rate_limit, remaining
+        return current_count < rate_limit, remaining
 
 
 def record_message_sent(
@@ -1043,17 +1030,16 @@ def get_message_type_rate_limit(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT rate_limit_per_hour FROM engine.__message_type
                 WHERE type_name = %s
                 """,
-                (message_type,),
-            )
-            row = cur.fetchone()
-            return row[0] if row else 0
+            (message_type,),
+        )
+        row = cur.fetchone()
+        return row[0] if row else 0
 
 
 # =============================================================================
@@ -1218,18 +1204,17 @@ def remove_from_group(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 DELETE FROM engine.__message_group_member
                 WHERE group_id = %s AND member_moniker = %s
                 """,
-                (group_id, member_moniker),
-            )
-            removed = cur.rowcount > 0
-            conn.commit()
-            return removed
+            (group_id, member_moniker),
+        )
+        removed = cur.rowcount > 0
+        conn.commit()
+        return removed
 
 
 def get_blocked(
@@ -1259,16 +1244,15 @@ def get_blocked(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT blocker_moniker FROM engine.__message_block
                 WHERE blocked_moniker = %s
                 """,
-                (moniker,),
-            )
-            return [row[0] for row in cur.fetchall()]
+            (moniker,),
+        )
+        return [row[0] for row in cur.fetchall()]
 
 
 def get_urgent(
@@ -1298,10 +1282,9 @@ def get_urgent(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT
                     m.id, m.channel, m.sender_moniker, m.content, m.data,
                     m.urgency, m.template, m.template_vars, m.datestamp,
@@ -1320,29 +1303,29 @@ def get_urgent(
                     m.datestamp DESC
                 LIMIT %s
                 """,
-                (moniker, limit),
-            )
-            rows = cur.fetchall()
+            (moniker, limit),
+        )
+        rows = cur.fetchall()
 
-            messages = []
-            for row in rows:
-                messages.append(
-                    {
-                        "id": row[0],
-                        "channel": row[1],
-                        "sender_moniker": row[2],
-                        "content": row[3],
-                        "data": row[4],
-                        "urgency": row[5],
-                        "template": row[6],
-                        "template_vars": row[7],
-                        "datestamp": row[8],
-                        "status": row[9],
-                        "datedelivered": row[10],
-                        "dateread": row[11],
-                    }
-                )
-            return messages
+        messages = []
+        for row in rows:
+            messages.append(
+                {
+                    "id": row[0],
+                    "channel": row[1],
+                    "sender_moniker": row[2],
+                    "content": row[3],
+                    "data": row[4],
+                    "urgency": row[5],
+                    "template": row[6],
+                    "template_vars": row[7],
+                    "datestamp": row[8],
+                    "status": row[9],
+                    "datedelivered": row[10],
+                    "dateread": row[11],
+                }
+            )
+        return messages
 
 
 def expunge(
@@ -1373,18 +1356,17 @@ def expunge(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 DELETE FROM engine.__message
                 WHERE id = %s AND sender_moniker = %s
                 """,
-                (message_id, sender_moniker),
-            )
-            removed = cur.rowcount > 0
-            conn.commit()
-            return removed
+            (message_id, sender_moniker),
+        )
+        removed = cur.rowcount > 0
+        conn.commit()
+        return removed
 
 
 def get_queue(
@@ -1525,10 +1507,9 @@ def set_rate_limit(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 INSERT INTO engine.__message_type
                     (type_name, description, rate_limit_per_hour, datemodified)
                 VALUES (%s, %s, %s, now())
@@ -1536,10 +1517,10 @@ def set_rate_limit(
                 SET rate_limit_per_hour = EXCLUDED.rate_limit_per_hour,
                     datemodified = now()
                 """,
-                (type_name, "", int(limit)),
-            )
-            conn.commit()
-            return True
+            (type_name, "", int(limit)),
+        )
+        conn.commit()
+        return True
 
 
 def register_type(
@@ -1571,10 +1552,9 @@ def register_type(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 INSERT INTO engine.__message_type
                     (type_name, description, rate_limit_per_hour,
                      requires_approval, datemodified)
@@ -1585,15 +1565,15 @@ def register_type(
                     requires_approval = EXCLUDED.requires_approval,
                     datemodified = now()
                 """,
-                (
-                    type_name,
-                    description,
-                    int(rate_limit_per_hour),
-                    bool(requires_approval),
-                ),
-            )
-            conn.commit()
-            return True
+            (
+                type_name,
+                description,
+                int(rate_limit_per_hour),
+                bool(requires_approval),
+            ),
+        )
+        conn.commit()
+        return True
 
 
 def _coerce_urgency(urgency: Any) -> str:
@@ -1803,24 +1783,23 @@ def get_types(
     args = _make_args(database)
     pool = getpool(args)
 
-    with pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
                 SELECT type_name, description, rate_limit_per_hour,
                        requires_approval, datemodified
                 FROM engine.__message_type
                 ORDER BY type_name
                 """
-            )
-            rows = cur.fetchall()
-            return [
-                {
-                    "type_name": row[0],
-                    "description": row[1],
-                    "rate_limit_per_hour": row[2],
-                    "requires_approval": row[3],
-                    "datemodified": row[4],
-                }
-                for row in rows
-            ]
+        )
+        rows = cur.fetchall()
+        return [
+            {
+                "type_name": row[0],
+                "description": row[1],
+                "rate_limit_per_hour": row[2],
+                "requires_approval": row[3],
+                "datemodified": row[4],
+            }
+            for row in rows
+        ]

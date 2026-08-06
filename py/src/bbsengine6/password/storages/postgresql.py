@@ -43,14 +43,13 @@ class PostgreSQLStorage(PasswordStorage):
         dat = (member_moniker,)
 
         try:
-            with database.connect(self.args) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, dat)
-                    if cur.rowcount == 0:
-                        return None
-                    row = cur.fetchone()
-                    encrypted = row[column_name]
-                    return encrypted if encrypted else None
+            with database.connect(self.args) as conn, conn.cursor() as cur:
+                cur.execute(sql, dat)
+                if cur.rowcount == 0:
+                    return None
+                row = cur.fetchone()
+                encrypted = row[column_name]
+                return encrypted if encrypted else None
         except Exception as e:
             echo(
                 f"PostgreSQLStorage.get_personal_password: {e}",
@@ -78,15 +77,14 @@ class PostgreSQLStorage(PasswordStorage):
         dat = (encrypted_password, member_moniker)
 
         try:
-            with database.connect(self.args) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, dat)
-                    if cur.rowcount == 0:
-                        echo(
-                            f"PostgreSQLStorage.set_personal_password: member not found",
-                            level="error",
-                        )
-                        return False
+            with database.connect(self.args) as conn, conn.cursor() as cur:
+                cur.execute(sql, dat)
+                if cur.rowcount == 0:
+                    echo(
+                        f"PostgreSQLStorage.set_personal_password: member not found",
+                        level="error",
+                    )
+                    return False
             return True
         except Exception as e:
             echo(
@@ -105,9 +103,8 @@ class PostgreSQLStorage(PasswordStorage):
         dat = (member_moniker,)
 
         try:
-            with database.connect(self.args) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, dat)
+            with database.connect(self.args) as conn, conn.cursor() as cur:
+                cur.execute(sql, dat)
             return True
         except Exception as e:
             echo(
@@ -126,18 +123,17 @@ class PostgreSQLStorage(PasswordStorage):
 
         result = {}
         try:
-            with database.connect(self.args) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, dat)
-                    if cur.rowcount == 0:
-                        return result
-                    row = cur.fetchone()
-                    for pwd_type in ["inbound", "outbound"]:
-                        encrypted = row.get(f"{pwd_type}_password")
-                        if encrypted:
-                            result[pwd_type] = {"exists": True}
-                        else:
-                            result[pwd_type] = {"exists": False}
+            with database.connect(self.args) as conn, conn.cursor() as cur:
+                cur.execute(sql, dat)
+                if cur.rowcount == 0:
+                    return result
+                row = cur.fetchone()
+                for pwd_type in ["inbound", "outbound"]:
+                    encrypted = row.get(f"{pwd_type}_password")
+                    if encrypted:
+                        result[pwd_type] = {"exists": True}
+                    else:
+                        result[pwd_type] = {"exists": False}
             return result
         except Exception as e:
             echo(
@@ -160,14 +156,13 @@ class PostgreSQLStorage(PasswordStorage):
         dat = (mailbox_id, member_moniker, password_type)
 
         try:
-            with database.connect(self.args) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, dat)
-                    if cur.rowcount == 0:
-                        return None
-                    row = cur.fetchone()
-                    encrypted = row["encrypted_password"]
-                    return encrypted if encrypted else None
+            with database.connect(self.args) as conn, conn.cursor() as cur:
+                cur.execute(sql, dat)
+                if cur.rowcount == 0:
+                    return None
+                row = cur.fetchone()
+                encrypted = row["encrypted_password"]
+                return encrypted if encrypted else None
         except Exception as e:
             echo(
                 f"PostgreSQLStorage.get_shared_mailbox_password: {e}",
@@ -206,9 +201,8 @@ class PostgreSQLStorage(PasswordStorage):
         )
 
         try:
-            with database.connect(self.args) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, dat)
+            with database.connect(self.args) as conn, conn.cursor() as cur:
+                cur.execute(sql, dat)
             return True
         except Exception as e:
             echo(
@@ -231,9 +225,8 @@ class PostgreSQLStorage(PasswordStorage):
         dat = (mailbox_id, member_moniker, password_type)
 
         try:
-            with database.connect(self.args) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, dat)
+            with database.connect(self.args) as conn, conn.cursor() as cur:
+                cur.execute(sql, dat)
             return True
         except Exception as e:
             echo(
@@ -255,24 +248,23 @@ class PostgreSQLStorage(PasswordStorage):
 
         result = {}
         try:
-            with database.connect(self.args) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, dat)
-                    for row in cur.fetchall():
-                        pwd_type = row["password_type"]
-                        result[pwd_type] = {
-                            "exists": True,
-                            "set_by": row["set_by_moniker"],
-                            "updated_at": (
-                                row["updated_at"].isoformat()
-                                if row["updated_at"]
-                                else None
-                            ),
-                        }
+            with database.connect(self.args) as conn, conn.cursor() as cur:
+                cur.execute(sql, dat)
+                for row in cur.fetchall():
+                    pwd_type = row["password_type"]
+                    result[pwd_type] = {
+                        "exists": True,
+                        "set_by": row["set_by_moniker"],
+                        "updated_at": (
+                            row["updated_at"].isoformat()
+                            if row["updated_at"]
+                            else None
+                        ),
+                    }
 
-                    for pwd_type in ["inbound", "outbound"]:
-                        if pwd_type not in result:
-                            result[pwd_type] = {"exists": False}
+                for pwd_type in ["inbound", "outbound"]:
+                    if pwd_type not in result:
+                        result[pwd_type] = {"exists": False}
 
             return result
         except Exception as e:
@@ -298,17 +290,16 @@ class PostgreSQLStorage(PasswordStorage):
 
         result = []
         try:
-            with database.connect(self.args) as conn:
-                with conn.cursor() as cur:
-                    cur.execute(sql, dat)
-                    for row in cur.fetchall():
-                        result.append(
-                            {
-                                "id": row["id"],
-                                "address": row["address"],
-                                "password_count": row["password_count"],
-                            }
-                        )
+            with database.connect(self.args) as conn, conn.cursor() as cur:
+                cur.execute(sql, dat)
+                for row in cur.fetchall():
+                    result.append(
+                        {
+                            "id": row["id"],
+                            "address": row["address"],
+                            "password_count": row["password_count"],
+                        }
+                    )
             return result
         except Exception as e:
             echo(
