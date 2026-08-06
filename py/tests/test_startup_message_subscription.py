@@ -30,7 +30,6 @@ import argparse
 import importlib
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 
 def _make_args(**overrides) -> argparse.Namespace:
@@ -75,7 +74,7 @@ class TestMaybeSubscribeToBedSuccess:
             startup_main, "subscribe_to_bed_sync", return_value=True
         ) as subscribe, patch(
             "bbsengine6.io.echo"
-        ) as echo:
+        ):
             result = startup_main._maybe_subscribe_to_bed(_make_args())
 
         assert result is True

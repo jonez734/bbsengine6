@@ -1,7 +1,6 @@
 # tests/test_net/test_frame_address.py
 # Tests for DSN frame address parsing
 
-import pytest
 from bbsengine6.net import FrameAddressParser, FrameScheme
 
 

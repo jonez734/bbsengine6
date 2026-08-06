@@ -7,7 +7,6 @@ bbsengine6.startup.main resolve a bare short name like
 """
 
 import argparse
-import importlib
 import sys
 from pathlib import Path
 

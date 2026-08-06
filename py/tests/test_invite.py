@@ -13,11 +13,10 @@ import argparse
 import getpass
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
 
 import pytest
 
-from bbsengine6 import database, invite as invite_dal
+from bbsengine6 import database
 from bbsengine6.services.invite import InviteService
 
 
@@ -70,29 +69,27 @@ def _insert_casino_table(
     engine.__member for ownermoniker. We use a NULL accountid to avoid
     the bank dependency in this test.
     """
-    with database.connect(args) as conn:
-        with database.cursor(conn) as cur:
-            cur.execute(
-                database.query(
-                    """INSERT INTO $casino.__table
+    with database.connect(args) as conn, database.cursor(conn) as cur:
+        cur.execute(
+            database.query(
+                """INSERT INTO $casino.__table
                            (moniker, type, ownermoniker, accountid)
                        VALUES (:moniker, 'test', :ownermoniker, NULL)
                        ON CONFLICT (moniker) DO NOTHING""",
-                    moniker=moniker,
-                    ownermoniker=owner,
-                )
+                moniker=moniker,
+                ownermoniker=owner,
             )
+        )
 
 
 def _delete_casino_table(args: argparse.Namespace, moniker: str) -> None:
-    with database.connect(args) as conn:
-        with database.cursor(conn) as cur:
-            cur.execute(
-                database.query(
-                    "DELETE FROM $casino.__table WHERE moniker = :moniker",
-                    moniker=moniker,
-                )
+    with database.connect(args) as conn, database.cursor(conn) as cur:
+        cur.execute(
+            database.query(
+                "DELETE FROM $casino.__table WHERE moniker = :moniker",
+                moniker=moniker,
             )
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +243,7 @@ class TestGetInvites:
             module="casino", resourceid=resourceid,
             createdbymoniker=_test_user(1), code="REVOKEA",
         )
-        b = invite_service.create_invite(
+        invite_service.create_invite(
             module="casino", resourceid=resourceid,
             createdbymoniker=_test_user(1), code="REVOKEB",
         )

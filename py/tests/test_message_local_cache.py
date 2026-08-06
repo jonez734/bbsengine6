@@ -1,7 +1,6 @@
 # test_message_local_cache.py
 # Tests for the local unread-count cache (server-push consumers).
 
-import pytest
 
 
 class TestLocalUnreadCache:

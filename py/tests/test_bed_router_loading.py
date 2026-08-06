@@ -2,7 +2,6 @@
 # Integration tests for BED router loading
 
 import argparse
-import pytest
 from bbsengine6 import module as bbsmodule
 
 
@@ -66,7 +65,7 @@ class TestModuleGetWithDebug:
         args = argparse.Namespace(debug=True)
         
         # First load
-        m1 = bbsmodule.get("zoid6.api.handler", args)
+        bbsmodule.get("zoid6.api.handler", args)
         # Second load should return reloaded module
         m2 = bbsmodule.get("zoid6.api.handler", args)
         

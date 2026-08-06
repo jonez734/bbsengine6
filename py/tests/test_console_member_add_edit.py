@@ -9,7 +9,7 @@ write so we can query it directly to prove the operations landed.
 
 import copy
 import contextlib
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import Mock, patch
 
 import pytest
 

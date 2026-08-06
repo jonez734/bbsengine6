@@ -583,9 +583,7 @@ class TestSetContextForAndRenderFor:
 class TestContextVarRouting:
     def test_default_routes_to_default_registry(self):
         from bbsengine6.bottombar import (
-            register_bottombar_fragment,
             setbottombar,
-            unregister_bottombar_fragment,
         )
 
         sentinel_args = object()

@@ -14,7 +14,6 @@ import importlib
 import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 
 def _load():
@@ -37,7 +36,7 @@ def _make_fake_bed_module(*, messageservice_get_message_client):
     where the messageservice module exposes ``get_message_client``
     bound to the supplied callable.
     """
-    from types import ModuleType, SimpleNamespace
+    from types import ModuleType
 
     bed = ModuleType("bed")
     bed_client = ModuleType("bed.client")

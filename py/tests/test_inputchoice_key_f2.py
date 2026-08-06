@@ -61,7 +61,7 @@ class TestInputChoiceKeyF2:
         from bbsengine6.io.inputchoice import inputchoice
 
         with patch("bbsengine6.io.inputchoice.getch") as mock_getch:
-            with patch("bbsengine6.io.inputchoice.echo") as mock_echo:
+            with patch("bbsengine6.io.inputchoice.echo"):
                 mock_getch.side_effect = ["KEY_F2", "Q"]
 
                 result = inputchoice(

@@ -9,7 +9,7 @@ Tests verify that:
 """
 
 import pytest
-from unittest.mock import Mock, MagicMock, patch, call
+from unittest.mock import Mock, MagicMock, patch
 import sys
 import os
 
@@ -17,7 +17,6 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../py/src"))
 
 from bbsengine6 import member as libmember
-from bbsengine6 import database
 
 
 class TestMemberUpdateMonikerParameter:
@@ -137,7 +136,7 @@ class TestSetflagTransactionConsistency:
         mock_cursor = MagicMock()
 
         with patch("bbsengine6.member.database.cursor") as mock_cursor_ctx:
-            with patch("bbsengine6.member.database.insert") as mock_insert:
+            with patch("bbsengine6.member.database.insert"):
                 mock_cursor_ctx.return_value.__enter__ = Mock(return_value=mock_cursor)
                 mock_cursor_ctx.return_value.__exit__ = Mock(return_value=None)
                 mock_cursor_ctx.return_value = MagicMock()
@@ -157,7 +156,7 @@ class TestSetflagTransactionConsistency:
         args.debug = False
 
         mock_conn = Mock()
-        mock_cursor = MagicMock()
+        MagicMock()
 
         with patch("bbsengine6.member.database.upsert") as mock_upsert:
             with patch("bbsengine6.member.util.logentry"):
@@ -231,7 +230,7 @@ class TestMemberApprovalWorkflow:
         mock_conn = Mock()
 
         with patch("bbsengine6.member.getbymoniker") as mock_getbymoniker:
-            with patch("bbsengine6.member.setflag") as mock_setflag:
+            with patch("bbsengine6.member.setflag"):
                 with patch("bbsengine6.member.update") as mock_update:
                     mock_getbymoniker.return_value = member_data
 
@@ -328,7 +327,6 @@ class TestForeignKeyConstraintPrevention:
 
         # Using the correct parameter type
         moniker_string = "jonez"  # Correct: string moniker
-        member_id = 123  # Wrong: integer memberid
 
         # When update is called with correct moniker, the WHERE clause works
         with patch("bbsengine6.member.database.update") as mock_db_update:

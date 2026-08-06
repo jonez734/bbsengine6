@@ -16,7 +16,6 @@ These tests pin down the new contract:
 """
 
 import argparse
-import importlib
 import inspect
 import re
 

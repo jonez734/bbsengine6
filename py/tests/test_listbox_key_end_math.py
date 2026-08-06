@@ -102,7 +102,6 @@ def test_handle_key_end_moves_highlight_to_last_item():
 
 def test_handle_key_end_with_itemheight_two_uses_correct_displacement():
     """With itemheight=2 the displacement must be 2x the index delta."""
-    from bbsengine6.listbox import Listbox, ListboxItem
     from bbsengine6 import listbox as listbox_module
 
     lb = _build_listbox(items_per_page=10, item_height=2, num_items=3)

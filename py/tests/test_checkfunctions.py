@@ -39,7 +39,6 @@ import pytest
 from bbsengine6 import database
 from bbsengine6.backend import lib
 from bbsengine6.backend import checkfunctions
-from bbsengine6.backend import checkmessage
 
 
 # ---------------------------------------------------------------------------
