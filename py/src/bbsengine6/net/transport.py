@@ -564,9 +564,10 @@ class WebSocketServer:
         # disconnect. Set via register_router() or pass via BED.
         self._router: Optional[Any] = None
 
-        # Pre-dispatch hook: async callable(websocket) invoked
+        # Pre-dispatch hook: async callable(websocket, message) invoked
         # before every service handler. Used by BED to set the
-        # per-request PostgreSQL role from the session.
+        # per-request PostgreSQL role from the session and to log
+        # incoming messages.
         self._pre_dispatch: Optional[Callable] = None
 
         # Session manager used for id allocation and moniker lookup.
@@ -686,7 +687,7 @@ class WebSocketServer:
         if service:
             try:
                 if self._pre_dispatch is not None:
-                    await self._pre_dispatch(websocket)
+                    await self._pre_dispatch(websocket, message)
                 return await service.handle_message(self, websocket, path, message)
             except Exception as e:
                 logger.error(f"Service {service.__class__.__name__} error: {e}")
