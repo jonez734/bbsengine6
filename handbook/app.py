@@ -5,17 +5,16 @@ Flask application for serving markdown documentation with runtime conversion
 Serves .md files as styled HTML without pre-conversion
 """
 
-import os
 import mimetypes
 from pathlib import Path
 from functools import lru_cache
 
-from flask import Flask, render_template_string, abort, redirect, url_for
+from flask import Flask, render_template_string, abort
 from markupsafe import escape
 
 try:
     import markdown
-    from markdown.extensions import toc, tables, fenced_code, codehilite, extra
+    from markdown.extensions import codehilite  # noqa: F401
 except ImportError:
     print("Error: markdown package not installed")
     print("Install with: pip install markdown pygments")

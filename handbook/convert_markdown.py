@@ -4,7 +4,6 @@ convert_markdown.py
 Convert markdown files to HTML with clean, consistent styling
 """
 
-import os
 import sys
 import argparse
 from pathlib import Path
@@ -12,7 +11,7 @@ from typing import Optional
 
 try:
     import markdown
-    from markdown.extensions import toc, tables, fenced_code, codehilite
+    from markdown.extensions import codehilite  # noqa: F401
 except ImportError:
     print("Error: markdown package not installed")
     print("Install with: pip install markdown markdown-extensions pygments")
