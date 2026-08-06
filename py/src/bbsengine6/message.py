@@ -108,7 +108,14 @@ def _table_identifier(table: str) -> sql.Identifier:
 
 
 def _make_args(database: str) -> Any:
-    """Create args object for database functions."""
+    """Create args object for database functions.
+
+    Populates the standard connection fields (host/port/user/password/
+    schema) with the same env-var fallbacks used by
+    ``bbsengine6.database.buildargs`` so that a downstream ``getpool``
+    call sees a complete namespace instead of bare ``database``/
+    ``databasename`` attrs.
+    """
 
     class _Args:
         pass
@@ -116,6 +123,11 @@ def _make_args(database: str) -> Any:
     args = _Args()
     args.database = database
     args.databasename = database
+    args.databasehost = os.environ.get("BBSENGINE6_DBHOST", "localhost")
+    args.databaseport = int(os.environ.get("BBSENGINE6_DBPORT", "5432"))
+    args.databaseuser = os.environ.get("BBSENGINE6_DBUSER")
+    args.databasepassword = os.environ.get("BBSENGINE6_DBPASSWORD")
+    args.databaseschema = os.environ.get("BBSENGINE6_DBSCHEMA", "engine")
     return args
 
 
