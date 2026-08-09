@@ -1713,14 +1713,64 @@ def cursor(conn: Any = None, row_factory: Any = dict_row, **kwargs: Any) -> Any:
     Args:
       conn: Database connection (can be passed as arg or via kwargs)
       row_factory: Row factory (default: dict_row for dict results)
-      **kwargs: Additional arguments (conn can be passed here)
+      **kwargs: Additional arguments (conn can be passed here). Any
+                remaining kwargs are forwarded to conn.cursor(), e.g.
+                ``name`` and ``scrollable`` for server-side cursors.
 
     Returns:
       Cursor instance
     """
     if conn is None:
-        conn = kwargs.get("conn", None)
-    return conn.cursor(row_factory=row_factory)
+        conn = kwargs.pop("conn", None)
+    return conn.cursor(row_factory=row_factory, **kwargs)
+
+
+def mogrify(cur: Any, sql: str, params: Any = None) -> str:
+    """Render ``sql`` with ``params`` for debug logging.
+
+    psycopg3 cursors do not expose ``mogrify`` directly; use a client-side
+    cursor to perform the substitution so the resulting string is the
+    actual query that would be sent to the server. Falls back to a
+    naive ``sql % params`` substitution when a client-side cursor is
+    unavailable.
+
+    Args:
+      cur: An open psycopg cursor.
+      sql: SQL with ``%s`` placeholders.
+      params: Parameter tuple/list/dict.
+
+    Returns:
+      Rendered SQL string suitable for debug output.
+    """
+    import psycopg
+    from psycopg import sql as pg_sql
+
+    try:
+        client_cur = cur.__class__(
+            cur.connection, row_factory=cur.row_factory
+        )
+        return client_cur.mogrify(sql, params).decode("utf-8", errors="replace")
+    except Exception:
+        try:
+            if params is None:
+                return sql
+            if isinstance(params, (list, tuple)):
+                rendered = sql
+                for p in params:
+                    if p is None:
+                        rendered = rendered.replace("%s", "NULL", 1)
+                    elif isinstance(p, (int, float)):
+                        rendered = rendered.replace("%s", str(p), 1)
+                    else:
+                        rendered = rendered.replace(
+                            "%s", "'" + str(p).replace("'", "''") + "'", 1
+                        )
+                return rendered
+            if isinstance(params, dict):
+                return sql % params
+            return sql
+        except Exception:
+            return f"{sql} -- params={params!r}"
 
 
 class DatabaseCursor:
@@ -1798,8 +1848,8 @@ class DatabaseConnection:
         self._pool = pool
         self._set_role = set_role
 
-    def cursor(self, row_factory: Any = dict_row) -> DatabaseCursor:
-        return DatabaseCursor(self._conn.cursor(row_factory=row_factory), self)
+    def cursor(self, row_factory: Any = dict_row, **kwargs: Any) -> DatabaseCursor:
+        return DatabaseCursor(self._conn.cursor(row_factory=row_factory, **kwargs), self)
 
     def commit(self) -> None:
         self._conn.commit()

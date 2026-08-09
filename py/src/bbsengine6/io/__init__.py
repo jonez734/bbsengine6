@@ -27,6 +27,8 @@ with warnings.catch_warnings():
     from .getch import getch_str as getch
     from .getch import install_signal_handlers
 
+    from .inputcompleter import inputcompleter
+
 
 def getterminalwidth() -> int:
     """Return the current terminal width in columns (back-compat shim)."""
@@ -84,4 +86,5 @@ __all__ = [
     "getch",
     "getterminalwidth",
     "install_signal_handlers",
+    "inputcompleter",
 ]
