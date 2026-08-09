@@ -15,6 +15,118 @@
 [ ] Fix /handbook/6/ 500 internal server error - add default mode=index when no mode is specified in handbook.php (@since 20250623)
 [ ] SETBOTTOMBAR packet type (12) - server-to-client UI update for bottom bar (e.g., casino module can update client status bar) (@since 20250621)
 
+## ⚠️ attraction_hour DATA FIX — demo_listbox_masterdetail.py (2026-08-06) — RESOLVED
+
+**Status (2026-08-06, end of day):** All blockers resolved. The data chain from
+CSV → schema → importer → join reachability is complete.
+
+- `yummyjam/article2/csv/president_attraction_hour.csv` now has **11 rows** (4
+  open hours + 4 Kenmore seasonal + 4 placeholder closed rows), with the
+  `note` column populated from the legacy 7th CSV column.
+- `yummyjam/article2/sql/attraction_hour.sql` has been fixed: `UNIQUE` on `key`
+  dropped; `starthour`/`endhour` changed from `time` to `text` so `99:99`
+  placeholders load; `startdate`/`enddate` are `text` for yearless `MM-DD`;
+  `note text` added.
+- `yummyjam/article2/py/importcsv.py` is wired to import all four attraction
+  tables, and the active importer
+  `yummyjam/article2/py/src/buildtool/attraction.py` has the hour import
+  enabled.
+- `yummyjam/article2/csv/president_attraction_join.csv` has 4 new rows linking
+  the hour-bearing places to their persons:
+  - Roosevelt (`n_us_gov_president_rooseveltt`) → birthplace
+    (`n_usny_nyc_hist_home_gov_president_rooseveltt_born`) with `born_place=TRUE`.
+  - Washington (`n_us_gov_president_washingtong`) → birthplace
+    (`pkn_n_us_gov_president_washingtong_home_born`) with `born_place=TRUE`.
+  - Washington → mother home
+    (`n_usva_msm_n_us_gov_president_parent_washington_mary_home`) with
+    `note="mother's home"` (no boolean column for parent home in
+    `attraction_join` schema).
+  - Washington → sister home (Kenmore)
+    (`n_usva_msm_n_us_gov_president_sibling_lewis_washington_mary_home`) with
+    `note="sister's home (Kenmore)"`.
+
+All four hour-bearing places are now reachable from `get_person_place_keys()`
+when the corresponding president is selected, so
+`display_attraction_hours()` will return real rows instead of `needinfo`.
+
+### What was changed (Pass 1)
+
+`yummyjam/article2/csv/president_attraction_hour.csv` (initial rewrite):
+1. Updated 3 stale keys to real `attraction_place.place_key` values.
+2. Dedupe to ONE row per place temporarily — the primary open-hours row was
+   kept and the rest dropped.
+3. Dropped the trailing 7th CSV column and used the schema column names as
+   the new header.
+
+### What was changed (Pass 2)
+
+`yummyjam/article2/sql/attraction_hour.sql` was fixed:
+- `key text unique` → `key text` (multi-season rows can coexist).
+- `starthour time`/`endhour time` → `starthour text`/`endhour text` (so
+  `99:99` placeholders load).
+- `startdate date`/`enddate date` → `startdate text`/`enddate text` (so the
+  yearless `MM-DD` values load per the author's intent).
+- Added `note text` (placeholder for the legacy 7th CSV column).
+
+`yummyjam/article2/py/importcsv.py` was wired to import the four attraction
+tables in `main()` (place, join, social_media, hour) with the necessary
+row callbacks. `inputplacerow` renames `long` → `lon` and skips empty
+`place_key`; the others are pass-through.
+
+### What was changed (Pass 3 — completion)
+
+`yummyjam/article2/csv/president_attraction_hour.csv` was expanded from 4 to
+11 rows, restoring the seasonal schedule data and the placeholder closed
+rows. The `note` column is now populated for the rows that had legacy
+flag data.
+
+`yummyjam/article2/csv/president_attraction_join.csv` had 4 new rows added
+linking the four hour-bearing places to their persons (see status block
+above for details).
+
+`yummyjam/article2/py/src/buildtool/attraction.py` had the commented-out
+hour import (lines 110-111) enabled, so the buildtool-driven pipeline now
+loads `attraction_hour` end-to-end.
+
+### Verification (run on 2026-08-06)
+
+End-to-end data-chain check via Python CSV parsing:
+- `president_attraction_hour.csv` → 11 rows, 4 distinct keys, 7 columns.
+- `president_attraction_join.csv` → 36 rows (was 32; +4).
+- All 4 hour-bearing places are now reachable from at least one person via
+  the join: Roosevelt→birthplace, Washington→birthplace, Washington→mother
+  home, Washington→sister home (Kenmore).
+- `attraction_hour.sql` declares `starthour text`/`endhour text` and has no
+  `UNIQUE` constraint (only an inline comment that mentions the dropped
+  constraint for documentation).
+
+### Files in this feature area (final state)
+
+- `bbsengine6/py/src/demo_listbox_masterdetail.py` — the demo (rewritten this session).
+- `bbsengine6/py/src/bbsengine6/database.py` — `cursor()` and
+  `DatabaseConnection.cursor()` now forward `**kwargs` to `conn.cursor()`.
+- `bbsengine6/py/src/bbsengine6/listbox.py` — added `Listbox.set_items()`.
+- `yummyjam/article2/sql/attraction_hour.sql` — **FIXED 2026-08-06.**
+- `yummyjam/article2/csv/president_attraction_hour.csv` — **FIXED 2026-08-06.**
+- `yummyjam/article2/csv/president_attraction_join.csv` — **FIXED 2026-08-06** (4 rows added).
+- `yummyjam/article2/py/importcsv.py` — **WIRED 2026-08-06** to import the four attraction tables.
+- `yummyjam/article2/py/src/buildtool/attraction.py` — **WIRED 2026-08-06** to import `attraction_hour`.
+
+### Future cleanup (separate, not required to make the demo work)
+
+- Consider whether `starthour text`/`endhour text` is the right long-term type
+  or whether to keep `time` and instead represent closed periods with a
+  `closed boolean` column (or a "season" dimension). Current decision
+  (`text`) maximizes CSV compatibility at the cost of losing time-type
+  arithmetic.
+- Consider adding `parent_home_place boolean` / `sibling_home_place boolean`
+  to `attraction_join.sql` to replace the `note`-based relationship markers
+  added in Pass 3. Not required; the `note` approach is fully functional.
+- Consider running the demo end-to-end against a live `yummyjam` database to
+  confirm hours display for Roosevelt and Washington. No live DB was
+  available in this environment, so the verification was limited to
+  static data-chain analysis.
+
 ## TEOS Router Breadcrumbs
 
 - [x] Add DB fallback to `router_buildBreadcrumbs()` — try querying `engine.sig` for each path segment; use DB title/URI if found, fall back to auto-generated values for filesystem-only folders. 2026-07-12.
