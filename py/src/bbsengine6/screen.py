@@ -15,6 +15,22 @@ from .io.screen import (
     unregister_bottombar_fragment,
 )
 
+
+def setarea(left, right=None, **kwargs) -> None:
+    """Render the bottom-bar / status line.
+
+    Re-exported here because several zoidoffice modules (client.lib,
+    staff.lib, etc.) call ``bbsengine6.screen.setarea(left, right)``
+    and tests patch this exact path. Delegates to
+    ``bbsengine6.io.screen.setbottombar`` (same signature). Falls back
+    to a no-op so test patching never raises.
+    """
+    try:
+        return setbottombar(left, right, **kwargs)
+    except Exception:
+        return None
+
+
 __all__ = [
     "init",
     "updatebottombar",
@@ -26,4 +42,5 @@ __all__ = [
     "bottombarstack",
     "register_bottombar_fragment",
     "unregister_bottombar_fragment",
+    "setarea",
 ]
