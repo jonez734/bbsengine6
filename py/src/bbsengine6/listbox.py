@@ -114,6 +114,18 @@ class Listbox:
         if self.custom_keys:
             self.key_handlers.update(self.custom_keys)
 
+    def set_items(self, items: List[ListboxItem]) -> None:
+        """Replace the item list and reset navigation state.
+
+        Recomputes the page count and rebuilds the hotkey map, so a
+        Listbox instance can be reused for a fresh set of items.
+        """
+        self.items = items if items is not None else []
+        self._curpage = 0
+        self._currentindex = 0
+        self.numpages = max(1, int(ceil(len(self.items) / self.itemsperpage)))
+        self._build_hotkey_map()
+
     def _build_hotkey_map(self) -> None:
         self._hotkey_map = {}
         for item in self.items:
