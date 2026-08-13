@@ -1,10 +1,35 @@
 from typing import Any, Dict, Optional
 
+import datetime
+from decimal import Decimal
+
 from bbsengine6.bank import BankService
 from bbsengine6 import database
 
 
 from bbsengine6.session import SessionManager
+
+
+def _jsonable(value: Any) -> Any:
+    """Coerce a single value into something ``json.dumps`` can encode.
+
+    ``datetime.datetime`` / ``datetime.date`` -> ISO 8601 string;
+    ``Decimal`` -> ``int`` (banks track integer cents); everything
+    else passes through untouched. Used to make DB row dicts safe
+    for the WebSocket JSON transport.
+    """
+    if isinstance(value, datetime.datetime):
+        return value.isoformat()
+    if isinstance(value, datetime.date):
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        return int(value)
+    return value
+
+
+def _jsonable_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Return ``row`` with every value coerced via :func:`_jsonable`."""
+    return {key: _jsonable(value) for key, value in row.items()}
 
 
 class BaseService:
@@ -206,7 +231,7 @@ class BankServiceHandler(BaseService):
 
         return {
             "type": "bank_pending",
-            "transfers": pending,
+            "transfers": [_jsonable_row(row) for row in pending],
         }
 
     async def _handle_history(self, session_id: int, message: Dict[str, Any]) -> Dict[str, Any]:
@@ -220,7 +245,7 @@ class BankServiceHandler(BaseService):
         return {
             "type": "bank_history",
             "moniker": moniker,
-            "transactions": history,
+            "transactions": [_jsonable_row(row) for row in history],
         }
 
     async def _handle_list_all(self, session_id: int, message: Dict[str, Any]) -> Dict[str, Any]:

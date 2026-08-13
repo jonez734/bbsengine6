@@ -751,14 +751,25 @@ class WebSocketServer:
         This is the canonical discovery primitive; routers must not
         register their own `list_services` handler.
 
+        If the incoming message carries a ``request_id`` (the bed
+        client protocol convention), the server copies it onto the
+        outgoing response so the matching :class:`BedConnection`
+        recv loop can match the reply to the originating request.
+        Without this echo ``BedConnection.send`` would always time
+        out, because its :meth:`_recv_match` lambda keys on
+        ``request_id``.
+
         Returns:
             Response dict, or None for broadcast
         """
         msg_type = message.get("type", "")
+        incoming_request_id = message.get("request_id")
 
         # Built-in: list_services is answered by the server itself.
         if msg_type == "list_services":
-            return self._handle_list_services()
+            return self._echo_request_id(
+                self._handle_list_services(), incoming_request_id
+            )
 
         # Look up service for this message type
         service = self.get_service(msg_type)
@@ -780,17 +791,46 @@ class WebSocketServer:
                         bbs_io.echo_traceback(
                             "bbsengine6.net.transport.dispatch_message.post_dispatch:"
                         )
-                return response
+                return self._echo_request_id(response, incoming_request_id)
             except Exception as e:
                 logger.error(f"Service {service.__class__.__name__} error: {e}")
-                return {"type": "error", "code": "service_error", "message": str(e)}
+                return self._echo_request_id(
+                    {"type": "error", "code": "service_error", "message": str(e)},
+                    incoming_request_id,
+                )
 
         # No service found
-        return {
-            "type": "error",
-            "code": "no_handler",
-            "message": f"No handler for message type: {msg_type}",
-        }
+        return self._echo_request_id(
+            {
+                "type": "error",
+                "code": "no_handler",
+                "message": f"No handler for message type: {msg_type}",
+            },
+            incoming_request_id,
+        )
+
+    @staticmethod
+    def _echo_request_id(
+        response: Optional[Dict[str, Any]], request_id: Any
+    ) -> Optional[Dict[str, Any]]:
+        """Copy ``request_id`` from the request onto the response.
+
+        No-op when ``response`` is ``None`` (broadcast) or when
+        ``request_id`` is missing/empty on the incoming side. The
+        original response object is left untouched when the echo
+        cannot be applied so handlers returning shared/static
+        dicts are not mutated.
+        """
+        if response is None or not request_id:
+            return response
+        # If the handler already echoed the same id, leave it alone.
+        if response.get("request_id") == request_id:
+            return response
+        # Broadcast shared/static dicts as a defensive copy only if we
+        # actually need to attach anything.
+        echoed = dict(response)
+        echoed["request_id"] = request_id
+        return echoed
 
     async def start(self) -> None:
         """Start the WebSocket server."""
