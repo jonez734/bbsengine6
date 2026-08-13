@@ -9,6 +9,11 @@ import socket
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
+import websockets.asyncio.server
+import websockets.exceptions
+
+from bbsengine6 import io as bbs_io
+
 if TYPE_CHECKING:
     from .packet import Packet
 
@@ -491,6 +496,74 @@ class WebSocketProtocol:
             return False, f"Error: {e}", None
 
 
+def _format_peer(peer: Any) -> str:
+    """Best-effort string for a peer sockaddr tuple (AF_INET or AF_INET6)."""
+    if peer is None:
+        return "unknown"
+    if isinstance(peer, tuple) and len(peer) == 2:
+        host, port = peer
+        return f"{host}:{port}"
+    return str(peer)
+
+
+class PeerLoggingServerConnection(websockets.asyncio.server.ServerConnection):
+    """ServerConnection subclass that logs handshake failures with peer info.
+
+    The websockets library's ``conn_handler`` logs ``opening handshake failed``
+    at ERROR with ``exc_info=True`` whenever the opening handshake raises. For
+    peers that TCP-connect and close before sending an HTTP upgrade request,
+    that produces a multi-frame traceback in the logs with no indication of
+    who is doing it.
+
+    This subclass overrides ``handshake`` to:
+      * catch the handshake exception,
+      * emit a single WARNING log line including the offending peer address,
+      * NOT re-raise, so the library's ``conn_handler`` proceeds to abort the
+        transport cleanly without logging the traceback.
+
+    Successful handshakes flow through unchanged.
+    """
+
+    async def handshake(
+        self,
+        process_request: Any,
+        process_response: Any,
+        server_header: Any,
+    ) -> None:
+        try:
+            await super().handshake(process_request, process_response, server_header)
+        except websockets.exceptions.InvalidHandshake as exc:
+            peer = None
+            try:
+                peer = self.transport.get_extra_info("peername")
+            except Exception:
+                bbs_io.echo_traceback(
+                    "bbsengine6.net.transport.peer_logging.handshake.100:"
+                )
+            logger.warning(
+                "WS handshake failed peer=%s exc=%s: %s",
+                _format_peer(peer),
+                type(exc).__name__,
+                exc,
+            )
+            return
+        except (EOFError, ConnectionResetError, OSError) as exc:
+            peer = None
+            try:
+                peer = self.transport.get_extra_info("peername")
+            except Exception:
+                bbs_io.echo_traceback(
+                    "bbsengine6.net.transport.peer_logging.handshake.200:"
+                )
+            logger.warning(
+                "WS handshake aborted peer=%s exc=%s: %s",
+                _format_peer(peer),
+                type(exc).__name__,
+                exc,
+            )
+            return
+
+
 class WebSocketServer:
     """
     WebSocket server for accepting client connections and handling messages.
@@ -544,6 +617,9 @@ class WebSocketServer:
         self._server: Optional[asyncio.Server] = None
         self._clients: Dict[Any, Set] = {}  # path -> set of websockets
         self._running = False
+        # Actual bound port. Set after ``start()`` completes its socket bind;
+        # equals ``self.port`` when not 0. Useful for tests with ephemeral ports.
+        self._bound_port: Optional[int] = None
 
         # Service registry for handling message types
         # Format: {message_type: service_instance}
@@ -566,9 +642,15 @@ class WebSocketServer:
 
         # Pre-dispatch hook: async callable(websocket, message) invoked
         # before every service handler. Used by BED to set the
-        # per-request PostgreSQL role from the session and to log
-        # incoming messages.
+        # per-request PostgreSQL role from the session.
         self._pre_dispatch: Optional[Callable] = None
+
+        # Post-dispatch hook: async callable(websocket, message, response)
+        # invoked after the service handler returns. Used by BED to log
+        # the dispatched message once the auth state is populated (the
+        # pre-dispatch hook fires before AuthService.bind, so any state
+        # lookup there is empty for the `auth` message itself).
+        self._post_dispatch: Optional[Callable] = None
 
         # Session manager used for id allocation and moniker lookup.
         if session_manager is not None:
@@ -688,7 +770,17 @@ class WebSocketServer:
             try:
                 if self._pre_dispatch is not None:
                     await self._pre_dispatch(websocket, message)
-                return await service.handle_message(self, websocket, path, message)
+                response = await service.handle_message(
+                    self, websocket, path, message
+                )
+                if self._post_dispatch is not None:
+                    try:
+                        await self._post_dispatch(websocket, message, response)
+                    except Exception:
+                        bbs_io.echo_traceback(
+                            "bbsengine6.net.transport.dispatch_message.post_dispatch:"
+                        )
+                return response
             except Exception as e:
                 logger.error(f"Service {service.__class__.__name__} error: {e}")
                 return {"type": "error", "code": "service_error", "message": str(e)}
@@ -718,6 +810,17 @@ class WebSocketServer:
                     path = "default"
             except Exception:
                 path = "default"
+
+            peer = None
+            try:
+                peer = websocket.transport.get_extra_info("peername")
+            except Exception:
+                bbs_io.echo_traceback(
+                    "bbsengine6.net.transport.WebSocketServer.start.on_connect.100:"
+                )
+            logger.debug(
+                f"on_connect accepted peer={_format_peer(peer)} path={path}"
+            )
 
             # Allocate a stable session id for this connection. Stashed on
             # the websocket so service handlers and disconnect cleanup can
@@ -825,7 +928,22 @@ class WebSocketServer:
         sock.bind((self.host, self.port))
         sock.listen(128)
 
-        self._server = await websockets.serve(on_connect, sock=sock)
+        # Record the actual port (relevant when port=0 was requested for
+        # ephemeral binding, e.g. tests).
+        try:
+            self._bound_port = sock.getsockname()[1]
+        except Exception:
+            bbs_io.echo_traceback(
+                "bbsengine6.net.transport.WebSocketServer.start.bound_port:"
+            )
+            self._bound_port = self.port
+
+        self._server = await websockets.serve(
+            on_connect,
+            sock=sock,
+            create_connection=PeerLoggingServerConnection,
+            logger=logging.getLogger("websockets.server"),
+        )
         logger.info(f"WebSocket server started on {self.host}:{self.port}")
 
     async def stop(self) -> None:
