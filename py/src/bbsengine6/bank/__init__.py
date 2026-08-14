@@ -58,6 +58,17 @@ def _get_message(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     return msg if isinstance(msg, dict) else {}
 
 
+def _get_claims(message: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the decoded claims sub-dict, or empty dict if absent/malformed.
+
+    The bed handler decodes the HMAC-signed token before calling
+    access() and stuffs the resulting claims under message["claims"].
+    access() never reads the raw token.
+    """
+    claims = message.get("claims")
+    return claims if isinstance(claims, dict) else {}
+
+
 def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
     """Authorize ``op`` for the given session/message pair.
 
@@ -87,7 +98,13 @@ def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
       session : bed.api.session.SessionState (or any object with
                 ``.moniker: str`` and ``.is_sysop: bool`` attributes),
                 or ``None`` for an unbound websocket.
-      message : dict, the incoming wire-shaped payload.
+      message : dict, the incoming wire-shaped payload. If the bed
+                handler verified a bearer token for this op, the
+                decoded claims live under ``message["claims"]``;
+                access() uses the claim-derived ``moniker`` /
+                ``is_sysop`` instead of the in-memory session
+                attributes because they come from a
+                cryptographically verified source.
 
     The function does NOT perform input validation (moniker present,
     amount > 0, transfer_id > 0). That is the caller's job and lives
@@ -96,6 +113,20 @@ def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
     """
     session = _get_session(kwargs)
     message = _get_message(kwargs)
+    claims = _get_claims(message)
+
+    # When the bed handler decoded and verified the session's bearer
+    # token, the resulting claims are stashed under message["claims"].
+    # Prefer the claim-derived values for authorization because they
+    # come from a cryptographically verified source (HMAC + store +
+    # expiry + instance-match), not just the in-memory session state.
+    # Fall back to session attributes when no claims are supplied.
+    auth_moniker = claims.get("moniker") or getattr(session, "moniker", None)
+    auth_is_sysop = bool(
+        claims.get("is_sysop")
+        if "is_sysop" in claims
+        else getattr(session, "is_sysop", False)
+    )
 
     # At module-load time (bbsengine6.module.check calls us with op="run"
     # and no extra kwargs), there is no session yet. We allow the module
@@ -113,26 +144,22 @@ def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
         target = (message.get("moniker") or "").strip()
         if not target:
             return False
-        if getattr(session, "is_sysop", False):
+        if auth_is_sysop:
             return True
-        return _moniker_eq(getattr(session, "moniker", None), target)
+        return _moniker_eq(auth_moniker, target)
 
     if op == "list_all":
-        return bool(getattr(session, "is_sysop", False))
+        return auth_is_sysop
 
     if op == "transfer":
         f = (message.get("from") or "").strip()
         t = (message.get("to") or "").strip()
         if not f or not t:
             return False
-        if not getattr(session, "is_sysop", False) and not _moniker_eq(
-            getattr(session, "moniker", None), f
-        ):
+        if not auth_is_sysop and not _moniker_eq(auth_moniker, f):
             return False
         rb = (message.get("requested_by") or "").strip()
-        if rb and not getattr(session, "is_sysop", False) and not _moniker_eq(
-            getattr(session, "moniker", None), rb
-        ):
+        if rb and not auth_is_sysop and not _moniker_eq(auth_moniker, rb):
             return False
         return True
 
@@ -144,9 +171,7 @@ def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
         if tid <= 0:
             return False
         rb = (message.get("responded_by") or "").strip()
-        if rb and not getattr(session, "is_sysop", False) and not _moniker_eq(
-            getattr(session, "moniker", None), rb
-        ):
+        if rb and not auth_is_sysop and not _moniker_eq(auth_moniker, rb):
             return False
         return True
 

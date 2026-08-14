@@ -234,3 +234,107 @@ def test_module_surface_present():
     assert callable(pkg.buildargs)
     assert callable(pkg.main)
     assert callable(pkg.access)
+
+
+# ---------- claims-aware authorization ----------
+#
+# When the bed handler verifies a bearer token before calling access(),
+# it stashes the decoded claims under ``message["claims"]``. access()
+# then prefers claim-derived ``moniker`` / ``is_sysop`` over the
+# in-memory session attributes, because the claims come from a
+# cryptographically verified source (HMAC + store + expiry +
+# instance-match).
+
+
+@pytest.mark.parametrize("op", ["balance", "add", "remove", "history", "pending"])
+def test_claim_sysop_overrides_non_sysop_session(op):
+    """A token whose claims say is_sysop=True lifts the ownership
+    gate even if ``session.is_sysop`` is False."""
+    s = _session("root", is_sysop=False)
+    msg = {
+        "moniker": "alice",
+        "claims": {"moniker": "root", "is_sysop": True, "session_id": "s1"},
+    }
+    assert bank_access(None, op, session=s, message=msg) is True
+
+
+@pytest.mark.parametrize("op", ["balance", "add", "remove", "history", "pending"])
+def test_claim_moniker_overrides_session_moniker_for_self_check(op):
+    """For ops where the session's moniker must match the target
+    moniker (the non-sysop branch), the claim-derived moniker is the
+    one that counts. This pins that the verifier, not the session
+    state, is the source of truth for who the user is."""
+    s = _session("alice", is_sysop=False)
+    msg = {
+        "moniker": "alice",
+        # session says "alice" but the claim says "alice" -- equal,
+        # so the op should be allowed. This is the common case.
+        "claims": {"moniker": "alice", "is_sysop": False, "session_id": "s1"},
+    }
+    assert bank_access(None, op, session=s, message=msg) is True
+
+
+@pytest.mark.parametrize("op", ["balance", "add", "remove", "history", "pending"])
+def test_claim_sysop_false_blocks_even_when_session_was_sysop(op):
+    """If the claim says is_sysop=False but the in-memory session
+    still says True (e.g. stale state from a token revoke), the
+    claim wins and the op is denied against an unrelated target."""
+    s = _session("alice", is_sysop=True)  # session stale, still sysop
+    msg = {
+        "moniker": "bob",
+        "claims": {"moniker": "alice", "is_sysop": False, "session_id": "s1"},
+    }
+    assert bank_access(None, op, session=s, message=msg) is False
+
+
+def test_claim_sysop_allows_list_all_when_session_was_not_sysop():
+    """list_all is sysop-only. The claim-derived is_sysop overrides
+    a demoted session attribute."""
+    s = _session("root", is_sysop=False)
+    msg = {"claims": {"moniker": "root", "is_sysop": True}}
+    assert bank_access(None, "list_all", session=s, message=msg) is True
+
+
+def test_claim_moniker_authorizes_transfer_when_session_moniker_stale():
+    """A transfer request whose ``from`` matches the claim's
+    moniker is allowed even if ``session.moniker`` has been
+    tampered with."""
+    s = _session("mallory", is_sysop=False)  # tampered session
+    msg = {
+        "from": "alice",
+        "to": "bob",
+        "amount": 1,
+        "claims": {"moniker": "alice", "is_sysop": False},
+    }
+    assert bank_access(None, "transfer", session=s, message=msg) is True
+
+
+def test_claim_moniker_denies_transfer_when_claim_does_not_match_from():
+    """The claim-derived moniker must match ``from`` to authorize a
+    transfer; if the session says alice but the claim says bob, the
+    transfer from alice is denied."""
+    s = _session("alice", is_sysop=False)
+    msg = {
+        "from": "alice",
+        "to": "bob",
+        "amount": 1,
+        "claims": {"moniker": "bob", "is_sysop": False},
+    }
+    assert bank_access(None, "transfer", session=s, message=msg) is False
+
+
+def test_no_claims_falls_back_to_session_attributes():
+    """When ``message["claims"]`` is absent, access() uses the
+    session's ``moniker`` / ``is_sysop`` exactly as before. Pins
+    backward compatibility with non-token-aware callers."""
+    s = _session("alice", is_sysop=False)
+    msg = {"moniker": "alice"}
+    assert bank_access(None, "balance", session=s, message=msg) is True
+
+
+def test_empty_claims_dict_falls_back_to_session_attributes():
+    """An empty claims dict behaves the same as no claims at all;
+    ``claim.get('moniker')`` returns None, so the session wins."""
+    s = _session("alice", is_sysop=False)
+    msg = {"moniker": "alice", "claims": {}}
+    assert bank_access(None, "balance", session=s, message=msg) is True
