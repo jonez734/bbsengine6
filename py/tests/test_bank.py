@@ -295,10 +295,15 @@ class TestTransferCrud:
         account.get_or_create(moniker1, initial_balance=1000)
         account.get_or_create(moniker2, initial_balance=0)
 
+        # Phase 2 hardening (ef02e1c) blocks self-approval: a sysop
+        # account is created as the approver.
+        approver = f"test_{user}_sysop"
+        account.get_or_create(approver, initial_balance=0)
+
         create_result = transfer.create(moniker1, moniker2, 100, user)
         transfer_id = create_result["transfer_id"]
 
-        approve_result = transfer.approve(transfer_id, user)
+        approve_result = transfer.approve(transfer_id, approver)
 
         assert approve_result["success"] is True
         assert approve_result["from_balance"] == 900
@@ -420,12 +425,17 @@ class TestBankService:
         bank.account.get_or_create(moniker1, initial_balance=1000)
         bank.account.get_or_create(moniker2, initial_balance=0)
 
+        # Phase 2 hardening (ef02e1c) blocks self-approval: a sysop
+        # account is created as the approver.
+        approver = f"test_{user}_sysop"
+        bank.account.get_or_create(approver, initial_balance=0)
+
         create_result = bank.transfer(moniker1, moniker2, 250, user)
         assert create_result["success"] is True
 
         transfer_id = create_result["transfer_id"]
 
-        approve_result = bank.approve_transfer(transfer_id, user)
+        approve_result = bank.approve_transfer(transfer_id, approver)
         assert approve_result["success"] is True
 
         assert bank.get_balance(moniker1) == 750
