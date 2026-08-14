@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### net.transport: warn on `register_service` overwrites
+
+`WebSocketServer.register_service` overwrites `self._services[msg_type]`
+per-key (and the `self._default_service` slot) without telling the
+operator. A second registration for the same message type was
+indistinguishable from a first, which made intentional swaps (e.g.
+bed's `PingService` overwriting a router's own `["ping"]`) and
+accidental swaps (e.g. a custom router registering `"auth"` and
+silently replacing bed's `AuthService`) both invisible.
+
+The method now emits a `WARNING` line whenever a registration would
+replace an existing handler, naming both the previous and the new
+service class. New regression test in
+`py/tests/test_register_service_overwrite.py` covers per-type,
+mixed-batch, default-slot, and "last writer wins" cases.
+
 ### bbsengine6: `make install` runs `version` and rebuilds with `--no-cache-dir`
 
 - `Makefile` `install` now depends on `version` (closes a gap where

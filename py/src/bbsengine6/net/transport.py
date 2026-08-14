@@ -670,13 +670,42 @@ class WebSocketServer:
             service: Service instance with async handle_message(server, websocket, path, message) method
             message_types: List of message types this service handles (e.g., ["auth", "bet", "hit"])
                            If None, service becomes the default service
+
+        When a registration would replace an already-registered handler
+        (either a per-type entry in ``self._services`` or the
+        ``self._default_service`` slot) a warning is emitted so the
+        operator can see the overwrite in the log. This is intentional:
+        ``register_service`` overwrites by ``msg_type`` key, so the
+        last writer wins; bed relies on this to install its
+        ``PingService`` after a router's own ``ping`` registration.
+        The warning surfaces both intentional swaps (bed's ping
+        override) and accidental ones (a custom router registering
+        ``"auth"`` would silently replace ``AuthService``).
         """
         if message_types is None:
+            if self._default_service is not None:
+                prev = self._default_service.__class__.__name__
+                new = service.__class__.__name__
+                logger.warning(
+                    f"WebSocketServer: overwriting existing default service "
+                    f"previous={prev} new={new}"
+                )
             self._default_service = service
             logger.info(f"Registered default service: {service.__class__.__name__}")
         else:
+            overwritten: List[str] = []
             for msg_type in message_types:
+                if msg_type in self._services:
+                    prev = self._services[msg_type].__class__.__name__
+                    overwritten.append(f"{msg_type}({prev})")
                 self._services[msg_type] = service
+            if overwritten:
+                new = service.__class__.__name__
+                logger.warning(
+                    f"WebSocketServer: overwriting existing handler(s) "
+                    f"previous=[{', '.join(overwritten)}] new={new} "
+                    f"message_types={list(message_types)}"
+                )
             logger.info(
                 f"Registered service {service.__class__.__name__} for: {message_types}"
             )
