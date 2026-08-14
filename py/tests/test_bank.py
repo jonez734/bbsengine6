@@ -42,7 +42,7 @@ def test_pool(test_args):
 
 
 @pytest.fixture(autouse=True)
-def cleanup_test_accounts(db_connection):
+def cleanup_test_accounts(test_args):
     """Clean up test accounts before and after each test."""
     user = getpass.getuser()
     test_monikers = [
@@ -50,22 +50,21 @@ def cleanup_test_accounts(db_connection):
         f"test_{user}_2",
         f"test_{user}_3",
     ]
-    
-    with db_connection.cursor() as cur:
-        for moniker in test_monikers:
-            cur.execute("DELETE FROM bank.__transfer WHERE fromaccountid IN (SELECT id FROM bank.__account WHERE moniker = %s) OR toaccountid IN (SELECT id FROM bank.__account WHERE moniker = %s)", (moniker, moniker))
-            cur.execute("DELETE FROM bank.__transaction WHERE accountid IN (SELECT id FROM bank.__account WHERE moniker = %s)", (moniker,))
-            cur.execute("DELETE FROM bank.__account WHERE moniker = %s", (moniker,))
-    db_connection.commit()
-    
+
+    def _cleanup():
+        with database.connect(test_args) as conn:
+            with conn.cursor() as cur:
+                for moniker in test_monikers:
+                    cur.execute("DELETE FROM bank.__transfer WHERE fromaccountid IN (SELECT id FROM bank.__account WHERE moniker = %s) OR toaccountid IN (SELECT id FROM bank.__account WHERE moniker = %s)", (moniker, moniker))
+                    cur.execute("DELETE FROM bank.__transaction WHERE accountid IN (SELECT id FROM bank.__account WHERE moniker = %s)", (moniker,))
+                    cur.execute("DELETE FROM bank.__account WHERE moniker = %s", (moniker,))
+            conn.commit()
+
+    _cleanup()
+
     yield
-    
-    with db_connection.cursor() as cur:
-        for moniker in test_monikers:
-            cur.execute("DELETE FROM bank.__transfer WHERE fromaccountid IN (SELECT id FROM bank.__account WHERE moniker = %s) OR toaccountid IN (SELECT id FROM bank.__account WHERE moniker = %s)", (moniker, moniker))
-            cur.execute("DELETE FROM bank.__transaction WHERE accountid IN (SELECT id FROM bank.__account WHERE moniker = %s)", (moniker,))
-            cur.execute("DELETE FROM bank.__account WHERE moniker = %s", (moniker,))
-    db_connection.commit()
+
+    _cleanup()
 
 
 class TestAccountCrud:
