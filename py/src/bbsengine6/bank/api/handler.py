@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 import datetime
 from decimal import Decimal
 
-from bbsengine6.bank import BankService
+from bbsengine6.bank import BankService, access as bank_access
 from bbsengine6 import database
 
 
@@ -32,6 +32,41 @@ def _jsonable_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return {key: _jsonable(value) for key, value in row.items()}
 
 
+class SessionState:
+    """Adapter: wraps a session dict from SessionManager into the interface bank_access expects."""
+
+    def __init__(self, session: Dict[str, Any]):
+        self.moniker = session.get("moniker")
+        self.is_sysop = session.get("is_sysop", False)
+
+
+OP_MAP: Dict[str, str] = {
+    "bank_balance": "balance",
+    "bank_add": "add",
+    "bank_remove": "remove",
+    "bank_history": "history",
+    "bank_transfer_request": "transfer",
+    "bank_transfer_approve": "approve",
+    "bank_transfer_reject": "reject",
+    "bank_pending": "pending",
+    "bank_list_all": "list_all",
+}
+
+
+def _check_auth(
+    args: Any, msg_type: str, session_id: int, message: Dict[str, Any], sessions: SessionManager
+) -> Optional[Dict[str, Any]]:
+    """Call bank_access with a SessionState; return error response if denied."""
+    op = OP_MAP.get(msg_type)
+    if op is None:
+        return {"type": "error", "code": "unknown_operation"}
+
+    sess = sessions.get_session(session_id)
+    if not bank_access(args, op, session=SessionState(sess) if sess else None, message=message):
+        return {"type": "error", "code": "forbidden", "message": "not authorized"}
+    return None
+
+
 class BaseService:
     """Base class for message handlers."""
 
@@ -56,6 +91,11 @@ class BankServiceHandler(BaseService):
         self, server: Any, websocket: Any, path: str, message: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         msg_type = message.get("type")
+
+        # Authorization check for all bank operations
+        auth_error = _check_auth(self.args, msg_type, id(websocket), message, self.sessions)
+        if auth_error:
+            return auth_error
 
         if msg_type == "bank_balance":
             return await self._handle_balance(id(websocket), message)
