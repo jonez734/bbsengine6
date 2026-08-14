@@ -87,34 +87,34 @@ class TestCheckNotificationsForwardsArgs:
 
 class TestResolveDbFallsBackToArgs:
     def test_uses_args_databasename_when_no_explicit_db(self):
-        from bbsengine6.message import _resolve_db
+        from bbsengine6.message import lib as message_lib
 
         args = _Args("zoidbo")
-        assert _resolve_db(None, args) == "zoidbo"
+        assert message_lib._resolve_db(None, args) == "zoidbo"
 
     def test_uses_args_database_attr_as_fallback(self):
-        from bbsengine6.message import _resolve_db
+        from bbsengine6.message import lib as message_lib
 
         class AltArgs:
             databasename = None
             database = "altdb"
 
-        assert _resolve_db(None, AltArgs()) == "altdb"
+        assert message_lib._resolve_db(None, AltArgs()) == "altdb"
 
     def test_explicit_database_overrides_args(self):
-        from bbsengine6.message import _resolve_db
+        from bbsengine6.message import lib as message_lib
 
         args = _Args("zoidbo")
-        assert _resolve_db("override", args) == "override"
+        assert message_lib._resolve_db("override", args) == "override"
 
     def test_falls_back_to_default_when_nothing_supplied(self, monkeypatch):
-        from bbsengine6 import message
+        from bbsengine6.message import lib as message_lib
 
         monkeypatch.delenv("BBSENGINE6_DBNAME", raising=False)
-        assert message._resolve_db(None, None) == "zoid6"
+        assert message_lib._resolve_db(None, None) == "zoid6"
 
     def test_falls_back_to_env_var_when_args_has_no_db(self, monkeypatch):
-        from bbsengine6 import message
+        from bbsengine6.message import lib as message_lib
 
         monkeypatch.setenv("BBSENGINE6_DBNAME", "envdb")
 
@@ -122,7 +122,7 @@ class TestResolveDbFallsBackToArgs:
             databasename = None
             database = None
 
-        assert message._resolve_db(None, NoDbArgs()) == "envdb"
+        assert message_lib._resolve_db(None, NoDbArgs()) == "envdb"
 
 
 class TestGetUnreadCountAcceptsArgsAndPool:

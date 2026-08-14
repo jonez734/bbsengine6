@@ -1,5 +1,11 @@
-# message.py
-# Unified message system with channel-based pub/sub and persistence
+# bbsengine6/message/lib.py
+# Unified message system with channel-based pub/sub and persistence.
+#
+# This is the implementation module for the ``bbsengine6.message``
+# package. The package-level ``__init__.py`` re-exports every public
+# name from here (including ``send``, ``get_pending_messages``,
+# ``get_unread_count``, ``Message``, ``MessageUrgency``, etc.) and adds
+# the ``access()`` authorization policy used by ``bed.api.message``.
 
 from __future__ import annotations
 
@@ -9,11 +15,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from psycopg import sql
-from psycopg import errors as psycopg_errors
-
-from . import io
-from .database import getpool
+from .. import io
+from ..database import getpool
 
 _message_enabled: bool = True
 
@@ -100,13 +103,6 @@ def _resolve_db(database: Optional[str] = None, args: Any = None) -> str:
     return _default_db()
 
 
-def _table_identifier(table: str) -> sql.Identifier:
-    if "." in table:
-        schema, table_name = table.split(".", 1)
-        return sql.Identifier(schema, table_name)
-    return sql.Identifier(table)
-
-
 def _make_args(database: str) -> Any:
     """Create args object for database functions.
 
@@ -129,6 +125,32 @@ def _make_args(database: str) -> Any:
     args.databasepassword = os.environ.get("BBSENGINE6_DBPASSWORD")
     args.databaseschema = os.environ.get("BBSENGINE6_DBSCHEMA", "engine")
     return args
+
+
+def _table_exists_on_cursor(cur: Any, schema: str, table: str) -> bool:
+    """Probe ``schema.table`` existence on an already-open cursor.
+
+    Runs a single SELECT against ``information_schema.tables`` and
+    returns True if a row matches. Never raises -- returns False on
+    any exception so a probe failure cannot mask the caller's intent.
+
+    Replaces a prior ``except psycopg.errors.UndefinedTable`` swallow
+    around the count query; doing the probe on the caller's existing
+    cursor keeps the ``bbsengine6.message`` package free of any
+    ``psycopg`` import.
+    """
+    try:
+        cur.execute(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = %s AND table_name = %s",
+            (schema, table),
+        )
+    except Exception:
+        return False
+    try:
+        return cur.fetchone() is not None
+    except Exception:
+        return False
 
 
 def _check_blocking_and_ratelimit(
@@ -551,36 +573,9 @@ def get_unread_count(
     if not _message_enabled:
         return 0
 
-    try:
-        if conn is not None:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT COUNT(*) FROM engine.__message_recipient
-                    WHERE recipient_moniker = %s AND status = 'pending'
-                    """,
-                    (moniker,),
-                )
-                return cur.fetchone()[0]
+    db_label = _resolve_db(database, args)
 
-        if pool is None:
-            database = _resolve_db(database, args)
-            args = _make_args(database)
-            pool = getpool(args)
-
-        with pool.connection() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                    SELECT COUNT(*) FROM engine.__message_recipient
-                    WHERE recipient_moniker = %s AND status = 'pending'
-                    """,
-                (moniker,),
-            )
-            return cur.fetchone()[0]
-    except psycopg_errors.UndefinedTable:
-        db_label = database
-        if db_label is None and args is not None:
-            db_label = getattr(args, "databasename", None)
+    def _missing_table_warning() -> int:
         io.echo(
             f"bbsengine6.message.get_unread_count.100: "
             f"engine.__message_recipient missing in {db_label or 'current db'}; "
@@ -589,6 +584,44 @@ def get_unread_count(
             level="warn",
         )
         return 0
+
+    # Caller supplied a connection -- use it directly. Probe the
+    # information_schema on the same cursor before the count query so
+    # we don't have to catch a server-side UndefinedTable (and don't
+    # need to import psycopg).
+    if conn is not None:
+        with conn.cursor() as cur:
+            if not _table_exists_on_cursor(
+                cur, "engine", "__message_recipient"
+            ):
+                return _missing_table_warning()
+            cur.execute(
+                """
+                SELECT COUNT(*) FROM engine.__message_recipient
+                WHERE recipient_moniker = %s AND status = 'pending'
+                """,
+                (moniker,),
+            )
+            return cur.fetchone()[0]
+
+    if pool is None:
+        database = _resolve_db(database, args)
+        args = _make_args(database)
+        pool = getpool(args)
+
+    with pool.connection() as conn, conn.cursor() as cur:
+        if not _table_exists_on_cursor(
+            cur, "engine", "__message_recipient"
+        ):
+            return _missing_table_warning()
+        cur.execute(
+            """
+                SELECT COUNT(*) FROM engine.__message_recipient
+                WHERE recipient_moniker = %s AND status = 'pending'
+                """,
+            (moniker,),
+        )
+        return cur.fetchone()[0]
 
 
 # NOTE: _local_unread_cache is process-local. When a single Python
