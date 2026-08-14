@@ -218,3 +218,199 @@ def test_handle_message_passes_through_on_allowed(monkeypatch, sessions):
     assert result["type"] == "bank_balance"
     assert result["moniker"] == "alice"
     assert fake_bank.calls == [("get_balance", "alice")]
+
+
+# ---------- token-claims path (existing token reused on bank ops) ----------
+#
+# When the auth handler (bed/api/auth.py) verifies a bearer token for
+# an incoming bank message, it stashes the decoded claims under
+# ``message["claims"]``. The bank WS handler must forward those claims
+# unchanged into ``bank_access`` so that the claim-derived
+# ``moniker`` / ``is_sysop`` take precedence over the in-memory
+# session attributes (which can be stale or tampered with).
+
+
+def test_handle_message_uses_existing_token_claims_for_self_op(monkeypatch, sessions):
+    """The live session belongs to 'mallory', but the message carries
+    a verified token whose claims say 'alice' owns the target. The
+    bank handler must authorize on the claims, not the session."""
+    from bbsengine6.bank.api.handler import BankServiceHandler
+
+    ws = _WS()
+    sessions.register_session(id(ws), "mallory", is_sysop=False)
+
+    handler = BankServiceHandler(SimpleNamespace(), sessions)
+    fake_bank = _FakeBankService()
+    monkeypatch.setattr(handler, "bank_service", fake_bank)
+
+    msg = {
+        "type": "bank_balance",
+        "moniker": "alice",
+        "claims": {"moniker": "alice", "is_sysop": False, "session_id": "tok-1"},
+    }
+    result = asyncio.run(handler.handle_message(None, ws, "/bank", msg))
+
+    assert result["type"] == "bank_balance"
+    assert fake_bank.calls == [("get_balance", "alice")]
+
+
+def test_handle_message_token_sysop_overrides_non_sysop_session(monkeypatch, sessions):
+    """A token whose claims say is_sysop=True must lift the
+    ownership gate even when the in-memory session is non-sysop.
+    This is the 'existing sysop token' path."""
+    from bbsengine6.bank.api.handler import BankServiceHandler
+
+    ws = _WS()
+    sessions.register_session(id(ws), "root", is_sysop=False)
+
+    handler = BankServiceHandler(SimpleNamespace(), sessions)
+    fake_bank = _FakeBankService()
+    monkeypatch.setattr(handler, "bank_service", fake_bank)
+
+    msg = {
+        "type": "bank_balance",
+        "moniker": "alice",
+        "claims": {"moniker": "root", "is_sysop": True, "session_id": "tok-root"},
+    }
+    result = asyncio.run(handler.handle_message(None, ws, "/bank", msg))
+
+    assert result["type"] == "bank_balance"
+    assert fake_bank.calls == [("get_balance", "alice")]
+
+
+def test_handle_message_token_authorizes_list_all_for_sysop(monkeypatch, sessions):
+    """An existing sysop token on the message must unlock list_all
+    even when the in-memory session is not sysop (e.g., demoted).
+    Patches out the DB read since list_all queries bank.__account."""
+    from bbsengine6.bank.api.handler import BankServiceHandler
+
+    ws = _WS()
+    sessions.register_session(id(ws), "root", is_sysop=False)
+
+    handler = BankServiceHandler(SimpleNamespace(), sessions)
+
+    class _Ctx:
+        def __enter__(self_inner):
+            class _Cur:
+                def __enter__(self_cur):
+                    return self_cur
+
+                def __exit__(self_cur, *exc):
+                    return False
+
+                def execute(self_cur, *a, **kw):
+                    return self_cur
+
+                def __iter__(self_cur):
+                    return iter([])
+
+            return _Cur()
+
+        def __exit__(self_inner, *exc):
+            return False
+
+    monkeypatch.setattr("bbsengine6.bank.api.handler.database.connect", lambda *a, **kw: _Ctx())
+    monkeypatch.setattr("bbsengine6.bank.api.handler.database.cursor", lambda conn: _Ctx())
+
+    msg = {"type": "bank_list_all", "claims": {"moniker": "root", "is_sysop": True}}
+    result = asyncio.run(handler.handle_message(None, ws, "/bank", msg))
+
+    assert result["type"] == "bank_list_all"
+
+
+def test_handle_message_token_authorizes_transfer_from_own_account(monkeypatch, sessions):
+    """A transfer whose ``from`` matches the token's moniker is
+    allowed even when the in-memory session was tampered to a
+    different moniker. Pins that claims are forwarded into
+    bank_access unchanged."""
+    from bbsengine6.bank.api.handler import BankServiceHandler
+
+    ws = _WS()
+    sessions.register_session(id(ws), "mallory", is_sysop=False)
+
+    handler = BankServiceHandler(SimpleNamespace(), sessions)
+    fake_bank = _FakeBankService()
+    monkeypatch.setattr(handler, "bank_service", fake_bank)
+
+    msg = {
+        "type": "bank_transfer_request",
+        "from": "alice",
+        "to": "bob",
+        "amount": 1,
+        "claims": {"moniker": "alice", "is_sysop": False, "session_id": "tok-1"},
+    }
+    result = asyncio.run(handler.handle_message(None, ws, "/bank", msg))
+
+    assert result["type"] == "bank_transfer_request"
+    assert fake_bank.calls == [("transfer", "alice", "bob", 1, "mallory")]
+
+
+def test_handle_message_token_denies_transfer_from_other_account(monkeypatch, sessions):
+    """If the session says 'alice' but the token's claims say 'bob',
+    a transfer from alice is denied. The claim wins."""
+    from bbsengine6.bank.api.handler import BankServiceHandler
+
+    ws = _WS()
+    sessions.register_session(id(ws), "alice", is_sysop=False)
+
+    handler = BankServiceHandler(SimpleNamespace(), sessions)
+    fake_bank = _FakeBankService()
+    monkeypatch.setattr(handler, "bank_service", fake_bank)
+
+    msg = {
+        "type": "bank_transfer_request",
+        "from": "alice",
+        "to": "bob",
+        "amount": 1,
+        "claims": {"moniker": "bob", "is_sysop": False, "session_id": "tok-bob"},
+    }
+    result = asyncio.run(handler.handle_message(None, ws, "/bank", msg))
+
+    assert result == {"type": "error", "code": "forbidden", "message": "not authorized"}
+    assert fake_bank.calls == []
+
+
+def test_handle_message_token_demoted_to_non_sysop_blocks_other_account(monkeypatch, sessions):
+    """If the token was demoted (claims say is_sysop=False) but the
+    stale session is still sysop, the claim wins and ops against an
+    unrelated account are denied. Pins that claims are the source of
+    truth, not the in-memory session."""
+    from bbsengine6.bank.api.handler import BankServiceHandler
+
+    ws = _WS()
+    sessions.register_session(id(ws), "alice", is_sysop=True)
+
+    handler = BankServiceHandler(SimpleNamespace(), sessions)
+    fake_bank = _FakeBankService()
+    monkeypatch.setattr(handler, "bank_service", fake_bank)
+
+    msg = {
+        "type": "bank_balance",
+        "moniker": "bob",
+        "claims": {"moniker": "alice", "is_sysop": False, "session_id": "tok-1"},
+    }
+    result = asyncio.run(handler.handle_message(None, ws, "/bank", msg))
+
+    assert result == {"type": "error", "code": "forbidden", "message": "not authorized"}
+    assert fake_bank.calls == []
+
+
+def test_handle_message_no_claims_falls_back_to_session(monkeypatch, sessions):
+    """When the message carries no claims dict (the auth handler did
+    not verify a token for this message -- e.g., a fresh login
+    followed immediately by a bank op), the handler falls back to
+    the in-memory session attributes."""
+    from bbsengine6.bank.api.handler import BankServiceHandler
+
+    ws = _WS()
+    sessions.register_session(id(ws), "alice", is_sysop=False)
+
+    handler = BankServiceHandler(SimpleNamespace(), sessions)
+    fake_bank = _FakeBankService()
+    monkeypatch.setattr(handler, "bank_service", fake_bank)
+
+    msg = {"type": "bank_balance", "moniker": "alice"}  # no "claims"
+    result = asyncio.run(handler.handle_message(None, ws, "/bank", msg))
+
+    assert result["type"] == "bank_balance"
+    assert fake_bank.calls == [("get_balance", "alice")]

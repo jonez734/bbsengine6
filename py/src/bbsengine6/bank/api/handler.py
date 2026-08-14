@@ -289,10 +289,6 @@ class BankServiceHandler(BaseService):
         }
 
     async def _handle_list_all(self, session_id: int, message: Dict[str, Any]) -> Dict[str, Any]:
-        session = self.sessions.get_session(session_id)
-        if not session or not session.get("is_sysop"):
-            return {"type": "error", "code": "permission_denied", "message": "sysop only"}
-
         accounts = []
         with database.connect(self.args) as conn:
             with database.cursor(conn) as cur:
