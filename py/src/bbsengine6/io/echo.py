@@ -921,6 +921,13 @@ _unicode = {
     "arrow_up": "\u2191",  # ↑
     "arrow_right": "\u2192",  # →
     "arrow_down": "\u2193",  # ↓
+    "spade": "\u2660",  # ♠ @since 20260815
+    "heart": "\u2665",  # ♥ @since 20260815
+    "diamond": "\u2666",  # ♦ @since 20260815
+    "club": "\u2663",  # ♣ @since 20260815
+    "solidblock": "\u2588",  # █ @since 20260815
+    "lightblock": "\u2591",  # ░ @since 20260815
+    "mediumblock": "\u2592",  # ▒ @since 20260815
 }
 
 
@@ -964,6 +971,20 @@ def _handle_command(token, **kwargs):  # palette=None, vars=None):
     if cmd in _acs_map:
         yield from _handle_acs(token)
         return
+
+    # {u:NAME[:repeat]} - look up NAME in the unicode table, optionally repeated
+    # @since 20260815
+    if cmd == "u" and token.args:
+        unicode_name = token.args[0]
+        if unicode_name in _unicode:
+            token.text = _unicode[unicode_name]
+            if len(token.args) > 1:
+                try:
+                    token.repeat = int(token.args[1])
+                except (ValueError, TypeError):
+                    token.repeat = 1
+            yield token
+            return
 
     if cmd in _unicode:
         yield from _handle_unicode(token)
