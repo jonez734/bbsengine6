@@ -925,8 +925,8 @@ _unicode = {
 
 
 def _handle_unicode(token):
-    if token.kind in _unicode:
-        token.text = _unicode[token.kind]
+    if token.value in _unicode:
+        token.text = _unicode[token.value]
         yield token
 
 
