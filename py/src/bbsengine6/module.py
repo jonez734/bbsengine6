@@ -499,7 +499,8 @@ def _check_func_return(func_ann, stub_ann):
         return True
 
     if func_ann is inspect._empty:
-        return False
+        # Unannotated function: structurally compatible (treat as Any).
+        return True
 
     if func_ann == stub_ann:
         return True
@@ -513,15 +514,25 @@ def _check_func_return(func_ann, stub_ann):
         if stub_ann == func_ann:
             return True
 
-    from typing import get_origin, get_args, Union
+    from typing import get_args, get_origin
 
-    def normalize(ann):
+    def _args(ann):
         origin = get_origin(ann)
-        if origin is Union:
-            return set(get_args(ann))
+        if origin is not None:
+            return set(get_args(ann)) | {origin}
         return {ann}
 
-    return normalize(func_ann) == normalize(stub_ann)
+    stub_args = _args(stub_ann)
+    func_args = _args(func_ann)
+
+    # Stub is a Union (e.g. bool | None): func must be in the union or a
+    # member of it. Accepts narrower return types like `bool` against
+    # `bool | None`.
+    if len(stub_args - func_args) != len(stub_args):
+        return True
+
+    # Otherwise the two annotations must agree exactly.
+    return func_args == stub_args
 
 
 def _kind_compatible(func_kind, stub_kind):
@@ -554,12 +565,14 @@ def _check_func_signature(
     f_name = name or func.__name__
 
     def fail(reason=None):
-        return SignatureError(
-            func_name=f_name,
-            expected=f"{f_name}{sig_stub}",
-            found=f"{f_name}{sig_func}",
-            reason=reason,
+        io.echo(
+            f"{f_name}() signature mismatch\n"
+            f"  expected: {f_name}{sig_stub}\n"
+            f"  found:    {f_name}{sig_func}"
+            + (f"\n  reason:   {reason}" if reason else ""),
+            level="debug",
         )
+        return False
 
     if len(f_params) < len(s_params):
         return False
@@ -567,7 +580,7 @@ def _check_func_signature(
     for i, s in enumerate(s_params):
         f = f_params[i]
 
-        if f.name != s.name:
+        if f.name != s.name and s.kind is not inspect.Parameter.VAR_KEYWORD:
             return fail(f"parameter {i + 1} should be '{s.name}'")
 
         if not _kind_compatible(f.kind, s.kind):
@@ -591,11 +604,11 @@ def _check_func_signature(
 # --- Stub Functions ---
 
 
-def _stub_access(args: argparse.Namespace, op: str, /, **kwargs: dict) -> bool | None:
+def _stub_access(args: argparse.Namespace, op: str, **kwargs: dict) -> bool | None:
     pass
 
 
-def _stub_init(args: argparse.Namespace, /, **kwargs: dict) -> bool | None:
+def _stub_init(args: argparse.Namespace, **kwargs: dict) -> bool | None:
     pass
 
 
@@ -605,11 +618,11 @@ def _stub_buildargs(
     pass
 
 
-def _stub_main(args: argparse.Namespace, /, **kwargs: dict) -> bool | None:
+def _stub_main(args: argparse.Namespace, **kwargs: dict) -> bool | None:
     pass
 
 
-def _stub_version(args: argparse.Namespace, /, **kwargs: dict) -> str | None:
+def _stub_version(args: argparse.Namespace, **kwargs: dict) -> str | None:
     return None
 
 
