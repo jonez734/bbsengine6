@@ -80,6 +80,24 @@ echo("{red}Hello {bold}World{/bold}!{/red}")
 
 ---
 
+## Unicode Points (`{u:NAME[:repeat]}`)
+
+> Added 20260815. Use the `{u:NAME}` namespace when the direct command
+> name would collide (e.g. `{diamond}` is an ACS character ◆; use `{u:diamond}`
+> for the card-suit ♦). A repeat count may follow the name: `{u:solidblock:2}`.
+
+| Command | Glyph | Codepoint |
+|---------|-------|-----------|
+| `{u:spade}` | ♠ | `U+2660` |
+| `{u:heart}` | ♥ | `U+2665` |
+| `{u:diamond}` | ♦ | `U+2666` |
+| `{u:club}` | ♣ | `U+2663` |
+| `{u:solidblock}` | █ | `U+2588` |
+| `{u:lightblock}` | ░ | `U+2591` |
+| `{u:mediumblock}` | ▒ | `U+2592` |
+
+---
+
 ## Emoji
 
 > **Note:** This table shows a sample of available emojis. The full list is defined in `echo.py`. Use tab-completion in your editor to discover all available emojis.

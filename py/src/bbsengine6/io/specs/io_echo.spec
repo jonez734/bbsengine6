@@ -109,8 +109,22 @@ Colon-wrapped emoji names: `:smile:`, `:fire:`, `:warning:`, etc. (100+ emojis d
 
 ### 9. Unicode Symbols
 
-- `{arrow}`, `{arrow_left}`, `{arrow_up}`, `{arrow_down}`
-- `{dblhline}`, `{dblvline}`, etc.
+Direct names (e.g. `{dblhline}`, `{arrow}`):
+
+- `{dblhline}`, `{dblvline}`, `{dblul}`, `{dblur}`, `{dblll}`, `{dbllr}`
+- `{arrow}`, `{arrow_left}`, `{arrow_up}`, `{arrow_right}`, `{arrow_down}`
+
+Namespaced lookup with `{u:NAME[:repeat]}` (added 20260815):
+
+- `{u:spade}` → ♠  (`U+2660`)
+- `{u:heart}` → ♥  (`U+2665`)
+- `{u:diamond}` → ♦  (`U+2666`)
+- `{u:club}` → ♣  (`U+2663`)
+- `{u:solidblock}` → █ (`U+2588`); `{u:solidblock:2}` repeats twice → `██`
+- `{u:lightblock}` → ░ (`U+2591`)
+- `{u:mediumblock}` → ▒ (`U+2592`)
+
+Unknown `{u:NAME}` falls through silently (no crash).
 
 ### 10. Fullwidth Text
 
