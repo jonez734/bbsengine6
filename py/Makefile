@@ -1,4 +1,5 @@
 PROJECT = bbsengine6
+OUTDIR = /srv/repo/$(PROJECT)/
 VERSION = $(shell date +%Y%m%d%H%M)
 USER = $(shell whoami)
 

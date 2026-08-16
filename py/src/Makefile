@@ -1,18 +1,15 @@
 PROJECT = bbsengine6
-OUTDIR = ../dist/ # /srv/repo/$(PROJECT)/
+OUTDIR = /srv/repo/$(PROJECT)/
 VERSION := $(shell date +%Y%m%d%H%M)
 
 PYTHON ?= python3
 PIP ?= $(PYTHON) -m pip
 
-.PHONY: install build version
+.PHONY: install version
 .PHONY: clean rename-sdist sign release all install
 
 install: version
 	cd .. && $(PIP) install --no-cache-dir -e .
-
-build: version
-	cd .. && $(PYTHON) -m build --outdir $(OUTDIR)
 
 rename-sdist:
 	@for f in $(OUTDIR)/*.tar.gz; do \
@@ -30,7 +27,8 @@ sign:
 		fi \
 	done
 
-release: clean build rename-sdist sign
+release:
+	$(MAKE) -C ../.. wheel-release
 
 all:
 

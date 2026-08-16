@@ -3,6 +3,7 @@ export COMHOST = copper
 export ENGINEHOST = merlin
 export STATICHOST = merlin
 export PROJECT = bbsengine6
+export OUTDIR = /srv/repo/$(PROJECT)/
 
 export datestamp = $(shell date +%Y%m%d-%H%M)
 export archivename = $(PROJECT)-$(datestamp)
@@ -132,7 +133,44 @@ log:
 	git log --graph --pretty=format:"%h %ad %s%d [%an]%n%B" --date=short > LOG_FULL.md
 	git log --pretty=format:"%ad|%h %s%d [%an]" --date=short | awk -F'|' '{if ($$1!=date) {print "## " $$1; date=$$1} print "  " $$2}' > LOG_SUMMARY.md
 
+version:
+	@echo '__version__ = "$(VERSION)"' > py/src/$(PROJECT)/_version.py
+	@echo '__datestamp__ = "'`date +%Y%m%d-%H%M`-`whoami`'"' >> py/src/$(PROJECT)/_version.py
+
+.PHONY: ensure-repo
+ensure-repo:
+	@stat -c '%G' /srv/repo 2>/dev/null | grep -qx repo || sudo chgrp repo /srv/repo
+	@stat -c '%a' /srv/repo 2>/dev/null | grep -q '^2775$$' || sudo chmod 2775 /srv/repo
+
+.PHONY: ensure-build-dir
+ensure-build-dir: ensure-repo
+	@mkdir -p /srv/repo/$(PROJECT)/
+	@stat -c '%G' /srv/repo/$(PROJECT)/ 2>/dev/null | grep -qx repo || sudo chgrp repo /srv/repo/$(PROJECT)/
+	@stat -c '%a' /srv/repo/$(PROJECT)/ 2>/dev/null | grep -q '^2775$$' || sudo chmod 2775 /srv/repo/$(PROJECT)/
+
+build: version ensure-build-dir
+	cd py && python3 -m build --outdir $(OUTDIR)
+
+rename-sdist:
+	@for f in $(OUTDIR)/*.tar.gz; do \
+		if [ -f "$$f" ] && echo "$$f" | grep -vq '\-src\.tar\.gz' ; then \
+			mv "$$f" "$${f%.tar.gz}-src.tar.gz"; \
+			echo "Renamed $$f -> $${f%.tar.gz}-src.tar.gz"; \
+		fi \
+	done
+
+sign:
+	@for f in $(OUTDIR)/*; do \
+		if [ -f "$$f" ] && [ ! -f "$$f.asc" ] && [ "$${f##*.}" != "asc" ]; then \
+			gpg --armor --detach-sign "$$f"; \
+			echo "Signed $$f"; \
+		fi \
+	done
+
+wheel-release: build rename-sdist sign
+
 .PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-www deploy-tui
+.PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
 
 
