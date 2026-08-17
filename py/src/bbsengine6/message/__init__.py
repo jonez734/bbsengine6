@@ -24,7 +24,7 @@ import argparse
 from typing import Any, Dict, Optional
 
 
-__version__ = "202608130000"
+__version__ = "202608150001"
 
 
 # Public surface of the package. ``lib`` defines the canonical names;
@@ -121,6 +121,37 @@ def _get_message(kwargs: Dict[str, Any]) -> Dict[str, Any]:
     return msg if isinstance(msg, dict) else {}
 
 
+def _get_claims(message: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the decoded claims sub-dict, or empty dict if absent/malformed.
+
+    The bed handler decodes the HMAC-signed token before calling
+    access() and stuffs the resulting claims under message["claims"].
+    access() never reads the raw token.
+    """
+    claims = message.get("claims")
+    return claims if isinstance(claims, dict) else {}
+
+
+def _auth_moniker(kwargs: Dict[str, Any]) -> Optional[str]:
+    """Return the claim-derived moniker, falling back to session."""
+    message = _get_message(kwargs)
+    claims = _get_claims(message)
+    if claims.get("moniker"):
+        return claims["moniker"]
+    session = _get_session(kwargs)
+    return getattr(session, "moniker", None)
+
+
+def _auth_is_sysop(kwargs: Dict[str, Any]) -> bool:
+    """Return the claim-derived is_sysop, falling back to session."""
+    message = _get_message(kwargs)
+    claims = _get_claims(message)
+    if "is_sysop" in claims:
+        return bool(claims["is_sysop"])
+    session = _get_session(kwargs)
+    return bool(getattr(session, "is_sysop", False))
+
+
 def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
     """Authorize ``op`` for the given session/message pair.
 
@@ -144,7 +175,13 @@ def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
       session : bed.api.session.SessionState (or any object with
                 ``.moniker: str`` and ``.is_sysop: bool`` attributes),
                 or ``None`` for an unbound websocket.
-      message : dict, the incoming wire-shaped payload.
+      message : dict, the incoming wire-shaped payload. If the bed
+                handler verified a bearer token for this op, the
+                decoded claims live under ``message["claims"]``;
+                access() uses the claim-derived ``moniker`` /
+                ``is_sysop`` instead of the in-memory session
+                attributes because they come from a
+                cryptographically verified source.
 
     The function does NOT perform input validation (moniker present,
     non-empty). That is the caller's job and lives next to the
@@ -156,23 +193,27 @@ def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
     allow the module to load for anyone; the per-op rules below only
     fire when the caller passes a ``session`` kwarg.
     """
-    session = _get_session(kwargs)
-    message = _get_message(kwargs)
-
     if "session" not in kwargs:
         return True
 
+    session = _get_session(kwargs)
+
     # Runtime call: session kwarg was explicitly passed. ``None`` means
-    # the websocket is unbound, which is always a denial.
+    # the websocket is unbound, which is always a denial -- claims
+    # alone (without a bound session) cannot grant access because the
+    # defense-in-depth contract is "the server-side session registry
+    # also recognizes this caller". A fresh WS that the auth flow
+    # never bound falls through to the lazy-bind helper in the bed
+    # handler, which synthesizes a session before invoking access().
     if session is None:
         return False
 
     if op in ("subscribe", "unsubscribe", "list_pending"):
-        target = (message.get("moniker") or "").strip()
+        target = (_get_message(kwargs).get("moniker") or "").strip()
         if not target:
             return False
-        if getattr(session, "is_sysop", False):
+        if _auth_is_sysop(kwargs):
             return True
-        return _moniker_eq(getattr(session, "moniker", None), target)
+        return _moniker_eq(_auth_moniker(kwargs), target)
 
     return False
