@@ -921,19 +921,12 @@ _unicode = {
     "arrow_up": "\u2191",  # ↑
     "arrow_right": "\u2192",  # →
     "arrow_down": "\u2193",  # ↓
-    "spade": "\u2660",  # ♠ @since 20260815
-    "heart": "\u2665",  # ♥ @since 20260815
-    "diamond": "\u2666",  # ♦ @since 20260815
-    "club": "\u2663",  # ♣ @since 20260815
-    "solidblock": "\u2588",  # █ @since 20260815
-    "lightblock": "\u2591",  # ░ @since 20260815
-    "mediumblock": "\u2592",  # ▒ @since 20260815
 }
 
 
 def _handle_unicode(token):
-    if token.value in _unicode:
-        token.text = _unicode[token.value]
+    if token.kind in _unicode:
+        token.text = _unicode[token.kind]
         yield token
 
 
@@ -956,17 +949,7 @@ def _handle_command(token, **kwargs):  # palette=None, vars=None):
 
     # Palette color
     if cmd.lstrip("/") in get_current_palette():
-        color_name = cmd.lstrip("/")
-        if cmd.startswith("/"):
-            # Closing tag: reset to default fg/bg, mirroring the
-            # ANSI_ATTRS .end pattern. CSI 39m = default fg,
-            # CSI 49m = default bg.
-            if color_name.startswith("bg"):
-                token.text = f"{CSI}49m"
-            else:
-                token.text = f"{CSI}39m"
-        else:
-            token.text = get_palette_entry(cmd)
+        token.text = get_palette_entry(cmd)
         yield token
         return
 
@@ -981,20 +964,6 @@ def _handle_command(token, **kwargs):  # palette=None, vars=None):
     if cmd in _acs_map:
         yield from _handle_acs(token)
         return
-
-    # {u:NAME[:repeat]} - look up NAME in the unicode table, optionally repeated
-    # @since 20260815
-    if cmd == "u" and token.args:
-        unicode_name = token.args[0]
-        if unicode_name in _unicode:
-            token.text = _unicode[unicode_name]
-            if len(token.args) > 1:
-                try:
-                    token.repeat = int(token.args[1])
-                except (ValueError, TypeError):
-                    token.repeat = 1
-            yield token
-            return
 
     if cmd in _unicode:
         yield from _handle_unicode(token)
@@ -1291,17 +1260,6 @@ def echo(
     for token in echo_iter(
         text, width=width, wordwrap=wordwrap, raw=_raw, palette=palette
     ):
-        _write_token(token, flush=flush)
-
-    # TODO: yield an ACS_OFF token as the last token of an echo() call.
-    # If the final emitted token was an ACS_CHAR (e.g. trailing {hline},
-    # {vline}, {ulcorner}, etc.), _terminal_state.acs is still True when
-    # echo() returns. The terminal is therefore left in DEC Special Graphics
-    # mode, so any subsequent plain text gets rendered as graphics glyphs
-    # instead of ASCII. This used to be emitted here (worked yesterday) and
-    # has regressed. Fix: after the loop, drain _acs_off() and write_token()
-    # any ACS_OFF token it produces, then proceed to write `end` as normal.
-    for token in _acs_off():
         _write_token(token, flush=flush)
 
     # Always write the "end" string
