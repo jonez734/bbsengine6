@@ -947,9 +947,18 @@ def _handle_command(token, **kwargs):  # palette=None, vars=None):
 
     yield from _acs_off()
 
-    # Palette color
+    # Palette color: opening (e.g. ``{red}``) emits the palette entry;
+    # closing (e.g. ``{/red}``) emits the default-fg reset, equivalent
+    # to ``{/fgcolor}``. Without the ``startswith("/")`` branch the
+    # membership check's ``lstrip("/")`` would route both forms through
+    # ``get_palette_entry`` and re-open the color instead of closing
+    # it -- the last cell's fg would bleed into the surrounding
+    # characters.
     if cmd.lstrip("/") in get_current_palette():
-        token.text = get_palette_entry(cmd)
+        if cmd.startswith("/"):
+            token.text = f"{CSI}39m"
+        else:
+            token.text = get_palette_entry(cmd)
         yield token
         return
 
