@@ -36,6 +36,11 @@ dependencies = [
 [project.scripts]
 bed = "bbsengine6.bed:main"
 
+[tool.setuptools]
+script-files = [
+    "bin/bbsengine6-ping",
+] 
+
 [project.optional-dependencies]
 dev = [
     "pytest",
