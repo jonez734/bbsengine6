@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### net.transport: WebSocketServer accepts `binds=[]` for multi-bind
+
+`WebSocketServer.__init__` now takes an optional `binds` keyword
+argument — a sequence of `(host, port)` pairs. When given, the
+server opens one listening socket per `(family, address)` tuple
+returned by `getaddrinfo(host, port, AF_UNSPEC)`, so a single host
+name like `localhost` fans out to one IPv4 and one IPv6 listener
+without a dual-stack socket.
+
+Legacy `host=`/`port=` keyword arguments remain the 1-element
+shortcut; passing both shapes raises `ValueError`. State
+(`channel_state`, `session_manager`, service registry, router,
+pre/post dispatch hooks) is shared across every listener so a
+service registered once reaches every bind.
+
+`start()` opens all sockets first, then hands each to its own
+`websockets.serve()` call. Partial-bind failures (EADDRINUSE on the
+second bind, EACCES on a privileged port, `gaierror` on a typo'd
+host) close any sockets already opened and re-raise so the caller
+sees a clean error rather than a half-started server.
+
+New attributes on `WebSocketServer`:
+
+* `self._bound_addrs: List[Tuple[str, str, int]]` — `(family_name,
+  host_str, port)` per listener, in bind order. New code should
+  prefer this over the legacy `self._bound_port` (which still
+  reports the port of the first listener for back-compat).
+
+New test file `py/tests/test_transport_multibind.py` covers
+dual-stack bind, `localhost` expansion, partial-bind cleanup,
+idempotent `stop()`, unresolvable host before any socket opens,
+and services visible across every listener. All existing
+transport tests pass unchanged.
+
 ### net.transport: warn on `register_service` overwrites
 
 `WebSocketServer.register_service` overwrites `self._services[msg_type]`
