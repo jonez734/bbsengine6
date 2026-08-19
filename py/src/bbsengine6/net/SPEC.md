@@ -150,6 +150,71 @@ at most one frame as an ack. Returns `(success, message)`. Handles
 timeouts via `asyncio.timeout`, refuses connection, and any
 `WebSocketException` gracefully.
 
+#### Ping Helper (ping.py)
+
+A small shared helper for the `*-ping` bin scripts
+(`bedping`, `bbsengine6-ping`, `casino-ping`, `zoid6-ping`).
+The motivation is to give every consumer that opens a
+WebSocket to a bbsengine6-based daemon the same friendly
+"connection refused" / "host unreachable" / "timed out"
+rendering so a stopped daemon produces a one-line operator
+message via `bbsengine6.io.echo(level="error")` and a non-zero
+exit status — never a Python traceback.
+
+The module exposes:
+
+* `class PingUnavailable(host, port, exc, *, prog="ping")`
+  — carries the configured endpoint and the original
+  exception. Renders as
+  `"<prog>: cannot connect to ws://{host}:{port}/ (is the
+  bed daemon running?): {exc}"`. The `prog` keyword is
+  keyword-only so the four-arg call site cannot accidentally
+  pass the prog in the exc slot.
+* `async def connect(host, port, *, path="/", timeout=5.0,
+  prog="ping")` — wraps `websockets.connect()` in a
+  `asyncio.wait_for(...)` and converts
+  `ConnectionRefusedError`, `OSError`,
+  `asyncio.TimeoutError`, and `WebSocketException` into
+  `PingUnavailable` (chained via `raise ... from exc`). On
+  success, returns the live websockets protocol object.
+* `async def send_ping(host, port, *, path="/",
+  timeout=5.0, prog="ping")` — opens via `connect`,
+  sends `{"type":"ping"}`, reads one reply with the same
+  timeout, and returns the parsed JSON dict.
+* `def build_parser(prog)` — argparse builder shared by
+  every consumer shim so `--host`, `--port`, `--path`,
+  `--timeout` behave identically regardless of which
+  project owns the entry point. `prog` flows into
+  `argparse.ArgumentParser(prog=...)` so `--help` shows
+  the correct program name.
+* `def main(argv, *, prog)` — CLI entry point. Catches
+  `PingUnavailable`, calls
+  `bbsengine6.io.echo(level="error")`, returns `1` so the
+  shim exits non-zero.
+
+Consumers:
+
+* `bbsengine6/bin/bbsengine6-ping` — generic shim
+  (`prog="bbsengine6-ping"`).
+* `bed/bin/bedping` (existing) and `bed.tools.ping` —
+  the bed ping/auth round-trip uses `connect(host, port,
+  prog="bedping")` so the friendly error renders with the
+  `bedping:` prefix.
+* `casino/bin/casino-ping` and `casino.client.CasinoClient.connect`
+  — the casino client routes `websockets.connect()` through
+  `bbsengine6.net.ping.connect(host, port, path=path,
+  prog="casino")` so `ConnectionRefusedError` etc. surface
+  as `PingUnavailable` and `CasinoClient.connect` renders
+  them via `io.echo(level="error")`.
+* `zoid6/bin/zoid6-ping` — zoid6 wraps the bed daemon
+  (`prog="zoid6-ping"`).
+
+`PingUnavailable` is re-exported by `bed.tools.ping` so the
+existing `bedping` shim continues to work; class identity is
+preserved (`bed.tools.ping.PingUnavailable is
+bbsengine6.net.ping.PingUnavailable`) for tests that import
+from either location.
+
 ### HMAC Authentication (crypto.py)
 
 - `CryptoHash` - HMAC-SHA256

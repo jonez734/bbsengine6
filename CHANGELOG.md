@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### net.ping: shared WebSocket liveness check for any bbsengine6-based daemon
+
+New module `bbsengine6.net.ping` provides a single code path for
+the `bedping`-style friendly-error pattern used across every
+project that talks to a bbsengine6-based WebSocket daemon. The
+helper exposes:
+
+- `class PingUnavailable(Exception)` — carries `host`, `port`,
+  original `exc`, and a `prog` keyword that controls the message
+  prefix so each `*-ping` shim identifies itself.
+- `async def connect(host, port, *, path="/", timeout=5.0, prog="ping")`
+  — bare WebSocket connect that converts
+  `ConnectionRefusedError`, `OSError`, `asyncio.TimeoutError`, and
+  `WebSocketException` into `PingUnavailable` (no raw exception
+  escapes).
+- `async def send_ping(...)` — opens a connection, sends
+  `{"type":"ping"}`, returns the parsed JSON reply.
+- `def build_parser(prog)` — argparse builder shared by every
+  shim so `--host`, `--port`, `--path`, `--timeout` behave
+  identically regardless of which project owns the entry point.
+- `def main(argv, *, prog)` — CLI entry point that catches
+  `PingUnavailable`, calls `bbsengine6.io.echo(level="error")`,
+  and returns `1` so the shim exits non-zero without a Python
+  traceback.
+
+New bin script `bin/bbsengine6-ping` is a 6-line shim around
+`bbsengine6.net.ping.main(prog="bbsengine6-ping")` and ships via
+`[tool.setuptools] script-files` in `pyproject.toml`.
+
+The `bedping` shim, the new `casino-ping` shim, and the new
+`zoid6-ping` shim all call the same helper, so future
+`websockets`-version fixes land in one place.
+
 ### net.transport: WebSocketServer accepts `binds=[]` for multi-bind
 
 `WebSocketServer.__init__` now takes an optional `binds` keyword
