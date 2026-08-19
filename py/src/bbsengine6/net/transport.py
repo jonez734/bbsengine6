@@ -3,12 +3,27 @@
 
 import asyncio
 import contextlib
+import errno
 import inspect
 import json
 import logging
+import os
 import socket
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import websockets.asyncio.server
 import websockets.exceptions
@@ -619,8 +634,10 @@ class WebSocketServer:
 
     def __init__(
         self,
-        host: str = "0.0.0.0",
-        port: int = 8765,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        *,
+        binds: Optional[Sequence[Tuple[str, int]]] = None,
         handler: Optional[WebSocketMessageHandler] = None,
         secret_key: Optional[bytes] = None,
         channel_state: Optional["ChannelState"] = None,
@@ -630,8 +647,20 @@ class WebSocketServer:
         Initialize WebSocket server.
 
         Args:
-            host: Host to bind to
-            port: Port to listen on
+            host: Legacy single-bind shortcut. Ignored when ``binds`` is given.
+                When neither ``host`` nor ``binds`` is supplied, defaults to
+                ``"0.0.0.0"`` (IPv4 wildcard) for back-compat with code written
+                before multi-bind support landed.
+            port: Legacy single-bind shortcut. Ignored when ``binds`` is given.
+                Defaults to ``8765`` when neither ``port`` nor ``binds`` is
+                supplied.
+            binds: Optional sequence of ``(host, port)`` pairs. When given,
+                ``start()`` resolves each entry via ``getaddrinfo`` and opens
+                one listening socket per ``(family, address)`` result, so a
+                single host string can fan out to both IPv4 and IPv6 without
+                a dual-stack socket. State (channel_state, session_manager,
+                service registry, router, pre/post dispatch hooks) is shared
+                across every listener.
             handler: Async callback for handling incoming messages.
                     Should accept (server, websocket, path, message) and return
                     a response dict (sent to sender) or None (broadcast to all).
@@ -647,17 +676,47 @@ class WebSocketServer:
                     and to look up moniker by session. When None, the server
                     constructs its own SessionManager (used for routing via
                     ``router.unregister_session`` cleanup).
+
+        Raises:
+            ValueError: when both ``binds`` and ``host``/``port`` are supplied
+                (use one form or the other, not both) or when ``binds`` is an
+                empty sequence.
         """
-        self.host = host
-        self.port = port
+        if binds is not None:
+            if host is not None or port is not None:
+                raise ValueError(
+                    "WebSocketServer: pass either host/port OR binds, not both"
+                )
+            binds_list = list(binds)
+            if not binds_list:
+                raise ValueError(
+                    "WebSocketServer: binds must contain at least one (host, port)"
+                )
+            self._binds: List[Tuple[str, int]] = binds_list
+            # Legacy attributes mirror the first bind so callers that still
+            # inspect ``server.host``/``server.port`` keep working.
+            self.host = binds_list[0][0]
+            self.port = binds_list[0][1]
+        else:
+            self._binds = [(host or "0.0.0.0", port if port is not None else 8765)]
+            self.host = self._binds[0][0]
+            self.port = self._binds[0][1]
         self.handler = handler
         self._secret_key = secret_key
         self._server: Optional[asyncio.Server] = None
+        self._servers: List[asyncio.Server] = []
         self._clients: Dict[Any, Set] = {}  # path -> set of websockets
         self._running = False
-        # Actual bound port. Set after ``start()`` completes its socket bind;
-        # equals ``self.port`` when not 0. Useful for tests with ephemeral ports.
+        # Actual bound port of the first listener (legacy attribute). Set
+        # after ``start()`` completes its socket bind; equals the requested
+        # ``self._binds[0][1]`` when that port was not 0. New code should
+        # prefer ``self._bound_addrs`` which carries every listener.
         self._bound_port: Optional[int] = None
+        # Resolved bind summary written after ``start()`` succeeds. Each
+        # entry is ``(family_name, host_str, port_int)`` in the order the
+        # listener sockets were opened. Useful for logging and tests that
+        # want to confirm dual-stack worked without re-running getaddrinfo.
+        self._bound_addrs: List[Tuple[str, str, int]] = []
 
         # Service registry for handling message types
         # Format: {message_type: service_instance}
@@ -1027,39 +1086,210 @@ class WebSocketServer:
                     f"Client disconnected from {path} (session_id={session_id})"
                 )
 
-        # Create socket with SO_REUSEADDR/SO_REUSEPORT for faster restart
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if hasattr(socket, "SO_REUSEPORT"):
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
-        sock.bind((self.host, self.port))
-        sock.listen(128)
-
-        # Record the actual port (relevant when port=0 was requested for
-        # ephemeral binding, e.g. tests).
+        # Resolve each bind entry to one or more concrete (family, address)
+        # tuples via getaddrinfo. A single host name like ``localhost`` can
+        # produce both an IPv4 and an IPv6 result; the operator gets both
+        # listener sockets without writing them out by hand. If any entry
+        # fails to resolve, no sockets are opened — partial-bind cleanup
+        # is not needed because nothing was opened yet at this point.
+        resolved: List[Tuple[int, int, Tuple[Any, ...]]] = []
         try:
-            self._bound_port = sock.getsockname()[1]
-        except Exception:
-            bbs_io.echo_traceback(
-                "bbsengine6.net.transport.WebSocketServer.start.bound_port:"
-            )
-            self._bound_port = self.port
+            for bind_idx, (host_str, port_int) in enumerate(self._binds):
+                entry_results = self._resolve_bind(host_str, port_int, bind_idx)
+                resolved.extend(entry_results)
+        except OSError:
+            raise
 
-        self._server = await websockets.serve(
-            on_connect,
-            sock=sock,
-            create_connection=PeerLoggingServerConnection,
-            logger=logging.getLogger("websockets.server"),
+        # Open one socket per resolved entry. SO_REUSEADDR/SO_REUSEPORT
+        # are set so a restart can rebind without waiting for TIME_WAIT,
+        # which matters when running multiple listeners on the same port.
+        bound_sockets: List[Tuple[
+            int, int, Tuple[Any, ...], socket.socket
+        ]] = []
+        try:
+            for family, port_int, sockaddr in resolved:
+                sock = socket.socket(family, socket.SOCK_STREAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                if hasattr(socket, "SO_REUSEPORT"):
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+                sock.bind(sockaddr)
+                sock.listen(128)
+                bound_sockets.append((family, port_int, sockaddr, sock))
+        except OSError:
+            # Partial bind failure: close whatever we did open so the
+            # operator's port is not held by a half-started daemon. Then
+            # re-raise so the caller's autorestart loop can decide.
+            for _, _, _, s in bound_sockets:
+                try:
+                    s.close()
+                except OSError:
+                    pass
+            raise
+
+        # Each pre-bound socket is fed to its own ``websockets.serve``
+        # call. The asyncio Server objects share the ``on_connect``
+        # closure (and therefore ``self``), so the service registry,
+        # session manager, channel state, and pre/post dispatch hooks
+        # are visible across every listener. The number of accepts in
+        # flight is unbounded by design — a high-traffic IPv6 listener
+        # does not starve the IPv4 listener.
+        servers: List[asyncio.Server] = []
+        try:
+            for family, port_int, sockaddr, sock in bound_sockets:
+                server = await websockets.serve(
+                    on_connect,
+                    sock=sock,
+                    create_connection=PeerLoggingServerConnection,
+                    logger=logging.getLogger("websockets.server"),
+                )
+                servers.append(server)
+        except Exception:
+            for s in servers:
+                try:
+                    s.close()
+                except Exception:
+                    pass
+            for _, _, _, sock in bound_sockets:
+                try:
+                    sock.close()
+                except OSError:
+                    pass
+            raise
+
+        self._servers = servers
+        # Legacy single-server attribute points at the first listener so
+        # callers that still touch ``self._server`` (or rely on
+        # ``self._bound_port``) keep working without code changes.
+        self._server = servers[0] if servers else None
+
+        # Record the resolved bind summary. ``_bound_port`` is the port
+        # of the first listener, which matches the legacy semantics
+        # (callers expect ``self.port`` after start()).
+        self._bound_addrs = []
+        for family, _port, sockaddr, sock in bound_sockets:
+            host_str, bound_port = self._format_sockname(family, sock)
+            self._bound_addrs.append(
+                (self._family_name(family), host_str, bound_port)
+            )
+            logger.info(
+                f"WebSocket listener: family={self._family_name(family)} "
+                f"host={host_str} port={bound_port}"
+            )
+        if self._bound_addrs:
+            self._bound_port = self._bound_addrs[0][2]
+        else:
+            self._bound_port = self._binds[0][1]
+
+        summary = ", ".join(
+            f"{fam} {host}:{port}"
+            for fam, host, port in self._bound_addrs
         )
-        logger.info(f"WebSocket server started on {self.host}:{self.port}")
+        logger.info(f"WebSocket server started ({len(self._bound_addrs)} "
+                    f"listener{'s' if len(self._bound_addrs) != 1 else ''}: "
+                    f"{summary})")
+
+    def _resolve_bind(
+        self,
+        host_str: str,
+        port_int: int,
+        bind_idx: int,
+    ) -> List[Tuple[int, int, Tuple[Any, ...]]]:
+        """Resolve one ``(host, port)`` entry to a list of concrete
+        ``(family, port, sockaddr)`` tuples via ``getaddrinfo``.
+
+        ``AF_UNSPEC`` is used so a name like ``localhost`` returns both
+        its A and AAAA records. Each result becomes its own listener
+        socket in :meth:`start`. ``AI_ADDRCONFIG`` is included so a host
+        that only has A records does not return an empty AAAA result
+        that would later fail to bind with ``EAFNOSUPPORT``.
+
+        Raises:
+            socket.gaierror: if the host does not resolve at all (the
+                error message includes the bind index and original
+                ``(host, port)`` tuple so the operator can find the
+                offender in a multi-bind config).
+        """
+        try:
+            infos = socket.getaddrinfo(
+                host_str,
+                port_int,
+                family=socket.AF_UNSPEC,
+                type=socket.SOCK_STREAM,
+                flags=socket.AI_ADDRCONFIG,
+            )
+        except socket.gaierror as e:
+            logger.error(
+                f"WebSocketServer: bind[{bind_idx}] "
+                f"({host_str!r}, {port_int}) failed to resolve: {e}"
+            )
+            raise
+        if not infos:
+            logger.error(
+                f"WebSocketServer: bind[{bind_idx}] "
+                f"({host_str!r}, {port_int}) returned no addresses"
+            )
+            raise socket.gaierror(
+                f"No addresses for bind[{bind_idx}] ({host_str!r}, {port_int})"
+            )
+        results: List[Tuple[int, int, Tuple[Any, ...]]] = []
+        for family, _socktype, _proto, _canon, sockaddr in infos:
+            results.append((family, port_int, sockaddr))
+        return results
+
+    @staticmethod
+    def _family_name(family: int) -> str:
+        """Short name for an address family. Used in log lines so an
+        operator can tell at a glance which stack a listener is on."""
+        if family == socket.AF_INET:
+            return "inet"
+        if family == socket.AF_INET6:
+            return "inet6"
+        return f"family{family}"
+
+    @staticmethod
+    def _format_sockname(
+        family: int, sock: socket.socket
+    ) -> Tuple[str, int]:
+        """Render ``getsockname()`` as ``(host_str, port_int)``.
+
+        IPv4 sockaddr tuples are ``(host, port)``; IPv6 tuples are
+        ``(host, port, flowinfo, scopeid)``. This helper hides the
+        difference so log lines are uniform."""
+        try:
+            sockaddr = sock.getsockname()
+        except OSError:
+            return ("?", -1)
+        if family == socket.AF_INET6 and len(sockaddr) >= 2:
+            return (sockaddr[0], sockaddr[1])
+        if len(sockaddr) >= 2:
+            return (sockaddr[0], sockaddr[1])
+        return (str(sockaddr), -1)
 
     async def stop(self) -> None:
-        """Stop the WebSocket server."""
+        """Stop every WebSocket listener. Idempotent: a second call is a
+        no-op, so SIGHUP/autorestart teardown paths can call it without
+        guarding."""
         self._running = False
-        if self._server:
-            self._server.close()
-            await self._server.wait_closed()
-            logger.info("WebSocket server stopped")
+        servers = self._servers or ([self._server] if self._server else [])
+        for s in servers:
+            try:
+                s.close()
+            except Exception:
+                bbs_io.echo_traceback(
+                    "bbsengine6.net.transport.WebSocketServer.stop.close:"
+                )
+        for s in servers:
+            try:
+                await s.wait_closed()
+            except Exception:
+                bbs_io.echo_traceback(
+                    "bbsengine6.net.transport.WebSocketServer.stop.wait_closed:"
+                )
+        if servers:
+            logger.info(f"WebSocket server stopped ({len(servers)} listener"
+                        f"{'s' if len(servers) != 1 else ''})")
+        self._server = None
+        self._servers = []
 
     async def broadcast(
         self, message: Dict[str, Any], path: Optional[str] = None
