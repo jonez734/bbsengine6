@@ -91,6 +91,15 @@ from .transport import (
 # Integration layer
 from .integration import NotifyIntegration, get_integration, send_with_internet
 
+# WebSocket liveness check (shared ping helper for bed/bbsengine6/casino/zoid6)
+from .ping import (
+    PingUnavailable,
+    build_parser as ping_build_parser,
+    connect as ping_connect,
+    main as ping_main,
+    send_ping as ping_send,
+)
+
 
 # Frame support moved to asimov.net
 # Import from asimov.net when needed:
@@ -170,8 +179,14 @@ __all__ = [
     "channel_get_subscribers",
     "channel_get_session_channels",
     "channel_publish",
-    # Integration
+# Integration
     "NotifyIntegration",
     "get_integration",
     "send_with_internet",
-]
+    # Ping helper
+    "PingUnavailable",
+    "ping_build_parser",
+    "ping_connect",
+    "ping_main",
+    "ping_send",
+] 
