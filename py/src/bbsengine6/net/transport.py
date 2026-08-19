@@ -2,6 +2,7 @@
 # WebSocket transport protocol for remote notification and packet delivery.
 
 import asyncio
+import contextlib
 import inspect
 import json
 import logging
@@ -170,9 +171,46 @@ async def channel_publish(
             )
             return
 
-    # Send to WebSocket subscribers
+    # Send to WebSocket subscribers. The previous implementation routed
+    # via server.broadcast(path=f"channel:{channel}"), which only reaches
+    # clients connected to that path; clients on the canonical "default"
+    # path were silently dropped. Fan out to each subscribed websocket
+    # directly, matching either the transport-allocated
+    # ``_bbsengine6_session_id`` or the Python ``id(websocket)`` fallback
+    # (callers may have subscribed under either identity).
+    #
+    # On send failure, drop the dead websocket from ``server._clients``
+    # so it is not retried on subsequent publishes (mirrors the cleanup
+    # logic in ``server.broadcast``); the socket is also explicitly
+    # closed so its file descriptor is released immediately rather than
+    # waiting for garbage collection.
     if server and channel in state.channels:
-        await server.broadcast(message, path=f"channel:{channel}")
+        target_session_ids = state.channels[channel]
+        delivered_ws: Set[int] = set()
+        for path, path_clients in list(server._clients.items()):
+            failed_ws = []
+            for ws in path_clients:
+                if id(ws) in delivered_ws:
+                    continue
+                ws_bbs_id = getattr(ws, "_bbsengine6_session_id", None)
+                if (
+                    id(ws) in target_session_ids
+                    or (ws_bbs_id is not None and ws_bbs_id in target_session_ids)
+                ):
+                    delivered_ws.add(id(ws))
+                    try:
+                        await ws.send(json.dumps(message))
+                    except Exception as e:
+                        logger.warning(
+                            f"channel_publish send failed: channel={channel} e={e}"
+                        )
+                        failed_ws.append(ws)
+            for ws in failed_ws:
+                path_clients.discard(ws)
+                with contextlib.suppress(Exception):
+                    await ws.close()
+            if not path_clients:
+                server._clients.pop(path, None)
 
     # Invoke registered callbacks (for bots)
     if channel in state.callbacks:

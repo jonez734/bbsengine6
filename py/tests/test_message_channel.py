@@ -1,6 +1,8 @@
 # test_message_channel.py
 # Tests for the message system channel subscription functionality (Phase 1A)
 
+from typing import Any, Optional
+
 from bbsengine6.net.transport import (
     ChannelState,
     channel_subscribe,
@@ -395,3 +397,231 @@ class TestSessionIdAllocation:
         assert server._sessions is sm
         sid = server._alloc_session_id()
         assert sm.get_moniker(sid) is None  # not registered yet
+
+
+class _MockWebSocket:
+    """Lightweight websocket stand-in for channel_publish unit tests.
+
+    Records every ``send`` payload so tests can assert on delivery. The
+    server only needs ``_bbsengine6_session_id`` (for transport-allocated
+    ids) and ``id(ws)`` (the Python object id fallback) to identify a
+    subscriber; ``send`` is the only method it ever calls.
+    """
+
+    def __init__(self, bbs_session_id: int) -> None:
+        self._bbsengine6_session_id = bbs_session_id
+        self.sent: list = []
+        self.send_error: Optional[Exception] = None
+
+    async def send(self, payload) -> None:
+        if self.send_error is not None:
+            raise self.send_error
+        self.sent.append(payload)
+
+
+class TestChannelPublishWebSocketFanOut:
+    """Regression tests for the WS fan-out path of ``channel_publish``.
+
+    The previous implementation routed via
+    ``server.broadcast(message, path=f"channel:{channel}")``, which only
+    reaches clients connected to that exact path. Casino clients connect
+    to path ``default``, so the broadcast was silently dropped. These
+    tests pin the corrected behaviour: subscribers identified by either
+    ``id(ws)`` or ``ws._bbsengine6_session_id`` get a JSON payload sent
+    over their websocket, non-subscribers don't, and the dedupe guard
+    prevents double-delivery when a single ws is subscribed under both
+    keys.
+    """
+
+    def _make_server(self) -> Any:
+        from bbsengine6.net.transport import WebSocketServer
+
+        return WebSocketServer(host="127.0.0.1", port=0)
+
+    def test_subscriber_via_bbsengine6_session_id_receives_publish(self):
+        """Subscriber keyed by transport-allocated id gets the message."""
+        import json
+        import asyncio
+
+        async def run():
+            state = ChannelState()
+            server = self._make_server()
+
+            ws = _MockWebSocket(bbs_session_id=42)
+            server._clients["default"] = {ws}
+            channel_subscribe(state, 42, "casino:table:test")
+
+            await channel_publish(
+                state,
+                "casino:table:test",
+                {"type": "game_state", "phase": "waiting"},
+                server=server,
+            )
+
+            assert len(ws.sent) == 1, f"expected 1 send, got {ws.sent}"
+            payload = json.loads(ws.sent[0])
+            assert payload == {"type": "game_state", "phase": "waiting"}
+
+        asyncio.run(run())
+
+    def test_subscriber_via_python_id_fallback_receives_publish(self):
+        """Subscriber keyed by id(ws) (legacy path) gets the message."""
+        import json
+        import asyncio
+
+        async def run():
+            state = ChannelState()
+            server = self._make_server()
+
+            ws = _MockWebSocket(bbs_session_id=99)
+            server._clients["default"] = {ws}
+            # Subscribe using the Python id() fallback, the way casino's
+            # _legacy_session_id used to work before normalization.
+            channel_subscribe(state, id(ws), "casino:table:test")
+
+            await channel_publish(
+                state,
+                "casino:table:test",
+                {"type": "game_state", "phase": "dealing"},
+                server=server,
+            )
+
+            assert len(ws.sent) == 1, f"expected 1 send, got {ws.sent}"
+            payload = json.loads(ws.sent[0])
+            assert payload == {"type": "game_state", "phase": "dealing"}
+
+        asyncio.run(run())
+
+    def test_non_subscriber_does_not_receive_publish(self):
+        """A websocket on the server but not subscribed to the channel
+        must not be sent the message."""
+        import asyncio
+
+        async def run():
+            state = ChannelState()
+            server = self._make_server()
+
+            ws_subscribed = _MockWebSocket(bbs_session_id=1)
+            ws_unrelated = _MockWebSocket(bbs_session_id=2)
+            ws_other_channel = _MockWebSocket(bbs_session_id=3)
+            server._clients["default"] = {ws_subscribed, ws_unrelated, ws_other_channel}
+            channel_subscribe(state, 1, "casino:table:test")
+            channel_subscribe(state, 3, "casino:table:other")
+
+            await channel_publish(
+                state,
+                "casino:table:test",
+                {"type": "game_state"},
+                server=server,
+            )
+
+            assert len(ws_subscribed.sent) == 1
+            assert ws_unrelated.sent == []
+            assert ws_other_channel.sent == []
+
+        asyncio.run(run())
+
+    def test_publish_without_server_skips_ws_fanout_but_still_invokes_callbacks(self):
+        """``server=None`` skips WS delivery but registered callbacks
+        still fire (in-process bots must keep working)."""
+        import asyncio
+
+        async def run():
+            state = ChannelState()
+
+            received = []
+            channel_register_callback(state, "casino:table:test", received.append)
+            channel_subscribe(state, 42, "casino:table:test")
+
+            await channel_publish(
+                state,
+                "casino:table:test",
+                {"type": "game_state"},
+                server=None,
+            )
+
+            assert received == [{"type": "game_state"}]
+
+        asyncio.run(run())
+
+    def test_publish_does_not_double_deliver_when_subscribed_under_both_ids(self):
+        """If the same ws is subscribed under both id-spaces, it must
+        receive exactly one message, not two."""
+        import json
+        import asyncio
+
+        async def run():
+            state = ChannelState()
+            server = self._make_server()
+
+            ws = _MockWebSocket(bbs_session_id=10)
+            server._clients["default"] = {ws}
+            channel_subscribe(state, 10, "casino:table:test")
+            channel_subscribe(state, id(ws), "casino:table:test")
+
+            await channel_publish(
+                state,
+                "casino:table:test",
+                {"type": "game_state"},
+                server=server,
+            )
+
+            assert len(ws.sent) == 1, f"expected exactly 1 send, got {ws.sent}"
+            payload = json.loads(ws.sent[0])
+            assert payload == {"type": "game_state"}
+
+        asyncio.run(run())
+
+    def test_publish_to_channel_with_no_subscribers_is_noop(self):
+        """Publishing to a channel nobody is subscribed to must not
+        attempt any send and must not raise."""
+        import asyncio
+
+        async def run():
+            state = ChannelState()
+            server = self._make_server()
+
+            ws = _MockWebSocket(bbs_session_id=1)
+            server._clients["default"] = {ws}
+            channel_subscribe(state, 1, "casino:table:other")
+
+            await channel_publish(
+                state,
+                "casino:table:empty",
+                {"type": "game_state"},
+                server=server,
+            )
+
+            assert ws.sent == []
+
+        asyncio.run(run())
+
+    def test_publish_swallows_send_errors_and_continues(self):
+        """A failing send on one subscriber must not prevent delivery to
+        other subscribers."""
+        import json
+        import asyncio
+
+        async def run():
+            state = ChannelState()
+            server = self._make_server()
+
+            ws_bad = _MockWebSocket(bbs_session_id=1)
+            ws_bad.send_error = RuntimeError("socket closed")
+            ws_good = _MockWebSocket(bbs_session_id=2)
+            server._clients["default"] = {ws_bad, ws_good}
+            channel_subscribe(state, 1, "casino:table:test")
+            channel_subscribe(state, 2, "casino:table:test")
+
+            await channel_publish(
+                state,
+                "casino:table:test",
+                {"type": "game_state"},
+                server=server,
+            )
+
+            assert ws_bad.sent == []
+            assert len(ws_good.sent) == 1
+            assert json.loads(ws_good.sent[0]) == {"type": "game_state"}
+
+        asyncio.run(run())
