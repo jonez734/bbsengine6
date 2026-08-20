@@ -93,8 +93,6 @@ schema to zoid6 in stage_one`.
 
 ### 4. Cross-module schema ownership pattern
 
-### 4. Cross-module schema ownership pattern
-
 **Where:** every BBS submodule whose `sql/schema.sql` is executed
 by `manage_schema_priv` (or any other `zoid6`-owned SECURITY
 DEFINER helper) under NOSUPERUSER — currently `casino`, plus any
