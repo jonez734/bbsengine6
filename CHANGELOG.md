@@ -7,6 +7,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### backend: dedicated `zoid6` role owns the SECURITY DEFINER helpers
+
+The five `public.*` privilege helpers (`manage_schema_priv`,
+`manage_database_priv`, `manage_role_privs`,
+`manage_secondary_role`, `get_role_privs`) are now owned by a
+dedicated, unprivileged role `zoid6` rather than by the bootstrap
+principal. This narrows the trust surface enforced by
+`database.verify_function_owner` and removes a non-deterministic
+allow-list entry (`getpass.getuser()`).
+
+- New `backend.checkzoid6role` module: creates `zoid6` as
+  `NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN INHERIT`. Hard-fails
+  if a pre-existing `zoid6` has `rolsuper=True`, since that would
+  silently break the trust model.
+- New `backend.checkzoid6owner` module: idempotently reassigns
+  ownership of the five helpers to `zoid6` via
+  `ALTER FUNCTION public.<fn>(<args>) OWNER TO zoid6`. Verbose on
+  first run so the operator sees exactly which functions moved
+  owners and from whom. Idempotent on re-run.
+- `backend.checkengine`: allow-list changed from
+  `(install_role, "postgres")` to hard-coded `("zoid6", "postgres")`.
+  `postgres` is kept for one release as a transition aid; it will
+  be dropped in a subsequent release — see
+  `bbsengine6/TODO_zoid6_role.md`.
+- `stage_zero` module loop now runs `checkzoid6role` after
+  `checkroles` and `checkzoid6owner` after `checkfunctions`.
+- `backend.checkengine` now creates the `engine` schema with
+  `AUTHORIZATION zoid6` (fresh installs) or, for BC, issues
+  `ALTER SCHEMA engine OWNER TO zoid6` when an existing schema is
+  owned by a different role. This is required because
+  `manage_schema_priv` is owned by `zoid6` (NOSUPERUSER) and can
+  only GRANT on objects it owns.
+- `database.verify_function_owner` error message updated to
+  reference `checkzoid6owner`.
+- Tests: `py/tests/test_manage_schema_priv.py` now asserts
+  `EXPECTED_OWNER = "zoid6"`. New integration tests
+  `tests/integration/test_checkzoid6_role.py`,
+  `tests/integration/test_checkzoid6_owner.py`, and a new
+  `test_main_reassigns_engine_schema_to_zoid6_when_owner_differs`
+  case in `tests/integration/test_stage_one_checkengine.py`.
+
+#### Follow-up: cross-module schema ownership (casino)
+
+Downstream of the role tightening above, the `casino` schema's
+ownership also matters. `manage_schema_priv` (owned by `zoid6`)
+`GRANT USAGE` on the `casino` schema in
+`casino/sql/schema.sql`, so the schema itself must be owned by
+`zoid6` (or another role the helper owns objects under) for that
+grant to succeed under NOSUPERUSER. Otherwise the bootstrap halts
+with `permission denied for schema casino`.
+
+The casino project now ships `casino.startup.checkcasino` — a
+mirror of `bbsengine6.backend.checkengine`'s schema-ownership
+block — which `casino.startup.main` invokes between the citext
+extension install and the `schema.sql` import. It is idempotent
+and `BBSENGINE6_DBNAME`-aware (uses the same env var as the
+existing `casino` test plumbing). See `casino/CHANGELOG.md` for
+the casino-side entry and `bbsengine6/TODO_zoid6_role.md` §4 for
+the cross-module pattern.
+
 ### net.ping: shared WebSocket liveness check for any bbsengine6-based daemon
 
 New module `bbsengine6.net.ping` provides a single code path for

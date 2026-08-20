@@ -148,7 +148,7 @@ The package lives at `py/src/bbsengine6/`.
 | `password/`                   | Strategy pattern (`manager`, `storage`, `config`, `cipher`); ciphers `aes256gcm`, `plaintext`; storage `postgresql` |
 | `services/`                   | `channel`, `invite`, `member` (server-side handlers) |
 | `session/`                    | Generic `SessionManager` (consumed by bed)         |
-| `sql/`                        | ~50 schema files (schema, views, enums, SECURITY DEFINER functions) |
+| `sql/`                        | ~50 schema files (schema, views, enums, SECURITY DEFINER functions owned by the dedicated `zoid6` role — see §5) |
 | `startup/`                    | `lib`, `main`, `__main__`, `message_subscription`  |
 | `examples/`                   | Demos + sample handlers (`message_demo.py`, `notify_handler.py`) |
 | `tests/`                      | net-layer integration tests                        |
@@ -226,10 +226,13 @@ Templates: `actions`, `blurb-block`, `breadcrumbs`,
 - `channel.sql` — channel pub/sub.
 - `bank.sql` — bank ledger.
 - `createrol.sql`, `createschema.sql`, `extensions.sql`,
-  `grants.sql` — DDL helpers (SECURITY DEFINER).
+  `grants.sql` — DDL helpers (SECURITY DEFINER; owned by the
+  dedicated `zoid6` role).
+- `manage_*_priv.sql` and `get_role_privs.sql` — privilege-
+  management helpers. Also `SECURITY DEFINER`; owned by the
+  dedicated `zoid6` role (see "SECURITY DEFINER ownership" below).
 - `log.sql` — audit log.
 - `ltree.sql` — ltree extension glue for folders.
-- `manage_*_priv.sql` — privilege-management functions.
 - `map_*.sql` — member-flag maps (`map_member_flag.sql` is the
   canonical example).
 - `memberinet.sql`, `migrate_notify_to_message.sql` —
@@ -238,6 +241,51 @@ Templates: `actions`, `blurb-block`, `breadcrumbs`,
 - A handful of `*_view.sql` files mirror tables for read paths.
 
 `handbook/migrations/` carries per-feature migration scripts.
+
+### SECURITY DEFINER ownership
+
+The five privilege-management helpers in `public` —
+`manage_schema_priv`, `manage_database_priv`, `manage_role_privs`,
+`manage_secondary_role`, `get_role_privs` — are `SECURITY DEFINER`
+functions. Their ownership determines whose privileges they run
+under when invoked, and is verified at bootstrap by
+`database.verify_function_owner` against a hard-coded allow-list
+`("zoid6", "postgres")`.
+
+The canonical owner is the dedicated unprivileged PostgreSQL role
+`zoid6` (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN INHERIT`),
+created by `backend.checkzoid6role` and enforced by
+`backend.checkzoid6owner` (which runs `ALTER FUNCTION ... OWNER
+TO zoid6` against the five helpers if ownership has drifted). The
+`postgres` entry in the allow-list is a one-release transition aid;
+it will be dropped in the next release — see
+`bbsengine6/TODO_zoid6_role.md`.
+
+This role split decouples code ownership from the bootstrap
+principal (typically a login superuser like `jam` or `opencode`)
+and turns the verifier allow-list from a non-deterministic tuple
+into a fixed two-element list. The `engine` schema is also
+`AUTHORIZATION zoid6` so that `manage_schema_priv` (now
+NOSUPERUSER-owned) can `GRANT USAGE` on it.
+
+#### Cross-module schema ownership
+
+Because `manage_schema_priv` is NOSUPERUSER-owned, every
+`schema.sql` it grants on must itself be owned by `zoid6` — the
+helper cannot grant on objects it does not own. The `engine`
+schema is covered in this repo via `backend.checkengine` (creates
+with `AUTHORIZATION zoid6`; reassigns inline when an existing
+schema has a different owner).
+
+Other BBS submodules that consume `manage_schema_priv` apply
+the same pattern locally. Each ships a `<module>.startup.check<module>`
+mirror of `checkengine`'s schema-ownership block (currently
+`casino.startup.checkcasino`; the pattern extends to any future
+submodule whose `sql/schema.sql` is executed by a `zoid6`-owned
+helper). The mirror is invoked from the submodule's startup
+`main` between extension install and the schema.sql import and
+is idempotent. See `bbsengine6/TODO_zoid6_role.md` §4 for the
+canonical pattern and the open follow-ups.
 
 ## 6. Handbook cross-reference
 
@@ -328,6 +376,10 @@ In addition to the Phase 0-5 audit, the recent work includes:
 - `test_database_create.py`, `test_checkfunctions.py`,
   `test_manage_schema_priv.py`, `test_member_verify_found.py`,
   `test_member_update_with_flags.py` — DB plumbing.
+- `test_checkzoid6_role.py`, `test_checkzoid6_owner.py` (under
+  `tests/integration/`) — `zoid6` ownership model (role
+  attributes, superuser hard-fail, idempotent reassignment of
+  the five helpers, BC path for the `engine` schema).
 - `test_message_*.py` (channel, lib, local_cache, phase1_gaps) —
   message subsystem regression.
 - `test_router_send_notification.py`,
@@ -400,7 +452,9 @@ Phase 3 regression tests (created 2026-08-02):
 | `py/src/bbsengine6/session/lib.py`        | Generic SessionManager                |
 | `py/src/bbsengine6/startup/main.py`       | DB bring-up                           |
 | `py/src/bbsengine6/password_hash.py`      | scrypt + SHA-256                      |
-| `py/src/bbsengine6/sql/`                  | ~50 schema files                      |
+| `py/src/bbsengine6/backend/checkzoid6role.py` | Creates the dedicated `zoid6` owner role |
+| `py/src/bbsengine6/backend/checkzoid6owner.py` | Reassigns the 5 SECURITY DEFINER helpers to `zoid6` |
+| `py/src/bbsengine6/sql/`                  | ~50 schema files (helpers owned by `zoid6`) |
 | `py/pyproject.toml`                        | Python manifest (console_script `bed`) |
 | `php/engine.php`                           | PHP global bootstrap                  |
 | `php/session.php`                          | `bbsengine6\session` namespace        |
