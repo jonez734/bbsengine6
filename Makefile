@@ -18,6 +18,11 @@ export RSYNC = rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --verbose \
 
 export VERSION = 6
 
+# Set by `deploy --editable` (deploytool). Empty by default. Propagated
+# to py/src/Makefile deploy-tui which switches between editable and
+# wheel install.
+DEPLOY_EDITABLE ?=
+
 # @since 20230414
 export SCSSLOADPATH = --load-path $(PWD)/../zoidweb6/skin/scss/ \
                      --load-path $(PWD)/skin/scss/ \
@@ -207,5 +212,5 @@ deploy:
 	$(RSYNC) $(ENGINESTAGE) $(ENGINEPROD)
 	$(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT)
 
-deploy-tui:
-	$(MAKE) -C py/src install
+deploy-tui: build
+	$(MAKE) -C py/src deploy-tui DEPLOY_EDITABLE=$(DEPLOY_EDITABLE)
