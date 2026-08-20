@@ -25,6 +25,7 @@ of the above without requiring a live PostgreSQL server. The
 integration class (TestStartupMainZoid6MissingIntegration) requires
 real Postgres and is gated behind @pytest.mark.integration.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -107,7 +108,9 @@ class _Harness:
         self.runmodule_returns = runmodule_returns
         self.runmodule_per_submodule = runmodule_per_submodule or {}
         self.run_calls: List[str] = []
-        self.databasename = databasename or f"zoid6_test_missing_{uuid.uuid4().hex[:12]}"
+        self.databasename = (
+            databasename or f"zoid6_test_missing_{uuid.uuid4().hex[:12]}"
+        )
         self.args = _make_args(self.databasename)
         self._patches: List[Any] = []
 
@@ -169,6 +172,7 @@ class _Harness:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.unit
 class TestStartupMainWhenZoid6DatabaseMissing:
     """Pure-mock coverage of startup.main's missing-database path.
 
@@ -176,6 +180,12 @@ class TestStartupMainWhenZoid6DatabaseMissing:
     required). They exercise the code paths that stage_zero /
     checkdatabase / checkcreatedb would otherwise need a real
     PostgreSQL server to exercise.
+
+    The mocked flow covers the pre-flight admin-pool bootstrap: every
+    call to ``bbsengine6.database.getpool`` returns a MagicMock admin
+    pool, ``bbsengine6.database.connect`` returns a context manager
+    yielding a fake conn, and ``bbsengine6.startup.lib.runmodule`` is
+    recorded so tests can assert the order of stage invocations.
     """
 
     def test_missing_database_routes_through_stage_zero(self):
@@ -183,6 +193,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         (which is responsible for creating it), then stage_one, then
         bank. The function returns True on success."""
         import importlib
+
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness() as h:
@@ -200,6 +211,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         """When the target DB already exists, startup still walks
         stage_zero -> stage_one and returns True."""
         import importlib
+
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness() as h:
@@ -214,6 +226,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         It must fall through to stage_zero so that checkdatabase can
         create the database."""
         import importlib
+
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness(
@@ -229,8 +242,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         )
         # No stages ran because startup could not even build a pool.
         assert h.run_calls == [], (
-            f"no stages should run when pool acquisition fails; "
-            f"got {h.run_calls!r}"
+            f"no stages should run when pool acquisition fails; got {h.run_calls!r}"
         )
 
     def test_emits_pool_is_none_message_when_admin_pool_fails(self, caplog):
@@ -239,12 +251,11 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         None' error and return False. This is the legitimate
         'caller cannot connect to PostgreSQL at all' case."""
         import importlib
+
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness(
-            getpool_raises=psycopg.OperationalError(
-                "could not connect to server"
-            ),
+            getpool_raises=psycopg.OperationalError("could not connect to server"),
         ) as h:
             result = startup_module.main(h.args, conn=None, pool=None)
 
@@ -253,8 +264,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         # captures the original (level-prefix-free) text.
         all_log = "\n".join(r.message for r in caplog.records)
         assert "pool is None" in all_log, (
-            f"expected 'pool is None' when admin pool also fails; got:\n"
-            f"{all_log!r}"
+            f"expected 'pool is None' when admin pool also fails; got:\n{all_log!r}"
         )
 
     def test_stage_zero_failure_short_circuits(self):
@@ -262,6 +272,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         stage_one must NOT run. The function still returns False
         and the connection is rolled back."""
         import importlib
+
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness(
@@ -282,6 +293,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         stage_zero still runs first (and succeeds); stage_one fails
         and no further stages run."""
         import importlib
+
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
         with _Harness(
@@ -294,8 +306,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         )
         # stage_zero ran, stage_one ran and failed; no further stages run.
         assert h.run_calls == ["stage_zero", "stage_one"], (
-            f"no stages should run after stage_one fails; "
-            f"got {h.run_calls!r}"
+            f"no stages should run after stage_one fails; got {h.run_calls!r}"
         )
 
     def test_createdb_missing_routes_through_checkcreatedb_in_stage_zero(self):
@@ -305,10 +316,11 @@ class TestStartupMainWhenZoid6DatabaseMissing:
 
         We pin this by patching the outer bbsengine6.startup.lib.runmodule
         to return a controlled value for 'stage_zero'. Inside our
-        controlled value, we mimic stage_zero's loop: call
+        controlled value, we mimic stage_zero's inner loop: call
         bbsengine6.backend.checkcreatedb.main and propagate its result.
         """
         import importlib
+
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
         sub_calls: List[str] = []
@@ -322,16 +334,24 @@ class TestStartupMainWhenZoid6DatabaseMissing:
                 # outer patch already controls checkcreatedb.main.
                 return False
             return True
+
         fake_runmodule.__name__ = "runmodule"
 
-        with patch(
-            "bbsengine6.backend.checkcreatedb.main",
-            return_value=False,
-        ), patch(
-            "bbsengine6.startup.lib.runmodule",
-            new=fake_runmodule,
+        # Use _Harness for getpool/connect patching (so the pre-flight
+        # admin pool + target pool succeed without a live Postgres),
+        # then layer an additional patch on the outer runmodule so we
+        # can make stage_zero return False while still letting the
+        # harness's fake_runmodule track stage_one calls.
+        with (
+            _Harness(
+                runmodule_per_submodule={"stage_zero": False},
+            ) as h,
+            patch(
+                "bbsengine6.startup.lib.runmodule",
+                new=fake_runmodule,
+            ),
         ):
-            args = _make_args("zoid6")
+            args = h.args
             result = startup_module.main(args, conn=None, pool=None)
 
         assert result is False, (
@@ -340,9 +360,6 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         assert "stage_zero" in sub_calls, (
             f"stage_zero must have been attempted; got {sub_calls!r}"
         )
-        # Production: stage_one still runs after stage_zero failure
-        # (failcount is what drives the final return). The key
-        # behavior is the final False.
         assert result is False
 
     def test_createdb_present_succeeds(self):
@@ -350,23 +367,25 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         through stage_zero / stage_one and return True. This
         pins the happy path of the new checkcreatedb sub-step."""
         import importlib
+
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
-        with patch(
-            "bbsengine6.backend.checkcreatedb.main",
-            return_value=True,
-        ), patch(
-            "bbsengine6.startup.lib.runmodule",
-            return_value=True,
-        ) as mock_runmodule:
-            args = _make_args("zoid6")
+        with (
+            patch(
+                "bbsengine6.backend.checkcreatedb.main",
+                return_value=True,
+            ),
+            _Harness() as h,
+        ):
+            args = h.args
             result = startup_module.main(args, conn=None, pool=None)
 
-        assert result is True
-        # All top-level stages were attempted.
-        called = [c.args[1] for c in mock_runmodule.call_args_list]
-        assert called == ["stage_zero", "stage_one"], (
-            f"unexpected stage order: {called!r}"
+        assert result is True, (
+            f"startup should succeed when checkcreatedb passes; "
+            f"got {result!r}, run_calls={h.run_calls!r}"
+        )
+        assert h.run_calls == ["stage_zero", "stage_one"], (
+            f"unexpected stage order: {h.run_calls!r}"
         )
 
     def test_stage_zero_runs_checkcreatedb_first(self):
@@ -379,6 +398,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         src = open(stage_zero.__file__).read()
         # Find the for m in (...) tuple.
         import re
+
         m = re.search(r"for m in \(\s*\"([^\"]+)\"", src)
         assert m is not None, "could not locate stage_zero sub-step tuple"
         first_substep = m.group(1)
@@ -389,9 +409,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         # checkdatabase must be the second sub-step (after checkcreatedb
         # but before checkextensions, so a missing CREATEDB is caught
         # before any other step runs).
-        second_match = re.search(
-            r"for m in \(\s*\"[^\"]+\",\s*\"([^\"]+)\"", src
-        )
+        second_match = re.search(r"for m in \(\s*\"[^\"]+\",\s*\"([^\"]+)\"", src)
         assert second_match is not None, (
             "could not locate second sub-step in stage_zero tuple"
         )
@@ -399,6 +417,301 @@ class TestStartupMainWhenZoid6DatabaseMissing:
         assert second_substep == "checkdatabase", (
             f"checkdatabase must be the second sub-step in stage_zero; "
             f"got {second_substep!r}"
+        )
+
+    def test_no_stderr_noise_when_target_db_missing(self, capfd):
+        """When startup.main is invoked against a target DB that does
+        not yet exist, the new pre-flight bootstrap must suppress the
+        legacy psycopg_pool ``error connecting in 'pool-N'`` and
+        ``Multiple connection attempts failed`` log spew that
+        previously appeared on the way to ``PoolTimeout``. With the
+        pre-flight in place, the first attempt is against the admin
+        'postgres' database, which always exists in a healthy cluster.
+        """
+        import importlib
+        from bbsengine6 import database as database_mod
+
+        startup_module = importlib.import_module("bbsengine6.startup.main")
+
+        admin_pool = MagicMock(name="admin_pool")
+        target_pool = MagicMock(name="target_pool")
+        getpool_calls: List[str] = []
+
+        def fake_getpool(args, **kwargs):
+            getpool_calls.append(kwargs.get("dbname") or args.databasename)
+            if getpool_calls[-1] == "postgres":
+                return admin_pool
+            return target_pool
+
+        fake_conn = MagicMock(name="conn")
+        fake_conn.commit = MagicMock()
+        fake_conn.rollback = MagicMock()
+        fake_cm = MagicMock(name="connect_cm")
+        fake_cm.__enter__ = MagicMock(return_value=fake_conn)
+        fake_cm.__exit__ = MagicMock(return_value=False)
+
+        runmodule_calls: List[str] = []
+
+        def fake_runmodule(args, submodule, **kwargs):
+            runmodule_calls.append(submodule)
+            return True
+
+        with (
+            patch.object(database_mod, "getpool", side_effect=fake_getpool),
+            patch.object(database_mod, "connect", return_value=fake_cm),
+            patch(
+                "bbsengine6.startup.lib.runmodule",
+                side_effect=fake_runmodule,
+            ),
+        ):
+            args = _make_args("does_not_exist")
+            result = startup_module.main(args, conn=None, pool=None)
+
+        captured = capfd.readouterr()
+        assert result is True, (
+            f"startup should succeed via pre-flight; got {result!r}, "
+            f"runmodule_calls={runmodule_calls!r}"
+        )
+        assert getpool_calls == ["postgres", "does_not_exist"], (
+            f"expected pre-flight admin pool first, then target pool; "
+            f"got {getpool_calls!r}"
+        )
+        assert runmodule_calls == ["stage_zero", "stage_one"], (
+            f"expected stage_zero then stage_one; got {runmodule_calls!r}"
+        )
+        combined = captured.err + captured.out
+        assert "error connecting in 'pool" not in combined, (
+            f"psycopg_pool 'error connecting' should not appear on "
+            f"the missing-DB path; got stderr:\n{captured.err!r}"
+        )
+        assert "Multiple connection attempts failed" not in combined, (
+            f"'Multiple connection attempts failed' should not appear "
+            f"on the missing-DB path; got stderr:\n{captured.err!r}"
+        )
+
+    def test_admin_pool_failure_returns_false_with_clear_message(self, caplog):
+        """When both the user-supplied pool AND the admin 'postgres'
+        pool are unavailable, startup must emit the legacy 'pool is
+        None' error and return False. This is the legitimate
+        'caller cannot connect to PostgreSQL at all' case."""
+        import importlib
+        from bbsengine6 import database as database_mod
+
+        startup_module = importlib.import_module("bbsengine6.startup.main")
+
+        with patch.object(
+            database_mod,
+            "getpool",
+            side_effect=psycopg.OperationalError("could not connect to server"),
+        ):
+            args = _make_args("zoid6")
+            result = startup_module.main(args, conn=None, pool=None)
+
+        assert result is False, (
+            f"startup should report False when admin pool fails; got {result!r}"
+        )
+        all_log = "\n".join(r.message for r in caplog.records)
+        assert "pool is None" in all_log, (
+            f"expected 'pool is None' when admin pool fails; got:\n{all_log!r}"
+        )
+
+    def test_target_pool_failure_after_stage_zero_returns_false(self, caplog):
+        """If stage_zero succeeds (e.g. CREATE DATABASE worked) but
+        building a target pool against the now-bootstrapped
+        ``args.databasename`` still fails, startup must emit a clear
+        'cannot build target pool' error and return False. This
+        catches the case where the role lost permission to connect
+        to the freshly-created DB."""
+        import importlib
+        from bbsengine6 import database as database_mod
+
+        startup_module = importlib.import_module("bbsengine6.startup.main")
+
+        def fake_getpool(args, **kwargs):
+            dbname = kwargs.get("dbname") or args.databasename
+            if dbname == "postgres":
+                return MagicMock(name="admin_pool")
+            raise psycopg.OperationalError(
+                f'FATAL: permission denied for database "{args.databasename}"'
+            )
+
+        fake_conn = MagicMock(name="conn")
+        fake_conn.commit = MagicMock()
+        fake_conn.rollback = MagicMock()
+        fake_cm = MagicMock(name="connect_cm")
+        fake_cm.__enter__ = MagicMock(return_value=fake_conn)
+        fake_cm.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch.object(database_mod, "getpool", side_effect=fake_getpool),
+            patch.object(database_mod, "connect", return_value=fake_cm),
+            patch(
+                "bbsengine6.startup.lib.runmodule", return_value=True
+            ) as mock_runmodule,
+        ):
+            args = _make_args("zoid6")
+            result = startup_module.main(args, conn=None, pool=None)
+
+        assert result is False, (
+            f"startup should report False when target pool fails; got {result!r}"
+        )
+        called = [c.args[1] for c in mock_runmodule.call_args_list]
+        assert called == ["stage_zero"], (
+            f"only stage_zero should run before the target pool failure; got {called!r}"
+        )
+        all_log = "\n".join(r.message for r in caplog.records)
+        assert "cannot build target pool" in all_log, (
+            f"expected 'cannot build target pool' error; got:\n{all_log!r}"
+        )
+
+    def test_caller_supplied_pool_matching_target_reused(self):
+        """When the caller passes ``pool=`` and the pool's dbname
+        matches ``args.databasename`` (verified via
+        ``Connection.info.dbname``), startup must reuse it for
+        stage_one instead of building a fresh target pool. This saves
+        one ConnectionPool open on the happy path for callers that
+        already have a working target pool."""
+        import importlib
+        from bbsengine6 import database as database_mod
+
+        startup_module = importlib.import_module("bbsengine6.startup.main")
+
+        admin_pool = MagicMock(name="admin_pool")
+        caller_pool = MagicMock(name="caller_pool")
+        caller_conn = MagicMock(name="caller_conn")
+        caller_conn.info.dbname = "zoid6"
+        caller_pool.getconn = MagicMock(return_value=caller_conn)
+        caller_pool.putconn = MagicMock()
+
+        getpool_calls: List[str] = []
+
+        def fake_getpool(args, **kwargs):
+            dbname = kwargs.get("dbname") or args.databasename
+            getpool_calls.append(dbname)
+            return admin_pool  # never actually used; caller_pool reused
+
+        fake_conn_target = MagicMock(name="target_conn")
+        fake_conn_target.commit = MagicMock()
+        fake_conn_target.rollback = MagicMock()
+        fake_cm_target = MagicMock(name="target_cm")
+        fake_cm_target.__enter__ = MagicMock(return_value=fake_conn_target)
+        fake_cm_target.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch.object(database_mod, "getpool", side_effect=fake_getpool),
+            patch.object(database_mod, "connect", return_value=fake_cm_target),
+            patch("bbsengine6.startup.lib.runmodule", return_value=True),
+        ):
+            args = _make_args("zoid6")
+            result = startup_module.main(args, conn=None, pool=caller_pool)
+
+        assert result is True, (
+            f"startup should reuse a matching caller pool; got {result!r}"
+        )
+        caller_pool.getconn.assert_called_once_with()
+        caller_pool.putconn.assert_called_once_with(caller_conn)
+        assert getpool_calls == ["postgres"], (
+            f"only the pre-flight admin pool should have been built; "
+            f"getpool_calls={getpool_calls!r}"
+        )
+
+    def test_caller_supplied_pool_mismatched_dbname_replaced(self):
+        """When the caller passes ``pool=`` but the pool's dbname
+        does not match ``args.databasename`` (e.g. the pool points at
+        the old 'postgres' admin DB or a stale DB), startup must
+        build a fresh target pool instead. The mismatched pool's
+        conn is returned to it via ``putconn`` before falling back."""
+        import importlib
+        from bbsengine6 import database as database_mod
+
+        startup_module = importlib.import_module("bbsengine6.startup.main")
+
+        admin_pool = MagicMock(name="admin_pool")
+        fresh_target_pool = MagicMock(name="fresh_target_pool")
+        caller_pool = MagicMock(name="caller_pool")
+        caller_conn = MagicMock(name="caller_conn")
+        caller_conn.info.dbname = "postgres"  # mismatch
+        caller_pool.getconn = MagicMock(return_value=caller_conn)
+        caller_pool.putconn = MagicMock()
+
+        getpool_calls: List[str] = []
+
+        def fake_getpool(args, **kwargs):
+            dbname = kwargs.get("dbname") or args.databasename
+            getpool_calls.append(dbname)
+            if dbname == "postgres":
+                return admin_pool
+            return fresh_target_pool
+
+        target_conn = MagicMock(name="target_conn")
+        target_conn.commit = MagicMock()
+        target_conn.rollback = MagicMock()
+        target_cm = MagicMock(name="target_cm")
+        target_cm.__enter__ = MagicMock(return_value=target_conn)
+        target_cm.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch.object(database_mod, "getpool", side_effect=fake_getpool),
+            patch.object(database_mod, "connect", return_value=target_cm),
+            patch("bbsengine6.startup.lib.runmodule", return_value=True),
+        ):
+            args = _make_args("zoid6")
+            result = startup_module.main(args, conn=None, pool=caller_pool)
+
+        assert result is True, (
+            f"startup should still succeed when caller pool mismatches; got {result!r}"
+        )
+        caller_pool.getconn.assert_called_once_with()
+        caller_pool.putconn.assert_called_once_with(caller_conn)
+        assert getpool_calls == ["postgres", "zoid6"], (
+            f"expected pre-flight admin + fresh target pool; got {getpool_calls!r}"
+        )
+
+    def test_caller_supplied_conn_replaced_by_fresh_target_conn(self):
+        """When the caller passes ``conn=``, startup must still run
+        the pre-flight and build a fresh target pool for stage_one.
+        The caller's conn was opened before the target DB existed and
+        is therefore stale; reusing it would mask target-DB issues.
+        """
+        import importlib
+        from bbsengine6 import database as database_mod
+
+        startup_module = importlib.import_module("bbsengine6.startup.main")
+
+        admin_pool = MagicMock(name="admin_pool")
+        fresh_target_pool = MagicMock(name="fresh_target_pool")
+        stale_caller_conn = MagicMock(name="stale_caller_conn")
+
+        getpool_calls: List[str] = []
+
+        def fake_getpool(args, **kwargs):
+            dbname = kwargs.get("dbname") or args.databasename
+            getpool_calls.append(dbname)
+            if dbname == "postgres":
+                return admin_pool
+            return fresh_target_pool
+
+        target_conn = MagicMock(name="target_conn")
+        target_conn.commit = MagicMock()
+        target_conn.rollback = MagicMock()
+        target_cm = MagicMock(name="target_cm")
+        target_cm.__enter__ = MagicMock(return_value=target_conn)
+        target_cm.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch.object(database_mod, "getpool", side_effect=fake_getpool),
+            patch.object(database_mod, "connect", return_value=target_cm),
+            patch("bbsengine6.startup.lib.runmodule", return_value=True),
+        ):
+            args = _make_args("zoid6")
+            result = startup_module.main(args, conn=stale_caller_conn, pool=None)
+
+        assert result is True, (
+            f"startup should succeed via pre-flight even with caller conn; "
+            f"got {result!r}"
+        )
+        assert getpool_calls == ["postgres", "zoid6"], (
+            f"expected pre-flight admin + fresh target pool; got {getpool_calls!r}"
         )
 
 
@@ -425,13 +738,9 @@ class TestStartupMainZoid6MissingIntegration:
         """
         user = getpass.getuser()
         try:
-            conn = psycopg.connect(
-                f"dbname=postgres user={user}", autocommit=True
-            )
+            conn = psycopg.connect(f"dbname=postgres user={user}", autocommit=True)
         except psycopg.OperationalError as e:
-            pytest.skip(
-                f"PostgreSQL not reachable for integration tests: {e}"
-            )
+            pytest.skip(f"PostgreSQL not reachable for integration tests: {e}")
         try:
             yield conn
         finally:
@@ -449,10 +758,7 @@ class TestStartupMainZoid6MissingIntegration:
         tests cover the same code paths unconditionally.
         """
         with admin_conn.cursor() as cur:
-            cur.execute(
-                "SELECT rolcreatedb FROM pg_roles "
-                "WHERE rolname = current_user"
-            )
+            cur.execute("SELECT rolcreatedb FROM pg_roles WHERE rolname = current_user")
             row = cur.fetchone()
         return bool(row[0]) if row else False
 
@@ -467,10 +773,7 @@ class TestStartupMainZoid6MissingIntegration:
         superuser-specific branch in the production code.
         """
         with admin_conn.cursor() as cur:
-            cur.execute(
-                "SELECT rolsuper FROM pg_roles "
-                "WHERE rolname = current_user"
-            )
+            cur.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
             row = cur.fetchone()
         return bool(row[0]) if row else False
 
@@ -481,9 +784,7 @@ class TestStartupMainZoid6MissingIntegration:
         # Ensure it does not pre-exist (paranoid; uuid makes a collision
         # effectively impossible).
         with admin_conn.cursor() as cur:
-            cur.execute(
-                "SELECT 1 FROM pg_database WHERE datname = %s", (name,)
-            )
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (name,))
             assert cur.fetchone() is None, (
                 f"integration test name {name!r} already exists"
             )
@@ -512,6 +813,7 @@ class TestStartupMainZoid6MissingIntegration:
         code path unconditionally.
         """
         import importlib
+
         startup_module = importlib.import_module("bbsengine6.startup.main")
 
         if not runner_has_createdb:
@@ -590,9 +892,7 @@ class TestStartupMainZoid6MissingIntegration:
                     "path"
                 )
             except psycopg.errors.FeatureNotSupported:
-                pytest.skip(
-                    "CREATE ROLE not supported in this Postgres build"
-                )
+                pytest.skip("CREATE ROLE not supported in this Postgres build")
             role_to_use = temp_role
         else:
             role_to_use = user
@@ -610,9 +910,7 @@ class TestStartupMainZoid6MissingIntegration:
             except Exception as e:
                 # checkcreatedb itself should not raise; surface
                 # any exception as a test failure with context.
-                pytest.fail(
-                    f"checkcreatedb.main raised unexpectedly: {e!r}"
-                )
+                pytest.fail(f"checkcreatedb.main raised unexpectedly: {e!r}")
 
             all_log = "\n".join(r.message for r in caplog.records)
 
@@ -684,14 +982,12 @@ class TestStartupMainZoid6MissingIntegration:
             f"got {result!r}, log:\n{all_log!r}"
         )
         assert "is a superuser" in all_log, (
-            f"superuser-specific ok message missing from log:\n"
-            f"{all_log!r}"
+            f"superuser-specific ok message missing from log:\n{all_log!r}"
         )
         # The 'lacks CREATEDB privilege' error must NOT appear for
         # a superuser, even when rolcreatedb is false.
         assert "lacks CREATEDB privilege" not in all_log, (
-            f"superuser should not see 'lacks CREATEDB' error:\n"
-            f"{all_log!r}"
+            f"superuser should not see 'lacks CREATEDB' error:\n{all_log!r}"
         )
 
 
