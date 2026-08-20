@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### deploy-tui: install from `/srv/repo/bbsengine6/` wheel by default; `DEPLOY_EDITABLE=1` for editable
+
+Part of the cross-monorepo Phase 1 work in `deploytool`'s
+`--editable` flag (see `deploytool/CHANGELOG.md` `[Unreleased]`).
+bbsengine6's `deploy-tui` target now matches the pattern shared
+by `bed`, `casino`, `zoid6`, and `deploytool`.
+
+Before: `bbsengine6/Makefile deploy-tui` called
+`$(MAKE) -C py/src install`, which `py/src/Makefile:11-12`
+resolved to `cd .. && pip install --no-cache-dir -e .` — always
+editable, never went through `/srv/repo/bbsengine6/`.
+
+After:
+
+- Default: `bbsengine6/Makefile deploy-tui` depends on `build`
+  and delegates to `py/src/Makefile deploy-tui`. The inner
+  target picks the most-recently-built wheel under
+  `/srv/repo/bbsengine6/bbsengine6-*.whl` via
+  `ls -t | head -1` and installs it with
+  `pip install --no-cache-dir $WHEEL`.
+- `DEPLOY_EDITABLE=1` (set by `deploytool --editable`):
+  installs editable from the source tree via
+  `cd py && pip install --no-cache-dir -e .`.
+
+The wheel glob uses `$(PROJECT)-*.whl` (not `$(VERSION)-*.whl`)
+because the wheel filename embeds the version from
+`pyproject.toml`'s `[tool.setuptools.dynamic] version = ...`
+attribute — which `py/src/Makefile version:` writes fresh to
+`src/bbsengine6/_version.py` at build time. Top-level
+`bbsengine6/Makefile`'s `$(VERSION)` is `6` (a semantic-version
+sentinel) and does NOT match the wheel filename.
+
+Verified: `make -n -C bbsengine6 deploy-tui` shows
+`pip install /srv/repo/bbsengine6/bbsengine6-*.whl`; the same
+with `DEPLOY_EDITABLE=1` shows `cd py && pip install -e .`.
+
 ### backend: dedicated `zoid6` role owns the SECURITY DEFINER helpers
 
 The five `public.*` privilege helpers (`manage_schema_priv`,
