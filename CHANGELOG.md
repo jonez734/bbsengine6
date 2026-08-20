@@ -67,6 +67,41 @@ existing `casino` test plumbing). See `casino/CHANGELOG.md` for
 the casino-side entry and `bbsengine6/TODO_zoid6_role.md` §4 for
 the cross-module pattern.
 
+#### Follow-up: stage_one regression fix + bank schema ownership
+
+Two related fixes found during the `casino.startup.checkcasino`
+smoke test on a fresh `zoid6` database:
+
+- `backend.stage_one`: add `"checkzoid6owner"` to the module
+  loop (after `"checkfunctions"`). `stage_zero` runs against the
+  admin `postgres` DB and its `checkzoid6owner` correctly
+  reassigns the 5 helpers to `zoid6` there, but `stage_one` runs
+  against the target DB (`args.databasename`) and its
+  `checkfunctions` re-`CREATE`s the helpers, resetting their
+  owner to the connecting user (typically the bootstrap
+  superuser). Without this fix, the target DB's copies stay
+  owned by the bootstrap principal — the verbose
+  "already zoid6" line in `stage_zero`'s output masked the
+  regression because it reported against the admin DB, not the
+  target DB. This broke the trust model that
+  `database.verify_function_owner` and
+  `casino.startup.checkcasino` both depend on.
+
+- `backend.checkbank`: add `_ensure_zoid6_owner()` block that
+  issues `ALTER SCHEMA bank OWNER TO zoid6` after
+  `bank_schema.sql` is imported, idempotent. Per the operator
+  directive ("we should be using `zoid6`, not `opencode`"),
+  all BBS-owned schemas (`engine`, `bank`, `casino`) now have
+  `zoid6` as their canonical owner. The block mirrors the
+  engine schema block in `checkengine` and the casino schema
+  block in `casino.startup.checkcasino`.
+
+End-to-end verification on a fresh `zoid6` DB: all 5 SECURITY
+DEFINER helpers owned by `zoid6` in both admin and target DBs;
+all 3 BBS schemas owned by `zoid6`; `casino.startup.main` runs
+cleanly with no `permission denied for schema casino`; both
+`bbsengine6` and `casino` startup are idempotent on re-run.
+
 ### net.ping: shared WebSocket liveness check for any bbsengine6-based daemon
 
 New module `bbsengine6.net.ping` provides a single code path for

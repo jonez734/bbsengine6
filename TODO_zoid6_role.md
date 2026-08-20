@@ -68,21 +68,30 @@ after.
 `TODO(remove-after-postgres-drop)` block at the top of the file.
 Remove the lines under that marker once item 1 is closed.
 
-### 3. Consider extending `checkzoid6owner.py` to also reassign
-the `bank` schema
+### 3. ~~Consider extending `checkzoid6owner.py` to also reassign
+the `bank` schema~~ DONE — now handled by `checkbank.py`
 
-**Where:** `bbsengine6/py/src/bbsengine6/backend/checkzoid6owner.py`.
+**Where:** `bbsengine6/py/src/bbsengine6/backend/checkbank.py`
+(new `_ensure_zoid6_owner` block).
 
-**Why:** this release only reassigns the `engine` schema (via
-`checkengine`, since `engine` is the only schema on which
-`manage_schema_priv` issues grants). `bank` schema grants live in
-`bank_schema.sql` and are issued by the bootstrap superuser
-directly, so `bank` does not currently need to be owned by
-`zoid6`. If a future schema uses `manage_schema_priv` (or
-analogous helpers) for its grants, extend `checkzoid6owner.py`
-to handle the new schema so the same trust model applies. The
-module already has the right shape for an extension — see
-`HELPERS` and the helper loop.
+**Why this was originally deferred:** `bank` schema grants live
+in `bank_schema.sql` and are issued by the bootstrap superuser
+directly, so `bank` did not strictly need to be `zoid6`-owned for
+the existing grant path.
+
+**Why it landed anyway:** per the operator directive ("we should
+be using `zoid6`, not `opencode`"), all BBS-owned schemas should
+have `zoid6` as their canonical owner. The block mirrors the
+engine schema block in `checkengine` and the casino schema block
+in `casino.startup.checkcasino`. It is idempotent (no-op when
+`bank` is already `zoid6`-owned) and runs after `bank_schema.sql`
+is imported, so the schema exists by the time the ALTER runs.
+
+**Done in:** bbsengine6 submodule commit
+`fix(bbsengine6): reassign SECURITY DEFINER helpers AND bank
+schema to zoid6 in stage_one`.
+
+### 4. Cross-module schema ownership pattern
 
 ### 4. Cross-module schema ownership pattern
 
