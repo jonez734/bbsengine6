@@ -26,6 +26,19 @@ def main(args, **kwargs):
             "checkengine",
             "checkclasses",
             "checkfunctions",
+            # Phase 1 fix: stage_one's checkfunctions re-CREATEs the
+            # 5 public.* SECURITY DEFINER helpers in the target DB,
+            # which resets their owner to the connecting user (typically
+            # the bootstrap superuser). Without this follow-up,
+            # stage_zero's checkzoid6owner (which runs against the
+            # admin 'postgres' DB) reassigns the helpers to zoid6
+            # there, but the target DB's copies stay owned by the
+            # bootstrap principal — breaking the trust model that
+            # database.verify_function_owner and casino.startup.
+            # checkcasino both depend on. Run checkzoid6owner here so
+            # the target DB's copies are reassigned to zoid6 before
+            # any other module issues GRANTs through them.
+            "checkzoid6owner",
             "checkmemberflag",
             "checkmessage",
             "checkbank",
