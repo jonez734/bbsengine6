@@ -7,6 +7,12 @@ from . import lib
 from .message_subscription import subscribe_to_bed_sync
 
 
+# Database name used by stage_zero for the maintenance pool. Every
+# PostgreSQL cluster ships with this database, so it is always reachable
+# whenever the server is up and the caller has SUPERUSER / CONNECT on it.
+_ADMIN_DATABASE = "postgres"
+
+
 def init(args, **kwargs) -> bool:
     return True
 
@@ -22,6 +28,7 @@ def _maybe_subscribe_to_bed(args, **kwargs) -> bool:
     """
     try:
         from bbsengine6.member import _threadlocal
+
         moniker = getattr(_threadlocal, "moniker", None)
         if not moniker:
             return False
@@ -33,8 +40,7 @@ def _maybe_subscribe_to_bed(args, **kwargs) -> bool:
         ok = subscribe_to_bed_sync(args, moniker)
         if ok:
             io.echo(
-                f"bbsengine6 startup: subscribed to bed message pushes "
-                f"for {moniker!r}",
+                f"bbsengine6 startup: subscribed to bed message pushes for {moniker!r}",
                 level="info",
             )
         else:
@@ -68,6 +74,87 @@ def buildargs(args, **kwargs):
     return lib.buildargs(args, **kwargs)
 
 
+def _select_stage_one_pool(
+    args,
+    caller_pool,
+    target_pool_factory,
+):
+    """Choose the pool to use for stage_one.
+
+    The pre-flight always builds an admin pool against 'postgres' and runs
+    stage_zero (which creates the target database if missing). For
+    stage_one we need a pool that points at the now-present target
+    database.
+
+    Selection rules:
+
+    1. If the caller supplied ``pool=`` via kwargs, sanity-check it:
+       try ``pool.getconn()`` to acquire a connection; if it succeeds
+       and the connection's ``info.dbname`` matches ``args.databasename``
+       the caller's pool is good - return the conn to it and reuse the
+       pool for stage_one. If ``info.dbname`` does not match (the
+       caller's pool points at e.g. the old 'postgres' admin database
+       that no longer exists, or a different application database)
+       or if ``getconn()`` raises ``OperationalError`` /
+       ``psycopg_pool.PoolTimeout``, fall through and build a fresh
+       target pool.
+
+    2. Otherwise, build a fresh target pool via ``target_pool_factory``
+       and use that.
+
+    Args:
+        args: Application args.
+        caller_pool: Pool supplied by the caller via kwargs, or None.
+        target_pool_factory: Zero-arg callable that returns a fresh
+            pool against ``args.databasename``. Must raise
+            ``psycopg.OperationalError`` (or a subclass) if the target
+            database is unreachable.
+
+    Returns:
+        The pool to use for stage_one.
+
+    Raises:
+        psycopg.OperationalError: If the target database cannot be
+            reached even after the pre-flight bootstrap. Caller should
+            catch this and surface a clear error.
+    """
+    if caller_pool is not None:
+        try:
+            check_conn = caller_pool.getconn()
+        except (psycopg.OperationalError, OSError) as e:
+            io.echo(
+                f"bbsengine6.startup.117: caller pool getconn() failed "
+                f"({e}); falling back to fresh target pool",
+                level="debug",
+            )
+        else:
+            try:
+                pool_dbname = getattr(getattr(check_conn, "info", None), "dbname", None)
+            except Exception:
+                pool_dbname = None
+            try:
+                caller_pool.putconn(check_conn)
+            except Exception:
+                io.echo_traceback(
+                    "bbsengine6.startup.main._select_stage_one_pool.putconn:"
+                )
+            if pool_dbname == args.databasename:
+                io.echo(
+                    f"bbsengine6.startup.118: reusing caller-supplied pool "
+                    f"(dbname={pool_dbname!r})",
+                    level="debug",
+                )
+                return caller_pool
+            io.echo(
+                f"bbsengine6.startup.117: caller-supplied pool points at "
+                f"{pool_dbname!r}, expected {args.databasename!r}; "
+                f"using fresh target pool",
+                level="debug",
+            )
+
+    return target_pool_factory()
+
+
 def main(args, **kwargs) -> bool:
     def _runstage(args, name, **kwargs):
         pkg = lib.BACKEND_STAGES.get(name)
@@ -81,67 +168,108 @@ def main(args, **kwargs) -> bool:
         result = lib.runmodule(args, name, **kwargs)
         return result is True
 
-    def _work(conn):
-        util.heading("bbsengine6 startup")
-        failcount = 0
-        # Drop conn/pool from kwargs so we don't double-pass them to
-        # _runstage; _work is always called with a real conn that
-        # already represents the active session.
-        stage_kwargs = {
-            k: v for k, v in kwargs.items()
-            if k not in ("conn", "pool")
-        }
-        for s in lib.BACKEND_STAGE_NAMES:
-            if _runstage(args, s, conn=conn, **stage_kwargs) is False:
-                failcount += 1
-                pkg = lib.BACKEND_STAGES.get(s, "bbsengine6.startup")
-                io.echo(f" module {s} failed (package={pkg!r}) ", level="error")
-                break
-
-        if failcount > 0:
-            io.echo("bbsengine6 startup failed", level="error")
-            conn.rollback()
-            return False
-
-        io.echo("bbsengine6 startup complete", level="ok")
-        conn.commit()
-
-        _maybe_subscribe_to_bed(args)
-        return True
+    # Drop conn/pool from kwargs so we don't double-pass them to
+    # _runstage; the pool-selection logic below picks the right pool
+    # for stage_one explicitly.
+    caller_conn = kwargs.pop("conn", None)
+    caller_pool = kwargs.pop("pool", None)
+    stage_kwargs = {k: v for k, v in kwargs.items() if k not in ("conn", "pool")}
 
     io.echo(f"bbsengine6.startup.120: trace", level="debug")
-    conn = kwargs.pop("conn", None)
     # Do NOT log the connection repr here; psycopg.Connection.__repr__
     # includes the DSN, which carries the password. Log only the
     # connection's identity.
-    io.echo(f"bbsengine6.startup.125: conn id={id(conn) if conn is not None else None}", level="debug")
-    if conn is None:
-        pool = kwargs.pop("pool", None)
-        if pool is None:
-            io.echo(
-                f"bbsengine6.startup.110: no conn or pool supplied; "
-                f"attempting pool against {args.databasename!r}",
-                level="debug",
-            )
-            try:
-                pool = database.getpool(args, dbname=args.databasename)
-            except (
-                ConnectionError, TimeoutError, OSError, psycopg.OperationalError
-            ) as e:
-                # Catch network-/socket-level errors and the
-                # "database does not exist" OperationalError that
-                # getpool() raises when the target database is missing.
-                # Both indicate "admin pool unavailable for a reason
-                # that startup can recover from by routing through
-                # stage_zero / checkcreatedb". A broad `except
-                # Exception` would also mask real programming bugs
-                # (NameError, TypeError, etc.) as "pool is None" and
-                # continue, hiding the failure.
+    io.echo(
+        f"bbsengine6.startup.125: caller conn id="
+        f"{id(caller_conn) if caller_conn is not None else None}",
+        level="debug",
+    )
+    io.echo(
+        f"bbsengine6.startup.126: caller pool id="
+        f"{id(caller_pool) if caller_pool is not None else None}",
+        level="debug",
+    )
+
+    util.heading("bbsengine6 startup")
+
+    # --- Pre-flight: admin pool against 'postgres' ---
+    #
+    # Always run this. The 'postgres' database is present in every
+    # PostgreSQL cluster; building a pool against it gives us a working
+    # connection that stage_zero can use to create args.databasename
+    # if it does not yet exist. This is what makes bbsengine6.startup
+    # self-heal on a fresh host where `python -m zoid6.main` (or any
+    # other entry point) has never been bootstrapped before.
+    io.echo(
+        f"bbsengine6.startup.115: pre-flight: building admin pool "
+        f"against {_ADMIN_DATABASE!r} to bootstrap target db "
+        f"{args.databasename!r}",
+        level="debug",
+    )
+    try:
+        admin_pool = database.getpool(args, dbname=_ADMIN_DATABASE)
+    except (ConnectionError, TimeoutError, OSError, psycopg.OperationalError) as e:
+        # The admin pool is unavailable. This is the legitimate
+        # "caller cannot connect to PostgreSQL at all" case; we
+        # cannot bootstrap. Surface the legacy 'pool is None' error
+        # so existing tooling (bed.startup.ensure_startup, casino,
+        # etc.) keeps recognizing it.
+        io.echo(
+            f"bbsengine6.startup.100: pool is None ({e})",
+            level="error",
+        )
+        return False
+
+    # --- stage_zero: bootstrap (create DB, roles, schema) ---
+    #
+    # stage_zero opens its own admin pool internally; we don't pass
+    # admin_pool to it. We do pass stage_kwargs so any caller-supplied
+    # argv-driven config reaches the stage.
+    if _runstage(args, "stage_zero", **stage_kwargs) is not True:
+        io.echo(
+            "bbsengine6 startup failed at stage_zero",
+            level="error",
+        )
+        return False
+
+    # --- stage_one: schema / data load against the target DB ---
+    #
+    # After stage_zero the target DB exists (or already existed).
+    # Pick the right pool for stage_one:
+    #   - caller_pool sanity-checked -> reuse it
+    #   - else build a fresh target pool
+    try:
+        target_pool = _select_stage_one_pool(
+            args,
+            caller_pool,
+            lambda: database.getpool(args, dbname=args.databasename),
+        )
+    except (ConnectionError, TimeoutError, OSError, psycopg.OperationalError) as e:
+        io.echo(
+            f"bbsengine6.startup.107: cannot build target pool ({e})",
+            level="error",
+        )
+        return False
+
+    try:
+        with database.connect(args, pool=target_pool) as conn:
+            if _runstage(args, "stage_one", conn=conn, **stage_kwargs) is not True:
                 io.echo(
-                    f"bbsengine6.startup.100: pool is None ({e})",
+                    "bbsengine6 startup failed at stage_one",
                     level="error",
                 )
+                conn.rollback()
                 return False
-        with database.connect(args, pool=pool) as conn:
-            return _work(conn)
-    return _work(conn)
+            conn.commit()
+    except Exception:
+        # database.connect or stage_one raised something we didn't
+        # catch above (e.g. an unexpected SQL error inside stage_one
+        # after the runmodule returned True). Surface it; the rollback
+        # is implicit because the with-block exits.
+        io.echo_traceback("bbsengine6.startup.main: stage_one raised:")
+        return False
+
+    io.echo("bbsengine6 startup complete", level="ok")
+
+    _maybe_subscribe_to_bed(args)
+    return True

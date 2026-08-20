@@ -21,11 +21,13 @@ All tests are marked ``@pytest.mark.unit`` so they run without a
 live PostgreSQL server. The ``check`` and ``run`` code paths are
 exercised via mocks, not real DB calls.
 """
+
 from __future__ import annotations
 
 import argparse
+import contextlib
 import sys
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -50,6 +52,57 @@ def _make_args(**overrides) -> argparse.Namespace:
     return argparse.Namespace(**base)
 
 
+@contextlib.contextmanager
+def _mock_db(target_dbname: str = "zoid6"):
+    """Stub the DB calls the startup pre-flight makes.
+
+    ``bbsengine6.startup.main`` now runs a pre-flight that builds an
+    admin pool against ``postgres`` and then builds (or reuses) a pool
+    against the target dbname before invoking each stage. With this
+    helper we mock ``bbsengine6.database.getpool`` and
+    ``bbsengine6.database.connect`` so the pre-flight succeeds in a
+    unit-test environment without a live PostgreSQL server.
+
+    Yields ``(fake_admin_pool, fake_target_pool, fake_conn_cm)`` so
+    individual tests can assert against the mock pool / conn if they
+    want to.
+    """
+    fake_admin_pool = MagicMock(name="fake_admin_pool")
+    fake_target_pool = MagicMock(name="fake_target_pool")
+    # _select_stage_one_pool calls .getconn().info.dbname to verify the
+    # caller's pool points at the target DB. Set dbname so the helper
+    # would also work if the test passed a caller_pool.
+    fake_target_pool.getconn.return_value.info.dbname = target_dbname
+
+    fake_conn = MagicMock(name="fake_conn")
+    fake_conn_cm = MagicMock(name="fake_conn_cm")
+    fake_conn_cm.__enter__.return_value = fake_conn
+    fake_conn_cm.__exit__.return_value = False
+
+    pool_iter = iter([fake_admin_pool, fake_target_pool])
+
+    def _fake_getpool(args, **kwargs):
+        try:
+            return next(pool_iter)
+        except StopIteration:
+            # If the test invokes getpool more times than expected
+            # (e.g. stage_one also calls database.connect with its own
+            # pool), return the target pool so the test still works.
+            return fake_target_pool
+
+    with (
+        patch(
+            "bbsengine6.database.getpool",
+            side_effect=_fake_getpool,
+        ),
+        patch(
+            "bbsengine6.database.connect",
+            return_value=fake_conn_cm,
+        ),
+    ):
+        yield fake_admin_pool, fake_target_pool, fake_conn_cm
+
+
 class TestSubpackageEntryPoints:
     """Pin that bbsengine6.startup itself exposes the module contract.
 
@@ -67,9 +120,7 @@ class TestSubpackageEntryPoints:
         assert hasattr(startup, "init"), (
             "bbsengine6.startup.init missing - module contract broken"
         )
-        assert callable(startup.init), (
-            "bbsengine6.startup.init is not callable"
-        )
+        assert callable(startup.init), "bbsengine6.startup.init is not callable"
 
     def test_access_is_present_and_callable(self):
         from bbsengine6 import startup
@@ -77,9 +128,7 @@ class TestSubpackageEntryPoints:
         assert hasattr(startup, "access"), (
             "bbsengine6.startup.access missing - module contract broken"
         )
-        assert callable(startup.access), (
-            "bbsengine6.startup.access is not callable"
-        )
+        assert callable(startup.access), "bbsengine6.startup.access is not callable"
 
     def test_buildargs_is_present_and_callable(self):
         from bbsengine6 import startup
@@ -97,9 +146,7 @@ class TestSubpackageEntryPoints:
         assert hasattr(startup, "main"), (
             "bbsengine6.startup.main missing - module contract broken"
         )
-        assert callable(startup.main), (
-            "bbsengine6.startup.main is not callable"
-        )
+        assert callable(startup.main), "bbsengine6.startup.main is not callable"
 
     def test_dunder_all_lists_the_four_entry_points(self):
         from bbsengine6 import startup
@@ -167,8 +214,7 @@ class TestAccessDoesNotRaise:
             result = startup_main.access(args, "run")
 
         assert result is True, (
-            f"startup.main.access should return the issysop() "
-            f"result; got {result!r}"
+            f"startup.main.access should return the issysop() result; got {result!r}"
         )
 
     def test_main_issysop_import_resolves_to_backend_lib(self):
@@ -253,14 +299,11 @@ class TestAccessDoesNotRaise:
             f"startup.main.access() must forward to issysop when "
             f"a pool is supplied; got {result!r}"
         )
-        assert mock_issysop.called, (
-            "issysop must be invoked when a pool is supplied"
-        )
+        assert mock_issysop.called, "issysop must be invoked when a pool is supplied"
         # issysop should receive both args and the pool kwarg.
         call = mock_issysop.call_args
         assert call.args[0] is args, (
-            f"issysop must receive args as first positional; got "
-            f"{call.args!r}"
+            f"issysop must receive args as first positional; got {call.args!r}"
         )
         assert call.kwargs.get("pool") is sentinel_pool, (
             f"issysop must receive pool kwarg; got {call.kwargs!r}"
@@ -295,6 +338,11 @@ class TestModuleRunOnSubpackage:
         "no init function" / "check of modulename='bbsengine6.startup'
         failed. module not run." - exactly the symptom the user
         reported when invoking bbsengine6.module.run() directly.
+
+        The startup.main() body now runs a pre-flight against the
+        'postgres' database before dispatching stages; mock
+        ``bbsengine6.database.getpool`` and ``database.connect`` so
+        the pre-flight succeeds without a live PostgreSQL server.
         """
         from bbsengine6 import module
 
@@ -304,12 +352,16 @@ class TestModuleRunOnSubpackage:
         # during the check phase. It needs a real conn/pool to do
         # anything useful, but for the test we just need check to
         # not fail - mock the issysop return value to True.
-        with patch(
-            "bbsengine6.startup.lib.runmodule",
-            return_value=True,
-        ) as mock_runmodule, patch(
-            "bbsengine6.startup.main.issysop",
-            return_value=True,
+        with (
+            _mock_db(),
+            patch(
+                "bbsengine6.startup.lib.runmodule",
+                return_value=True,
+            ) as mock_runmodule,
+            patch(
+                "bbsengine6.startup.main.issysop",
+                return_value=True,
+            ),
         ):
             result = module.run(args, "bbsengine6.startup")
 
@@ -352,15 +404,19 @@ class TestModuleRunOnSubpackage:
 
         args = _make_args(debug=True)
 
-        with patch(
-            "bbsengine6.startup.lib.runmodule",
-            return_value=True,
-        ), patch(
-            "bbsengine6.startup.main.issysop",
-            return_value=True,
-        ), patch(
-            "bbsengine6.io.echo_traceback",
-        ) as mock_traceback:
+        with (
+            patch(
+                "bbsengine6.startup.lib.runmodule",
+                return_value=True,
+            ),
+            patch(
+                "bbsengine6.startup.main.issysop",
+                return_value=True,
+            ),
+            patch(
+                "bbsengine6.io.echo_traceback",
+            ) as mock_traceback,
+        ):
             module.run(args, "bbsengine6.startup")
 
         # If the access check threw, io.echo_traceback would have
@@ -397,8 +453,7 @@ class TestCLIStartupInvocation:
 
         spec = importlib.util.find_spec("bbsengine6.startup.__main__")
         assert spec is not None, (
-            "bbsengine6.startup.__main__ not findable - the CLI "
-            "entry point is missing"
+            "bbsengine6.startup.__main__ not findable - the CLI entry point is missing"
         )
 
     def test_main_access_does_not_cascade_to_check_failure(self):
@@ -418,12 +473,15 @@ class TestCLIStartupInvocation:
         # lib.runmodule defaults package="bbsengine6.startup", so
         # this is equivalent to module.run(args, "main", package=
         # "bbsengine6.startup") which loads bbsengine6.startup.main.
-        with patch(
-            "bbsengine6.startup.lib.runmodule",
-            return_value=True,
-        ), patch(
-            "bbsengine6.startup.main.issysop",
-            return_value=True,
+        with (
+            patch(
+                "bbsengine6.startup.lib.runmodule",
+                return_value=True,
+            ),
+            patch(
+                "bbsengine6.startup.main.issysop",
+                return_value=True,
+            ),
         ):
             # If access() raised AttributeError on lib.issysop,
             # check would return None and module.run would log
