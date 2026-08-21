@@ -881,11 +881,12 @@ def checkpassword(
     def _work(cur):
         if membermoniker is None:
             return None
+        qualified_member = _qualified("member", args)
         cur.execute(
             database.query(
-                "select password from $engine.member where moniker=$1",
-                membermoniker,
-            )
+                f"select password from {qualified_member} where moniker=%s",
+            ),
+            (membermoniker,),
         )
         row = cur.fetchone()
         if row is None:
@@ -895,10 +896,10 @@ def checkpassword(
             return plaintextpassword == ""
         cur.execute(
             database.query(
-                "select 1 from $engine.member where password=crypt($1, password) and moniker=$2",
-                plaintextpassword,
-                membermoniker,
-            )
+                f"select 1 from {qualified_member} "
+                "where password=crypt(%s, password) and moniker=%s",
+            ),
+            (plaintextpassword, membermoniker),
         )
         io.echo(f"{cur.rowcount=}", level="debug")
         return False if cur.rowcount == 0 else True
@@ -993,12 +994,13 @@ def _verify_member(
         return None
 
     # column is whitelisted, safe to interpolate into the identifier slot.
-    sql = f"select 1 from $engine.member where {column} = $1"
+    qualified_member = _qualified("member", args)
+    sql = f"select 1 from {qualified_member} where {column} = %s"
 
     try:
         with database.connect(args, pool=pool) as conn:
             with database.cursor(conn) as cur:
-                cur.execute(database.query(sql, name))
+                cur.execute(database.query(sql), (name,))
                 return (cur.rowcount > 0) is expect_found
     except Exception as e:
         io.echo_traceback(f"bbsengine6.member._verifymember.200 ({fn_name}): {e}")
@@ -1120,11 +1122,12 @@ def has_password(args, moniker: str, **kwargs) -> bool:
     def _work(conn):
         try:
             with database.cursor(conn) as cur:
+                qualified_member = _qualified("member", args)
                 cur.execute(
                     database.query(
-                        "SELECT password FROM $engine.member WHERE moniker = $1",
-                        moniker,
-                    )
+                        f"SELECT password FROM {qualified_member} WHERE moniker = %s",
+                    ),
+                    (moniker,),
                 )
                 row = cur.fetchone()
                 if row is None:

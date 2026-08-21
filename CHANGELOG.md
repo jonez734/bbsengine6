@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### member: auth hot path uses psycopg3 `%s` parameter binding, not `database.query()` `$N`
+
+Three functions on the password-verification path now bypass the
+`database.query()` regex-replacement layer and bind their values
+as standard psycopg3 `%s` parameters:
+
+* `bbsengine6.member.checkpassword` — both the
+  `select password from <schema>.member where moniker=…` read
+  and the `password=crypt(…, password)` match.
+* `bbsengine6.member.has_password` — the `select password from
+  <schema>.member where moniker=…` read.
+* `bbsengine6.member._verify_member` (the shared implementation
+  used by `verifyMemberFound` / `verifyMemberNotFound`) — the
+  `select 1 from <schema>.member where <column>=…` read.
+
+The schema slot still flows through `_qualified(rel, args)` so
+`args.databaseschema` is respected (the same routing
+`database.query()` would do for `$engine.member`); only the value
+binding changed. End result:
+
+* The password value never flows through the `database.query()`
+  `re.finditer` / `sql.Literal` substitution path on the auth
+  hot path.
+* psycopg3 prepared-statement caching applies to all three
+  functions (the prior `$1` → `sql.Literal` form bypassed the
+  cache because the SQL string changed per call).
+* `cur.execute(sql, params)` is the canonical psycopg3 form; the
+  rest of the file can be migrated to it incrementally.
+
+The `regression` commit `f0e9366` (`use %s placeholder in
+verifyMemberFound and has_password`) pre-dated the
+`database.query()` rework that handles `$N` → `sql.Literal()`
+(`7a30b29`); its bug was real for an earlier code path and is
+no longer reproducible. This commit is belt-and-braces: it
+removes one entire layer of "is the regex doing the right thing"
+worry from the auth path and pins the new `%s` + parameter-tuple
+shape with a unit test (`tests/test_member_verify_found.py`
+`test_emits_select_against_schema_member_keyed_on_loginid` was
+updated to assert `where loginid = %s` and
+`params == ('alice',)`).
+
 ### build: depend on `clean` to wipe stale egg-info before each `python -m build`
 
 The root `Makefile` `build` target (`bbsengine6/Makefile:156-157`)

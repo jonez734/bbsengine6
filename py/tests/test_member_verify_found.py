@@ -80,6 +80,7 @@ def _fake_conn_with_cursor(captured: dict, rowcount: int):
 
         def execute(self, q, params=None):
             captured["query"] = q
+            captured["params"] = params
             self.rowcount = rowcount
 
     class FakeConn:
@@ -91,7 +92,13 @@ def _fake_conn_with_cursor(captured: dict, rowcount: int):
 
 @pytest.mark.unit
 def test_emits_select_against_schema_member_keyed_on_loginid() -> None:
-    """The read must issue a SELECT 1 against <schema>.member keyed on loginid."""
+    """The read must issue a SELECT 1 against <schema>.member keyed on loginid,
+    with the value bound as a psycopg3 %s parameter (not inlined as a literal).
+
+    Regression pin for the password-path hardening: the auth hot path now
+    uses cur.execute(sql, params) so the value never flows through the
+    database.query() regex-replacement layer.
+    """
     test_args = make_test_args()
     captured = {}
     fake_conn, fake_cursor = _fake_conn_with_cursor(captured, rowcount=1)
@@ -109,7 +116,11 @@ def test_emits_select_against_schema_member_keyed_on_loginid() -> None:
     rendered = captured["query"].as_string(None)
     assert rendered == (
         f'select 1 from "{test_args.databaseschema}"."member" '
-        "where loginid = 'alice'"
+        "where loginid = %s"
+    )
+    assert captured["params"] == ("alice",), (
+        "value must be bound as a separate parameter tuple, not inlined "
+        "into the SQL string"
     )
 
 

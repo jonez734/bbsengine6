@@ -23,6 +23,16 @@
 [x] (related) build→clean dependency also sidesteps the setuptools SOURCES.txt absolute-path failure mode (`@since 20260821`)
    - As of `bbsengine6/Makefile:156`, `build` now declares `clean` as a prerequisite, so `py/build/`, `py/dist/`, and `py/src/bbsengine6.egg-info/` are wiped before every `python -m build`. This addresses the egg-info SOURCES.txt stale-paths issue but does NOT replace PREPARE_BUILD — direct invocations of `python -m build` (not through `make`) still need PREPARE_BUILD protection for foreign-owned `py/build/`.
 
+[x] member auth hot path: use psycopg3 `%s` + `cur.execute(sql, params)` instead of `database.query("$1", …) (`@since 20260821`)
+   - Original symptom report: "member's password not working even tho it is correct". The git-log culprit was `f0e9366 bbsengine6: use %s placeholder in verifyMemberFound and has_password` reverting the `$1` → `%s` fix that broke psycopg3 pre-`database.query()` rewrite (`7a30b29` introduced `$N` → `sql.Literal()` substitution in `database.query()` itself, so the `$1` form is functionally correct again).
+   - Fix landed: `py/src/bbsengine6/member/lib.py` `checkpassword` (both queries), `has_password`, and `_verify_member` (used by `verifyMemberFound`/`verifyMemberNotFound`) now bind the value as a separate psycopg3 `%s` parameter via `cur.execute(sql, params)`. The schema slot still flows through `_qualified(rel, args)` so `args.databaseschema` is respected. End result: the password value never traverses the `database.query()` regex-replacement / `sql.Literal()` path; psycopg3 prepared-statement caching applies; `cur.execute(sql, params)` is the canonical psycopg3 form for the rest of the file to migrate to incrementally.
+   - Regression pin: `py/tests/test_member_verify_found.py` `test_emits_select_against_schema_member_keyed_on_loginid` was updated to assert the rendered query ends in `where loginid = %s` AND `captured["params"] == ("alice",)`. Without the params assertion, a future regression that re-inlines the value as a literal would still satisfy the rendered-string check.
+   - Companion changes in `bed/` (separate commit):
+     - `bed/src/bed/tools/auth.py` `auth_login` already wraps `moniker:` and `password:` prompts in `{var:promptcolor}…{var:inputcolor}` per `57a62d9`; pinned by new `bed/src/bed/tests/test_auth_prompt_markup.py`.
+     - `bed/src/bed/tools/bank.py` six `io.inputinteger` / `io.inputstring` calls now pass `args=args` so the screen-state pipeline sees the same args context as the rest of bed's CLI.
+   - Audit notes for future migration of the rest of `member/lib.py`:
+     - `getcurrentmoniker` (`loginid=$1`), `getcurrentid` (`loginid=$1`), `getbymoniker` (`moniker=$1`), `getbyid` (`id=$1`), `checkflag` (`checkmemberflag($1, $2)`), `getflags` (`getflags($1)`), `setpassword` (`set password=crypt($1, gen_salt('bf'))`), `checkpassword` (crypt-match `$1, $2` — already migrated here), `setattrs` (`attrs||$1` / `attrs=$1`, both `$2`), `__message_group` (`name=$1`), `get_group_members` (`g.name=$1`) — all currently use `database.query("$N", …)` and work correctly via the regex-replacement layer. Lower priority, but should follow this pattern when touched.
+
 ## ⚠️ attraction_hour DATA FIX — demo_listbox_masterdetail.py (2026-08-06) — RESOLVED
 
 **Status (2026-08-06, end of day):** All blockers resolved. The data chain from
