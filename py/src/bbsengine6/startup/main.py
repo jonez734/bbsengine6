@@ -222,10 +222,18 @@ def main(args, **kwargs) -> bool:
 
     # --- stage_zero: bootstrap (create DB, roles, schema) ---
     #
-    # stage_zero opens its own admin pool internally; we don't pass
-    # admin_pool to it. We do pass stage_kwargs so any caller-supplied
-    # argv-driven config reaches the stage.
-    if _runstage(args, "stage_zero", **stage_kwargs) is not True:
+    # Forward the pre-flight admin_pool so stage_zero.access() can call
+    # lib.issysop(pool=...) and verify the connecting role is a sysop
+    # or superuser before stage_zero.main() runs DDL. Without this
+    # kwarg, stage_zero.access() falls into the "no conn or pool"
+    # branch of lib.issysop() and the whole startup aborts with
+    # "check of modulename='stage_zero' failed".
+    #
+    # stage_zero.main() rebuilds the same pool from the
+    # bbsengine6.database pool cache (database.getpool(args,
+    # dbname="postgres") returns the cached admin_pool), so no extra
+    # pool is opened.
+    if _runstage(args, "stage_zero", pool=admin_pool, **stage_kwargs) is not True:
         io.echo(
             "bbsengine6 startup failed at stage_zero",
             level="error",
