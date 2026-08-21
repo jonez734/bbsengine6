@@ -18,6 +18,14 @@ export RSYNC = rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --verbose \
 
 VERSION = 6
 
+# Python package version. PY_VERSION is a dev-timestamp captured once at
+# Makefile parse time; VERSION_PREFIX is the stable semver prefix. Combined
+# they produce the wheel filename (and the __version__ written to
+# py/src/$(PROJECT)/_version.py) so that the wheel produced by `build` and
+# the wheel selected by the deploy-tui sub-make stay in lockstep.
+PY_VERSION := $(shell date +%Y%m%d%H%M)
+VERSION_PREFIX = 0.0.1.dev
+
 # Set by `deploy --editable` (deploytool). Empty by default. Propagated
 # to py/src/Makefile deploy-tui which switches between editable and
 # wheel install.
@@ -139,7 +147,7 @@ log:
 	git log --pretty=format:"%ad|%h %s%d [%an]" --date=short | awk -F'|' '{if ($$1!=date) {print "## " $$1; date=$$1} print "  " $$2}' > LOG_SUMMARY.md
 
 version:
-	@echo '__version__ = "$(VERSION)"' > py/src/$(PROJECT)/_version.py
+	@echo '__version__ = "$(VERSION_PREFIX)$(PY_VERSION)"' > py/src/$(PROJECT)/_version.py
 	@echo '__datestamp__ = "'`date +%Y%m%d-%H%M`-`whoami`'"' >> py/src/$(PROJECT)/_version.py
 
 .PHONY: ensure-repo
