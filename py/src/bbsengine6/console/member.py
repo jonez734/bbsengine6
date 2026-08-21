@@ -346,14 +346,27 @@ def configurerole(args, rolename: str, sysop=False, **kwargs: dict) -> bool:
         database.manage_role_privs(args, rolename, "grant", "login", **kwargs)
         database.manage_role_privs(args, rolename, "grant", "inherit", **kwargs)
 
+    privs = database.get_role_privs(args, rolename, conn=conn)
+    if privs is not None and privs.get("rolsuper") is True:
+        io.echo(
+            f"{{var:valuecolor}}{rolename}{{var:labelcolor}} has "
+            f"SUPERUSER; skipping login/inherit/createdb/createrole sync "
+            f"(zoid6 cannot ALTER a SUPERUSER role). Leave SUPERUSER in "
+            f"place.",
+            level="warning",
+        )
+    else:
+        if sysop is True:
+            database.manage_role_privs(args, rolename, "grant", "createdb", **kwargs)
+            database.manage_role_privs(args, rolename, "grant", "createrole", **kwargs)
+        else:
+            database.manage_role_privs(args, rolename, "revoke", "createdb", **kwargs)
+            database.manage_role_privs(args, rolename, "revoke", "createrole", **kwargs)
+
     if sysop is True:
         database.manage_secondary_role(args, rolename, "grant", "sysop", **kwargs)
-        database.manage_role_privs(args, rolename, "grant", "createdb", **kwargs)
-        database.manage_role_privs(args, rolename, "grant", "createrole", **kwargs)
     else:
         database.manage_secondary_role(args, rolename, "revoke", "sysop", **kwargs)
-        database.manage_role_privs(args, rolename, "revoke", "createdb", **kwargs)
-        database.manage_role_privs(args, rolename, "revoke", "createrole", **kwargs)
 
     return True
 
