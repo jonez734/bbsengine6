@@ -66,8 +66,12 @@ def _strip_ansi(s: str) -> str:
     return scs
 
 
-class TestUnicodeTableContents:
-    """The _unicode dict must contain the expected card-suit and block glyphs."""
+class TestSuitsTableContents:
+    """The _suits dict must contain the four card-suit glyphs.
+
+    Suits live in their own small table (separate from _unicode) so the
+    diamond/ACS-collision story stays clean.
+    """
 
     @pytest.mark.parametrize(
         "name, codepoint",
@@ -76,6 +80,21 @@ class TestUnicodeTableContents:
             ("heart", "\u2665"),
             ("diamond", "\u2666"),
             ("club", "\u2663"),
+        ],
+    )
+    def test_suits_entry_present(self, name, codepoint):
+        assert name in echo_module._suits, (
+            f"{name!r} is missing from bbsengine6.io.echo._suits"
+        )
+        assert echo_module._suits[name] == codepoint
+
+
+class TestUnicodeTableContents:
+    """The _unicode dict must contain the block glyphs (suits live in _suits)."""
+
+    @pytest.mark.parametrize(
+        "name, codepoint",
+        [
             ("solidblock", "\u2588"),
             ("lightblock", "\u2591"),
             ("mediumblock", "\u2592"),
@@ -247,9 +266,9 @@ class TestUserReproFromBugReport:
         assert out == "\u2660"
 
     def test_double_brace_literal_spade(self, captured_stdout):
-        # echo(f"{{spade}}") -> "{spade}". "spade" IS now a registered
-        # name in _unicode, so it should render as the spade glyph
-        # (same answer as {u:spade}).
+        # echo(f"{{spade}}") -> "{spade}". "spade" is registered in the
+        # _suits table, so the bare form resolves to ♠ (same answer as
+        # {u:spade}).
         echo_module.echo("{spade}", end="", width=80, flush=False)
         out = _strip_ansi("".join(captured_stdout["chunks"]))
         assert out == "\u2660", (
