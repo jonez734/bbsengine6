@@ -56,16 +56,18 @@ def _qualified(rel: str, args) -> str:
     Resolves the schema from args.databaseschema when the caller passes the
     default 'engine' schema, so callers can keep using 'engine.<rel>' as the
     default table kwarg without hardcoding the active schema.
+
+    Falls back to the 'engine' schema when args is None or has no
+    databaseschema attribute (e.g. partial Namespace from the router).
     """
+    default_schema = "engine"
     if "." in rel:
         schema, name = rel.split(".", 1)
         if schema == "engine":
-            try:
-                schema = args.databaseschema
-            except AttributeError:
-                pass
+            schema = getattr(args, "databaseschema", None) or default_schema
         return f"${schema}.{name}"
-    return f"${args.databaseschema}.{rel}"
+    schema = getattr(args, "databaseschema", None) or default_schema
+    return f"${schema}.{rel}"
 
 
 # @since 20221113
