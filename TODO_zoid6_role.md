@@ -120,14 +120,14 @@ The mirror is invoked from the submodule's startup `main` after
 extension install and before the schema.sql import.
 
 **Bootstrap interaction (casino-specific, but illustrative):**
-`casino/sql/bootstrap_opencode.sql` resets ownership of the
-`bank`, `engine`, **and** `casino` schemas back to `opencode` at
-lines 60-95. Running that script after `casino.startup.main` will
-undo `checkcasino`'s reassignment; a re-run of `casino.startup.main`
-repairs it. If we ever want the bootstrap script to leave
-`casino` owned by `zoid6`, edit the loop in that file. For now,
-the re-run-on-bootstrap pattern is acceptable and documented in
-`casino/TODO.md`.
+`casino/sql/bootstrap_zoid6.sql` (formerly `bootstrap_opencode.sql`)
+issues `ALTER SCHEMA ... OWNER TO zoid6` for the `bank`, `engine`,
+and `casino` schemas (`bootstrap_zoid6.sql:60-95`). It is therefore
+complementary to the `<module>.startup.check<module>` mirrors
+above, not in conflict with them: running the bootstrap after
+`casino.startup.main` no longer undoes `checkcasino`'s reassignment,
+because both target `zoid6`. The historical re-run-on-bootstrap
+fallback documented in `casino/TODO.md` is no longer required.
 
 ## Out of scope (do not touch)
 
