@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### build: depend on `clean` to wipe stale egg-info before each `python -m build`
+
+The root `Makefile` `build` target (`bbsengine6/Makefile:156-157`)
+now declares `clean` as a prerequisite so `bbsengine6/py/build/`,
+`bbsengine6/py/dist/`, and `bbsengine6/py/src/bbsengine6.egg-info/`
+are wiped before every `python -m build` invocation. This sidesteps
+the setuptools SOURCES.txt absolute-path failure mode that surfaces
+when `bbsengine6.egg-info/SOURCES.txt` carries forward absolute
+paths from a prior run (the working tree currently has a stale
+`bbsengine6.egg-info/SOURCES.txt` from a `2026-08-21 10:59` build
+whose paths point at the operator's home).
+
+`py/Makefile:clean` was extended from `-rm *~` to also wipe
+`build/`, `dist/`, `src/*.egg-info`, and the standard pytest /
+ruff / mypy cache directories, mirroring the pattern already
+shipped in `zoid6/src/Makefile:118-124`.
+
 ### deploy-tui: install from `/srv/repo/bbsengine6/` wheel by default; `DEPLOY_EDITABLE=1` for editable
 
 Part of the cross-monorepo Phase 1 work in `deploytool`'s
