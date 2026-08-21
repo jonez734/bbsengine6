@@ -14,6 +14,12 @@ version:
 	@cat src/$(PROJECT)/_version.py
 
 clean:
+	-rm -rf build dist
+	-rm -rf src/*.egg-info
+	-find . -type d -name __pycache__ -exec rm -rf {} +
+	-find . -type d -name .pytest_cache -exec rm -rf {} +
+	-find . -type d -name .ruff_cache -exec rm -rf {} +
+	-find . -type d -name .mypy_cache -exec rm -rf {} +
 	-rm *~
 
 test:
