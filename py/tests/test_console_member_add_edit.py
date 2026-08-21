@@ -706,3 +706,180 @@ class TestEditMember:
         assert result is False, (
             "edit() should return False when loginid rename is attempted"
         )
+
+
+# ---------------------------------------------------------------------------
+# Tests — configurerole() rolsuper guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestConfigureRoleSuperuserGuard:
+    """``configurerole()`` must leave a SUPERUSER role's attributes alone
+    because the connecting executor (``zoid6``, NOSUPERUSER) cannot
+    ``ALTER ROLE`` a SUPERUSER role. This is the regression that broke
+    ``console.member.edit`` once the database owner was switched to
+    ``zoid6``.
+    """
+
+    def test_skips_privs_when_role_is_superuser(self):
+        """When ``get_role_privs`` reports ``rolsuper=True``, neither
+        the ``grant`` nor the ``revoke`` branch of the priv sync runs.
+        ``manage_secondary_role`` is still called (out-of-scope skip).
+        """
+        args = _make_args()
+        fake_conn = _FakeConn()
+
+        privs_super = {
+            "rolname": "jam",
+            "rolsuper": True,
+            "rolcreaterole": False,
+            "rolcreatedb": False,
+            "rolcanlogin": True,
+            "rolreplication": False,
+            "rolbypassrls": False,
+        }
+
+        with (
+            patch.object(
+                console_member.database, "rolexists", return_value=True
+            ),
+            patch.object(
+                console_member.database, "get_role_privs", return_value=privs_super
+            ),
+            patch.object(
+                console_member.database,
+                "manage_role_privs",
+            ) as mock_privs,
+            patch.object(
+                console_member.database,
+                "manage_secondary_role",
+            ) as mock_secondary,
+            patch("bbsengine6.console.member.io.echo"),
+            patch("bbsengine6.console.member.io.inputboolean"),
+        ):
+            result_true = console_member.configurerole(
+                args, "jam", sysop=True, conn=fake_conn
+            )
+            result_false = console_member.configurerole(
+                args, "jam", sysop=False, conn=fake_conn
+            )
+
+        assert result_true is True
+        assert result_false is True
+        mock_privs.assert_not_called(), (
+            "manage_role_privs must NOT be called for a SUPERUSER role"
+        )
+        assert mock_secondary.call_count == 2, (
+            "manage_secondary_role still runs (out of scope for the guard)"
+        )
+        # manage_secondary_role(args, rolename, action, secondary, **kwargs)
+        secondary_calls = [
+            (c.args[1], c.args[2], c.args[3])
+            for c in mock_secondary.call_args_list
+        ]
+        assert ("jam", "grant", "sysop") in secondary_calls
+        assert ("jam", "revoke", "sysop") in secondary_calls
+
+    def test_runs_privs_when_role_is_not_superuser(self):
+        """When ``rolsuper`` is False the existing grant/revoke behavior
+        is preserved verbatim (regression coverage)."""
+        args = _make_args()
+        fake_conn = _FakeConn()
+
+        privs_normal = {
+            "rolname": "alice",
+            "rolsuper": False,
+            "rolcreaterole": False,
+            "rolcreatedb": False,
+            "rolcanlogin": True,
+            "rolreplication": False,
+            "rolbypassrls": False,
+        }
+
+        with (
+            patch.object(
+                console_member.database, "rolexists", return_value=True
+            ),
+            patch.object(
+                console_member.database, "get_role_privs", return_value=privs_normal
+            ),
+            patch.object(
+                console_member.database,
+                "manage_role_privs",
+            ) as mock_privs,
+            patch.object(
+                console_member.database,
+                "manage_secondary_role",
+            ) as mock_secondary,
+            patch("bbsengine6.console.member.io.echo"),
+        ):
+            result_true = console_member.configurerole(
+                args, "alice", sysop=True, conn=fake_conn
+            )
+            result_false = console_member.configurerole(
+                args, "alice", sysop=False, conn=fake_conn
+            )
+
+        assert result_true is True
+        assert result_false is True
+
+# sysop=True -> grant createdb, grant createrole
+        grant_actions = [
+            (c.args[1], c.args[2], c.args[3])
+            for c in mock_privs.call_args_list
+            if c.args[3] == "createdb" or c.args[3] == "createrole"
+        ]
+        assert ("alice", "grant", "createdb") in grant_actions
+        assert ("alice", "grant", "createrole") in grant_actions
+
+        # sysop=False -> revoke createdb, revoke createrole
+        revoke_actions = [
+            (c.args[1], c.args[2], c.args[3])
+            for c in mock_privs.call_args_list
+            if c.args[2] == "revoke"
+        ]
+        assert ("alice", "revoke", "createdb") in revoke_actions
+        assert ("alice", "revoke", "createrole") in revoke_actions
+
+        assert mock_secondary.call_count == 2
+        secondary_calls = [
+            (c.args[1], c.args[2], c.args[3])
+            for c in mock_secondary.call_args_list
+        ]
+        assert ("alice", "grant", "sysop") in secondary_calls
+        assert ("alice", "revoke", "sysop") in secondary_calls
+
+    def test_runs_privs_when_get_role_privs_returns_none(self):
+        """A lookup failure (``privs is None``) must fall back to the
+        existing behavior so a transient DB error doesn't strand a
+        member's role attributes out of sync."""
+        args = _make_args()
+        fake_conn = _FakeConn()
+
+        with (
+            patch.object(
+                console_member.database, "rolexists", return_value=True
+            ),
+            patch.object(
+                console_member.database, "get_role_privs", return_value=None
+            ),
+            patch.object(
+                console_member.database,
+                "manage_role_privs",
+            ) as mock_privs,
+            patch.object(
+                console_member.database,
+                "manage_secondary_role",
+            ),
+            patch("bbsengine6.console.member.io.echo"),
+        ):
+            console_member.configurerole(args, "bob", sysop=False, conn=fake_conn)
+
+        revoke_actions = [
+            (c.args[1], c.args[2], c.args[3])
+            for c in mock_privs.call_args_list
+            if c.args[2] == "revoke"
+        ]
+        assert ("bob", "revoke", "createdb") in revoke_actions
+        assert ("bob", "revoke", "createrole") in revoke_actions
