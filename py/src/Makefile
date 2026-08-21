@@ -1,6 +1,7 @@
 PROJECT = bbsengine6
 OUTDIR = /srv/repo/$(PROJECT)/
 VERSION := $(shell date +%Y%m%d%H%M)
+export VERSION_PREFIX = 0.0.1.dev
 
 PYTHON ?= python3
 PIP ?= $(PYTHON) -m pip
@@ -58,7 +59,7 @@ clean:
 	$(MAKE) -C tk clean
 
 version:
-	@echo '__version__ = "0.0.1.dev$(VERSION)"' > $(PROJECT)/_version.py
+	@echo '__version__ = "$(VERSION_PREFIX)$(VERSION)"' > $(PROJECT)/_version.py
 	@echo '__datestamp__ = "'`date +%Y%m%d-%H%M`-`whoami`'"' >> $(PROJECT)/_version.py
 
 push: tag
