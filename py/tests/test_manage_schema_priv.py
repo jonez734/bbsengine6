@@ -3,10 +3,12 @@ Tests for public.manage_schema_priv — the SECURITY DEFINER helper used by
 the engine to grant/revoke schema-level privileges.
 
 The checkengine refuses to call this function unless it is owned by
-``postgres`` (see ``database.verify_function_owner``). These tests pin:
+the canonical role ``zoid6`` (``"postgres"`` is also accepted for one
+release as a transition aid — see ``database.verify_function_owner``
+and ``backend.checkengine``). These tests pin:
 
   * the function is installed in ``public`` with the right signature;
-  * it is owned by ``postgres``;
+  * it is owned by ``zoid6`` (the canonical owner);
   * it is marked ``SECURITY DEFINER`` (so it executes as the owner, not
     the caller);
   * ``sysop`` has been granted ``EXECUTE`` on it;
@@ -33,7 +35,7 @@ from bbsengine6 import database
 FUNCTION_NAME = "manage_schema_priv"
 QUALIFIED_NAME = f"public.{FUNCTION_NAME}"
 EXPECTED_ARGS = "action text, priv text, target_schema text, target_role text"
-EXPECTED_OWNER = "postgres"
+EXPECTED_OWNER = "zoid6"
 
 
 # ---------------------------------------------------------------------------
@@ -68,12 +70,19 @@ def isolated_schema_and_role(db_connection):
     role, so the test does not require ``CREATEROLE`` on the test user.
     The role's privileges on the throwaway schema are likewise rolled
     back, so subsequent tests are unaffected.
+
+    The schema is created with ``AUTHORIZATION zoid6`` because
+    ``manage_schema_priv`` is a SECURITY DEFINER function owned by
+    ``zoid6`` (NOSUPERUSER) and can only GRANT on objects it owns.
+    This mirrors the production setup, where ``checkengine`` creates
+    the ``engine`` schema with ``AUTHORIZATION zoid6`` for the same
+    reason.
     """
     schema = "test_manage_schema_priv"
     role = "term"  # pre-existing nologin role in the test database
 
     with db_connection.cursor() as cur:
-        cur.execute(f'CREATE SCHEMA "{schema}"')
+        cur.execute(f'CREATE SCHEMA "{schema}" AUTHORIZATION zoid6')
     db_connection.commit()
 
     yield schema, role
@@ -140,7 +149,7 @@ class TestInstall:
             f"signature changed: got {args!r}, expected {EXPECTED_ARGS!r}"
         )
 
-    def test_owner_is_postgres(self, db_connection):
+    def test_owner_is_zoid6(self, db_connection):
         assert _row_owner(db_connection) == EXPECTED_OWNER, (
             f"{QUALIFIED_NAME} must be owned by {EXPECTED_OWNER!r} for "
             f"checkengine's verify_function_owner gate to pass"
@@ -193,7 +202,7 @@ class TestInstall:
     def test_verify_function_owner_accepts(self, test_args, db_connection):
         """The checkengine gate must accept the install as-is."""
         result = database.verify_function_owner(
-            test_args, QUALIFIED_NAME, ("postgres",), conn=db_connection
+            test_args, QUALIFIED_NAME, ("zoid6", "postgres"), conn=db_connection
         )
         assert result is True
 

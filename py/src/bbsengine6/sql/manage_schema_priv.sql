@@ -1,3 +1,12 @@
+-- TODO(remove-after-postgres-drop): the SET ROLE postgres / RESET ROLE
+-- block below is kept for backward compatibility with databases
+-- bootstrapped under the previous ownership model. Once
+-- `acceptable_owners` in backend.checkengine drops "postgres" (see
+-- bbsengine6/TODO_zoid6_role.md), delete the SET ROLE / RESET ROLE
+-- lines and let the connecting superuser create the function; the
+-- stage_zero `checkzoid6owner` module will then transfer ownership to
+-- the dedicated `zoid6` role.
+--
 -- Run as a superuser (e.g. jam). The role switch only affects DDL,
 -- and only for the duration of the connection.
 SET ROLE postgres;

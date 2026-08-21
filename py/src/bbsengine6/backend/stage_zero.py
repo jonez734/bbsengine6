@@ -40,7 +40,9 @@ def main(args, **kwargs):
                     "checkdatabase",
                     "checkextensions",
                     "checkroles",
+                    "checkzoid6role",
                     "checkfunctions",
+                    "checkzoid6owner",
                     "checksuperuser",
                     "checkwebserverrole",
                 ):

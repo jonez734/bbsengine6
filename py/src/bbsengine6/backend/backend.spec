@@ -76,6 +76,8 @@ entry point:
 | `checkmessage`          | `bbsengine6.backend.checkmessage` |
 | `checkwebserverrole`    | `bbsengine6.backend.checkwebserverrole` |
 | `checkbank`             | `bbsengine6.backend.checkbank` |
+| `checkzoid6role`        | `bbsengine6.backend.checkzoid6role` |
+| `checkzoid6owner`       | `bbsengine6.backend.checkzoid6owner` |
 
 ### `ok()` / `fail()`
 
@@ -193,14 +195,20 @@ fixed and significant:
    extensions installed in `postgres` are NOT inherited by other
    databases, so `checkextensions` is also run in `stage_one`).
 4. `checkroles` - `member`, `web`, `sysop`, `term`.
-5. `checkfunctions` (stage=0) - the five `public.*` privilege
+5. `checkzoid6role` - ensure the dedicated `zoid6` role exists
+   (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN INHERIT`); hard-fail
+   if it exists with `rolsuper=True`. See `checkzoid6role.py`.
+6. `checkfunctions` (stage=0) - the five `public.*` privilege
    helpers: `get_role_privs`, `manage_secondary_role`,
    `manage_role_privs`, `manage_database_priv`, `manage_schema_priv`.
-6. `checksuperuser` - verify the OS login id has `rolsuper`.
-7. `checkwebserverrole` - `www-data` with `login=True`, plus
+7. `checkzoid6owner` - migrate ownership of the five `public.*`
+   helpers to `zoid6` if any of them is currently owned by anyone
+   else (idempotent; verbose on first run). See `checkzoid6owner.py`.
+8. `checksuperuser` - verify the OS login id has `rolsuper`.
+9. `checkwebserverrole` - `www-data` with `login=True`, plus
    `GRANT member TO "www-data"` for `SET LOCAL ROLE` support.
-8. `checkengine` - bootstrap the `engine` schema, its
-   `USAGE`/`CREATE` grants, and its core classes.
+10. `checkengine` - bootstrap the `engine` schema, its
+    `USAGE`/`CREATE` grants, and its core classes.
 
 The pool is built against `dbname="postgres"`. A `None` pool is a
 hard failure (returns `False` with `"could not connect to 'postgres'"`
@@ -305,15 +313,29 @@ Before creating the `engine` schema, this module:
    - `public.manage_role_privs`
    - `public.manage_secondary_role`
    - `public.get_role_privs`
-   The allow-list is `(args.databaseuser, "postgres")` (deduped;
-   `args.databaseuser` defaults to `getpass.getuser()` then
-   `"postgres"`). If a helper is missing it is skipped (it will
-   be installed by `checkfunctions`); if it is present but owned
-   by anyone else, the module prints
-   `"checkengine: refusing to use {fn} (owner mismatch); see error above"`
-   at `level="error"` and returns `False` without making any
-   grant. This is a defense against privilege escalation via a
-   replaced helper.
+   The allow-list is `("zoid6", "postgres")`. The canonical owner is
+   the dedicated, unprivileged role `zoid6` (created by
+   `checkzoid6role` and made the owner of the helpers by
+   `checkzoid6owner`); `postgres` is also accepted for one release
+   so databases bootstrapped under the previous model — where the
+   SQL files used `SET ROLE postgres` to make `postgres` the
+   immediate creator — pass the gate on first run. `postgres` will
+   be removed from the list in a subsequent release; see
+   `bbsengine6/TODO_zoid6_role.md`.
+
+   Note: the previous allow-list was derived dynamically from
+   `args.databaseuser` / `getpass.getuser()`. That made the
+   trusted owner non-deterministic (re-bootstrap as a different OS
+   user and ownership shifts) and pointed it at a login superuser,
+   which largely defeated the verifier. The hard-coded
+   `("zoid6", "postgres")` tuple removes both problems.
+
+   If a helper is missing it is skipped (it will be installed by
+   `checkfunctions`); if it is present but owned by anyone else,
+   the module prints `"checkengine: refusing to use {fn} (owner
+   mismatch); see error above"` at `level="error"` and returns
+   `False` without making any grant. This is a defense against
+   privilege escalation via a replaced helper.
 
 ### Schema bootstrap
 
@@ -324,6 +346,23 @@ create, `ok` on skip), then issues (via
 - `GRANT USAGE ON SCHEMA engine TO web,term,sysop,member`
   (loop short-circuits on first failure)
 - `GRANT CREATE ON SCHEMA engine TO sysop`
+
+#### Schema ownership: `zoid6`
+
+The schema is created with `CREATE SCHEMA engine AUTHORIZATION
+zoid6` (when missing) or, if it already exists with a different
+owner, `ALTER SCHEMA engine OWNER TO zoid6` is issued inline. The
+schema must be owned by `zoid6` because the SECDEF helper
+`manage_schema_priv` (also owned by `zoid6`, NOSUPERUSER) can only
+GRANT on objects it owns. Without this, every grant in the loop
+above fails with `permission denied for schema engine` once the
+helpers are owned by `zoid6`. The BC ALTER path covers existing
+databases where `engine` was created by the previous bootstrap
+principal (e.g. `jam`, `opencode`).
+
+`bank` schema does not need this treatment because its grants
+live in `bank_schema.sql` and are issued by the bootstrap
+superuser directly, not via `manage_schema_priv`.
 
 ### Class bootstrap
 
@@ -495,6 +534,103 @@ CREATEDB + CANLOGIN + CREATEROLE as superuser-equivalent; that
 was over-broad and could be escalated by creating additional
 roles, so the check now requires `rolsuper` only.
 
+## `checkzoid6role.py`
+
+Ensures the dedicated `zoid6` role exists. This role is the
+canonical owner of the five `public.*` SECURITY DEFINER helpers
+and nothing else (see `checkengine.py → SECURITY DEFINER helpers`
+and `checkzoid6owner.py`). Decoupling ownership from the bootstrap
+principal keeps the trust surface stable across re-bootstraps and
+tightens the `verify_function_owner` allow-list.
+
+Attributes at creation: `NOSUPERUSER NOCREATEDB NOCREATEROLE
+NOLOGIN INHERIT`. The role has no password and cannot log in, so
+it cannot be used as a credential entrypoint by an attacker even
+if `pg_hba.conf` is misconfigured. Mutating SQL objects owned by
+`zoid6` is done from a superuser via `ALTER FUNCTION ... OWNER TO
+zoid6` (see `checkzoid6owner.py`).
+
+Steps:
+
+1. If `database.rolexists(args, "zoid6", conn=conn)` is `False`,
+   create it via `database.createrol(..., superuser=False,
+   login=False, createdb=False, createrole=False, inherit=True)`
+   and print `ok` on success, `fail` on failure.
+2. If the role already exists, print `ok` and additionally probe
+   `database.get_role_privs(args, "zoid6", conn=conn)`. If
+   `privs["rolsuper"]` is `True`, print a hard-fail message
+   directing the operator to `ALTER ROLE zoid6 WITH NOSUPERUSER;`
+   and return `False`. A `zoid6` with `rolsuper=True` would
+   silently break the trust model — the verifier would still
+   pass (a superuser can own anything), but the role's purpose
+   is to be unprivileged. Hard-fail rather than warn so the
+   misconfig cannot be ignored in production.
+
+Requires `conn=`. Returns `True` iff `failcount == 0`. Honors the
+four-call module contract; `access` returns `True` (only the
+bootstrap superuser reaches this code path in practice).
+
+## `checkzoid6owner.py`
+
+Migrates ownership of the five `public.*` SECURITY DEFINER
+helpers to the dedicated `zoid6` role. This is the on-bootstrap
+step that brings databases created under the previous ownership
+model onto the new one — the previous model had the helpers
+owned by the bootstrap principal
+(`args.databaseuser` / `getpass.getuser()`, typically a login
+superuser).
+
+The helpers covered exactly match the loop in `checkengine.main`:
+
+| Function name                  |
+|--------------------------------|
+| `public.manage_schema_priv`    |
+| `public.manage_database_priv`  |
+| `public.manage_role_privs`     |
+| `public.manage_secondary_role` |
+| `public.get_role_privs`        |
+
+Steps:
+
+1. For each helper, look up `(args, owner)` via
+   `pg_get_function_identity_arguments(p.oid)` joined with
+   `pg_roles`.
+2. If the function does not exist, print
+   `skip (not installed; checkfunctions will install on next run)`
+   and continue. (This is a defensive no-op: in normal
+   `stage_zero` order `checkfunctions` runs immediately before
+   this module, so the helpers should be present.)
+3. If the owner is already `zoid6`, print
+   `already zoid6` and continue.
+4. Otherwise issue
+   `ALTER FUNCTION public.<name>(<args>) OWNER TO zoid6`
+   using the caller-supplied connection. The `args` string comes
+   from `pg_get_function_identity_arguments`, so the signature
+   always matches regardless of how the function was originally
+   declared. Print `reassigned (was '<old>', now 'zoid6')` on
+   success; `fail` and continue on `psycopg.errors.Error` so a
+   single function's reassignment failure does not skip the
+   others.
+
+Verbose on first run by design (per the design discussion in
+`bbsengine6/TODO_zoid6_role.md`): the operator can see exactly
+which functions moved owners and from whom. Idempotent:
+re-running on a database where all helpers are already owned by
+`zoid6` is a no-op.
+
+The role itself is **not** created here — that is
+`checkzoid6role.py`'s job, and it runs earlier in `stage_zero`.
+If `checkzoid6owner` runs against a database where `zoid6` does
+not exist, the `ALTER FUNCTION` will fail with
+`role "zoid6" does not exist`; the error is caught per-function
+and surfaced as `fail` in the per-helper output, then the loop
+moves on and the module returns `False` overall.
+
+Requires `conn=`. Returns `True` iff every helper was either
+already owned by `zoid6`, successfully reassigned, or skipped as
+not installed. Honors the four-call module contract; `access`
+returns `True`.
+
 ## `checkwebserverrole.py`
 
 Ensures the `www-data` database role exists. If missing,
@@ -616,6 +752,15 @@ via `bbsengine6.util.logentry(action="level_fail_in_use")`.
 - `checkengine`: introduced the SECURITY DEFINER helper owner
   allow-list check before invoking any `manage_*` helper, to
   defend against privilege escalation via a replaced helper.
+- `checkzoid6role` / `checkzoid6owner`: introduced the
+  dedicated, unprivileged `zoid6` role as the canonical owner
+  of the SECURITY DEFINER helpers. The previous allow-list was
+  derived from `args.databaseuser` / `getpass.getuser()` and so
+  pointed at a login superuser — defeating the verifier. The
+  new allow-list is hard-coded `("zoid6", "postgres")` (with
+  `"postgres"` kept for one release as a transition aid); on
+  first run the bootstrap reassigns ownership of any helpers
+  still owned by other roles to `zoid6`.
 - `checkcreatedb`: previous version required `pool=` and
   silently failed when only `conn=` was supplied. Now accepts
   `conn=` (used as-is) as well as `pool=`.

@@ -1,5 +1,3 @@
-import getpass
-
 from bbsengine6 import io, database
 
 from bbsengine6.backend import lib
@@ -47,15 +45,16 @@ def main(args, **kwargs):
     # SECURITY: verify the owner of every SECURITY DEFINER helper
     # before calling it. If the function has been replaced or its
     # owner changed, calls below would execute as the new owner and
-    # could escalate privileges. Acceptable owners are the bootstrap
-    # superuser ("postgres") and the configured install role
-    # (args.databaseuser). If a hostile or unexpected role owns
-    # the function, the check fails loudly rather than silently
-    # granting privileges through it.
-    install_role = (
-        getattr(args, "databaseuser", None) or getpass.getuser() or "postgres"
-    )
-    acceptable_owners = tuple({install_role, "postgres"})
+    # could escalate privileges. The acceptable owner is the
+    # dedicated, unprivileged role ``zoid6`` (created by
+    # ``checkzoid6role`` and owned by ``checkzoid6owner``); ``postgres``
+    # is also accepted for one release so databases bootstrapped
+    # under the previous model (where the SQL files used
+    # ``SET ROLE postgres`` to make ``postgres`` the immediate creator)
+    # pass the gate on first run. ``postgres`` will be removed from
+    # this list in a subsequent release — see
+    # ``bbsengine6/TODO_zoid6_role.md``.
+    acceptable_owners = ("zoid6", "postgres")
     for secdef_fn in (
         "public.manage_schema_priv",
         "public.manage_database_priv",
@@ -76,6 +75,13 @@ def main(args, **kwargs):
             return False
 
     # --- engine schema ---
+    # The schema must be owned by ``zoid6`` so that the SECURITY
+    # DEFINER helper ``manage_schema_priv`` (also owned by ``zoid6``)
+    # can issue GRANT statements on it. ``zoid6`` is NOSUPERUSER and
+    # can only GRANT on objects it owns. Without this, every grant in
+    # the loop below would fail with
+    # ``permission denied for schema engine`` once the helpers are
+    # owned by ``zoid6``.
     io.echo(
         f"{{var:labelcolor}}schema {{var:valuecolor}}engine{{var:labelcolor}}: ",
         end="",
@@ -83,12 +89,48 @@ def main(args, **kwargs):
 
     if database.schemaexists(args, "engine", pool=pool, conn=conn) is False:
         io.echo(f"create ", end="")
-        if database.createschema(args, "engine", pool=pool, conn=conn) is False:
-            lib.fail()
+        # ``createschema`` does not accept an owner kwarg, so issue
+        # the DDL directly so the new schema is owned by ``zoid6``
+        # from the start (``CREATE SCHEMA ... AUTHORIZATION zoid6``).
+        try:
+            with database.cursor(conn=conn) as cur:
+                cur.execute("CREATE SCHEMA engine AUTHORIZATION zoid6")
+        except Exception as e:
+            io.echo(f"{{var:level.error}}fail {{/all}}", level="error")
+            io.echo(f"  {e}", level="error")
             return False
         lib.ok()
     else:
-        lib.ok()
+        # BC: an existing engine schema may be owned by the previous
+        # bootstrap principal (e.g. jam, opencode). Reassign to
+        # zoid6 so the SECDEF helper grants below can succeed.
+        try:
+            with database.cursor(conn=conn) as cur:
+                cur.execute(
+                    "SELECT pg_catalog.pg_get_userbyid(nspowner) AS owner "
+                    "FROM pg_namespace WHERE nspname = 'engine'"
+                )
+                row = cur.fetchone()
+                # ``database.cursor`` returns dict rows by default;
+                # handle either shape defensively.
+                if row is None:
+                    current_owner = None
+                elif isinstance(row, dict):
+                    current_owner = row.get("owner")
+                else:
+                    current_owner = row[0]
+                if current_owner and current_owner != "zoid6":
+                    cur.execute("ALTER SCHEMA engine OWNER TO zoid6")
+                    io.echo(
+                        f"{{level.ok}}ok{{/all}} (reassigned from "
+                        f"'{current_owner}' to 'zoid6')"
+                    )
+                else:
+                    lib.ok()
+        except Exception as e:
+            io.echo(f"{{var:level.error}}fail {{/all}}", level="error")
+            io.echo(f"  {e}", level="error")
+            return False
 
     # --- schema privs ---
     for role in ("web", "term", "sysop", "member"):

@@ -38,6 +38,28 @@ def _make_args():
     return args
 
 
+def _fake_cursor_context(fetchone_value=None, current_owner="zoid6"):
+    """Build a mock that quacks like the ``database.cursor`` context
+    manager used by checkengine's schema bootstrap path.
+
+    ``checkengine`` now issues ``CREATE SCHEMA ... AUTHORIZATION zoid6``
+    (or ``ALTER SCHEMA ... OWNER TO zoid6``) directly via a cursor
+    rather than going through ``database.createschema``, so the tests
+    mock the cursor instead. ``fetchone_value`` is the dict/tuple the
+    SELECT-pg_get_userbyid call returns; ``current_owner`` is shorthand
+    for the common case where ``fetchone_value`` is not provided.
+    """
+    if fetchone_value is None:
+        fetchone_value = {"owner": current_owner}
+    cur = Mock()
+    cur.fetchone.return_value = fetchone_value
+    cur.execute = Mock()
+    cm = Mock()
+    cm.__enter__ = Mock(return_value=cur)
+    cm.__exit__ = Mock(return_value=False)
+    return cm, cur
+
+
 class TestStageOneModuleLoop(unittest.TestCase):
     """The stage 1 module loop must include checkengine, ordered correctly."""
 
@@ -132,17 +154,21 @@ class TestCheckEngineIdempotency(unittest.TestCase):
 
     def test_main_skips_createschema_when_schema_exists(self):
         """
-        If the schema already exists, checkengine must not call
-        createschema (which would raise DuplicateSchema on a re-run).
+        If the schema already exists AND is owned by ``zoid6``, checkengine
+        must not issue any DDL. (The previous mock pattern asserted that
+        ``createschema`` was not called; the new schema bootstrap issues
+        the DDL directly via a cursor with ``AUTHORIZATION zoid6``, so we
+        instead assert no CREATE/ALTER was issued.)
         """
         args = _make_args()
         fake_conn = Mock()
         fake_pool = Mock()
+        cm, cur = _fake_cursor_context(current_owner="zoid6")
 
         with patch.object(self.checkengine.database, "functionexists", return_value=True) as functionexists, \
              patch.object(self.checkengine.database, "importsql") as importsql, \
              patch.object(self.checkengine.database, "schemaexists", return_value=True) as schemaexists, \
-             patch.object(self.checkengine.database, "createschema") as createschema, \
+             patch.object(self.checkengine.database, "cursor", return_value=cm), \
              patch.object(self.checkengine.database, "manage_schema_priv", return_value=True), \
              patch.object(self.checkengine.database, "classexists", return_value=True), \
              patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
@@ -150,10 +176,15 @@ class TestCheckEngineIdempotency(unittest.TestCase):
 
         self.assertTrue(result)
         schemaexists.assert_called_once()
-        createschema.assert_not_called()
+        # No CREATE SCHEMA, no ALTER SCHEMA — owner already zoid6.
+        execute_calls = [c.args[0] for c in cur.execute.call_args_list]
+        self.assertNotIn(
+            "CREATE SCHEMA engine AUTHORIZATION zoid6", execute_calls,
+        )
+        self.assertNotIn(
+            "ALTER SCHEMA engine OWNER TO zoid6", execute_calls,
+        )
         # manage_schema_priv helper already present — no importsql call.
-        # functionexists is also called by the SECDEF owner-verification
-        # loop, so we just check the first call was the helper install.
         self.assertGreaterEqual(functionexists.call_count, 1)
         first_args, _ = functionexists.call_args_list[0]
         self.assertEqual(first_args[1], "public.manage_schema_priv")
@@ -161,60 +192,64 @@ class TestCheckEngineIdempotency(unittest.TestCase):
 
     def test_main_creates_schema_when_missing(self):
         """
-        If the schema is missing, checkengine must call createschema
-        using the caller-provided conn/pool.
+        If the schema is missing, checkengine must issue
+        ``CREATE SCHEMA engine AUTHORIZATION zoid6`` against the
+        caller-provided conn.
         """
         args = _make_args()
         fake_conn = Mock()
         fake_pool = Mock()
+        cm, cur = _fake_cursor_context()
 
         with patch.object(self.checkengine.database, "functionexists", return_value=True), \
              patch.object(self.checkengine.database, "importsql") as importsql, \
              patch.object(self.checkengine.database, "schemaexists", return_value=False), \
-             patch.object(self.checkengine.database, "createschema", return_value=True) as createschema, \
+             patch.object(self.checkengine.database, "cursor", return_value=cm) as cursor, \
              patch.object(self.checkengine.database, "manage_schema_priv", return_value=True), \
              patch.object(self.checkengine.database, "classexists", return_value=True), \
              patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
             result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
 
         self.assertTrue(result)
-        createschema.assert_called_once()
-        # The connection/pool from the stage 1 loop must be propagated,
-        # so the schema is created in the target DB (e.g. zoid6), not
-        # re-derived from args and pointing back at the admin DB.
-        _, kwargs = createschema.call_args
+        # The CREATE SCHEMA statement must be issued against the
+        # caller-provided conn.
+        execute_calls = [c.args[0] for c in cur.execute.call_args_list]
+        self.assertIn(
+            "CREATE SCHEMA engine AUTHORIZATION zoid6", execute_calls,
+        )
+        # The conn must be propagated, so the schema is created in the
+        # target DB (e.g. zoid6), not a different one.
+        cursor.assert_called()
+        _, kwargs = cursor.call_args
         self.assertIn("conn", kwargs)
         self.assertIs(kwargs["conn"], fake_conn)
-        self.assertIn("pool", kwargs)
-        self.assertIs(kwargs["pool"], fake_pool)
-        # And the schema name must be the one we depend on elsewhere.
-        args_list, _ = createschema.call_args
-        self.assertEqual(args_list[1], "engine")
         # helper already present — no install attempt.
         importsql.assert_not_called()
 
     def test_main_returns_false_when_createschema_fails(self):
         """
-        If createschema fails, checkengine must return False so the
-        stage 1 loop breaks and the transaction rolls back.
+        If the CREATE SCHEMA statement raises, checkengine must return
+        False so the stage 1 loop breaks and the transaction rolls back.
         """
         args = _make_args()
         fake_conn = Mock()
         fake_pool = Mock()
 
+        cur = Mock()
+        cur.execute.side_effect = RuntimeError("simulated DDL failure")
+        cm = Mock()
+        cm.__enter__ = Mock(return_value=cur)
+        cm.__exit__ = Mock(return_value=False)
+
         with patch.object(self.checkengine.database, "functionexists", return_value=True), \
              patch.object(self.checkengine.database, "importsql"), \
              patch.object(self.checkengine.database, "schemaexists", return_value=False), \
-             patch.object(self.checkengine.database, "createschema", return_value=False), \
+             patch.object(self.checkengine.database, "cursor", return_value=cm), \
              patch.object(self.checkengine.database, "classexists", return_value=True), \
-             patch.object(self.checkengine.database, "verify_function_owner", return_value=True), \
-             patch.object(self.checkengine, "lib") as fake_lib:
-            fake_lib.fail = Mock()
-            fake_lib.ok = Mock()
+             patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
             result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
 
         self.assertFalse(result)
-        fake_lib.fail.assert_called_once()
 
     def test_main_installs_manage_schema_priv_when_missing(self):
         """
@@ -229,11 +264,12 @@ class TestCheckEngineIdempotency(unittest.TestCase):
         args = _make_args()
         fake_conn = Mock()
         fake_pool = Mock()
+        cm, _cur = _fake_cursor_context()
 
         with patch.object(self.checkengine.database, "functionexists", return_value=False) as functionexists, \
              patch.object(self.checkengine.database, "importsql", return_value=True) as importsql, \
              patch.object(self.checkengine.database, "schemaexists", return_value=True), \
-             patch.object(self.checkengine.database, "createschema"), \
+             patch.object(self.checkengine.database, "cursor", return_value=cm), \
              patch.object(self.checkengine.database, "manage_schema_priv", return_value=True) as manage, \
              patch.object(self.checkengine.database, "classexists", return_value=True), \
              patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
@@ -282,7 +318,7 @@ class TestCheckEngineIdempotency(unittest.TestCase):
         with patch.object(self.checkengine.database, "functionexists", return_value=False), \
              patch.object(self.checkengine.database, "importsql", return_value=False) as importsql, \
              patch.object(self.checkengine.database, "schemaexists") as schemaexists, \
-             patch.object(self.checkengine.database, "createschema"), \
+             patch.object(self.checkengine.database, "cursor"), \
              patch.object(self.checkengine.database, "manage_schema_priv") as manage, \
              patch.object(self.checkengine.database, "classexists", return_value=True), \
              patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
@@ -299,6 +335,37 @@ class TestCheckEngineIdempotency(unittest.TestCase):
         # Must NOT have proceeded to schema creation or grant loop.
         schemaexists.assert_not_called()
         manage.assert_not_called()
+
+    def test_main_reassigns_engine_schema_to_zoid6_when_owner_differs(self):
+        """
+        BC: if the engine schema already exists and is owned by a
+        different role (e.g. jam, opencode), checkengine must issue
+        ``ALTER SCHEMA engine OWNER TO zoid6`` so the SECDEF helper
+        grants below can succeed. Without this, every grant fails
+        with ``permission denied for schema engine`` once ``zoid6``
+        owns ``manage_schema_priv``.
+        """
+        args = _make_args()
+        fake_conn = Mock()
+        fake_pool = Mock()
+        # Pretend the existing engine schema is owned by opencode
+        # (mirrors the dev DB state prior to migration).
+        cm, cur = _fake_cursor_context(current_owner="opencode")
+
+        with patch.object(self.checkengine.database, "functionexists", return_value=True), \
+             patch.object(self.checkengine.database, "importsql"), \
+             patch.object(self.checkengine.database, "schemaexists", return_value=True), \
+             patch.object(self.checkengine.database, "cursor", return_value=cm), \
+             patch.object(self.checkengine.database, "manage_schema_priv", return_value=True), \
+             patch.object(self.checkengine.database, "classexists", return_value=True), \
+             patch.object(self.checkengine.database, "verify_function_owner", return_value=True):
+            result = self.checkengine.main(args, conn=fake_conn, pool=fake_pool)
+
+        self.assertTrue(result)
+        execute_calls = [c.args[0] for c in cur.execute.call_args_list]
+        self.assertIn(
+            "ALTER SCHEMA engine OWNER TO zoid6", execute_calls,
+        )
 
 
 class TestStageOneFailsFastWithoutCheckEngine(unittest.TestCase):

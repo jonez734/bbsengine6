@@ -69,6 +69,14 @@ def checkclasses(args, **kwargs):
     return runmodule(args, "checkclasses", **kwargs)
 
 
+def checkzoid6role(args, **kwargs):
+    return runmodule(args, "checkzoid6role", **kwargs)
+
+
+def checkzoid6owner(args, **kwargs):
+    return runmodule(args, "checkzoid6owner", **kwargs)
+
+
 def ok():
     io.echo(  f"{{level.ok}}  ok  {{/all}}")
     return

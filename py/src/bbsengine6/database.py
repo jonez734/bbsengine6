@@ -2101,7 +2101,9 @@ def verify_function_owner(
                 f"bbsengine6.database.verify_function_owner.200: "
                 f"function {name!r} is owned by {owner!r}, expected one of "
                 f"{expected_owners!r}. Refusing to call it. "
-                f"Reinstall the function or update the expected owner.",
+                f"Reassign the function to an accepted owner "
+                f"(see bbsengine6.backend.checkzoid6owner for the "
+                f"canonical owner role) or update the caller's allow-list.",
                 level="error",
             )
             return False
