@@ -921,12 +921,35 @@ _unicode = {
     "arrow_up": "\u2191",  # ↑
     "arrow_right": "\u2192",  # →
     "arrow_down": "\u2193",  # ↓
+    "solidblock": "\u2588",  # █ @since 20260821
+    "lightblock": "\u2591",  # ░ @since 20260821
+    "mediumblock": "\u2592",  # ▒ @since 20260821
 }
 
 
+# Small focused table for the four playing-card suits.
+# Consulted by _handle_command() for both the bare form ({spade}) and the
+# {u:NAME} namespace ({u:spade}). Kept separate from _unicode because
+# {diamond} in _unicode (or ACS) is the ◆ glyph, not the card suit ♦;
+# the split keeps the precedence story clean.
+# @since 20260821
+_suits = {
+    "spade": "\u2660",  # ♠
+    "heart": "\u2665",  # ♥
+    "diamond": "\u2666",  # ♦
+    "club": "\u2663",  # ♣
+}
+
+
+def _handle_suits(token):
+    if token.value in _suits:
+        token.text = _suits[token.value]
+        yield token
+
+
 def _handle_unicode(token):
-    if token.kind in _unicode:
-        token.text = _unicode[token.kind]
+    if token.value in _unicode:
+        token.text = _unicode[token.value]
         yield token
 
 
@@ -972,6 +995,38 @@ def _handle_command(token, **kwargs):  # palette=None, vars=None):
 
     if cmd in _acs_map:
         yield from _handle_acs(token)
+        return
+
+    # Card suits: bare form (e.g. {spade}) resolves to ♠. Checked AFTER
+    # _acs_map so that {diamond} still resolves to the ACS ◆ glyph
+    # (not the card suit ♦); use {u:diamond} for the card suit.
+    # @since 20260821
+    if cmd in _suits:
+        yield from _handle_suits(token)
+        return
+
+    # {u:NAME[:repeat]} namespace: looks NAME up in _suits first, then
+    # _unicode (for blocks like solidblock). An optional repeat count
+    # follows the name as args[1]. Unknown {u:NAME} falls through
+    # silently without crashing.
+    # @since 20260821
+    if cmd == "u" and token.args:
+        unicode_name = token.args[0]
+        if unicode_name in _suits:
+            token.text = _suits[unicode_name]
+        elif unicode_name in _unicode:
+            token.text = _unicode[unicode_name]
+        else:
+            # unknown {u:NAME} -- let handler_dispatch() yield the raw
+            # token so callers at least see the original text
+            yield from handler_dispatch(token)
+            return
+        if len(token.args) > 1:
+            try:
+                token.repeat = int(token.args[1])
+            except (ValueError, TypeError):
+                token.repeat = 1
+        yield token
         return
 
     if cmd in _unicode:
