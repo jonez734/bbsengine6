@@ -515,6 +515,72 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             f"expected 'pool is None' when admin pool fails; got:\n{all_log!r}"
         )
 
+    def test_stage_zero_dispatch_forwards_admin_pool(self):
+        """Regression: stage_zero.access() calls lib.issysop(), which
+        needs a conn/pool to query pg_auth_members. startup.main
+        builds an admin_pool against 'postgres' as a pre-flight and
+        must forward it to the stage_zero dispatch (as pool=...) so
+        the access check has something to query.
+
+        Without this kwarg, stage_zero.access() falls into the
+        "bbsengine6.backend.lib.issysop: no conn or pool" branch,
+        returns False, and the whole startup aborts with
+        "check of modulename='stage_zero' failed. module not run."
+        This is the literal failure mode the user reported when
+        running `zoid6` against an unconfigured Postgres.
+        """
+        import importlib
+        from bbsengine6 import database as database_mod
+
+        startup_module = importlib.import_module("bbsengine6.startup.main")
+
+        admin_pool = MagicMock(name="admin_pool")
+        target_pool = MagicMock(name="target_pool")
+
+        def fake_getpool(args, **kwargs):
+            if kwargs.get("dbname") == "postgres":
+                return admin_pool
+            return target_pool
+
+        fake_conn = MagicMock(name="conn")
+        fake_conn.commit = MagicMock()
+        fake_conn.rollback = MagicMock()
+        fake_cm = MagicMock(name="connect_cm")
+        fake_cm.__enter__ = MagicMock(return_value=fake_conn)
+        fake_cm.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch.object(database_mod, "getpool", side_effect=fake_getpool),
+            patch.object(database_mod, "connect", return_value=fake_cm),
+            patch(
+                "bbsengine6.startup.lib.runmodule",
+                return_value=True,
+            ) as mock_runmodule,
+        ):
+            args = _make_args("zoid6")
+            result = startup_module.main(args, conn=None, pool=None)
+
+        assert result is True, (
+            f"startup should succeed when stage_zero dispatches "
+            f"with pool=admin_pool; got {result!r}"
+        )
+        assert mock_runmodule.call_count == 2, (
+            f"expected stage_zero + stage_one dispatches; got "
+            f"{mock_runmodule.call_count}: "
+            f"{[c.args[1] for c in mock_runmodule.call_args_list]!r}"
+        )
+
+        stage_zero_call = mock_runmodule.call_args_list[0]
+        assert stage_zero_call.args[1] == "stage_zero", (
+            f"first dispatch must be stage_zero; got "
+            f"{stage_zero_call.args[1]!r}"
+        )
+        assert stage_zero_call.kwargs.get("pool") is admin_pool, (
+            f"stage_zero dispatch must pass pool=admin_pool so its "
+            f"access() check can call lib.issysop(); got kwargs="
+            f"{stage_zero_call.kwargs!r}"
+        )
+
     def test_target_pool_failure_after_stage_zero_returns_false(self, caplog):
         """If stage_zero succeeds (e.g. CREATE DATABASE worked) but
         building a target pool against the now-bootstrapped
