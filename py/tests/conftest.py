@@ -143,12 +143,21 @@ def schema_init(db_connection, request):
     # Ensure messageview.sql's predicates can reference engine.__member.approved.
     # member.sql's CREATE TABLE IF NOT EXISTS will not retro-add columns to a
     # pre-existing table; this ALTER is idempotent and safe on fresh DBs.
-    with db_connection.cursor() as cur:
-        cur.execute(
-            "ALTER TABLE engine.__member "
-            "ADD COLUMN IF NOT EXISTS approved boolean NOT NULL DEFAULT false"
+    # If the connecting user does not own the table, the ALTER will fail
+    # with InsufficientPrivilege -- log and skip rather than aborting the
+    # whole DB test session.
+    try:
+        with db_connection.cursor() as cur:
+            cur.execute(
+                "ALTER TABLE engine.__member "
+                "ADD COLUMN IF NOT EXISTS approved boolean NOT NULL DEFAULT false"
+            )
+        db_connection.commit()
+    except psycopg.errors.InsufficientPrivilege:
+        db_connection.rollback()
+        logger.warning(
+            "  ⊘ engine.__member.approved -- insufficient privileges, skipping"
         )
-    db_connection.commit()
 
     sql_files = _get_message_sql_files()
 
