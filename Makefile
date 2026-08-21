@@ -16,7 +16,7 @@ export RSYNC = rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --verbose \
 	--delete-after --mkpath \
 	--exclude 'captchas'
 
-export VERSION = 6
+VERSION = 6
 
 # Set by `deploy --editable` (deploytool). Empty by default. Propagated
 # to py/src/Makefile deploy-tui which switches between editable and
