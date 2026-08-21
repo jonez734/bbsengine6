@@ -11,10 +11,9 @@ PIP ?= $(PYTHON) -m pip
 
 # DEPLOY_EDITABLE is set by `deploytool --editable`. Empty by default.
 # When set to 1, deploy-tui installs editable from the source tree
-# (`pip install -e .`). When unset, deploy-tui installs the most
-# recently-built wheel under $(OUTDIR). Picks the newest wheel via
-# `ls -t | head -1` so the recipe is robust to multiple wheels
-# accumulating in OUTDIR over time (Phase 0 lands wheels there).
+# (`pip install -e .`). When unset, deploy-tui installs the wheel
+# whose filename is composed from $(VERSION_PREFIX)$(VERSION), which
+# matches the wheel produced by `make build` in the same invocation.
 DEPLOY_EDITABLE ?=
 
 install: version
@@ -24,9 +23,9 @@ deploy-tui:
 ifeq ($(DEPLOY_EDITABLE),1)
 	cd .. && $(PIP) install --no-cache-dir -e .
 else
-	@WHEEL=$$(ls -t $(OUTDIR)/$(PROJECT)-*.whl 2>/dev/null | head -1); \
-	if [ -z "$$WHEEL" ]; then \
-		echo "no wheel matching $(PROJECT)-*.whl in $(OUTDIR)" >&2; \
+	@WHEEL=$(OUTDIR)/$(PROJECT)-$(VERSION_PREFIX)$(VERSION)-py3-none-any.whl; \
+	if [ ! -f "$$WHEEL" ]; then \
+		echo "expected wheel $$WHEEL not found" >&2; \
 		exit 1; \
 	fi; \
 	$(PIP) install --no-cache-dir $$WHEEL
