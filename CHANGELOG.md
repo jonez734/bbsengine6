@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### build: add `PREPARE_BUILD` macro to root Makefile
+
+`bbsengine6/Makefile` lacked the `PREPARE_BUILD` helper that
+`bed/Makefile:189-194`, `getdate_next/Makefile:32-36`,
+`casino/Makefile:75-110`, and `zoid6/src/Makefile:132-167` (this
+release) already have. The macro is added with `$(1) = $(CURDIR)/py`
+to match the existing `build` target's `cd py && python3 -m build`
+shape.
+
+`py/` is currently mode `775` (no setgid), so this tree is
+"safe-by-accident" today — `py/build/` won't inherit setgid from
+`py/`, so the `shutil.copystat` cascade won't fire. The macro is
+added here anyway so a future `chmod 2775 py/` (e.g. matching the
+rest of the tree for consistency) doesn't silently regress the
+EPERM.
+
+`py/src/Makefile` was intentionally *not* modified — it only
+runs `pip install -e .`, never `python -m build`, so the EPERM
+cascade can't apply there.
+
+Tracked in `zoid6/TODO.md` "PREPARE_BUILD standardization
+(cross-project)" — that checkbox is now ticked.
+
 ### member: auth hot path uses psycopg3 `%s` parameter binding, not `database.query()` `$N`
 
 Three functions on the password-verification path now bypass the
