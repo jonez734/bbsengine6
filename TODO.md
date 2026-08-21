@@ -20,6 +20,9 @@
    - Solution: add a `PREPARE_BUILD` macro mirroring `bed/Makefile:163-185` (rename foreign-owned `py/build/` to `py/build.stale.$$`, `chmod 1775` the replacement) and call it before the `python -m build` line. The current `py/build/` is `jam:opencode 2775` — both the foreign owner and the setgid bit are problems.
    - Cross-ref: `bed/Makefile:163-185`, `zoid6/TODO.md` "PREPARE_BUILD standardization".
 
+[x] (related) build→clean dependency also sidesteps the setuptools SOURCES.txt absolute-path failure mode (`@since 20260821`)
+   - As of `bbsengine6/Makefile:156`, `build` now declares `clean` as a prerequisite, so `py/build/`, `py/dist/`, and `py/src/bbsengine6.egg-info/` are wiped before every `python -m build`. This addresses the egg-info SOURCES.txt stale-paths issue but does NOT replace PREPARE_BUILD — direct invocations of `python -m build` (not through `make`) still need PREPARE_BUILD protection for foreign-owned `py/build/`.
+
 ## ⚠️ attraction_hour DATA FIX — demo_listbox_masterdetail.py (2026-08-06) — RESOLVED
 
 **Status (2026-08-06, end of day):** All blockers resolved. The data chain from
