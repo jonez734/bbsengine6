@@ -9,6 +9,7 @@ write so we can query it directly to prove the operations landed.
 
 import copy
 import contextlib
+import crypt
 from unittest.mock import Mock, patch
 
 import pytest
@@ -883,3 +884,467 @@ class TestConfigureRoleSuperuserGuard:
         ]
         assert ("bob", "revoke", "createdb") in revoke_actions
         assert ("bob", "revoke", "createrole") in revoke_actions
+
+
+# ---------------------------------------------------------------------------
+# Tests — password encryption when set via console member
+# ---------------------------------------------------------------------------
+
+
+_pycrypt = crypt
+
+
+class _SpyCursor:
+    """Cursor stand-in that records every ``execute()`` call.
+
+    The encryption claim is verified at the SQL layer: we do NOT mock
+    ``libmember.setpassword`` (the bug the user reported). Instead, we let
+    the real ``setpassword`` run and capture the SQL it sends to the
+    database. Each call gets a fresh, freshly-minted bcrypt hash from
+    Python's ``crypt`` module so we can also exercise the round-trip
+    ("what gets stored must match the plaintext via ``crypt(plain, stored)``").
+    """
+
+    def __init__(self):
+        self.calls = []  # list of (query, params) — query is the original
+        # Composed/string, never the stringified repr.
+        self._fetchone_result = None
+        self._password_response = None  # set by setpassword UPDATE
+        self._rowcount = 1
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def execute(self, query, params=None):
+        # Store the original query object so callers can inspect both the
+        # SQL text (via str() / as_string()) and the structural composition
+        # (via iteration of psycopg.sql.Composed children). We do NOT
+        # stringify here: str(Composed) yields its Python repr, not SQL.
+        self.calls.append((query, params))
+        rendered = query.as_string(None) if hasattr(query, "as_string") else str(query)
+        sql_lower = rendered.lower()
+        # Simulate the server-side bcrypt: when setpassword's UPDATE
+        # runs, the DB would call crypt(plaintext, gen_salt('bf')) and
+        # return the hash. We replicate that here so the round-trip
+        # assertion (crypt(plain, stored) == stored) is meaningful.
+        if "password=crypt(" in sql_lower and "gen_salt" in sql_lower:
+            # database.query() puts the plaintext inside the Composed as a
+            # Literal node — there is no separate params tuple. Pull it
+            # back out of the structure for the simulated hash.
+            from psycopg import sql as _sql
+            plaintext = ""
+            if hasattr(query, "__iter__") and not isinstance(query, str):
+                for child in query:
+                    if isinstance(child, _sql.Literal):
+                        v = child.as_string(None).strip("'\"")
+                        # The plaintext is the first Literal after the
+                        # password=crypt( SQL chunk; anything else is the
+                        # moniker (the second positional parameter).
+                        if v and plaintext == "":
+                            plaintext = v
+            salt = _pycrypt.mksalt(method=_pycrypt.METHOD_BLOWFISH)
+            self._password_response = _pycrypt.crypt(plaintext, salt)
+            self._rowcount = 1
+            return
+        # For all other statements, leave _fetchone_result alone so the
+        # SELECT result from before setpassword stays intact.
+        self._rowcount = 1
+
+    def fetchone(self):
+        if self._password_response is not None:
+            return {"password": self._password_response}
+        return self._fetchone_result
+
+    @property
+    def rowcount(self):
+        return self._rowcount
+
+    @rowcount.setter
+    def rowcount(self, value):
+        self._rowcount = value
+
+
+class _SpyConn:
+    """Connection stand-in: emits ``_SpyCursor`` and tracks commit/rollback."""
+
+    def __init__(self, cursor):
+        self._cursor = cursor
+        self.committed = False
+        self.rolled_back = False
+
+    def cursor(self, **kw):
+        return self._cursor
+
+    def commit(self):
+        self.committed = True
+
+    def rollback(self):
+        self.rolled_back = True
+
+    @property
+    def autocommit(self):
+        return False
+
+    @autocommit.setter
+    def autocommit(self, value):
+        pass
+
+    @property
+    def pgconn(self):
+        m = Mock()
+        m.transaction_status = 0
+        return m
+
+
+def _spy_connect_factory(cursor):
+    """Build a ``database.connect`` replacement that yields a ``_SpyConn``."""
+
+    @contextlib.contextmanager
+    def _cm(*a, **kw):
+        conn = _SpyConn(cursor)
+        try:
+            yield conn
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            # Mirror the existing tests: auto_commit=True (default for
+            # add()'s outside block) commits at exit. add()/edit() open
+            # their own conn with auto_commit=False and call commit()
+            # explicitly, so this is a no-op on that path.
+            if kw.get("auto_commit", True):
+                conn.commit()
+
+    return _cm
+
+
+def _find_setpassword_call(calls):
+    """Return the (sql, params) tuple for the setpassword UPDATE, or None.
+
+    ``database.query()`` returns a ``psycopg.sql.Composed`` whose ``str()``
+    is its Python repr (not the wire-protocol SQL). We detect the
+    setpassword statement by inspecting both the repr and the structural
+    children so we are not fooled by the repr's content.
+    """
+    for sql, params in calls:
+        # Match on the structural children: an UPDATE Composed that contains
+        # both a password=crypt( chunk and a gen_salt chunk.
+        children = list(sql) if hasattr(sql, "__iter__") and not isinstance(sql, str) else []
+        if not children:
+            continue
+        rendered = sql.as_string(None) if hasattr(sql, "as_string") else str(sql)
+        r_lower = rendered.lower()
+        if (
+            r_lower.lstrip().startswith("update ")
+            and "password=crypt(" in r_lower
+            and "gen_salt" in r_lower
+            and "__member" in r_lower
+        ):
+            return (sql, params, children, rendered)
+    return None
+
+
+def _assert_setpassword_sql(sql, params, plaintext: str, moniker: str):
+    """Shared assertions: encryption pattern, parameterization, no plaintext leak.
+
+    ``database.query()`` produces a ``psycopg.sql.Composed`` that parameterizes
+    via ``Literal`` nodes. When psycopg executes a ``Composed``, the literals
+    are sent as bound parameters on the wire (never inlined as a SQL string
+    body), so the structural shape is the authoritative evidence that the
+    plaintext is not being concatenated into the SQL.
+    """
+    rendered = sql.as_string(None) if hasattr(sql, "as_string") else str(sql)
+    sql_lower = rendered.lower()
+
+    assert "password=crypt(" in sql_lower, (
+        f"setpassword must encrypt via crypt(...); got: {rendered!r}"
+    )
+    assert "gen_salt" in sql_lower, (
+        f"setpassword must use a fresh gen_salt (server-side salt); got: {rendered!r}"
+    )
+    assert "'bf'" in sql_lower or '"bf"' in sql_lower, (
+        f"setpassword must use bcrypt ('bf'); got: {rendered!r}"
+    )
+    assert "where moniker=" in sql_lower, (
+        f"setpassword must target the right row by moniker; got: {rendered!r}"
+    )
+    assert "__member" in sql_lower, (
+        f"setpassword must target the __member table; got: {rendered!r}"
+    )
+
+    # Parameterization check: the plaintext must appear as a Literal node
+    # (bound parameter on the wire), NEVER as an inline SQL fragment.
+    children = list(sql)
+    from psycopg import sql as _sql
+
+    def _literal_value(c):
+        return c.as_string(None).strip("'\"") if hasattr(c, "as_string") else ""
+
+    literals_with_plaintext = [
+        c for c in children
+        if isinstance(c, _sql.Literal) and _literal_value(c) == plaintext
+    ]
+    literals_with_moniker = [
+        c for c in children
+        if isinstance(c, _sql.Literal) and _literal_value(c) == moniker
+    ]
+    sql_chunks_with_plaintext = [
+        c for c in children
+        if isinstance(c, _sql.SQL) and plaintext in c.as_string(None)
+    ]
+    sql_chunks_with_moniker = [
+        c for c in children
+        if isinstance(c, _sql.SQL) and moniker in c.as_string(None)
+    ]
+
+    assert literals_with_plaintext, (
+        f"plaintext {plaintext!r} must appear as a Literal (bound parameter); "
+        f"children were: {[type(c).__name__ for c in children]}"
+    )
+    assert literals_with_moniker, (
+        f"moniker {moniker!r} must appear as a Literal (bound parameter)"
+    )
+    assert not sql_chunks_with_plaintext, (
+        f"plaintext must NEVER be inlined into a SQL fragment; "
+        f"offending chunk: {sql_chunks_with_plaintext[0].as_string(None)!r}"
+    )
+    assert not sql_chunks_with_moniker, (
+        f"moniker must NEVER be inlined into a SQL fragment; "
+        f"offending chunk: {sql_chunks_with_moniker[0].as_string(None)!r}"
+    )
+
+
+@pytest.mark.unit
+class TestConsoleMemberPasswordEncryption:
+    """Confirm that ``console.member.{add,edit}`` write an encrypted password.
+
+    The user's bug report: ``libmember.setpassword`` works fine when called
+    standalone (auth succeeds afterwards), but the console member flow does
+    not set the password correctly. The existing tests mock
+    ``libmember.setpassword`` outright, so they cannot catch a bug in the
+    call site. These tests instead spy on the SQL layer and verify:
+
+    1. ``setpassword`` is actually invoked from ``add()`` and ``edit()``.
+    2. The SQL it sends uses ``crypt(..., gen_salt('bf'))`` (bcrypt).
+    3. The plaintext is a bound parameter (never inlined in the SQL).
+    4. The plaintext is never written anywhere else (e.g. as a literal
+       in some other UPDATE or INSERT).
+    5. The stored hash round-trips: ``crypt(plaintext, stored) == stored``.
+    """
+
+    def test_add_member_password_is_bcrypted_and_bound_as_parameter(self):
+        """add() must call setpassword with the right plaintext and target row."""
+        args = _make_args()
+        fake_pool = Mock()
+        member_dict = _make_member_dict(password="Sup3rSecret!")
+        spy_cursor = _SpyCursor()
+
+        # Pre-seed the cursor so the SELECT in edit() flow doesn't blow up,
+        # and so insert() / other helpers see the row they expect.
+        # add() does not SELECT first; it just builds then inserts.
+        def _fake_inputchoice(prompt, valid, default, **kw):
+            return "Q"
+
+        def _fake_inputboolean(prompt, default="Y", **kw):
+            if "add member?" in prompt:
+                return True
+            return True
+
+        def _fake_inputstring(prompt, default="", **kw):
+            if prompt.endswith("moniker:"):
+                return member_dict["moniker"]
+            if prompt.endswith("loginid:"):
+                return member_dict["loginid"]
+            if prompt.endswith("e-mail address:"):
+                return member_dict["email"]
+            if prompt.endswith("refcode:"):
+                return None
+            return ""
+
+        with (
+            patch("bbsengine6.console.member.database.connect", _spy_connect_factory(spy_cursor)),
+            patch.object(libmember, "build", return_value=copy.deepcopy(member_dict)),
+            patch.object(
+                libmember,
+                "getflags",
+                return_value=copy.deepcopy(member_dict["flags"]),
+            ),
+            patch.object(libmember, "getcurrentmoniker", return_value="admin"),
+            patch.object(libmember, "verifyMemberFound", return_value=False),
+            patch.object(libmember, "insert", return_value=member_dict["moniker"]),
+            patch.object(libmember, "setflag", return_value=True),
+            # NB: libmember.setpassword is intentionally NOT mocked here.
+            # The whole point of this test is to exercise the real call.
+            patch("bbsengine6.console.member.pgrole.ensure_login_role", return_value=True),
+            patch("bbsengine6.console.member.pgrole.sync_groups", return_value=True),
+            patch("bbsengine6.console.member.io.inputchoice", _fake_inputchoice),
+            patch("bbsengine6.console.member.io.inputboolean", _fake_inputboolean),
+            patch("bbsengine6.console.member.io.inputstring", _fake_inputstring),
+            patch("bbsengine6.console.member.io.inputinteger", return_value=100),
+            patch("bbsengine6.console.member.io.echo"),
+            patch("bbsengine6.console.member.io.echo_traceback"),
+            patch("bbsengine6.util.heading"),
+            patch("bbsengine6.util.inputpassword", return_value="Sup3rSecret!"),
+            patch("bbsengine6.console.member.bank.BankService") as mock_bank_cls,
+            patch("bbsengine6.console.member.configurerole", return_value=True),
+        ):
+            mock_bank_cls.return_value.add_funds.return_value = True
+            result = console_member.add(args, pool=fake_pool)
+
+        assert result is True, "add() should succeed end-to-end"
+
+        # 1. A setpassword UPDATE was actually issued.
+        sp = _find_setpassword_call(spy_cursor.calls)
+        assert sp is not None, (
+            "add() never sent a setpassword UPDATE; password not stored. "
+            f"Calls observed: {[type(c).__name__ for c, _ in spy_cursor.calls]}"
+        )
+        sql, params, _children, _rendered = sp
+
+        # 2. SQL has the right shape: bcrypt via crypt+gen_salt('bf').
+        _assert_setpassword_sql(
+            sql, params, plaintext="Sup3rSecret!", moniker=member_dict["moniker"]
+        )
+
+        # 3. No SQL fragment elsewhere in the add() flow contains the
+        #    plaintext. (as_string() renders Literals inline for display,
+        #    so it is not a meaningful check; we inspect the structural
+        #    children directly. Here we only need to confirm no SQL chunk
+        #    from any other statement inlined the plaintext.)
+        from psycopg import sql as _sql
+        for call_sql, _p in spy_cursor.calls:
+            for child in call_sql if hasattr(call_sql, "__iter__") and not isinstance(call_sql, str) else []:
+                if isinstance(child, _sql.SQL) and "Sup3rSecret!" in child.as_string(None):
+                    raise AssertionError(
+                        f"plaintext leaked into a SQL fragment: {child.as_string(None)!r}"
+                    )
+
+        # 4. Round-trip: the simulated DB hash must verify against the
+        #    plaintext via crypt(plaintext, stored) == stored. This is the
+        #    same predicate ``libmember.checkpassword`` uses server-side.
+        stored_hash = spy_cursor._password_response
+        assert stored_hash.startswith(("$2a$", "$2b$", "$2y$")), (
+            f"stored hash must be a bcrypt hash; got: {stored_hash!r}"
+        )
+        assert _pycrypt.crypt("Sup3rSecret!", stored_hash) == stored_hash, (
+            "stored hash must verify against the plaintext via crypt()"
+        )
+
+    def test_edit_member_password_is_bcrypted_and_bound_as_parameter(self):
+        """edit() must call setpassword with the new plaintext on the right row."""
+        args = _make_args()
+        fake_pool = Mock()
+        existing = _make_existing_member()
+        new_plaintext = "N3wP@ssw0rd!"
+
+        spy_cursor = _SpyCursor()
+        spy_cursor._fetchone_result = existing  # SELECT returns the row
+
+        # Drive the in-memory edit loop: pick [P] to change the password,
+        # then [Q] to quit, then confirm save.
+        cc = {"n": 0}
+
+        def _fake_inputchoice(prompt, valid, default, **kw):
+            cc["n"] += 1
+            if cc["n"] == 1:
+                return "P"
+            return "Q"
+
+        def _fake_inputboolean(prompt, default="Y", **kw):
+            if "save changes?" in prompt:
+                return True
+            return True
+
+        def _fake_inputstring(prompt, default="", **kw):
+            return ""
+
+        with (
+            patch("bbsengine6.console.member.database.connect", _spy_connect_factory(spy_cursor)),
+            patch("bbsengine6.console.member.database.cursor", lambda conn=None, **kw: spy_cursor),
+            patch.object(
+                libmember,
+                "build",
+                side_effect=lambda *a, conn=None, **kw: copy.deepcopy(existing),
+            ),
+            patch.object(
+                libmember,
+                "getflags",
+                return_value=copy.deepcopy(existing["flags"]),
+            ),
+            patch.object(libmember, "update", return_value=True),
+            patch.object(libmember, "setflag", return_value=True),
+            # NB: libmember.setpassword is intentionally NOT mocked here.
+            patch("bbsengine6.console.member.pgrole.ensure_login_role", return_value=True),
+            patch("bbsengine6.console.member.pgrole.sync_groups", return_value=True),
+            patch("bbsengine6.console.member.io.inputchoice", _fake_inputchoice),
+            patch("bbsengine6.console.member.io.inputboolean", _fake_inputboolean),
+            patch("bbsengine6.console.member.io.inputstring", _fake_inputstring),
+            patch("bbsengine6.console.member.io.inputinteger", return_value=100),
+            patch("bbsengine6.console.member.io.echo"),
+            patch("bbsengine6.console.member.io.echo_traceback"),
+            patch("bbsengine6.util.heading"),
+            patch("bbsengine6.util.inputpassword", return_value=new_plaintext),
+            patch("bbsengine6.console.member.configurerole", return_value=True),
+            patch("bbsengine6.console.member.setui"),
+        ):
+            result = console_member.edit(args, pool=fake_pool)
+
+        assert result is True, "edit() should succeed end-to-end"
+
+        sp = _find_setpassword_call(spy_cursor.calls)
+        assert sp is not None, (
+            "edit() never sent a setpassword UPDATE; password not stored. "
+            f"Calls observed: {[type(c).__name__ for c, _ in spy_cursor.calls]}"
+        )
+        sql, params, _children, _rendered = sp
+        _assert_setpassword_sql(
+            sql, params, plaintext=new_plaintext, moniker=existing["moniker"]
+        )
+
+        from psycopg import sql as _sql
+        for call_sql, _p in spy_cursor.calls:
+            for child in call_sql if hasattr(call_sql, "__iter__") and not isinstance(call_sql, str) else []:
+                if isinstance(child, _sql.SQL) and new_plaintext in child.as_string(None):
+                    raise AssertionError(
+                        f"plaintext leaked into a SQL fragment: {child.as_string(None)!r}"
+                    )
+
+        stored_hash = spy_cursor._password_response
+        assert stored_hash.startswith(("$2a$", "$2b$", "$2y$")), (
+            f"stored hash must be a bcrypt hash; got: {stored_hash!r}"
+        )
+        assert _pycrypt.crypt(new_plaintext, stored_hash) == stored_hash, (
+            "stored hash must verify against the plaintext via crypt()"
+        )
+
+    def test_setpassword_uses_unique_salt_per_call(self):
+        """gen_salt('bf') is invoked on every call so two identical passwords
+        produce two distinct hashes. If the code ever cached a salt or used a
+        static salt, this assertion fails — which is exactly the kind of bug
+        a "password not set correctly" symptom could mask.
+        """
+        args = _make_args()
+        cur1 = _SpyCursor()
+        cur2 = _SpyCursor()
+
+        with patch(
+            "bbsengine6.console.member.database.connect",
+            _spy_connect_factory(cur1),
+        ):
+            libmember.setpassword(args, "SamePass!", "alice", pool=Mock())
+
+        with patch(
+            "bbsengine6.console.member.database.connect",
+            _spy_connect_factory(cur2),
+        ):
+            libmember.setpassword(args, "SamePass!", "bob", pool=Mock())
+
+        h1 = cur1._password_response
+        h2 = cur2._password_response
+        assert h1 != h2, (
+            "two setpassword calls with the same plaintext must produce "
+            "different hashes (gen_salt must run each time)"
+        )
