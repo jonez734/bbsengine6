@@ -224,6 +224,31 @@ manage_schema_priv(args: Any, action: str, priv: str, database_name: str, target
 ```
 Manage schema privileges.
 
+### SECURITY DEFINER helpers and ownership
+
+The five privilege-management helpers listed above (`get_role_privs`,
+`manage_role_privs`, `manage_secondary_role`, `manage_database_priv`,
+`manage_schema_priv`) are `SECURITY DEFINER` functions installed in
+the `public` schema by `sql/manage_*.sql` /
+`sql/get_role_privs.sql`. They are owned by the dedicated
+unprivileged PostgreSQL role `zoid6` (`NOSUPERUSER NOCREATEDB
+NOCREATEROLE NOLOGIN INHERIT`), created by
+`backend.checkzoid6role` and enforced at bootstrap by
+`backend.checkzoid6owner` (which runs `ALTER FUNCTION ... OWNER TO
+zoid6` against the five helpers if ownership has drifted).
+
+`database.verify_function_owner` is the hard guard that rejects
+bootstrap if any of the five is owned by a role other than those in
+the hard-coded allow-list `("zoid6", "postgres")`. The `postgres`
+entry is a one-release transition aid; it will be dropped in the
+next release — see `bbsengine6/TODO_zoid6_role.md`.
+
+Because the helpers are now NOSUPERUSER-owned, the `engine` schema
+is created with `AUTHORIZATION zoid6` (fresh installs) or
+`ALTER SCHEMA engine OWNER TO zoid6` (BC upgrades). The `bank`
+schema is unaffected because its grants live in `bank_schema.sql`
+(executed by the bootstrap superuser), not via `manage_schema_priv`.
+
 ### Database/Schema Operations
 
 ```python

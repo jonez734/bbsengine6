@@ -122,7 +122,8 @@ bbsengine6/
 │   │   ├── services/            ChannelService, InviteService, MemberService
 │   │   ├── session/             Generic SessionManager
 │   │   ├── sql/                 ~50 schema files (schema, views, enums,
-│   │   │                        SECURITY DEFINER functions)
+│   │   │                        SECURITY DEFINER functions,
+│   │   │                        owned by the dedicated `zoid6` role)
 │   │   ├── startup/             Bring-up + message subscription hook
 │   │   ├── examples/            Demos + sample handlers
 │   │   ├── tests/               net-layer integration tests

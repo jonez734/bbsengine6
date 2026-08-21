@@ -15,6 +15,11 @@
 [ ] Fix /handbook/6/ 500 internal server error - add default mode=index when no mode is specified in handbook.php (@since 20250623)
 [ ] SETBOTTOMBAR packet type (12) - server-to-client UI update for bottom bar (e.g., casino module can update client status bar) (@since 20250621)
 
+[ ] PREPARE_BUILD protection for in-tree `py/build/` (@since 20260820)
+   - Problem: `bbsengine6/Makefile` `build` target (lines 151-152) runs `cd py && python3 -m build --outdir $(OUTDIR)`. The `ensure-build-dir` macro (lines 145-149) only protects `/srv/repo`, not the in-tree `py/build/` directory that setuptools writes to during the build. If `py/build/` is foreign-owned (left over from a prior `jam` build), setuptools EPERMs on the `chown` it does when populating `dist-info/`.
+   - Solution: add a `PREPARE_BUILD` macro mirroring `bed/Makefile:163-185` (rename foreign-owned `py/build/` to `py/build.stale.$$`, `chmod 1775` the replacement) and call it before the `python -m build` line. The current `py/build/` is `jam:opencode 2775` — both the foreign owner and the setgid bit are problems.
+   - Cross-ref: `bed/Makefile:163-185`, `zoid6/TODO.md` "PREPARE_BUILD standardization".
+
 ## ⚠️ attraction_hour DATA FIX — demo_listbox_masterdetail.py (2026-08-06) — RESOLVED
 
 **Status (2026-08-06, end of day):** All blockers resolved. The data chain from
