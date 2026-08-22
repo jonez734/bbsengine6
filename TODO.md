@@ -32,6 +32,9 @@
      - `bed/src/bed/tools/bank.py` six `io.inputinteger` / `io.inputstring` calls now pass `args=args` so the screen-state pipeline sees the same args context as the rest of bed's CLI.
    - Audit notes for future migration of the rest of `member/lib.py`:
      - `getcurrentmoniker` (`loginid=$1`), `getcurrentid` (`loginid=$1`), `getbymoniker` (`moniker=$1`), `getbyid` (`id=$1`), `checkflag` (`checkmemberflag($1, $2)`), `getflags` (`getflags($1)`), `setpassword` (`set password=crypt($1, gen_salt('bf'))`), `checkpassword` (crypt-match `$1, $2` — already migrated here), `setattrs` (`attrs||$1` / `attrs=$1`, both `$2`), `__message_group` (`name=$1`), `get_group_members` (`g.name=$1`) — all currently use `database.query("$N", …)` and work correctly via the regex-replacement layer. Lower priority, but should follow this pattern when touched.
+   - Cross-ref: `zoid6/TODO.md` "Password column hardening — legacy MD5-crypt migration" — the auth hot path migration above fixes one failure mode (the `$1` → `sql.Literal` substitution cascade). The runtime audit (`audit_password_hash` in `member.checkpassword`), the legacy-MD5 detection / CHECK constraint, and the .pth cleanup live in the zoid6 TODO since the 2026-08-22 incident. The two TODOs are the same work split: this repo owns the schema and the SQL layer; zoid6 owns the operator-facing audit-and-migrate workflow.
+
+[ ] See `zoid6/TODO.md` "Password column hardening — legacy MD5-crypt migration (@since 20260822)" — runtime audit + CHECK constraint + .pth cleanup. Owned by zoid6; this repo is the upstream schema authority. Back-reference from the auth hot path migration above.
 
 ## ⚠️ attraction_hour DATA FIX — demo_listbox_masterdetail.py (2026-08-06) — RESOLVED
 
