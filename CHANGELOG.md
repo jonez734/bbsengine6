@@ -7,6 +7,92 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### member + sql: password column hardening — legacy MD5-crypt audit + bcrypt CHECK constraint
+
+Resolves the three checkboxes in `zoid6/TODO.md` "Password column
+hardening — legacy MD5-crypt migration (@since 20260822)" via
+`bbsengine6` (the schema authority) and a per-auth audit hook.
+This is the follow-up to the 2026-08-22 `bed auth login` incident
+where `engine.__member.password` for `jam` held a `$1$` MD5-crypt
+hash that defeated the bcrypt round-trip in `member.checkpassword`.
+
+**New code (Python):**
+
+* `bbsengine6.member.audit_password_hash(args, moniker, **kwargs)`
+  reads `engine.member.password` for `moniker` and returns a
+  `PasswordHashAudit` namedtuple
+  (`present, non_empty, prefix, is_bcrypt, is_md5crypt, length_ok`).
+  Emits `level="warning"` on any unhealthy flag or `True`
+  `is_md5crypt`; emits `level="ok"` on the healthy path. Follows
+  the standard CONN_POOL_PATTERN (cur → conn → pool → args).
+  Docstring points at `zoid6/TODO.md` and
+  `bbsengine6/io/echo.py:1317` for the level="ok" green-bg prefix.
+
+* `bbsengine6.member.audit_password_column(args, **kwargs)` returns
+  the list of monikers holding a legacy `$1$` hash. SQL matches the
+  discovery query in `zoid6/TODO.md` verbatim:
+  `select moniker from <schema>.member
+   where password is not null and password ~ '^\$1\$'`.
+  Same CONN_POOL_PATTERN; same prefix-routing via `_qualified()`.
+
+* `member.checkpassword` now calls `audit_password_hash(args,
+  membermoniker, cur=cur)` immediately before the bcrypt round-trip
+  SELECT, on the same cursor (no extra connection). On
+  `is_md5crypt=True` the audit logs the warning AND the round-trip
+  proceeds (the legacy plaintext might still MD5-match the stored
+  hash; the warning is the operator signal, not a hard reject).
+
+**New schema (SQL):**
+
+* `bbsengine6/sql/member.sql` — top-of-file comment documents the
+  bcrypt-only invariant, lists the known-good writers
+  (`bbsengine6.member.setpassword`, `console.member.{add,edit}`,
+  `bbsengine6/scripts/setpassword.py`, post-port `engine/join.php`),
+  and cross-references the audit + migration entry points.
+* `bbsengine6/sql/manage_password_format.sql` (new) — adds
+  `chk_member_password_bcrypt` on `engine.__member.password`:
+  `password ~ '^\$2[abxy]\$'`. NULL is allowed; any non-NULL value
+  must satisfy the prefix check. Created via
+  `DROP CONSTRAINT IF EXISTS` then `ADD CONSTRAINT` so re-running
+  `bbsengine6.sql` against an existing DB is a no-op. Run AFTER the
+  audit is clean (CHECK constraints validate on write, not on
+  creation).
+* `bbsengine6/sql/bbsengine6.sql` — `\i manage_password_format.sql`
+  added after `memberview.sql` / `memberinet.sql` so the constraint
+  is in place by the time `memberview.sql`'s predicates reference
+  `engine.__member`.
+
+**New tests (Python):**
+
+* `bbsengine6/py/tests/test_member_audit_password_hash.py` —
+  16 unit cases covering the 6-case matrix from the TODO
+  (bcrypt, MD5-crypt, NULL, empty, 34-char non-prefixed,
+  60-char non-bcrypt) plus 4 specific cases
+  (missing member, cursor reuse) plus 6 wire-up tests in
+  `TestCheckpasswordCallsAudit` pinning `checkpassword`'s
+  audit invocation against both healthy bcrypt and the
+  2026-08-22 MD5 incident scenario.
+* `bbsengine6/py/tests/test_member_legacy_hash_audit.py` — 6 unit
+  cases pinning the audit SQL pattern (engine.member schema, NULL
+  exclusion, `$1$` regex, no bcrypt prefix) plus 1 live-DB
+  regression pin asserting `len(rows) == 0` against the `zoid6`
+  database (gated by `@pytest.mark.requires_db`; the conftest's
+  `test_transaction` rollback keeps any change from persisting).
+  The live-DB assertion fails as long as any row holds a `$1$`
+  hash — operator signal that the migration is incomplete.
+
+**Verification:**
+
+- [x] `python3 -m pytest tests/test_member_audit_password_hash.py tests/test_member_legacy_hash_audit.py -m unit -p no:cacheprovider` → 22 passed, 1 skipped (live-DB).
+- [x] `python3 -m pytest tests/test_console_member_add_edit.py tests/test_auth_password_e2e.py tests/test_password_hash_scrypt.py tests/test_member_verify_found.py -m unit -p no:cacheprovider` → 27 passed, 7 deselected (existing tests unaffected).
+- [x] `python3 -m ruff check src/bbsengine6/member/lib.py tests/test_member_audit_password_hash.py tests/test_member_legacy_hash_audit.py` → All checks passed.
+
+Cross-ref: `zoid6/TODO.md` "Password column hardening" (all three
+checkboxes now ticked). The audit-and-migrate workflow is split
+between the two repos per the TODO note: this repo owns the schema
+and the SQL layer; zoid6 owns the operator-facing audit-and-migrate
+workflow + the `.pth` cleanup.
+
 ### build: add `PREPARE_BUILD` macro to root Makefile
 
 `bbsengine6/Makefile` lacked the `PREPARE_BUILD` helper that

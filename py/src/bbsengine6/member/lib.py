@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+import re
 import threading
+from collections import namedtuple
 
 import psycopg
 
@@ -863,6 +865,178 @@ def setpassword(args, plaintextpassword: str, moniker: str, **kwargs):
         return _setpw(cur)
 
 
+_BCRYPT_PREFIX_RE = re.compile(r"^\$2[abxy]\$")
+_MD5CRYPT_PREFIX_RE = re.compile(r"^\$1\$")
+_BCRYPT_LENGTH = 60
+
+
+PasswordHashAudit = namedtuple(
+    "PasswordHashAudit",
+    ["present", "non_empty", "prefix", "is_bcrypt", "is_md5crypt", "length_ok"],
+)
+
+
+def audit_password_hash(args, moniker: str, **kwargs):
+    """Read engine.__member.password for ``moniker`` and report its format.
+
+    Returns a ``PasswordHashAudit`` namedtuple with structural flags so the
+    caller (and tests) can assert against each one independently. Emits a
+    ``level="warning"`` log on any ``False`` health flag or any ``True``
+    ``is_md5crypt`` flag; emits ``level="ok"`` on the fully-healthy path.
+
+    The 2026-08-22 ``bed auth login`` incident took four ``psql`` probes to
+    diagnose because ``checkpassword`` silently returned ``False`` on a
+    ``$1$`` MD5-crypt hash. Wiring this into ``checkpassword`` produces one
+    diagnostic line per auth attempt so the operator sees the failure mode
+    directly.
+
+    CONN_POOL_PATTERN: resolves cursor from kwargs in priority order:
+    1. cur= - use caller's existing cursor
+    2. conn= - use caller's existing connection
+    3. pool= - borrow connection from caller's pool
+    4. args= - build/cache pool via database.getpool(args)
+    """
+    def _audit(cur):
+        qualified_member = _qualified("member", args)
+        cur.execute(
+            database.query(
+                f"select password from {qualified_member} where moniker=%s",
+            ),
+            (moniker,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            audit = PasswordHashAudit(
+                present=False,
+                non_empty=False,
+                prefix="",
+                is_bcrypt=False,
+                is_md5crypt=False,
+                length_ok=False,
+            )
+            io.echo(
+                f"bbsengine6.audit_password_hash: {moniker} not found in "
+                f"{qualified_member}",
+                level="warning",
+            )
+            return audit
+
+        stored = row["password"]
+        present = stored is not None
+        non_empty = present and stored != ""
+        prefix = stored[:4] if non_empty else ""
+        is_bcrypt = bool(non_empty and _BCRYPT_PREFIX_RE.match(prefix))
+        is_md5crypt = bool(non_empty and _MD5CRYPT_PREFIX_RE.match(prefix))
+        length_ok = bool(is_bcrypt and len(stored) == _BCRYPT_LENGTH)
+
+        audit = PasswordHashAudit(
+            present=present,
+            non_empty=non_empty,
+            prefix=prefix,
+            is_bcrypt=is_bcrypt,
+            is_md5crypt=is_md5crypt,
+            length_ok=length_ok,
+        )
+
+        if is_md5crypt:
+            io.echo(
+                f"bbsengine6.audit_password_hash: {moniker} password is "
+                f"MD5-crypt ({stored[:20]}...), migrate to bcrypt",
+                level="warning",
+            )
+            return audit
+
+        if not (present and non_empty and is_bcrypt and length_ok):
+            reasons = []
+            if not present:
+                reasons.append("NULL")
+            elif not non_empty:
+                reasons.append("empty")
+            if non_empty and not is_bcrypt:
+                reasons.append(f"prefix={prefix!r} (not bcrypt)")
+            if non_empty and is_bcrypt and not length_ok:
+                reasons.append(f"length={len(stored)} (expected {_BCRYPT_LENGTH})")
+            io.echo(
+                f"bbsengine6.audit_password_hash: {moniker} password "
+                f"unhealthy: {', '.join(reasons)}",
+                level="warning",
+            )
+            return audit
+
+        io.echo(
+            f"bbsengine6.audit_password_hash: {moniker} password healthy "
+            f"(bcrypt, length={len(stored)})",
+            level="ok",
+        )
+        return audit
+
+    cur = kwargs.get("cur", None)
+    if cur is not None:
+        return _audit(cur)
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        with database.cursor(conn) as cur:
+            return _audit(cur)
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        if args is not None:
+            pool = database.getpool(args)
+        else:
+            io.echo("bbsengine6.audit_password_hash.100: pool=None", level="error")
+            return None
+    with database.connect(args, pool=pool) as conn:
+        with database.cursor(conn) as cur:
+            return _audit(cur)
+
+
+def audit_password_column(args, **kwargs):
+    """Return the list of monikers holding a legacy MD5-crypt hash.
+
+    Used by ``test_member_legacy_hash_audit.py`` to assert no production
+    row holds a ``$1$`` hash, and by the operator CLI for one-shot
+    migration audits. The query matches the discovery query in
+    ``zoid6/TODO.md`` "Password column hardening":
+
+        SELECT moniker
+          FROM engine.__member
+         WHERE password IS NOT NULL
+           AND password ~ '^\\$1\\$';
+
+    CONN_POOL_PATTERN: resolves cursor from kwargs in priority order:
+    1. cur= - use caller's existing cursor
+    2. conn= - use caller's existing connection
+    3. pool= - borrow connection from caller's pool
+    4. args= - build/cache pool via database.getpool(args)
+    """
+    def _scan(cur):
+        qualified_member = _qualified("member", args)
+        cur.execute(
+            database.query(
+                f"select moniker from {qualified_member} "
+                f"where password is not null and password ~ '^\\$1\\$'",
+            )
+        )
+        return [row["moniker"] for row in cur.fetchall()]
+
+    cur = kwargs.get("cur", None)
+    if cur is not None:
+        return _scan(cur)
+    conn = kwargs.get("conn", None)
+    if conn is not None:
+        with database.cursor(conn) as cur:
+            return _scan(cur)
+    pool = kwargs.get("pool", None)
+    if pool is None:
+        if args is not None:
+            pool = database.getpool(args)
+        else:
+            io.echo("bbsengine6.audit_password_column.100: pool=None", level="error")
+            return None
+    with database.connect(args, pool=pool) as conn:
+        with database.cursor(conn) as cur:
+            return _scan(cur)
+
+
 def checkpassword(
     args, plaintextpassword: str, membermoniker: str | None = None, **kwargs
 ):
@@ -896,6 +1070,7 @@ def checkpassword(
         stored_password = row["password"]
         if stored_password is None or stored_password == "":
             return plaintextpassword == ""
+        audit_password_hash(args, membermoniker, cur=cur)
         cur.execute(
             database.query(
                 f"select 1 from {qualified_member} "
