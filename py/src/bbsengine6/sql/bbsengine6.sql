@@ -47,6 +47,9 @@
 \i memberinet.sql
 --\i subscribe.sql
 
+\echo manage_password_format
+\i manage_password_format.sql
+
 \echo manage_secondary_role
 \i manage_secondary_role.sql
 \echo manage_role_privs
