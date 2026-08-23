@@ -28,7 +28,7 @@ zoidtechnologies.com stack. It owns:
 
 - The Python TUI primitives (`io/`).
 - The Python database layer (`database.py`, `pgrole.py`,
-  `password/`).
+  `password_cipher/`).
 - The Python module-registry / plugin system (`module.py`).
 - The Python message pub/sub with channel persistence (`message.py`,
   `channel/`).
@@ -39,7 +39,9 @@ zoidtechnologies.com stack. It owns:
 - The Python member subsystem (`member/`).
 - The Python console admin tools (`console/`).
 - The Python backend staging wizard (`backend/`).
-- The Python password hashing (`password_hash.py`, `password/`).
+- The Python password hashing (`password.py`; legacy `password_hash.py`
+  name kept as an alias).
+- The Python AES-256-GCM reversible encryption (`password_cipher/`).
 - The SQL schema under `sql/` (engines, member, bank, message,
   channel, …).
 - The PHP web layer (Smarty/HTML_QuickForm2 under `php/` and
@@ -126,7 +128,7 @@ The package lives at `py/src/bbsengine6/`.
 | `menu.py`                    | TUI menu widget                                    |
 | `message.py`                 | Unified pub/sub with channel persistence           |
 | `module.py`                  | Module-registry / plugin loader                    |
-| `password_hash.py`           | scrypt primary + SHA-256 legacy verify             |
+| `password.py`                 | bcrypt; mirrors PHP `bbsengine6\\password` namespace |
 | `pgrole.py`                  | Per-member PostgreSQL role provisioning            |
 | `readfile.py`                | Read file into str (optional ANSI escape)          |
 | `screen.py`                  | Shim → `bbsengine6.io.screen`                      |
@@ -145,7 +147,7 @@ The package lives at `py/src/bbsengine6/`.
 | `io/`                         | TUI primitives: `echo`, `getch`, `getstr`, `input`, `inputstring`, `inputchoice`, `inputboolean`, `inputinteger`, `terminal`, `screen`, `palette`, `keymap`, `common`, `const`, `lib`, `output`, `util` |
 | `member/`                     | `lib`, `api/handler` — member subsystem            |
 | `net/`                        | `address`, `frame_address`, `frame_types`, `packet`, `packet_types`, `packet_codec`, `crypto`, `transport`, `tcp`, `udp`, `socket`, `router`, `defaultrouter`, `integration`, `registry` |
-| `password/`                   | Strategy pattern (`manager`, `storage`, `config`, `cipher`); ciphers `aes256gcm`, `plaintext`; storage `postgresql` |
+| `password_cipher/`            | AES-256-GCM strategy pattern (`manager`, `storage`, `config`, `cipher`); ciphers `aes256gcm`, `plaintext`; storage `postgresql` |
 | `services/`                   | `channel`, `invite`, `member` (server-side handlers) |
 | `session/`                    | Generic `SessionManager` (consumed by bed)         |
 | `sql/`                        | ~50 schema files (schema, views, enums, SECURITY DEFINER functions owned by the dedicated `zoid6` role — see §5) |
@@ -451,7 +453,7 @@ Phase 3 regression tests (created 2026-08-02):
 | `py/src/bbsengine6/channel/api/handler.py` | ChannelServiceHandler                 |
 | `py/src/bbsengine6/session/lib.py`        | Generic SessionManager                |
 | `py/src/bbsengine6/startup/main.py`       | DB bring-up                           |
-| `py/src/bbsengine6/password_hash.py`      | scrypt + SHA-256                      |
+| `py/src/bbsengine6/password.py`            | bcrypt (single source of truth); mirrors PHP `bbsengine6\\password` |
 | `py/src/bbsengine6/backend/checkzoid6role.py` | Creates the dedicated `zoid6` owner role |
 | `py/src/bbsengine6/backend/checkzoid6owner.py` | Reassigns the 5 SECURITY DEFINER helpers to `zoid6` |
 | `py/src/bbsengine6/sql/`                  | ~50 schema files (helpers owned by `zoid6`) |

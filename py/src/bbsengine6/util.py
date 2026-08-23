@@ -1242,7 +1242,7 @@ def strip_ansi(s: str) -> str:
 
 
 # AES-256-GCM Password Encryption Functions
-# (Use bbsengine6.password module for pluggable system)
+# (Use bbsengine6.password_cipher module for pluggable system)
 
 
 def get_encryption_key() -> bytes:
@@ -1255,7 +1255,7 @@ def get_encryption_key() -> bytes:
         ValueError: If key is invalid, not set, or wrong length.
 
     Note:
-        Deprecated: Use bbsengine6.password.config.get_cipher() instead for
+        Deprecated: Use bbsengine6.password_cipher.config.get_cipher() instead for
         pluggable cipher implementations. This function is provided for
         direct AES-256-GCM use cases.
 
@@ -1306,8 +1306,11 @@ def encrypt_password(plaintext: str) -> str:
         ValueError: If encryption fails or key is invalid.
 
     Note:
-        Deprecated: Use bbsengine6.password for pluggable cipher implementations.
+        Deprecated: Use bbsengine6.password_cipher for pluggable cipher implementations.
         This function provides direct AES-256-GCM encryption.
+
+    Cross-ref:
+        bbsengine6.password_cipher.ciphers.aes256gcm.AES256GCMCipher
 
     Algorithm:
         - Cipher: AES-256-GCM (NIST SP800-38D)
@@ -1358,8 +1361,11 @@ def decrypt_password(ciphertext_b64: str) -> str:
         ValueError: If decryption fails (wrong key, tampering, invalid format, etc.)
 
     Note:
-        Deprecated: Use bbsengine6.password for pluggable cipher implementations.
+        Deprecated: Use bbsengine6.password_cipher for pluggable cipher implementations.
         This function provides direct AES-256-GCM decryption.
+
+    Cross-ref:
+        bbsengine6.password_cipher.ciphers.aes256gcm.AES256GCMCipher.decrypt
 
     Example:
         >>> import os, base64
@@ -1415,6 +1421,6 @@ def decrypt_password(ciphertext_b64: str) -> str:
 #    - For IMAP/SMTP server credentials
 #    - Reversible: can encrypt AND decrypt
 #    - Use in: Email system authentication
-#    - Lives in bbsengine6.password package (cipher + storage strategy)
+#    - Lives in bbsengine6.password_cipher package (cipher + storage strategy)
 #
 # Choose the right one for your use case!

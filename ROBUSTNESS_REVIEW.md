@@ -168,7 +168,7 @@ behaviour so a future refactor can't quietly reintroduce the bug.
 ### Finding 2.1 — `password_hash` used SHA-256 with no salt and no key-stretching
 
 - **Severity:** CRITICAL (cryptography)
-- **Where:** `py/src/bbsengine6/password_hash.py`
+- **Where:** `py/src/bbsengine6/password.py` (formerly `password_hash.py`)
 - **Symptom:** `hash_password(p)` did `hashlib.sha256(p.encode()).hexdigest()`.
   A SHA-256 of a weak password is brute-forceable in seconds on commodity
   hardware; no salt means a single rainbow table matches every user.
