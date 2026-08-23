@@ -121,6 +121,7 @@ bbsengine6/console/
     ├── checkfunctions.py                 Verify stored functions
     ├── checkloginid.py                   Verify system login (DBus)
     ├── checkclasses.py                   Verify table structure
+    ├── checkpasswordformat.py            Install chk_member_password_bcrypt + audit
     ├── checkflag.py                      Verify flag tables
     └── checknotify.py                    Verify notification system
 ```
@@ -209,8 +210,9 @@ Console menu [S]essions
 3. `lib.checkschema()` — Create engine schema
 4. `lib.checkfunctions(stage=1)` — Load engine functions
 5. `lib.checkclasses()` — Create tables
-6. `lib.checkflag()` — Create flag tables
-7. `lib.checknotify()` — Create notification system
+6. `lib.checkpasswordformat()` — Install chk_member_password_bcrypt + audit
+7. `lib.checkflag()` — Create flag tables
+8. `lib.checknotify()` — Create notification system
 
 ---
 

@@ -264,6 +264,66 @@ Check for required tables:
 
 ---
 
+### checkpasswordformat.py (148 lines) *(since 2026-08-22)*
+
+Install the password-format CHECK constraint on `engine.__member`
+and audit the column for any legacy `$1$` MD5-crypt hashes. Wired
+into `backend/stage_one.py`'s module tuple immediately after
+`checkclasses`, so the engine schema and `engine.__member` table
+are already in place when the constraint lands.
+
+**Operation (two phases, both SAVEPOINT-protected):**
+
+```
+Phase 1 — constraint install (idempotent):
+  constraintexists(args, "engine", "chk_member_password_bcrypt", conn)
+  ├─ True: skip import (constraint already present)
+  └─ False:
+     ├─ SAVEPOINT sp_ck_chk_member_password_bcrypt
+     ├─ importsql("manage_password_format.sql")
+     │  └─ DROP CONSTRAINT IF EXISTS chk_member_password_bcrypt
+     │  └─ ADD CONSTRAINT ... CHECK (password ~ '^\$2[abxy]\$')
+     ├─ RELEASE SAVEPOINT on success
+     └─ ROLLBACK TO SAVEPOINT on retry-exhausted failure
+
+Phase 2 — audit (unconditional, runs even if install failed):
+  audit_password_column(args, conn=conn)
+  ├─ Empty:  log "0 row(s) with $1$ hash in engine.__member" level="ok"
+  └─ Populated: log "<n> row(s) with $1$ hash in engine.__member: <list>"
+                  level="warning"  (operator signal during migration window)
+```
+
+**Returns:** `True` if both phases succeed (constraint install
+succeeded or was a no-op, AND audit returned a list — empty or
+populated, both count as success because the legacy rows are the
+operator's responsibility to migrate).
+
+**Migration window:** until the column is clean, the audit emits
+the warning on every bootstrap. Once `bbsengine6.member.
+audit_password_column` returns `[]`, the warning flips to a
+green-bg `level="ok"` one-liner. The hard reject is the constraint
+itself; the audit is just the operator signal during the
+transition.
+
+**New helper:** `bbsengine6.database.constraintexists(args, schema,
+constraintname, **kwargs)` — schema-filtered lookup against
+`pg_constraint` joined to `pg_namespace`. Returns `False` on
+exception (mirrors `functionexists`' defensive try/except) so a
+broken DB cannot crash startup. CONN_POOL_PATTERN: resolves
+cursor from kwargs in priority order `conn` → `pool` → `args`.
+
+**Tests:**
+- `bbsengine6/py/tests/test_checkpasswordformat.py` — 11 cases
+  pinning the install + audit sequence (probe-true skip, probe-
+  false import, import failure rollback, import success release,
+  audit zero rows, audit with legacy rows, audit exception,
+  autocommit helper invocation, etc.).
+- `bbsengine6/py/tests/test_database_helpers.py` — 5 cases pinning
+  `constraintexists` (positive, negative, schema-filter, no-conn/
+  no-pool, exception).
+
+---
+
 ### checkflag.py (74 lines)
 
 Verify flag table and junction table structure.
@@ -350,8 +410,9 @@ def create_database(dbname, owner=None, encoding='UTF8'):
 3. checkschema()            ← Create engine schema
 4. checkfunctions(stage=1)  ← Load application functions
 5. checkclasses()           ← Create tables
-6. checkflag()              ← Create flag tables
-7. checknotify()            ← Create notification system
+6. checkpasswordformat()    ← Install chk_member_password_bcrypt + audit
+7. checkflag()              ← Create flag tables
+8. checknotify()            ← Create notification system
 ```
 
 **Connection:** Separate connection to main BBS database

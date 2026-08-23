@@ -100,8 +100,9 @@ Database structure and function initialization. Executed after stage 0 succeeds.
 3. `lib.checkschema()` — Verify/import engine schema
 4. `lib.checkfunctions(stage=1)` — Verify/create engine functions
 5. `lib.checkclasses()` — Verify/create class definitions (tables)
-6. `lib.checkflag()` — Verify/initialize system flags
-7. `lib.checknotify()` — Verify/initialize notification system
+6. `lib.checkpasswordformat()` — Install chk_member_password_bcrypt + audit engine.__member.password
+7. `lib.checkflag()` — Verify/initialize system flags
+8. `lib.checknotify()` — Verify/initialize notification system
 
 **Returns:** `True` if all checks pass, `False` on first failure
 

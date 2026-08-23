@@ -88,6 +88,17 @@ Exit: Return True (success) or False (failure at any step)
    └─ Verify tables exist: member, session, flag, map_member_flag, etc.
    └─ Return: True if all present
 
+6. lib.checkpasswordformat()                    [since 2026-08-22]
+   └─ Probe via constraintexists: pg_constraint/pg_namespace lookup
+   └─ If False: importsql("manage_password_format.sql") inside SAVEPOINT
+       └─ DROP CONSTRAINT IF EXISTS chk_member_password_bcrypt
+       └─ ADD CONSTRAINT ... CHECK (password ~ '^\$2[abxy]\$')
+       └─ RELEASE SAVEPOINT on success / ROLLBACK TO SAVEPOINT on fail
+   └─ audit_password_column(args, conn=conn) on the same conn
+       └─ Returns list of monikers with `$1$` MD5-crypt hashes
+       └─ level="ok" if empty; level="warning" with comma-separated list otherwise
+   └─ Return: True if both install and audit succeed
+
 6. lib.checkflag()
    └─ Verify: engine.flag, engine.map_member_flag tables
    └─ Seed standard flags if needed

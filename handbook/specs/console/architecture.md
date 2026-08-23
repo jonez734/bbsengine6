@@ -196,6 +196,7 @@ main
               │   ├─ lib.checkschema()
               │   ├─ lib.checkfunctions(stage=1)
               │   ├─ lib.checkclasses()
+              │   ├─ lib.checkpasswordformat()   [chk_member_password_bcrypt + audit]
               │   ├─ lib.checkflag()
               │   └─ lib.checknotify()
               │

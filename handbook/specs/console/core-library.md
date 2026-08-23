@@ -198,6 +198,9 @@ def checkschema(args=None, **kwargs) -> bool:
 def checkclasses(args=None, **kwargs) -> bool:
     return runmodule(args, "console.checkclasses", **kwargs)
 
+def checkpasswordformat(args=None, **kwargs) -> bool:
+    return runmodule(args, "console.checkpasswordformat", **kwargs)
+
 def checkflag(args=None, **kwargs) -> bool:
     return runmodule(args, "console.checkflag", **kwargs)
 

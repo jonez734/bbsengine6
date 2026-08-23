@@ -53,6 +53,7 @@ bbsengine6/console/
 │  │  └── checkfunctions.py (61)
 │  └── Data Structures
 │     ├── checkclasses.py (57)
+│     ├── checkpasswordformat.py (148)  [chk_member_password_bcrypt + audit]
 │     ├── checkflag.py (74)
 │     └── checknotify.py (83)
 │
@@ -214,8 +215,9 @@ zoidoffice [subcommand] [args]
 3. lib.checkschema()         → Create schema
 4. lib.checkfunctions(1)     → Load engine functions
 5. lib.checkclasses()        → Create tables
-6. lib.checkflag()           → Create flag tables
-7. lib.checknotify()         → Create notification system
+6. lib.checkpasswordformat() → Install chk_member_password_bcrypt + audit
+7. lib.checkflag()           → Create flag tables
+8. lib.checknotify()         → Create notification system
 ```
 
 ### Interactive Menu Loop
@@ -352,8 +354,9 @@ Database structure initialization. Returns True if all checks pass, False on fir
 3. `lib.checkschema()` — Create schema
 4. `lib.checkfunctions(stage=1)` — Load engine functions
 5. `lib.checkclasses()` — Create tables
-6. `lib.checkflag()` — Create flag tables
-7. `lib.checknotify()` — Create notification system
+6. `lib.checkpasswordformat()` — Install chk_member_password_bcrypt + audit
+7. `lib.checkflag()` — Create flag tables
+8. `lib.checknotify()` — Create notification system
 
 ### main()
 
@@ -594,6 +597,27 @@ def main():
 **checkclasses.py (57 lines)**
 - Verify table existence
 - Create if missing
+
+**checkpasswordformat.py (148 lines)** *(since 2026-08-22)*
+- Install `chk_member_password_bcrypt` on `engine.__member` via
+  `database.importsql("manage_password_format.sql")` inside a
+  SAVEPOINT (mirrors the `checkclasses`/`checkfunctions`/`checkmessage`
+  savepoint pattern; idempotent because the SQL itself uses
+  `DROP CONSTRAINT IF EXISTS` + `ADD CONSTRAINT`).
+- Probe via new `database.constraintexists(args, schema,
+  constraintname, conn=conn)` (joins `pg_constraint` to
+  `pg_namespace` so two schemas with the same constraint name do
+  not collide).
+- Then unconditionally call
+  `bbsengine6.member.audit_password_column(args, conn=conn)` on the
+  same connection. Legacy `$1$` MD5-crypt rows are logged at
+  `level="warning"` as a comma-separated list of monikers; zero
+  rows emits `level="ok"` on the green-bg prefix path.
+- Wired into `backend/stage_one.py`'s module tuple immediately
+  after `checkclasses`, so the engine schema and `engine.__member`
+  table are already in place when the constraint lands. Runs on
+  every `bbsengine6.startup` invocation, so operators no longer
+  need a manual `psql \i bbsengine6.sql` to land the hardening.
 
 **checkflag.py (74 lines)**
 - Verify flag tables
