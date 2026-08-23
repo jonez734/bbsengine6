@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bcrypt
 import copy
 import re
 import threading
@@ -1074,7 +1075,7 @@ def checkpassword(
     round-trip: the stored hash is fetched with one SELECT and
     verified locally via :func:`password.verify_password`
     (with a stdlib ``crypt()`` fallback for legacy ``$1$`` MD5-crypt
-    hashes that passlib's bcrypt-only verify would reject).
+    hashes).
 
     Successful verify of a legacy hash triggers the
     opportunistic-rehash path: :func:`password.needs_rehash`
@@ -1089,7 +1090,7 @@ def checkpassword(
          ``$5$`` SHA-256-crypt, ``$6$`` SHA-512-crypt, and the
          ``$2[abxy]$`` bcrypt family. Constant-time via the
          underlying libc implementation.
-      2. passlib ``bcrypt.verify`` — bcrypt-specific fallback for
+      2. ``bcrypt.checkpw`` (pyca) — bcrypt-specific fallback for
          platforms where stdlib ``crypt`` lacks bcrypt support.
 
     Returns:
@@ -1135,7 +1136,7 @@ def checkpassword(
         audit_password_hash(args, membermoniker, cur=cur)
 
         # Local verify. _verify_any handles $1$ MD5-crypt via stdlib
-        # crypt() and bcrypt via passlib bcrypt.verify.
+        # crypt() and bcrypt via bcrypt.checkpw.
         ok = _verify_any(plaintextpassword, stored)
         if not ok:
             io.echo(
@@ -1192,9 +1193,9 @@ def _verify_any(plaintext: str, stored: str) -> bool:
     and the ``$2[abxy]$`` bcrypt family all in one path, with the
     constant-time guarantees of the underlying libc implementation.
 
-    Falls through to passlib ``bcrypt.verify`` as a bcrypt-specific
-    fallback (catches edge cases where stdlib ``crypt`` is configured
-    without bcrypt support on unusual platforms).
+    Falls through to ``bcrypt.checkpw`` (pyca) as a bcrypt-specific
+    fallback for edge cases where stdlib ``crypt`` is configured
+    without bcrypt support on unusual platforms.
 
     Returns ``False`` (never raises) on empty / None input or any
     malformed stored hash so callers can use a single truthiness
@@ -1211,8 +1212,9 @@ def _verify_any(plaintext: str, stored: str) -> bool:
     except (ValueError, TypeError, OSError):
         pass
     try:
-        from passlib.hash import bcrypt as _bcrypt
-        return _bcrypt.verify(plaintext, stored)
+        return bcrypt.checkpw(
+            plaintext.encode("utf-8"), stored.encode("ascii")
+        )
     except (ValueError, TypeError):
         return False
 

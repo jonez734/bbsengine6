@@ -1063,8 +1063,8 @@ def _assert_setpassword_sql(sql, params, plaintext: str, moniker: str):
     """Shared assertions: hash produced locally, parameterization, no plaintext leak.
 
     After the 2026-08-22 refactor, ``setpassword`` produces the bcrypt
-    hash locally via ``bbsengine6.util.encryptpassword`` (passlib,
-    ``$2b$06$``) and binds it as a single ``Literal`` parameter on a
+    hash locally via ``bbsengine6.util.encryptpassword``
+    (pyca bcrypt, ``$2b$06$``) and binds it as a single ``Literal`` parameter on a
     parameterized ``UPDATE ... set password=$1 where moniker=$2``. So:
 
     * The SQL must NOT contain ``crypt(`` or ``gen_salt`` — those are
@@ -1183,8 +1183,8 @@ class TestConsoleMemberPasswordEncryption:
 
     1. ``setpassword`` is actually invoked from ``add()`` and ``edit()``.
     2. The plaintext is NOT sent to the database at all — the hash is
-       produced locally by ``bbsengine6.util.encryptpassword`` (passlib
-       bcrypt, ``$2b$06$``, matching PostgreSQL ``gen_salt('bf')``) and
+       produced locally by ``bbsengine6.util.encryptpassword``
+       (pyca bcrypt, ``$2b$06$``, matching PostgreSQL ``gen_salt('bf')``) and
        passed to the UPDATE as a single bound parameter.
     3. The hash is a bound parameter (never inlined in the SQL).
     4. The plaintext is never written anywhere (no SQL fragment, no

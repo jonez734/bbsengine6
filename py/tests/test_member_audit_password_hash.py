@@ -165,19 +165,15 @@ def echo_calls(monkeypatch):
     return captured
 
 
-# Real bcrypt hash for plaintext "12345" at cost 4 (fast for tests).
-# Generated at import time via passlib with a fixed 22-char base64 salt so
-# the value is deterministic across test runs (the audit tests only need
-# the prefix $2b$ and the 60-char length; the checkpassword test needs
-# stdlib crypt() / passlib bcrypt.verify to confirm it as the password
-# for "12345"). If passlib is unavailable, fall back to a syntactically
-# valid 60-char placeholder that audit still classifies as bcrypt but
-# verify rejects — the checkpassword test will skip via pytest.importorskip.
-try:
-    from passlib.hash import bcrypt as _pl_bcrypt  # noqa: F401
-    _BCRYPT_HASH = _pl_bcrypt.using(rounds=4, salt="12345678901234567890uv").hash("12345")
-except ImportError:  # pragma: no cover
-    _BCRYPT_HASH = "$2b$04$" + "Z" * 22 + "." * 31
+# Real bcrypt hash for plaintext "12345" at cost 4 (fast for tests),
+# generated at import time via pyca bcrypt with a random salt. The audit
+# tests only assert on prefix ($2b$) and length (60), not on the bytes
+# of the salt/digest, so a per-process random salt is fine. The
+# checkpassword test (test_member_checkpassword_local.py) uses its own
+# hash for the verify round-trip.
+import bcrypt as _bcrypt
+
+_BCRYPT_HASH = _bcrypt.hashpw(b"12345", _bcrypt.gensalt(rounds=4)).decode("ascii")
 _MD5CRYPT_HASH = "$1$AUNKK0aN$" + "abcdefghijklmnopqrstuvwxyz01"  # 34 chars total
 
 

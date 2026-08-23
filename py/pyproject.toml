@@ -25,9 +25,10 @@ classifiers = [
 ]
 dependencies = [
     "argcomplete",
-    "getdate-next",
+    "bcrypt>=4.0",
+    "bbsengine6",
+    "getdate-next>=0.0.1.dev202608",
     "markdown",
-    "passlib[bcrypt]>=1.7.4",
     "psycopg[binary,pool]",
     "psycopg-pool",
     "python-dateutil",

@@ -25,8 +25,8 @@
 # the needs_rehash() helper below drives that migration on the next
 # successful login (mirrors PHP's opportunistic-rehash path).
 #
-# Cross-platform note: PHP password_hash() emits $2y$, passlib emits
-# $2b$, PG crypt(plaintext, stored) only recognises $2a$ (gen_salt
+# Cross-platform note: PHP password_hash() emits $2y$, pyca bcrypt
+# emits $2b$, PG crypt(plaintext, stored) only recognises $2a$ (gen_salt
 # output). Since verification is local on each platform after
 # eliminating the DB round-trip, the cross-platform prefix drift is
 # harmless — the integration test (test_php_password_round_trip.php
@@ -38,8 +38,9 @@
 #                  Replaces the prior scrypt + legacy SHA-256
 #                  implementation that was effectively dead code
 #                  (no production callers; util.encryptpassword was
-#                  using passlib directly with the same cost factor).
+#                  using bcrypt directly with the same cost factor).
 
+import bcrypt
 import os
 import re
 from typing import Optional
@@ -84,16 +85,15 @@ def _get_bcrypt_rounds() -> int:
 def hash_password(plaintext: str) -> str:
     """Return a fresh bcrypt hash of *plaintext*.
 
-    No database round-trip. Uses passlib.hash.bcrypt with the cost
-    factor from ``BBSENGINE_BCRYPT_ROUNDS`` (default 6). Returns a
-    ``$2b$06$...`` string of length 60 — verifiable by
-    ``verify_password()`` and accepted by the
-    ``chk_member_password_bcrypt`` CHECK constraint
+    No database round-trip. Uses ``bcrypt.hashpw`` (pyca) with a
+    fresh ``bcrypt.gensalt`` at the cost factor from
+    ``BBSENGINE_BCRYPT_COST`` (default 6). Returns a ``$2b$06$...``
+    string of length 60 — verifiable by ``verify_password()`` and
+    accepted by the ``chk_member_password_bcrypt`` CHECK constraint
     (``^\\$2[abxy]\\$``, len 60).
 
     Raises:
         ValueError: If plaintext is empty / None.
-        RuntimeError: If passlib raises (e.g. backend misconfigured).
 
     Args:
         plaintext: Plaintext password (must be non-empty string).
@@ -108,15 +108,14 @@ def hash_password(plaintext: str) -> str:
     """
     if not plaintext or not isinstance(plaintext, str):
         raise ValueError("Plaintext must be non-empty string")
-    from passlib.hash import bcrypt
-
-    return bcrypt.using(rounds=_get_bcrypt_rounds()).hash(plaintext)
+    salt = bcrypt.gensalt(rounds=_get_bcrypt_rounds(), prefix=b"2b")
+    return bcrypt.hashpw(plaintext.encode("utf-8"), salt).decode("ascii")
 
 
 def verify_password(plaintext: str, stored: str) -> bool:
     """Return True iff *plaintext* matches *stored*.
 
-    Constant-time via passlib's bcrypt.verify (uses hmac.compare_
+    Constant-time via bcrypt.checkpw (uses hmac.compare_digest internally).
     digest internally). Returns False (never raises) on empty,
     None, or otherwise malformed input so callers can use a single
     truthiness check.
@@ -132,10 +131,10 @@ def verify_password(plaintext: str, stored: str) -> bool:
         return False
     if not stored or not isinstance(stored, str):
         return False
-    from passlib.hash import bcrypt
-
     try:
-        return bcrypt.verify(plaintext, stored)
+        return bcrypt.checkpw(
+            plaintext.encode("utf-8"), stored.encode("ascii")
+        )
     except (ValueError, TypeError):
         return False
 

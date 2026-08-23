@@ -5,7 +5,7 @@ the PHP bbsengine6\\password namespace API.
 Covers:
 - hash_password() produces a bcrypt hash ($2b$06$..., length 60)
 - verify_password() round-trips successfully
-- verify_password() rejects wrong passwords (constant-time via passlib)
+- verify_password() rejects wrong passwords (constant-time via bcrypt.checkpw)
 - verify_password() accepts legacy MD5-crypt $1$ hashes (PHP parity)
 - verify_password() never raises on malformed input
 - hash_password() rejects empty plaintext
@@ -79,11 +79,11 @@ def test_two_hashes_with_same_plaintext_differ():
 
 
 def test_verify_password_rejects_legacy_md5crypt():
-    """Python/ passlib bcrypt.verify only accepts bcrypt hashes.
+    """pyca bcrypt.checkpw only accepts bcrypt hashes.
 
     PHP's password_verify() accepts legacy $1$ MD5-crypt as a side
     effect (the underlying crypt() function supports multiple
-    algorithms); passlib's bcrypt.verify is bcrypt-only and returns
+    algorithms); bcrypt.checkpw is bcrypt-only and returns
     False for $1$. The Python-side equivalent of the opportunistic-
     rehash path is therefore the SQL round-trip in
     bbsengine6.member.checkpassword (``where password = crypt(%s,
