@@ -22,8 +22,8 @@ import pytest
 
 from bbsengine6.password import (
     BCRYPT_HASH_LENGTH,
-    BCRYPT_PREFIX_RE,
-    MD5CRYPT_PREFIX_RE,
+    BCRYPT_PREFIX_REGEX,
+    LEGACY_MD5_PREFIX_REGEX,
     classify_hash,
     hash_password,
     is_healthy_hash,
@@ -163,15 +163,15 @@ def test_classify_hash_labels():
 
 def test_bcrypt_prefix_re_matches_all_bcrypt_variants():
     for variant in ("$2a$", "$2b$", "$2x$", "$2y$"):
-        assert BCRYPT_PREFIX_RE.match(variant + "06$xxxx") is not None
+        assert BCRYPT_PREFIX_REGEX.match(variant + "06$xxxx") is not None
     for non_variant in ("$1$", "$5$", "$6$", "$2z$", "plain"):
-        assert BCRYPT_PREFIX_RE.match(non_variant + "06$xxxx") is None
+        assert BCRYPT_PREFIX_REGEX.match(non_variant + "06$xxxx") is None
 
 
 def test_md5crypt_prefix_re_matches_legacy_only():
-    assert MD5CRYPT_PREFIX_RE.match("$1$abcdefgh$xxx") is not None
-    assert MD5CRYPT_PREFIX_RE.match("$2y$06$xxx") is None
-    assert MD5CRYPT_PREFIX_RE.match("plain") is None
+    assert LEGACY_MD5_PREFIX_REGEX.match("$1$abcdefgh$xxx") is not None
+    assert LEGACY_MD5_PREFIX_REGEX.match("$2y$06$xxx") is None
+    assert LEGACY_MD5_PREFIX_REGEX.match("plain") is None
 
 
 def test_bcrypt_rounds_env_override(monkeypatch):
@@ -191,3 +191,50 @@ def test_utf8_plaintext_round_trips():
     h = hash_password(pw)
     assert verify_password(pw, h) is True
     assert verify_password(pw + "x", h) is False
+
+
+def test_canonical_constant_names_match_php():
+    """The canonical Python names match the PHP-side names exactly.
+
+    Locked so a future rename can never silently drift the names
+    apart again.
+    """
+    import bbsengine6.password as pw
+
+    assert hasattr(pw, "BCRYPT_PREFIX_REGEX"), (
+        "BCRYPT_PREFIX_REGEX must match the PHP-side canonical name"
+    )
+    assert hasattr(pw, "LEGACY_MD5_PREFIX_REGEX"), (
+        "LEGACY_MD5_PREFIX_REGEX must match the PHP-side canonical name"
+    )
+    # Deprecated aliases still present for one release cycle
+    assert hasattr(pw, "BCRYPT_PREFIX_RE")
+    assert hasattr(pw, "MD5CRYPT_PREFIX_RE")
+    # The aliases point to the canonical names (not separate objects)
+    assert pw.BCRYPT_PREFIX_RE is pw.BCRYPT_PREFIX_REGEX
+    assert pw.MD5CRYPT_PREFIX_RE is pw.LEGACY_MD5_PREFIX_REGEX
+
+
+def test_bcrypt_cost_env_override(monkeypatch):
+    """BBSENGINE_BCRYPT_COST env var (canonical name) overrides rounds."""
+    monkeypatch.setenv("BBSENGINE_BCRYPT_COST", "8")
+    h = hash_password("env-canonical-test")
+    assert h.startswith("$2b$08$"), f"hash should reflect cost=8, got: {h[:10]!r}"
+
+
+def test_bcrypt_rounds_env_alias_still_honoured(monkeypatch):
+    """BBSENGINE_BCRYPT_ROUNDS env var (deprecated alias) still works
+    for one release cycle so operators have time to update configs."""
+    monkeypatch.setenv("BBSENGINE_BCRYPT_ROUNDS", "8")
+    # BBSENGINE_BCRYPT_COST unset, so ROUNDS takes effect.
+    monkeypatch.delenv("BBSENGINE_BCRYPT_COST", raising=False)
+    h = hash_password("env-alias-test")
+    assert h.startswith("$2b$08$"), f"hash should reflect rounds=8, got: {h[:10]!r}"
+
+
+def test_bcrypt_cost_env_overrides_rounds_env(monkeypatch):
+    """When both env vars are set, BBSENGINE_BCRYPT_COST wins (canonical)."""
+    monkeypatch.setenv("BBSENGINE_BCRYPT_COST", "8")
+    monkeypatch.setenv("BBSENGINE_BCRYPT_ROUNDS", "10")
+    h = hash_password("env-precedence-test")
+    assert h.startswith("$2b$08$"), f"COST should win over ROUNDS, got: {h[:10]!r}"

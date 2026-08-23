@@ -10,6 +10,11 @@
 # Format produced by hash_password():
 #   "$2b$06$<22-char salt><31-char digest>"  (length 60)
 #
+# Constant names match the PHP-side bbsengine6\\password exactly:
+#
+#   BBSENGINE_BCRYPT_COST, BCRYPT_PREFIX_REGEX, BCRYPT_HASH_LENGTH,
+#   LEGACY_MD5_PREFIX_REGEX
+#
 # Cost factor matches:
 #   - bbsengine6\\password\\BBSENGINE_BCRYPT_COST (PHP, defined = 6)
 #   - PostgreSQL gen_salt('bf') default (PG, = 6)
@@ -40,19 +45,31 @@ import re
 from typing import Optional
 
 
-BCRYPT_PREFIX_RE = re.compile(r"^\$2[abxy]\$")
-MD5CRYPT_PREFIX_RE = re.compile(r"^\$1\$")
+BCRYPT_PREFIX_REGEX = re.compile(r"^\$2[abxy]\$")
+# Backward-compat alias for the previous (Python-only) suffix; the
+# canonical name now matches the PHP-side
+# bbsengine6\\password\BCRYPT_PREFIX_REGEX.
+BCRYPT_PREFIX_RE = BCRYPT_PREFIX_REGEX
+LEGACY_MD5_PREFIX_REGEX = re.compile(r"^\$1\$")
+# Backward-compat alias for the previous name. The canonical name
+# matches the PHP-side bbsengine6\\password\LEGACY_MD5_PREFIX_REGEX.
+MD5CRYPT_PREFIX_RE = LEGACY_MD5_PREFIX_REGEX
 BCRYPT_HASH_LENGTH = 60
 
 
 def _get_bcrypt_rounds() -> int:
-    """Read BBSENGINE_BCRYPT_ROUNDS env var with a 6-round default.
+    """Read the cost-factor env var with a 6-round default.
 
-    Matches the PHP ``BBSENGINE_BCRYPT_COST`` constant and the
-    previous util._BCRYPT_ROUNDS = 6. Set this to 10+ in production
-    deployments that can afford the extra ~100ms per login.
+    Canonical name is BBSENGINE_BCRYPT_COST (matches the PHP-side
+    bbsengine6\\password constant). BBSENGINE_BCRYPT_ROUNDS is
+    accepted as a deprecated alias for one release cycle to give
+    operators time to update deploy configs. Set this to 10+ in
+    production deployments that can afford the extra ~100ms per
+    login.
     """
-    raw = os.environ.get("BBSENGINE_BCRYPT_ROUNDS", "6")
+    raw = os.environ.get("BBSENGINE_BCRYPT_COST")
+    if raw is None:
+        raw = os.environ.get("BBSENGINE_BCRYPT_ROUNDS", "6")
     try:
         rounds = int(raw)
     except ValueError:
@@ -141,7 +158,7 @@ def is_healthy_hash(stored: Optional[str]) -> bool:
         return False
     if len(stored) != BCRYPT_HASH_LENGTH:
         return False
-    return bool(BCRYPT_PREFIX_RE.match(stored))
+    return bool(BCRYPT_PREFIX_REGEX.match(stored))
 
 
 def needs_rehash(stored: Optional[str]) -> bool:
@@ -187,7 +204,7 @@ def classify_hash(stored: Optional[str]) -> str:
         return "null"
     if stored == "":
         return "empty"
-    if BCRYPT_PREFIX_RE.match(stored):
+    if BCRYPT_PREFIX_REGEX.match(stored):
         return "bcrypt"
     if MD5CRYPT_PREFIX_RE.match(stored):
         return "md5crypt"
@@ -195,9 +212,10 @@ def classify_hash(stored: Optional[str]) -> str:
 
 
 __all__ = [
-    "BCRYPT_PREFIX_RE",
-    "MD5CRYPT_PREFIX_RE",
+    "BCRYPT_PREFIX_REGEX",
+    "LEGACY_MD5_PREFIX_REGEX",
     "BCRYPT_HASH_LENGTH",
+    "BBSENGINE_BCRYPT_COST",
     "hash_password",
     "verify_password",
     "is_healthy_hash",
