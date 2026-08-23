@@ -39,7 +39,7 @@ import warnings
 from datetime import datetime
 from typing import Any, Optional
 
-from . import database, input, io  # type: ignore
+from . import input, io  # type: ignore
 
 LOGGER_NAME = "bbsengine6"
 
@@ -895,35 +895,53 @@ def timedeltastr(delta: Any) -> str:
     return buf
 
 
+# Match PostgreSQL's gen_salt('bf') default so hashes produced here are
+# verifiable by the DB-side crypt(plaintext, stored) path. Bumping this
+# makes stored hashes unrecognised by the old gen_salt('bf') cost.
+_BCRYPT_ROUNDS = 6
+
+
+def encryptpassword(plaintextpassword: str) -> str:
+    """Return a bcrypt hash of ``plaintextpassword`` computed locally.
+
+    No database round-trip: this is the single source of truth for new
+    password hashes. ``setpassword`` and ``getencryptedpassword`` both
+    delegate here so the cost factor, salt format, and hash prefix stay
+    in lock-step with PostgreSQL's ``crypt(..., gen_salt('bf'))`` (which
+    defaults to ``$2b$06$``).
+
+    Returns a ``$2b$06$...`` string of length 60. The hash is verifiable
+    by PostgreSQL's ``crypt(plaintext, stored)`` because the prefix and
+    rounds match.
+    """
+    from passlib.hash import bcrypt
+
+    io.echo(f"bbsengine6.util.encryptpassword.100: {plaintextpassword=}", level="debug")
+    return bcrypt.using(rounds=_BCRYPT_ROUNDS).hash(plaintextpassword)
+
+
 def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
     """Encrypt a plaintext password using the database crypt() function.
 
-    Executes a PostgreSQL crypt() function call with bcrypt (bf) salt generation.
+    Thin compatibility wrapper around ``encryptpassword``. ``args`` is
+    accepted (and ignored) so existing call sites in bbsengine5,
+    mistermcfeely, etc. keep working without modification. The hash is
+    now produced locally by ``encryptpassword`` rather than via a
+    PostgreSQL ``crypt(..., gen_salt('bf'))`` round-trip.
 
     Args:
-        args: Arguments object containing database connection configuration.
+        args: Accepted for backward compatibility; not used.
         plaintextpassword: The plaintext password to encrypt.
 
     Returns:
-        The encrypted password string, or None if the database query fails.
-
-    Note:
-        This function requires PostgreSQL with the pgcrypto extension installed.
-        bcrypt hashing is used; stronger than legacy MD5.
+        The encrypted password string (``$2b$06$...``), or None if
+        hashing fails.
 
     Example:
         >>> encrypted = getencryptedpassword(args, "mypassword")
     """
     io.echo(f"getencryptedpassword.100: {plaintextpassword=}", level="debug")
-    sql = "select crypt(%s, gen_salt('bf'))"
-    dat = (plaintextpassword,)
-    with database.connect(args) as conn, conn.cursor() as cur:
-        cur.execute(sql, dat)
-        if cur.rowcount == 0:
-            return None
-
-        res = cur.fetchone()
-        return res["crypt"]
+    return encryptpassword(plaintextpassword)
 
 
 def init(args=None, **kw) -> None:

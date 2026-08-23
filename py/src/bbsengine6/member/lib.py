@@ -838,11 +838,25 @@ def setflag(args, name, value, **kwargs) -> bool:
 
 
 def setpassword(args, plaintextpassword: str, moniker: str, **kwargs):
+    """Set ``engine.__member.password`` for ``moniker`` to a bcrypt hash.
+
+    The hash is produced locally by ``bbsengine6.util.encryptpassword``
+    (single source of truth for new password hashes) so the SQL UPDATE
+    does not need a ``crypt(..., gen_salt('bf'))`` round-trip. The
+    stored hash is still verifiable by the DB-side
+    ``crypt(plaintext, stored)`` path because ``encryptpassword`` uses
+    the same prefix and cost factor as ``gen_salt('bf')``.
+
+    Returns ``True`` on a successful UPDATE (one row matched), ``None``
+    if no row matched (moniker does not exist).
+    """
+    encrypted = util.encryptpassword(plaintextpassword)
+
     def _setpw(cur):
         cur.execute(
             database.query(
-                "update $engine.__member set password=crypt($1, gen_salt('bf')) where moniker=$2",
-                plaintextpassword,
+                "update $engine.__member set password=$1 where moniker=$2",
+                encrypted,
                 moniker,
             )
         )

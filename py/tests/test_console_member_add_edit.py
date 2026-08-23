@@ -926,27 +926,36 @@ class _SpyCursor:
         self.calls.append((query, params))
         rendered = query.as_string(None) if hasattr(query, "as_string") else str(query)
         sql_lower = rendered.lower()
-        # Simulate the server-side bcrypt: when setpassword's UPDATE
-        # runs, the DB would call crypt(plaintext, gen_salt('bf')) and
-        # return the hash. We replicate that here so the round-trip
-        # assertion (crypt(plain, stored) == stored) is meaningful.
-        if "password=crypt(" in sql_lower and "gen_salt" in sql_lower:
-            # database.query() puts the plaintext inside the Composed as a
-            # Literal node — there is no separate params tuple. Pull it
-            # back out of the structure for the simulated hash.
+        # Detect the new setpassword shape: an UPDATE against __member
+        # that sets password=... and filters by moniker=... . The hash is
+        # pre-computed in Python by ``bbsengine6.util.encryptpassword``,
+        # so the SQL is just ``set password=$1 where moniker=$2`` — no
+        # ``crypt`` or ``gen_salt`` in the wire SQL. We capture the hash
+        # (first Literal child) so the round-trip assertion
+        # ``crypt(plain, stored) == stored`` is meaningful.
+        if (
+            sql_lower.lstrip().startswith("update ")
+            and "set password=" in sql_lower
+            and "where moniker=" in sql_lower
+            and "__member" in sql_lower
+            and "crypt(" not in sql_lower
+        ):
             from psycopg import sql as _sql
-            plaintext = ""
+            captured_hash = ""
             if hasattr(query, "__iter__") and not isinstance(query, str):
                 for child in query:
                     if isinstance(child, _sql.Literal):
                         v = child.as_string(None).strip("'\"")
-                        # The plaintext is the first Literal after the
-                        # password=crypt( SQL chunk; anything else is the
-                        # moniker (the second positional parameter).
-                        if v and plaintext == "":
-                            plaintext = v
-            salt = _pycrypt.mksalt(method=_pycrypt.METHOD_BLOWFISH)
-            self._password_response = _pycrypt.crypt(plaintext, salt)
+                        # The hash is the first Literal after the
+                        # ``set password=`` chunk; the moniker is the
+                        # second positional parameter.
+                        if v and captured_hash == "":
+                            captured_hash = v
+                            break
+            # If for any reason we did not extract a hash, fall back to
+            # letting the spy report None so the test surfaces a real
+            # failure rather than a misleading default.
+            self._password_response = captured_hash or None
             self._rowcount = 1
             return
         # For all other statements, leave _fetchone_result alone so the
@@ -1027,11 +1036,13 @@ def _find_setpassword_call(calls):
     ``database.query()`` returns a ``psycopg.sql.Composed`` whose ``str()``
     is its Python repr (not the wire-protocol SQL). We detect the
     setpassword statement by inspecting both the repr and the structural
-    children so we are not fooled by the repr's content.
+    children so we are not fooled by the repr's content. After the
+    2026-08-22 refactor the SQL is ``set password=$1 where moniker=$2``
+    (no ``crypt``/``gen_salt`` in SQL because the hash is computed
+    locally by ``bbsengine6.util.encryptpassword``), so we match on the
+    parameterized UPDATE shape.
     """
     for sql, params in calls:
-        # Match on the structural children: an UPDATE Composed that contains
-        # both a password=crypt( chunk and a gen_salt chunk.
         children = list(sql) if hasattr(sql, "__iter__") and not isinstance(sql, str) else []
         if not children:
             continue
@@ -1039,34 +1050,44 @@ def _find_setpassword_call(calls):
         r_lower = rendered.lower()
         if (
             r_lower.lstrip().startswith("update ")
-            and "password=crypt(" in r_lower
-            and "gen_salt" in r_lower
+            and "set password=" in r_lower
+            and "where moniker=" in r_lower
             and "__member" in r_lower
+            and "crypt(" not in r_lower
         ):
             return (sql, params, children, rendered)
     return None
 
 
 def _assert_setpassword_sql(sql, params, plaintext: str, moniker: str):
-    """Shared assertions: encryption pattern, parameterization, no plaintext leak.
+    """Shared assertions: hash produced locally, parameterization, no plaintext leak.
 
-    ``database.query()`` produces a ``psycopg.sql.Composed`` that parameterizes
-    via ``Literal`` nodes. When psycopg executes a ``Composed``, the literals
-    are sent as bound parameters on the wire (never inlined as a SQL string
-    body), so the structural shape is the authoritative evidence that the
-    plaintext is not being concatenated into the SQL.
+    After the 2026-08-22 refactor, ``setpassword`` produces the bcrypt
+    hash locally via ``bbsengine6.util.encryptpassword`` (passlib,
+    ``$2b$06$``) and binds it as a single ``Literal`` parameter on a
+    parameterized ``UPDATE ... set password=$1 where moniker=$2``. So:
+
+    * The SQL must NOT contain ``crypt(`` or ``gen_salt`` — those are
+      no longer sent to the database.
+    * The plaintext must NOT appear as a ``Literal`` nor as an inline
+      SQL fragment (it is never bound).
+    * The hash (first ``Literal`` child) must be bcrypt-shaped and must
+      verify via ``crypt(plaintext, hash) == hash``.
+    * The moniker must be the second ``Literal`` and bound, not inlined.
+
+    ``database.query()`` produces a ``psycopg.sql.Composed`` that
+    parameterizes via ``Literal`` nodes; on the wire those literals are
+    bound parameters, so the structural shape is the authoritative
+    evidence that values are not concatenated into the SQL.
     """
     rendered = sql.as_string(None) if hasattr(sql, "as_string") else str(sql)
     sql_lower = rendered.lower()
 
-    assert "password=crypt(" in sql_lower, (
-        f"setpassword must encrypt via crypt(...); got: {rendered!r}"
+    assert sql_lower.lstrip().startswith("update "), (
+        f"setpassword must be an UPDATE; got: {rendered!r}"
     )
-    assert "gen_salt" in sql_lower, (
-        f"setpassword must use a fresh gen_salt (server-side salt); got: {rendered!r}"
-    )
-    assert "'bf'" in sql_lower or '"bf"' in sql_lower, (
-        f"setpassword must use bcrypt ('bf'); got: {rendered!r}"
+    assert "set password=" in sql_lower, (
+        f"setpassword must set the password column; got: {rendered!r}"
     )
     assert "where moniker=" in sql_lower, (
         f"setpassword must target the right row by moniker; got: {rendered!r}"
@@ -1074,43 +1095,76 @@ def _assert_setpassword_sql(sql, params, plaintext: str, moniker: str):
     assert "__member" in sql_lower, (
         f"setpassword must target the __member table; got: {rendered!r}"
     )
+    assert "crypt(" not in sql_lower, (
+        f"setpassword must NOT call crypt() server-side anymore "
+        f"(hash is produced locally); got: {rendered!r}"
+    )
+    assert "gen_salt" not in sql_lower, (
+        f"setpassword must NOT call gen_salt() server-side anymore "
+        f"(hash is produced locally); got: {rendered!r}"
+    )
 
-    # Parameterization check: the plaintext must appear as a Literal node
-    # (bound parameter on the wire), NEVER as an inline SQL fragment.
     children = list(sql)
     from psycopg import sql as _sql
 
     def _literal_value(c):
         return c.as_string(None).strip("'\"") if hasattr(c, "as_string") else ""
 
-    literals_with_plaintext = [
-        c for c in children
-        if isinstance(c, _sql.Literal) and _literal_value(c) == plaintext
-    ]
-    literals_with_moniker = [
-        c for c in children
-        if isinstance(c, _sql.Literal) and _literal_value(c) == moniker
-    ]
+    # The hash is the first Literal after the ``set password=`` chunk.
+    hash_literal = None
+    moniker_literal = None
+    for c in children:
+        if isinstance(c, _sql.Literal):
+            v = _literal_value(c)
+            if hash_literal is None:
+                hash_literal = v
+            elif moniker_literal is None:
+                moniker_literal = v
+                break
+
+    assert hash_literal is not None, (
+        f"setpassword must bind the bcrypt hash as the first Literal; "
+        f"children were: {[type(c).__name__ for c in children]}"
+    )
+    assert hash_literal.startswith(("$2a$", "$2b$", "$2y$")), (
+        f"setpassword must store a bcrypt hash ($2a$/2b$/2y$); "
+        f"got: {hash_literal!r}"
+    )
+    assert len(hash_literal) == 60, (
+        f"setpassword must store a 60-char bcrypt hash; "
+        f"got len={len(hash_literal)} value={hash_literal!r}"
+    )
+    assert _pycrypt.crypt(plaintext, hash_literal) == hash_literal, (
+        f"stored hash must verify against the plaintext via crypt(); "
+        f"plaintext={plaintext!r} hash={hash_literal!r}"
+    )
+
+    # The plaintext must NEVER appear anywhere in the wire SQL.
     sql_chunks_with_plaintext = [
         c for c in children
         if isinstance(c, _sql.SQL) and plaintext in c.as_string(None)
     ]
-    sql_chunks_with_moniker = [
+    literals_with_plaintext = [
         c for c in children
-        if isinstance(c, _sql.SQL) and moniker in c.as_string(None)
+        if isinstance(c, _sql.Literal) and _literal_value(c) == plaintext
     ]
-
-    assert literals_with_plaintext, (
-        f"plaintext {plaintext!r} must appear as a Literal (bound parameter); "
-        f"children were: {[type(c).__name__ for c in children]}"
-    )
-    assert literals_with_moniker, (
-        f"moniker {moniker!r} must appear as a Literal (bound parameter)"
+    assert not literals_with_plaintext, (
+        f"plaintext {plaintext!r} must NEVER appear as a Literal "
+        f"(it should not be bound at all)"
     )
     assert not sql_chunks_with_plaintext, (
         f"plaintext must NEVER be inlined into a SQL fragment; "
         f"offending chunk: {sql_chunks_with_plaintext[0].as_string(None)!r}"
     )
+
+    assert moniker_literal == moniker, (
+        f"setpassword must bind moniker={moniker!r} as the second Literal; "
+        f"got: {moniker_literal!r}"
+    )
+    sql_chunks_with_moniker = [
+        c for c in children
+        if isinstance(c, _sql.SQL) and moniker in c.as_string(None)
+    ]
     assert not sql_chunks_with_moniker, (
         f"moniker must NEVER be inlined into a SQL fragment; "
         f"offending chunk: {sql_chunks_with_moniker[0].as_string(None)!r}"
@@ -1128,10 +1182,13 @@ class TestConsoleMemberPasswordEncryption:
     call site. These tests instead spy on the SQL layer and verify:
 
     1. ``setpassword`` is actually invoked from ``add()`` and ``edit()``.
-    2. The SQL it sends uses ``crypt(..., gen_salt('bf'))`` (bcrypt).
-    3. The plaintext is a bound parameter (never inlined in the SQL).
-    4. The plaintext is never written anywhere else (e.g. as a literal
-       in some other UPDATE or INSERT).
+    2. The plaintext is NOT sent to the database at all — the hash is
+       produced locally by ``bbsengine6.util.encryptpassword`` (passlib
+       bcrypt, ``$2b$06$``, matching PostgreSQL ``gen_salt('bf')``) and
+       passed to the UPDATE as a single bound parameter.
+    3. The hash is a bound parameter (never inlined in the SQL).
+    4. The plaintext is never written anywhere (no SQL fragment, no
+       parameter).
     5. The stored hash round-trips: ``crypt(plaintext, stored) == stored``.
     """
 
@@ -1321,10 +1378,11 @@ class TestConsoleMemberPasswordEncryption:
         )
 
     def test_setpassword_uses_unique_salt_per_call(self):
-        """gen_salt('bf') is invoked on every call so two identical passwords
-        produce two distinct hashes. If the code ever cached a salt or used a
-        static salt, this assertion fails — which is exactly the kind of bug
-        a "password not set correctly" symptom could mask.
+        """encryptpassword() is invoked on every call so two identical
+        passwords produce two distinct bcrypt hashes. If the code ever
+        cached a hash, reused a salt, or substituted a static value,
+        this assertion fails — which is exactly the kind of bug a
+        "password not set correctly" symptom could mask.
         """
         args = _make_args()
         cur1 = _SpyCursor()
@@ -1344,7 +1402,11 @@ class TestConsoleMemberPasswordEncryption:
 
         h1 = cur1._password_response
         h2 = cur2._password_response
+        assert h1 is not None and h2 is not None, (
+            "spy cursor must capture the stored hash from both calls; "
+            "got h1=None or h2=None"
+        )
         assert h1 != h2, (
             "two setpassword calls with the same plaintext must produce "
-            "different hashes (gen_salt must run each time)"
+            "different hashes (encryptpassword must randomise the salt each call)"
         )

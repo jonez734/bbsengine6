@@ -27,6 +27,7 @@ dependencies = [
     "argcomplete",
     "getdate-next",
     "markdown",
+    "passlib[bcrypt]>=1.7.4",
     "psycopg[binary,pool]",
     "psycopg-pool",
     "python-dateutil",
