@@ -68,6 +68,63 @@ on the next successful login.
 
 @since 20260823
 
+### py: member.checkpassword — local verify + opportunistic rehash (PHP parity)
+
+Mirrors the PHP-side change above on the Python side:
+
+* bbsengine6.member.checkpassword no longer round-trips through
+  PostgreSQL crypt(plaintext, password). The stored hash is
+  fetched with one SELECT and verified locally via a new
+  bbsengine6.member.lib._verify_any helper that tries stdlib
+  crypt(plaintext, stored) first (handles $1$ MD5-crypt,
+  $5$ SHA-256-crypt, $6$ SHA-512-crypt, and the
+  $2[abxy]$ bcrypt family in one path with the constant-time
+  guarantees of the underlying libc) and falls through to passlib
+  bcrypt.verify as a bcrypt-specific fallback.
+* On successful verify of a legacy $1$ MD5-crypt hash, the
+  column is transparently rewritten to a fresh $2b$06$...
+  value via the new bbsengine6.member.rehashpassword helper.
+  Healthy $2[abxy]$06$ rows are not rewritten. The 2026-08-22
+  bed auth login incident now heals organically on the next
+  successful login — no psql \i bbsengine6.sql migration
+  required.
+* bbsengine6.member.setpassword gains the full
+  CONN_POOL_PATTERN (cur=/conn=/pool=/args= priority order) and
+  surfaces a no-row failure (False return + level=error log)
+  instead of the silent no-op behaviour of the pre-rewrite path.
+* bbsengine6.util.encryptpassword is the new single-source-of-truth
+  helper for new password hashes; setpassword and any future
+  caller delegate here so the cost factor and salt format stay in
+  lock-step with the PHP side.
+
+**Why mirror PHP:** the pre-2026-08-23 code was asymmetric — PHP
+round-tripped through PG (two PG queries per login), Python already
+produced new hashes locally via bbsengine6.util._BCRYPT_ROUNDS=6
+but still round-tripped the verify. After both sides rewrite, every
+auth path produces the hash locally, verifies locally, and writes the
+hash in a single UPDATE. The chk_member_password_bcrypt CHECK
+constraint on engine.__member.password and the per-auth
+audit_password_hash diagnostic accept both $2y$ (PHP) and
+$2b$ (Python) prefixes so cross-language migrations are
+uneventful.
+
+**Cross-platform note:** PHP password_hash() emits $2y$,
+Python passlib emits $2b$, PG crypt(plaintext, stored) only
+recognises $2a$. Since verification is now local on each
+platform after eliminating the DB round-trip, the prefix drift is
+harmless. tests/integration/test_php_password_round_trip.php
+pins PG crypt() does not recognise $2y$ so any future
+regression that reintroduces a PG-side backstop catches the mismatch
+immediately.
+
+**Tests:** py/tests/test_member_checkpassword_local.py (new, 18
+cases) pins no-PG-crypt, exactly-two-selects-no-updates on healthy
+rows, opportunistic rehash on $1$ legacy, malformed-hash
+tolerance, and full CONN_POOL_PATTERN coverage for both
+checkpassword and the new rehashpassword.
+
+@since 20260823
+
 ### member + sql: password column hardening — legacy MD5-crypt audit + bcrypt CHECK constraint
 
 Resolves the three checkboxes in `zoid6/TODO.md` "Password column
