@@ -137,7 +137,7 @@ The package lives at `py/src/bbsengine6/`.
 
 | Sub-package                   | Role                                               |
 |-------------------------------|----------------------------------------------------|
-| `backend/`                    | `check*` routines that stage the database; `stage_zero` / `stage_one`; `lib`; wizard for spinning up a BBS DB |
+| `backend/`                    | `check*` routines that stage the database; `stage_zero` / `stage_one`; `lib`; wizard for spinning up a BBS DB. `checkpasswordformat` lands the `chk_member_password_bcrypt` CHECK constraint on every bootstrap. |
 | `bank/`                       | `account`, `bank`, `transaction`, `transfer`, plus `api/handler` (BankServiceHandler) |
 | `channel/`                    | Channel WebSocket handlers                         |
 | `console/`                    | Admin CLI: `createdatabase`, `member`, `memberapproval`, `showpgrole`, `session`, interactive menu |

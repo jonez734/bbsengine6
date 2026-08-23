@@ -1406,6 +1406,7 @@ Main console commands:
   - checkextensions: Verify PostgreSQL extensions
   - checkfunctions: Check custom functions exist
   - checkclasses: Verify custom class definitions
+  - checkpasswordformat: Install chk_member_password_bcrypt + audit engine.__member.password
   - createdatabase: Initialize new database
   - member: Member management operations
   - memberapproval: Member approval workflow
