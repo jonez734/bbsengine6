@@ -3,6 +3,7 @@
 namespace {
   require_once("util.php");
   require_once("database.php");
+  require_once("libpassword.php");
 }
 
 namespace bbsengine6\member\lib
@@ -241,23 +242,125 @@ SQL;
     }
 
     /**
+     * Check plaintext password against stored hash.
+     *
+     * No PostgreSQL round-trip: the stored hash is fetched with one
+     * SELECT and verified locally via
+     * \bbsengine6\password\verify_password(). On a successful verify
+     * against a legacy/unhealthy hash, the column is transparently
+     * rewritten with a fresh bcrypt hash (matches Python's
+     * audit_password_hash + opportunistic-rehash pattern).
+     *
      * @since 20240825 copied from bbsengine4
-     * @param text $password plain text password i.e. from a quickform
-     * @param text $moniker moniker to check against
-     * 
+     * @since 20260823 rewrote to use local PHP password_verify (no
+     *                crypt() round-trip), with legacy-hash rehash.
+     * @param string $password Plaintext password from the form.
+     * @param string $moniker  Moniker to check against.
+     * @return bool True iff $password matches the stored hash.
      */
     function checkpassword($password, $moniker)
     {
+      if ($moniker === null || $moniker === "") {
+        return false;
+      }
       $pdo = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
-      $stmt = \bbsengine6\database\query($pdo, 'SELECT 1 as valid FROM $engine.member WHERE moniker = :moniker AND password = crypt(:password, password)', [":moniker" => $moniker, ":password" => $password]);
+      $stmt = \bbsengine6\database\query(
+        $pdo,
+        "SELECT password FROM \$engine.__member WHERE moniker = :moniker",
+        [":moniker" => $moniker]
+      );
+      if ($stmt === false || $stmt->rowCount() !== 1) {
+        return false;
+      }
+      $row = $stmt->fetch();
+      $stored = $row["password"] ?? null;
+
+      if ($stored === null || $stored === "") {
+        return $password === "";
+      }
+
+      $ok = \bbsengine6\password\verify_password($password, $stored);
+      if (!$ok) {
+        \bbsengine6\util\logentry(
+          "libmember.checkpassword.100: verify failed for {$moniker} " .
+          "(stored=" . \bbsengine6\password\classify_hash($stored) . ")"
+        );
+        return false;
+      }
+
+      if (\bbsengine6\password\needs_rehash($stored)) {
+        \bbsengine6\util\logentry(
+          "libmember.checkpassword.110: opportunistic rehash for {$moniker} " .
+          "(was=" . \bbsengine6\password\classify_hash($stored) . ")"
+        );
+        \bbsengine6\member\lib\rehashpassword($moniker, $password, $pdo);
+      }
+      return true;
+    }
+
+    /**
+     * Rewrite engine.__member.password for $moniker with a fresh
+     * bcrypt hash of $plaintext. Single UPDATE, no
+     * crypt()/gen_salt() round-trip.
+     *
+     * @since 20260823
+     */
+    function rehashpassword($moniker, $plaintext, $pdo = null)
+    {
+      if ($pdo === null) {
+        $pdo = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
+      }
+      try {
+        $hash = \bbsengine6\password\hash_password($plaintext);
+      } catch (\Throwable $e) {
+        \bbsengine6\util\logentry(
+          "libmember.rehashpassword.100: hash failed for {$moniker}: " .
+          $e->getMessage()
+        );
+        return false;
+      }
+      $stmt = \bbsengine6\database\query(
+        $pdo,
+        "UPDATE \$engine.__member SET password = :hash WHERE moniker = :moniker",
+        [":hash" => $hash, ":moniker" => $moniker]
+      );
       return $stmt !== false && $stmt->rowCount() === 1;
     }
 
+    /**
+     * Set engine.__member.password for $moniker to a fresh bcrypt hash
+     * of $plaintext.
+     *
+     * No PostgreSQL round-trip: the hash is produced locally by
+     * \bbsengine6\password\hash_password() (single source of truth for
+     * new password hashes, cost factor and prefix in lock-step with
+     * PG gen_salt('bf')). One UPDATE statement.
+     *
+     * @since 20240825 copied from bbsengine4
+     * @since 20260823 rewrote to use local PHP password_hash (no
+     *                gen_salt('bf') round-trip).
+     * @param string $moniker   Moniker whose password is being set.
+     * @param string $plaintext New plaintext password.
+     * @return bool True iff one row was updated.
+     */
     function setpassword($moniker, $plaintext)
     {
-      $pdo = \bbsengine6\database\connect(getDSN());
-      $stmt = \bbsengine6\database\query($pdo, 'UPDATE $engine.__member SET password = crypt(:password, gen_salt(\'bf\')) WHERE moniker = :moniker', [":password" => $plaintext, ":moniker" => $moniker]);
-      return $stmt !== false && $stmt->rowCount() == 1;
+      $pdo = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
+      try {
+        $hash = \bbsengine6\password\hash_password($plaintext);
+      } catch (\Throwable $e) {
+        \bbsengine6\util\logentry(
+          "libmember.setpassword.100: hash failed for {$moniker}: " .
+          $e->getMessage()
+        );
+        return false;
+      }
+      $stmt = \bbsengine6\database\query(
+        $pdo,
+        "UPDATE \$engine.__member SET password = :hash WHERE moniker = :moniker",
+        [":hash" => $hash, ":moniker" => $moniker]
+      );
+      return $stmt !== false && $stmt->rowCount() === 1;
     }
 
     function approved($moniker)
