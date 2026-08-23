@@ -895,29 +895,29 @@ def timedeltastr(delta: Any) -> str:
     return buf
 
 
-# Match PostgreSQL's gen_salt('bf') default so hashes produced here are
-# verifiable by the DB-side crypt(plaintext, stored) path. Bumping this
-# makes stored hashes unrecognised by the old gen_salt('bf') cost.
-_BCRYPT_ROUNDS = 6
-
-
 def encryptpassword(plaintextpassword: str) -> str:
     """Return a bcrypt hash of ``plaintextpassword`` computed locally.
 
+    Thin wrapper around :func:`bbsengine6.password_hash.hash_password`.
     No database round-trip: this is the single source of truth for new
     password hashes. ``setpassword`` and ``getencryptedpassword`` both
     delegate here so the cost factor, salt format, and hash prefix stay
-    in lock-step with PostgreSQL's ``crypt(..., gen_salt('bf'))`` (which
-    defaults to ``$2b$06$``).
+    in lock-step with the PHP side (``bbsengine6\\password``) and with
+    PostgreSQL's ``crypt(..., gen_salt('bf'))`` default.
 
-    Returns a ``$2b$06$...`` string of length 60. The hash is verifiable
-    by PostgreSQL's ``crypt(plaintext, stored)`` because the prefix and
-    rounds match.
+    Returns a ``$2b$06$...`` string of length 60. Verifiable by
+    :func:`bbsengine6.password_hash.verify_password` locally; PG
+    ``crypt(plaintext, stored)`` only recognises the ``$2a$`` prefix
+    so cross-platform PG verification is not load-bearing any more.
+
+    See also:
+        bbsengine6.password_hash.BCRYPT_PREFIX_RE
+        bbsengine6.password_hash._get_bcrypt_rounds
     """
-    from passlib.hash import bcrypt
+    from . import password_hash
 
     io.echo(f"bbsengine6.util.encryptpassword.100: {plaintextpassword=}", level="debug")
-    return bcrypt.using(rounds=_BCRYPT_ROUNDS).hash(plaintextpassword)
+    return password_hash.hash_password(plaintextpassword)
 
 
 def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
@@ -1403,16 +1403,18 @@ def decrypt_password(ciphertext_b64: str) -> str:
 
 # IMPORTANT DISTINCTION
 # =====================
-# This module contains TWO password systems:
+# This module (and bbsengine6.password_hash) contains TWO password systems:
 #
-# 1. SHA-256 Hashing (password_hash.py)
+# 1. bcrypt Hashing (bbsengine6.password_hash + encryptpassword above)
 #    - For member login passwords
 #    - One-way: can verify but NOT decrypt
 #    - Use in: bbsengine6 authentication
+#    - PHP analog: bbsengine6\password\libpassword.php
 #
 # 2. AES-256-GCM Encryption (encrypt_password/decrypt_password below)
 #    - For IMAP/SMTP server credentials
 #    - Reversible: can encrypt AND decrypt
 #    - Use in: Email system authentication
+#    - Lives in bbsengine6.password package (cipher + storage strategy)
 #
 # Choose the right one for your use case!
