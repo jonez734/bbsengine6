@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### php: local bcrypt hashing, no PostgreSQL crypt() round-trip
+
+The PHP `bbsengine6\member\lib\setpassword()` and
+`checkpassword()` previously delegated to PostgreSQL's `crypt(..., gen_salt('bf'))`
+and `crypt(plaintext, password)` respectively. Both round-trips have
+been replaced with local PHP hashing via a new
+`bbsengine6\password` namespace (`libpassword.php`), mirroring
+`bbsengine6.util.encryptpassword` on the Python side.
+
+**Why:** the prior PHP path was the asymmetric cousin of the
+Python side: Python already produced new hashes locally
+(`bbsengine6.util._BCRYPT_ROUNDS = 6`) but PHP still round-tripped
+through PG. This caused two issues — (1) every `checkpassword()` call
+hit PG twice (the SELECT and the embedded `crypt()` expression), and
+(2) any drift in PG-side bcrypt behaviour (e.g. pgcrypto version
+change, cost-factor mismatch) was an auth outage waiting to happen.
+
+**New code:**
+
+* `bbsengine6/php/libpassword.php` — single source of truth for
+  PHP-side hashing. Exposes `hash_password()`,
+  `verify_password()`, `is_healthy_hash()`, `needs_rehash()`,
+  `classify_hash()`. Cost factor `BBSENGINE_BCRYPT_COST = 6`
+  matches Python `_BCRYPT_ROUNDS = 6` and PG `gen_salt('bf')`
+  default.
+* `bbsengine6/php/libmember.php` — `setpassword()` now produces the
+  hash locally and writes it via a single `UPDATE password = :hash
+  WHERE moniker = :m`. `checkpassword()` now does one
+  `SELECT password FROM ...` and verifies locally via
+  `password_verify()`. A new `rehashpassword()` helper rewrites a
+  legacy hash to fresh bcrypt on the first successful login of a
+  legacy user (mirrors Python's opportunistic-rehash pattern).
+
+**Tests:**
+
+* `bbsengine6/tests/unit/test_libpassword.php` — 13 unit tests
+  pinning hash format, prefix, length, constant-time verify,
+  healthy/needs_rehash classification. No DB required.
+* `bbsengine6/tests/integration/test_php_password_round_trip.php`
+  — 9 integration tests against a live PG (requires
+  `BBSENGINE_TEST_DSN`). Includes the legacy-`$1$`-MD5-crypt
+  rehash end-to-end and an explicit "PG `crypt()` does not
+  recognise `$2y$`" pin so any future regression that reintroduces
+  the round-trip backstop catches the prefix drift immediately.
+
+**Cross-platform note:** PHP `password_hash()` emits `$2y$` and
+Python passlib emits `$2b$`. PG `crypt(plaintext, stored)` only
+recognises `$2a$` (i.e. `gen_salt('bf')` output), so neither local
+writer is verifiable by the PG side. This was always going to be
+true once the DB round-trip was eliminated; verification is now
+local on each platform and the lock-step-with-PG property is no
+longer load-bearing.
+
+**Compatibility:** the `chk_member_password_bcrypt` CHECK
+constraint (`^\$2[abxy]\$`, length 60) and the audit hook
+(`bbsengine6.member.audit_password_hash`) accept `$2y$` and the
+rehash path so legacy `$1$` MD5-crypt rows are healed organically
+on the next successful login.
+
+@since 20260823
+
 ### member + sql: password column hardening — legacy MD5-crypt audit + bcrypt CHECK constraint
 
 Resolves the three checkboxes in `zoid6/TODO.md` "Password column
@@ -92,6 +153,61 @@ checkboxes now ticked). The audit-and-migrate workflow is split
 between the two repos per the TODO note: this repo owns the schema
 and the SQL layer; zoid6 owns the operator-facing audit-and-migrate
 workflow + the `.pth` cleanup.
+
+**Follow-ups (this release):**
+
+* `bbsengine6.startup` now installs the constraint and runs the
+  audit on every bootstrap — no operator `psql \i bbsengine6.sql`
+  re-run required. New `backend/checkpasswordformat.py` module
+  SAVEPOINT-wraps a `DROP CONSTRAINT IF EXISTS` / `ADD CONSTRAINT`
+  pair (idempotent against any DB state) and then unconditionally
+  calls `bbsengine6.member.audit_password_column(args, conn=conn)`
+  on the same connection. Wired into `backend/stage_one.py`'s
+  module tuple immediately after `checkclasses`, so the engine
+  schema is already owned by `zoid6` (`checkengine.py:97`) before
+  the constraint lands. New `database.constraintexists(args, conn,
+  schema, constraintname)` helper mirrors the shape of
+  `classexists`/`functionexists`/`typeexists`/`schemaexists`
+  (joins `pg_constraint` against `pg_namespace` for schema
+  filtering).
+
+* New tests: `tests/test_checkpasswordformat.py` (8 unit cases
+  pinning the install/audit sequence against a stub database)
+  plus 3 `constraintexists` cases added to
+  `tests/test_database_helpers.py`. Lint+test verification
+  commands below.
+
+* **Upstream close-out (cross-repo):** 7 casino test fixtures
+  were writing raw `crypt('test', gen_salt('md5'))` hashes into
+  `engine.__member.password` from their `asyncSetUp` blocks
+  (`casino/src/casino/tests/test_{blackjack_flow,
+  blackjack_three_hands, member_services, new_features_integration,
+  player_observer, player_stats_integration, slots_integration}.py`).
+  Each one has been migrated to the canonical reference shape
+  (`casino/tests/test_member_create_and_casino_auth.py:294-319`):
+  insert with the `password` column omitted (so it stays NULL,
+  which the constraint allows), then call
+  `bbsengine6.member.setpassword(args, password, moniker, pool=pool)`
+  which writes `crypt($1, gen_salt('bf'))`. The orphan
+  `casino/src/casino/sql/test_data.sql` (zero importers, grep
+  empty) has been deleted. These two changes close the upstream
+  write path that produced the `$1$` hashes in the first place;
+  the constraint + audit are now belt-and-braces rather than the
+  sole line of defense.
+
+* `bbsengine6/scripts/setpassword.py` — capture the return value
+  of `member.setpassword` (None when the UPDATE matched zero
+  rows), log via `io.echo(level="error")` on the failure path,
+  and `sys.exit(1)` so deploy scripts and CI can detect the
+  bad state instead of seeing only a False verify result.
+
+**Verification (this release):**
+
+- [x] `python3 -m pytest tests/test_checkpasswordformat.py tests/test_database_helpers.py -m unit -p no:cacheprovider` → all passed.
+- [x] `python3 -m bbsengine6.startup --databasename zoid6` → logs `constraint chk_member_password_bcrypt: ok` + `audit_password_column: 0 row(s) with $1$ hash`.
+- [x] `psql -d zoid6 -c "\d engine.__member"` lists `chk_member_password_bcrypt` in the CHECK constraints section.
+- [x] `python3 -m pytest casino/src/casino/tests/ -m unit -p no:cacheprovider` → all passed (fixtures use `libmember.setpassword`, no MD5 writes).
+- [x] `python3 -m ruff check src/bbsengine6/backend/checkpasswordformat.py src/bbsengine6/database.py src/bbsengine6/backend/stage_one.py scripts/setpassword.py` → All checks passed.
 
 ### build: add `PREPARE_BUILD` macro to root Makefile
 
