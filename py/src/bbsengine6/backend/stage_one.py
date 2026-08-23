@@ -25,6 +25,15 @@ def main(args, **kwargs):
             "checkextensions",
             "checkengine",
             "checkclasses",
+            # Phase 1+ password hardening: install
+            # chk_member_password_bcrypt on engine.__member and audit
+            # the column for any legacy $1$ MD5-crypt rows. Runs every
+            # startup so operators no longer need to manually
+            # ``psql \i bbsengine6.sql`` to land the constraint. The
+            # audit log line is the operator signal during the
+            # migration window; once the column is clean the warning
+            # becomes a green-bg ``0 row(s)``.
+            "checkpasswordformat",
             "checkfunctions",
             # Phase 1 fix: stage_one's checkfunctions re-CREATEs the
             # 5 public.* SECURITY DEFINER helpers in the target DB,

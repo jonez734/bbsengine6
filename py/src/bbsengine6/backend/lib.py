@@ -69,6 +69,10 @@ def checkclasses(args, **kwargs):
     return runmodule(args, "checkclasses", **kwargs)
 
 
+def checkpasswordformat(args, **kwargs):
+    return runmodule(args, "checkpasswordformat", **kwargs)
+
+
 def checkzoid6role(args, **kwargs):
     return runmodule(args, "checkzoid6role", **kwargs)
 

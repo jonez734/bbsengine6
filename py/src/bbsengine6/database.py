@@ -2150,6 +2150,50 @@ def functionexists(args: Any, name: str, **kwargs: Any) -> bool:
         return False
 
 
+# @since 20260822
+def constraintexists(
+    args: Any, schema: str, constraintname: str, **kwargs: Any
+) -> bool:
+    """Return True iff a constraint named ``constraintname`` exists in
+    ``schema``. Schema-filtered via pg_namespace, so two schemas with
+    the same constraint name do not collide. Mirrors the shape of
+    functionexists / classexists / typeexists / schemaexists.
+
+    CONN_POOL_PATTERN: resolves cursor from kwargs in priority order:
+    1. conn= - use caller's existing connection
+    2. pool= - borrow connection from caller's pool
+    3. args= - build/cache pool via database.getpool(args)
+    """
+
+    def _work(conn):
+        sql = (
+            "SELECT 1 FROM pg_constraint c "
+            "JOIN pg_namespace n ON c.connamespace = n.oid "
+            "WHERE c.conname = %s AND n.nspname = %s"
+        )
+        dat = (constraintname, schema)
+        with cursor(conn=conn) as cur:
+            cur.execute(sql, dat)
+            return True if cur.rowcount > 0 else False
+
+    try:
+        conn = kwargs.get("conn", None)
+        if conn is None:
+            pool = kwargs.get("pool", None)
+            if pool is None:
+                io.echo(
+                    f"bbsengine6.database.constraintexists.100: {pool=}",
+                    level="error",
+                )
+                return False
+            with connect(args, pool=pool) as conn:
+                return _work(conn)
+        return _work(conn)
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.database.constraintexists.200: {e}")
+        return False
+
+
 # @since 20250511
 def manage_database_priv(
     args: Any,
