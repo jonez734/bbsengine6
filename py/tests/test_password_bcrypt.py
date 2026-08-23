@@ -1,5 +1,5 @@
 """
-Tests for bbsengine6.password_hash — bcrypt implementation matching
+Tests for bbsengine6.password — bcrypt implementation matching
 the PHP bbsengine6\\password namespace API.
 
 Covers:
@@ -20,7 +20,7 @@ Covers:
 
 import pytest
 
-from bbsengine6.password_hash import (
+from bbsengine6.password import (
     BCRYPT_HASH_LENGTH,
     BCRYPT_PREFIX_RE,
     MD5CRYPT_PREFIX_RE,
@@ -93,7 +93,7 @@ def test_verify_password_rejects_legacy_md5crypt():
     (future work, mirroring the PHP rewrite in this commit series),
     the legacy-rehash path will need an explicit
     ``crypt($plaintext, $stored)`` Python check before falling
-    through to ``password_hash.verify_password``.
+    through to ``password.verify_password``.
     """
     legacy = "$1$abcdefgh$irWbblnpmw.5z7wgBnprh0"
     assert verify_password("test", legacy) is False

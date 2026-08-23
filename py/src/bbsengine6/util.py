@@ -898,7 +898,7 @@ def timedeltastr(delta: Any) -> str:
 def encryptpassword(plaintextpassword: str) -> str:
     """Return a bcrypt hash of ``plaintextpassword`` computed locally.
 
-    Thin wrapper around :func:`bbsengine6.password_hash.hash_password`.
+    Thin wrapper around :func:`bbsengine6.password.hash_password`.
     No database round-trip: this is the single source of truth for new
     password hashes. ``setpassword`` and ``getencryptedpassword`` both
     delegate here so the cost factor, salt format, and hash prefix stay
@@ -906,18 +906,18 @@ def encryptpassword(plaintextpassword: str) -> str:
     PostgreSQL's ``crypt(..., gen_salt('bf'))`` default.
 
     Returns a ``$2b$06$...`` string of length 60. Verifiable by
-    :func:`bbsengine6.password_hash.verify_password` locally; PG
+    :func:`bbsengine6.password.verify_password` locally; PG
     ``crypt(plaintext, stored)`` only recognises the ``$2a$`` prefix
     so cross-platform PG verification is not load-bearing any more.
 
     See also:
-        bbsengine6.password_hash.BCRYPT_PREFIX_RE
-        bbsengine6.password_hash._get_bcrypt_rounds
+        bbsengine6.password.BCRYPT_PREFIX_RE
+        bbsengine6.password._get_bcrypt_rounds
     """
-    from . import password_hash
+    from . import password
 
     io.echo(f"bbsengine6.util.encryptpassword.100: {plaintextpassword=}", level="debug")
-    return password_hash.hash_password(plaintextpassword)
+    return password.hash_password(plaintextpassword)
 
 
 def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
@@ -1409,9 +1409,9 @@ def decrypt_password(ciphertext_b64: str) -> str:
 
 # IMPORTANT DISTINCTION
 # =====================
-# This module (and bbsengine6.password_hash) contains TWO password systems:
+# This module (and bbsengine6.password) contains TWO password systems:
 #
-# 1. bcrypt Hashing (bbsengine6.password_hash + encryptpassword above)
+# 1. bcrypt Hashing (bbsengine6.password + encryptpassword above)
 #    - For member login passwords
 #    - One-way: can verify but NOT decrypt
 #    - Use in: bbsengine6 authentication
