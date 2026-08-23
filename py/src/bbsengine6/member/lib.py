@@ -7,7 +7,7 @@ from collections import namedtuple
 
 import psycopg
 
-from bbsengine6 import bank, database, io, util
+from bbsengine6 import bank, database, io, password, util
 
 
 _threadlocal = threading.local()
@@ -838,21 +838,28 @@ def setflag(args, name, value, **kwargs) -> bool:
 
 
 def setpassword(args, plaintextpassword: str, moniker: str, **kwargs):
-    """Set ``engine.__member.password`` for ``moniker`` to a bcrypt hash.
+    """Set ``engine.__member.password`` for ``moniker`` to a fresh bcrypt hash.
 
-    The hash is produced locally by ``bbsengine6.util.encryptpassword``
-    (single source of truth for new password hashes) so the SQL UPDATE
-    does not need a ``crypt(..., gen_salt('bf'))`` round-trip. The
-    stored hash is still verifiable by the DB-side
-    ``crypt(plaintext, stored)`` path because ``encryptpassword`` uses
-    the same prefix and cost factor as ``gen_salt('bf')``.
+    Mirrors the PHP-side ``bbsengine6\\member\\lib\\setpassword``
+    (libmember.php). The hash is produced locally by
+    ``bbsengine6.util.encryptpassword`` (which delegates to
+    ``password.hash_password`` — single source of truth
+    for new password hashes) so the SQL UPDATE does not need a
+    ``crypt(..., gen_salt('bf'))`` round-trip.
 
-    Returns ``True`` on a successful UPDATE (one row matched), ``None``
-    if no row matched (moniker does not exist).
+    Returns ``True`` on a successful UPDATE (one row matched),
+    ``False`` if the UPDATE matched zero rows (moniker does not
+    exist), ``None`` if no connection could be resolved.
+
+    CONN_POOL_PATTERN: resolves cursor from kwargs in priority order:
+    1. cur= - use caller's existing cursor
+    2. conn= - use caller's existing connection
+    3. pool= - borrow connection from caller's pool
+    4. args= - build/cache pool via database.getpool(args)
     """
     encrypted = util.encryptpassword(plaintextpassword)
 
-    def _setpw(cur):
+    def _write(cur):
         cur.execute(
             database.query(
                 "update $engine.__member set password=$1 where moniker=$2",
@@ -860,23 +867,29 @@ def setpassword(args, plaintextpassword: str, moniker: str, **kwargs):
                 moniker,
             )
         )
-        if cur.rowcount == 0:
-            return None
-        return True
+        return cur.rowcount == 1
 
-    conn = kwargs.get("conn")
-    if conn is None:
+    try:
+        cur = kwargs.get("cur")
+        if cur is not None:
+            return _write(cur)
+        conn = kwargs.get("conn")
+        if conn is not None:
+            with database.cursor(conn) as cur:
+                return _write(cur)
         pool = kwargs.get("pool")
         if pool is None:
-            io.echo("bbsengine6.setpassword.160: pool=None", level="error")
-            return None
-
+            if args is not None:
+                pool = database.getpool(args)
+            else:
+                io.echo("bbsengine6.member.setpassword.100: pool=None", level="error")
+                return None
         with database.connect(args, pool=pool) as conn:
             with database.cursor(conn) as cur:
-                return _setpw(cur)
-
-    with database.cursor(conn) as cur:
-        return _setpw(cur)
+                return _write(cur)
+    except Exception:
+        io.echo_traceback("bbsengine6.member.setpassword.200:")
+        return None
 
 
 _BCRYPT_PREFIX_RE = re.compile(r"^\$2[abxy]\$")
@@ -1054,24 +1067,55 @@ def audit_password_column(args, **kwargs):
 def checkpassword(
     args, plaintextpassword: str, membermoniker: str | None = None, **kwargs
 ):
-    """Check if password matches member's stored password.
+    """Check if plaintextpassword matches member's stored password.
 
-    CONN_POOL_PATTERN: Resolves connection from kwargs in priority order:
+    Mirrors the PHP-side ``bbsengine6\\member\\lib\\checkpassword``
+    (libmember.php). No PostgreSQL ``crypt(plaintext, password)``
+    round-trip: the stored hash is fetched with one SELECT and
+    verified locally via :func:`password.verify_password`
+    (with a stdlib ``crypt()`` fallback for legacy ``$1$`` MD5-crypt
+    hashes that passlib's bcrypt-only verify would reject).
+
+    Successful verify of a legacy hash triggers the
+    opportunistic-rehash path: :func:`password.needs_rehash`
+    classifies the stored hash; on a True classification, this
+    function calls :func:`rehashpassword` to rewrite the column to a
+    fresh ``$2b$06$...`` hash. The column is healed over time
+    without operator intervention.
+
+    Algorithm coverage (in priority order)
+      1. Python stdlib ``crypt(plaintext, stored)`` — handles every
+         ``crypt(3)`` variant glibc supports: ``$1$`` MD5-crypt,
+         ``$5$`` SHA-256-crypt, ``$6$`` SHA-512-crypt, and the
+         ``$2[abxy]$`` bcrypt family. Constant-time via the
+         underlying libc implementation.
+      2. passlib ``bcrypt.verify`` — bcrypt-specific fallback for
+         platforms where stdlib ``crypt`` lacks bcrypt support.
+
+    Returns:
+        True iff plaintext verifies against the stored hash
+        (any algorithm). On a successful verify of a legacy hash,
+        the column is rewritten in place.
+
+    CONN_POOL_PATTERN: resolves cursor from kwargs in priority order:
     1. cur= - use caller's existing cursor
     2. conn= - use caller's existing connection
     3. pool= - borrow connection from caller's pool
     4. args= - build/cache pool via database.getpool(args)
-
-    Args:
-        args: Application args for pool resolution
-        plaintextpassword: Password to check (plaintext, will be crypt'd)
-        membermoniker: Member moniker to check against
-        **kwargs: Optional - cur, conn, pool, args
     """
-    def _work(cur):
+    if membermoniker is None:
+        membermoniker = getcurrentmoniker(args)
         if membermoniker is None:
+            io.echo("You do not exist! Go away!", level="error")
             return None
+
+    io.echo(f"{plaintextpassword=} {membermoniker=}", level="debug")
+
+    def _work(cur):
         qualified_member = _qualified("member", args)
+        # Single SELECT to fetch the stored hash. Replaces the prior
+        # ``select 1 ... where password=crypt(%s, password)`` PG
+        # round-trip so the verify runs locally.
         cur.execute(
             database.query(
                 f"select password from {qualified_member} where moniker=%s",
@@ -1081,48 +1125,155 @@ def checkpassword(
         row = cur.fetchone()
         if row is None:
             return False
-        stored_password = row["password"]
-        if stored_password is None or stored_password == "":
+        stored = row["password"]
+        if stored is None or stored == "":
             return plaintextpassword == ""
+
+        # Per-auth audit on the same cursor (one diagnostic line per
+        # login attempt; the 2026-08-22 incident took four psql
+        # probes to diagnose because this hook was missing).
         audit_password_hash(args, membermoniker, cur=cur)
+
+        # Local verify. _verify_any handles $1$ MD5-crypt via stdlib
+        # crypt() and bcrypt via passlib bcrypt.verify.
+        ok = _verify_any(plaintextpassword, stored)
+        if not ok:
+            io.echo(
+                f"bbsengine6.member.checkpassword.200: verify failed "
+                f"for {membermoniker} "
+                f"(stored={password.classify_hash(stored)})",
+                level="debug",
+            )
+            return False
+
+        # Opportunistic rehash: successful verify of a legacy hash
+        # transparently rewrites the column to a fresh bcrypt hash.
+        if password.needs_rehash(stored):
+            io.echo(
+                f"bbsengine6.member.checkpassword.210: opportunistic "
+                f"rehash for {membermoniker} "
+                f"(was={password.classify_hash(stored)})",
+                level="debug",
+            )
+            rehashpassword(
+                args, membermoniker, plaintextpassword,
+                conn=kwargs.get("conn"), pool=kwargs.get("pool"),
+            )
+        return True
+
+    try:
+        cur = kwargs.get("cur")
+        if cur is not None:
+            return _work(cur)
+        conn = kwargs.get("conn")
+        if conn is not None:
+            with database.cursor(conn) as cur:
+                return _work(cur)
+        pool = kwargs.get("pool")
+        if pool is None:
+            if args is not None:
+                pool = database.getpool(args)
+            else:
+                io.echo("bbsengine6.member.checkpassword.100: pool=None", level="error")
+                return None
+        with database.connect(args, pool=pool) as conn:
+            with database.cursor(conn) as cur:
+                return _work(cur)
+    except Exception:
+        io.echo_traceback("bbsengine6.member.checkpassword.300:")
+        return None
+
+
+def _verify_any(plaintext: str, stored: str) -> bool:
+    """Verify plaintext against a stored hash of any supported variant.
+
+    Tries Python stdlib ``crypt(plaintext, stored)`` first — handles
+    ``$1$`` MD5-crypt, ``$5$`` SHA-256-crypt, ``$6$`` SHA-512-crypt,
+    and the ``$2[abxy]$`` bcrypt family all in one path, with the
+    constant-time guarantees of the underlying libc implementation.
+
+    Falls through to passlib ``bcrypt.verify`` as a bcrypt-specific
+    fallback (catches edge cases where stdlib ``crypt`` is configured
+    without bcrypt support on unusual platforms).
+
+    Returns ``False`` (never raises) on empty / None input or any
+    malformed stored hash so callers can use a single truthiness
+    check.
+    """
+    if not plaintext or not isinstance(plaintext, str):
+        return False
+    if not stored or not isinstance(stored, str):
+        return False
+    import crypt as _crypt
+    try:
+        if _crypt.crypt(plaintext, stored) == stored:
+            return True
+    except (ValueError, TypeError, OSError):
+        pass
+    try:
+        from passlib.hash import bcrypt as _bcrypt
+        return _bcrypt.verify(plaintext, stored)
+    except (ValueError, TypeError):
+        return False
+
+
+def rehashpassword(args, moniker: str, plaintext: str, **kwargs):
+    """Rewrite ``engine.__member.password`` for ``moniker`` with a fresh bcrypt hash.
+
+    Mirrors the PHP-side ``bbsengine6\\member\\lib\\rehashpassword``
+    (libmember.php). Single UPDATE statement, no
+    ``crypt()/gen_salt()`` round-trip. The hash is produced locally
+    by ``bbsengine6.util.encryptpassword`` (which delegates to
+    ``password.hash_password``).
+
+    Called by :func:`checkpassword` after a successful verify of a
+    non-healthy hash (:func:`password.needs_rehash`
+    returned True) to heal the column to a fresh ``$2b$06$...``
+    value on the next successful login — no operator action
+    required.
+
+    CONN_POOL_PATTERN: resolves cursor from kwargs in priority order:
+    1. cur= - use caller's existing cursor
+    2. conn= - use caller's existing connection
+    3. pool= - borrow connection from caller's pool
+    4. args= - build/cache pool via database.getpool(args)
+
+    Returns:
+        True on successful UPDATE (one row matched), False if no
+        row matched, None on connection failure.
+    """
+    encrypted = util.encryptpassword(plaintext)
+
+    def _write(cur):
         cur.execute(
             database.query(
-                f"select 1 from {qualified_member} "
-                "where password=crypt(%s, password) and moniker=%s",
-            ),
-            (plaintextpassword, membermoniker),
+                "update $engine.__member set password=$1 where moniker=$2",
+                encrypted,
+                moniker,
+            )
         )
-        io.echo(f"{cur.rowcount=}", level="debug")
-        return False if cur.rowcount == 0 else True
+        return cur.rowcount == 1
 
-    if membermoniker is None:
-        membermoniker = getcurrentmoniker(args)
-        if membermoniker is None:
-            io.echo("You do not exist! Go away!", level="error")
-            return None
-
-    io.echo(f"{plaintextpassword=} {membermoniker=}", level="debug")
     try:
-        cur = kwargs.get("cur", None)
-        if cur is None:
-            conn = kwargs.get("conn", None)
-            if conn is not None:
-                with database.cursor(conn) as cur:
-                    return _work(cur)
-            pool = kwargs.get("pool", None)
-            if pool is None:
-                # CONN_POOL_PATTERN: Try to get pool from args parameter
-                if args is not None:
-                    pool = database.getpool(args)
-                else:
-                    io.echo("bbsengine6.checkpassword.100: pool=None", level="error")
-                    return None
-            with database.connect(args, pool=pool) as conn:
-                with database.cursor(conn) as cur:
-                    return _work(cur)
-        return _work(cur)
+        cur = kwargs.get("cur")
+        if cur is not None:
+            return _write(cur)
+        conn = kwargs.get("conn")
+        if conn is not None:
+            with database.cursor(conn) as cur:
+                return _write(cur)
+        pool = kwargs.get("pool")
+        if pool is None:
+            if args is not None:
+                pool = database.getpool(args)
+            else:
+                io.echo("bbsengine6.member.rehashpassword.100: pool=None", level="error")
+                return None
+        with database.connect(args, pool=pool) as conn:
+            with database.cursor(conn) as cur:
+                return _write(cur)
     except Exception:
-        io.echo_traceback("bbsengine6.member.checkpassword.100:")
+        io.echo_traceback("bbsengine6.member.rehashpassword.200:")
         return None
 
 

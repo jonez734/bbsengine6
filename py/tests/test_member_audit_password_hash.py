@@ -16,7 +16,9 @@ Covers:
 
 Also pins the integration with member.checkpassword: every checkpassword
 call must invoke audit_password_hash on the same cursor (one SELECT for the
-audit, the existing round-trip SELECT, no extra connection).
+audit, one SELECT for the row, no extra connection — no PG crypt() round-trip;
+the verify runs locally via bbsengine6.password.verify_password with a
+stdlib crypt() fallback for legacy $1$ MD5-crypt hashes).
 """
 
 import pytest
@@ -34,12 +36,14 @@ class _SpyCursor:
     touching a real database. Mirrors the spy pattern in
     test_console_member_add_edit.py:_SpyCursor.
 
-    ``rowcount_after_round_trip`` controls what ``cur.rowcount`` returns
-    AFTER the crypt round-trip SELECT (the SELECT 1 FROM ... WHERE
-    password=crypt(...) statement). Default 1 (success). Set to 0 to
-    simulate a wrong plaintext against the stored hash. The audit and
-    row-A SELECTs always return ``_rowcount`` (default 1) because they
-    don't gate the result.
+    ``rowcount_after_round_trip`` is kept for backward compatibility
+    with the pre-2026-08-23 PG crypt() round-trip SELECT 1 FROM ... WHERE
+    password=crypt(...) path. After member.checkpassword was rewritten to
+    verify locally (no PG round-trip), the round-trip SELECT no longer
+    exists and this attribute is read but ignored. It is preserved so
+    older test scenarios that supplied it continue to construct without
+    TypeError. The audit and row-A SELECTs always return ``_rowcount``
+    (default 1) because they don't gate the result.
     """
 
     def __init__(
@@ -161,7 +165,19 @@ def echo_calls(monkeypatch):
     return captured
 
 
-_BCRYPT_HASH = "$2b$12$" + "a" * 53  # 60 chars total: $2b$ + cost + $ + 22-salt + 31-hash
+# Real bcrypt hash for plaintext "12345" at cost 4 (fast for tests).
+# Generated at import time via passlib with a fixed 22-char base64 salt so
+# the value is deterministic across test runs (the audit tests only need
+# the prefix $2b$ and the 60-char length; the checkpassword test needs
+# stdlib crypt() / passlib bcrypt.verify to confirm it as the password
+# for "12345"). If passlib is unavailable, fall back to a syntactically
+# valid 60-char placeholder that audit still classifies as bcrypt but
+# verify rejects — the checkpassword test will skip via pytest.importorskip.
+try:
+    from passlib.hash import bcrypt as _pl_bcrypt  # noqa: F401
+    _BCRYPT_HASH = _pl_bcrypt.using(rounds=4, salt="12345678901234567890uv").hash("12345")
+except ImportError:  # pragma: no cover
+    _BCRYPT_HASH = "$2b$04$" + "Z" * 22 + "." * 31
 _MD5CRYPT_HASH = "$1$AUNKK0aN$" + "abcdefghijklmnopqrstuvwxyz01"  # 34 chars total
 
 
