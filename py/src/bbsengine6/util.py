@@ -898,7 +898,7 @@ def timedeltastr(delta: Any) -> str:
 def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
     """Encrypt a plaintext password using the database crypt() function.
 
-    Executes a PostgreSQL crypt() function call with MD5 salt generation.
+    Executes a PostgreSQL crypt() function call with bcrypt (bf) salt generation.
 
     Args:
         args: Arguments object containing database connection configuration.
@@ -909,14 +909,13 @@ def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
 
     Note:
         This function requires PostgreSQL with the pgcrypto extension installed.
-        MD5 hashing is provided for legacy compatibility but stronger algorithms
-        like bcrypt are recommended for new systems.
+        bcrypt hashing is used; stronger than legacy MD5.
 
     Example:
         >>> encrypted = getencryptedpassword(args, "mypassword")
     """
     io.echo(f"getencryptedpassword.100: {plaintextpassword=}", level="debug")
-    sql = "select crypt(%s, gen_salt('md5'))"
+    sql = "select crypt(%s, gen_salt('bf'))"
     dat = (plaintextpassword,)
     with database.connect(args) as conn, conn.cursor() as cur:
         cur.execute(sql, dat)
