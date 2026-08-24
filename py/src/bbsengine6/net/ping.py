@@ -75,6 +75,8 @@ async def connect(
     path: str = _DEFAULT_PATH,
     timeout: float = _DEFAULT_TIMEOUT,
     prog: str = "ping",
+    ping_interval: Optional[float] = None,
+    ping_timeout: Optional[float] = None,
 ) -> Any:
     """Open a WebSocket to ``ws://{host}:{port}{path}``.
 
@@ -85,10 +87,26 @@ async def connect(
     ``raise ... from exc``. The ``prog`` keyword is forwarded to
     :class:`PingUnavailable` so the rendered message identifies the
     caller (e.g. ``bedping:``).
+
+    The ``ping_interval`` and ``ping_timeout`` kwargs forward to
+    :func:`websockets.connect` so callers with long blocking
+    sections outside the asyncio loop (terminal prompts, human
+    menu decisions) can widen the keepalive window. When omitted,
+    the websockets library defaults apply (``ping_interval=20``,
+    ``ping_timeout=20``). Use these to avoid spurious
+    ``ConnectionClosedError: 1011 keepalive ping timeout`` when
+    the user's wall-clock between sends exceeds the default 20s.
     """
     url = f"ws://{host}:{port}{path}"
+    kwargs: Dict[str, Any] = {}
+    if ping_interval is not None:
+        kwargs["ping_interval"] = ping_interval
+    if ping_timeout is not None:
+        kwargs["ping_timeout"] = ping_timeout
     try:
-        return await asyncio.wait_for(websockets.connect(url), timeout=timeout)
+        return await asyncio.wait_for(
+            websockets.connect(url, **kwargs), timeout=timeout
+        )
     except (
         ConnectionRefusedError,
         OSError,
