@@ -642,6 +642,8 @@ class WebSocketServer:
         secret_key: Optional[bytes] = None,
         channel_state: Optional["ChannelState"] = None,
         session_manager: Optional[Any] = None,
+        ping_interval: Optional[float] = None,
+        ping_timeout: Optional[float] = None,
     ):
         """
         Initialize WebSocket server.
@@ -707,6 +709,17 @@ class WebSocketServer:
         self._servers: List[asyncio.Server] = []
         self._clients: Dict[Any, Set] = {}  # path -> set of websockets
         self._running = False
+        # Per-listener WebSocket keepalive (seconds). Forwarded to
+        # ``websockets.serve()`` in :meth:`start`. ``None`` means
+        # "use the websockets library default" (20s ping interval,
+        # 20s ping timeout), which is too aggressive for terminal
+        # clients whose main loop interleaves blocking stdin reads;
+        # long pauses outside the asyncio loop starve the ping
+        # task and trigger ``ConnectionClosedError: 1011 keepalive
+        # ping timeout`` on the server side. Bed/zoid6 daemons
+        # typically read these from their JSON config.
+        self._ping_interval: Optional[float] = ping_interval
+        self._ping_timeout: Optional[float] = ping_timeout
         # Actual bound port of the first listener (legacy attribute). Set
         # after ``start()`` completes its socket bind; equals the requested
         # ``self._binds[0][1]`` when that port was not 0. New code should
@@ -958,9 +971,32 @@ class WebSocketServer:
         echoed["request_id"] = request_id
         return echoed
 
-    async def start(self) -> None:
-        """Start the WebSocket server."""
+    async def start(
+        self,
+        *,
+        ping_interval: Optional[float] = None,
+        ping_timeout: Optional[float] = None,
+    ) -> None:
+        """Start the WebSocket server.
+
+        ``ping_interval`` and ``ping_timeout`` (seconds) forward to
+        :func:`websockets.serve` so the server's keepalive window
+        can be widened beyond the library default of 20s/20s. This
+        matters for terminal clients whose main loop is interleaved
+        with blocking stdin reads — the asyncio loop is frozen
+        during those reads, so the server's ping task can fire
+        without the client ever answering, hitting the 20s window
+        and closing the socket with 1011. When omitted here, the
+        websockets library defaults apply; values set on
+        :class:`WebSocketServer` via the constructor take precedence
+        over per-call overrides.
+        """
         import websockets
+
+        if ping_interval is not None:
+            self._ping_interval = ping_interval
+        if ping_timeout is not None:
+            self._ping_timeout = ping_timeout
 
         self._running = True
 
@@ -1136,12 +1172,16 @@ class WebSocketServer:
         servers: List[asyncio.Server] = []
         try:
             for family, port_int, sockaddr, sock in bound_sockets:
-                server = await websockets.serve(
-                    on_connect,
-                    sock=sock,
-                    create_connection=PeerLoggingServerConnection,
-                    logger=logging.getLogger("websockets.server"),
-                )
+                serve_kwargs: Dict[str, Any] = {
+                    "sock": sock,
+                    "create_connection": PeerLoggingServerConnection,
+                    "logger": logging.getLogger("websockets.server"),
+                }
+                if self._ping_interval is not None:
+                    serve_kwargs["ping_interval"] = self._ping_interval
+                if self._ping_timeout is not None:
+                    serve_kwargs["ping_timeout"] = self._ping_timeout
+                server = await websockets.serve(on_connect, **serve_kwargs)
                 servers.append(server)
         except Exception:
             for s in servers:
