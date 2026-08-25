@@ -794,3 +794,118 @@ class TestScreenShimContextVarRouting:
                 assert "door-render" not in rendered
         finally:
             reset_active_registry(token)
+
+
+# ---------------------------------------------------------------------------
+# Regression: bbsengine6.screen and bbsengine6.io.screen must be the same
+# module object. Pre-registration in bbsengine6/io/__init__.py pins the
+# aliasing contract.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+class TestScreenModuleUnification:
+    """bbsengine6.screen and bbsengine6.io.screen resolve to one module.
+
+    The same dual-module-import bug documented for bbsengine6.session in
+    casino/tests/test_main_dispatch.py:183-193 affected screen too:
+    pytest can produce two distinct module objects for the same logical
+    path, so mock.patch("bbsengine6.io.screen.X") and
+    mock.patch("bbsengine6.screen.X") would land on different bindings
+    and not stick for callers that imported the other path.
+    """
+
+    def test_bbsengine6_screen_is_bbsengine6_io_screen(self):
+        import bbsengine6.screen as canonical
+        import bbsengine6.io.screen as legacy
+        assert canonical is legacy
+        assert sys.modules["bbsengine6.io.screen"] is canonical
+        assert sys.modules["bbsengine6.screen"] is canonical
+
+    def test_from_import_resolves_against_canonical(self):
+        from bbsengine6.io.screen import (
+            setarea,
+            setbottombar,
+            init,
+            register_bottombar_fragment,
+            unregister_bottombar_fragment,
+            _render_bottombar_fragments,
+            bottombarstack,
+        )
+        import bbsengine6.screen as canonical
+        # Every legacy import resolves to the canonical symbol.
+        assert setarea is canonical.setarea
+        assert setbottombar is canonical.setbottombar
+        assert init is canonical.init
+        assert register_bottombar_fragment is canonical.register_bottombar_fragment
+        assert unregister_bottombar_fragment is canonical.unregister_bottombar_fragment
+        assert _render_bottombar_fragments is canonical._render_bottombar_fragments
+        assert bottombarstack is canonical.bottombarstack
+
+    def test_patch_on_canonical_visible_via_legacy_path(self):
+        import bbsengine6
+        import bbsengine6.screen as canonical
+        from bbsengine6.io import screen as legacy  # noqa: F401
+
+        sentinel = object()
+        with patch.object(canonical, "setarea", sentinel):
+            assert legacy.setarea is sentinel
+            assert bbsengine6.io.screen.setarea is sentinel
+
+    def test_patch_on_legacy_visible_via_canonical_path(self):
+        import bbsengine6
+        from bbsengine6.io import screen as legacy
+
+        sentinel = object()
+        with patch.object(legacy, "setarea", sentinel):
+            assert bbsengine6.screen.setarea is sentinel
+            assert sys.modules["bbsengine6.io.screen"].setarea is sentinel
+
+    def test_patch_dotted_string_path_lands_on_canonical(self):
+        # Patching via the dotted string "bbsengine6.io.screen.setarea"
+        # must reach the same module attribute as patching via
+        # "bbsengine6.screen.setarea". Without unification these would
+        # be different module objects.
+        import bbsengine6
+        sentinel = object()
+        with patch("bbsengine6.io.screen.setarea", sentinel):
+            assert bbsengine6.screen.setarea is sentinel
+        with patch("bbsengine6.screen.setarea", sentinel):
+            assert bbsengine6.io.screen.setarea is sentinel
+
+    def test_setarea_propagates_exceptions(self):
+        """setarea is a direct delegation, not a try/except wrapper.
+
+        Regression: the previous bbsengine6.screen.setarea wrapper
+        silently returned None on any exception, hiding bugs in legacy
+        callers. The current implementation raises.
+        """
+        import bbsengine6.screen as canonical
+
+        # Sanity: setarea and setbottombar are distinct callable objects,
+        # but setarea delegates to setbottombar (so patching the
+        # underlying setbottombar must affect setarea's behavior).
+        assert callable(canonical.setarea)
+        assert callable(canonical.setbottombar)
+
+        with patch(
+            "bbsengine6.screen.setbottombar",
+            side_effect=RuntimeError("boom"),
+        ):
+            with pytest.raises(RuntimeError):
+                canonical.setarea("left", "right")
+
+    def test_setarea_emits_deprecation_warning(self):
+        """setarea is on the deprecation path; warn on every call."""
+        import bbsengine6.screen as canonical
+        import warnings
+
+        with patch("bbsengine6.screen.setbottombar", return_value=None):
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                canonical.setarea("left", "right")
+        deprecation = [
+            w for w in caught if issubclass(w.category, DeprecationWarning)
+        ]
+        assert deprecation, "expected DeprecationWarning from setarea"
+        assert "bbsengine6.bottombar" in str(deprecation[0].message)
