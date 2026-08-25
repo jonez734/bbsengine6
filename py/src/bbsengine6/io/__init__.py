@@ -1,4 +1,27 @@
+import sys as _sys
 import warnings
+
+# Unify bbsengine6.io.screen with bbsengine6.screen so every access path
+# (attribute access, from-import, mock.patch, monkeypatch.setattr) lands on
+# the same module object. Without this pre-registration, pytest's import
+# isolation can produce two distinct module objects for the same logical
+# path, and patches against one don't reach the other — the same family
+# of bug documented for bbsengine6.session in
+# casino/tests/test_main_dispatch.py:183-193.
+#
+# Pre-registering here also lets Python's `from bbsengine6.io.screen
+# import X` resolve `X` against the canonical module after
+# bbsengine6/io/screen.py is removed (Python's `from X import Y` looks
+# `X` up in sys.modules first; without this entry the import would
+# raise ModuleNotFoundError).
+#
+# This MUST run before the eager submodule imports below — some of those
+# submodules (notably .getch) do `from . import screen` at module load
+# time, which would otherwise trigger a circular import against
+# bbsengine6.io's own __init__.py.
+from bbsengine6 import screen as _canonical_screen
+_sys.modules[__name__ + ".screen"] = _canonical_screen
+
 
 # Import and expose functions from submodules
 # Suppress deprecation warnings during import
@@ -48,9 +71,7 @@ def __getattr__(name):
 
         return const
     if name == "screen":
-        from . import screen
-
-        return screen
+        return _canonical_screen
     if name == "getterminalwidth":
         return getterminalwidth
     if name == "setvariable":

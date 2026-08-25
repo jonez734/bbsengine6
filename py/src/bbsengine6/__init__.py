@@ -2,7 +2,12 @@
 # from . import database
 # from . import session
 # from . import module
-# from . import screen
+# `screen` is the canonical home for the bottombar / screen-positioning
+# back-compat shims. bbsengine6.io.screen is pre-registered as an alias
+# for this module in bbsengine6/io/__init__.py so every access path
+# (bbsengine6.screen, bbsengine6.io.screen, from-import, mock.patch)
+# lands on the same module object.
+from . import screen
 # from . import blurb
 # from . import folder
 # from . import menu
@@ -33,6 +38,7 @@ from .module import (
 )
 
 __all__ = [
+    "screen",
     "register_module",
     "unregister_module",
     "is_module_registered",
