@@ -250,14 +250,14 @@ def getcurrentid(args, **kwargs):
             rec = cur.fetchone()
             moniker = rec["moniker"]
             _threadlocal.id = moniker
-            if args.debug is True:
+            if args is not None and getattr(args, "debug", False) is True:
                 io.echo(f"getcurrentid.120: {moniker=}", level="debug")
             return moniker
         except psycopg.DatabaseError:
             io.echo_traceback(f"bbsengine6.member.getcurrentid.180:")
             return None
 
-    if args.debug is True:
+    if args is not None and getattr(args, "debug", False) is True:
         io.echo(f"bbsengine6.member.getcurrentid.120: cached={cached}", level="debug")
 
     conn = kwargs.get("conn", None)
