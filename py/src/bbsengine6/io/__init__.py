@@ -60,6 +60,13 @@ def getterminalwidth() -> int:
     return terminal.width()
 
 
+def getterminalheight() -> int:
+    """Return the current terminal height in lines (back-compat shim)."""
+    from . import terminal
+
+    return terminal.height()
+
+
 # For backwards compatibility, also expose as module attributes via __getattr__
 def __getattr__(name):
     if name == "terminal":
@@ -74,6 +81,8 @@ def __getattr__(name):
         return _canonical_screen
     if name == "getterminalwidth":
         return getterminalwidth
+    if name == "getterminalheight":
+        return getterminalheight
     if name == "setvariable":
         # Legacy alias for setvar.
         from .echo import setvar
@@ -106,6 +115,7 @@ __all__ = [
     "inputchar",
     "getch",
     "getterminalwidth",
+    "getterminalheight",
     "install_signal_handlers",
     "inputcompleter",
 ]
