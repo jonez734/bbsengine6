@@ -136,11 +136,12 @@ markdown:
 skin-prod:
 	$(MAKE) -C skin stage
 	$(RSYNC) $(ENGINESTAGE)skin/ $(ENGINEPROD)skin/
-#wwwcom:
-#	$(MAKE) -C www com
 
 wwworg:
 	$(MAKE) -C www org
+
+wwwcom:
+	$(MAKE) -C www com
 
 engine:
 	$(MAKE) -C engine all
@@ -231,7 +232,7 @@ sign:
 
 wheel-release: build rename-sdist sign
 
-.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-www deploy-tui
+.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-tui
 .PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
 
@@ -257,7 +258,9 @@ markdown-deploy:
 markdown-deploy-prod: parsedown-deploy
 	$(RSYNC) /srv/www/markdown/ merlin:/srv/www/markdown/
 
-deploy-www: deploy
+deploy-wwworg: wwworg
+
+deploy-wwwcom: wwwcom
 
 deploy:
 	$(MAKE) -C engine stage
