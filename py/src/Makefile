@@ -1,7 +1,11 @@
 PROJECT = bbsengine6
 OUTDIR = /srv/repo/$(PROJECT)/
-VERSION := $(shell date +%Y%m%d%H%M)
-export VERSION_PREFIX = 0.0.1.dev
+# Allow VERSION/VERSION_PREFIX to be passed in by the parent Makefile
+# (see ../Makefile deploy-tui target). Fall back to a fresh timestamp
+# only when invoked standalone, so the wheel produced by `make build`
+# in the parent and the wheel selected here stay in lockstep.
+VERSION ?= $(shell date +%Y%m%d%H%M)
+export VERSION_PREFIX ?= 0.0.1.dev
 
 PYTHON ?= python3
 PIP ?= $(PYTHON) -m pip
