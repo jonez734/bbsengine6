@@ -1,203 +1,379 @@
-# TODO: `bbsengine6.bottombar` architecture and per-connection plumbing
+# TODO: bottombar thin-client wire push (single source of truth)
 
-> **STATUS (2026-07-22): Phase 0–3 complete; Phase 4a (per-connection
-> plumbing) implemented.** The `bbsengine6.bottombar` module lives
-> as a single file (`py/src/bbsengine6/bottombar.py`). The
-> per-connection plumbing described in Phase 4a (`registry_for(name)`,
-> `set_context_for`, `render_for`, `set_active_registry`,
-> `reset_active_registry`, `ContextVar` routing in
-> `_resolve_registry`) is implemented. Door mode (no ContextVar set)
-> is unchanged. See the Phase 4a section below for the final list of
-> checkboxes.
+> **This file owns every TODO item related to pushing the bottombar
+> status bar from the bbsengine6 / bed process to a thin client.**
+> Per-package fragment registration (casino, empyre, bed bank, etc.),
+> the per-connection `FragmentRegistry`, and the BED-side wire push
+> envelope all live here. Non-bottombar items (general `echo`,
+> `BEDSink.echo`, `BEDSink.inputchoice`, `WebSocketServer.on_connect_hook`
+> as a general mechanism, etc.) stay in their owning TODO files and
+> are referenced here only when they intersect with the bottombar.
 
-The bottombar is the BBS-style status bar at the bottom of the terminal.
-It has a left side (free-form text from the current game/mode) and a
-right side (a list of "fragments" — small str or callable(**kwargs) -> str
-items registered by whichever package is currently active).
+## Status (2026-08-26)
 
-`bbsengine6.bottombar` is the new (as of 2026) home for the fragment
-machinery, replacing the process-global `_bottombar_fragments` list and
-the per-package `setbottombar(args, buf, **kwargs)` shims that used to
-live in `bbsengine6.io.screen`. See `bbsengine6/py/src/bbsengine6/bottombar.py`
-and `bbsengine6/py/tests/test_bottombar.py`.
+The in-process `FragmentRegistry` and per-connection routing are done:
 
-This TODO file tracks bottombar-specific work. The broader `bbsengine6.io`
-sink infrastructure that touches the bottombar primitives is tracked in
-the main `TODO.md` (`bbsengine6.io` sink infrastructure for thin-client
-BED conversion); only the bottombar-specific facets are mirrored here.
+- [x] `bbsengine6.bottombar` module with `FragmentRegistry`,
+      `default_registry()`, `setbottombar`, register/unregister/clear
+      helpers (`bbsengine6/py/src/bbsengine6/bottombar.py`).
+- [x] `bbsengine6.io.screen` reduced to back-compat shims
+      (`bbsengine6/py/src/bbsengine6/screen.py:157-216`).
+- [x] `bbsengine6.bottombar.registry_for(name)` factory +
+      `set_context_for` / `render_for` for per-package registries
+      (`bottombar.py:316-348`).
+- [x] Per-connection ContextVar routing via `_active_registry`,
+      `set_active_registry(reg)` / `reset_active_registry(token)`
+      (`bottombar.py:267-271, 351-363`). Door mode (no ContextVar
+      set) is unchanged.
 
-## Status (2026-06-30)
+What's NOT done — the wire push to a thin client — is below.
 
-- [x] `bbsengine6.bottombar` module created with `FragmentRegistry`,
-      `default_registry()`, `setbottombar`, `register_bottombar_fragment`,
-      `unregister_bottombar_fragment`, `clear_bottombar_fragments`.
-- [x] `bbsengine6.io.screen` reduced to back-compat shims that emit
-      `DeprecationWarning` (see `bbsengine6/io/screen.py:_warn_shim_deprecated`).
-- [x] `bbsengine6.startup.lib.setbottombar` and
-      `bbsengine6.backend.lib.setbottombar` collapsed to one-liner shims
-      that delegate to `bbsengine6.bottombar.setbottombar`.
-- [x] `empyre.lib.setbottombar` migrated to call
-      `bbsengine6.bottombar.setbottombar` directly (no shim).
-- [x] `casino.lib.setbottombar` and `casino.auth` migrated to call
-      `bbsengine6.bottombar.*` directly.
-- [x] `bbsengine6.ed.common.ui.unregister_bottombar` no longer calls
-      `screen.clear_bottombar_fragments()` (which clobbered every
-      package's fragments) — it now unregisters only the fragments the
-      editor itself registered.
-- [x] `bbsengine6/tests/test_bottombar.py` covers registry basics,
-      per-package independence, set_context, kwargs forwarding,
-      notification prepending, thread safety, and screen-shim routing.
-- [x] `bbsengine6/tests/test_screen.py` continues to pass unchanged
-      (62 tests; shim preserves the old public API).
+---
 
-## Phase 4a — Per-connection `bbsengine6.bottombar.registry_for(name)` plumbing
+## Phase 5a — `render_structured()` separates "render" from "layout"
 
-`bbsengine6.bottombar` (new in this revision) already exposes
-`default_registry()` and the `FragmentRegistry` class, plus a back-compat
-shim in `bbsengine6.io.screen`. The BED-sink work in the main `TODO.md`
-needs to register/unregister fragments **per connection** instead of
-process-globally, so that one player's editor status fragment doesn't
-bleed into another player's bottombar.
+The terminal-width mismatch between server (bed's own stdout) and
+client (40/80/100 columns) is the reason a fully-pre-rendered
+bottombar string cannot be shipped over the wire. The server has no
+way to know the client's width without an extra round-trip, and a
+fragile one at that (resize events, connect ordering, MCI tokens).
 
-- [x] Add `bbsengine6.bottombar.registry_for(name: str) -> FragmentRegistry`:
-  a module-level factory that returns a named, cached `FragmentRegistry`
-  instance. The default registry lives at the key `"default"`. Calling
-  `registry_for("empyre")` from inside empyre gives empyre a private
-  registry; calling it from a BED per-connection setup gives that
-  connection a private registry. Pre-implementation test
-  (`test_bottombar.py::TestPerPackageRegistries`) already exercises
-  the underlying independence.
-- [x] Add `bbsengine6.bottombar.set_context_for(name, **ctx)` and
-  `bbsengine6.bottombar.render_for(name, **kwargs)` so BED-sink code
-  can stash args/player/pool and render against a named registry
-  without going through the default.
-- [x] Wire `screen.setbottombar` and `screen.register/unregister_bottombar_fragment`
-  (the deprecated back-compat shims) to look up the per-connection
-  registry from a `contextvars.ContextVar` set by the BED connection
-  layer, falling back to `default_registry()` for door mode. This is
-  the per-connection plumbing that the BED-sink work in the main
-  `TODO.md` (Phase 4) implicitly assumes but does not spell out.
-- [x] Update `bbsengine6.bottombar.setbottombar` and the shim
-  to read the per-connection ContextVar first, default registry
-  second, so door mode is unchanged. Also added
-  `set_active_registry(reg)` / `reset_active_registry(token)` so BED
-  connection setup/teardown can manage the ContextVar.
-- [x] **Backward compat check**: door-mode callers see zero behavior
-  change because no `ContextVar` is set. `test_screen.py` and
-  `test_bottombar.py` pass unchanged.
+Solution: split `_render_bottombar` into two steps. The server does
+**rendering** (MCI substitution, fragment concatenation, notification
+prepend). The client does **layout** (terminal-width measurement,
+left-truncation, padding, cursor positioning).
 
-### Phase 4a new tests
+- [ ] Add `bbsengine6.bottombar.render_structured(registry, left,
+      **kwargs) -> dict` returning
+      `{"left": str, "right": List[str], "separator": " | ",
+      "left_priority": "truncate", "ts": iso}`.
+      - Pre-renders each fragment string via
+        `bbsengine6.io.echo.echo(item, wordwrap=False, end="")` so
+        the client receives MCI-substituted text (no server-side
+        width math baked in).
+      - `right` is the post-`FragmentRegistry.render()` list split
+        on `" | "` — same shape the door-mode renderer produces
+        internally.
+      - `left_priority` defaults to `"truncate"` (truncate with
+        `...` if too long); a future game may emit `"drop"` or
+        `"ellipsize"`.
+      - The notification fragment (`F2: messages (N)`) is prepended
+        to `right` exactly as today.
+- [ ] Refactor `_render_bottombar(registry, left, right, **kwargs)`
+      (`bottombar.py:419-467`) into two functions:
+      - `_render_bottombar_structured(registry, left, **kwargs) ->
+        dict`: calls `render_structured`, returns the dict.
+      - `_render_bottombar_layout(structured, width) -> str`: takes
+        a structured dict + a width, returns the ANSI cursor
+        sequence for the last line (the existing truncation +
+        padding + emit logic, parameterized on width).
+      - Door mode calls `setbottombar` → `_resolve_registry` →
+        `_render_bottombar_structured` → `_render_bottombar_layout(
+        structured, terminal.width() - 2)` → existing ANSI
+        emission. **Byte-for-byte identical output for door mode.**
+- [ ] **Backward compat check**: `py/tests/test_bottombar.py` and
+      `py/tests/test_screen.py` pass unchanged. Door-mode
+      byte-for-byte parity is the regression bar.
 
-Added to `py/tests/test_bottombar.py`:
+---
 
-- `TestRegistryFor` — `registry_for(name)` returns a named
-  `FragmentRegistry`, caches by name, returns the same object for
-  `"default"` and `default_registry()`, does not pollute the default,
-  and bypasses the ContextVar.
-- `TestSetContextForAndRenderFor` — `set_context_for(name, ...)`
-  stashes context on the named registry; `render_for(name)` renders
-  the named registry and passes the stashed context to callables.
-- `TestContextVarRouting` — without a ContextVar, `setbottombar`,
-  `register/unregister_bottombar_fragment`, and
-  `clear_bottombar_fragments` route to `default_registry()`; with a
-  ContextVar set, they route to the supplied registry; explicit
-  `set_context_for(name, ...)` still goes to the named registry even
-  while the ContextVar is set; `reset_active_registry(token)`
-  restores door-mode behavior.
-- `TestScreenShimContextVarRouting` — `screen.setbottombar`,
-  `screen.register_bottombar_fragment`,
-  `screen.unregister_bottombar_fragment`, and
-  `screen._render_bottombar_fragments` route to the active registry
-  when the ContextVar is set, and to the default registry when it
-  is not.
+## Phase 5b — `echo{stream:"bottombar"}` wire push
 
-## Sink-integration facets (mirrored from the main `TODO.md`)
+The bottombar reaches the thin client via the generic `echo` push
+channel already planned in `bed/TODO.md` "`echo` and `echo_ack` —
+generic push-based text channel". This phase makes the bottombar a
+named `echo` stream; it does not introduce a new top-level wire type.
 
-The main `TODO.md` (`bbsengine6.io` sink infrastructure) covers the
-general sink mechanism. The bottombar-specific facets of that work,
-extracted:
+### Wire shape
+```json
+# Server → client: bottombar update on the "bottombar" stream
+S→C {"type":"echo",
+     "request_id":"r42",
+     "stream":"bottombar",
+     "seq":17,
+     "payload":{
+       "left":"In casino lobby",
+       "right":["127.0.0.1:8765","alice","3 credits","F2: messages (3)"],
+       "separator":" | ",
+       "left_priority":"truncate"},
+     "flush":false,
+     "ts":"2026-08-26T11:30:01Z"}
+```
 
-### Sink protocol (Phase 0 in main `TODO.md`)
+The `echo` envelope, `request_id`, `seq`, `flush`, and `ts` semantics
+are owned by `bed/TODO.md` "echo and echo_ack". The bottombar
+**payload** shape (the four fields above) is owned by this file.
 
-- [ ] `bbsengine6.io.sink.Sink` protocol includes
-  `screen_setbottombar`, `screen_register_bottombar_fragment`,
-  `screen_unregister_bottombar_fragment` methods.
-- [ ] `bbsengine6.io.sink.DefaultSink` delegates those to the
-  current `bbsengine6.io.screen._impl_*` private functions (the
-  back-compat shim paths in `bbsengine6.io.screen` become the
-  default-sink targets).
+### Why `stream="bottombar"` and not a separate `setbottombar` type
+- The `echo` envelope already defines three streams (`main`,
+  `bottombar`, `statusline`) at `bed/TODO.md:194-214`. A separate
+  top-level `setbottombar` type would duplicate the transport
+  contract (seq, flush, ack, cancel, reconnect-resume) without
+  reusing it.
+- `echo{stream:"bottombar"}` carries the bottombar payload in
+  `echo.payload`. The thin client dispatches on
+  `msg.get("stream") == "bottombar"`.
+- `bed/TODO.md:1067-1071` (BEDSink's bottombar methods) is
+  absorbed into the generic `BEDSink.echo` path: the sink checks
+  the active registry, calls `render_structured`, and ships the
+  payload.
 
-### Per-primitive sink dispatch (Phase 0 in main `TODO.md`)
+### Tasks
+- [ ] Add `bbsengine6.bottombar.to_echo_payload(registry, left,
+      **kwargs) -> dict` returning the four-field payload above.
+      Thin wrapper over `render_structured` that strips
+      `ts`/`request_id`/`seq` (those are added by `EchoService`,
+      not by the bottombar).
+- [ ] Add `bbsengine6.io.sink._STREAM_BOTTOMBAR: ContextVar[str] =
+      ContextVar("bbsengine6_io_sink_stream_bottombar", default="")`.
+      Set by `bbsengine6.io.screen.setbottombar` /
+      `register_bottombar_fragment` /
+      `unregister_bottombar_fragment`'s sink-dispatch path; read
+      by `BEDSink.echo` to choose `stream="bottombar"` vs
+      `stream="main"`. No kwarg change to the public `setbottombar`
+      signature.
+- [ ] `BEDSink.echo(text, **kwargs)` (in `bed/sinks/bed_sink.py`,
+      defined per `bed/TODO.md:1041-1101`) gains a
+      `stream="bottombar"` path: when
+      `_STREAM_BOTTOMBAR.get() == "1"`, the sink reads the active
+      `FragmentRegistry`, calls
+      `bbsengine6.bottombar.to_echo_payload`, and ships an `echo`
+      envelope with `stream="bottombar"` instead of `stream="main"`.
+      The sink ignores `text` in this path (the structured payload
+      is the source of truth).
+- [ ] `bbsengine6.io.screen.setbottombar` /
+      `register_bottombar_fragment` /
+      `unregister_bottombar_fragment` (the back-compat shims at
+      `bbsengine6/py/src/bbsengine6/screen.py:157-216`) gain a
+      sink-dispatch path: when a sink is installed, they
+      `_STREAM_BOTTOMBAR.set("1")`, call
+      `sink.setbottombar(...)` /
+      `sink.register_bottombar_fragment(...)` /
+      `sink.unregister_bottombar_fragment(...)`, then reset the
+      contextvar in a `finally` block. The sink is responsible
+      for translating to `echo{stream:"bottombar"}`. **Per
+      `bed/TODO.md §"Phase 0 — BEDSink for the BED process"`**
+      (lines 1067-1071, rephrased to point here).
+- [ ] `register_*` / `unregister_*` through the sink trigger a
+      **full re-render** on the client — the server pushes a
+      fresh `echo{stream:"bottombar"}` envelope with the updated
+      `right[]` (no per-fragment delta wire type). The thin
+      client never maintains its own fragment registry; the
+      structured `payload.right[]` from the server is the
+      source of truth.
+- [ ] `bed/client/bottombar.py` (new file, ~40 lines): the thin
+      client receives `echo` envelopes and dispatches by stream.
+      On `stream="bottombar"`, the handler does the client-side
+      layout step (terminal width measurement, truncation,
+      padding, cursor positioning) — port of
+      `_render_bottombar_layout` from Phase 5a. Door-mode games
+      that use the existing `sys.modules` swap never see these
+      envelopes.
 
-- [ ] Refactor `bbsengine6.io.screen.setbottombar` into:
-  - `def _impl_screen_setbottombar(left, right=None, **kwargs)`:
-    the current code path.
-  - `def setbottombar(...)`: the public function. If
-    `_active_sink.get()` returns a non-`None` sink, dispatch to
-    `sink.screen_setbottombar(...)`. Otherwise call
-    `_impl_screen_setbottombar(...)`.
-- [ ] Same for `register_bottombar_fragment` and
-  `unregister_bottombar_fragment`.
-- [ ] **Backward compat check**: door-mode callers see zero behavior
-  change. `test_screen.py` and `test_bottombar.py` pass.
+### Tests
+- [ ] `bbsengine6/py/tests/test_render_structured.py`:
+    - `render_structured` returns the four-field dict for a
+      registry with two string fragments + two callable
+      fragments.
+    - Notification fragment is prepended to `right` when
+      `get_notification_status()` returns a non-empty count.
+    - `left_priority` defaults to `"truncate"`.
+    - Each fragment string in `right` is MCI-substituted (run
+      `bbsengine6.io.echo.echo(item, wordwrap=False, end="")` on
+      it before adding to the list).
+- [ ] `bbsengine6/py/tests/test_render_structured_door_parity.py`:
+    - For a battery of `(left, registry contents)` inputs,
+      `_render_bottombar_layout(render_structured(...),
+      terminal.width() - 2)` produces byte-for-byte identical
+      output to the current `_render_bottombar(...)`. Asserts
+      equality against a snapshot of the legacy output.
+- [ ] `bbsengine6/py/tests/test_sink_stream_bottombar.py`:
+    - `_STREAM_BOTTOMBAR.set("1")` before calling
+      `sink.echo("hello")` makes the sink ship
+      `stream="bottombar"` instead of `stream="main"`.
+    - The contextvar is reset in `finally` even when the sink
+      raises.
+    - Two concurrent asyncio tasks with different contextvar
+      values see different streams (contextvar semantics).
+- [ ] `bed/tests/test_echo_bottombar_payload.py`:
+    - `BEDSink.setbottombar("left")` builds an `echo` envelope
+      with `stream="bottombar"` and `payload={left, right,
+      separator, left_priority}`.
+    - The same call via the sink-dispatched
+      `bbsengine6.io.screen.setbottombar` produces the same
+      envelope (proves the contextvar → sink path).
+    - `register_bottombar_fragment` / `unregister_bottombar_fragment`
+      through the sink ship `echo` envelopes with the
+      **updated** `right[]` (full re-render, not a delta).
+- [ ] `bed/tests/test_thin_client_bottombar_layout.py`:
+    - Given an `echo{stream:"bottombar", payload:{...}}` envelope
+      and a known terminal width (40, 80, 100), the client-side
+      layout produces the expected left-truncated / padded
+      string.
+    - At 80 columns, the rendered string fits in one line.
+    - At 40 columns, `left` is truncated with `...` and `right`
+      is preserved in full.
+    - At 100 columns, both fit with extra padding.
+    - `left_priority="drop"` (future value) is accepted and
+      produces a left-empty, right-only string.
 
-### Sink variants (Phase 4 in main `TODO.md`)
+### Door-mode byte-for-byte parity
+- [ ] Door mode never sets `_STREAM_BOTTOMBAR` and never sends an
+      `echo` envelope — there's no websocket to send to.
+      `bbsengine6.bottombar.setbottombar` continues to call
+      `_render_bottombar_layout` → `bbsengine6.io.echo` with
+      byte-for-byte identical output. `py/tests/test_bottombar.py`
+      and `py/tests/test_screen.py` pass unchanged.
+- [ ] When a sink IS installed but no websocket is attached
+      (e.g. a unit test), `setbottombar` falls back to the
+      default registry path. The sink is responsible for
+      buffering or dropping the call.
 
-- [ ] `screen.setbottombar`, `screen.register_bottombar_fragment`,
-  `screen.unregister_bottombar_fragment` all need sink-based
-  variants.
-- [ ] **Backward compat check**: door-mode callers see zero behavior
-  change. `test_io_backward_compat.py` passes.
+---
+
+## Per-package fragment registration (consolidated)
+
+Each game package owns its fragments via
+`bbsengine6.bottombar.registry_for(name)`. This section is the
+**canonical** list of per-package items; the game repos (`casino`,
+`empyre`, `bed bank`, `mistermcfeely`, `murdermotel`, `zoid6`)
+cross-reference here instead of duplicating. Game-specific call
+sites (e.g. empyre's 14 `setbottombar` calls) stay in the game's
+own TODO file.
+
+### `casino` (`bbsengine6.bottombar.registry_for("casino")`)
+- [x] `casino/src/casino/lib.py:440` — `_casino_registry =
+      bottombar.registry_for("casino")`.
+- [x] Three fragments registered in
+      `casino/src/casino/lib.py:458-488`:
+      `_casino_host_fragment` (host:port or "direct"),
+      `_casino_player_fragment` (bound moniker),
+      `_casino_credits_fragment` ("N credits" / "a credit" / "no credits").
+- [x] `casino/src/casino/lib.py:539-566` —
+      `casino.lib.setbottombar(args, buf, **kwargs)` delegates to
+      `bbsengine6.bottombar.setbottombar`.
+- [x] Registration on entry / cleanup on exit
+      (`casino/src/casino/main.py:125, 147`).
+- [ ] **Pending**: thin-client fragment `_casino_table_fragment`
+      at `casino/src/casino/TODO_CLIENT.md:137-154` —
+      `bbsengine6.bottombar.registry_for("casino").register(...)`.
+      Migrate from the deprecated back-compat shim to the
+      registry API. Tracked here, not in `casino/TODO_CLIENT.md`.
+- [ ] **Pending**: casino thin-client path calls
+      `BEDSink.setbottombar(...)` on every `bbsengine6.bottombar
+      .setbottombar` call, so the live bottombar updates on the
+      thin client whenever door-mode casino pushes. Game-repo
+      task lives in `casino/TODO.md` cross-reference section
+      (single line pointing here).
+
+### `empyre` (`bbsengine6.bottombar.registry_for("empyre")`)
+- [ ] **Pending migration** (was
+      `bbsengine6/TODO-BOTTOMBAR.md:168-199`):
+      `empyre/src/empyre/lib.py:99` constructs
+      `bottombar.FragmentRegistry(name="empyre")` directly. Swap
+      to `bottombar.registry_for("empyre")` (one-line change;
+      cached, so `_empyre_registry.args` / `__contains__` /
+      `__iter__` reads continue to work unchanged).
+- [ ] **Pending**: review empyre's `setbottombar` call sites
+      (14 sites across `empyre.player`, `empyre.main`,
+      `empyre.market`, `empyre.combat.joust`,
+      `empyre.combat.main`, `empyre.town.main`,
+      `empyre.town.lucifersden`,
+      `empyre.town.naturaldisasterbank`, `empyre.maint.main`,
+      `empyre.generatenpc`, `empyre.quests.main`,
+      `empyre.ship.lib`, `empyre.sysopoptions`) for whether
+      they should call
+      `bottombar.set_context_for("empyre", ...)` before
+      `bottombar.setbottombar(...)` to ensure the right
+      registry gets the stashed context. Follow-up pass after
+      the casino migration is the prototype. **Game-repo task
+      lives in `empyre/TODO.md`**, not here.
+- [ ] **Pending** (was `empyre/TODO.md:237`): mirror the three
+      empyre fragments from `lib.init` to the thin client at
+      `auth` time; re-push on every `register_*` call. Adopt
+      `BEDSink.setbottombar(...)` in the empyre thin-client
+      entry path. **Game-repo task lives in `empyre/TODO.md`**,
+      not here.
+- [ ] **Pending** (was `empyre/TODO.md:115-122`):
+      `screen.setbottombar` / `register_*` / `unregister_*` push
+      `echo{stream:"bottombar"}` frames in Phase 5b. Out of
+      scope for empyre's Phase 1a (which only handles
+      `stream="main"`). **Game-repo task lives in
+      `empyre/TODO.md`**, not here.
+
+### `bed bank` (`bbsengine6.bottombar.registry_for("bed")`)
+- [x] `bed/src/bed/tools/bank.py:765-810` —
+      `_register_bank_fragments` with `_bank_host_fragment` and
+      `_bank_moniker_balance_fragment`.
+- [x] `bed/src/bed/tools/bank.py:887, 924` —
+      `bottombar.setbottombar(...)` call sites in the bank tool.
+- [ ] **Pending**: thin-client push — bank tool's `setbottombar`
+      calls happen in the BED process, so on a thin-client
+      connection the push goes through `BEDSink.setbottombar`
+      automatically once the bank tool is given the websocket
+      handle. Game-repo task: pass the websocket handle to the
+      bank tool from BED's per-connection setup.
+
+### Other packages
+- [ ] **Future**: `mistermcfeely` (postoffice), `murdermotel`,
+      `zoid6` — `registry_for("<name>")` factory is generic;
+      per-package migration is one-line. Cross-reference here
+      when each game adopts the bottombar push.
+
+---
 
 ## Cross-references
 
-- `bbsengine6/TODO.md` — main engine TODO; sections `bbsengine6.io`
-  sink infrastructure (Phases 0, 3, 4, 5) cover the sink plumbing
-  that the bottombar primitives participate in.
-- `bbsengine6/TODO.md` — the F2-key "pending message count in
-  bottombar" item and the `get_notification_status()` design belong
-  to the message-delivery work, not to the bottombar-architecture
-  work, so they stay in the main TODO.
-- `empyre/TODO.md`, `bed/TODO.md` — per-game bottombar push
-  work; the thin-client BED conversion uses the per-connection
-  registry plumbing from Phase 4a above.
-- `casino/src/casino/lib.py::_casino_registry` — migrated to
-  `bbsengine6.bottombar.registry_for("casino")` (2026-07-22). The
-  per-package `_casino_registry` instance is now the same object as
-  `bottombar.registry_for("casino")` (cache-backed).
-- `empyre/src/empyre/lib.py::_empyre_registry` — **pending migration.**
-  Still constructed directly as `bottombar.FragmentRegistry(name="empyre")`
-  (line 99). The Phase 4a-equivalent swap is a one-liner:
-  ```python
-  _empyre_registry = bottombar.registry_for("empyre")
-  ```
-  The cached instance is the same object, so `_empyre_registry.args`,
-  `_empyre_registry.player`, the `__contains__` / `__iter__` /
-  `__len__` reads in the three fragment callables
-  (`_empyre_turns_fragment`, `_empyre_player_fragment`,
-  `_empyre_coins_fragment`), and the `_current_args` /
-  `_current_player` legacy globals all continue to work unchanged.
-  Empyre's `setbottombar` calls `bottombar.setbottombar` (not
-  `bottombar.registry_for("empyre").setbottombar`), so the central
-  shim routes through `_resolve_registry()` — which falls through to
-  the default registry in door mode. After the swap, the central
-  shim still falls through to the default; if the goal is to push
-  empyre's context into a per-connection registry too, the call
-  sites in `empyre.lib.setbottombar` (and the call sites in
-  `empyre.player`, `empyre.main`, `empyre.market`,
-  `empyre.combat.joust`, `empyre.combat.main`,
-  `empyre.town.main`, `empyre.town.lucifersden`,
-  `empyre.town.naturaldisasterbank`, `empyre.maint.main`,
-  `empyre.generatenpc`, `empyre.quests.main`,
-  `empyre.ship.lib`, `empyre.sysopoptions`) should be reviewed to
-  decide whether they should call
-  `bottombar.set_context_for("empyre", ...)` /
-  `bottombar.registry_for("empyre").set_context(...)` first to
-  ensure the right registry gets the stashed context, then call
-  `bottombar.setbottombar` (which now routes through
-  `_resolve_registry()`). This is a follow-up pass; the casino
-  migration is the prototype.
-- `bed/TODO.md` (Streams section) — updated with concrete
-  `set_active_registry` / `reset_active_registry` usage for the
-  per-connection routing that BED's eventual connection layer
-  will need.
+- `bbsengine6/TODO.md` §"Phase 0-5 sink infrastructure" — owns
+  the `bbsengine6.io.sink.Sink` protocol and `set_io_sink` /
+  `reset_io_sink`. **Phase 5b of this file does not depend on it
+  for the bottombar primitives** — the bottombar reaches the wire
+  through `BEDSink.setbottombar`, which is a sink method like the
+  other 10 primitives but only the bottombar primitives use it.
+- `bbsengine6/TODO.md` §"Phase 5 — MessageRouter + MessageRouterMixin
+  + WebSocketServer.on_connect_hook" — the hook mechanism. Used
+  by `BEDSink` (bed) for installing the per-connection sink.
+- `bed/TODO.md` §"echo and echo_ack" — owns the `echo` envelope
+  (`type`, `request_id`, `stream`, `seq`, `payload`, `flush`,
+  `ts`, `echo_ack`, `echo_cancel`, reconnect-resume). Phase 5b
+  of this file uses this envelope as-is and only fills in the
+  `payload` shape for `stream="bottombar"`.
+- `bed/TODO.md` §"BED Sink integration with bbsengine6.io" —
+  owns `BEDSink` and its installation. Phase 5b references this
+  for the sink side of the dispatch.
+- `casino/TODO.md` — single-line cross-reference: "Bottombar wire
+  push: see `bbsengine6/TODO-BOTTOMBAR.md`."
+- `empyre/TODO.md` — per-game bottombar items (the 14 call sites,
+  the auth-time fragment mirror, the Phase 1a bottombar follow-up)
+  live in `empyre/TODO.md` and reference here for the wire shape.
+- `zoid6/TODO.md` — single-line cross-reference: "Bottombar wire
+  push: see `bbsengine6/TODO-BOTTOMBAR.md`."
+
+---
+
+## Implementation order
+
+1. Phase 5a (`render_structured` + layout split). Door-mode parity
+   test (`py/tests/test_screen.py` +
+   `py/tests/test_bottombar.py`) is the regression bar.
+2. `EchoService` lands in `bed/api/echo.py` per `bed/TODO.md`
+   "`echo` and `echo_ack`" + "`echo` envelope plumbing".
+3. Phase 5b (`echo{stream:"bottombar"}` wire push via `BEDSink` +
+   thin-client layout). Depends on `EchoService` and Phase 5a.
+4. Per-package `registry_for("...")` migrations (casino done,
+   empyre pending, bed bank done). Game-repo tasks are 1-3 lines
+   each, pointing back here.
+
+Backward-compat gates at every step:
+- Door-mode byte-for-byte parity (`py/tests/test_screen.py`,
+  `py/tests/test_bottombar.py`).
+- `py/tests/test_bottombar.py::TestRegistryFor` /
+  `TestSetContextForAndRenderFor` / `TestContextVarRouting` /
+  `TestScreenShimContextVarRouting` — per-connection plumbing
+  invariants.
+- `bbsengine6/io/echo` return-value usage stays zero-affecting
+  (the `io.echo` Phase 3 return-value change is gated by the
+  pre-flight grep result in `bbsengine6/TODO.md` §"Phase 0a
+  pre-flight"; the bottombar work touches `io.echo` only via
+  `render_structured`'s per-fragment MCI render, which is
+  additive and does not depend on the return value).
