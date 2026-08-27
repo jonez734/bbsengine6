@@ -4,7 +4,13 @@ OUTDIR = /srv/repo/$(PROJECT)/
 # (see ../Makefile deploy-tui target). Fall back to a fresh timestamp
 # only when invoked standalone, so the wheel produced by `make build`
 # in the parent and the wheel selected here stay in lockstep.
-VERSION ?= $(shell date +%Y%m%d%H%M)
+#
+# Per-second resolution (matching ../Makefile PY_VERSION) so two
+# back-to-back `deploy bbsengine6.tui` runs in the same minute don't
+# produce identical wheel filenames — pip would otherwise compare the
+# freshly-built wheel's Version against the installed Version (same
+# string) and report "Requirement already satisfied".
+VERSION ?= $(shell date +%Y%m%d%H%M%S)
 export VERSION_PREFIX ?= 0.0.1.dev
 
 PYTHON ?= python3
@@ -27,11 +33,16 @@ deploy-tui:
 ifeq ($(DEPLOY_EDITABLE),1)
 	cd .. && $(PIP) install --no-cache-dir -e .
 else
-	@WHEEL=$(OUTDIR)/$(PROJECT)-$(VERSION_PREFIX)$(VERSION)-py3-none-any.whl; \
+	@WHEEL=$(OUTDIR)$(PROJECT)-$(VERSION_PREFIX)$(VERSION)-py3-none-any.whl; \
 	if [ ! -f "$$WHEEL" ]; then \
-		echo "expected wheel $$WHEEL not found" >&2; \
-		exit 1; \
+		WHEEL=$$(ls -t $(OUTDIR)$(PROJECT)-*.whl 2>/dev/null | head -1); \
+		if [ -z "$$WHEEL" ]; then \
+			echo "expected wheel $(OUTDIR)$(PROJECT)-$(VERSION_PREFIX)$(VERSION)-py3-none-any.whl not found, and no fallback wheel in $(OUTDIR)" >&2; \
+			exit 1; \
+		fi; \
+		echo "explicit wheel missing; falling back to newest in OUTDIR: $$WHEEL" >&2; \
 	fi; \
+	echo "WHEEL=$$WHEEL"; \
 	$(PIP) install --no-cache-dir $$WHEEL
 endif
 

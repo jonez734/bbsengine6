@@ -23,7 +23,16 @@ VERSION = 6
 # they produce the wheel filename (and the __version__ written to
 # py/src/$(PROJECT)/_version.py) so that the wheel produced by `build` and
 # the wheel selected by the deploy-tui sub-make stay in lockstep.
-PY_VERSION := $(shell date +%Y%m%d%H%M)
+#
+# Resolution is per-SECOND, not per-minute. Two `deploy bbsengine6.tui`
+# runs that landed in the same minute produced identical wheel filenames;
+# pip then compared the freshly-built wheel's Version against the
+# already-installed Version (same string) and reported "Requirement
+# already satisfied", so site-packages stayed stale while new wheels piled
+# up in /srv/repo/bbsengine6/. Second resolution collapses that 60-second
+# collision window to a 1-second one, which is short enough that a
+# back-to-back deploy is essentially never going to collide in practice.
+PY_VERSION := $(shell date +%Y%m%d%H%M%S)
 VERSION_PREFIX = 0.0.1.dev
 
 # Set by `deploy --editable` (deploytool). Empty by default. Propagated

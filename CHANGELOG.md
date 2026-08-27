@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### build: `PY_VERSION` now has second resolution; `deploy-tui` falls back to newest wheel in `OUTDIR`
+
+`bbsengine6/Makefile:26` `PY_VERSION` (and the matching fallback
+`bbsengine6/py/src/Makefile:7` `VERSION`) are now captured at
+**second** resolution (`%Y%m%d%H%M%S`), not minute resolution.
+Minute resolution produced a 60-second window during which two
+`deploy bbsengine6.tui` runs collided on the same wheel filename:
+the second run's `pip install` saw the freshly-built wheel's
+`Version` was identical to the already-installed `Version` and
+reported `Requirement already satisfied`, leaving the operator's
+venv stale while new wheels piled up in `/srv/repo/bbsengine6/`.
+Second resolution collapses that window to one second.
+
+`bbsengine6/py/src/Makefile deploy-tui` now also logs the resolved
+wheel path (`WHEEL=…`) to stdout before invoking pip and falls
+back to `ls -t $(OUTDIR)/$(PROJECT)-*.whl | head -1` if the
+explicit-filename wheel isn't on disk (e.g. clock skew between
+parent Makefile parse time and the moment `python -m build`
+finished writing the wheel, or a stale OUTDIR). The fallback
+prints a stderr breadcrumb so the operator can see when it
+fired.
+
 ### php: local bcrypt hashing, no PostgreSQL crypt() round-trip
 
 The PHP `bbsengine6\member\lib\setpassword()` and

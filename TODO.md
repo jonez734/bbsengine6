@@ -14,14 +14,22 @@
 [x] io.echo(): unknown tokens (anything in curly braces) are silently dropped. make a way to display them unchanged (@since 20240107)
 [ ] Fix /handbook/6/ 500 internal server error - add default mode=index when no mode is specified in handbook.php (@since 20250623)
 [ ] SETBOTTOMBAR packet type (12) - server-to-client UI update for bottom bar (e.g., casino module can update client status bar) (@since 20250621)
+   > Status: superseded for the WebSocket transport by `bbsengine6/TODO-BOTTOMBAR.md` Phase 5b (`echo{stream:"bottombar"}`). Binary packet 12 is still planned but lower priority.
+[ ] consider allowing a regular expression as a filter for what chars are allowed. inputchoice()? inputfloat()? inputstring()?
 
-[ ] PREPARE_BUILD protection for in-tree `py/build/` (@since 20260820)
+[x] PREPARE_BUILD protection for in-tree `py/build/` (@since 20260820)
    - Problem: `bbsengine6/Makefile` `build` target (lines 151-152) runs `cd py && python3 -m build --outdir $(OUTDIR)`. The `ensure-build-dir` macro (lines 145-149) only protects `/srv/repo`, not the in-tree `py/build/` directory that setuptools writes to during the build. If `py/build/` is foreign-owned (left over from a prior `jam` build), setuptools EPERMs on the `chown` it does when populating `dist-info/`.
    - Solution: add a `PREPARE_BUILD` macro mirroring `bed/Makefile:163-185` (rename foreign-owned `py/build/` to `py/build.stale.$$`, `chmod 1775` the replacement) and call it before the `python -m build` line. The current `py/build/` is `jam:opencode 2775` — both the foreign owner and the setgid bit are problems.
    - Cross-ref: `bed/Makefile:163-185`, `zoid6/TODO.md` "PREPARE_BUILD standardization".
 
 [x] (related) build→clean dependency also sidesteps the setuptools SOURCES.txt absolute-path failure mode (`@since 20260821`)
    - As of `bbsengine6/Makefile:156`, `build` now declares `clean` as a prerequisite, so `py/build/`, `py/dist/`, and `py/src/bbsengine6.egg-info/` are wiped before every `python -m build`. This addresses the egg-info SOURCES.txt stale-paths issue but does NOT replace PREPARE_BUILD — direct invocations of `python -m build` (not through `make`) still need PREPARE_BUILD protection for foreign-owned `py/build/`.
+
+[x] `PY_VERSION` second resolution + `deploy-tui` newest-wheel fallback (`@since 20260827`)
+   - Symptom: `deploy bbsengine6.tui` reported "no changes" even after source edits; site-packages stayed stale while fresh wheels accumulated in `/srv/repo/bbsengine6/`.
+   - Root cause: `PY_VERSION := $(shell date +%Y%m%d%H%M)` had minute resolution. Two `deploy` runs in the same minute produced the same wheel filename and the same `Version` field. Pip compares wheel `Version` against installed `Version` (PEP 440), so the second run saw equal versions and emitted `Requirement already satisfied` instead of upgrading.
+   - Fix (`bbsengine6/Makefile:34` and `bbsengine6/py/src/Makefile:11`): PY_VERSION / VERSION now use `%Y%m%d%H%M%S` (second resolution). Back-to-back deploys in the same second are extremely rare in practice.
+   - Belt-and-braces (`bbsengine6/py/src/Makefile:36-50`): if the explicit wheel filename isn't on disk (e.g. clock skew between parent parse time and build completion, or a stale `OUTDIR`), fall back to `ls -t $(OUTDIR)/$(PROJECT)-*.whl | head -1` with a stderr breadcrumb. Either way the resolved path is logged as `WHEEL=…` so the operator can see which wheel was installed.
 
 [x] member auth hot path: use psycopg3 `%s` + `cur.execute(sql, params)` instead of `database.query("$1", …) (`@since 20260821`)
    - Original symptom report: "member's password not working even tho it is correct". The git-log culprit was `f0e9366 bbsengine6: use %s placeholder in verifyMemberFound and has_password` reverting the `$1` → `%s` fix that broke psycopg3 pre-`database.query()` rewrite (`7a30b29` introduced `$N` → `sql.Literal()` substitution in `database.query()` itself, so the `$1` form is functionally correct again).
@@ -175,7 +183,7 @@ End-to-end data-chain check via Python CSV parsing:
 
 - [x] Split monolithic `sql/bank.sql` into per-table files: `bank_schema.sql`, `bank_account.sql`, `bank_transaction.sql`, `bank_transfer.sql`. Updated `backend/bank.py` to reference the new filenames and moved inline schema/priv logic into `bank_schema.sql`. Updated `tests/conftest.py` to loop-load the 4 files. 25/25 tests pass. 2026-07-09.
 
-- [ ] Make `bbsengine6.startup` runnable from both the CLI (`python -m bbsengine6.startup`) and from `bbsengine6.module.run()`. Two bugs:
+- [x] Make `bbsengine6.startup` runnable from both the CLI (`python -m bbsengine6.startup`) and from `bbsengine6.module.run()`. Two bugs:
   1. `py/src/bbsengine6/startup/__init__.py` is empty in the committed state. The TODO entry above (2026-07-07) says the four entry points were added, but `git diff` shows the changes are uncommitted. Commit the current draft (init/access/buildargs/main defined in `__init__.py`).
   2. `py/src/bbsengine6/startup/main.py:13` calls `lib.issysop(args, **kwargs)` but `bbsengine6.startup.lib` does NOT have an `issysop` function — it lives in `bbsengine6.backend.lib`. The current code throws `AttributeError: module 'bbsengine6.startup.lib' has no attribute 'issysop'` during `module.check`'s `m.access(args, op, **kwargs)` call. `check` catches the exception and returns None, so `module.run` logs "check of modulename='bbsengine6.startup.main' failed. module not run." with a traceback via `io.echo_traceback`. This is hit by BOTH invocation paths: CLI goes `__main__.py -> lib.runmodule(args, "main") -> module.run on bbsengine6.startup.main -> check fails`; programmatic `module.run(args, "bbsengine6.startup")` passes the subpackage check (the four entry points are present) but then `m.main` -> `lib.runmodule(args, "main")` -> same failure on the `.main` file. The user reports this as "unknown function init()" — a paraphrase of the traceback during the init/access phase of `check`.
 
@@ -187,6 +195,19 @@ End-to-end data-chain check via Python CSV parsing:
   > — the live `startup/main.py` still calls
   > `lib.issysop(...)` and `bbsengine6.startup.lib` still has no
   > such symbol.
+  >
+  > **2026-08-26 verification:** Both items are now fixed and committed.
+  > `py/src/bbsengine6/startup/main.py:4` imports `issysop` directly from
+  > `bbsengine6.backend.lib` and the `access()` function calls it (line 70).
+  > The placeholder stubs `startup/bank.py`, `startup/engine.py`,
+  > `startup/stage_zero.py`, `startup/stage_one.py` are gone; only
+  > `__init__.py`, `lib.py`, `__main__.py`, `main.py`, `message_subscription.py`
+  > remain. `py/tests/test_startup_subpackage.py` covers both invocation paths
+  > (CLI and `module.run`) and pins the four regression cases listed below
+  > (`test_subpackage_has_entrypoints`, `test_module_run_startup_subpackage`,
+  > `test_cli_startup_invocation`, `test_subpackage_access_does_not_raise`).
+  > The `startup.py~` editor backup is also gone. The fix landed alongside the
+  > startup self-heal work (commit `b3294d5` + follow-ups).
 
   Fix: in `py/src/bbsengine6/startup/main.py`, change
   ```python
@@ -213,9 +234,9 @@ End-to-end data-chain check via Python CSV parsing:
   - `test_subpackage_access_does_not_raise` — specifically pin that `bbsengine6.startup.access(args, "run")` does not raise `AttributeError` on `lib.issysop` (this is the exact failure mode the user is hitting).
 
   Verification:
-  - `pytest py/tests/test_startup_zoid6_missing.py py/tests/test_startup_subpackage.py` — both files should pass.
-  - `python -m bbsengine6.startup --help` — should print startup help without AttributeError.
-  - `ruff check py/src/bbsengine6/startup/` — no unused imports after deletions.
+  - [x] `pytest py/tests/test_startup_zoid6_missing.py py/tests/test_startup_subpackage.py` — both files should pass.
+  - [x] `python -m bbsengine6.startup --help` — should print startup help without AttributeError.
+  - [x] `ruff check py/src/bbsengine6/startup/` — no unused imports after deletions.
 
 ## Unified Pub/Sub Channel System
 
@@ -1016,16 +1037,20 @@ Test classes (function-scoped, with `test_args` + `test_pool` fixtures; autouse 
 - [x] Create `engine.invite` view with local timezone conversion
   **VERIFIED 2026-07-22: done** (same file, lines after the
   table DDL).
-- [ ] Create `bbsengine6/invite.py` - DAL functions:
-  - [ ] `create_invite(args, module, resourceid, createdbymoniker, dateexpires)` → returns code
-  - [ ] `get_invites(args, module, resourceid)` → list of codes
-  - [ ] `revoke_invite(args, invite_id)` → bool
-  - [ ] `validate_invite(args, module, resourceid, code)` → returns invite record or None
-  - [ ] `mark_used(args, invite_id)` → bool
-  **VERIFIED 2026-07-22: still pending.** The
-  `py/src/bbsengine6/invite.py` module and
-  `py/src/bbsengine6/services/invite.py` service class do
-  not yet exist. SQL is in place; Python DAL is not.
+- [x] Create `bbsengine6/invite.py` - DAL functions:
+  - [x] `create_invite(args, module, resourceid, createdbymoniker, dateexpires)` → returns code
+  - [x] `get_invites(args, module, resourceid)` → list of codes
+  - [x] `revoke_invite(args, invite_id)` → bool
+  - [x] `validate_invite(args, module, resourceid, code)` → returns invite record or None
+  - [x] `mark_used(args, invite_id)` → bool
+  **VERIFIED 2026-08-26: DONE.** `py/src/bbsengine6/invite.py` defines all five
+  DAL functions (`create_invite`, `get_invites`, `revoke_invite`, `validate_invite`,
+  `mark_used`) using the `_work(conn)` + `kwargs.pop("conn")` pattern from
+  `session.py`. `py/src/bbsengine6/services/invite.py` wraps them in
+  `InviteService` with the `MESSAGE_INVITE_*` message-type constants.
+  `py/src/bbsengine6/sql/invite.sql` was already in place (verified 2026-07-22).
+  `py/tests/test_invite.py` covers all five DAL functions plus the service
+  wrapper and the `casino.__table` FK cascade.
 
 ---
 
@@ -1370,15 +1395,18 @@ added to the existing `bbsengine6.bank` package or a new
 
 ## `bbsengine6.io` sink infrastructure for thin-client BED conversion
 
+> Bottombar primitives (`setbottombar`, `register_bottombar_fragment`,
+> `unregister_bottombar_fragment`) are NOT in the io sink list — they
+> are wire-pushed via `echo{stream:"bottombar"}`. See
+> `bbsengine6/TODO-BOTTOMBAR.md` Phase 5b.
+
 ### Context and scope
 
 The thin-client BED conversion (planned across `empyre/TODO.md`,
 `bed/TODO.md`, and the per-game cross-references) needs a way to
 intercept every `bbsengine6.io` primitive call (`echo`, `inputchoice`,
 `inputstring`, `inputboolean`, `inputinteger`, `inputchar`, `inputdate`,
-`inputfilename`, `inputpassword`, `screen.setbottombar`,
-`screen.register_bottombar_fragment`,
-`screen.unregister_bottombar_fragment`) and dispatch it to a per-connection
+`inputfilename`, `inputpassword`) and dispatch it to a per-connection
 `BEDSink` that builds BED wire envelopes, instead of writing to stdout
 or reading from a TTY.
 
@@ -1451,9 +1479,10 @@ surprised by the new return type.
   - `class Sink(Protocol)`: structural-typed protocol with one method
     per primitive (`echo`, `inputchoice`, `inputstring`, `inputboolean`,
     `inputinteger`, `inputchar`, `inputdate`, `inputfilename`,
-    `inputpassword`, `screen_setbottombar`,
-    `screen_register_bottombar_fragment`,
-    `screen_unregister_bottombar_fragment`).
+    `inputpassword`). (Bottombar primitive sink methods are NOT
+    in this protocol; the bottombar reaches the wire via
+    `echo{stream:"bottombar"}` instead — see
+    `bbsengine6/TODO-BOTTOMBAR.md` Phase 5b.)
   - `class DefaultSink`: implements the protocol by delegating to the
     current `bbsengine6.io` private `_impl` functions.
   - `class IOSinkError(Exception)`: raised when a sink is missing a
@@ -1471,9 +1500,9 @@ surprised by the new return type.
     `sink.xxx(...)`. Otherwise call `_impl_xxx(...)`.
 - [ ] Apply to: `echo`, `inputchoice`, `inputstring`, `inputboolean`,
   `inputinteger`, `inputchar`, `inputdate`, `inputfilename`,
-  `inputpassword`, `screen.setbottombar`,
-  `screen.register_bottombar_fragment`,
-  `screen.unregister_bottombar_fragment`.
+`inputpassword`. (Bottombar primitives — `setbottombar`,
+    `register_bottombar_fragment`, `unregister_bottombar_fragment` —
+    are NOT in this list; see `bbsengine6/TODO-BOTTOMBAR.md` Phase 5b.)
 - [ ] **Backward compat check**: all existing tests in
   `bbsengine6/tests/` pass with zero changes. The default sink is
   `None`, so the public functions take the `_impl` path, which is the
@@ -1590,9 +1619,8 @@ surprised by the new return type.
   call `_impl_inputchoice(...)`.
 - [ ] Same for `inputstring`, `inputboolean`, `inputinteger`,
   `inputchar`, `inputdate`, `inputfilename`, `inputpassword`.
-- [ ] Same for `screen.setbottombar`,
-  `screen.register_bottombar_fragment`,
-  `screen.unregister_bottombar_fragment`.
+  (Bottombar primitives are NOT in this list; see
+  `bbsengine6/TODO-BOTTOMBAR.md` Phase 5b.)
 - [ ] **Backward compat check**: door-mode callers see zero behavior
   change. `test_io_backward_compat.py` passes.
 - [ ] Add `bbsengine6/tests/test_io_sink_per_primitive.py`: one test
