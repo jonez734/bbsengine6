@@ -11,16 +11,16 @@ ul.breadcrumbs {
   }
 
   a {
-    color: $blurb-body-textcolor;
+    color: $blurb-body-color;
     text-decoration: underline;
 
     &:hover {
       color: $blurb-body-backgroundcolor;
-      background-color: $blurb-body-textcolor;
+      background-color: $blurb-body-color;
     }
 
     &:visited {
-      color: darken($blurb-body-textcolor, 10%);
+      color: darken($blurb-body-color, 10%);
     }
   }
 }
