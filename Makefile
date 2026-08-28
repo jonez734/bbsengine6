@@ -196,8 +196,10 @@ ensure-build-dir: ensure-repo
 # first. The parent dir is group-writable in this tree so the rename is
 # permitted even when we don't own the build/ contents. Without this,
 # the subsequent chmod fails with EPERM and the build aborts.
-# Mirrors bed/Makefile:189-194 (see also zoid6/TODO.md "PREPARE_BUILD
-# standardization (cross-project)").
+# Canonical version lives at bed/Makefile:165-189 (PREPARE_BUILD);
+# all four projects (bed, bbsengine6, zoidoffice, casino) target this
+# comment + macro pair so a fix in one place applies to all. See also
+# zoid6/TODO.md "PREPARE_BUILD standardization (cross-project)".
 #
 # Note: py/ is currently mode 775 (no setgid), so this tree is
 # "safe-by-accident" today -- py/build/ won't inherit setgid from
