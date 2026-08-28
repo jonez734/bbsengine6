@@ -18,12 +18,19 @@
 [ ] consider allowing a regular expression as a filter for what chars are allowed. inputchoice()? inputfloat()? inputstring()?
 
 [x] PREPARE_BUILD protection for in-tree `py/build/` (@since 20260820)
-   - Problem: `bbsengine6/Makefile` `build` target (lines 151-152) runs `cd py && python3 -m build --outdir $(OUTDIR)`. The `ensure-build-dir` macro (lines 145-149) only protects `/srv/repo`, not the in-tree `py/build/` directory that setuptools writes to during the build. If `py/build/` is foreign-owned (left over from a prior `jam` build), setuptools EPERMs on the `chown` it does when populating `dist-info/`.
-   - Solution: add a `PREPARE_BUILD` macro mirroring `bed/Makefile:163-185` (rename foreign-owned `py/build/` to `py/build.stale.$$`, `chmod 1775` the replacement) and call it before the `python -m build` line. The current `py/build/` is `jam:opencode 2775` — both the foreign owner and the setgid bit are problems.
-   - Cross-ref: `bed/Makefile:163-185`, `zoid6/TODO.md` "PREPARE_BUILD standardization".
+   - Problem: `bbsengine6/Makefile` `build` target runs `cd py && python3 -m build --outdir $(OUTDIR)`. The `ensure-build-dir` macro only protects `/srv/repo`, not the in-tree `py/build/` directory that setuptools writes to during the build. If `py/build/` is foreign-owned (left over from a prior `jam` build), setuptools EPERMs on the `chown` it does when populating `dist-info/`.
+   - Solution: add a `PREPARE_BUILD` macro mirroring `bed/Makefile` (rename foreign-owned `py/build/` to `py/build.stale.$$`, `chmod 1775` the replacement) and call it before the `python -m build` line. The current `py/build/` is `jam:opencode 2775` — both the foreign owner and the setgid bit are problems.
+   - Cross-ref: `bed/Makefile:165-189` (canonical PREPARE_BUILD; comment block at lines 165-189, macro at lines 190-194), `zoid6/TODO.md` "PREPARE_BUILD standardization". Line numbers in this entry's preamble above are pre-fix and intentionally not updated on every rebase.
 
 [x] (related) build→clean dependency also sidesteps the setuptools SOURCES.txt absolute-path failure mode (`@since 20260821`)
    - As of `bbsengine6/Makefile:156`, `build` now declares `clean` as a prerequisite, so `py/build/`, `py/dist/`, and `py/src/bbsengine6.egg-info/` are wiped before every `python -m build`. This addresses the egg-info SOURCES.txt stale-paths issue but does NOT replace PREPARE_BUILD — direct invocations of `python -m build` (not through `make`) still need PREPARE_BUILD protection for foreign-owned `py/build/`.
+
+[x] `deploy-tui` hard-fails on editable-in-venv; port `verify-install` (`@since 20260828`)
+   - Symptom: `deploy bbsengine6.tui` (without `--editable`) reported "Requirement already satisfied" or otherwise silently no-op'd whenever the active venv had an editable install of `bbsengine6`. Wheels piled up in `/srv/repo/bbsengine6/`; `pip show` kept reporting the source-tree version; the operator's TUI kept running the source-tree code.
+   - Root cause: PEP 660's `__editable___bbsengine6_*_finder` `.pth` hook wins on `import`, so a wheel install into the same venv writes a fresh `dist-info` but is shadowed at import time. This is structurally distinct from the minute-resolution collision fixed 2026-08-27 (filename collision vs. venv-state conflict).
+   - Fix (`py/src/Makefile precheck-editable`): inspect `pip show` for `Editable project location:` and bail non-zero with the two clean remedies (`deploy --editable bbsengine6.tui` to stay in editable mode, `pip uninstall bbsengine6 && deploy bbsengine6.tui` to switch to wheels). Implemented as a recipe-time macro so it only fires on the non-editable branch.
+   - Belt-and-braces (`py/src/Makefile verify-install`): three-way cross-check of wheel filename / wheel METADATA / post-install `pip show` Version. Same shape as `zoidoffice/src/Makefile VERIFY_INSTALL` and `casino/Makefile:verify-install`; ported verbatim. If this had been in place when the editable-in-venv bug fired, it would have caught the silent no-op immediately.
+   - Cross-ref: `bbsengine6/CHANGELOG.md` "[Unreleased] build: deploy-tui hard-fails when the active venv has an editable install"; `zoidoffice/src/Makefile VERIFY_INSTALL`; `casino/Makefile:verify-install`.
 
 [x] `PY_VERSION` second resolution + `deploy-tui` newest-wheel fallback (`@since 20260827`)
    - Symptom: `deploy bbsengine6.tui` reported "no changes" even after source edits; site-packages stayed stale while fresh wheels accumulated in `/srv/repo/bbsengine6/`.
