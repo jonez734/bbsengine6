@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### feat(bbsengine6.config): generic JSON+env+default merge helpers
+
+A new `bbsengine6.config` module (`py/src/bbsengine6/config.py`)
+provides small, dependency-free helpers for loading JSON config
+files, deep-merging override dicts, expanding `${VAR}` and `~` in
+string values, and layering environment variables on top of JSON
+values. Downstream apps (zoidoffice, asimov, bed, achilles, ...) can
+now share a single precedence chain instead of each re-implementing
+their own.
+
+The exported helpers are:
+
+- `load_json_file(path)` — read a single JSON file; non-dict /
+  missing / malformed → `{}`. Never raises. The `strict` variant
+  raises for operator-visible misconfigurations.
+- `search_config(candidates, *, env_var=None)` — walk a list of
+  candidate paths; honor an optional environment-variable override
+  (`ZOIDOFFICE_CONFIG`, `BED_CONFIG`, etc.) as the highest-priority
+  entry.
+- `deep_merge(base, override)` — recursive merge; override wins on
+  scalar conflicts; lists replaced wholesale.
+- `resolve(env, json, default)` — single-key precedence with env
+  vars on top, then JSON, then hardcoded default.
+- `get_section(config, *path)` — safe nested-dict lookup.
+- `expand_value(value, *, env=None)` — recursive `${VAR}` and `~`
+  expansion for any JSON-derived tree.
+- `expand_paths(value)` — additional `safe_path` expansion for keys
+  ending in `_path` / `_file` / `_dir` / `_socket` / `_log`
+  (matches the convention already in `bed.config`).
+- `build_argparse_defaults(json_config, *, section, keys, env_prefix,
+  global_section, hardcoded_defaults, coerce)` — produce the
+  `defaults=` dict for an argparse group with the full precedence
+  chain in one call.
+- `validate_schema(config, *, known_sections)` — light warning when
+  the JSON file contains unknown top-level sections. Doesn't raise;
+  typo-catching only.
+
+70 new unit tests in `py/src/bbsengine6/tests/test_config.py`.
+
 ### build: `PY_VERSION` now has second resolution; `deploy-tui` falls back to newest wheel in `OUTDIR`
 
 `bbsengine6/Makefile:26` `PY_VERSION` (and the matching fallback
