@@ -21,6 +21,7 @@ stage:
 	$(MAKE) -C js stage
 
 	mkdir -p $(COMSTAGE)templates_c/
+	touch $(COMSTAGE)templates_c/.gitkeep
 	$(RSYNC) config-prod.php $(COMSTAGEDOCROOT)config.php
 	-$(RSYNC) htpasswd-prod $(COMSTAGEDOCROOT).htpasswd
 	$(RSYNC) htaccess-prod $(COMSTAGEDOCROOT).htaccess

@@ -14,10 +14,10 @@ clean:
 org:
 	$(MAKE) -C org stage
 	$(MAKE) -C ../handbook stage
-	$(RSYNC) --exclude "releases" $(ORGSTAGE) $(ORGPROD)
-	
+	$(RSYNC) --exclude "releases" --exclude "templates_c" --chmod=Dg+rwxs $(ORGSTAGE) $(ORGPROD)
+
 com:
 	$(MAKE) -C com stage
-	$(RSYNC) --exclude "releases" $(COMSTAGE) $(COMPROD)
+	$(RSYNC) --exclude "releases" --exclude "templates_c" --chmod=Dg+rwxs $(COMSTAGE) $(COMPROD)
 
 .PHONY: org com
