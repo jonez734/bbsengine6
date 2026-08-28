@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### build: `deploy-tui` hard-fails when the active venv has an editable install
+
+`py/src/Makefile deploy-tui` (non-editable branch) silently no-op'd
+if the active venv already had an editable install of `bbsengine6`.
+PEP 660's editable finder `.pth` hook wins on `import`, so a
+subsequent `pip install /srv/repo/bbsengine6/bbsengine6-*.whl` would
+write a fresh `dist-info` but be shadowed at import time; the
+operator's running TUI kept seeing the source tree, `pip show`
+kept reporting the source-tree version, and fresh wheels piled up
+in `/srv/repo/bbsengine6/` until `du` was the only way to notice.
+This is structurally distinct from the minute-resolution collision
+fixed previously — same observable symptom ("no changes"), different
+failure mode (venv-state conflict, not filename collision).
+
+The fix is a precondition check, not a precondition repair.
+
+* `py/src/Makefile` — new `precheck-editable` recipe macro. Runs
+  `pip show bbsengine6` and bails non-zero if the output contains
+  `Editable project location:`, pointing the operator at the two
+  clean remedies (`deploy --editable bbsengine6.tui` for editable,
+  `pip uninstall bbsengine6 && deploy bbsengine6.tui` for wheels).
+  Implemented as a recipe-time macro (not a `.PHONY` prerequisite)
+  so the check only fires on the non-editable branch — `deploy
+  --editable` legitimately has an editable install and must not
+  be flagged. The Makefile does **not** call `pip uninstall` on the
+  operator's behalf: that loses post-install hooks, races with any
+  concurrent editable install in the same venv, and overrides the
+  operator's conscious choice to be in editable mode.
+* `py/src/Makefile` — new `verify-install` recipe macro, ported
+  from `zoidoffice/src/Makefile VERIFY_INSTALL` (same shape as
+  `casino/Makefile:verify-install`). Three-way cross-checks the
+  wheel filename, the wheel METADATA, and the post-install `pip
+  show` Version. Wired into the non-editable branch of
+  `deploy-tui` so any future silent-no-op (orphaned `.dist-info`,
+  permission-denied mid-install, the editable-in-venv conflict
+  above, etc.) gets caught immediately rather than manifesting as
+  weeks-old wheels in `/srv/repo/bbsengine6/`.
+
+### docs: PREPARE_BUILD cross-reference points at the bed canonical
+
+`bbsengine6/Makefile` already mirrors `bed/Makefile` for the
+`PREPARE_BUILD` macro (rename foreign-owned `$(1)/build/`,
+`chmod g-s,+t`). Comment cross-reference was aimed at the wrong
+line numbers; promoted to the canonical `bed/Makefile:165-189`
+with an explicit "all four projects (bed, bbsengine6, zoidoffice,
+casino) target this comment + macro pair" note. No behavior
+change.
+
 ### feat(bbsengine6.config): generic JSON+env+default merge helpers
 
 A new `bbsengine6.config` module (`py/src/bbsengine6/config.py`)
