@@ -591,6 +591,38 @@ mixed-batch, default-slot, and "last writer wins" cases.
 - The wheel-rebuild step now passes `--no-cache-dir` so wheel reuse
   from a previous build can never silently regress the install.
 
+### www: protect remote templates_c/ from wwworg/wwwcom deploy rsyncs
+
+`bbsengine6/www/Makefile` `org` and `com` push rsyncs now pass
+`--exclude "templates_c"` and `--chmod=Dg+rwxs`.
+
+Without `--exclude`, every `deploy bbsengine6.wwworg` push walked
+`templates_c/` on the remote with `--delete-after`; the per-sub
+`stage` target creates `$(ORGSTAGE)templates_c/` (and
+`$(COMSTAGE)templates_c/`) empty locally, so rsync considered every
+file on the remote's cache stale and deleted it. Smarty then had to
+recompile every template on the next request — and worse, on hosts
+where the cache was not group-writable + setgid, the first request
+failed outright with a `Permission denied` writing to
+`templates_c/<hash>.php`.
+
+`--chmod=Dg+rwxs` makes rsync enforce `g=rwxs` on every directory
+it creates on the remote, so freshly-created `templates_c/` (or any
+other dir) ends up group-writable + setgid without operator
+intervention.
+
+`bbsengine6/www/org/Makefile` and `bbsengine6/www/com/Makefile`
+`stage` targets keep their `mkdir -p .../templates_c/` (for local
+dev) and now also `touch .../templates_c/.gitkeep` so an empty
+stage dir doesn't confuse rsync with "directory disappeared"
+warnings. The push-rsync `--exclude` is what actually protects the
+remote.
+
+Regression coverage lives in
+`deploytool/tests/test_deploy_bbsengine6_www.py`:
+`test_www_push_rsyncs_exclude_templates_c_and_setgid_dirs` and
+`test_wwworg_and_wwwcom_stage_templates_c_locally_with_gitkeep`.
+
 ### smarty/function.teos: drop doubled TEOSURL prefix on `$uri`
 
 `{teos uri=…}` no longer double-prefixes `TEOSURL`. The plugin now
