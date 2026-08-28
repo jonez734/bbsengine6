@@ -44,6 +44,20 @@ The fix is a precondition check, not a precondition repair.
   permission-denied mid-install, the editable-in-venv conflict
   above, etc.) gets caught immediately rather than manifesting as
   weeks-old wheels in `/srv/repo/bbsengine6/`.
+* `py/src/Makefile` — `precheck-editable` now branches on
+  `DEPLOY_WITH_DEPS` (set by `deploytool --with-deps`; plumbed in
+  the deploytool commit alongside this one). Default branch: hard
+  fail with the two-remedy message, plus a third line pointing
+  operators at the `--with-deps` escape hatch. `DEPLOY_WITH_DEPS=1`
+  branch: warn-and-proceed. The `--with-deps` flag semantically
+  promises "rebuild the venv, no questions asked", so blocking on
+  a mixed editable/wheel state under that flag is wrong-headed;
+  the post-install `verify-install` macro then becomes the actual
+  correctness check — the editable `.pth` finder shadows the
+  wheel install, `pip show` disagrees with the wheel's METADATA,
+  and the deploy aborts with the same precise diagnosis as the
+  default branch. The Makefile still does NOT call `pip uninstall`
+  on the operator's behalf under either branch.
 
 ### docs: PREPARE_BUILD cross-reference points at the bed canonical
 
