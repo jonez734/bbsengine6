@@ -421,6 +421,42 @@ class TestBuildArgparseDefaults:
         # env_prefix="" disables env lookup; the JSON value is used
         assert out["twilio_auth_token"] == "json"
 
+    def test_env_key_map_full_name_overrides_prefix(self):
+        """A mapped entry that already starts with the prefix is
+        treated as a full env-var name (avoids doubled segments like
+        ``BBSENGINE6_DB_DBNAME``)."""
+        cfg = {"global": {}}
+        with mock.patch.dict(os.environ, {"BBSENGINE6_DBNAME": "from-env"}):
+            out = config.build_argparse_defaults(
+                cfg, section="global", keys=("databasename",),
+                env_prefix="BBSENGINE6_DB",
+                env_key_map={"databasename": "BBSENGINE6_DBNAME"},
+            )
+        assert out == {"databasename": "from-env"}
+
+    def test_env_key_map_short_suffix_combines(self):
+        """A mapped entry that doesn't already start with the prefix
+        is concatenated with the prefix + underscore."""
+        cfg = {"global": {}}
+        with mock.patch.dict(os.environ, {"DB_NAME": "from-env"}):
+            out = config.build_argparse_defaults(
+                cfg, section="global", keys=("databasename",),
+                env_prefix="DB",
+                env_key_map={"databasename": "NAME"},
+            )
+        assert out == {"databasename": "from-env"}
+
+    def test_env_key_map_unmapped_key_uses_upper(self):
+        """A key not in env_key_map falls back to key.upper()."""
+        cfg = {"global": {}}
+        with mock.patch.dict(os.environ, {"FOO_HOST": "from-env"}):
+            out = config.build_argparse_defaults(
+                cfg, section="global", keys=("host",),
+                env_prefix="FOO",
+                env_key_map={"other_key": "OTHER"},
+            )
+        assert out == {"host": "from-env"}
+
 
 # ---------------------------------------------------------------------------
 # validate_schema

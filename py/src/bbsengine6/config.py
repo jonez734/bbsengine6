@@ -341,6 +341,7 @@ def build_argparse_defaults(
     section: str,
     keys: Sequence[str],
     env_prefix: str = "",
+    env_key_map: Mapping[str, str] | None = None,
     global_section: str = "global",
     hardcoded_defaults: Mapping[str, Any] | None = None,
     coerce: Mapping[str, Callable[[Any], Any]] | None = None,
@@ -349,7 +350,7 @@ def build_argparse_defaults(
 
     For each ``key`` in ``keys``, the returned value is resolved via:
         json_config[section][key] (post expansion)
-        ?? env ${env_prefix}_${KEY.upper()}
+        ?? env ${env_prefix}_${env_name_for(key)}
         ?? json_config[global_section][key]
         ?? hardcoded_defaults[key]
         ?? ``None``
@@ -362,8 +363,16 @@ def build_argparse_defaults(
         keys: The keys to resolve, in the order callers want them
         in the returned dict.
         env_prefix: Prefix for environment-variable lookup. ``""``
-        disables env-var fallback. ``"BED"`` produces ``BED_HOST``,
-        ``"BBSENGINE6_DB"`` produces ``BBSENGINE6_DBNAME``, etc.
+        disables env-var fallback. ``"BED"`` produces
+        ``BED_HOST`` for key ``"host"`` by default.
+        env_key_map: Optional mapping ``key -> env_name_suffix``.
+        When provided, the env-var lookup uses
+        ``${env_prefix}_${env_key_map[key]}`` instead of the
+        default ``${env_prefix}_${key.upper()}``. This lets apps
+        bridge between argparse dest names (``"databasename"``)
+        and historical env-var conventions (``"NAME"`` →
+        ``BBSENGINE6_DBNAME``). When ``env_key_map`` has no entry
+        for a key, the default ``key.upper()`` is used.
         global_section: Section name to use as the cross-section
         fallback (typically ``"global"``). ``""`` disables the
         cross-section fallback.
@@ -384,6 +393,7 @@ def build_argparse_defaults(
     )
     hardcoded = dict(hardcoded_defaults or {})
     coerce_map = dict(coerce or {})
+    key_map = dict(env_key_map or {})
 
     out: dict[str, Any] = {}
     for key in keys:
@@ -393,7 +403,26 @@ def build_argparse_defaults(
 
         env_val: Any = None
         if env_prefix:
-            env_name = f"{env_prefix}_{key.upper()}"
+            mapped = key_map.get(key)
+            if mapped is not None:
+                # ``mapped`` may be either a full env-var name
+                # (e.g. ``"BBSENGINE6_DBNAME"``) or a suffix to
+                # combine with the prefix. A full name is recognized
+                # by containing ``_`` characters beyond what the
+                # prefix alone contains — in practice, if ``mapped``
+                # contains the prefix substring, treat it as the
+                # full env var; otherwise combine with the prefix.
+                mapped_upper = mapped.upper()
+                if (
+                    env_prefix
+                    and mapped_upper.startswith(env_prefix.upper())
+                    and mapped_upper != env_prefix.upper()
+                ):
+                    env_name = mapped_upper
+                else:
+                    env_name = f"{env_prefix}_{mapped_upper}"
+            else:
+                env_name = f"{env_prefix}_{key.upper()}"
             env_val = os.environ.get(env_name)
 
         # Precedence: env var > JSON > hardcoded default.
