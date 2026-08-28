@@ -26,6 +26,23 @@ PIP ?= $(PYTHON) -m pip
 # matches the wheel produced by `make build` in the same invocation.
 DEPLOY_EDITABLE ?=
 
+# DEPLOY_WITH_DEPS is set by `deploytool --with-deps`. Empty by
+# default. When set to 1, `precheck-editable` switches from hard-fail
+# to warn-and-proceed for the editable-in-venv case: a `--with-deps`
+# invocation semantically promises "rebuild the venv, no questions
+# asked", so blocking on an editable install that the operator may
+# have placed there on purpose is wrong-headed. The `verify-install`
+# macro that runs after the wheel install provides the actual
+# correctness check — if the editable .pth finder shadows the wheel
+# install, `pip show` will disagree with the wheel's METADATA and the
+# deploy aborts with a precise diagnosis naming the editable-install
+# cause.
+#
+# Without `--with-deps`, the precheck still hard-fails: most operators
+# are not consciously managing a mixed editable/wheel state and
+# silently no-op'ing is the wrong default.
+DEPLOY_WITH_DEPS ?=
+
 # Verifies the wheel just installed is the one `pip show` reports
 # as installed. Catches the silent-no-op case where `pip install
 # <wheel>` exits 0 without actually replacing an existing install
@@ -94,6 +111,22 @@ endef
 # PREPARE_BUILD macro in bbsengine6/Makefile (which reports a
 # foreign-owned build/, it doesn't chown on the operator's behalf).
 #
+# Behavior branches on DEPLOY_WITH_DEPS (set by deploytool when
+# `--with-deps` is passed; empty by default):
+#
+#   - DEPLOY_WITH_DEPS unset (default): hard fail with the two clean
+#     remedies. Most operators are not consciously managing a mixed
+#     editable/wheel state and silently no-op'ing is the wrong
+#     default.
+#   - DEPLOY_WITH_DEPS=1: warn-and-proceed. `--with-deps` semantically
+#     promises "rebuild the venv, no questions asked", so blocking
+#     on an editable install the operator may have placed there on
+#     purpose is wrong-headed. The post-install `verify-install`
+#     macro then becomes the actual correctness check — if the
+#     editable .pth finder shadows the wheel install, `pip show`
+#     will disagree with the wheel's METADATA and the deploy aborts
+#     with a precise diagnosis naming the editable-install cause.
+#
 # Implemented as a recipe-time macro (not a `.PHONY` target) so the
 # check only fires on the non-editable branch — the editable branch
 # legitimately has an editable install and must not be flagged.
@@ -101,19 +134,34 @@ define precheck-editable
 	SHOW=$$($(PIP) show $(PROJECT) 2>/dev/null); \
 	if echo "$$SHOW" | grep -q '^Editable project location:'; then \
 		EDITABLE_SRC=$$(echo "$$SHOW" | awk -F': ' '/^Editable project location: / {print $$2; exit}'); \
-		echo "deploy-tui: $(PROJECT) is installed editable in the active venv" >&2; \
-		echo "  editable source: $$EDITABLE_SRC" >&2; \
-		echo >&2; \
-		echo "Editable and wheel installs of the same distribution name can't coexist in" >&2; \
-		echo "one venv (the editable .pth finder shadows subsequent wheel installs), so" >&2; \
-		echo "this Makefile refuses to silently no-op. Pick one:" >&2; \
-		echo >&2; \
-		echo "  1) Stay in editable mode: deploy --editable bbsengine6.tui" >&2; \
-		echo "  2) Switch to wheel mode: pip uninstall bbsengine6 && deploy bbsengine6.tui" >&2; \
-		echo >&2; \
-		echo "(The Makefile intentionally doesn't 'fix' this for you — see" >&2; \
-		echo " py/src/Makefile precheck-editable.)" >&2; \
-		exit 1; \
+		if [ "$(DEPLOY_WITH_DEPS)" = "1" ]; then \
+			echo "deploy-tui: WARNING: $(PROJECT) is installed editable in the active venv" >&2; \
+			echo "  editable source: $$EDITABLE_SRC" >&2; \
+			echo >&2; \
+			echo "DEPLOY_WITH_DEPS=1 is set (deploy --with-deps), so precheck-editable is" >&2; \
+			echo "proceeding with the wheel install. If the editable .pth finder shadows it" >&2; \
+			echo "(the common case), verify-install will abort with a precise diagnosis." >&2; \
+			echo "To switch permanently, run one of:" >&2; \
+			echo >&2; \
+			echo "  - Stay in editable mode:  deploy --editable bbsengine6.tui" >&2; \
+			echo "  - Force a wheel rebuild:  pip uninstall bbsengine6 && deploy bbsengine6.tui" >&2; \
+			echo >&2; \
+		else \
+			echo "deploy-tui: $(PROJECT) is installed editable in the active venv" >&2; \
+			echo "  editable source: $$EDITABLE_SRC" >&2; \
+			echo >&2; \
+			echo "Editable and wheel installs of the same distribution name can't coexist in" >&2; \
+			echo "one venv (the editable .pth finder shadows subsequent wheel installs), so" >&2; \
+			echo "this Makefile refuses to silently no-op. Pick one:" >&2; \
+			echo >&2; \
+			echo "  1) Stay in editable mode: deploy --editable bbsengine6.tui" >&2; \
+			echo "  2) Switch to wheel mode: pip uninstall bbsengine6 && deploy bbsengine6.tui" >&2; \
+			echo "  3) Override for this run only: deploy --with-deps bbsengine6.tui" >&2; \
+			echo >&2; \
+			echo "(The Makefile intentionally doesn't 'fix' this for you — see" >&2; \
+			echo " py/src/Makefile precheck-editable.)" >&2; \
+			exit 1; \
+		fi; \
 	fi
 endef
 
