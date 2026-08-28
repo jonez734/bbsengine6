@@ -26,6 +26,97 @@ PIP ?= $(PYTHON) -m pip
 # matches the wheel produced by `make build` in the same invocation.
 DEPLOY_EDITABLE ?=
 
+# Verifies the wheel just installed is the one `pip show` reports
+# as installed. Catches the silent-no-op case where `pip install
+# <wheel>` exits 0 without actually replacing an existing install
+# (orphaned .dist-info, permission-denied mid-install, an editable
+# install of the same distribution name in the same venv, etc.). On
+# mismatch, prints the verbatim `pip show` output (stdout) and aborts
+# the deploy with a summary (stderr).
+#
+# Three values are compared:
+#   - filename:  regex-extracted from $$WHEEL (recipe time)
+#   - METADATA:  Version: line from the wheel's METADATA (unzip -p)
+#   - pip show:  Version: line from `pip show $(PROJECT)` post-install
+#
+# All three must agree. Used by `deploy-tui` in the non-editable
+# branch. Editable installs (DEPLOY_EDITABLE=1) skip this — `pip
+# show` for an editable install reports the *source-tree* version,
+# not a wheel version, and the comparison semantics differ.
+#
+# Takes the wheel path as $$WHEEL (recipe-scoped), not as $(WHEEL)
+# (Makefile-evaluated), because the wheel filename embeds a
+# timestamp that is only known after `ls -t $(OUTDIR)/...` runs at
+# recipe time. Same shape as casino/Makefile:verify-install;
+# ported from zoidoffice/src/Makefile VERIFY_INSTALL.
+define verify-install
+	EXPECTED_FROM_FILENAME=$$(basename "$$WHEEL" | sed -E 's/^$(PROJECT)-(.+)-py3-none-any\.whl$$/\1/'); \
+	EXPECTED_FROM_METADATA=$$(unzip -p "$$WHEEL" '*/METADATA' 2>/dev/null | awk -F': ' '/^Version: / {print $$2; exit}'); \
+	echo "=== verify-install ($(PROJECT)) ==="; \
+	echo "  wheel filename Version: $$EXPECTED_FROM_FILENAME"; \
+	echo "  wheel METADATA Version: $$EXPECTED_FROM_METADATA"; \
+	echo "--- pip show $(PROJECT) ---"; \
+	SHOW_OUTPUT=$$($(PIP) show $(PROJECT) 2>&1); \
+	SHOW_RC=$$?; \
+	echo "$$SHOW_OUTPUT"; \
+	echo "(pip show exited $$SHOW_RC)"; \
+	echo "--- end pip show ---"; \
+	INSTALLED=$$(echo "$$SHOW_OUTPUT" | awk '/^Version: / {print $$2; exit}'); \
+	if [ "$$INSTALLED" != "$$EXPECTED_FROM_FILENAME" ] \
+		|| [ "$$INSTALLED" != "$$EXPECTED_FROM_METADATA" ]; then \
+		echo "verify-install FAILED: $$WHEEL was installed but pip show does not agree" >&2; \
+		echo "  expected filename:  $$EXPECTED_FROM_FILENAME" >&2; \
+		echo "  expected METADATA:  $$EXPECTED_FROM_METADATA" >&2; \
+		echo "  pip show Version:   $$INSTALLED" >&2; \
+		exit 1; \
+	fi; \
+	echo "verify-install OK: pip show reports $$INSTALLED"
+endef
+
+# Hard-fail precondition for `deploy-tui` (non-editable branch).
+#
+# PEP 660 / setuptools' `__editable___<pkg>_*_finder` `.pth` hook
+# makes an editable install of `<pkg>` in a venv mutually exclusive
+# with a wheel install of the same `<pkg>` into the same venv:
+# the editable hook wins on `import`, so a subsequent `pip install
+# /srv/repo/.../<pkg>-*.whl` writes a fresh dist-info but is shadowed
+# on import, and the operator's running TUI keeps seeing the source
+# tree. Wheels accumulate in OUTDIR; `pip show` keeps reporting the
+# source-tree version. There is no in-place fix — the two install
+# modes can't coexist in one venv.
+#
+# `precheck-editable` runs at the top of the non-editable branch of
+# `deploy-tui`. It deliberately does NOT call `pip uninstall` itself:
+# that would lose any post-install hooks, race with concurrently-
+# installed editable installs in the same venv, and undermine the
+# operator's conscious choice to be in editable mode. The error is
+# a precondition report, not a fixup — same shape as the in-tree
+# PREPARE_BUILD macro in bbsengine6/Makefile (which reports a
+# foreign-owned build/, it doesn't chown on the operator's behalf).
+#
+# Implemented as a recipe-time macro (not a `.PHONY` target) so the
+# check only fires on the non-editable branch — the editable branch
+# legitimately has an editable install and must not be flagged.
+define precheck-editable
+	SHOW=$$($(PIP) show $(PROJECT) 2>/dev/null); \
+	if echo "$$SHOW" | grep -q '^Editable project location:'; then \
+		EDITABLE_SRC=$$(echo "$$SHOW" | awk -F': ' '/^Editable project location: / {print $$2; exit}'); \
+		echo "deploy-tui: $(PROJECT) is installed editable in the active venv" >&2; \
+		echo "  editable source: $$EDITABLE_SRC" >&2; \
+		echo >&2; \
+		echo "Editable and wheel installs of the same distribution name can't coexist in" >&2; \
+		echo "one venv (the editable .pth finder shadows subsequent wheel installs), so" >&2; \
+		echo "this Makefile refuses to silently no-op. Pick one:" >&2; \
+		echo >&2; \
+		echo "  1) Stay in editable mode: deploy --editable bbsengine6.tui" >&2; \
+		echo "  2) Switch to wheel mode: pip uninstall bbsengine6 && deploy bbsengine6.tui" >&2; \
+		echo >&2; \
+		echo "(The Makefile intentionally doesn't 'fix' this for you — see" >&2; \
+		echo " py/src/Makefile precheck-editable.)" >&2; \
+		exit 1; \
+	fi
+endef
+
 install: version
 	cd .. && $(PIP) install --no-cache-dir -e .
 
@@ -33,6 +124,7 @@ deploy-tui:
 ifeq ($(DEPLOY_EDITABLE),1)
 	cd .. && $(PIP) install --no-cache-dir -e .
 else
+	@$(precheck-editable)
 	@WHEEL=$(OUTDIR)$(PROJECT)-$(VERSION_PREFIX)$(VERSION)-py3-none-any.whl; \
 	if [ ! -f "$$WHEEL" ]; then \
 		WHEEL=$$(ls -t $(OUTDIR)$(PROJECT)-*.whl 2>/dev/null | head -1); \
@@ -43,7 +135,8 @@ else
 		echo "explicit wheel missing; falling back to newest in OUTDIR: $$WHEEL" >&2; \
 	fi; \
 	echo "WHEEL=$$WHEEL"; \
-	$(PIP) install --no-cache-dir $$WHEEL
+	$(PIP) install --no-cache-dir "$$WHEEL"; \
+	$(verify-install)
 endif
 
 rename-sdist:
