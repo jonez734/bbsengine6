@@ -131,8 +131,14 @@ def _table_identifier(table: str, args: Any = None):
     Args:
       table: Table name, optionally qualified with schema (e.g., 'empyre.__player')
       args: Optional application args. When provided, a bare schema of 'engine'
-            is rewritten to args.databaseschema so callers do not have to know
+            is rewritten to args.bbsengineschema (falling back to
+            args.databaseschema, then 'engine') so callers do not have to know
             the active schema at the call site.
+
+            ``bbsengineschema`` is the bbsengine6-owned namespace
+            (``engine.__session``, ``engine.__member``, ``engine.__blurb``,
+            ...). ``databaseschema`` remains a backward-compat fallback for
+            callers that historically set it to relocate engine tables.
 
     Returns:
       sql.Identifier for the table
@@ -141,9 +147,12 @@ def _table_identifier(table: str, args: Any = None):
         schema, table_name = table.split(".", 1)
         if schema == "engine" and args is not None:
             try:
-                schema = args.databaseschema
+                schema = args.bbsengineschema
             except AttributeError:
-                pass
+                try:
+                    schema = args.databaseschema
+                except AttributeError:
+                    pass
         return sql.Identifier(schema, table_name)
     return sql.Identifier(table)
 
@@ -725,7 +734,8 @@ def upsert(
             update_columns=["value"],
             conn=conn,
         )
-        # The 'engine' schema is rewritten to args.databaseschema.
+        # The 'engine' schema is rewritten to args.bbsengineschema
+        # (falling back to args.databaseschema for back-compat).
 
     Note:
         - All columns in items should be valid for the table
@@ -1079,6 +1089,10 @@ def buildargs(
     databaseschema = defaults.get(
         "databaseschema", os.environ.get("BBSENGINE6_DBSCHEMA", "engine")
     )
+    bbsengineschema = defaults.get(
+        "bbsengineschema",
+        os.environ.get("BBSENGINE6_DBENGINESCHEMA", databaseschema),
+    )
 
     group = parentparser.add_argument_group(label)
     #    group = argparse.ArgumentParser("database", parents=[parentparser], add_help=False)
@@ -1139,6 +1153,20 @@ def buildargs(
             type=str,
             help="schema to use",
         )
+        group.add_argument(
+            "--bbsengineschema",
+            dest="bbsengineschema",
+            action="store",
+            default=bbsengineschema,
+            type=str,
+            help=(
+                "schema for bbsengine6-owned tables (engine.__session, "
+                "engine.__member, engine.__blurb, ...). Defaults to "
+                "$BBSENGINE6_DBENGINESCHEMA or $BBSENGINE6_DBSCHEMA or 'engine'. "
+                "Almost never needs to change; override only if you "
+                "relocated bbsengine6's tables to a custom schema at install time."
+            ),
+        )
     else:
         group.add_argument(
             "--databasename",
@@ -1180,6 +1208,23 @@ def buildargs(
             type=str,
             help=argparse.SUPPRESS,
         )  # "database password (default: %(default)r)")
+
+        group.add_argument(
+            "--databaseschema",
+            dest="databaseschema",
+            action="store",
+            default=databaseschema,
+            type=str,
+            help=argparse.SUPPRESS,
+        )
+        group.add_argument(
+            "--bbsengineschema",
+            dest="bbsengineschema",
+            action="store",
+            default=bbsengineschema,
+            type=str,
+            help=argparse.SUPPRESS,
+        )
 
     return
 
