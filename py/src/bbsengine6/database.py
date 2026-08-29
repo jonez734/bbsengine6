@@ -1,6 +1,7 @@
 import contextvars
 import copy
 import os
+import re
 from contextlib import contextmanager
 import threading
 from typing import Any, Generator, Iterator, Literal
@@ -1984,6 +1985,151 @@ def creatextension(args: Any, ext: str, **kwargs: Any) -> bool:
         return _work(cur)
 
 
+_DOLLAR_QUOTE_RE = re.compile(r"\$([A-Za-z_][A-Za-z0-9_]*)?\$")
+
+
+def _split_sql_statements(script: str) -> list[str]:
+    """Split a SQL script into individual statements.
+
+    psycopg3's ``Cursor.execute`` accepts only a single statement per
+    call (the server's prepared-statement protocol rejects multi-
+    command strings), so ``importsql`` walks the loaded script and
+    issues one ``execute`` per statement.
+
+    The splitter is a small state machine that correctly skips over:
+
+      * ``-- ...`` line comments,
+      * ``/* ... */`` block comments (including nested variants where
+        the dialect supports them),
+      * single-quoted ``'...'`` and double-quoted ``"..."`` string
+        literals, honoring ``''`` / ``""`` escapes,
+      * ``E'...'`` escape strings,
+      * ``$$ ... $$`` and ``$tag$ ... $tag$`` dollar-quoted blocks
+        (every PL/pgSQL function body, including the
+        ``format('CREATE ROLE %I', ...)`` constructions inside
+        ``createrol.sql``, lives inside one of these).
+
+    Whitespace and comment-only chunks are stripped from the output
+    so callers see only runnable statements.
+
+    Args:
+        script: The full SQL script text as loaded from a ``.sql``
+            resource.
+
+    Returns:
+        A list of non-empty, stripped statement strings in source
+        order. The returned list is empty when ``script`` is empty
+        or contains only whitespace / comments.
+    """
+    statements: list[str] = []
+    buf: list[str] = []
+    i = 0
+    n = len(script)
+
+    def _flush() -> None:
+        stmt = "".join(buf).strip()
+        if stmt:
+            statements.append(stmt)
+        buf.clear()
+
+    while i < n:
+        ch = script[i]
+        nxt = script[i + 1] if i + 1 < n else ""
+
+        # Line comment: -- ... up to (but not including) newline.
+        # Skip past the comment without appending it to the buffer:
+        # PostgreSQL accepts comments inside SQL, but stripping them
+        # produces cleaner statement strings and keeps comment-only
+        # scripts from leaking into the output.
+        if ch == "-" and nxt == "-":
+            end = script.find("\n", i)
+            if end == -1:
+                end = n
+            i = end
+            continue
+
+        # Block comment: /* ... */ (PostgreSQL also accepts nesting).
+        # As with line comments, drop the comment text from the buffer.
+        if ch == "/" and nxt == "*":
+            j = i + 2
+            depth = 1
+            while j < n and depth:
+                if script[j] == "/" and j + 1 < n and script[j + 1] == "*":
+                    depth += 1
+                    j += 2
+                    continue
+                if script[j] == "*" and j + 1 < n and script[j + 1] == "/":
+                    depth -= 1
+                    j += 2
+                    continue
+                j += 1
+            i = j
+            continue
+
+        # Dollar-quoted block: $tag$ ... $tag$.
+        if ch == "$":
+            m = _DOLLAR_QUOTE_RE.match(script, i)
+            if m:
+                opener = m.group(0)
+                close_at = script.find(opener, m.end())
+                if close_at == -1:
+                    buf.append(script[i:])
+                    i = n
+                    continue
+                buf.append(script[i : close_at + len(opener)])
+                i = close_at + len(opener)
+                continue
+
+        # Single-quoted string literal.
+        if ch == "'":
+            # Optional E'' escape prefix already absorbed by the
+            # outer state machine; we just consume the body.
+            j = i + 1
+            while j < n:
+                if script[j] == "'":
+                    if j + 1 < n and script[j + 1] == "'":
+                        j += 2
+                        continue
+                    j += 1
+                    break
+                j += 1
+            buf.append(script[i:j])
+            i = j
+            continue
+
+        # Double-quoted identifier (preserved verbatim so we don't
+        # accidentally treat a `";"` inside as a separator).
+        if ch == '"':
+            j = i + 1
+            while j < n:
+                if script[j] == '"':
+                    if j + 1 < n and script[j + 1] == '"':
+                        j += 2
+                        continue
+                    j += 1
+                    break
+                j += 1
+            buf.append(script[i:j])
+            i = j
+            continue
+
+        # Statement terminator. Flush the buffer (if it has anything
+        # non-empty after stripping) and advance past the `;`.
+        if ch == ";":
+            buf.append(ch)
+            _flush()
+            i += 1
+            continue
+
+        buf.append(ch)
+        i += 1
+
+    # Trailing buffer (no terminating `;` on the last line).
+    _flush()
+
+    return statements
+
+
 # @since 20241212
 def importsql(
     args: Any, filename: str, *, rollback: bool = True, **kwargs: Any
@@ -2062,9 +2208,15 @@ def importsql(
             #        sql_script = file.read()
             with cursor(conn=conn) as cur:
                 try:
-                    cur.execute(sql_script)
+                    statement = ""
+                    for statement in _split_sql_statements(sql_script):
+                        cur.execute(statement)
                 except psycopg.errors.Error as e:
-                    io.echo_traceback(f"bbsengine6.database.importsql.200: {e}")
+                    preview = statement[:200]
+                    io.echo_traceback(
+                        f"bbsengine6.database.importsql.200: "
+                        f"{filename}: {e} :: {preview}"
+                    )
                     if rollback:
                         try:
                             conn.rollback()
