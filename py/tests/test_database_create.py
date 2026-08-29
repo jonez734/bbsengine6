@@ -186,7 +186,7 @@ class TestCreate:
         rendered = stmt.as_string(None)  # type: ignore[arg-type]
         assert "WITH" not in rendered
         assert "CREATE DATABASE" in rendered
-        assert '"my_new_db"' in rendered
+        assert '"bare_db"' in rendered
 
     def test_duplicate_database_returns_false(self, test_args):
         # Simulate psycopg's DuplicateDatabase being raised on the second
