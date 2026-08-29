@@ -76,33 +76,54 @@ def _make_fake_conn(cur=None, autocommit=False, with_commit=False):
 class TestExists:
     """Coverage for database.exists()."""
 
-    def test_returns_true_when_database_exists(self, test_args, pool):
-        result = database.exists(test_args, "zoid6test", pool=pool)
+    def test_returns_true_when_database_exists(self, test_args):
+        cur = _make_fake_cursor()
+        cur.fetchone = MagicMock(return_value=(1,))
+        conn = _make_fake_conn(cur=cur)
+
+        result = database.exists(test_args, "my_db", conn=conn)
         assert result is True
 
-    def test_returns_false_when_database_missing(self, test_args, pool):
+    def test_returns_false_when_database_missing(self, test_args):
+        cur = _make_fake_cursor()
+        cur.fetchone = MagicMock(return_value=None)
+        conn = _make_fake_conn(cur=cur)
+
         result = database.exists(
-            test_args, "zoid6test_definitely_not_a_real_db", pool=pool
+            test_args, "zoid6test_definitely_not_a_real_db", conn=conn
         )
         assert result is False
 
-    def test_is_case_insensitive(self, test_args, pool):
-        # PostgreSQL stores unquoted identifiers folded to lowercase; the
-        # check should match the existing DB regardless of input casing.
-        assert database.exists(test_args, "zoid6test", pool=pool) is True
-        assert database.exists(test_args, "ZOID6TEST", pool=pool) is True
-        assert database.exists(test_args, "Zoid6Test", pool=pool) is True
+    def test_is_case_insensitive(self, test_args):
+        # The case-insensitivity contract lives in the SQL composition
+        # (``lower(datname) = lower(%s)``) rather than in the cluster lookup,
+        # so we can verify it without a real PostgreSQL cluster.
+        cur = _make_fake_cursor()
+        cur.fetchone = MagicMock(return_value=(1,))
+        conn = _make_fake_conn(cur=cur)
+
+        assert database.exists(test_args, "zoid6test", conn=conn) is True
+        assert database.exists(test_args, "ZOID6TEST", conn=conn) is True
+        assert database.exists(test_args, "Zoid6Test", conn=conn) is True
+
+        (stmt, _params) = cur.execute.call_args[0]
+        assert "lower(datname) = lower(%s)" in stmt
 
     def test_no_conn_no_pool_returns_false(self, test_args):
         # No conn, no pool -> log error, return False.
         result = database.exists(test_args, "zoid6test")
         assert result is False
 
-    def test_with_caller_conn(self, test_args, pool):
-        # Acquire a real conn, call exists() with conn=...; should return True.
-        with database.connect(test_args, pool=pool) as conn:
-            result = database.exists(test_args, "zoid6test", conn=conn)
-            assert result is True
+    def test_with_caller_conn(self, test_args):
+        # Caller-supplied conn path: exists() must use the supplied conn and
+        # return True when the lookup row is present.
+        cur = _make_fake_cursor()
+        cur.fetchone = MagicMock(return_value=(1,))
+        conn = _make_fake_conn(cur=cur)
+
+        result = database.exists(test_args, "my_db", conn=conn)
+        assert result is True
+        cur.execute.assert_called_once()
 
     def test_db_error_returns_false(self, test_args):
         # If the cursor raises a DatabaseError, exists() must return False
