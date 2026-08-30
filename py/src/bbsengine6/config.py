@@ -454,6 +454,8 @@ def validate_schema(
     known = frozenset(known_sections)
     warnings: list[str] = []
     for section in config:
+        if section.startswith("_"):
+            continue
         if section not in known:
             warnings.append(
                 f"unknown top-level config section {section!r} "
