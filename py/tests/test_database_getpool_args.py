@@ -20,6 +20,24 @@ import pytest
 pytestmark = pytest.mark.unit
 
 
+@pytest.fixture(autouse=True)
+def _isolate_default(monkeypatch):
+    """Pin ``make_dsn``'s last-resort fallback to a fixed sentinel so
+    this test file does not depend on environment, JSON files, or
+    the literal default constants.
+
+    Intercepts only tier 5 (the hardcoded last-resort defaults).
+    Tiers 1-4 (kwargs, args attr, env var, ``config["global"]``)
+    flow through the original :func:`bbsengine6.database._resolve_db_settings`
+    unimpeded.
+    """
+    from bbsengine6 import database
+
+    monkeypatch.setattr(database, "BBSENGINE6_DBNAME_DEFAULT", "SENTINEL_DB")
+    monkeypatch.setattr(database, "BBSENGINE6_DBHOST_DEFAULT", "SENTINEL_HOST")
+    monkeypatch.setattr(database, "BBSENGINE6_DBPORT_DEFAULT", 6543)
+
+
 class _FakePool:
     """Minimal stand-in for psycopg_pool.ConnectionPool that captures
     the DSN string it was constructed with so tests can assert against
@@ -156,9 +174,9 @@ def test_make_dsn_uses_env_fallback_when_args_has_no_db_attrs(monkeypatch):
     args = _EmptyArgs()
     dsn = database.make_dsn(args)
 
-    assert "dbname=zoid6" in dsn
-    assert "host=localhost" in dsn
-    assert "port=5432" in dsn
+    assert "dbname=SENTINEL_DB" in dsn
+    assert "host=SENTINEL_HOST" in dsn
+    assert "port=6543" in dsn
     # Critically: must NOT rely on libpq's silent unix-socket fallback
     assert "host=" in dsn
     assert "dbname=" in dsn
@@ -202,9 +220,9 @@ def test_getpool_uses_env_fallback_when_args_databasename_missing(monkeypatch):
     args = _EmptyArgs()
     pool = database.getpool(args)
 
-    assert "dbname=zoid6" in pool.conninfo
-    assert "host=localhost" in pool.conninfo
-    assert "port=5432" in pool.conninfo
+    assert "dbname=SENTINEL_DB" in pool.conninfo
+    assert "host=SENTINEL_HOST" in pool.conninfo
+    assert "port=6543" in pool.conninfo
 
 
 def test_make_dsn_does_not_silently_use_unix_socket(monkeypatch):
@@ -224,8 +242,8 @@ def test_make_dsn_does_not_silently_use_unix_socket(monkeypatch):
     dsn = database.make_dsn(args)
 
     # Both keys must be present and non-empty
-    assert "dbname=zoid6" in dsn
-    assert "host=localhost" in dsn
+    assert "dbname=SENTINEL_DB" in dsn
+    assert "host=SENTINEL_HOST" in dsn
     # And the unix-socket-specific libpq default must NOT be what
     # makes the DSN "work" — we must always supply our own values.
     assert "/var/run/postgresql" not in dsn
