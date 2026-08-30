@@ -24,9 +24,11 @@ DEFAULTDATABASE = "postgres"
 
 #: Last-resort default database name used by :func:`make_dsn` when
 #: no CLI flag, kwargs override, env var, or explicit ``config``
-#: mapping provides one. Mirrors the historical bbsengine6 value so
-#: existing deployments keep working without operator action.
-BBSENGINE6_DBNAME_DEFAULT: str = "zoid6"
+#: mapping supplies one. The sentinel value ``"NEEDINFO"`` is
+#: intentionally not a real database name so that an unresolved
+#: dbname produces a clear, recognizable connection error rather
+#: than silently connecting to a stale legacy database.
+BBSENGINE6_DBNAME_DEFAULT: str = "NEEDINFO"
 
 #: Last-resort default host used by :func:`make_dsn` when no other
 #: source supplies one.
@@ -1125,7 +1127,7 @@ def buildargs(
     if defaults is None:
         defaults = {}
     databasename = defaults.get(
-        "databasename", os.environ.get("BBSENGINE6_DBNAME", "zoid6")
+        "databasename", os.environ.get("BBSENGINE6_DBNAME", BBSENGINE6_DBNAME_DEFAULT)
     )
     databasehost = defaults.get(
         "databasehost", os.environ.get("BBSENGINE6_DBHOST", "localhost")
