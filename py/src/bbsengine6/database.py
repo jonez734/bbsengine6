@@ -4,6 +4,7 @@ import os
 import re
 from contextlib import contextmanager
 import threading
+from collections.abc import Mapping
 from typing import Any, Generator, Iterator, Literal
 
 import argparse
@@ -20,6 +21,20 @@ from psycopg_pool import ConnectionPool
 from . import io, util
 
 DEFAULTDATABASE = "postgres"
+
+#: Last-resort default database name used by :func:`make_dsn` when
+#: no CLI flag, kwargs override, env var, or explicit ``config``
+#: mapping provides one. Mirrors the historical bbsengine6 value so
+#: existing deployments keep working without operator action.
+BBSENGINE6_DBNAME_DEFAULT: str = "zoid6"
+
+#: Last-resort default host used by :func:`make_dsn` when no other
+#: source supplies one.
+BBSENGINE6_DBHOST_DEFAULT: str = "localhost"
+
+#: Last-resort default port used by :func:`make_dsn` when no other
+#: source supplies one. Coerced to ``int`` at the call site.
+BBSENGINE6_DBPORT_DEFAULT: int = 5432
 
 _current_db_role: contextvars.ContextVar[str | None] = contextvars.ContextVar(
     "current_db_role", default=None
@@ -330,97 +345,134 @@ def parse_dsn(dsn: str) -> dict[str, str]:
     return params
 
 
-def make_dsn(args: Any, **kwargs: Any) -> str:
+def make_dsn(
+    args: Any,
+    *,
+    config: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> str:
     """Build a PostgreSQL DSN string from args or kwargs.
 
     Args:
-      args: Application args with database* attributes
-      **kwargs: Optional overrides for dbname/database, user, password, host, port.
-                Supports both 'database' and 'dbname' for backward compatibility;
-                'database' takes precedence.
+      args: Application args with database* attributes.
+      config: Optional pre-resolved application config dict. When
+        provided, ``config["global"][key]`` is consulted for each
+        DSN component. The dict shape is whatever the calling
+        application uses; bbsengine6 only reads ``config["global"]``.
+      **kwargs: Optional overrides for dbname/database, user,
+        password, host, port. Supports both 'database' and 'dbname'
+        for backward compatibility; 'database' takes precedence.
 
     Returns:
-      DSN string like 'dbname=test user=admin'
+      DSN string like 'dbname=test user=admin'.
+
+    Precedence (top wins):
+      1. CLI / argparse attribute on ``args`` (``args.databasename``,
+         ``args.databasehost``, ...)
+      2. ``kwargs[key]`` (explicit override at the call site)
+      3. ``BBSENGINE6_DB*`` env var
+      4. ``config["global"][key]`` when ``config`` is supplied
+      5. :data:`BBSENGINE6_DBNAME_DEFAULT` for the ``dbname`` slot;
+         other slots return ``None`` (omit from DSN)
 
     Raises:
-      ValueError: If args is None and required database parameters are not provided via kwargs.
+      ValueError: If ``args`` is ``None`` and no kwargs override
+        supplies a dbname (the only key required to construct a
+        minimal DSN).
     """
     if "database" in kwargs and "dbname" not in kwargs:
         kwargs["dbname"] = kwargs.pop("database")
     elif "database" in kwargs and "dbname" in kwargs:
         kwargs.pop("database")
 
-    components = []
-
-    if args is None:
-        defaults = {
-            "dbname": os.environ.get("BBSENGINE6_DBNAME", "zoid6"),
-            "user": os.environ.get("BBSENGINE6_DBUSER"),
-            "password": os.environ.get("BBSENGINE6_DBPASSWORD"),
-            "host": os.environ.get("BBSENGINE6_DBHOST", "localhost"),
-            "port": int(os.environ.get("BBSENGINE6_DBPORT", "5432")),
-            "autocommit": False,
-        }
-        if not any(kwargs.get(k) for k in ("dbname", "user", "password", "host")):
-            raise ValueError(
-                "make_dsn: args is None and no database parameters provided via kwargs. "
-                "Cannot build DSN."
-            )
-    else:
-        try:
-            defaults = {
-                "dbname": (
-                    getattr(args, "databasename", None)
-                    or os.environ.get("BBSENGINE6_DBNAME", "zoid6")
-                ),
-                "user": (
-                    getattr(args, "databaseuser", None)
-                    or os.environ.get("BBSENGINE6_DBUSER")
-                ),
-                "password": (
-                    getattr(args, "databasepassword", None)
-                    or os.environ.get("BBSENGINE6_DBPASSWORD")
-                ),
-                "host": (
-                    getattr(args, "databasehost", None)
-                    or os.environ.get("BBSENGINE6_DBHOST", "localhost")
-                ),
-                "port": (
-                    getattr(args, "databaseport", None)
-                    or int(os.environ.get("BBSENGINE6_DBPORT", "5432"))
-                ),
-                "autocommit": False,
-            }
-        except AttributeError:
-            io.echo_traceback("bbsengine6.database.make_dsn.100:")
-            defaults = {
-                "dbname": os.environ.get("BBSENGINE6_DBNAME", "zoid6"),
-                "user": os.environ.get("BBSENGINE6_DBUSER"),
-                "password": os.environ.get("BBSENGINE6_DBPASSWORD"),
-                "host": os.environ.get("BBSENGINE6_DBHOST", "localhost"),
-                "port": int(os.environ.get("BBSENGINE6_DBPORT", "5432")),
-                "autocommit": False,
-            }
-
-    for k in ("dbname", "user", "password", "host", "port"):
-        v = kwargs.get(k, defaults.get(k))
+    components: list[str] = []
+    for key in ("dbname", "user", "password", "host", "port"):
+        v = _resolve_db_settings(args, kwargs, config, key)
         if v not in (None, ""):
-            components.append(f"{k}={v}")
+            components.append(f"{key}={v}")
+
+    if args is None and not any(c.startswith("dbname=") for c in components):
+        raise ValueError(
+            "make_dsn: args is None and no database parameters provided via kwargs. "
+            "Cannot build DSN."
+        )
 
     return " ".join(components)
+
+
+def _resolve_db_settings(
+    args: Any,
+    kwargs: dict[str, Any],
+    config: Mapping[str, Any] | None,
+    key: str,
+) -> str | None:
+    """Resolve one database connection setting via the bbsengine6
+    precedence chain.
+
+    Precedence (top wins):
+      1. ``kwargs[key]`` (explicit override at the call site)
+      2. ``getattr(args, f"database{key}", None)`` (CLI flag)
+      3. ``os.environ[f"BBSENGINE6_DB{key.upper()}"]``
+      4. ``config["global"][f"database{key}"]`` when ``config`` is supplied
+      5. :data:`BBSENGINE6_DBNAME_DEFAULT` (only when
+         ``key == "dbname"``); other keys return ``None``
+
+    Returns the resolved value, or ``None`` when no source provides
+    one. Callers must treat ``None`` as "omit from DSN".
+    """
+    # 1. explicit kwargs override
+    val = kwargs.get(key)
+    if val not in (None, ""):
+        return val
+    # 2. CLI flag on args namespace (args.databasename / args.databasehost / ...)
+    if args is not None:
+        suffix = key[2:] if key.startswith("db") else key
+        attr = getattr(args, f"database{suffix}", None)
+        if attr not in (None, ""):
+            return attr
+    # 3. env var (BBSENGINE6_DBNAME / BBSENGINE6_DBHOST / ...)
+    suffix = key.upper()
+    if suffix.startswith("DB"):
+        suffix = suffix[2:]
+    env_name = f"BBSENGINE6_DB{suffix}"
+    env_val = os.environ.get(env_name)
+    if env_val not in (None, ""):
+        return env_val
+    # 4. application-supplied config dict
+    if config:
+        global_cfg = config.get("global") or {}
+        cfg_suffix = key[2:] if key.startswith("db") else key
+        cfg_val = global_cfg.get(f"database{cfg_suffix}")
+        if cfg_val not in (None, ""):
+            return str(cfg_val)
+    # 5. last-resort defaults
+    if key == "dbname":
+        return BBSENGINE6_DBNAME_DEFAULT
+    if key == "host":
+        return BBSENGINE6_DBHOST_DEFAULT
+    if key == "port":
+        return str(BBSENGINE6_DBPORT_DEFAULT)
+    return None
 
 
 _pool_cache: dict = {}
 _pool_cache_lock = threading.Lock()
 
 
-def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
+def getpool(
+    args: Any,
+    *,
+    config: Mapping[str, Any] | None = None,
+    **kwargs: Any,
+) -> ConnectionPool:
     """Get or create a connection pool to PostgreSQL.
 
     Args:
-      args: Application args for DSN construction
+      args: Application args for DSN construction.
+      config: Optional pre-resolved application config dict
+        (forwarded to :func:`make_dsn`).
       **kwargs: Optional DSN overrides. Supports both 'database' and 'dbname'
-                for backward compatibility; 'database' takes precedence.
+        for backward compatibility; 'database' takes precedence.
 
     Returns:
       ConnectionPool instance (min=10, max=100 connections)
@@ -431,13 +483,15 @@ def getpool(args: Any, **kwargs: Any) -> ConnectionPool:
     databasename = kwargs.pop("database", kwargs.pop("dbname", None))
     if databasename is None and args is not None:
         databasename = getattr(args, "databasename", None) or os.environ.get(
-            "BBSENGINE6_DBNAME", "zoid6"
+            "BBSENGINE6_DBNAME"
         )
+    if databasename is None:
+        databasename = _resolve_db_settings(args, kwargs, config, "dbname")
 
     if databasename is not None:
-        dsn = make_dsn(args, dbname=databasename, **kwargs)
+        dsn = make_dsn(args, config=config, dbname=databasename, **kwargs)
     else:
-        dsn = make_dsn(args, **kwargs)
+        dsn = make_dsn(args, config=config, **kwargs)
 
     if not dsn or dsn == "port=5432":
         raise ValueError(
