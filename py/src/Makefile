@@ -43,6 +43,19 @@ DEPLOY_EDITABLE ?=
 # silently no-op'ing is the wrong default.
 DEPLOY_WITH_DEPS ?=
 
+# DEPLOY_UPGRADE is set by `deploytool --upgrade` (default true) and
+# unset by `--no-upgrade`. When "1", every `pip install` in this
+# Makefile passes `--upgrade` so the install replaces any prior version
+# of the same distribution and pulls the newest transitive deps from
+# PyPI. When empty, the prior behavior holds: pip is a no-op if the
+# wheel version already matches what's installed, and transitive deps
+# are whatever was in the target venv at deploy time. The contract is
+# `ifeq ($(DEPLOY_UPGRADE),1)` literal-string match — deploytool is
+# the canonical writer (sets to "1" or strips entirely), so anything
+# else means "off".
+DEPLOY_UPGRADE ?=
+PIP_UPGRADE_FLAG := $(if $(filter 1,$(DEPLOY_UPGRADE)),--upgrade,)
+
 # Verifies the wheel just installed is the one `pip show` reports
 # as installed. Catches the silent-no-op case where `pip install
 # <wheel>` exits 0 without actually replacing an existing install
@@ -166,11 +179,11 @@ define precheck-editable
 endef
 
 install: version
-	cd .. && $(PIP) install --no-cache-dir -e .
+	cd .. && $(PIP) install $(PIP_UPGRADE_FLAG) --no-cache-dir -e .
 
 deploy-tui:
 ifeq ($(DEPLOY_EDITABLE),1)
-	cd .. && $(PIP) install --no-cache-dir -e .
+	cd .. && $(PIP) install $(PIP_UPGRADE_FLAG) --no-cache-dir -e .
 else
 	@$(precheck-editable)
 	@WHEEL=$(OUTDIR)$(PROJECT)-$(VERSION_PREFIX)$(VERSION)-py3-none-any.whl; \
@@ -183,7 +196,7 @@ else
 		echo "explicit wheel missing; falling back to newest in OUTDIR: $$WHEEL" >&2; \
 	fi; \
 	echo "WHEEL=$$WHEEL"; \
-	$(PIP) install --no-cache-dir "$$WHEEL"; \
+	$(PIP) install $(PIP_UPGRADE_FLAG) --no-cache-dir "$$WHEEL"; \
 	$(verify-install)
 endif
 

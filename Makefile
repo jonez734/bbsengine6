@@ -40,6 +40,13 @@ VERSION_PREFIX = 0.0.1.dev
 # wheel install.
 DEPLOY_EDITABLE ?=
 
+# Set by `deploy --upgrade` (deploytool). Default "1" (deploytool sets
+# this when --upgrade is passed or no flag is given). Propagated to
+# py/src/Makefile deploy-tui which splices `--upgrade` into every
+# `pip install` line when this is "1". Empty means the prior no-op-
+# if-version-matches behavior.
+DEPLOY_UPGRADE ?=
+
 # @since 20230414
 export SCSSLOADPATH = --load-path $(PWD)/../zoidweb6/skin/scss/ \
                      --load-path $(PWD)/skin/scss/ \
@@ -275,4 +282,4 @@ deploy:
 	$(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT)
 
 deploy-tui: build
-	$(MAKE) -C py/src deploy-tui DEPLOY_EDITABLE=$(DEPLOY_EDITABLE) VERSION=$(PY_VERSION) VERSION_PREFIX=$(VERSION_PREFIX)
+	$(MAKE) -C py/src deploy-tui DEPLOY_EDITABLE=$(DEPLOY_EDITABLE) DEPLOY_UPGRADE=$(DEPLOY_UPGRADE) VERSION=$(PY_VERSION) VERSION_PREFIX=$(VERSION_PREFIX)
