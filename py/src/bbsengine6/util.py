@@ -15,6 +15,10 @@
 # - Other: diceroll(), checksum(), tobool(), ltree_to_path(), chop_last_element(),
 #   get_safe_path(), load_sql(), serialize_datetimes(), getencryptedpassword(),
 #   filedisplay()
+# - Argv hardening (bin wrappers): sanitize_args(),
+#   DANGEROUS_PYTHON_ENV_VARS, safe_main(); paired with
+#   ``bbsengine6/data/sanitize_args.sh`` (the shell-side helper for
+#   shell bin wrappers).
 #
 # ERROR HANDLING PATTERNS:
 # - User-facing errors: Functions like verify_*() use io.echo(..., level="error")
@@ -34,6 +38,7 @@ import logging.handlers
 import os
 import random
 import re
+import sys
 import threading
 import warnings
 from datetime import datetime
@@ -1424,3 +1429,215 @@ def decrypt_password(ciphertext_b64: str) -> str:
 #    - Lives in bbsengine6.password_cipher package (cipher + storage strategy)
 #
 # Choose the right one for your use case!
+
+
+# ---------------------------------------------------------------------------
+# Sanitize args for bin wrappers
+#
+# Background: every zoidoffice bin wrapper is a thin shell script that
+# does ``python -W all -m <module> "$@"``. Passing "$@" verbatim means
+# a user-supplied argv can subvert python startup in three ways:
+#
+#   1. Python-interpreter flag injection. ``python`` consumes its own
+#      options before ``-m <module>`` runs, so a user arg like
+#      ``-X faulthandler`` or ``-c "code"`` would be consumed by
+#      python itself (not the module's argparse layer) and can change
+#      startup behavior.
+#
+#   2. Environment-variable RCE / persistence. ``PYTHONSTARTUP``,
+#      ``PYTHONPATH``, ``PYTHONBREAKPOINT``, ``PYTHONINSPECT``,
+#      ``PYTHONDEBUG``, ``PYTHONPYCACHEPREFIX`` and friends can hijack
+#      python startup even when argv is clean. ``DANGEROUS_PYTHON_ENV_VARS``
+#      below lists the ones that matter; ``sanitize_args_main`` (the
+#      entry point behind the ``bbsengine6-sanitize-args`` console
+#      script) ``os.environ.pop``s them before ``os.execv``.
+#
+#   3. Stdin redirection / option-name smuggling. A bare ``-`` is the
+#      argparse sentinel for stdin; long opts whose name contains
+#      shell metacharacters could break out of their token if a
+#      wrapper ever forgets to quote. ``sanitize_args`` enforces a
+#      strict charset on long-opt names and rejects ``-`` outright.
+#
+# Policy implemented by ``sanitize_args``:
+#
+#   * Empty token            -> reject.
+#   * Bare ``-``              -> reject (stdin sentinel; python single-letter
+#                                flags are also a single ``-X`` etc., see
+#                                next rule).
+#   * Any token starting with ``-`` but not ``--`` -> reject. zoidoffice's
+#                                CLIs use long opts only; refusing the
+#                                whole single-dash class closes the
+#                                python-flag-injection hole without
+#                                breaking any legitimate invocation.
+#   * ``--`` alone            -> allow (argparse end-of-options).
+#   * ``--name`` or
+#     ``--name=value``        -> allow iff ``name`` matches
+#                                ``^[A-Za-z0-9_-]+$``. NUL bytes anywhere
+#                                in the token are rejected.
+#   * Anything else (positional) -> allow, except NUL bytes.
+#
+# Returns ``(cleaned_argv, rejections)``. ``cleaned_argv`` is a list of
+# the validated tokens in original order; ``rejections`` is a list of
+# ``(index, token, reason)`` tuples. Empty ``rejections`` means all
+# tokens passed. The caller decides what to do on rejection (typically
+# print and exit non-zero without invoking python).
+# ---------------------------------------------------------------------------
+
+import re as _re  # noqa: E402
+
+# Strict charset for the *name* portion of a long opt. The value
+# portion (after the first ``=``) is unrestricted except for NUL.
+_LONG_OPT_NAME_RE = _re.compile(r"^[A-Za-z0-9_-]+$")
+
+# Env vars that influence python startup. Keep this list explicit so
+# adding a new one is a code change rather than a silent behavior
+# shift. ``PYTHONUNBUFFERED`` and ``PYTHONIOENCODING`` are
+# intentionally excluded (benign; commonly set by CI / terminals).
+DANGEROUS_PYTHON_ENV_VARS: frozenset = frozenset(
+    {
+        "PYTHONSTARTUP",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "PYTHONINSPECT",
+        "PYTHONBREAKPOINT",
+        "PYTHONDEBUG",
+        "PYTHONPYCACHEPREFIX",
+        "PYTHONNOUSERSITE",
+        "PYTHONUSERBASE",
+        "PYTHONFAULTHANDLER",
+        "PYTHONTRACEMALLOC",
+        "PYTHONPROFILEIMPORTTIME",
+        "PYTHONCOERCECLOCALE",
+        "PYTHONDEVMODE",
+        "PYTHONMALLOCSTATS",
+        "PYTHONLEGACYWINDOWSSTDIO",
+        "PYTHONDONTWRITEBYTECODE",
+    }
+)
+
+
+def sanitize_args(argv):
+    # type: (tuple[str, ...]) -> tuple[list[str], list[tuple[int, str, str]]]
+    """Validate ``argv`` for a bin-wrapper invocation.
+
+    Returns ``(cleaned, rejections)``:
+
+    * ``cleaned`` is the input with rejected tokens removed. The
+      relative order of accepted tokens is preserved.
+    * ``rejections`` is a list of ``(index, token, reason)`` tuples,
+      one per rejected token. Reasons are short, machine-readable
+      strings (e.g. ``"single-dash-option"``, ``"nul-byte"``).
+
+    The function is pure (no I/O, no env access) so it can be unit
+    tested in isolation. ``bbsengine6.util.safe_main`` wraps this in
+    env-var scrubbing + dispatch to the wrapped ``main()`` function;
+    shell wrappers use the parallel helper shipped in
+    ``bbsengine6/data/sanitize_args.sh``.
+    """
+    cleaned: list = []
+    rejections: list = []
+    for idx, token in enumerate(argv):
+        if not isinstance(token, str):
+            # Defensive: a non-str token (bytes, int) in argv would
+            # crash the receiving python on PY3. Reject explicitly.
+            rejections.append((idx, repr(token), "non-string-token"))
+            continue
+        if token == "":
+            rejections.append((idx, token, "empty"))
+            continue
+        if "\x00" in token:
+            rejections.append((idx, token, "nul-byte"))
+            continue
+        if token == "-":
+            rejections.append((idx, token, "bare-dash"))
+            continue
+        if token.startswith("-"):
+            # Refuse the whole single-dash class; allow ``--`` as a
+            # special case (argparse end-of-options).
+            if token == "--":
+                cleaned.append(token)
+                continue
+            if not token.startswith("--"):
+                rejections.append((idx, token, "single-dash-option"))
+                continue
+            # Long opt. Split on the first ``=``; validate only the
+            # name portion. The value portion is unrestricted except
+            # for the NUL check above.
+            head = token[2:]
+            if "=" in head:
+                name, _value = head.split("=", 1)
+            else:
+                name = head
+            if not _LONG_OPT_NAME_RE.match(name):
+                rejections.append((idx, token, "bad-long-opt-name"))
+                continue
+            cleaned.append(token)
+            continue
+        cleaned.append(token)
+    return cleaned, rejections
+
+
+def safe_main(
+    main_fn,
+    *,
+    argv=None,
+    report_rejections=True,
+):
+    # type: (Callable[[], Any], ..., ..., int) -> int
+    """Validate argv, scrub dangerous env vars, then call ``main_fn()``.
+
+    Returns the appropriate exit code:
+
+    * If any argv token is rejected (per :func:`sanitize_args`), writes
+      one ``progname: rejected argv[idx] (reason): repr(token)`` line
+      per rejection to stderr (unless ``report_rejections=False``),
+      then returns ``2``. ``main_fn`` is NOT called.
+    * Otherwise scrubs every name in :data:`DANGEROUS_PYTHON_ENV_VARS`
+      from ``os.environ``, replaces ``sys.argv[1:]`` with the cleaned
+      argv, calls ``main_fn()``, and returns its return value coerced
+      to ``int`` (use ``0`` if your ``main_fn`` returns ``None`` or a
+      non-int).
+
+    Args:
+      main_fn: Zero-argument callable (the bin-wrapper's entry
+        point). Called only after argv passes validation.
+      argv: Token list to validate. Defaults to ``sys.argv[1:]`` when
+        ``None`` (the standard console-script convention).
+      report_rejections: When ``True`` (default), write per-rejection
+        lines to stderr. Tests pass ``False`` to silence the helper.
+
+    Returns:
+      Exit code: ``2`` on rejection; ``main_fn()``'s return value
+      otherwise.
+    """
+    if argv is None:
+        argv = sys.argv[1:]
+
+    cleaned, rejections = sanitize_args(argv)
+    if rejections:
+        if report_rejections:
+            prog = sys.argv[0] if sys.argv else "<unknown>"
+            for idx, token, reason in rejections:
+                sys.stderr.write(
+                    "{prog}: rejected argv[{idx}] ({reason}): "
+                    "{token!r}\n".format(
+                        prog=prog, idx=idx, reason=reason, token=token
+                    )
+                )
+                sys.stderr.write(
+                    "{prog}: refusing to invoke main() due to "
+                    "rejected argv tokens\n".format(prog=prog)
+                )
+        return 2
+
+    for name in DANGEROUS_PYTHON_ENV_VARS:
+        os.environ.pop(name, None)
+
+    sys.argv[1:] = cleaned
+    result = main_fn()
+    if result is None:
+        return 0
+    try:
+        return int(result)
+    except (TypeError, ValueError):
+        return 0

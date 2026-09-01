@@ -60,7 +60,7 @@ include = ["bbsengine6*"]
 version = { attr = "bbsengine6._version.__version__" }
 
 [tool.setuptools.package-data]
-bbsengine6 = ["sql/*.sql", "sql/Makefile"]
+bbsengine6 = ["sql/*.sql", "sql/Makefile", "data/*.sh"]
 
 [tool.pytest.ini_options]
 markers = [
