@@ -33,6 +33,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from bbsengine6.message import lib as message_lib
+
 
 # ---------------------------------------------------------------------------
 # Module-level presence
@@ -166,8 +168,9 @@ class TestSendValidation:
 class TestSendDisabled:
     def test_returns_zero_when_message_disabled(self):
         from bbsengine6 import message
+        from bbsengine6.message import lib as message_lib
 
-        with patch.object(message, "_message_enabled", False):
+        with patch.object(message_lib, "_message_enabled", False):
             result = message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -203,7 +206,7 @@ class TestSendRoutesToStoreMessage:
     def test_returns_store_message_result(self):
         from bbsengine6 import message
 
-        with patch.object(message, "store_message", return_value=42) as sm:
+        with patch.object(message_lib, "store_message", return_value=42) as sm:
             result = message.send(
                 notification_type="casino_kick",
                 recipients=["alice", "bob"],
@@ -235,7 +238,7 @@ class TestSendRoutesToStoreMessage:
         from bbsengine6 import message
 
         args = SimpleNamespace(database="from_database", databasename="from_databasename")
-        with patch.object(message, "store_message", return_value=1) as sm:
+        with patch.object(message_lib, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino.bankalert",
                 recipients=["sysop"],
@@ -247,7 +250,7 @@ class TestSendRoutesToStoreMessage:
     def test_renders_template_with_missing_vars(self):
         from bbsengine6 import message
 
-        with patch.object(message, "store_message", return_value=1) as sm:
+        with patch.object(message_lib, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -261,7 +264,7 @@ class TestSendRoutesToStoreMessage:
     def test_urgency_string_passthrough(self):
         from bbsengine6 import message
 
-        with patch.object(message, "store_message", return_value=1) as sm:
+        with patch.object(message_lib, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -273,7 +276,7 @@ class TestSendRoutesToStoreMessage:
     def test_urgency_none_defaults_to_routine(self):
         from bbsengine6 import message
 
-        with patch.object(message, "store_message", return_value=1) as sm:
+        with patch.object(message_lib, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -284,7 +287,7 @@ class TestSendRoutesToStoreMessage:
     def test_no_args_database_is_none(self):
         from bbsengine6 import message
 
-        with patch.object(message, "store_message", return_value=1) as sm:
+        with patch.object(message_lib, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -296,7 +299,7 @@ class TestSendRoutesToStoreMessage:
         from bbsengine6 import message
 
         payload = {"custom": "payload", "n": 7}
-        with patch.object(message, "store_message", return_value=1) as sm:
+        with patch.object(message_lib, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -311,7 +314,7 @@ class TestSendRoutesToStoreMessage:
         store_message."""
         from bbsengine6 import message
 
-        with patch.object(message, "store_message", return_value=1) as sm:
+        with patch.object(message_lib, "store_message", return_value=1) as sm:
             result = message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -326,7 +329,7 @@ class TestSendRoutesToStoreMessage:
         shim and must not be forwarded to store_message."""
         from bbsengine6 import message
 
-        with patch.object(message, "store_message", return_value=1) as sm:
+        with patch.object(message_lib, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -355,8 +358,9 @@ class TestRegisterTypeCompatPresent:
 class TestRegisterTypeCompatDisabled:
     def test_returns_false_when_disabled(self):
         from bbsengine6 import message
+        from bbsengine6.message import lib as message_lib
 
-        with patch.object(message, "_message_enabled", False):
+        with patch.object(message_lib, "_message_enabled", False):
             ok = message.register_type_compat(
                 "casino.bankalert",
                 message.MessageUrgency.ROUTINE,
@@ -375,7 +379,7 @@ class TestRegisterTypeCompatAdapter:
     def test_legacy_signature_routes_to_register_type(self):
         from bbsengine6 import message
 
-        with patch.object(message, "register_type", return_value=True) as rt:
+        with patch.object(message_lib, "register_type", return_value=True) as rt:
             ok = message.register_type_compat(
                 "casino.bankalert",
                 message.MessageUrgency.ROUTINE,
@@ -402,7 +406,7 @@ class TestRegisterTypeCompatAdapter:
         that already migrated to the new schema."""
         from bbsengine6 import message
 
-        with patch.object(message, "register_type", return_value=True) as rt:
+        with patch.object(message_lib, "register_type", return_value=True) as rt:
             ok = message.register_type_compat(
                 "casino.bankalert",
                 description="Casino bank alerts",
@@ -423,7 +427,7 @@ class TestRegisterTypeCompatAdapter:
     def test_no_urgency_skips_description(self):
         from bbsengine6 import message
 
-        with patch.object(message, "register_type", return_value=True) as rt:
+        with patch.object(message_lib, "register_type", return_value=True) as rt:
             message.register_type_compat(
                 "casino.bankalert",
                 urgency=None,

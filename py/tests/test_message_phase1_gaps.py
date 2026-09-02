@@ -22,6 +22,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from bbsengine6.message import lib as message_lib
+
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +75,7 @@ class TestRemoveFromGroup:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             result = message.remove_from_group(7, "alice")
 
         assert result is True
@@ -98,15 +100,16 @@ class TestRemoveFromGroup:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             result = message.remove_from_group(99, "ghost")
 
         assert result is False
 
     def test_returns_false_when_disabled(self):
         from bbsengine6 import message
+        from bbsengine6.message import lib as message_lib
 
-        with patch.object(message, "_message_enabled", False):
+        with patch.object(message_lib, "_message_enabled", False):
             assert message.remove_from_group(1, "alice") is False
 
 
@@ -132,7 +135,7 @@ class TestGetBlocked:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             result = message.get_blocked("carol")
 
         assert result == ["alice", "bob"]
@@ -156,7 +159,7 @@ class TestGetBlocked:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             assert message.get_blocked("carol") == []
 
 
@@ -182,7 +185,7 @@ class TestGetUrgent:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             message.get_urgent("alice", limit=10)
 
         sql = cur.execute.call_args[0][0]
@@ -223,7 +226,7 @@ class TestGetUrgent:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             result = message.get_urgent("bob")
 
         assert len(result) == 1
@@ -255,7 +258,7 @@ class TestExpunge:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             result = message.expunge(42, "alice")
 
         assert result is True
@@ -281,7 +284,7 @@ class TestExpunge:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             result = message.expunge(42, "someone-else")
 
         assert result is False
@@ -297,8 +300,7 @@ class TestGetQueue:
         from bbsengine6 import message
 
         sentinel = [{"id": 1, "urgency": "ROUTINE"}]
-        with patch.object(
-            message, "get_pending_messages", return_value=sentinel
+        with patch.object(message_lib, "get_pending_messages", return_value=sentinel
         ) as gpm:
             result = message.get_queue("alice")
 
@@ -319,7 +321,7 @@ class TestResolveRecipients:
     def test_passes_through_plain_monikers(self):
         from bbsengine6 import message
 
-        with patch.object(message, "is_enabled", return_value=True):
+        with patch.object(message_lib, "is_enabled", return_value=True):
             result = message.resolve_recipients(["alice", "bob"])
 
         assert result == ["alice", "bob"]
@@ -327,7 +329,7 @@ class TestResolveRecipients:
     def test_dedupes_plain_monikers(self):
         from bbsengine6 import message
 
-        with patch.object(message, "is_enabled", return_value=True):
+        with patch.object(message_lib, "is_enabled", return_value=True):
             result = message.resolve_recipients(["alice", "bob", "alice"])
 
         assert result == ["alice", "bob"]
@@ -348,8 +350,8 @@ class TestResolveRecipients:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "is_enabled", return_value=True), \
-             patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "is_enabled", return_value=True), \
+             patch.object(message_lib, "getpool", return_value=pool):
             result = message.resolve_recipients(["@everyone"])
 
         assert result == ["alice", "bob", "carol"]
@@ -375,10 +377,9 @@ class TestResolveRecipients:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "is_enabled", return_value=True), \
-             patch.object(message, "getpool", return_value=pool), \
-             patch.object(
-                 message, "get_message_group_members",
+        with patch.object(message_lib, "is_enabled", return_value=True), \
+             patch.object(message_lib, "getpool", return_value=pool), \
+             patch.object(message_lib, "get_message_group_members",
                  return_value=["dave", "eve"],
              ):
             result = message.resolve_recipients(["@ops"])
@@ -403,8 +404,8 @@ class TestResolveRecipients:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "is_enabled", return_value=True), \
-             patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "is_enabled", return_value=True), \
+             patch.object(message_lib, "getpool", return_value=pool):
             result = message.resolve_recipients(["@nope", "alice"])
 
         assert result == ["alice"]
@@ -425,8 +426,8 @@ class TestResolveRecipients:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "is_enabled", return_value=True), \
-             patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "is_enabled", return_value=True), \
+             patch.object(message_lib, "getpool", return_value=pool):
             result = message.resolve_recipients(["alice", "@everyone", "bob"])
 
         # alice first, then everyone (bob appears once, deduped)
@@ -434,8 +435,9 @@ class TestResolveRecipients:
 
     def test_returns_empty_when_disabled(self):
         from bbsengine6 import message
+        from bbsengine6.message import lib as message_lib
 
-        with patch.object(message, "_message_enabled", False):
+        with patch.object(message_lib, "_message_enabled", False):
             assert message.resolve_recipients(["alice"]) == []
 
 
@@ -461,7 +463,7 @@ class TestRateLimitAndTypes:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             result = message.set_rate_limit("casino:table", 50)
 
         assert result is True
@@ -485,7 +487,7 @@ class TestRateLimitAndTypes:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             result = message.register_type(
                 "x:new", "new channel", 25, requires_approval=True
             )
@@ -517,7 +519,7 @@ class TestRateLimitAndTypes:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool):
+        with patch.object(message_lib, "getpool", return_value=pool):
             result = message.get_types()
 
         assert len(result) == 2
@@ -561,12 +563,11 @@ class TestStoreMessageExpandsRecipients:
 
         expanded = ["alice", "bob", "carol"]
 
-        with patch.object(message, "getpool", return_value=pool), \
-             patch.object(
-                 message, "resolve_recipients", return_value=expanded
+        with patch.object(message_lib, "getpool", return_value=pool), \
+             patch.object(message_lib, "resolve_recipients", return_value=expanded
              ) as expand, \
-             patch.object(message, "is_blocked", return_value=False), \
-             patch.object(message, "check_rate_limit", return_value=(True, 999)):
+             patch.object(message_lib, "is_blocked", return_value=False), \
+             patch.object(message_lib, "check_rate_limit", return_value=(True, 999)):
             result = message.store_message(
                 channel="system:shout",
                 sender_moniker="alice",
@@ -600,13 +601,12 @@ class TestStoreMessageExpandsRecipients:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message, "getpool", return_value=pool), \
-             patch.object(
-                 message, "resolve_recipients",
+        with patch.object(message_lib, "getpool", return_value=pool), \
+             patch.object(message_lib, "resolve_recipients",
                  return_value=["alice", "bob"],
              ) as expand, \
-             patch.object(message, "is_blocked", return_value=False), \
-             patch.object(message, "check_rate_limit", return_value=(True, 999)):
+             patch.object(message_lib, "is_blocked", return_value=False), \
+             patch.object(message_lib, "check_rate_limit", return_value=(True, 999)):
             message.store_message(
                 channel="member:direct",
                 sender_moniker="carol",

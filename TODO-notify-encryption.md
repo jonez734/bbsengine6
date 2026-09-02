@@ -12,6 +12,15 @@
 > GPG signing/encryption is still a desirable feature, but the
 > schema for it must be reworked against `bbsengine6.message`
 > (`engine.__message`, `engine.__message_recipient`) and the
+>
+> **Phase 11 note (DAL extraction):** the
+> `bbsengine6.message` referenced above is now a layered
+> package (`bbsengine6.message.dal.*`,
+> `bbsengine6.message.service`, `bbsengine6.message.templates`,
+> `bbsengine6.message.cache`); `bbsengine6.message.lib` is a
+> facade. The package surface is unchanged. Per-row encryption
+> work that previously targeted `engine.__notify*` will need to
+> target `engine.__message*` after this change.
 > `bbsengine6.member` GPG-key work in
 > `bbsengine6/TODO.md` "GPG Key Support for Message Signing"
 > (which itself is still pending). This file is preserved for

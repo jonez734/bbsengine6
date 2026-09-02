@@ -497,3 +497,39 @@ Phase 3 regression tests (created 2026-08-02):
   zoid6-vintage monoliths are frozen; new PHP code should follow
   the SPL autoload pattern documented in
   `handbook/BBSENGINE6_PHP_SPL.md`.
+
+## 11. Layered package layout
+
+Added in Phase 11 (see `TODO-message-migration.md` Phase 11, 2026-09-01).
+See [§3 Python package layout](#3-python-package-layout) for the
+module map. This section calls out the layered architecture that
+applies specifically to `bbsengine6.message`, mirroring casino's
+four-layer architecture (see `casino/SPEC.md` §3):
+
+| Layer       | Module                                  | Role                                          |
+|-------------|------------------------------------------|-----------------------------------------------|
+| **Service** | `bbsengine6.message.service`             | Business orchestration: enable/disable gate, rate-limit gating, blocking filter, recipient expansion, legacy `send` shim |
+|             | `bbsengine6.message.lib`                 | Public re-export surface + `Message` / `MessageUrgency` dataclasses + DB helpers (`_make_args`, `_resolve_db`, `_coerce_urgency`) |
+| **DAL**     | `bbsengine6.message.dal.messages`        | `engine.__message`, `engine.__message_recipient` I/O |
+|             | `bbsengine6.message.dal.recipients`      | `engine.__message_group_member` expansion     |
+|             | `bbsengine6.message.dal.groups`          | `engine.__message_group[_member]` I/O         |
+|             | `bbsengine6.message.dal.blocking`        | `engine.__message_block` I/O                  |
+|             | `bbsengine6.message.dal.ratelimit`       | `engine.__message_rate_limit`, `engine.__message_type` reads |
+|             | `bbsengine6.message.dal.types`           | `engine.__message_type` writes                |
+|             | `bbsengine6.message.dal._pool`           | CONN_POOL_PATTERN helper + schema probes     |
+| **State**   | `bbsengine6.message.cache`               | In-memory local unread counter (no DB)        |
+| **Domain**  | `bbsengine6.message.templates`           | `{var}` / `$var` template rendering           |
+|             | `bbsengine6.message.access` (in `__init__.py`) | Per-op authorization (subscribe / unsubscribe / list_pending) |
+
+The DAL never imports `psycopg` directly -- all DB plumbing goes
+through `bbsengine6.database`. Services call DAL methods; DAL executes
+queries; the engine layer never makes direct database calls. The local
+unread cache in `cache.py` is not a DAL module because it has no DB
+I/O; it sits at the package root so the DAL contract stays "talks to
+Postgres only".
+
+Async DAL: not yet provided. The current implementation is fully sync
+(via `bbsengine6.database.getpool` / `pool.connection()`); an async
+counterpart under `bbsengine6.message.dal.aio/` would mirror
+`casino/dal/aiosql/` once a consumer needs it.
+

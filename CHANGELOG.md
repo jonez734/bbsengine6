@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### bbsengine6.message: extract `dal/` subpackage, split service from lib
+
+Refactor `bbsengine6.message.lib` (1850 lines) into a layered
+structure that mirrors casino's `dal/` / `services/` contract.
+
+- New `bbsengine6/message/dal/` package with one module per
+  `engine.__message*` table family (`messages`, `recipients`,
+  `groups`, `blocking`, `ratelimit`, `types`) and a `_pool.py`
+  CONN_POOL_PATTERN helper. DAL has no policy: no rate-limit
+  checks, no enable/disable gate, no recipient expansion, no
+  business branching.
+- New `bbsengine6/message/service.py` owns business orchestration:
+  rate-limit gating, blocking filter, recipient expansion, legacy
+  `send()` shim, enable/disable. Calls into DAL.
+- New `bbsengine6/message/templates.py` -- pure `{var}` / `$var`
+  rendering helpers (`render_template`, `render_message_content`,
+  `parse_variables_from_content`, `get_builtin_variables`,
+  `validate_template`). No I/O.
+- New `bbsengine6/message/cache.py` (at package root, not under
+  `dal/`) -- in-memory local unread counter. No DB.
+- `bbsengine6/message/lib.py` slimmed to a facade: the `Message`
+  dataclass, DB helpers (`_make_args`, `_resolve_db`,
+  `_db_from_args`, `_coerce_urgency`), and `__getattr__`
+  re-exports so the public surface is preserved.
+- `bbsengine6/message/__init__.py` `access()`, `init()`, `cli`
+  unchanged.
+- No public-API breakage: every name in `bbsengine6.message.<X>`
+  resolves to the same callable. Existing test patches against
+  `bbsengine6.message.lib.<name>` continue to work because `lib.py`
+  re-exports the moved names via `__getattr__`.
+- `bbsengine6/SPEC.md` gains a "Layered package layout" section
+  mirroring `casino/SPEC.md` §3.
+
+See `TODO-message-migration.md` "Phase 11 -- DAL extraction"
+for the change list and verification.
+
 ### build: `deploy-tui` hard-fails when the active venv has an editable install
 
 `py/src/Makefile deploy-tui` (non-editable branch) silently no-op'd

@@ -3,13 +3,40 @@
 Replace the `bbsengine6.notify` / `bbsengine6.message_delivery` system with
 `bbsengine6.message`. Both currently coexist with separate DB tables.
 
+> **Phase 11 note (2026-09-01):** Throughout this document,
+> `bbsengine6/message.py` / `message.py` is shorthand for the
+> `bbsengine6/message/` package. After Phase 11 (DAL extraction,
+> see below) the canonical home for the implementation is
+> `bbsengine6/message/service.py` (orchestration) plus
+> `bbsengine6/message/dal/*.py` (Postgres I/O);
+> `bbsengine6/message/lib.py` is retained as a thin facade so
+> the package surface `from bbsengine6.message import <name>`
+> continues to resolve unchanged. Phase 1-10 checklist items
+> are not rewritten line-by-line; this footnote applies to all
+> of them.
+
+## Current status
+
+- **Phase 7-10: COMPLETE.** Notify package deleted; `bbsengine6.message` is
+  the canonical implementation; consumer migration done; shims for
+  deleted-package parity (`send`, `register_type_compat`) landed in
+  Phase 10.
+- **Phase 11: COMPLETE.** `bbsengine6.message.lib` (1850 lines) split into
+  `bbsengine6/message/service.py` (orchestration), `bbsengine6/message/dal/`
+  (Postgres I/O per table family), `bbsengine6/message/templates.py` (pure
+  rendering), `bbsengine6/message/cache.py` (in-memory local unread). See
+  Phase 11 checklist below.
+
 ## Background
 
 - `notify` (canonical: `message_delivery/lib.py`, 1518 lines) is the mature
   notification system with DB persistence, HMAC tamper protection, in-memory
   queues, TUI, daemon, and delivery handlers.
-- `message.py` (815 lines) is the newer channel-based pub/sub system with its
+- `message.py` is the newer channel-based pub/sub system with its
   own DB tables (`__message*`), groups, blocking, rate limiting, and templating.
+  Historical line counts (Phase 1 audit: 815 lines, Phase 11: 1850 lines as
+  of 2026-09-01) appear in the Background section for chronology; the live
+  module is now the `bbsengine6/message/` package (see Phase 11).
 - `notify/__init__.py` re-exports everything from `message_delivery`.
 - `getch.py` and `bottombar.py` already try `message.py` first, fall back to
   `notify`.
@@ -512,3 +539,76 @@ solely to bridge the deletion of the subpackage.
   phases and is itself a follow-up to Phase 7: it documents the
   shims that keep downstream game packages (casino, etc.)
   importable after Phase 7 deleted `bbsengine6.message_delivery`.
+
+## Phase 11: Extract `bbsengine6.message.dal` subpackage
+
+`bbsengine6.message.lib` has grown to 1850 lines mixing business
+orchestration, Postgres I/O, template rendering, and the
+in-memory local unread cache. Casino already follows the
+layered pattern (see `casino/SPEC.md` §3 and
+`casino/src/casino/dal/`). Bring `bbsengine6.message` in line so
+the DAL contract stays "talks to Postgres only".
+
+**Layout (mirrors casino `dal/` / `services/`):**
+
+- `bbsengine6/message/dal/__init__.py` -- facade
+- `bbsengine6/message/dal/_pool.py` -- `_connect_ctx(args, pool=None)`,
+  `table_exists(cur, schema, table)`
+- `bbsengine6/message/dal/messages.py` -- `engine.__message`,
+  `engine.__message_recipient` I/O
+- `bbsengine6/message/dal/recipients.py` -- group expansion
+- `bbsengine6/message/dal/groups.py` -- `engine.__message_group[_member]`
+- `bbsengine6/message/dal/blocking.py` -- `engine.__message_block`
+- `bbsengine6/message/dal/ratelimit.py` -- `engine.__message_rate_limit`,
+  `engine.__message_type` reads
+- `bbsengine6/message/dal/types.py` -- `engine.__message_type` writes
+- `bbsengine6/message/service.py` -- business orchestration (new)
+- `bbsengine6/message/templates.py` -- pure rendering helpers (new)
+- `bbsengine6/message/cache.py` -- local unread counter (new, package root)
+- `bbsengine6/message/lib.py` -- slimmed facade (~190 lines)
+- `bbsengine6/message/__init__.py` -- unchanged public surface; refresh
+  module docstring's "Layout" block
+
+**Checklist:**
+
+- [x] Create `dal/` subpackage and six DAL modules
+- [x] Create `service.py` and move orchestration in
+- [x] Create `templates.py` and move rendering helpers in
+- [x] Create `cache.py` at package root
+- [x] Slim `lib.py` to facade, re-exporting from `service` and
+      `templates` and keeping dataclasses + DB helpers
+- [x] Update `__init__.py` module docstring "Layout" block
+- [x] Run `pytest tests/test_message_lib.py
+      tests/test_message_access.py tests/test_message_send.py
+      tests/test_message_channel.py tests/test_message_cli.py
+      tests/test_message_local_cache.py
+      tests/test_message_make_args.py
+      tests/test_message_phase1_gaps.py -m unit -p no:cacheprovider`
+      -- all green, no test edits
+- [x] Smoke check:
+      `python -c "from bbsengine6 import message;
+      assert callable(message.store_message); ..."`
+- [x] Verify no external caller broke:
+      `grep -rn "bbsengine6\.message\." --include="*.py"
+      bed casino bbsengine6 | grep -v "/build\."`
+      returns zero hits outside of `message/` itself
+- [x] Update `bbsengine6/SPEC.md` with a "Layered package layout"
+      section
+- [x] Add `bbsengine6/CHANGELOG.md` "[Unreleased] bbsengine6.message:
+      extract `dal/` subpackage" entry
+- [x] Cross-link this phase from `bbsengine6/TODO.md` and from the
+      bed-side `bed/TODO*.md`
+
+**Files changed:**
+
+- 11 new files under `py/src/bbsengine6/message/`:
+  `dal/__init__.py`, `dal/_pool.py`, `dal/messages.py`,
+  `dal/recipients.py`, `dal/groups.py`, `dal/blocking.py`,
+  `dal/ratelimit.py`, `dal/types.py`, `service.py`, `templates.py`,
+  `cache.py`.
+- 2 modified files: `lib.py` (1850 → ~190 lines) and `__init__.py`
+  (module docstring refresh only).
+
+**Note:** Phase 11's section in `bbsengine6/SPEC.md` (§11) and the
+CHANGELOG `[Unreleased]` entry are the authoritative descriptions;
+this file is the checklist.

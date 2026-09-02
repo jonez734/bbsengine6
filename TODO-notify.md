@@ -12,6 +12,12 @@
 > The work item is preserved here for historical reference only. The
 > new notification system lives in `bbsengine6/message.py` and is
 > documented in `TODO-message-migration.md` Phase 8.
+>
+> **Phase 11 note (DAL extraction, see
+> `TODO-message-migration.md`):** the underlying
+> `bbsengine6/message.py` referenced above is now a layered
+> package; `bbsengine6.message.lib` is a facade. The package
+> surface is unchanged.
 
 Work item: add per-recipient delivery-method audit fields to the notify
 subsystem and clean up the dead `should_persist` parameter. No rename

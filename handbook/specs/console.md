@@ -310,6 +310,10 @@ Add new console commands by:
   entries in `TODO-message-migration.md`).
 - The "Incomplete Features" note that previously called this a
   "stub" is now outdated; the subsystem is gone, not stubbed.
+  (Phase 11, 2026-09-01: `bbsengine6/message.py` is shorthand for
+  the `bbsengine6/message/` package; the live layer is
+`bbsengine6/message/service.py` + `bbsengine6/message/dal/`.
+Package surface unchanged.)
 
 **email.py** — Incomplete implementation
 - Stub module structure in place

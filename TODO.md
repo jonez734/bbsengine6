@@ -268,6 +268,13 @@ system:announcements         # sysop broadcasts only (reserved)
 - Message system replaces and absorbs notify (persistence, groups, rate limiting, blocking)
 - The old notify system becomes delivery mechanisms (email daemon, SMS) that subscribe to message channels
 
+- [x] **Phase 11 -- Extract `bbsengine6.message.dal` subpackage**
+      -- see `TODO-message-migration.md` Phase 11. Split the
+      1850-line `lib.py` into `dal/` (Postgres I/O per table
+      family), `service.py` (orchestration), `templates.py`
+      (pure rendering), `cache.py` (in-memory local unread).
+      No public-API breakage.
+
 ---
 
 ## Implementation Phases
@@ -313,7 +320,8 @@ Add database storage for messages, delivered to offline users on connect.
 - `engine.__message` - main message table (sql/message.sql)
 - `engine.__message_recipient` - per-recipient delivery tracking
 
-**DAL functions (bbsengine6/message.py):**
+**DAL functions (now under `bbsengine6/message/dal/` after Phase 11;
+originally `bbsengine6/message.py`):**
 - `store_message()` - store message with recipients
 - `get_pending_messages()` - retrieve pending messages
 - `mark_delivered()` - mark as delivered
@@ -342,7 +350,8 @@ Add notify-like features directly into message system.
 - `engine.__message_type` - message types with rate limits
 - `engine.__message_rate_limit` - rate limit tracking
 
-**DAL functions (bbsengine6/message.py):**
+**DAL functions (now under `bbsengine6/message/dal/` after Phase 11;
+originally `bbsengine6/message.py`):**
 - Groups: `create_message_group()`, `add_to_message_group()`, `get_message_group_members()`, `get_user_groups()`
 - Blocking: `block_sender()`, `unblock_sender()`, `is_blocked()`
 - Rate limiting: `check_rate_limit()`, `record_message_sent()`, `get_message_type_rate_limit()`
@@ -488,7 +497,7 @@ is called once at the end of `bbsengine6.startup.main()` after the
 backend bootstrap succeeds. If bed is reachable, it opens a
 `BedConnection`, subscribes via `BedMessageServiceClient`, and the
 bed websocket fans PG `NOTIFY` payloads into
-`bbsengine6.message._local_unread_cache` so `getch.py` /
+`bbsengine6.message.cache._local_unread` so `getch.py` /
 `bottombar.py` can show unread counts without a DB hit.
 
 If the websocket to bed **drops mid-session**, the subscription
@@ -619,6 +628,12 @@ Keep existing `broadcast()` and path-based messaging for backward compatibility.
 > `TODO-message-migration.md` Phase 10) so the zoid6 → casino →
 > `message_delivery` import chain does not break bed startup
 > after Phase 7 deleted the subpackage.**
+>
+> **STATUS (2026-09-01): Phase 11 landed.** The
+> `bbsengine6/message/lib.py` "single file" reference earlier in
+> this banner is now a layered package (DAL + service +
+> templates + cache); `lib.py` is a facade. Public API
+> unchanged. See `TODO-message-migration.md` Phase 11.
 
 When message system is complete, it replaces notify entirely:
 

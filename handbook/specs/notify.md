@@ -8,6 +8,12 @@
 > removed. The replacement is `bbsengine6/message.py`; see
 > `TODO-message-migration.md` Phase 8 for the live behavior.
 >
+> **Note (Phase 11, 2026-09-01):** The `bbsengine6/message.py`
+> reference above is shorthand for the `bbsengine6/message/`
+> package. Post-Phase-11 the package is layered (`service`,
+> `dal/`, `templates`, `cache`); `bbsengine6/message/lib.py` is a
+> thin facade. The package-level surface is unchanged.
+>
 > The recipient-validation / group-management features documented
 > in `NOTIFY_MESSAGING.md` (and the `moniker_exists` /
 > `group_exists` / `get_group_members` functions) were preserved

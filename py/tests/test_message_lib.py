@@ -34,10 +34,10 @@ class TestMessageLib:
         message.enable()
         assert message.is_enabled() is True
 
-    @patch("bbsengine6.message.record_message_sent")
-    @patch("bbsengine6.message.is_blocked", return_value=False)
-    @patch("bbsengine6.message.check_rate_limit", return_value=(True, 999))
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.record_message_sent")
+    @patch("bbsengine6.message.lib.is_blocked", return_value=False)
+    @patch("bbsengine6.message.lib.check_rate_limit", return_value=(True, 999))
+    @patch("bbsengine6.message.lib.getpool")
     def test_store_message(self, mock_getpool, mock_rate, mock_block, mock_record):
         """Store message in database."""
         from bbsengine6 import message
@@ -61,7 +61,7 @@ class TestMessageLib:
         assert msg_id == 123
         mock_cursor.execute.assert_called()
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_get_pending_messages(self, mock_getpool):
         """Get pending messages for a user."""
         from bbsengine6 import message
@@ -111,7 +111,7 @@ class TestMessageLib:
         assert messages[0]["status"] == "pending"
         assert messages[1]["status"] == "delivered"
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_mark_delivered(self, mock_getpool):
         """Mark message as delivered."""
         from bbsengine6 import message
@@ -129,7 +129,7 @@ class TestMessageLib:
         mock_cursor.execute.assert_called_once()
         mock_conn.commit.assert_called_once()
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_mark_read(self, mock_getpool):
         """Mark message as read."""
         from bbsengine6 import message
@@ -147,7 +147,7 @@ class TestMessageLib:
         mock_cursor.execute.assert_called_once()
         mock_conn.commit.assert_called_once()
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_get_unread_count(self, mock_getpool):
         """Get count of unread messages."""
         from bbsengine6 import message
@@ -165,8 +165,8 @@ class TestMessageLib:
 
         assert count == 5
 
-    @patch("bbsengine6.message.get_pending_messages_prioritized")
-    @patch("bbsengine6.message.mark_delivered")
+    @patch("bbsengine6.message.lib.get_pending_messages_prioritized")
+    @patch("bbsengine6.message.lib.mark_delivered")
     def test_deliver_pending_on_connect(self, mock_mark_delivered, mock_get_pending):
         """Deliver pending messages on connect."""
         from bbsengine6 import message
@@ -198,10 +198,10 @@ class TestStoreMessageWithChecks:
     """Tests for store_message / store_message_with_checks (rate limit
     and blocking wired in)."""
 
-    @patch("bbsengine6.message.record_message_sent")
-    @patch("bbsengine6.message.is_blocked")
-    @patch("bbsengine6.message.check_rate_limit")
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.record_message_sent")
+    @patch("bbsengine6.message.lib.is_blocked")
+    @patch("bbsengine6.message.lib.check_rate_limit")
+    @patch("bbsengine6.message.lib.getpool")
     def test_happy_path_returns_id_and_recipients(
         self, mock_getpool, mock_rate, mock_block, mock_record
     ):
@@ -230,9 +230,9 @@ class TestStoreMessageWithChecks:
         assert result["recipients_blocked"] == []
         mock_record.assert_called_once()
 
-    @patch("bbsengine6.message.is_blocked")
-    @patch("bbsengine6.message.check_rate_limit")
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.is_blocked")
+    @patch("bbsengine6.message.lib.check_rate_limit")
+    @patch("bbsengine6.message.lib.getpool")
     def test_blocked_recipient_is_dropped(self, mock_getpool, mock_rate, mock_block):
         from bbsengine6 import message
 
@@ -261,9 +261,9 @@ class TestStoreMessageWithChecks:
         assert "bob" not in result["recipients_stored"]
         assert "charlie" in result["recipients_stored"]
 
-    @patch("bbsengine6.message.is_blocked")
-    @patch("bbsengine6.message.check_rate_limit")
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.is_blocked")
+    @patch("bbsengine6.message.lib.check_rate_limit")
+    @patch("bbsengine6.message.lib.getpool")
     def test_rate_limit_denies_storage(self, mock_getpool, mock_rate, mock_block):
         from bbsengine6 import message
 
@@ -287,7 +287,7 @@ class TestStoreMessageWithChecks:
         # The pool was never opened: rate-limit check happens first
         mock_pool.connection.assert_not_called()
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_disabled_system_returns_zero(self, mock_getpool):
         from bbsengine6 import message
 
@@ -301,10 +301,10 @@ class TestStoreMessageWithChecks:
         finally:
             message.enable()
 
-    @patch("bbsengine6.message.record_message_sent")
-    @patch("bbsengine6.message.is_blocked", return_value=False)
-    @patch("bbsengine6.message.check_rate_limit", return_value=(True, 999))
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.record_message_sent")
+    @patch("bbsengine6.message.lib.is_blocked", return_value=False)
+    @patch("bbsengine6.message.lib.check_rate_limit", return_value=(True, 999))
+    @patch("bbsengine6.message.lib.getpool")
     def test_legacy_store_message_returns_int(
         self, mock_getpool, mock_rate, mock_block, mock_record
     ):
@@ -333,7 +333,7 @@ class TestStoreMessageWithChecks:
 class TestPendingMessagesPrioritized:
     """CRITICAL/URGENT messages are surfaced before ROUTINE ones."""
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_query_uses_urgency_first_ordering(self, mock_getpool):
         """The SQL must include a CASE expression over urgency."""
         from bbsengine6 import message
@@ -356,7 +356,7 @@ class TestPendingMessagesPrioritized:
         assert "CASE m.urgency" in executed_sql
         assert "m.datestamp DESC" in executed_sql
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_legacy_query_uses_datestamp_only(self, mock_getpool):
         """Sanity: get_pending_messages still uses datestamp-only ordering."""
         from bbsengine6 import message
@@ -375,7 +375,7 @@ class TestPendingMessagesPrioritized:
         assert "CASE m.urgency" not in executed_sql
         assert "m.datestamp DESC" in executed_sql
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_prioritized_returns_rows(self, mock_getpool):
         from bbsengine6 import message
 
@@ -425,7 +425,7 @@ class TestPendingMessagesPrioritized:
 class TestMessageGroups:
     """Tests for message groups (Phase 1C)."""
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_create_message_group(self, mock_getpool):
         """Create a message group."""
         from bbsengine6 import message
@@ -447,7 +447,7 @@ class TestMessageGroups:
 
         assert group_id == 42
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_add_to_message_group(self, mock_getpool):
         """Add member to message group."""
         from bbsengine6 import message
@@ -468,7 +468,7 @@ class TestMessageGroups:
 
         assert result is True
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_get_message_group_members(self, mock_getpool):
         """Get members of a message group."""
         from bbsengine6 import message
@@ -486,7 +486,7 @@ class TestMessageGroups:
 
         assert members == ["alice", "bob", "charlie"]
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_get_user_groups(self, mock_getpool):
         """Get groups a user belongs to."""
         from bbsengine6 import message
@@ -513,7 +513,7 @@ class TestMessageGroups:
 class TestMessageBlocking:
     """Tests for message blocking (Phase 1C)."""
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_block_sender(self, mock_getpool):
         """Block a sender."""
         from bbsengine6 import message
@@ -530,7 +530,7 @@ class TestMessageBlocking:
 
         assert result is True
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_unblock_sender(self, mock_getpool):
         """Unblock a sender."""
         from bbsengine6 import message
@@ -547,7 +547,7 @@ class TestMessageBlocking:
 
         assert result is True
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_is_blocked(self, mock_getpool):
         """Check if sender is blocked."""
         from bbsengine6 import message
@@ -565,7 +565,7 @@ class TestMessageBlocking:
 
         assert result is True
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_is_not_blocked(self, mock_getpool):
         """Check if sender is not blocked."""
         from bbsengine6 import message
@@ -587,7 +587,7 @@ class TestMessageBlocking:
 class TestMessageRateLimiting:
     """Tests for rate limiting (Phase 1C)."""
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_check_rate_limit_unlimited(self, mock_getpool):
         """Unlimited message type allows all."""
         from bbsengine6 import message
@@ -606,7 +606,7 @@ class TestMessageRateLimiting:
         assert allowed is True
         assert remaining == 999
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_check_rate_limit_allowed(self, mock_getpool):
         """Rate limit not exceeded."""
         from bbsengine6 import message
@@ -628,7 +628,7 @@ class TestMessageRateLimiting:
         assert allowed is True
         assert remaining == 55
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_check_rate_limit_exceeded(self, mock_getpool):
         """Rate limit exceeded."""
         from bbsengine6 import message
@@ -650,7 +650,7 @@ class TestMessageRateLimiting:
         assert allowed is False
         assert remaining == 0
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_record_message_sent(self, mock_getpool):
         """Record message sent."""
         from bbsengine6 import message
@@ -667,7 +667,7 @@ class TestMessageRateLimiting:
 
         assert result is True
 
-    @patch("bbsengine6.message.getpool")
+    @patch("bbsengine6.message.lib.getpool")
     def test_get_message_type_rate_limit(self, mock_getpool):
         """Get rate limit for message type."""
         from bbsengine6 import message

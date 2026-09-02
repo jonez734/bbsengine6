@@ -2,16 +2,29 @@
 #
 # Unified message system: package facade.
 #
-# Layout:
-#   - ``lib``     -- implementation (DB schema, send / get / mark /
-#                    rate-limit / group / template). All public names
-#                    below come from there via wildcard re-export.
-#   - ``access``  -- per-op authorization policy. Bed's message service
-#                    (``bed.api.message``) calls this for every
-#                    ``message_subscribe`` / ``message_unsubscribe`` /
-#                    ``message_list_pending`` request, mirroring the
-#                    bank/auth pattern at ``bbsengine6.bank.access`` /
-#                    ``bbsengine6.auth.access``.
+# Layout (mirrors casino's four-layer architecture; see
+# ``casino/SPEC.md`` sec3 and ``bbsengine6/SPEC.md`` "Layered package
+# layout"):
+#   - ``service``   -- business orchestration. The only layer that
+#                      talks to both the DAL and the in-memory cache.
+#                      Owns enable/disable, rate-limit gating, blocking,
+#                      recipient expansion, and the legacy ``send`` shim.
+#   - ``dal``       -- pure Postgres I/O. One module per ``engine.*``
+#                      table family (``messages``, ``recipients``,
+#                      ``groups``, ``blocking``, ``ratelimit``,
+#                      ``types``). No policy, no rendering.
+#   - ``cache``     -- in-memory local unread counter (no DB).
+#   - ``templates`` -- pure rendering helpers (``{var}`` / ``$var``
+#                      substitution).
+#   - ``lib``       -- public re-export surface plus the ``Message``
+#                      dataclass, ``MessageUrgency`` enum, and DB
+#                      helpers (``_make_args``, ``_resolve_db``,
+#                      ``_coerce_urgency``). The package __init__
+#                      wildcard-imports from here.
+#   - ``access``    -- per-op authorization policy. Lives here so the
+#                      module API contract stays in one file. Mirrors
+#                      ``bbsengine6.bank.access`` /
+#                      ``bbsengine6.auth.access``.
 #
 # No ``psycopg`` imports anywhere in this package. All DB plumbing is
 # reached through ``bbsengine6.database``.

@@ -1,2 +1,3 @@
-__version__ = "0.0.1.dev20260828184346"
-__datestamp__ = "20260828-1843-opencode"
+__version__ = "0.0.1.dev202609011938"
+__datestamp__ = "202609011938"
+__githash__ = "9681dda497642820"

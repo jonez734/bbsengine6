@@ -435,6 +435,13 @@ registry.register("machine2", "other.example.com", 8765)
 > `from bbsengine6 import message; message.store_message(...)`.
 > The structure of the migration (one local call → unified
 > local+remote call) is unchanged.
+>
+> **Note (Phase 11, 2026-09-01):** `bbsengine6.message.store_message`
+> is unchanged at the package surface. Internally it delegates to
+> `bbsengine6.message.service.store_message`, which delegates to
+> `bbsengine6.message.dal.messages.store_message_with_recipients`.
+> The integration layer at `bbsengine6/net/integration.py` does not
+> need any change.
 
 **Before** (local only):
 ```python
