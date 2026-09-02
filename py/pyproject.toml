@@ -41,6 +41,7 @@ bed = "bbsengine6.bed:main"
 [tool.setuptools]
 script-files = [
     "bin/bbsengine6-ping",
+    "bin/bbsengine6-msg",
 ] 
 
 [project.optional-dependencies]
