@@ -1,0 +1,17 @@
+#!/usr/bin/env python3.12
+# bbsengine6/bin/bbsengine6-msg
+# Operator CLI for the bbsengine6 message subsystem.
+#
+# Thin shim around bbsengine6.message.cli.main. Mirrors the
+# bbsengine6-ping shim style: the package owns argparse + IO,
+# the bin file only adapts prog= and exits.
+#
+# Recipients may be plain monikers (alice, bob) or @group
+# references (@table, @everyone); groups are resolved dynamically
+# against engine.__message_group at call time.
+
+from bbsengine6.message.cli import main
+import sys
+
+if __name__ == "__main__":
+    sys.exit(main(prog="bbsengine6-msg"))

@@ -19,12 +19,20 @@
 from __future__ import annotations
 
 from bbsengine6.message.lib import *  # noqa: F401,F403
+from bbsengine6.message.lib import (  # noqa: F401
+    _coerce_urgency,
+    _db_from_args,
+    _make_args,
+)
 
 import argparse
 from typing import Any, Dict, Optional
 
 
 __version__ = "202608130000"
+
+
+from bbsengine6.message import cli as cli  # noqa: F401
 
 
 # Public surface of the package. ``lib`` defines the canonical names;
