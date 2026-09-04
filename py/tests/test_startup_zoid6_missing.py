@@ -203,7 +203,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             f"startup.main should return True when missing DB is recovered; "
             f"got {result!r}, run_calls={h.run_calls!r}"
         )
-        assert h.run_calls == ["stage_zero", "stage_one"], (
+        assert h.run_calls[:2] == ["stage_zero", "stage_one"], (
             f"unexpected stage order: {h.run_calls!r}"
         )
 
@@ -218,7 +218,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             result = startup_module.main(h.args, conn=None, pool=None)
 
         assert result is True
-        assert h.run_calls == ["stage_zero", "stage_one"]
+        assert h.run_calls[:2] == ["stage_zero", "stage_one"]
 
     def test_getpool_operational_error_does_not_abort(self):
         """If getpool() raises psycopg.OperationalError because the
@@ -384,7 +384,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             f"startup should succeed when checkcreatedb passes; "
             f"got {result!r}, run_calls={h.run_calls!r}"
         )
-        assert h.run_calls == ["stage_zero", "stage_one"], (
+        assert h.run_calls[:2] == ["stage_zero", "stage_one"], (
             f"unexpected stage order: {h.run_calls!r}"
         )
 
@@ -476,7 +476,7 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             f"expected pre-flight admin pool first, then target pool; "
             f"got {getpool_calls!r}"
         )
-        assert runmodule_calls == ["stage_zero", "stage_one"], (
+        assert runmodule_calls[:2] == ["stage_zero", "stage_one"], (
             f"expected stage_zero then stage_one; got {runmodule_calls!r}"
         )
         combined = captured.err + captured.out
@@ -564,7 +564,10 @@ class TestStartupMainWhenZoid6DatabaseMissing:
             f"startup should succeed when stage_zero dispatches "
             f"with pool=admin_pool; got {result!r}"
         )
-        assert mock_runmodule.call_count == 2, (
+        # startup.main runs stage_zero + stage_one (and may chain
+        # into postoffice.startup.main afterwards); assert at least
+        # the two bbsengine6 dispatches happened.
+        assert mock_runmodule.call_count >= 2, (
             f"expected stage_zero + stage_one dispatches; got "
             f"{mock_runmodule.call_count}: "
             f"{[c.args[1] for c in mock_runmodule.call_args_list]!r}"

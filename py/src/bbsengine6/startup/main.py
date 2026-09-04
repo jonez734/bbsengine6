@@ -279,5 +279,23 @@ def main(args, **kwargs) -> bool:
 
     io.echo("bbsengine6 startup complete", level="ok")
 
+    # --- project-module startup: postoffice ---
+    # Mirrors how casino chains into its own schema setup via the
+    # bbsengine6 module runner: invoke postoffice.startup.main through
+    # the same runmodule path that bin/postoffice uses. postoffice's
+    # __init__.init delegates to postoffice.startup.startup_main,
+    # identical in shape to casino's __init__.init delegating to
+    # casino.startup.checkcasino.
+    #
+    # Tolerate absence so bbsengine6.startup remains runnable in
+    # environments where mistermcfeely/postoffice is not installed
+    # (e.g., a CI matrix that only tests bbsengine6).
+    try:
+        if lib.runmodule(args, "startup", package="postoffice") is False:
+            io.echo("postoffice startup failed", level="error")
+            return False
+    except Exception:
+        io.echo_traceback("bbsengine6.startup.main.postoffice_chain:")
+
     _maybe_subscribe_to_bed(args)
     return True
