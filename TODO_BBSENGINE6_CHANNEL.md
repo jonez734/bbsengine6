@@ -11,10 +11,10 @@
 
 ## Phase 1 — Centralize channel-state sharing in bed
 
-- [ ] Edit `bed/src/bed/main.py:604-643`: in `BED.start`, construct one `ChannelState()`, pass to `WebSocketServer(channel_state=state)` and `MessageRouterClass(..., channel_state=state)`
-- [ ] Remove `server._channel_state = self.channel_state` from `casino/src/casino/api/handler.py:1544`
-- [ ] Remove duplicate wiring from `empyre/src/empyre/api/handler.py:838`
-- [ ] Remove duplicate wiring from `mistermcfeely/src/postoffice/api/handler.py:564`
+- [x] Edit `bed/src/bed/main.py:604-643`: in `BED.start`, construct one `ChannelState()`, pass to `WebSocketServer(channel_state=state)` and `MessageRouterClass(..., channel_state=state)`
+- [x] Remove `server._channel_state = self.channel_state` from `casino/src/casino/api/handler.py:1544`
+- [x] Remove duplicate wiring from `empyre/src/empyre/api/handler.py:838` — was only a comment, no actual wiring line; no edit needed
+- [x] Remove duplicate wiring from `mistermcfeely/src/postoffice/api/handler.py:564` — was only a comment, no actual wiring line; no edit needed
 
 ## Phase 1.5 — Production schema + namespacing + auto-seed
 
