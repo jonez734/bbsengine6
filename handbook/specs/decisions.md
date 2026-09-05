@@ -1,907 +1,634 @@
-# bbsengine6 Architectural Decisions Specification
+# bbsengine6 Architectural Decision Records
 
-**Version:** 0.0.1.dev  
-**Last Updated:** 2026-02-23
+> Status: canonical. Last updated 2026-09-04.
+> Each ADR records the decision, the rationale, the alternatives
+> considered, and the outcome. The rationale paragraphs are
+> authoritative; the surrounding background and source links have
+> been pruned.
 
-This document explains the major architectural decisions made in bbsengine6, the rationale behind them, and alternatives that were considered.
+## Contents
 
-## Table of Contents
-
-1. [Decision: Layered Architecture](#decision-1-layered-architecture)
-2. [Decision: Module/Plugin System](#decision-2-moduleplugin-system)
-3. [Decision: Terminal-First Design](#decision-3-terminal-first-design)
-4. [Decision: Multi-Language Stack](#decision-4-multi-language-stack)
-5. [Decision: PostgreSQL](#decision-5-postgresql)
-6. [Decision: Separation of Web Layer](#decision-6-separation-of-web-layer)
-7. [Decision: No Circular Dependencies](#decision-7-no-circular-dependencies)
-8. [Decision: Rich Terminal UI](#decision-8-rich-terminal-ui)
-9. [Decision: Explicit Cascade Ordering for Primary Key Changes](#decision-9-explicit-cascade-ordering-for-primary-key-changes)
+1. [Layered Architecture](#decision-1-layered-architecture)
+2. [Module / Plugin System](#decision-2-module--plugin-system)
+3. [Terminal-First Design](#decision-3-terminal-first-design)
+4. [Multi-Language Stack](#decision-4-multi-language-stack)
+5. [PostgreSQL](#decision-5-postgresql)
+6. [Separation of Web Layer](#decision-6-separation-of-web-layer)
+7. [No Circular Dependencies](#decision-7-no-circular-dependencies)
+8. [Rich Terminal UI](#decision-8-rich-terminal-ui)
+9. [Explicit Cascade Ordering for Primary Key Changes](#decision-9-explicit-cascade-ordering-for-primary-key-changes)
+10. [Per-Op `access(args, op, **kwargs)` Policy Modules](#decision-10-per-op-accessargs-op-kwargs-policy-modules)
+11. [Layered `bbsengine6.message` Package](#decision-11-layered-bbsengine6message-package)
+12. [`startup.main` as the Canonical Bootstrap Entry Point](#decision-12-startupmain-as-the-canonical-bootstrap-entry-point)
+13. [Dedicated `zoid6` Owner Role for SECURITY DEFINER Helpers](#decision-13-dedicated-zoid6-owner-role-for-security-definer-helpers)
+14. [Single-Source-of-Truth bcrypt in `bbsengine6.password`](#decision-14-single-source-of-truth-bcrypt-in-bbsengine6password)
+15. [`notify` Subsystem Deletion](#decision-15-notify-subsystem-deletion)
 
 ---
 
 ## Decision 1: Layered Architecture
 
-### The Decision
+### Decision
 
-bbsengine6 uses a **4-layer architecture**:
-1. **Data Layer** - PostgreSQL database
-2. **Business Logic Layer** - Session, member, module, message management
-3. **Presentation Layer** - Terminal UI widgets and web interface
-4. **Module System** - Meta-layer for plugins
+bbsengine6 is organised as four layers:
+
+1. **Data** — `database.py` + `py/src/bbsengine6/sql/`.
+2. **Business Logic** — `session/`, `member/`, `bank/`, `channel/`,
+   `message/`, `auth/`, `services/`, `invite.py`, `pgrole.py`,
+   `password.py`, `password_cipher/`, `blurb.py`, `folder.py`,
+   `util.py`, `bottombar.py`, `menu_next/`, `editor.py`,
+   `screen.py`.
+3. **Presentation** — `io/`, `menu.py`, `listbox.py`, `form.py`,
+   `editor.py` / `ed/`, `input.py` + the PHP web layer
+   (`engine/`, `php/`, `smarty/`, `skin/`, `js/`).
+4. **Module System** — `module.py` + every registered module.
 
 ### Rationale
 
-**Why layering?**
-- **Separation of Concerns**: Each layer has a single responsibility
-- **Testability**: Can test database layer without UI layer
-- **Maintainability**: Changes in one layer don't affect others
-- **Reusability**: Business logic can be used by multiple UIs
-- **Flexibility**: Easy to swap implementations
+Separation of concerns lets each layer be tested without dragging
+in the next. The data layer is swappable behind `database.getpool`;
+business logic is shared by terminal and web clients; presentation
+layers can be added without touching the layer below. The module
+system overlays all three so a new feature can compose anything it
+needs.
 
-**Example: If testing member authentication:**
-```python
-# With layering, can test without terminal:
-def test_authenticate():
-  result = member.authenticate(args, loginid="test", password="secret")
-  assert result is not None
-  # No UI involved, no terminal I/O needed
-  
-# Without layering, would need to:
-# - Set up terminal environment
-# - Mock all UI components
-# - Much harder to test
-```
+The concrete layering — which packages sit in which layer — is
+documented in [`architecture.md`](./architecture.md#1-layered-architecture).
 
-### Alternatives Considered
+### Alternatives considered
 
-#### Alternative 1: Monolithic Design
+- **Monolith.** Single huge module with prompts, queries, and
+  rendering interleaved. Rejected: hard to test, hard to reuse,
+  can't add a web layer without forking the data path.
+- **Microservices.** Auth / messaging / session each in a separate
+  process. Rejected: overkill for a single BBS, network overhead,
+  service discovery, complex deploy.
 
-**What it looks like:**
-```python
-# Single huge module
-def login():
-  display_prompt()
-  get_input()
-  query_database()
-  update_session()
-  display_result()
-```
+### Outcome
 
-**Why rejected:**
-- Hard to test (everything interdependent)
-- Hard to maintain (changes break multiple things)
-- Hard to reuse (can't use database layer without UI)
-- Can't add web interface easily
-
-#### Alternative 2: Microservices
-
-**What it looks like:**
-```
-Service 1: Authentication microservice
-Service 2: Message service
-Service 3: Session service
-...each in separate process/container
-```
-
-**Why rejected:**
-- Overkill for single application
-- Network overhead between services
-- Complex deployment
-- Requires service discovery, load balancing
-- Too heavy for a BBS system
-
-### Decision Outcome
-
-**Layered architecture chosen because:**
-- Provides clear structure
-- Good balance of separation vs. simplicity
-- Easy to test each layer
-- Easy to document and understand
-- Extensible for multiple UIs
+Layered architecture. See [`architecture.md`](./architecture.md).
 
 ---
 
-## Decision 2: Module/Plugin System
+## Decision 2: Module / Plugin System
 
-### The Decision
+### Decision
 
-bbsengine6 implements a **runtime-loadable plugin system** via `module.py`:
-- Modules are Python packages with standard interface
-- Required functions: `init()`, `access()`, `buildargs()`, `main()`
-- Loaded dynamically at runtime
-- Access control checked before execution
+`bbsengine6.module` is the runtime-loadable plugin loader. Every
+registered module exposes `init`, `access`, `buildargs`, `main`,
+discovered via `importlib.import_module`. Per-op authorization is
+delegated to a package-specific `access(args, op, **kwargs)` (see
+[Decision 10](#decision-10-per-op-accessargs-op-kwargs-policy-modules)).
 
 ### Rationale
 
-**Why a plugin system?**
-- **Extensibility**: Add features without modifying core
-- **Maintainability**: Isolate features in separate modules
-- **Distribution**: Users can install custom modules
-- **Flexibility**: Enable/disable features per deployment
+Plugins add features without touching the core. `init` runs once
+per load; `access` is the policy hook; `buildargs` parses CLI flags;
+`main` runs the feature. The loader wraps everything in
+`runcallback` so exceptions surface as a clean `False`/traceback
+rather than a process crash.
 
-**Example: Adding a games feature**
-```python
-# Create modules/games/__init__.py with:
-def init(args, **kwargs): pass
-def access(args, **kwargs): return True  # Check user permission
-def buildargs(args, **kwargs): return args
-def main(args, **kwargs):
-  # Game logic here
-  return game_result
+The `MenuOption` registry in `bbsengine6.menu_next` is the modern
+way for game submodules to register options against a shared
+menu — see the consumer pattern in `casino/SPEC.md` §3 and the
+description in [`./module.md`](./module.md).
 
-# No changes to core modules needed!
-# Just add to menu: Item(label="Games", module="games")
-```
+### Alternatives considered
 
-### Alternatives Considered
+- **Monolithic features.** Keep every feature in core. Rejected:
+  large, hard-to-test, can't remove or opt out.
+- **Separate pip packages.** Each feature ships as its own
+  distribution. Rejected: no unified interface, no built-in access
+  control, hard to discover.
 
-#### Alternative 1: Monolithic Features
+### Outcome
 
-**What it looks like:**
-```python
-# Everything in core modules
-class BBS:
-  def login(self): ...
-  def post_message(self): ...
-  def play_game(self): ...
-  def edit_profile(self): ...
-  # Thousands of lines
-```
-
-**Why rejected:**
-- Core becomes huge and complex
-- Mixing concerns (authentication, games, messaging, etc.)
-- Hard to test individual features
-- Hard to document
-- Can't remove features easily
-
-#### Alternative 2: Separate Python Packages
-
-**What it looks like:**
-```
-pip install bbsengine-games
-pip install bbsengine-forum
-# Import separately
-import games, forum
-# Manually integrate
-```
-
-**Why rejected:**
-- Doesn't provide single unified interface
-- Harder for users to add modules
-- Module discovery is complex
-- No built-in access control
-
-### Decision Outcome
-
-**Plugin system chosen because:**
-- Perfect balance of flexibility and structure
-- Clear API for module writers
-- Built-in security (access checking)
-- Easy for users to add features
-- Isolates features for testing/maintenance
+`module.run` + the four-function contract. New modules can be
+added without modifying the loader.
 
 ---
 
 ## Decision 3: Terminal-First Design
 
-### The Decision
+### Decision
 
-bbsengine6 is **designed primarily for terminal access**:
-- Rich terminal UI (colors, widgets, keyboard navigation)
-- Web interface is secondary
-- Python backend is terminal-optimized
+The primary user interface is the terminal. The Python TUI is
+rich (colors, widgets, keyboard navigation); the web layer
+(`engine/`, `php/`, `smarty/`, `skin/`, `js/`) is a secondary
+read/write surface over the same database.
 
 ### Rationale
 
-**Why terminal-first?**
-- **Historical**: BBSes are inherently terminal systems
-- **User Experience**: Classic BBS aesthetic
-- **Performance**: Terminal is lightweight
-- **Accessibility**: Works with standard terminal emulators
-- **Simplicity**: Don't need web framework complexity
+bbsengine.org is a bulletin board system; the BBS heritage is
+text-first. Terminal clients work over SSH, render instantly,
+and don't require a browser or JavaScript. The web layer reuses
+the same database, so the two clients stay in lock-step without
+a unifying web framework.
 
-**Benefits:**
-```
-Terminal Advantages:
-  ✓ Works over SSH (remote access)
-  ✓ Fast and responsive
-  ✓ Rich UI without HTML/CSS/JS
-  ✓ Simple deployment
-  ✓ Works on slow connections
-  ✓ Nostalgic for BBS users
+### Alternatives considered
 
-Web as Bonus:
-  ✓ Same data backend
-  ✓ Optional secondary interface
-  ✓ Doesn't complicate core
-```
+- **Web-first.** Flask / Django with full HTML + JS. Rejected:
+  adds web-framework complexity and breaks the BBS aesthetic.
+- **Desktop GUI (Qt / GTK).** Rejected: requires X11 / Wayland,
+  complex build, no SSH access.
 
-### Alternatives Considered
+### Outcome
 
-#### Alternative 1: Web-First Design
-
-**What it looks like:**
-```
-Flask/Django application
-  ├─ User authentication
-  ├─ HTML rendering
-  ├─ JavaScript for interactivity
-  └─ Database queries
-```
-
-**Why rejected:**
-- Web framework introduces complexity
-- BBS users expect terminal experience
-- Web adds dependencies (ORM, template engine, etc.)
-- Defeats the purpose of classic BBS
-- Harder to deploy on simple servers
-
-#### Alternative 2: Desktop App (Qt/GTK)
-
-**What it looks like:**
-```
-PyQt/GTK Desktop Application
-  ├─ Native GUI widgets
-  ├─ Complex build process
-  └─ Requires X11 or Wayland
-```
-
-**Why rejected:**
-- Loss of text-based aesthetic
-- Complex build and distribution
-- Reduces accessibility
-- Requires desktop environment
-- Not suitable for remote servers
-
-### Decision Outcome
-
-**Terminal-first chosen because:**
-- Aligns with BBS tradition
-- Simpler architecture
-- Better user experience for target audience
-- Web layer can be added later
-- Easy to use over SSH/Telnet
+Terminal-first, web-secondary. The web layer is documented in
+[`../../SPEC.md`](../../SPEC.md#4-php-web-layer).
 
 ---
 
 ## Decision 4: Multi-Language Stack
 
-### The Decision
+### Decision
 
-bbsengine6 uses **3 languages**:
-- **Python** - Core application logic
-- **PHP** - Web interface (secondary)
-- **JavaScript** - Client-side interactivity (web only)
+Python owns the terminal, the business logic, and the WebSocket
+daemon (`bed.py` + `net/`). PHP owns the web request handlers.
+JavaScript owns client-side interactivity in the browser.
 
 ### Rationale
 
-**Why multiple languages?**
-- **Python**: Best for system administration, complex logic, rapid development
-- **PHP**: Mature web stack, existing hosting support
-- **JavaScript**: Client-side interactivity, browser standard
+Each language is chosen for what it does best. Python handles
+system complexity and the TUI. PHP is mature web hosting and
+matches the existing site deployment. JavaScript is the browser
+standard. Splitting along these lines avoids either dragging a
+web framework into the terminal or rebuilding the TUI for the
+web.
 
-**Why NOT consolidate?**
+### Alternatives considered
 
-```
-Option 1: Everything in Python
-  - Would need web framework (Flask/Django/FastAPI)
-  - Hosting more complex
-  - Doesn't make web "simpler"
-  ✗ Rejected
+- **All Python.** Flask/Django for the web. Rejected: web
+  framework weight; terminal would still need its own stack.
+- **All PHP.** Rejected: terminal libraries are weaker; PHP is
+  not a good fit for system plumbing.
+- **Python + Node split.** Rejected: massive overkill, service
+  orchestration, complex deploy.
 
-Option 2: Everything in PHP
-  - Not suitable for complex business logic
-  - Poor terminal interface support
-  - Reinventing wheels (authentication, module system)
-  ✗ Rejected
+### Outcome
 
-Option 3: Everything in JavaScript (Node.js)
-  - BBS tradition is Python/C
-  - Terminal libraries weaker in JS
-  - Overkill for what PHP needs
-  ✗ Rejected
-```
-
-### Alternatives Considered
-
-#### Alternative 1: Single Language (Python)
-
-```python
-# Python terminal app
-class TerminalBBS:
-  def display_menu(self): ...
-  def handle_input(self): ...
-  
-# Flask web app
-@app.route('/login', methods=['POST'])
-def login():
-  # Same code?
-```
-
-**Why rejected:**
-- Terminal and web have different paradigms
-- Forces awkward abstractions
-- Trying to serve two masters poorly
-- Web becomes complex in Python web framework
-- Terminal remains clean, but why add web complexity?
-
-#### Alternative 2: Microservices (Python + Node)
-
-```
-Python service: Core logic
-Node.js service: Web frontend
-  Communicate via REST/gRPC
-```
-
-**Why rejected:**
-- Massive overkill
-- Requires service orchestration
-- Complex deployment
-- Unnecessary for single-user BBS
-- Violates principle of simplicity
-
-### Decision Outcome
-
-**Multi-language stack chosen because:**
-- Each language does what it does best
-- Python for system complexity
-- PHP for web simplicity
-- JavaScript for browser interactivity
-- Low friction between layers
-- Minimal interdependencies
+Multi-language stack with the boundaries in
+[`architecture.md` §3](./architecture.md#3-domain-organization).
 
 ---
 
 ## Decision 5: PostgreSQL
 
-### The Decision
+### Decision
 
-bbsengine6 uses **PostgreSQL 12+** as the primary database:
-- Advanced SQL features (JSON, ltree, UUID)
-- Roles and permissions system
-- Connection pooling support
-- ACID compliance
-- Free and open source
+PostgreSQL 12+ is the primary database. The schema lives at
+`py/src/bbsengine6/sql/`. JSONB, ltree, UUID-ossp, and roles are
+load-bearing features.
 
 ### Rationale
 
-**Why PostgreSQL?**
-- **Reliability**: 30+ years, production-proven
-- **Features**: ltree, JSONB, UUID-ossp extensions
-- **Security**: Role-based access control
-- **Standards**: Follows SQL standard closely
-- **Deployment**: Runs on Linux/Unix (BBS preference)
+PostgreSQL gives ACID, JSONB for flexible per-row state (`flags`,
+`attrs`, `__session.data`), ltree for the folder hierarchy
+(`py/src/bbsengine6/sql/ltree.sql`), UUID-ossp for session
+identifiers, and a real role system that lets the engine run
+each request under a member-scoped role. The five
+SECURITY DEFINER helpers (`manage_schema_priv`,
+`manage_database_priv`, `manage_role_privs`,
+`manage_secondary_role`, `get_role_privs`) are owned by the
+dedicated unprivileged `zoid6` role — see
+[Decision 13](#decision-13-dedicated-zoid6-owner-role-for-security-definer-helpers).
 
-**PostgreSQL-Specific Features Used:**
-```sql
--- JSONB for flexible attributes
-CREATE TABLE engine.member (
-  attrs JSONB,  -- Custom user attributes
-  flags JSONB   -- Permission flags
-);
+### Alternatives considered
 
--- ltree for hierarchical messages
-CREATE TABLE engine.__blurb (
-  path ltree    -- Message thread path
-);
+- **MySQL / MariaDB.** Rejected: weaker JSONB, no ltree.
+- **SQLite.** Rejected: no concurrent writers, no role system.
+- **NoSQL (MongoDB).** Rejected: structured data wants relational
+  integrity.
 
--- UUID-ossp for session IDs
-CREATE TABLE engine.__session (
-  id UUID DEFAULT uuid_generate_v4()
-);
+### Outcome
 
--- Roles for application permissions
-CREATE ROLE bbsengine_webserver;
-GRANT SELECT, INSERT ON engine.__session TO bbsengine_webserver;
-```
-
-### Alternatives Considered
-
-#### Alternative 1: MySQL/MariaDB
-
-**Pros:**
-- Widely hosted
-- Good performance
-- Simple to deploy
-
-**Cons:**
-- Fewer advanced features
-- JSONB not as mature
-- No ltree
-- Weaker ACID guarantees
-- ✗ Rejected because: BBS deserves better reliability
-
-#### Alternative 2: SQLite
-
-**Pros:**
-- Single file database
-- No server needed
-- Easy deployment
-
-**Cons:**
-- Limited to single user
-- No concurrent writes
-- Can't run as web service
-- No role-based security
-- ✗ Rejected because: Web+terminal access requires concurrent writes
-
-#### Alternative 3: NoSQL (MongoDB, etc.)
-
-**Pros:**
-- Flexible schema
-- Horizontal scaling
-
-**Cons:**
-- Overkill for structured data
-- Weaker consistency guarantees
-- No referential integrity
-- Complex querying
-- ✗ Rejected because: BBS data is relational
-
-### Decision Outcome
-
-**PostgreSQL chosen because:**
-- Features match BBS needs perfectly
-- Reliability critical for data
-- Advanced features reduce code complexity
-- Free and open source
-- UNIX philosophy alignment
-- Community support strong
+PostgreSQL. See [`../../SPEC.md`](../../SPEC.md#5-sql-schema) for the
+schema inventory.
 
 ---
 
 ## Decision 6: Separation of Web Layer
 
-### The Decision
+### Decision
 
-The **web layer is separate from core logic**:
-- PHP reads/writes same database as Python
-- No forced integration
-- Web is optional feature
-- Can evolve independently
+The PHP web layer and the Python engine read/write the same
+PostgreSQL database. They do not call each other over the wire
+for ordinary request handling; integration points (real-time
+push, login auditing) go through `bed`.
 
 ### Rationale
 
-**Why separate?**
-- **Independence**: Web doesn't constrain terminal design
-- **Simplicity**: Each layer optimized for its purpose
-- **Optionality**: Hosting can run terminal OR web OR both
-- **Testing**: Can test each independently
+The two layers stay independent — neither has to know about the
+other's runtime. Both can be deployed standalone. Real-time
+push (Phase 11) and login flow (post-2026-08-23) share bed as
+the broker: PHP authenticates locally with
+`bbsengine6\\password\\libpassword`, Python authenticates
+locally with `bbsengine6.password`, and bed's `AuthService`
+issues the bearer tokens used by the WS layer.
 
-**What separation looks like:**
-```
-Terminal Interface (Python)
-  └─ Queries PostgreSQL
-  
-Web Interface (PHP)
-  └─ Queries same PostgreSQL
-  
-(Both read/write same tables)
-(No forced inter-layer calls)
-```
+### Alternatives considered
 
-### Alternatives Considered
+- **Thin PHP over Python REST API.** Rejected: PHP becomes a
+  marshaling layer with full HTTP overhead per request.
+- **Unified ORM across PHP and Python.** Rejected: language
+  mismatch, would need middleware.
 
-#### Alternative 1: Web as Thin Client
+### Outcome
 
-**What it looks like:**
-```
-Browser → PHP → Python Backend (REST API)
-            ↓
-         PostgreSQL
-```
-
-**Pros:**
-- All logic in Python
-- Single source of truth
-- Easy to test
-
-**Cons:**
-- PHP becomes just marshaling layer
-- Adds HTTP overhead
-- Complex REST API to maintain
-- Requires running Python service
-
-**Status**: Could be future enhancement
-
-#### Alternative 2: Unified ORM
-
-**What it looks like:**
-```python
-# Same code runs in Python and PHP
-class Member(ORM):
-  id = Column(Integer)
-  loginid = Column(String)
-  
-# Python uses it
-member = Member.query.get(123)
-
-# PHP somehow uses same ORM?
-# (Impossible - different languages)
-```
-
-**Why rejected:**
-- Languages are incompatible
-- Would require middleware
-- Adds unnecessary layer
-
-### Decision Outcome
-
-**Separation chosen because:**
-- Respects language differences
-- Allows independent evolution
-- Keeps both simple
-- Better overall maintainability
-- Future API integration possible
+Independent layers, shared database. Bed is the integration
+broker for real-time and authentication.
 
 ---
 
 ## Decision 7: No Circular Dependencies
 
-### The Decision
+### Decision
 
-bbsengine6 is designed to have **zero circular dependencies**:
-- Data layer imports nothing upward
-- Util layer has no imports of dependent modules
-- Module system is cleanly meta-layer
-- Prevents initialization problems
+The package dependency graph is a strict DAG. Lower layers never
+import upward. `module.py` is the cross-layer loader; loaded
+modules may not import back into `module.py`. `util.py` has no
+upward imports; it's a shared leaf.
 
 ### Rationale
 
-**Why avoid circular dependencies?**
-- **Initialization**: Can't boot system if cycles exist
-- **Testing**: Can't mock one side without the other
-- **Clarity**: Dependency graph is a DAG (not a cycle)
-- **Maintainability**: Clear what depends on what
-- **Refactoring**: Easy to understand impact
+Cycles break Python's import system, make tests brittle, and
+hide what depends on what. A DAG lets every layer be reasoned
+about and replaced in isolation.
 
-**Example problem with cycles:**
-```python
-# BAD - circular import
-# module_a.py:
-from module_b import func_b
+### Alternatives considered
 
-# module_b.py:
-from module_a import func_a
+- **Allow cycles and rely on `importlib` caching.** Rejected:
+  illusion of safety; refactoring becomes terrifying.
+- **Everyone imports everyone.** Rejected: defeats the purpose
+  of layering.
 
-# This breaks Python import system!
-```
+### Outcome
 
-### Alternatives Considered
-
-#### Alternative 1: Allow Cycles
-
-```python
-# database.py imports session.py
-# session.py imports database.py
-# (Both exist, but careful about order)
-```
-
-**Problems:**
-- Initialization order issues
-- Hard to trace dependencies
-- Fragile when refactoring
-- Harder to test
-- ✗ Rejected
-
-#### Alternative 2: Everything Imports Everything
-
-```python
-# Modules import as needed
-# Cycles are "managed" via Python's import caching
-```
-
-**Problems:**
-- Illusion of no cycle (Python caches, but still bad design)
-- Makes refactoring terrifying
-- Hard to understand module relationships
-- Testing becomes nightmare
-- ✗ Rejected
-
-### Decision Outcome
-
-**No circular dependencies chosen because:**
-- System reliability
-- Better design clarity
-- Easier testing
-- Simpler documentation
-- Prevents entire classes of bugs
+No cycles. Enforced by convention and code review; see
+[`dependencies.md`](./dependencies.md) for the matrix.
 
 ---
 
 ## Decision 8: Rich Terminal UI
 
-### The Decision
+### Decision
 
-bbsengine6 implements **rich terminal UI** with:
-- ANSI color support (16, 256, 24-bit RGB)
-- Interactive widgets (menu, listbox, form, editor)
-- Keyboard navigation
-- Word wrapping
-- Mouse support (optional)
+The TUI uses ANSI colors (16, 256, 24-bit RGB), interactive
+widgets (`menu`, `listbox`, `form`, `editor`), and keyboard
+navigation. The widget set lives in `bbsengine6.io` and the
+top-level `menu.py` / `listbox.py` / `form.py` / `editor.py` /
+`ed/` modules.
 
 ### Rationale
 
-**Why rich UI?**
-- **User Experience**: More pleasant interaction
-- **Usability**: Widgets are faster than text prompts
-- **Aesthetic**: Visual appeal for users
-- **Accessibility**: Color can indicate state (error, success)
-- **Productivity**: Listbox navigation faster than text-based
+Rich UI is faster and more pleasant than line-mode prompts; the
+BBS audience expects it; modern terminals support it natively;
+the implementation cost is contained inside `io/`.
 
-**Benefits:**
-```
-Plain text interface:
-  "Enter member ID: _"
-  (User has to remember/type ID)
+### Alternatives considered
 
-Rich interface (listbox):
-  "Select member:
-   > alice
-     bob
-     carol"
-  (Visual, navigate with arrows)
-```
+- **Plain text only.** Rejected: feels 1980s, slower navigation.
+- **Full GUI (Qt / GTK).** Rejected: defeats BBS aesthetic,
+  requires desktop, no SSH access.
 
-### Alternatives Considered
+### Outcome
 
-#### Alternative 1: Plain Text Only
-
-```
-Enter login ID: _
-Enter password: _
-Welcome back!
-Main Menu:
-1. Read Messages
-2. Post Message
-3. Edit Profile
-```
-
-**Why rejected:**
-- Feels 1980s
-- Harder to use
-- Slower navigation
-- Less engaging
-- Not utilizing modern terminals
-
-#### Alternative 2: Full GUI (Qt/GTK)
-
-```python
-# Full graphical interface
-window = QMainWindow()
-button = QPushButton("Click me")
-window.show()
-```
-
-**Why rejected:**
-- Defeats BBS aesthetic
-- Requires X11/desktop
-- Complex build/deployment
-- Overkill for terminal system
-- Can't use over SSH
-
-### Decision Outcome
-
-**Rich terminal UI chosen because:**
-- Best of both worlds
-- Retro BBS feel with modern usability
-- Works in any terminal
-- Fast and responsive
-- Visually engaging
-- No complex dependencies
+Rich terminal UI. Phase 4 hardening (see
+[`../../ROBUSTNESS_REVIEW.md`](../../ROBUSTNESS_REVIEW.md))
+pinned DSR-based input waits, `_input_dirty`, the `filter` kwarg,
+listbox math, and bottombar padding.
 
 ---
 
 ## Decision 9: Explicit Cascade Ordering for Primary Key Changes
 
-### The Decision
+### Decision
 
-When changing a primary key value (e.g., member moniker), the application uses **explicit cascade ordering** rather than relying solely on PostgreSQL CASCADE constraints:
+When changing a primary key value (e.g. member moniker),
+`database.update` runs an explicit cascade in this order:
 
-1. **Before updating the primary key in the parent table**: Explicitly update all dependent records to use the new key value
-2. **Then update the primary key** in the parent table with `updatepk=True`
-3. **PostgreSQL CASCADE constraints** automatically handle remaining related tables
-4. **Entire operation is atomic** within a single transaction
+1. UPDATE dependent rows to the new key.
+2. UPDATE the parent table with `updatepk=True`.
+3. PostgreSQL `ON UPDATE CASCADE` handles any remaining dependents.
+4. Commit — the whole operation is one transaction.
 
 ### Rationale
 
-**Why explicit cascade for moniker changes?**
+`ON UPDATE CASCADE` fires after the parent row changes, so the
+parent UPDATE alone would violate the FK. Pre-emptively rewriting
+dependents first lets the cascade succeed. The single transaction
+keeps the system consistent under any failure.
 
-```
-Problem: Foreign key constraint violated if order is wrong
-- When changing moniker from "alice" → "alicia"
-- If we UPDATE __member first, map_member_flag still has old "alice"
-- FK constraint violation occurs before CASCADE can help!
+### Alternatives considered
 
-Solution: Update dependent tables BEFORE primary key change
-- Step 1: UPDATE map_member_flag SET moniker='alicia' WHERE moniker='alice'
-- Step 2: UPDATE __member SET moniker='alicia' WHERE moniker='alice'
-- Step 3: (Optional) handle flag value changes
-- Step 4: conn.commit() - atomic transaction
-```
+- **Rely on `CASCADE` alone.** Rejected: the FK violation fires
+  before CASCADE runs.
+- **`SET CONSTRAINTS ALL DEFERRED`.** Rejected: complex
+  transaction management, easy to leave constraints disabled
+  on failure.
+- **Surrogate key only.** Rejected: breaking schema change.
 
-**PostgreSQL CASCADE ON UPDATE isn't enough:**
-```sql
--- Schema definition (correct):
-ALTER TABLE map_member_flag 
-  ADD CONSTRAINT fk_mmf_membermoniker 
-  REFERENCES __member(moniker) 
-  ON UPDATE CASCADE;
+### Outcome
 
--- The CASCADE is for when __member.moniker is ALREADY changed
--- But we can't change __member.moniker until map_member_flag points 
--- to the new moniker (which doesn't exist yet!)
--- Catch-22: FK violation prevents the cascade from happening
-```
-
-### Alternatives Considered
-
-#### Alternative 1: Rely Only on PostgreSQL CASCADE
-
-```sql
--- Assume this works:
-UPDATE __member SET moniker='alicia' WHERE moniker='alice';
--- (CASCADE should update map_member_flag)
-```
-
-**Problems:**
-- FK constraint violation occurs BEFORE cascade can fire
-- New moniker doesn't exist yet in __member
-- Database rejects the operation immediately
-- ✗ Rejected because: Doesn't work
-
-#### Alternative 2: Disable/Re-enable Constraints
-
-```python
-# Disable FK checking, update, re-enable
-conn.execute("SET CONSTRAINTS ALL DEFERRED")
-database.update(..., old_moniker, new_moniker)
-conn.execute("SET CONSTRAINTS ALL IMMEDIATE")
-conn.commit()
-```
-
-**Problems:**
-- Complex transaction management
-- Error-prone if constraint re-enable fails
-- Violates principle of explicit constraint enforcement
-- Less clear about data consistency
-- ✗ Rejected because: Unnecessary complexity
-
-#### Alternative 3: Use Surrogate Key (ID) Instead
-
-```python
-# Don't allow moniker changes at all
-# Use numeric ID as PK instead
-ALTER TABLE __member ADD COLUMN id SERIAL PRIMARY KEY;
--- All FK constraints reference id, not moniker
--- moniker becomes unique constraint, not PK
--- Can be changed safely
-```
-
-**Pros:**
-- Avoids complex ordering logic
-- Moniker changes become simple UPDATE
-
-**Cons:**
-- Breaking schema change
-- Would require data migration
-- Affects all dependent code
-- ✗ Rejected because: Too invasive for existing system
-
-### Decision Outcome
-
-**Explicit cascade ordering chosen because:**
-
-1. **Correctness**: Solves FK constraint violation problem
-2. **Clarity**: Code explicitly shows the ordering requirement
-3. **Safety**: All operations in single atomic transaction
-4. **Maintainability**: Future developers see why order matters
-5. **Non-invasive**: Works with existing schema
-6. **Documentation**: Code is self-documenting about constraint dependencies
-
-### Implementation Details
-
-See `member.py:update()` for the implementation:
-```python
-if moniker_is_changing:
-    with database.cursor(conn) as cur:
-        sql_stmt = sql.SQL(
-            "UPDATE engine.map_member_flag SET moniker = %s WHERE moniker = %s"
-        )
-        cur.execute(sql_stmt, (new_moniker, moniker))
-    # Only now is it safe to update __member
-    database.update(..., updatepk=True, commit=False, conn=conn)
-```
+Explicit cascade ordering. See `member.lib.update` for the
+implementation pattern.
 
 ---
 
-## Summary of Architectural Decisions
+## Decision 10: Per-Op `access(args, op, **kwargs)` Policy Modules
 
-| Decision | Choice | Rationale | Key Benefit |
-|----------|--------|-----------|-------------|
-| Architecture | Layered (4 layers) | Separation of concerns | Testable, maintainable |
-| Extensibility | Module/plugin system | Add features without core changes | Flexibility |
-| Primary Interface | Terminal | Historical, simple, accessible | User satisfaction |
-| Languages | Python + PHP + JS | Each language's strengths | Pragmatic, simple |
-| Database | PostgreSQL | Advanced features, reliability | Power + stability |
-| Web Layer | Separate/optional | Independence from core | Evolutionary development |
-| Dependencies | No cycles | Clean design | System reliability |
-| Terminal UI | Rich (colors, widgets) | User experience | Engagement + usability |
-| PK Changes | Explicit cascade ordering | FK constraint safety, clarity | Data consistency |
+### Decision
 
----
+Authorization for a domain operation lives in a package-local
+`access(args, op, **kwargs)` function. The wire-protocol handler
+in `bed` decodes tokens / parses envelopes *before* calling
+`access`; `access` only inspects decoded state and the domain
+arguments.
 
-## Trade-offs Made
+### Rationale
 
-### Trade-off 1: Flexibility vs. Simplicity
+The wire envelope (HMAC, expiry, instance match) is bound to the
+transport; the policy is bound to the domain. Mixing the two
+couples every policy module to bed's HMAC scheme and forces
+test fixtures to mint valid tokens. Decoupling means `auth.access`
+can be unit-tested with plain dicts; `bed/api/auth.py` owns the
+HMAC plumbing.
 
-```
-Chosen: Layered architecture (more flexible)
-Cost: Slightly more code, more files
-Benefit: Easy to test, modify, extend
-Alternative: Monolithic (simpler initially, harder later)
-```
+### Per-op policy modules
 
-### Trade-off 2: Feature Richness vs. Complexity
+| Module | Ops |
+|--------|-----|
+| `bbsengine6.auth.access` | `login`, `reconnect`, `refresh`, `revoke`. |
+| `bbsengine6.bank.access` | `transfer`, `deposit`, `withdraw`, `read`. |
+| `bbsengine6.message.access` | `subscribe`, `unsubscribe`, `list_pending`. |
+| `bbsengine6.module.check` | `op="run"` at module-load time. |
 
-```
-Chosen: Rich terminal UI (more complex)
-Cost: More I/O module code
-Benefit: Better user experience
-Alternative: Plain text (less code, less engaging)
-```
+The shared shape is documented in [`auth-bank.md`](./auth-bank.md).
 
-### Trade-off 3: PostgreSQL Constraints vs. Flexibility
+### Alternatives considered
 
-```
-Chosen: PostgreSQL ACID compliance
-Cost: Stricter schema, stronger constraints
-Benefit: Data consistency, reliability
-Alternative: NoSQL (more flexible, less reliable)
-```
+- **Single global `access` table.** Rejected: turns every
+  authorization decision into a SQL lookup, hides per-op
+  semantics.
+- **Bed validates everything; Python packages trust blindly.**
+  Rejected: pushes all policy into the wire layer; CLI
+  consumers can't reuse it.
 
-### Trade-off 4: Web Separation vs. Code Reuse
+### Outcome
 
-```
-Chosen: Separate web layer
-Cost: Some duplication between Python and PHP
-Benefit: Each optimized for platform
-Alternative: Shared ORM (requires complex middleware)
-```
+Per-op `access()` per package. Bed owns the wire envelope; the
+package owns the policy.
 
 ---
 
-## Future Evolution
+## Decision 11: Layered `bbsengine6.message` Package
 
-### Possible Future Decisions
+### Decision
 
-**1. REST API Layer**
-- If web layer grows significantly
-- Could add Python REST API
-- PHP calls Python backend
-- Moves logic consolidation
+`bbsengine6.message` is split into four layers — **Service**,
+**DAL**, **State**, **Domain** — mirroring `casino`'s four-layer
+architecture (see `casino/SPEC.md` §3).
 
-**2. Client-Server Refactor**
-- Separate terminal client from server
-- Client connects to Python server
-- Enables multiplayer BBS features
+| Layer | Module(s) |
+|-------|-----------|
+| Service | `bbsengine6.message.service`, `bbsengine6.message.lib` |
+| DAL | `bbsengine6.message.dal.messages`, `…recipients`, `…groups`, `…blocking`, `…ratelimit`, `…types`, `…_pool` |
+| State | `bbsengine6.message.cache` |
+| Domain | `bbsengine6.message.templates`, `bbsengine6.message.access` (in `__init__.py`) |
 
-**3. Containerization**
-- Move to Docker/Kubernetes
-- Requires rethinking service boundaries
-- Maybe split terminal and web services
+The DAL never imports `psycopg` directly; all DB plumbing goes
+through `bbsengine6.database`. Async DAL is not yet provided —
+the current implementation is fully sync.
 
-**4. Expanded Module System**
-- Remote module marketplace
-- Module versioning
-- Dependency management
+### Rationale
 
-**5. Multi-Database Support**
-- Abstract database layer further
-- Support MySQL, SQLite alternatives
-- Requires careful schema design
+Before the split, `bbsengine6.message.lib` was 1850 lines
+mixing policy, I/O, rendering, and DB plumbing. Per-table DAL
+modules give the service layer a clean composition surface;
+the cache module is intentionally *not* under `dal/` because
+it has no DB I/O. Templates and access sit at the package root
+because they're not DAL.
+
+### Alternatives considered
+
+- **Single 1850-line `message.py`.** Rejected: untestable,
+  no layering, no per-table ownership.
+- **Microservice over REST.** Rejected: per the rest of
+  bbsengine6's layering decisions.
+
+### Outcome
+
+Layered package, documented in
+[`../../SPEC.md`](../../SPEC.md#11-layered-package-layout) and the
+message subsystem's own docs.
 
 ---
 
-*Architectural Decisions for bbsengine6*
+## Decision 12: `startup.main` as the Canonical Bootstrap Entry Point
+
+### Decision
+
+DB bring-up runs through `bbsengine6.startup.main`, which loops
+`("stage_zero", "stage_one", "engine", "bank")` via
+`startup.lib.runmodule` → `console.lib.runmodule(package="bbsengine6.startup")`
+→ `module.run(...)`. The thin console-script shim is
+`py/src/bbsengine6/bed.py`.
+
+`bbsengine6.backend` owns the actual `check*`, `stage_zero`,
+`stage_one`, `engine`, `bank` modules. `console/` and
+`startup/` carry four-line shims that re-export
+`init`, `access`, `buildargs`, `main` from the canonical home.
+
+### Rationale
+
+`console/` previously held admin UI; `startup/` held engine-init
+plumbing. The two directories had drifted into byte-identical
+duplicates with a broken four-stage orchestrator. Folding the
+init plumbing into `backend/` makes the canonical home
+unambiguous; the thin shims preserve existing import paths.
+
+`console.lib.runmodule` gained a `package=` kwarg (default
+`"bbsengine6.console"`) so the same dispatcher serves both
+call sites. At the end of a successful boot,
+`startup.main._maybe_subscribe_to_bed` opens a `BedConnection`
+and subscribes to bed's message pushes (failure is non-fatal —
+`io.getch` falls back to DB polling).
+
+### Alternatives considered
+
+- **Keep the duplicates, fix the orchestrator in place.**
+  Rejected: keeps two copies of every check.
+- **Inline backend into startup, drop console shims.**
+  Rejected: breaks `console.check*` import paths.
+
+### Outcome
+
+Canonical home at `bbsengine6.backend/`. The change list is in
+the Phase 0 / backend-refactor commit history (the
+`TODO_BACKEND.md` working notes were retired as part of the
+2026-09-04 doc consolidation).
+
+---
+
+## Decision 13: Dedicated `zoid6` Owner Role for SECURITY DEFINER Helpers
+
+### Decision
+
+The five privilege-management helpers — `manage_schema_priv`,
+`manage_database_priv`, `manage_role_privs`,
+`manage_secondary_role`, `get_role_privs` — are `SECURITY
+DEFINER` functions owned by a dedicated unprivileged PostgreSQL
+role `zoid6`
+(`NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN INHERIT`).
+`backend.checkzoid6role` creates the role; `backend.checkzoid6owner`
+runs `ALTER FUNCTION ... OWNER TO zoid6` against the five
+helpers if ownership has drifted. The `engine` schema is
+`AUTHORIZATION zoid6` so `manage_schema_priv` can `GRANT USAGE`.
+
+`database.verify_function_owner` checks the five helpers against
+a hard-coded allow-list `("zoid6", "postgres")`. The `postgres`
+entry is a one-release transition aid; it will be dropped in
+the next release (see [`../../TODO_zoid6_role.md`](../../TODO_zoid6_role.md)).
+
+### Rationale
+
+The bootstrap principal (typically a login superuser like `jam`
+or `opencode`) should not own runtime helpers. A NOSUPERUSER
+owner is the smallest possible privilege that can still run
+`ALTER FUNCTION ... OWNER TO` on the five helpers and `GRANT
+USAGE` on `engine`. The allow-list converts a
+non-deterministic ownership tuple into a fixed two-element
+list.
+
+Because `manage_schema_priv` is NOSUPERUSER-owned, every
+`schema.sql` it grants on must itself be owned by `zoid6`. The
+`engine` schema is handled in-repo via `backend.checkengine`;
+other BBS submodules ship a `<module>.startup.check<module>`
+mirror invoked from the submodule's startup `main` between
+extension install and the schema.sql import. `casino.startup.checkcasino`
+is the canonical example.
+
+### Alternatives considered
+
+- **Bootstrap principal owns the helpers.** Rejected: keeps
+  superuser ownership in the runtime path.
+- **Hard-coded `postgres` owner.** Rejected: makes the
+  allow-list non-deterministic; environment drift = silent
+  outage.
+
+### Outcome
+
+Dedicated `zoid6` owner role. See [`../../SPEC.md`](../../SPEC.md#5-sql-schema)
+for the full pattern.
+
+---
+
+## Decision 14: Single-Source-of-Truth bcrypt in `bbsengine6.password`
+
+### Decision
+
+`bbsengine6.password` is the single source of truth for bcrypt
+hashing on the Python side (mirrors PHP's
+`bbsengine6\\password` namespace). The legacy
+`bbsengine6.password_cipher` package keeps the `bbsengine6.password`
+namespace free for bcrypt; `bbsengine6.password_cipher` is the
+AES-256-GCM reversible encryption strategy for IMAP/SMTP secrets.
+
+`bbsengine6.member.checkpassword` verifies locally
+(`crypt(plaintext, stored)` with a passlib bcrypt fallback) and
+rewrites legacy `$1$` MD5-crypt hashes to fresh `$2b$06$` on the
+first successful login. PHP `bbsengine6\\password\\libpassword`
+mirrors the same cost factor and emits `$2y$`. The
+`chk_member_password_bcrypt` CHECK constraint
+(`^\$2[abxy]$`, length 60) accepts both prefixes.
+
+### Rationale
+
+Before the change, the two sides were asymmetric: Python produced
+new hashes locally (`bbsengine6.util._BCRYPT_ROUNDS = 6`) but
+still round-tripped verify through PostgreSQL `crypt()`. PHP
+round-tripped both directions. Round-tripping verify makes every
+login hit PG twice and turns a `pgcrypto` upgrade into a
+potential auth outage. After the rewrite, both sides produce and
+verify locally; PG only stores and audits.
+
+### Alternatives considered
+
+- **PG-side round-trip on both languages.** Rejected: doubles
+  PG load per login; cross-version pgcrypto drift is a risk.
+- **Two different cost factors.** Rejected: complicates
+  cross-language auth tests.
+
+### Outcome
+
+Single source of truth on each side. See
+[`../../CHANGELOG.md`](../../CHANGELOG.md) entries "php: local
+bcrypt hashing, no PostgreSQL crypt() round-trip" and
+"py: member.checkpassword — local verify + opportunistic rehash".
+
+---
+
+## Decision 15: `notify` Subsystem Deletion
+
+### Decision
+
+The `notify` messaging subsystem was deleted in 2026 (commit
+`a689c89`). Only three functions survive — `member.moniker_exists`,
+`member.group_exists`, `member.get_group_members` — now in
+`py/src/bbsengine6/member/lib.py`. The historical changelog
+(`CHANGELOG_NOTIFY_MESSAGING.md`) was deleted as part of the
+2026-09-04 doc consolidation; the surviving functions are
+documented in [`./member.md`](./member.md) §"Moniker and group
+validation (notify-era, retained)".
+
+The replacement is the layered `bbsengine6.message` package
+documented in [Decision 11](#decision-11-layered-bbsengine6message-package).
+
+### Rationale
+
+`notify` mixed wire-protocol, policy, and DB I/O in one place
+and did not survive the Phase 0-5 hardening (see
+[`../../ROBUSTNESS_REVIEW.md`](../../ROBUSTNESS_REVIEW.md) Phase 0.4
+"Stale root tests that couldn't pass"). The `notify → message`
+migration produced a layered package with a clean DAL,
+replaced every call site, and pinned regression tests at every
+layer.
+
+### Alternatives considered
+
+- **Keep `notify`, fix the tests.** Rejected: the architectural
+  problems (mixing layers, no DAL boundary) remain.
+- **Rename `notify` in place.** Rejected: rename-without-restructure
+  hides the layering change.
+
+### Outcome
+
+Deleted; replaced by `bbsengine6.message`. The `BBSENGINE6_NOTIFYD_*.md`
+specs are HISTORICAL — kept for archaeology, do not link to them
+from new docs (see [`../../SPEC.md`](../../SPEC.md#10-out-of-scope)).
+
+---
+
+## Summary
+
+| # | Decision | Choice |
+|---|----------|--------|
+| 1 | Architecture | Layered (data / business / presentation / module system) |
+| 2 | Extensibility | Module / plugin system |
+| 3 | Primary interface | Terminal (web secondary) |
+| 4 | Languages | Python + PHP + JavaScript |
+| 5 | Database | PostgreSQL 12+ |
+| 6 | Web layer | Separate, shared database, bed as integration broker |
+| 7 | Dependencies | No cycles |
+| 8 | TUI | Rich widgets + keyboard navigation |
+| 9 | PK changes | Explicit cascade ordering |
+| 10 | Authorization | Per-op `access(args, op, **kwargs)` per package |
+| 11 | Message package | Layered Service / DAL / State / Domain |
+| 12 | Bootstrap entry | `bbsengine6.startup.main` |
+| 13 | SECURITY DEFINER ownership | Dedicated `zoid6` role |
+| 14 | Password hashing | Local verify + opportunistic rehash on each side |
+| 15 | `notify` subsystem | Deleted; replaced by `bbsengine6.message` |
+
+---
+
+*Architectural Decision Records for bbsengine6.*

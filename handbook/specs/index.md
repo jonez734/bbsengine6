@@ -1,295 +1,84 @@
-# bbsengine6 Master Specification
+# bbsengine6 Specifications — Index
 
-**Version:** 0.0.1.dev  
-**Last Updated:** 2026-02-23  
-**Target Audience:** Developers & Architects
+> **Status:** canonical. Updated 2026-09-04.
+> This directory is the single source of truth for subsystem
+> design specs. The 2026-02-23 baseline (`architecture.md`,
+> `decisions.md`, `dependencies.md`, `flows.md`) was rewritten
+> for Phase 11; per-subsystem specs were promoted out of the
+> handbook root and `handbook/specs/console/` was collapsed into
+> a single [`console.md`](./console.md). The 10
+> `BBSENGINE6_NOTIFYD_*.md` specs are HISTORICAL and were
+> superseded by [`messaging.md`](./messaging.md).
 
-> **Note on spec accuracy (2026-07-22):** This master spec and its
-> sibling "core" specs (`architecture.md`, `decisions.md`,
-> `dependencies.md`, `flows.md`, `web.md`, `modules.md`) are
-> the **2026-02-23 baseline**. Some specific claims have drifted
-> from the live code (e.g. `util.py` is ~1,394 lines, not 16,001;
-> `engine.php` is ~1,471 lines, not 1,506; `editor.py` is deprecated
-> in favor of the `ed/` package). See the topic-specific specs
-> (`util.md`, `web.md`, `NOTIFY_MESSAGING.md`, etc.) and the live
-> code for the current ground truth. Topic-specific specs are
-> maintained independently and are generally more current than this
-> bundle.
+## Architecture and process
 
-## Overview
+- [architecture.md](./architecture.md) — layered architecture, package
+  tree, domain organization, cross-layer flows, module system,
+  diagrams
+- [decisions.md](./decisions.md) — 15 architectural decision records
+- [dependencies.md](./dependencies.md) — cross-package dependency
+  matrix, layer edges, external dependencies, coupling notes
+- [flows.md](./flows.md) — end-to-end workflows (bootstrap, login,
+  message send, bank transfer, module execution, navigation, web
+  request) with sequence diagrams
 
-bbsengine6 is a comprehensive Bulletin Board System (BBS) engine written in Python, PHP, and JavaScript with a PostgreSQL database backend. It provides both terminal-based and web-based interfaces for running bulletin board systems with features including user authentication, messaging, forums, and a modular plugin system for extensibility.
+## Database and core
 
-### Quick Facts
+- [database.md](./database.md) — `bbsengine6.database` pool, DSN,
+  contextvars role management, SECURITY DEFINER ownership, DB-API
+  2.0 wrapper
+- [util.md](./util.md) — display, dates, logging, input, ranges,
+  password hashing, ANSI stripping, at-rest encryption
+- [member.md](./member.md) — member subsystem + WebSocket handler,
+  with notify-era recipient-validation retained
+- [bestpractices.md](./bestpractices.md) — `io.echo` f-string rule
+  and JSONB-at-the-database-boundary rule
+- [auth-bank.md](./auth-bank.md) — WS login + bank authorization flow
+- [pg-ident-auth.md](./pg-ident-auth.md) — per-member `l_<loginid>`
+  / `m_<moniker>` roles, `pg_hba.conf` + `pg_ident.conf`, `[P]`
+  psql credentials flow
 
-- **Primary Language:** Python 3.10+
-- **Secondary Languages:** PHP 8.1, JavaScript
-- **Database:** PostgreSQL (with advanced features: roles, schemas, JSON types)
-- **Core Entry Points:** Terminal I/O + Web HTTP endpoints
-- **Architecture Pattern:** Layered + Plugin-based modules
-- **Module System:** Runtime-loaded plugins with standardized API
+## Messaging and net layer
 
----
+- [messaging.md](./messaging.md) — `bbsengine6.message` Phase 11
+  layered package (Service / DAL / State / Domain)
+- [net-layer.md](./net-layer.md) — `bbsengine6.net` SMTP-style
+  addressing, transport, packets, integration
 
-## Table of Contents
+## UI, modules, content
 
-### 1. [Architecture Overview](specs/architecture.md)
-   - Layered architecture (data, business logic, presentation, modules)
-   - Domain-based organization (sessions, members, messaging, module system, I/O)
-   - Layer responsibilities and data flow between layers
-   - Visual architecture diagrams
+- [console.md](./console.md) — admin CLI: interactive menu,
+  subcommand dispatch, member CRUD, member approval, psql role
+  display, database creation
+- [module.md](./module.md) — `bbsengine6.module` four-function
+  contract, registry, signature validation, execution lifecycle
+- [listbox.md](./listbox.md) — TUI listbox widget
+- [blurb.md](./blurb.md) — content entity (filesystem-based)
+- [folder.md](./folder.md) — ltree-backed folder hierarchy
+- [bottombar.md](./bottombar.md) — fragment registry + Phase 5b
+  wire-push plan
 
-### 2. [Module Specifications](specs/modules.md)
-   - Core Python modules (database, session, member, util, menu, listbox, module system)
-   - [util.md](specs/util.md) -- General-purpose utilities (display, dates, logging, file ops, passwords)
-   - Subpackages (io, console)
-      - **[Console Module Spec](specs/console.md)** -- Administrative CLI interface for database initialization, member management, and system configuration
-   - PHP layer modules
-   - JavaScript modules
-   - Complete function signatures with brief descriptions
-   - Class and method specifications
+## Build / templating
 
-### 3. [Data Flows & Workflows](specs/flows.md)
-   - High-level workflows:
-      - User login flow
-      - Message posting flow
-      - Navigation/menu flow
-      - Module execution flow
-   - Detailed sequence flows showing function calls and state changes
-   - State transformations at each layer
+- [md2tpl.md](./md2tpl.md) — Markdown → Smarty `.tmpl` converter
 
-### 4. [Web Layer Specification](specs/web.md)
-   - PHP architecture and bootstrap process
-   - HTTP endpoints and their purposes
-   - Smarty template integration
-   - JavaScript execution and DOM manipulation
-   - Connection between web layer and Python backend
-   - Request/response lifecycle
+## Out of scope (HISTORICAL)
 
-### 5. [Module Dependencies](specs/dependencies.md)
-   - Complete dependency matrix (which modules depend on which)
-   - Dependency rationale (why each dependency exists)
-   - Layer-to-layer dependencies
-   - Inter-module dependencies
-   - External package dependencies
+The following files were deleted as part of the 2026-09-04
+consolidation. They are referenced only from the migration
+changelogs:
 
-### 6. [Architectural Decisions](specs/decisions.md)
-   - Design decisions and their rationale
-   - Architectural alternatives explored
-   - Trade-offs documented
-   - Why certain patterns were chosen
-
----
-
-## System Architecture at a Glance
-
-```
-┌─────────────────────────────────────────────────┐
-│         Web Interface (HTTP)                    │
-│  PHP Endpoints → Smarty Templates → JavaScript │
-└────────────────────┬────────────────────────────┘
-                     │
-                     ├── Uses: Theming (SCSS)
-                     ├── Uses: JavaScript Libraries
-                     └── Uses: PHP Library
-                             (engine.php, database.php, session.php)
-                                    │
-┌───────────────────────────────────┴──────────────────────────┐
-│     Python Backend (Core Business Logic)                      │
-│                                                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   Sessions   │  │   Members    │  │   Messages   │      │
-│  │  Persistence │  │  Management  │  │   Storage    │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-│         │                  │                  │              │
-│         └──────────────────┼──────────────────┘              │
-│                            │                                 │
-│                    ┌───────▼────────┐                        │
-│                    │  Database API  │                        │
-│                    │ (database.py)  │                        │
-│                    └───────┬────────┘                        │
-│                            │                                 │
-│  ┌────────────────────────▼──────────────────────────┐      │
-│  │        Module System (module.py)                  │      │
-│  │  Runtime plugin loading & execution framework     │      │
-│  └─────────────────────────────────────────────────┘      │
-│                                                               │
-│  ┌────────────────────────────────────────────────┐        │
-│  │      Terminal I/O Library (io subpackage)      │        │
-│  │  Color, keyboard input, screen control, forms  │        │
-│  └─────────────────────────────────────────────────┘       │
-│                                                               │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-                    ┌──────▼──────┐
-                    │ PostgreSQL  │
-                    │  Database   │
-                    │  with roles │
-                    └─────────────┘
-```
-
----
-
-## Key Concepts
-
-### Layer Model
-
-1. **Data Layer** - PostgreSQL database with connection pooling (database.py)
-2. **Business Logic Layer** - Session, member, module management, utilities
-3. **Presentation Layer** - Terminal I/O widgets (menu, listbox, forms) + web HTML/JS
-4. **Module System** - Runtime-loadable plugin architecture overlaying all layers
-
-### Domain Model
-
-- **Session Domain** - User session lifecycle and state persistence
-- **Member Domain** - User profile, credentials, flags, permissions
-- **Message Domain** - Message/blurb creation, storage, display
-- **Module Domain** - Plugin system for extensibility
-- **Terminal I/O Domain** - Rich terminal interactions (colors, keyboard, widgets)
-- **Web Domain** - HTTP request handling, templating, browser interactions
-
-### Critical Paths
-
-1. **User Login** → Session creation → Member authentication → Permission checks
-2. **Module Execution** → Module loading → Access validation → Function invocation
-3. **Message Posting** → Form input → Validation → Storage → Display
-4. **Navigation** → Menu rendering → User input → Menu action → Next state
-
----
-
-## Module Organization
-
-### Python Core Modules
-
-| Module | Purpose | Dependencies |
-|--------|---------|---|
-| database.py | PostgreSQL interface & connection pooling | psycopg, psycopg_pool |
-| session.py | Session lifecycle management | database.py, member.py |
-| member.py | User management & authentication | database.py, util.py |
-| module.py | Plugin system & module loading | database.py, io.* |
-| util.py | General-purpose utilities | io.echo, logging |
-| menu.py | Interactive menu widget | util.py, io.* |
-| listbox.py | Paginated list widget | database.py, io.* |
-| form.py | Form handling & validation | util.py, io.* |
-| blurb.py | Message/post storage & retrieval | database.py, util.py |
-| editor.py | Legacy line editor (deprecated) | io.getch, io.echo |
-| ed/ | Visual & line editor package | io.*, common modules |
-| input.py | User input parsing | io.* |
-| folder.py | Directory/folder management | database.py |
-| sig.py | Alias to folder.py for backwards compatibility | folder.py |
-
-### I/O Subpackage (Terminal Interface)
-
-| Module | Purpose |
-|--------|---------|
-| echo.py | Output with colors, variables, commands |
-| screen.py | Cursor positioning, clearing |
-| getch.py | Single character input, key codes |
-| inputstring.py | String input with editing |
-| inputinteger.py | Integer input validation |
-| inputboolean.py | Yes/No prompts |
-| inputchoice.py | Multiple choice selection |
-| terminal.py | Terminal capabilities detection |
-| palette.py | Color palette management |
-| keymap.py | Keyboard mapping |
-
-### Console Package (Admin Tools)
-
-Database schema checks, member management, configuration validation
-
----
-
-## Web Stack
-
-- **PHP** - Server-side request handling
-- **Smarty** - Template engine
-- **JavaScript** - Client-side interactivity
-- **SCSS** - Stylesheet preprocessing
-- **jQuery** - DOM manipulation & AJAX
-
----
-
-## How to Use This Specification
-
-1. **New to bbsengine6?** Start with [Architecture Overview](specs/architecture.md)
-2. **Need to understand a module?** Go to [Module Specifications](specs/modules.md)
-3. **Tracing a workflow?** Check [Data Flows](specs/flows.md)
-4. **Working with web layer?** See [Web Layer Spec](specs/web.md)
-5. **Understanding dependencies?** Review [Module Dependencies](specs/dependencies.md)
-6. **Need design rationale?** Read [Architectural Decisions](specs/decisions.md)
-
----
-
-## File Structure Reference
-
-```
-bbsengine6/
-├── py/                          # Python backend
-│   └── src/bbsengine6/
-│       ├── database.py          # PostgreSQL interface
-│       ├── session.py           # Session management
-│       ├── member.py            # User management
-│       ├── module.py            # Module/plugin system
-│       ├── menu.py              # Menu widget
-│       ├── listbox.py           # List widget
-│       ├── util.py              # Utilities ([spec](specs/util.md))
-│       ├── io/                  # Terminal I/O subpackage
-│       └── console/             # Admin tools
-├── php/                         # PHP backend
-│   ├── engine.php               # Main engine
-│   ├── database.php             # Database layer
-│   ├── session.php              # Session handling
-│   └── ... (input types, utilities)
-├── js/                          # JavaScript
-├── www/                         # Web endpoints & pages
-├── skin/                        # CSS/SCSS styling
-├── smarty/                      # Template plugins
-└── handbook/                    # Documentation
-    └── specs/                   # Specification files
-        ├── index.md            # Master spec index
-        ├── architecture.md
-        ├── modules.md
-        ├── flows.md
-        ├── web.md
-        ├── dependencies.md
-        └── decisions.md
-```
-
----
-
-## Technology Stack
-
-### Backend
-- Python 3.10+ (core application logic)
-- PHP 8.1 (web layer)
-- PostgreSQL 12+ (database with roles, schemas, JSONB)
-- psycopg3 (Python-PostgreSQL driver)
-- Smarty (PHP template engine)
-
-### Frontend
-- JavaScript/jQuery
-- SCSS
-- HTML5
-
-### Infrastructure
-- Apache 2 (web server)
-- Git (version control)
-- Make (build automation)
-
----
-
-## Next Steps
-
-To dive deeper into the system:
-
-1. Read **[architecture.md](specs/architecture.md)** for a complete architectural overview
-2. Explore **[modules.md](specs/modules.md)** for detailed module APIs, including **[util.md](specs/util.md)**
-3. Study **[flows.md](specs/flows.md)** to understand critical workflows
-4. Review **[web.md](specs/web.md)** for web layer integration
-5. Check **[dependencies.md](specs/dependencies.md)** to understand module coupling
-6. Reference **[decisions.md](specs/decisions.md)** for design rationale
-
----
-
-*Master Specification for bbsengine6*  
-*For questions or updates, refer to the main handbook documentation*
+- `BBSENGINE6_NOTIFYD_*.md` (10 files) — superseded by
+  [`messaging.md`](./messaging.md); the notify subsystem was
+  deleted 2026-07-22 (Phase 7 of `TODO-message-migration.md`).
+- `notify.md`, `NOTIFY_MESSAGING.md`, `NET_LAYER_SPEC.md` —
+  folded into [`messaging.md`](./messaging.md) /
+  [`net-layer.md`](./net-layer.md).
+- `web.md` (1342 lines) — folded into
+  [`architecture.md`](./architecture.md) §3.8 "Web domain".
+- `modules.md` (1678 lines) — folded into
+  [`module.md`](./module.md).
+- `BLURB_SPEC.md`, `FOLDER_SPEC.md` — canonical content kept in
+  [`blurb.md`](./blurb.md) / [`folder.md`](./folder.md).
+- All `console/*.md` files (13 files) — folded into
+  [`console.md`](./console.md).

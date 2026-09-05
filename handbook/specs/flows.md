@@ -1,614 +1,611 @@
-# bbsengine6 Data Flow Specifications
+# bbsengine6 End-to-End Flows
 
-**Version:** 0.0.1.dev  
-**Last Updated:** 2026-02-23
+> Status: canonical. Last updated 2026-09-04.
+> Trigger for every Python flow is `bbsengine6.startup.main` (see
+> [decisions.md §12](./decisions.md#decision-12-startupmain-as-the-canonical-bootstrap-entry-point)
+> for the bring-up sequence). The notify subsystem is gone; see
+> [decisions.md §15](./decisions.md#decision-15-notify-subsystem-deletion).
 
-This document describes how data flows through bbsengine6 during critical operations, both at high level and in detailed sequence form.
+## Contents
 
-## Table of Contents
-
-1. [High-Level Workflows](#high-level-workflows)
-2. [Detailed Sequence Flows](#detailed-sequence-flows)
-3. [State Transformations](#state-transformations)
-4. [Data Structures at Each Layer](#data-structures-at-each-layer)
-
----
-
-## High-Level Workflows
-
-### Workflow 1: User Login Flow
-
-**Initiator:** User interacts with login prompt
-
-**Steps:**
-1. Terminal I/O displays login menu
-2. User selects "Login" option
-3. Module system loads login module
-4. Login module prompts for credentials
-5. Member module authenticates against database
-6. Session module creates new session if valid
-7. System returns success/failure message
-
-**Outcome:** User logged in with active session, or error message displayed
-
-**Time Complexity:** O(1) - single user lookup, single session creation
-
-**Affected Systems:**
-- Terminal I/O (io/getch, io/echo)
-- Module system (module.py)
-- Member module (member.py)
-- Session module (session.py)
-- Database layer (database.py)
-- PostgreSQL (member, __session tables)
+1. [High-Level Workflows](#1-high-level-workflows)
+2. [Detailed Sequences](#2-detailed-sequences)
+3. [State Transformations](#3-state-transformations)
+4. [Data Structures at Each Layer](#4-data-structures-at-each-layer)
+5. [Error Handling](#5-error-handling)
 
 ---
 
-### Workflow 2: Message Posting Flow
+## 1. High-Level Workflows
 
-**Initiator:** User selects message/post feature
+### 1.1 Bootstrap
 
-**Steps:**
-1. Terminal displays message menu
-2. User selects "Post Message"
-3. Module loads message composition module
-4. Module displays form for:
-   - Recipient/folder selection
-   - Subject input
-   - Message body (possibly using editor)
-5. User submits message
-6. Validation checks message content
-7. Blurb module inserts message into database
-8. Folder module updates folder metadata
-9. System returns confirmation
+**Trigger.** `python -m bbsengine6.startup` (or the
+`py/src/bbsengine6/bed.py` console-script entry point).
 
-**Outcome:** Message stored in database, confirmation displayed
+**Steps.**
+1. `startup.lib.buildargs` parses argv.
+2. `startup.main.main` opens the admin pool against the `postgres`
+   maintenance DB and runs `stage_zero` (creates the target DB
+   if missing).
+3. `startup.main.main` selects the stage-one pool (caller-supplied
+   if it points at the right dbname, otherwise a fresh target pool).
+4. The loop runs `stage_one`, `engine`, `bank` via
+   `startup.lib.runmodule(...)` →
+   `console.lib.runmodule(..., package="bbsengine6.startup")` →
+   `module.run(...)`. Each stage reads its `check*` siblings from
+   `bbsengine6.backend`.
+5. On failure: `conn.rollback()`, return `False`. On success:
+   `conn.commit()`, return `True`.
+6. `startup.main._maybe_subscribe_to_bed` opens a `BedConnection`
+   and subscribes the current moniker to bed's message pushes.
+   Failure is non-fatal — `io.getch` falls back to DB polling.
 
-**Time Complexity:** O(n) where n = message size
+**Outcome.** `engine` schema + roles are present, the `bank` and
+`message` tables exist, and (optionally) the local session is
+subscribed to bed's push stream.
 
-**Affected Systems:**
-- Terminal I/O (menu, form, editor, listbox)
-- Module system (module.py)
-- Blurb module (blurb.py)
-- Folder module (folder.py)
-- Validation (util.py)
-- Database layer (database.py)
-- PostgreSQL (__blurb, __folder tables)
+**Affected systems.**
+- `bbsengine6.backend.*` (`stage_zero`, `stage_one`, `engine`,
+  `bank`, the `check*` siblings).
+- `bbsengine6.startup.{lib,main,message_subscription}`.
+- `bbsengine6.console.lib.runmodule` (with `package=` kwarg).
+- `bbsengine6.database` (admin pool + stage-one pool).
+- PostgreSQL `engine` schema + roles.
+- `bed.client.connection` (optional).
+
+### 1.2 Login (terminal)
+
+**Steps.**
+1. The TUI displays a login prompt.
+2. The user enters `moniker` and `password`.
+3. `bbsengine6.member.checkpassword(args, loginid, password)` runs:
+   one `SELECT password FROM engine.member WHERE loginid = ?`,
+   verifies locally with `crypt(plaintext, stored)` (passlib
+   bcrypt fallback). On success against a legacy `$1$` MD5-crypt
+   hash, `bbsengine6.member.rehashpassword` rewrites the column to
+   a fresh `$2b$06$`.
+4. `bbsengine6.member.setthreadlocal_moniker(moniker)` binds the
+   identity for the rest of the request.
+5. `bbsengine6.session.setcurrentsessionid(uuid)` starts a DB-backed
+   session row (`INSERT INTO engine.__session ...`).
+6. `bbsengine6.pgrole.sync_groups(args, loginid)` reconciles the
+   member's `m_<moniker>` PostgreSQL role group memberships.
+
+**Outcome.** Active session, monotonic `bbsengine6.session.SessionManager`
+allocation, fresh `__session` row, `lastlogin` updated.
+
+**Affected systems.**
+- `bbsengine6.io.{getch,inputstring,echo}`.
+- `bbsengine6.member.lib.{checkpassword,rehashpassword,setthreadlocal_moniker}`.
+- `bbsengine6.password` (bcrypt).
+- `bbsengine6.session.lib` + `bbsengine6.session.SessionManager`.
+- `bbsengine6.pgrole.sync_groups`.
+- PostgreSQL `engine.member`, `engine.__session`,
+  `engine.pgrole`.
+
+### 1.3 Login (web)
+
+**Trigger.** `POST /login.php` (or `engine/login.php`).
+
+**Steps.**
+1. `engine/login.php` reads the form payload.
+2. `bbsengine6\libmember\checkpassword` (or the new
+   `bbsengine6\\password\\libpassword.verify_password`) verifies
+   locally against the bcrypt hash stored in `engine.member.password`.
+3. On success, `engine.session` namespace sets the PHP session
+   cookie (`PHPSESSID`) and writes an `engine.__session` row.
+4. On a legacy `$1$` hash, `rehashpassword` rewrites the column.
+5. PHP redirects to the post-login page; the page template is
+   rendered by Smarty against `engine.member` flags.
+
+**Outcome.** Authenticated PHP session, fresh `__session` row.
+
+### 1.4 Authenticate on WebSocket (bed)
+
+**Steps.**
+1. Client opens a WebSocket to `bed`.
+2. Client sends `{"type": "login", "moniker": "...", "password": "..."}`.
+3. `bed/api/auth.py` runs the credential check (mirrors
+   `bbsengine6.password`).
+4. `bed/api/auth.py` decodes the HMAC, stuffs claims under
+   `message["claims"]`, and calls `bbsengine6.auth.access(args,
+   op="login", session=…, message=…)`. Op is `login` — always
+   returns True (the credential provider decided).
+5. `bed` issues a bearer token and registers a session in
+   `bbsengine6.session.SessionManager` via `alloc_session_id` +
+   `register_session`.
+
+For subsequent ops:
+- `reconnect`: `auth.access` requires either an unbound websocket
+  or matching moniker.
+- `refresh`: `auth.access` requires the same `session_id` claim
+  as the live websocket.
+- `revoke`: `auth.access` accepts any signature-valid token.
+
+See [decisions.md §10](./decisions.md#decision-10-per-op-accessargs-op-kwargs-policy-modules)
+and [`auth-bank.md`](./auth-bank.md).
+
+### 1.5 Message flow (Phase 11 layered)
+
+**Steps.**
+1. Sender calls `bbsengine6.message.service.store_message_with_checks(...)`.
+2. `service` runs the enable/disable gate (`is_enabled()`).
+3. `service` resolves the database via `_resolve_db` (env → kwarg →
+   args), normalises urgency via `_coerce_urgency`, and expands
+   recipients via `bbsengine6.message.dal.recipients.resolve_recipients`.
+4. `service` runs `_check_blocking_and_ratelimit`:
+   - `dal.ratelimit.check_rate_limit` consumes the sender's quota
+     against `engine.__message_rate_limit`.
+   - For each recipient, `dal.blocking.is_blocked` checks
+     `engine.__message_block`.
+5. `service` calls `dal.messages.insert` against
+   `engine.__message` + `engine.__message_recipient`.
+6. `service` updates `bbsengine6.message.cache` (in-memory unread
+   counter).
+7. If bed is reachable, `bbsengine6.startup.message_subscription`
+   (registered on the receiver's behalf at startup) fans the
+   unread bump out via `bed`.
+
+**Outcome.** `engine.__message` row + per-recipient rows;
+`bbsengine6.message.cache` updated; bed pushes the unread bump.
+
+**Affected systems.**
+- `bbsengine6.message.{service,lib,cache,templates}`.
+- `bbsengine6.message.dal.{messages,recipients,blocking,ratelimit}`.
+- `bbsengine6.database.getpool`.
+- `bbsengine6.startup.message_subscription`.
+- `bed.MessageService`.
+- PostgreSQL `engine.__message`, `engine.__message_recipient`,
+  `engine.__message_block`, `engine.__message_rate_limit`,
+  `engine.__message_group[_member]`.
+
+### 1.6 Bank transfer
+
+**Steps.**
+1. Sender calls `BankService.transfer(args, from_account, to_account,
+   amount)`.
+2. `bbsengine6.bank.api.handler._handle_bank_transfer_request`:
+   - Maps wire message `bank_transfer_request` → domain op
+     `transfer` via `OP_MAP`.
+   - Builds a `SessionState` adapter from `bbsengine6.session.SessionManager`.
+   - Calls `bbsengine6.bank.access(args, op="transfer",
+     session=…, message=…)`. Policy decides whether the live
+     session owns the source account.
+   - Calls `BankService.transfer` (TOCTOU-safe: SELECT … FOR UPDATE
+     on both account rows, debit + credit + INSERT into
+     `engine.__transaction` in one transaction).
+   - Returns the JSON-safe row dict.
+
+**Outcome.** Debited + credited accounts; new `engine.__transaction`
+row; both account rows locked and committed atomically.
+
+### 1.7 Module / menu execution
+
+**Steps.**
+1. Menu (or CLI) invokes `module.run(args, modulename, **kwargs)`.
+2. `module.check` verifies the module exposes
+   `init`/`access`/`buildargs`/`main` and that
+   `modulename.access(args, op="run", …)` returns True.
+3. `module.runcallback("modulename.init", …)` runs one-time setup.
+4. If `--help` / `-h` is in argv: `module.runcallback("modulename.buildargs")`
+   builds the parser, prints help, returns True.
+5. `module.runcallback("modulename.buildargs", …)` parses argv.
+6. `module.runcallback("modulename.main", …)` runs the feature and
+   returns the result.
+7. The menu (`bbsengine6.menu` or `bbsengine6.menu_next`) renders
+   the next state via `bbsengine6.io.{echo,screen}`.
+
+**Outcome.** Feature executed, result surfaced through the
+widget, ready for the next user action.
+
+### 1.8 Navigation / menu flow
+
+**Steps.**
+1. `bbsengine6.menu.Menu.display` (or `menu_next.registered_options` /
+   `visible_options`) renders available items.
+2. `io.getch` reads the next keystroke.
+3. `menu.Menu.handle` updates the cursor; the new frame is rendered
+   via `io.echo` + `io.screen.setcursor`.
+4. On ENTER, `menu.Menu.run` returns the selected `Item`. The
+   `requires` predicate is evaluated; if it fails, the menu is
+   re-displayed with a warning.
+5. The resolved module is dispatched via `module.run`.
+
+**Outcome.** Module dispatched, result threaded back to the menu
+loop.
+
+### 1.9 Web request
+
+**Steps.**
+1. Browser sends HTTP request to Apache.
+2. Apache routes to a `engine/*.php` entry point.
+3. `php/engine.php` boots Smarty, PEAR Log, QuickForm2.
+4. The entry-point PHP loads the page (`engine/page.php` helpers,
+   `bbsengine6\\session`, `bbsengine6\\database`, `bbsengine6\\password`).
+5. Smarty renders the page with data from `bbsengine6.libmember`.
+6. JS bundle (`js/bbsengine6.js` + per-widget init scripts) ships
+   in the HTML; jQuery + smoothState take over the DOM.
+7. Browser executes client-side logic; AJAX calls go back to
+   `engine/*.php`.
+
+**Outcome.** HTML + JS rendered; user interacts.
 
 ---
 
-### Workflow 3: Navigation/Menu Flow
+## 2. Detailed Sequences
 
-**Initiator:** User at main menu
-
-**Steps:**
-1. Terminal displays main menu with options
-2. Menu widget shows available items (based on user flags)
-3. User presses arrow keys to navigate
-4. Menu highlights selected item
-5. User presses ENTER to select
-6. Menu resolves "requires" condition for item
-7. Menu calls associated module or function
-8. Result returned to menu
-9. Menu redisplays or exits
-
-**Outcome:** Selected action executed or submenu displayed
-
-**Time Complexity:** O(1) per navigation step
-
-**Affected Systems:**
-- Terminal I/O (menu.py, io/getch, io/echo, io/screen)
-- Member module (flags for visibility)
-- Module system (module loading)
-- Database (access control checks)
-
----
-
-### Workflow 4: Module Execution Flow
-
-**Initiator:** Menu, command-line, or programmatic call
-
-**Steps:**
-1. Caller invokes `module.run(args, modulename, **kwargs)`
-2. Module system checks access permissions via `module.check()`
-3. Module is loaded from filesystem via `module.load()`
-4. Functions are validated via `validate_function()`
-5. Module's `init()` called once per session
-6. Module's `access()` checks user permission
-7. Module's `buildargs()` parses and validates arguments
-8. Module's `main()` executes module logic
-9. Result caught and returned via `runcallback()`
-10. Result returned to caller
-
-**Outcome:** Module action completed, result returned or error displayed
-
-**Time Complexity:** O(n) where n = module code execution time
-
-**Affected Systems:**
-- Module system (module.py)
-- Database (access control)
-- I/O (error display)
-- All loaded modules
-
----
-
-### Workflow 5: Web Request Flow
-
-**Initiator:** HTTP request from browser
-
-**Steps:**
-1. Browser sends HTTP request to Apache
-2. Apache routes to PHP endpoint
-3. PHP bootstrap loads configuration
-4. PHP calls `engine.php:displaypage()`
-5. `displaypage()` loads Smarty template
-6. Smarty template requests data (if needed)
-7. PHP queries database or calls Python backend
-8. Smarty renders template with data
-9. JavaScript files injected into HTML
-10. HTML sent back to browser
-11. Browser renders page and executes JavaScript
-12. User interacts with page
-
-**Outcome:** HTML page rendered, JavaScript active for interactions
-
-**Time Complexity:** O(database queries)
-
-**Affected Systems:**
-- Apache web server
-- PHP engine (engine.php)
-- Database (database.php queries)
-- Smarty templating
-- JavaScript execution
-- Browser DOM
-
----
-
-## Detailed Sequence Flows
-
-### Sequence 1: User Login (Terminal)
+### 2.1 Bootstrap (`bbsengine6.startup.main`)
 
 ```
-USER                           TERMINAL I/O              BUSINESS LOGIC           DATABASE
- │                                 │                          │                     │
- │ Sees "Login" menu option        │                          │                     │
- │<────────────────────────────────│                          │                     │
- │                                 │                          │                     │
- │ Presses ENTER                   │                          │                     │
- ├─────────────────────────────────>                          │                     │
- │                                 │                          │                     │
- │                           menu.run()                        │                     │
- │                                 ├─ check access on "login" │                     │
- │                                 │   module                  │                     │
- │                                 ├────────────────────────────>                    │
- │                                 │         Query: has access to module?             │
- │                                 │<─────────────────────────    query                │
- │                                 │                              →│
- │                                 │                          Result: Yes│
- │                                 │<─────────────────────────────────│
- │                                 │                          │                     │
- │                          module.run()                      │                     │
- │                                 ├─ load login module        │                     │
- │                                 ├─ validate functions       │                     │
- │                                 ├─ init()                   │                     │
- │                                 │                          │                     │
- │ "Enter login ID:"               │                          │                     │
- │<────────────────────────────────│                          │                     │
- │ john.doe                        │                          │                     │
- ├─────────────────────────────────>                          │                     │
- │                                 │                          │                     │
- │ "Enter password:"               │                          │                     │
- │<────────────────────────────────│                          │                     │
- │ ••••••                          │                          │                     │
- ├─────────────────────────────────>                          │                     │
- │                                 │                          │                     │
- │                           buildargs()                      │                     │
- │                                 ├─ Parse login ID & password
- │                                 │                          │                     │
- │                           access()                         │                     │
- │                                 ├─ Check user has login permission│              │
- │                                 │                          │                     │
- │                           main(args)                       │                     │
- │                                 │  member.authenticate()    │                     │
- │                                 │├────────────────────────────>                   │
- │                                 │         Query: SELECT * FROM members          │
- │                                 │         WHERE loginid = 'john.doe'              │
- │                                 │                              →│
- │                                 │           Result: member record with hashed│
- │                                 │           password                     │
- │                                 │<─────────────────────────────────────│
- │                                 │  ├─ Compare provided password        │
- │                                 │     with stored hash                 │
- │                                 │  ├─ Hash matches!                    │
- │                                 │                          │                     │
- │                                 │  session.start()         │                     │
- │                                 │├────────────────────────────>                   │
- │                                 │         Query: INSERT INTO __session   │
- │                                 │         (id, expiry, lastactivity, │
- │                                 │          ipaddress, useragent, ...)    │
- │                                 │                              →│
- │                                 │           Result: Session ID (UUID)     │
- │                                 │<─────────────────────────────────────│
- │                                 │                          │                     │
- │                                 │  ├─ Store currentsessionid = UUID  │
- │                                 │  ├─ Return success                   │
- │                                 │                          │                     │
- │ "Welcome, john.doe!"            │                          │                     │
- │<────────────────────────────────│                          │                     │
- │                                 │                          │                     │
- │ [Display main menu]             │                          │                     │
- │<────────────────────────────────│                          │                     │
+OPERATOR                        startup.main                 backend                  console.lib        module.run       database
+  │                                  │                          │                        │                  │                │
+  │ python -m bbsengine6.startup     │                          │                        │                  │                │
+  ├─────────────────────────────────>│                          │                        │                  │                │
+  │                                  ├─ buildargs / parse argv  │                        │                  │                │
+  │                                  │                          │                        │                  │                │
+  │                                  ├─ admin pool against     │                        │                  │                │
+  │                                  │  'postgres'              │                        │                  │                │
+  │                                  ├─────────────────────────────  database.getpool    ───────────────────>│                │
+  │                                  │                          │                        │                  │                │
+  │                                  ├─ stage_zero ────────────>│                        │                  │                │
+  │                                  │  via runmodule ─────────>│                        │                  │                │
+  │                                  │                          ├────────────────────────>  module.run ───>  │
+  │                                  │                          │  backend.stage_zero     │                  │  CREATE DATABASE│
+  │                                  │                          │<────────────────────────────────────────────────│
+  │                                  │                          │                        │                  │                │
+  │                                  ├─ select stage-one pool   │                        │                  │                │
+  │                                  ├─ stage_one ─────────────>│                        │                  │                │
+  │                                  ├─────────────────────────────  ...                  ───────────────────>│                │
+  │                                  ├─ engine ────────────────>│                        │                  │  schema.sql     │
+  │                                  ├─────────────────────────────  ...                  ───────────────────>│  (engine.auth.z│
+  │                                  │                          │                        │                  │   oid6)         │
+  │                                  ├─ bank ──────────────────>│                        │                  │  bank.sql       │
+  │                                  │                          │                        │                  │                │
+  │                                  ├─ commit / rollback       │                        │                  │                │
+  │                                  ├─────────────────────────────  conn.commit()       ───────────────────>│                │
+  │                                  │                          │                        │                  │                │
+  │                                  ├─ _maybe_subscribe_to_bed│                        │                  │                │
+  │                                  ├─ (optional) BedConnection.subscribe  ───────────────────────────────────────>  bed (WS) │
+  │                                  │                          │                        │                  │                │
+  │<────────────── ready ───────────│                          │                        │                  │                │
 ```
 
-**State After Login:**
-- `session.currentsessionid` = UUID
-- `member.currentmoniker` = "john.doe"
-- PostgreSQL `__session` table: new row inserted
-- PostgreSQL `engine.member` table: `lastlogin` updated
+**State after bootstrap.** `engine` schema owned by `zoid6`;
+helper functions owned by `zoid6`; `engine.member`,
+`engine.__session`, `engine.__message*`, `engine.__bank_*` populated
+by their respective schema files; (optional) bed push subscription
+active for the current session.
+
+### 2.2 WebSocket login (`bed` + `bbsengine6.auth.access`)
+
+```
+CLIENT                          bed/api/auth.py            bbsengine6.auth.access    bbsengine6.password       bbsengine6.session
+  │                                  │                            │                            │                          │
+  │ {"type":"login",                 │                            │                            │                          │
+  │  "moniker":"alice",              │                            │                            │                          │
+  │  "password":"…"}                 │                            │                            │                          │
+  ├─────────────────────────────────>│                            │                            │                          │
+  │                                  │                            │                            │                          │
+  │                                  ├─ credential check ─────────────────────────────────────────>│                          │
+  │                                  │   SELECT password FROM     │                            │  crypt() verify          │
+  │                                  │   engine.member WHERE      │                            │  (passlib bcrypt fallback│
+  │                                  │   loginid = ?              │                            │   on healthy $2[abxy]$) │
+  │                                  │<──────────────────────────────────────────────────────────│                          │
+  │                                  │                            │                            │                          │
+  │                                  ├─ mint HMAC token          │                            │                          │
+  │                                  │                            │                            │                          │
+  │                                  ├─ access(args, op="login", │                            │                          │
+  │                                  │           session=None,    │                            │                          │
+  │                                  │           message=…)        │                            │                          │
+  │                                  ├───────────────────────────>│                            │                          │
+  │                                  │                            ├─ op=="login" → True       │                          │
+  │                                  │<───────────────────────────│                            │                          │
+  │                                  │                            │                            │                          │
+  │                                  ├─ alloc_session_id() ───────────────────────────────────────────────────────────>  │
+  │                                  ├─ register_session(         │                            │                          │
+  │                                  │     id, moniker, is_sysop)│                            │                          │
+  │                                  ├──────────────────────────────────────────────────────────────────────────────────>  │
+  │                                  │                            │                            │                          │
+  │ {"type":"login_ok",              │                            │                            │                          │
+  │  "token":"…"}                    │                            │                            │                          │
+  │<─────────────────────────────────│                            │                            │                          │
+```
+
+**State after WS login.** `SessionManager._sessions` has one entry;
+bearer token issued; client holds the token for subsequent messages.
+
+### 2.3 Message send (Phase 11 layered)
+
+```
+SENDER                     message.service      message.dal.ratelimit   message.dal.blocking   message.dal.recipients   message.dal.messages    database                message.cache
+  │                             │                       │                       │                       │                       │                       │                       │
+  │ store_message_with_checks   │                       │                       │                       │                       │                       │                       │
+  ├────────────────────────────>│                       │                       │                       │                       │                       │                       │
+  │                             ├─ is_enabled() → True  │                       │                       │                       │                       │                       │
+  │                             ├─ _resolve_db          │                       │                       │                       │                       │                       │
+  │                             ├─ _coerce_urgency      │                       │                       │                       │                       │                       │
+  │                             ├─ resolve_recipients ────────────────────────────────────────────────────────────────────>│                       │                       │
+  │                             │                       │                       │                       │  expand groups         │                       │                       │
+  │                             │<────────────────────────────────────────────────────────────────────────────────────────  │                       │                       │
+  │                             │                       │                       │                       │                       │                       │                       │
+  │                             ├─ check_rate_limit ───>│                       │                       │                       │                       │                       │
+  │                             │                       ├─ SELECT … FROM engine.__message_rate_limit                                │                       │                       │
+  │                             │                       ├───────────────────────  database.getpool / pool.connection ────────────────────────────>│                       │
+  │                             │                       │<─ rows ───────────────────────────────────────────────────────────────────│                       │
+  │                             │<─ allowed, remaining ─│                       │                       │                       │                       │                       │
+  │                             │                       │                       │                       │                       │                       │                       │
+  │                             ├─ for each recipient:  │                       │                       │                       │                       │                       │
+  │                             │   is_blocked ───────────────────────────────────────────>│                       │                       │                       │
+  │                             │<────────────────────────── blocked? ────────────│                       │                       │                       │
+  │                             │                       │                       │                       │                       │                       │                       │
+  │                             ├─ insert ────────────────────────────────────────────────────────────────────────────────────────────────────>│                       │
+  │                             │                       │                       │                       │                       ├─ INSERT engine.__message / engine.__message_recipient  ───────>│
+  │                             │<──────────────────────────────────────────────── message_id ──────────────────────────────────────────────────────────────────────│
+  │                             │                       │                       │                       │                       │                       │                       │
+  │                             ├─ cache.incr_unread ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────>│
+  │                             │<──────────────────────────────────────────── ok ──────────────────────────────────────────────────────────────────────────────────────────│
+  │                             │                       │                       │                       │                       │                       │                       │
+  │<── {message_id, …} ────────│                       │                       │                       │                       │                       │                       │
+```
+
+**State after send.** `engine.__message` row + per-recipient rows;
+`message.cache` bumped for each recipient; (if bed is reachable)
+push events fired to each recipient.
+
+### 2.4 Module execution
+
+```
+CALLER                      module                database        io.echo                  MODULE
+  │                          │                       │              │                       │
+  │ module.run(args, "x")    │                       │              │                       │
+  ├─────────────────────────>│                       │              │                       │
+  │                          ├─ check("x","run")     │              │                       │
+  │                          ├─ importlib.reload() (if debug)      │                       │
+  │                          ├─ importlib.import_module("x")       │                       │
+  │                          ├─ verify init/access/buildargs/main callable                │
+  │                          ├─ inspect.signature check             │                       │
+  │                          ├─ x.access(args, op="run", **kw)      │                       │
+  │                          ├─────────────────────>│ (access data)│                       │
+  │                          │<─ access allowed ───│              │                       │
+  │                          ├─ runcallback("x.init")              │                       │
+  │                          ├───────────────────────────────────────────────────────────────────>  init(args)
+  │                          │<──────────────────────────────────────────────────────────────────  ok
+  │                          ├─ if --help in argv:                  │                       │
+  │                          │   buildargs → parser.print_help     │                       │
+  │                          │   return True                        │                       │
+  │                          ├─ runcallback("x.buildargs")         │                       │
+  │                          ├───────────────────────────────────────────────────────────────────>  buildargs(args)
+  │                          │<────────────────────────────────────  parser
+  │                          ├─ parser.parse_args()                 │                       │
+  │                          ├─ runcallback("x.main", args)        │                       │
+  │                          ├───────────────────────────────────────────────────────────────────>  main(args)
+  │                          │<────────────────────────────────────  result
+  │                          │   try/except wraps: on error →      │                       │
+  │                          │     io.echo_traceback(e)             │                       │
+  │<─ result ───────────────│                       │              │                       │
+```
+
+**Key points.**
+- Access is checked before import; import is checked before run.
+- `_check_params` + `inspect.signature` validate signatures
+  (the standalone `validate_function` is *not* part of this flow).
+- Errors are caught and rendered via `io.echo_traceback`; the
+  loader returns `None` or an error sentinel so the menu can
+  display gracefully.
+
+### 2.5 Navigation
+
+```
+USER                  io.getch                menu.Menu             module                  MODULE
+  │                     │                       │                    │                       │
+  │ arrow key           │                       │                    │                       │
+  ├────────────────────>│                       │                    │                       │
+  │                     ├─ read key ──> key code│                    │                       │
+  │                     │                       ├─ handle(key)       │                       │
+  │                     │                       ├─ update cursor     │                       │
+  │                     │                       ├─ io.screen.setcursor(row, col)
+  │                     │                       ├─ io.echo(frame)    │                       │
+  │                     │                       │                    │                       │
+  │ ENTER               │                       │                    │                       │
+  ├────────────────────>│                       │                    │                       │
+  │                     ├─ key code ───────────>│                    │                       │
+  │                     │                       ├─ selected = current│                       │
+  │                     │                       ├─ if item.requires:│                       │
+  │                     │                       │   eval predicate   │                       │
+  │                     │                       ├─ module.run(args,  │                       │
+  │                     │                       │   item.module)     │                       │
+  │                     │                       ├───────────────────>│                       │
+  │                     │                       │                    ├─ …                    │
+  │                     │                       │<────────────────────  result                │
+  │                     │                       ├─ io.echo(result)   │                       │
+```
+
+**Outcome.** Selected feature ran; menu loop resumes.
 
 ---
 
-### Sequence 2: Message Posting (Terminal)
+## 3. State Transformations
+
+### 3.1 Before login
 
 ```
-USER                       TERMINAL I/O         BUSINESS LOGIC         DATABASE/EDITOR
- │                             │                     │                      │
- │ "Post Message" selected     │                     │                      │
- │─────────────────────────────>                     │                      │
- │                             │                     │                      │
- │                        module.run(posteditor)     │                      │
- │                             ├─ load posteditor    │                      │
- │                             │                     │                      │
- │ "Select recipient:"         │                     │                      │
- │<────────────────────────────│                     │                      │
- │                             │                listbox.run()               │
- │                             │                     ├─ fetchpage(1)       │
- │                             │                     │    Query: SELECT *   │
- │                             │                     │    FROM __member     │
- │                             │                     │    LIMIT 20          │
- │                             │                     │                    ↓│
- │ [Listbox of members] 1/5    │                     │         [Database query]
- │  ☐ alice                   │                     │                    ↓│
- │  ☐ bob                     │                     │         Result: list[dict]
- │  ☐ carol                   │                     │                      │
- │<────────────────────────────│                     │<─────────────────────│
- │                             │                     │                      │
- │ [UP/DOWN arrows] → carol    │                     │                      │
- ├─────────────────────────────>                     │                      │
- │                             │                listbox.handle()           │
- │ [ENTER]                     │                     │                      │
- ├─────────────────────────────>                     │                      │
- │                             │                listbox.run() returns      │
- │                             │                ListboxResult(item=carol)  │
- │                             │                     │                      │
- │ "Enter subject:"            │                     │                      │
- │<────────────────────────────│                     │                      │
- │ Re: Project Status          │                     │                      │
- ├─────────────────────────────>                     │                      │
- │                             │                     │                      │
- │ "Enter message (. to end):" │                     │                      │
- │<────────────────────────────│                     │                      │
- │ I'm working on the new      │                     │                      │
- │ feature. Should be ready    │                     │                      │
- │ next week.                  │                     │                      │
- │ .                           │                     │                      │
- ├─────────────────────────────>                     │                      │
- │                             │                     │                      │
- │                             │             blurb.insert()                 │
- │                             │                     ├─ Build record with   │
- │                             │                        to, from, subject,
- │                             │                        body, datecreated    │
- │                             │                     ├─ INSERT INTO         │
- │                             │                        __blurb              │
- │                             │                     │                    ↓│
- │                             │                     │   INSERT INTO __blurb
- │                             │                     │   (folderid, to_id,   │
- │                             │                     │    from_id, subject,  │
- │                             │                     │    body,              │
- │                             │                     │    datecreated)       │
- │                             │                     │     VALUES (...)      │
- │                             │                     │                    ↓│
- │                             │                     │      COMMIT           │
- │                             │                     │                    ↓│
- │                             │                     │  Result: message ID   │
- │                             │                     │         12345         │
- │                             │<────────────────────────────────────────────│
- │                             │                     │                      │
- │ "Message posted! (ID:12345)"│                     │                      │
- │<────────────────────────────│                     │                      │
- │                             │                     │                      │
-```
-
-**State After Posting:**
-- PostgreSQL `__blurb` table: new row inserted with ID 12345
-- PostgreSQL `__folder` table: message count incremented
-- User sees confirmation with message ID
-
----
-
-### Sequence 3: Module Execution Flow
-
-```
-CALLER                   MODULE SYSTEM          DATABASE/FILESYSTEM   RESULT
-  │                          │                         │                  │
-  │ module.run(args,        │                         │                  │
-  │            "messages")  │                         │                  │
-  ├──────────────────────────>                         │                  │
-  │                          │                         │                  │
-  │                   module.check()                   │                  │
-  │                          ├─ Query: Is "messages"   │                  │
-  │                          │  module allowed for     │                  │
-  │                          │  current user?          │                  │
-  │                          │──────────────────────────>                  │
-  │                          │     SELECT * FROM       │                  │
-  │                          │     __member_flags      │                  │
-  │                          │     WHERE user_id = ? AND                  │
-  │                          │     module = "messages" │                  │
-  │                          │<──────────────────────────                  │
-  │                          │  ├─ Result: access=True │                  │
-  │                          │                         │                  │
-   │                   module.load()                    │                  │
-   │                          ├─ import_module() via     │                  │
-   │                          │  sys.path (e.g.          │                  │
-   │                          │  "mymodule.messages")    │                  │
-  │                          │──────────────────────────>                  │
-  │                          │  ├─ Load module from    │                  │
-  │                          │     filesystem          │                  │
-  │                          │<──────────────────────────                  │
-  │                          │                         │                  │
-  │                   validate_function                │                  │
-  │                          ├─ Check init()           │                  │
-  │                          ├─ Check access()         │                  │
-  │                          ├─ Check buildargs()      │                  │
-  │                          ├─ Check main()           │                  │
-  │                          │  ├─ All signatures valid
-  │                          │                         │                  │
-  │                   messages.init()                  │                  │
-  │                          ├─ One-time setup         │                  │
-  │                          │                         │                  │
-  │                   messages.access()                │                  │
-  │                          ├─ Check runtime access   │                  │
-  │                          │  ├─ Result: True        │                  │
-  │                          │                         │                  │
-  │                   messages.buildargs()             │                  │
-  │                          ├─ Parse args, build      │                  │
-  │                          │  argparse.Namespace     │                  │
-  │                          │  ├─ Result: args obj    │                  │
-  │                          │                         │                  │
-  │                   runcallback(main)                │                  │
-  │                          ├─ Try:                   │                  │
-  │                          │   messages.main(args)   │                  │
-  │                          │   ├─ [execute module]   │                  │
-  │                          │   └─ Result: message    │                  │
-  │                          │      list               │                  │
-  │                          │ Except Exception:       │                  │
-  │                          │   ├─ io.echo(error)     │                  │
-  │                          │   └─ Result: None/error │                  │
-  │                          │                         │                  │
-  │<──────────────────────────                         │        Result: [ │
-  │  Result returned                                                { id: 1, from: 'alice', ...│
-  │                                                       { id: 2, from: 'bob', ...│
-  │                                                     ]
-```
-
-**Key Points:**
-1. Access checked before loading
-2. Module functions validated
-3. Execution wrapped in try/except
-4. Errors display gracefully
-5. Result returned to caller
-
----
-
-## State Transformations
-
-### State 1: Before Login
-
-```
-Session State:
+Session (thread-local):
   currentsessionid = None
-  lastactivity = None
-
-Member State:
   currentmoniker = None
-  currentid = None
-  currentflags = {}
 
-Database State:
-  __session: empty or expired rows only
-  engine.member: lastlogin not updated
+SessionManager:
+  _sessions = {}   # in-memory WS map
+  _id_counter: not started
+
+Database:
+  engine.__session: empty (or expired rows only)
+  engine.member:   lastlogin NULL for current user
 ```
 
-### State 2: During/After Login
+### 3.2 After login
 
 ```
-Session State:
-  currentsessionid = "550e8400-e29b-41d4-a716-446655440000"
-  lastactivity = "2026-02-23T18:40:00"
+Session (thread-local):
+  currentsessionid = <uuid>
+  currentmoniker = "alice"
 
-Member State:
-  currentmoniker = "john.doe"
-  currentid = 123
-  currentflags = {"admin": False, "moderator": False}
+SessionManager:
+  _sessions[<id>] = {"moniker": "alice", "is_sysop": False}
 
-Database State:
-  __session: new row with session UUID
+Database:
+  engine.__session: new row with session uuid
   engine.member: lastlogin = now()
-
-User Can:
-  - Access all modules allowed by flags
-  - Create/read/update messages
-  - Edit profile
-  - Access restricted features
+  engine.pgrole: m_alice login role granted group memberships
 ```
 
-### State 3: During Message Posting
+### 3.3 During message send
 
 ```
-Session State:
-  [unchanged, continues active]
+Database (single transaction):
+  engine.__message:               new row
+  engine.__message_recipient:     new row per recipient (after rate-limit + block + expansion)
 
-Module State:
-  current_module = "posteditor"
-  editor_mode = "composing"
-
-Database State:
-  [no changes yet, in transaction]
-  
-User Input:
-  to = "carol"
-  subject = "Re: Project Status"
-  body = "..."
+Cache:
+  message.cache[recipient] += 1   (in-memory)
 ```
 
-### State 4: After Message Posting
+### 3.4 After module execution
 
 ```
-Database State:
-  __blurb: new row inserted
-    {
-      id: 12345,
-      folderid: 5,
-      to_id: 3,
-      from_id: 123,
-      subject: "Re: Project Status",
-      body: "...",
-      datecreated: "2026-02-23T18:45:00"
-    }
-  __folder: message_count incremented
-    message_count: 156 → 157
+Module state:
+  current_module = "menu_next.<registrar>"
+  menu cursor at the resolved option
 
-Module State:
-  current_module = "main_menu"
-  editor_mode = None
-
-Message Queue (if async):
-  ├─ Notify "carol" of new message
-  └─ Update folder statistics
+User:
+  sees next prompt / output frame
 ```
 
 ---
 
-## Data Structures at Each Layer
+## 4. Data Structures at Each Layer
 
-### Data Layer (PostgreSQL)
+### 4.1 Data Layer (PostgreSQL)
 
-**Session Record:**
+**Session (`engine.__session`):**
+
 ```sql
 CREATE TABLE engine.__session (
-  id UUID PRIMARY KEY,
-  expiry TIMESTAMP NOT NULL,
-  lastactivity TIMESTAMP,
-  data JSONB,
-  ipaddress INET,
-  useragent TEXT,
-  datecreated TIMESTAMP DEFAULT NOW(),
-  dateupdated TIMESTAMP DEFAULT NOW(),
-  moniker VARCHAR(32)
+  id            UUID PRIMARY KEY,
+  expiry        TIMESTAMP NOT NULL,
+  lastactivity  TIMESTAMP,
+  data          JSONB,
+  ipaddress     INET,
+  useragent     TEXT,
+  datecreated   TIMESTAMP DEFAULT NOW(),
+  dateupdated   TIMESTAMP DEFAULT NOW(),
+  moniker       VARCHAR(32)
 );
 ```
 
-**Member Record:**
+**Member (`engine.member`):**
+
 ```sql
 CREATE TABLE engine.member (
-  id SERIAL PRIMARY KEY,
-  loginid VARCHAR(32) UNIQUE,
-  moniker VARCHAR(32),
-  email VARCHAR(254),
-  password VARCHAR(255),  -- bcrypt hash
-  credits INT DEFAULT 100,
-  flags JSONB DEFAULT '{}',
-  attrs JSONB DEFAULT '{}',
-  ui TEXT[],  -- ARRAY of interface types
-  datecreated TIMESTAMP DEFAULT NOW(),
-  dateupdated TIMESTAMP,
-  lastlogin TIMESTAMP
+  id            SERIAL PRIMARY KEY,
+  loginid       VARCHAR(32) UNIQUE,
+  moniker       VARCHAR(32),
+  email         VARCHAR(254),
+  password      VARCHAR(255),                 -- bcrypt $2[abxy]$06$…
+  credits       INT DEFAULT 100,
+  flags         JSONB DEFAULT '{}',
+  attrs         JSONB DEFAULT '{}',
+  ui            TEXT[],                       -- ARRAY of interface types
+  approved      BOOLEAN NOT NULL DEFAULT FALSE,
+  datecreated   TIMESTAMP DEFAULT NOW(),
+  dateupdated   TIMESTAMP,
+  lastlogin     TIMESTAMP,
+  CONSTRAINT chk_member_password_bcrypt
+    CHECK (password ~ '^\$2[abxy]\$' AND length(password) = 60)
 );
 ```
 
-**Message Record:**
+**Message (`engine.__message` + `engine.__message_recipient`):**
+
 ```sql
-CREATE TABLE engine.__blurb (
-  id SERIAL PRIMARY KEY,
-  folderid INT NOT NULL REFERENCES __folder(id),
-  to_id INT REFERENCES engine.member(id),
-  from_id INT REFERENCES engine.member(id),
-  subject TEXT,
-  body TEXT,
-  attributes JSONB DEFAULT '{}',
-  datecreated TIMESTAMP DEFAULT NOW()
+CREATE TABLE engine.__message (
+  id           SERIAL PRIMARY KEY,
+  sender_moniker VARCHAR(32),
+  channel      VARCHAR(64) NOT NULL,
+  urgency      VARCHAR(16) NOT NULL DEFAULT 'ROUTINE',
+  content      TEXT,
+  data         JSONB DEFAULT '{}',
+  created_at   TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE engine.__message_recipient (
+  message_id   INT NOT NULL REFERENCES engine.__message(id) ON DELETE CASCADE,
+  recipient_moniker VARCHAR(32) NOT NULL,
+  read_at      TIMESTAMP,
+  PRIMARY KEY (message_id, recipient_moniker)
 );
 ```
 
-### Business Logic Layer (Python Dicts)
+The full schema inventory is in
+[`../SPEC.md`](../SPEC.md#5-sql-schema).
 
-**Session Object:**
+### 4.2 Business Logic (Python dicts)
+
+**Session row** (mirrors `engine.__session`):
+
 ```python
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "expiry": "2026-02-24T10:30:00",
-  "lastactivity": "2026-02-23T18:40:00",
-  "data": {
-    "preferences": {
-      "colormode": "ansi",
-      "width": 80
-    }
-  },
+  "id": UUID,
+  "expiry": datetime,
+  "lastactivity": datetime,
+  "data": {"preferences": {"colormode": "ansi", "width": 80}},
   "ipaddress": "192.168.1.1",
   "useragent": "Terminal v1.0",
-  "datecreated": "2026-02-23T09:00:00",
-  "dateupdated": "2026-02-23T18:40:00",
-  "moniker": "john.doe"
+  "moniker": "alice",
+  "datecreated": datetime,
+  "dateupdated": datetime,
 }
 ```
 
-**Member Object:**
+**Member row**:
+
 ```python
 {
   "id": 123,
-  "loginid": "john.doe",
-  "moniker": "john.doe",
-  "email": "john@example.com",
-  "password": "$2b$12$...",  # bcrypt hash
+  "loginid": "alice",
+  "moniker": "alice",
+  "email": "alice@example.com",
+  "password": "$2b$06$...",
   "credits": 500,
-  "flags": {
-    "admin": False,
-    "moderator": False,
-    "verified": True
-  },
-  "attrs": {
-    "signature": "John Doe",
-    "bio": "Software developer"
-  },
+  "flags": {"admin": False, "moderator": False, "verified": True},
+  "attrs": {"signature": "Alice", "bio": "..."},
   "ui": ["term", "web"],
-  "datecreated": "2026-01-01T00:00:00",
-  "dateupdated": "2026-02-23T18:40:00",
-  "lastlogin": "2026-02-23T18:40:00"
+  "approved": True,
+  "datecreated": datetime,
+  "dateupdated": datetime,
+  "lastlogin": datetime,
 }
 ```
 
-**Message Object:**
+**Message (`bbsengine6.message.Message`)**:
+
 ```python
 {
   "id": 12345,
-  "folderid": 5,
-  "to_id": 3,
-  "from_id": 123,
-  "to_moniker": "carol",
-  "from_moniker": "john.doe",
-  "subject": "Re: Project Status",
-  "body": "I'm working on the new feature...",
-  "attributes": {
-    "read": False,
-    "replied": False,
-    "flagged": False
-  },
-  "datecreated": "2026-02-23T18:45:00"
+  "sender_moniker": "alice",
+  "channel": "casino.dealer",
+  "urgency": "ROUTINE",
+  "content": "Welcome back.",
+  "data": {"template": "greet", "vars": {"first_name": "Alice"}},
+  "recipients": ["bob", "carol"],
+  "created_at": datetime,
 }
 ```
 
-### Presentation Layer (Terminal)
+### 4.3 Presentation (terminal)
 
-**Menu Display:**
+**Menu frame:**
+
 ```
 ╔══════════════════════════════════════╗
 ║          BBSENGINE MAIN MENU         ║
@@ -616,172 +613,124 @@ CREATE TABLE engine.__blurb (
 ║ ☐ Read Messages                      ║
 ║ ☒ Post Message                       ║
 ║ ☐ Edit Profile                       ║
-║ ☐ Check Mail                         ║
 ║ ☐ Logout                             ║
 ╠══════════════════════════════════════╣
 ║ [ENTER] Select  [ESC] Quit  [?] Help ║
 ╚══════════════════════════════════════╝
 ```
 
-**Listbox Display:**
+**Listbox frame:**
+
 ```
 Message List (Page 1 of 5)
- 1. alice - Need feedback on design    | 2026-02-23 10:15
- 2. bob - Project status update        | 2026-02-23 14:22
- 3. carol - Upcoming meeting           | 2026-02-23 15:30
- 4. dave - Code review requested       | 2026-02-23 16:45
+  1. alice - Need feedback on design    | 2026-09-01 10:15
+  2. bob   - Project status update      | 2026-09-02 14:22
+  3. carol - Upcoming meeting           | 2026-09-03 15:30
 
 [UP/DOWN] Navigate  [PAGEUP/DOWN] Page  [ENTER] Select  [ESC] Exit
 ```
 
-### Presentation Layer (Web/PHP)
+### 4.4 Presentation (web JSON)
 
-**JSON Response:**
 ```json
 {
   "success": true,
   "data": {
     "messages": [
-      {
-        "id": 456,
-        "from": "alice",
-        "subject": "Feedback Request",
-        "date": "2026-02-23T10:15:00",
-        "read": false
-      },
-      {
-        "id": 457,
-        "from": "bob",
-        "subject": "Status Update",
-        "date": "2026-02-23T14:22:00",
-        "read": true
-      }
+      {"id": 456, "from": "alice", "subject": "Feedback", "date": "2026-09-01T10:15:00", "read": false}
     ]
   },
-  "timestamp": "2026-02-23T18:50:00"
+  "timestamp": "2026-09-04T18:50:00"
 }
 ```
 
 ---
 
-## Cross-Layer Data Transformation
+## 5. Error Handling
 
-### Example: Message from Database to Terminal Display
-
-**Step 1: Database Query**
-```sql
-SELECT * FROM engine.__blurb
-WHERE id = 12345
-```
-
-**Result (Raw):**
-```
-id    | folderid | to_id | from_id | subject      | body        | datecreated
-------|----------|-------|---------|--------------|-------------|--------------------
-12345 | 5        | 3     | 123     | Project...   | I'm...      | 2026-02-23 18:45:00
-```
-
-**Step 2: Business Logic Layer (Python dict)**
-```python
-{
-  "id": 12345,
-  "folderid": 5,
-  "to_id": 3,
-  "from_id": 123,
-  "to_moniker": "carol",     # Fetched in separate query
-  "from_moniker": "john.doe",
-  "subject": "Project Status Update",
-  "body": "I'm working on the new feature...",
-  "datecreated": "2026-02-23T18:45:00"
-}
-```
-
-**Step 3: Presentation Layer (Terminal)**
-```
-From: john.doe
-To:   carol
-Date: 2026-02-23 18:45 (Tue)
-Subj: Project Status Update
-───────────────────────────────────────
-
-I'm working on the new feature. Should be
-ready next week.
-
-───────────────────────────────────────
-[R]eply  [F]orward  [D]elete  [ESC] Back
-```
-
----
-
-## Performance Considerations
-
-### Query Optimization
-
-**High-Frequency Queries:**
-1. `member` lookup by loginid - **Indexed** on loginid
-2. `__session` lookup by id - **Indexed** on id (PRIMARY KEY)
-3. `__blurb` lookup by folderid - **Indexed** on folderid
-4. Member flags retrieval - **Cached** in memory
-
-**Pagination:**
-- Listbox uses LIMIT/OFFSET for large datasets
-- Default page size: 20 items
-- Maintains current_page to avoid re-fetching
-
-### Connection Pooling
-
-- Min pool size: 1 connection
-- Max pool size: 20 connections
-- Timeout: 30 seconds
-- Reuses connections across requests
-
-### Caching Strategy
-
-- Member flags cached during session
-- OID lookups cached in memory
-- SQL templates cached after first compilation
-
----
-
-## Error Handling Flows
-
-### Database Error Flow
+### 5.1 Database error
 
 ```
 SQL Query Execution
   │
   ├─ psycopg.Error
-  │  ├─ Log via util.logentry()
-  │  ├─ io.echo(error message, level="error")
-  │  └─ Return None/False/[]
+  │   ├─ logentry via bbsengine6.util.logentry
+  │   ├─ io.echo(error, level="error")
+  │   └─ return None / False / []
   │
   └─ Connection Timeout
-     ├─ Reconnect via pool
-     └─ Retry query (1x)
+      ├─ reconnect via pool
+      └─ retry once
 ```
 
-### Module Execution Error Flow
+### 5.2 Auth error
+
+```
+bed/api/auth.py
+  │
+  ├─ credential check fails
+  │   ├─ log entry
+  │   └─ return {"type": "login_fail", "reason": "invalid_credentials"}
+  │
+  ├─ HMAC decode fails
+  │   ├─ log entry
+  │   └─ return {"type": "envelope_error", "reason": "bad_signature"}
+  │
+  └─ bbsengine6.auth.access returns False
+      └─ return {"type": "forbidden", "op": "<op>"}
+```
+
+### 5.3 Module execution error
 
 ```
 module.run(modulename)
   │
-  ├─ module.check() fails
-  │  └─ io.echo("Access denied")
+  ├─ module.check fails
+  │   └─ io.echo("Access denied"); return False
   │
-  ├─ module.load() fails
-  │  └─ io.echo("Module not found")
+  ├─ module.load fails
+  │   └─ io.echo("Module not found"); return False
   │
-  ├─ validate_function() fails
-  │  └─ io.echo("Invalid module API")
+  ├─ signature check fails
+  │   └─ io.echo("Invalid module API"); return False
   │
-  ├─ module.main() raises Exception
-  │  ├─ runcallback() catches
-  │  ├─ io.echo_traceback(exception)
-  │  └─ Return None/error status
+  ├─ module.main raises Exception
+  │   ├─ runcallback catches
+  │   ├─ io.echo_traceback(exception)
+  │   └─ return None / error sentinel
   │
-  └─ Return result to caller
+  └─ return result
+```
+
+### 5.4 Message subsystem errors
+
+```
+bbsengine6.message.service.store_message_with_checks
+  │
+  ├─ is_enabled() == False → empty diagnostics, message_id=0
+  │
+  ├─ rate limit exceeded → diagnostics.rate_limit_ok=False, no insert
+  │
+  ├─ recipient blocked → diagnostics.recipients_blocked.append(...)
+  │
+  ├─ psycopg.Error → bubbles up; caller logs and surfaces via io.echo
+  │
+  └─ success → message_id, diagnostics
+```
+
+### 5.5 Bootstrap errors
+
+```
+bbsengine6.startup.main
+  │
+  ├─ stage fails → conn.rollback(); return False
+  │
+  ├─ bed unreachable → io.echo(level="debug") "bed unreachable;
+  │   using DB-polling fallback"
+  │
+  └─ all stages ok → conn.commit(); return True
 ```
 
 ---
 
-*Data Flow Specification for bbsengine6*
+*Data Flow Specification for bbsengine6.*

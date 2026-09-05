@@ -1,917 +1,460 @@
-# bbsengine6 Architecture Specification
+# bbsengine6 Architecture
 
-**Version:** 0.0.1.dev  
-**Last Updated:** 2026-02-23
+> Status: canonical. Last updated 2026-09-04.
+> See [`../../SPEC.md`](../../SPEC.md) for the canonical package map and
+> [`decisions.md`](./decisions.md) for the architectural decision records.
 
-## Table of Contents
+## Contents
 
-1. [Layered Architecture](#layered-architecture)
-2. [Domain-Based Organization](#domain-based-organization)
-3. [Data Flow Between Layers](#data-flow-between-layers)
-4. [Module System Architecture](#module-system-architecture)
-5. [Visual Architecture Diagrams](#visual-architecture-diagrams)
-
----
-
-## Layered Architecture
-
-bbsengine6 follows a **4-layer architectural pattern**:
-
-### Layer 1: Data Layer (Foundation)
-
-**Responsibility:** Database connectivity and persistence
-
-**Primary Modules:**
-- `database.py` - PostgreSQL connection management, query execution, OID handling
-
-**Capabilities:**
-- Connection pooling with psycopg_pool
-- Query building and execution with parameter safety
-- Transaction management (commit/rollback)
-- OID type lookups for PostgreSQL custom types
-- Result formatting (dict_row conversion)
-
-**Key Functions:**
-```python
-connect(args, **kwargs) -> ConnectionPool
-  "Create or reuse PostgreSQL connection pool"
-
-cursor(conn, **kwargs) -> Cursor
-  "Get a cursor from connection for query execution"
-
-insert(args, table, rec, **kwargs) -> Any
-  "Insert record into table, return inserted row ID"
-
-update(args, table, rec, **kwargs) -> bool
-  "Update record in table"
-
-delete(args, table, rec, **kwargs) -> bool
-  "Delete record from table"
-
-query(args, sql, params, **kwargs) -> list[dict]
-  "Execute SQL query, return results as list of dicts"
-
-getoid(args, typ, cur=None) -> int | None
-  "Get PostgreSQL OID for a type"
-
-mogrifysql(cur, query, params) -> str
-  "Format SQL query with params for debugging"
-
-parse_dsn(dsn) -> dict
-  "Parse PostgreSQL DSN string"
-
-make_dsn(args, **kwargs) -> str
-  "Build PostgreSQL DSN from args"
-```
-
-**Depends On:**
-- psycopg3 (PostgreSQL driver)
-- psycopg_pool (connection pooling)
-- io module (logging via echo)
+1. [Layered Architecture](#1-layered-architecture)
+2. [Package Tree](#2-package-tree)
+3. [Domain Organization](#3-domain-organization)
+4. [Cross-Layer Data Flow](#4-cross-layer-data-flow)
+5. [Module System](#5-module-system)
+6. [Visual Diagrams](#6-visual-diagrams)
+7. [Cross-Cutting Concerns](#7-cross-cutting-concerns)
 
 ---
 
-### Layer 2: Business Logic Layer
+## 1. Layered Architecture
 
-**Responsibility:** Application-domain logic, state management, permission checking
+bbsengine6 is a **four-layer** system. The layering is the rationale
+behind Decision 1 in [`decisions.md`](./decisions.md#decision-1-layered-architecture);
+this file documents the layers themselves and where each package
+lives in the source tree.
 
-**Primary Modules:**
-
-#### 2a. Session Management (`bbsengine6.session`)
-- **In-memory WebSocket sessions:** `SessionManager` class in `session/lib.py` — generic base for mapping session IDs to auth state. Extended by game-specific subclasses (`CasinoSessionManager`, `EmpyreSessionManager`).
-- **DB-backed sessions:** Functions in `session/lib.py` (`start`, `read`, `write`, `garbagecollect`) — PostgreSQL-backed session lifecycle for CLI/web.
-- Session expiration and garbage collection
-- Member session tracking
-
-**Key Functions:**
-```python
-start(args, **kwargs) -> bool
-  "Initialize or resume user session"
-
-build(rec) -> dict
-  "Build session dict from database record"
-
-read(args, sessionid, **kwargs) -> dict | None
-  "Read session data by ID"
-
-delete(args, sessionid, **kwargs) -> bool
-  "Delete session by ID"
-
-getmembersession(args, **kwargs) -> dict | bool | None
-  "Get session for current member (None=new, False=multiple, dict=found)"
-
-buildsession(args, **kwargs) -> dict
-  "Create new session dict with defaults"
-
-garbagecollect(args, **kwargs) -> bool
-  "Remove expired sessions"
+```
+┌────────────────────────────────────────────────────────────┐
+│  Presentation                                              │
+│    io/, menu/, listbox.py, form.py, editor.py / ed/,       │
+│    input.py, plus the PHP web layer (engine/, smarty/,     │
+│    skin/, js/)                                            │
+├────────────────────────────────────────────────────────────┤
+│  Module System (cross-layer)                               │
+│    module.py + every registered module                     │
+├────────────────────────────────────────────────────────────┤
+│  Business Logic                                            │
+│    session/, member/, bank/, channel/, message/,           │
+│    auth/, services/, blurb.py, folder.py, util.py,         │
+│    invite.py, pgrole.py, password.py, password_cipher/,    │
+│    editor.py, screen.py                                    │
+├────────────────────────────────────────────────────────────┤
+│  Data                                                      │
+│    database.py, py/src/bbsengine6/sql/ (~50 schema files)  │
+└────────────────────────────────────────────────────────────┘
 ```
 
-**Depends On:**
-- database.py (persistence)
-- member.py (member info)
-- io module (logging)
+The layer boundaries are enforced by the dependency direction:
+lower layers never import upward. See [`dependencies.md`](./dependencies.md)
+for the full matrix.
 
-#### 2b. Member Management (`member.py`)
-- User profile and authentication
-- Member credentials, flags, permissions
-- Member creation and updates
+### 1.1 Data Layer
 
-**Key Functions:**
-```python
-build(args, row={}, **kwargs) -> dict
-  "Build member dict with defaults"
+`bbsengine6.database` owns the PostgreSQL connection pool, DSN
+construction, contextvars-based role management, and the SQL
+helpers consumed by every higher layer. All SQL files in
+`py/src/bbsengine6/sql/` are loaded through this module.
 
-getcurrentmoniker(args, **kwargs) -> str | None
-  "Get current logged-in member's moniker"
+| Function | Purpose |
+|----------|---------|
+| `getpool(args, **kwargs)` | Return the shared `psycopg_pool.ConnectionPool`. |
+| `connect(args, **kwargs)` | Build a one-shot connection (used by the `postgres` maintenance pool). |
+| `query(sql, *params, **kwargs)` | Parameterised SELECT, returns `list[dict]`. |
+| `insert(args, table, items, **kwargs)` | INSERT, returns new PK. |
+| `update(args, table, pk, items, **kwargs)` | UPDATE by PK, supports explicit cascade for PK renames. |
+| `delete(args, table, pk, **kwargs)` | DELETE by PK. |
+| `upsert(args, table, items, **kwargs)` | INSERT … ON CONFLICT. |
+| `transaction(conn, **kwargs)` | Context manager wrapper. |
+| `execute(cur, query, *params)` | Low-level execute. |
+| `executemany(cur, op, seq)` | Batch execute. |
+| `getoid(args, typ, cur=None)` | Resolve a PostgreSQL custom type OID. |
+| `convert_for_jsonb(v, *, wrap=True)` | Coerce Python values for JSONB columns. |
+| `mogrifysql(cur, query, params)` | Render an SQL statement for debugging. |
+| `parse_dsn(dsn)` / `make_dsn(args, **kwargs)` | DSN round-trip. |
+| `set_current_role(role)` / `get_current_role()` | Contextvars role plumbing (consumed by `manage_role_privs.sql`). |
+| `commit(args, conn=None, **kwargs)` / `rollback(args, conn=None, **kwargs)` | Transaction control. |
+| `createrol(args, name, **kwargs)` / `rolexists(args, rolname)` | Role bootstrap helpers. |
+| `schemaexists`, `tableexists`, `classexists`, `typeexists` | Idempotent DDL preflight. |
 
-getcurrentid(args, **kwargs) -> int | None
-  "Get current member's database ID"
+### 1.2 Business Logic Layer
 
-getflags(args, moniker, **kwargs) -> dict
-  "Get member flags (permissions/capabilities)"
+Packages and modules grouped by responsibility:
 
-createmember(args, **kwargs) -> int | None
-  "Create new member, return ID"
+| Package / Module | Role |
+|------------------|------|
+| `bbsengine6.session` | `SessionManager` (generic, in-memory WS session map) + DB-backed `start/read/write/garbagecollect` (consumed by CLI/web). `setcurrentsessionid` / `getcurrentsessionid` thread-local storage. |
+| `bbsengine6.member` | `member.lib` (member CRUD, `checkpassword`, `setpassword`, `audit_password_hash`), `member.api.handler` (`MemberServiceHandler` invoked by bed). |
+| `bbsengine6.bank` | `Account`, `Transaction`, `Transfer`, `BankService`, `bank.access`, `bank.api.handler` (`BankServiceHandler`). |
+| `bbsengine6.channel` | Channel WebSocket plumbing; `channel.api.handler` (`ChannelServiceHandler`). |
+| `bbsengine6.message` | Unified pub/sub with channel persistence. See [§2.4](#24-bbsengine6message-layered-package) for the layered layout. |
+| `bbsengine6.auth` | `auth.access(args, op, **kwargs)` policy for bed's auth/reconnect/refresh/revoke ops. The bed handler decodes the HMAC token; `access` only inspects the decoded claims. |
+| `bbsengine6.services` | Server-side handlers: `channel`, `invite`, `member`. |
+| `bbsengine6.invite` | Generic invite-code DAL on `engine.__invite`. |
+| `bbsengine6.pgrole` | Per-member PostgreSQL role provisioning (`ensure_login_role`, `sync_groups`). |
+| `bbsengine6.password` | bcrypt single source of truth; mirrors PHP `bbsengine6\\password`. |
+| `bbsengine6.password_cipher` | AES-256-GCM reversible encryption (ciphers `aes256gcm`, `plaintext`; storage `postgresql`). |
+| `bbsengine6.blurb` | BBS blurb handler functions (legacy, retained for the PHP namespace). |
+| `bbsengine6.folder` | ltree-backed folder hierarchy + visibility. |
+| `bbsengine6.editor` | Lightweight editor invoked from the daemon (legacy path). |
+| `bbsengine6.screen` | Shim to `bbsengine6.io.screen`. |
+| `bbsengine6.util` | Terminal, text, range parsing, input helpers, `logentry`, `encryptpassword`. |
+| `bbsengine6.menu` | Bordered terminal `Menu`/`Item` UI (legacy, kept). |
+| `bbsengine6.menu_next` | New `MenuOption` dataclass + `register_menu_options` / `visible_options` registry. |
+| `bbsengine6.bottombar` | Per-package `registry_for(name)` fragment registry consumed by `io.getch`. |
+| `bbsengine6.common` | Logging setup, shared defaults. |
+| `bbsengine6.conf` | `LOGGER_NAME = "bbsengine6"`. |
 
-updatemember(args, memberid, **kwargs) -> bool
-  "Update member record"
-```
+### 1.3 Presentation Layer
 
-**Depends On:**
-- database.py (persistence)
-- util.py (utilities)
-- io module (logging)
+| Module / Package | Role |
+|------------------|------|
+| `bbsengine6.io` | TUI primitives (`echo`, `getch`, `getstr`, `input`, `inputstring`, `inputchoice`, `inputboolean`, `inputinteger`, `terminal`, `screen`, `palette`, `keymap`, `common`, `const`, `lib`, `output`, `util`). |
+| `bbsengine6.listbox`, `listboxcursor` | Paginated TUI listbox. |
+| `bbsengine6.form` | `FormItem` base class. |
+| `bbsengine6.input`, `inputdate`, `getdate` | Date / datetime / email input wrappers. |
+| `bbsengine6.ed` | Terminal visual editor: `common/{buffer,fileops,keys,state,ui}.py`, `line/`, `visual/`. |
+| `bbsengine6.engine` | Stub (kept for BC). |
+| PHP layer | `php/` (library), `engine/` (entry points), `smarty/` (plugins), `skin/` (SCSS + templates), `js/` (browser singleton + page-transition framework). See [`../../SPEC.md`](../../SPEC.md#4-php-web-layer). |
 
-#### 2c. Module System (`module.py`)
-- Plugin loading and execution framework
-- Access control per module
-- Module validation and error handling
+### 1.4 Module System
 
-**Key Functions:**
-```python
-check(args, modulename, op="run", **kwargs) -> bool
-  "Check if module operation is allowed"
-
-load(args, modulepath) -> module
-  "Load and return a Python module dynamically"
-
-run(args, modulename, **kwargs) -> Any
-  "Execute module main() function with args"
-
-runcallback(args, callback, optional=False, **kwargs) -> Any
-  "Execute a callback function with error handling"
-
-validate_function(module_name, func_name, required_signature) -> bool
-  "Validate module function matches required signature"
-
-_check_params(func_name, params, required, optional_kwargs=False) -> bool
-  "Check function parameters against requirements"
-```
-
-**Depends On:**
-- database.py (access control data)
-- io module (logging, error display)
-- importlib (module loading)
-
-#### 2d. Utility Functions (`util.py`)
-- General-purpose helpers (format, encode, parse)
-- Logging integration
-- Password encryption
-- Date/time handling
-
-**Key Functions:**
-```
-hr(acs=True, width=None, end="\n", color="{boxcolor}") -> bool
-  "Display a horizontal rule (box-drawing or ASCII) to the terminal"
-
-heading(title, **kwargs) -> str
-  "Format title as heading"
-
-pluralize(amount, singular, plural, **kwargs) -> str
-  "Return singular or plural form"
-
-datestamp(t=None, format="%Y-%m-%d %I:%M%P %Z (%a)") -> str
-  "Format timestamp as string"
-
-inputpassword(prompt, mask="X", **kwargs) -> str
-  "Prompt for password with masked input"
-
-logentry(message, *, level=logging.INFO, handler=None) -> None
-  "Log message to application logger"
-
-collapserange(lst) -> str
-  "Convert [1,2,3,5,6,7] to '1-3,5-7'"
-
-expandrange(txt) -> list
-  "Convert '1-3,5-7' to [1,2,3,5,6,7]"
-
-filedisplay(res, **kw) -> None
-  "Display file content with paging"
-
-getencryptedpassword(args, plaintextpassword) -> str
-  "Hash password for storage"
-
-checksum(data) -> str
-  "Calculate checksum/hash of data"
-
-ltree_to_path(ltree) -> str
-  "Convert PostgreSQL ltree to filesystem path"
-
-tobool(value) -> bool
-  "Convert string/int/bool to boolean"
-
-getremoteaddr() -> str
-  "Get client IP address"
-
-getcurrentloginid(args, **kwargs) -> str | None
-  "Get current user's login ID"
-
-load_sql(args, resource_name, *, package=None) -> str
-  "Load SQL from resource file"
-```
-
-**Depends On:**
-- io module (logging)
-- logging module (Python standard)
-- hashlib (password hashing)
-
-#### 2e. Message/Blurb Management (`blurb.py`)
-- Message creation and storage
-- Message attributes and metadata
-
-**Key Functions:**
-```python
-insert(args, **kwargs) -> int | None
-  "Insert new message/blurb, return ID"
-
-updatesigs(args, blurbid, **kwargs) -> bool
-  "Update message signatures"
-
-updateattributes(args, blurbid, attributes, **kwargs) -> bool
-  "Update message attributes"
-```
-
-**Depends On:**
-- database.py (persistence)
-- util.py (utilities)
-
-#### 2f. Folder Management (`folder.py`)
-- Directory structure management
-- Folder metadata
-
-**Depends On:**
-- database.py (persistence)
+`bbsengine6.module` is the cross-layer plugin loader. It registers
+modules, validates their `init`/`access`/`buildargs`/`main`
+functions, runs them, and surfaces the result through
+`runcallback`. See [§5](#5-module-system) for the contract.
 
 ---
 
-### Layer 3: Presentation Layer
-
-**Responsibility:** User interaction (terminal UI and web interface)
-
-#### 3a. Terminal UI Widgets
-
-##### Menu Widget (`menu.py`)
-Interactive menu system with keyboard navigation
-
-**Classes:**
-```python
-class Menu:
-  items: list[Item]
-  display(**kwargs) -> None
-    "Render menu to terminal"
-  
-  run(**kwargs) -> Item | None
-    "Display menu and get user selection"
-
-class Item:
-  label: str
-  description: str
-  requires: str | None
-  help: str | None
-
-class Op(Enum):
-  DISPLAY = auto()
-  INPUT_SELECT = auto()
-  QUIT = auto()
-```
-
-**Depends On:**
-- util.py (formatting)
-- io module (output, input)
-
-##### Listbox Widget (`listbox.py`)
-Database-backed paginated list with keyboard navigation
-
-**Classes:**
-```python
-class Listbox:
-  def fetchpage(page_num, page_size) -> list[ListboxItem]
-    "Fetch a page of items from query"
-  
-  def display(**kwargs) -> None
-    "Render listbox to terminal"
-  
-  def handle(key_code) -> None
-    "Handle keyboard input (arrow keys, page up/down)"
-  
-  def run(**kwargs) -> ListboxResult | None
-    "Display and manage listbox interaction"
-
-class ListboxItem:
-  pk: Any
-  label: str
-  detail: str | None
-  
-class ListboxResult:
-  item: ListboxItem
-  op: Op
-
-class Op(Enum):
-  UNKNOWN = auto()
-  SELECT = auto()
-  EDIT = auto()
-  DELETE = auto()
-  ESCAPE = auto()
-```
-
-**Depends On:**
-- database.py (fetching data)
-- util.py (formatting)
-- io module (output, input, keyboard)
-
-##### Form Widget (`form.py`)
-Form handling and validation (QuickForm2 integration)
-
-**Classes:**
-```python
-class Form:
-  items: list[FormItem]
-  validate() -> bool
-  get_values() -> dict
-
-class FormItem:
-  name: str
-  label: str
-  value: Any
-
-class FormItemCheckbox(FormItem): ...
-class FormItemRadioButton(FormItem): ...
-class FormItemTextbox(FormItem): ...
-```
-
-**Depends On:**
-- util.py (utilities)
-- io module (input validation)
-
-##### Editor (`editor.py`)
-Line-based text editor
-
-**Functions:**
-```python
-init(args, **kwargs) -> None
-  "Initialize editor"
-
-access(args, **kwargs) -> bool
-  "Check if user has access to editor"
-
-line(args, **kwargs) -> str | None
-  "Edit a single line of text"
-
-help(args, **kwargs) -> str
-  "Return editor help text"
-```
-
-**Depends On:**
-- io.getch (character input)
-- io.echo (output)
-
-##### Input Helpers (`input.py`)
-Date, datetime, email input parsing
-
-**Functions:**
-```python
-inputdate(**kwargs) -> date | None
-  "Prompt for and parse date"
-
-inputdatetime(**kwargs) -> datetime | None
-  "Prompt for and parse datetime"
-
-inputemail(**kwargs) -> str | None
-  "Prompt for and validate email"
-```
-
-**Depends On:**
-- io module (input/output)
-
-#### 3b. Terminal I/O Library (`io` subpackage)
-
-Core I/O abstractions for terminal interaction
-
-##### Output (`io/echo.py`)
-Primary output function with advanced features
-
-```python
-echo(text, level="normal", end="\n", file=None, **kwargs) -> None
-  "Output text with:
-   - Word wrapping at terminal width
-   - ANSI color code support
-   - Command expansion {cmd:...}
-   - Variable substitution {var:...}
-   - File paging {file:...}
-   - Recursive command evaluation"
-
-echo_file(path, **kwargs) -> None
-  "Display file content with paging"
-
-setvar(name, value) -> None
-  "Set echo variable for substitution"
-
-getvar(name) -> str
-  "Get echo variable value"
-
-rendered_length(text) -> int
-  "Calculate display length (accounting for ANSI codes)"
-
-echo_traceback(exc) -> None
-  "Display exception traceback"
-```
-
-**Depends On:**
-- io.terminal (width detection)
-- io.palette (color codes)
-- io.const (ANSI constants)
-
-##### Screen Control (`io/screen.py`)
-Cursor positioning and screen management
-
-```python
-setbottombar(text) -> None
-  "Set status bar at screen bottom"
-
-setcursor(row, col) -> None
-  "Move cursor to position (CUP)"
-
-cursordown(count=1) -> None
-  "Move cursor down (CUD)"
-
-cursorforward(count=1) -> None
-  "Move cursor right (CUF)"
-
-cursorback(count=1) -> None
-  "Move cursor left (CUB)"
-
-home() -> None
-  "Move cursor to top-left (HOME)"
-
-clearscreen() -> None
-  "Clear entire screen (CLS)"
-
-eraseline() -> None
-  "Clear from cursor to end of line"
-
-erasedisplay() -> None
-  "Clear from cursor to end of display"
-
-setscrollregion(top, bottom) -> None
-  "Set DECSTBM scroll region"
-```
-
-**Depends On:**
-- io.terminal (capabilities)
-- io.const (ANSI codes)
-
-##### Character Input (`io/getch.py`)
-Single character input with key code mapping
-
-```python
-getch() -> str
-  "Read single character from terminal"
-
-getch_str(prompt="") -> str
-  "Read string from keyboard with echo"
-```
-
-**Depends On:**
-- io.keymap (key codes)
-
-##### String Input (`io/inputstring.py`)
-User text input with editing
-
-```python
-inputstring(prompt="", initial="", **kwargs) -> str
-  "Prompt user to enter text"
-```
-
-**Depends On:**
-- io.getch (character input)
-- io.echo (output)
-
-##### Integer Input (`io/inputinteger.py`)
-Numeric input with validation
-
-```python
-inputinteger(prompt="", min=None, max=None, **kwargs) -> int | None
-  "Prompt user for integer in range"
-```
-
-**Depends On:**
-- io.inputstring (base input)
-- io.echo (output)
-
-##### Boolean Input (`io/inputboolean.py`)
-Yes/No prompts
-
-```python
-inputboolean(prompt="", default=None, **kwargs) -> bool
-  "Prompt user for yes/no response"
-```
-
-**Depends On:**
-- io.getch (character input)
-- io.echo (output)
-
-##### Choice Input (`io/inputchoice.py`)
-Multiple choice selection
-
-```python
-inputchoice(prompt="", choices=[], **kwargs) -> str | None
-  "Let user select from list of choices"
-```
-
-**Depends On:**
-- io.getch (character input)
-- io.echo (output)
-
-##### Terminal Detection (`io/terminal.py`)
-Terminal capabilities and characteristics
-
-```python
-get_width() -> int
-  "Get terminal width in columns"
-
-get_height() -> int
-  "Get terminal height in rows"
-
-get_termtype() -> str
-  "Get terminal type (e.g., 'xterm')"
-
-has_capability(name) -> bool
-  "Check if terminal supports capability"
-```
-
-**Depends On:**
-- stty (system command)
-- terminfo (POSIX terminal database)
-
-##### Color Palette (`io/palette.py`)
-Color management
-
-```python
-set_palette(palette_type) -> None
-  "Set color palette (ANSI, C64, RGB)"
-
-get_color_code(name) -> str
-  "Get ANSI code for color name"
-```
-
-**Supports:** ANSI 16, C64, RGB (24-bit true color)
-
-##### Keyboard Mapping (`io/keymap.py`)
-Key code definitions and mapping
-
-```python
-Key codes for:
-- Arrow keys (UP, DOWN, LEFT, RIGHT)
-- Function keys (F1-F12)
-- Special keys (HOME, END, PAGE_UP, PAGE_DOWN)
-- Ctrl+key combinations
-```
-
-**Depends On:**
-- io.getch (raw input)
-
-##### Constants (`io/const.py`)
-ANSI escape sequences and control codes
+## 2. Package Tree
+
+The Python package lives at `py/src/bbsengine6/`. The list below is
+verified against `ls py/src/bbsengine6/`.
+
+### 2.1 Top-level modules
+
+| Module | Role |
+|--------|------|
+| `__init__.py` | Module-registry re-exports (`register_module`, `get_module`, `MenuOption`, …). |
+| `bed.py` | `bed` console script shim; delegates to the `bed` package. |
+| `blurb.py` | BBS blurb handler functions. |
+| `bottombar.py` | Fragment registry; `registry_for(name)` plumbing. |
+| `common.py` | Logging setup, shared defaults. |
+| `conf.py` | `LOGGER_NAME = "bbsengine6"`. |
+| `database.py` | PostgreSQL pool, DSN, contextvars role management. |
+| `editor.py` | Lightweight editor (legacy). |
+| `engine.py` | Stub (kept for BC). |
+| `folder.py` | ltree-backed folder hierarchy + visibility. |
+| `form.py` | `FormItem` base class. |
+| `getdate.py` | Date parsing (`python-dateutil`). |
+| `input.py` / `inputdate.py` | Wrapper around `io.input`. |
+| `invite.py` | Generic invite-code DAL on `engine.__invite`. |
+| `listbox.py` / `listboxcursor.py` | Paginated TUI listbox widget. |
+| `md2tpl.py` | Markdown → Smarty `.tmpl` converter. |
+| `menu.py` | Legacy bordered TUI menu (`Menu` / `Item`). |
+| `message.py` | Unified pub/sub with channel persistence. |
+| `module.py` | Module-registry / plugin loader. |
+| `password.py` | bcrypt (single source of truth); mirrors PHP `bbsengine6\\password`. |
+| `pgrole.py` | Per-member PostgreSQL role provisioning. |
+| `readfile.py` | Read file into `str` (optional ANSI escape). |
+| `screen.py` | Shim → `bbsengine6.io.screen`. |
+| `sig.py` | Sig / folder management (legacy alias). |
+| `util.py` | Terminal, text, range parsing, input helpers. |
+
+### 2.2 Sub-packages
+
+| Sub-package | Role |
+|-------------|------|
+| `auth/` | `auth.access(args, op, **kwargs)` policy consumed by bed's `AuthService`. |
+| `backend/` | `check*` routines that stage the database; `stage_zero` / `stage_one`; `lib`; wizard for spinning up a BBS DB. `checkpasswordformat` lands the `chk_member_password_bcrypt` CHECK constraint on every bootstrap. (The canonical home was created by the Phase 0 backend refactor; the old `TODO_BACKEND.md` was deleted as part of the 2026-09-04 consolidation.) |
+| `bank/` | `account`, `bank`, `transaction`, `transfer`, plus `api/handler` (`BankServiceHandler`). |
+| `channel/` | Channel WebSocket plumbing; `api/handler` (`ChannelServiceHandler`). |
+| `console/` | Admin CLI: `createdatabase`, `member`, `memberapproval`, `showpgrole`, `session`, interactive menu. Console `check*` modules are thin shims over `backend/`. |
+| `ed/` | Terminal visual editor (`common/{buffer,fileops,keys,state,ui}.py`, `line/`, `visual/`). |
+| `io/` | TUI primitives — full module list in [§1.3](#13-presentation-layer). |
+| `member/` | `lib`, `api/handler` — member subsystem. |
+| `message/` | Layered pub/sub. See [§2.4](#24-bbsengine6message-layered-package). |
+| `menu_next/` | New `MenuOption` registry (`MenuOption`, `register_menu_options`, `registered_options`, `visible_options`). |
+| `net/` | `address`, `frame_address`, `frame_types`, `packet`, `packet_types`, `packet_codec`, `crypto`, `transport`, `tcp`, `udp`, `socket`, `router`, `defaultrouter`, `integration`, `registry`. |
+| `password_cipher/` | AES-256-GCM strategy pattern (`manager`, `storage`, `config`, `cipher`); ciphers `aes256gcm`, `plaintext`; storage `postgresql`. |
+| `services/` | `channel`, `invite`, `member` (server-side handlers). |
+| `session/` | Generic `SessionManager` (consumed by bed); DB-backed session lifecycle. |
+| `sql/` | ~50 schema files. Helpers are `SECURITY DEFINER` and owned by the dedicated `zoid6` role — see [`../../SPEC.md`](../../SPEC.md#5-sql-schema). |
+| `startup/` | DB bring-up: `lib`, `main`, `__main__`, `message_subscription`. The `check*` modules here are thin shims over `backend/`. |
+| `tests/` | Net-layer integration tests (`test_net_frames/`, plus `test_database_create.py`, `test_message_*.py`, `test_router_send_notification.py`, …). |
+| `examples/` | Demos + sample handlers (`message_demo.py`, `notify_handler.py`). |
+
+### 2.3 Cross-package entry point
+
+`bbsengine6.startup.main` is the canonical bootstrap entry point
+(see [decisions.md §12](./decisions.md#decision-12-startupmain-as-the-canonical-bootstrap-entry-point)). `startup.main`
+loops through `("stage_zero", "stage_one", "engine", "bank")` via
+`startup.lib.runmodule`, which delegates to `console.lib.runmodule`
+with `package="bbsengine6.startup"`. `console.lib.runmodule` carries a
+`package=` kwarg (default `"bbsengine6.console"`) so the same
+mechanism serves both call sites. At the end of a successful boot,
+`startup.main._maybe_subscribe_to_bed` opens a `BedConnection` and
+subscribes to bed's message pushes (failure is non-fatal — `io.getch`
+falls back to DB polling).
+
+The thin console-script shim lives at `py/src/bbsengine6/bed.py`
+and constructs a `BED` daemon from
+`bbsengine6.net.WebSocketServer` + `bbsengine6.net.DefaultRouter`.
+
+### 2.4 `bbsengine6.message` layered package
+
+Added in Phase 11 (see [`../../TODO-message-migration.md`](../../TODO-message-migration.md)
+and [`../../SPEC.md`](../../SPEC.md#11-layered-package-layout)):
+
+| Layer | Module | Role |
+|-------|--------|------|
+| **Service** | `bbsengine6.message.service` | Business orchestration: enable/disable gate, rate-limit gating, blocking filter, recipient expansion, legacy `send` shim. |
+| | `bbsengine6.message.lib` | Public re-export surface + `Message` / `MessageUrgency` dataclasses + DB helpers (`_make_args`, `_resolve_db`, `_coerce_urgency`). |
+| **DAL** | `bbsengine6.message.dal.messages` | `engine.__message`, `engine.__message_recipient` I/O. |
+| | `bbsengine6.message.dal.recipients` | `engine.__message_group_member` expansion. |
+| | `bbsengine6.message.dal.groups` | `engine.__message_group[_member]` I/O. |
+| | `bbsengine6.message.dal.blocking` | `engine.__message_block` I/O. |
+| | `bbsengine6.message.dal.ratelimit` | `engine.__message_rate_limit`, `engine.__message_type` reads. |
+| | `bbsengine6.message.dal.types` | `engine.__message_type` writes. |
+| | `bbsengine6.message.dal._pool` | CONN_POOL_PATTERN helper + schema probes. |
+| **State** | `bbsengine6.message.cache` | In-memory local unread counter (no DB). |
+| **Domain** | `bbsengine6.message.templates` | `{var}` / `$var` template rendering. |
+| | `bbsengine6.message.access` (in `__init__.py`) | Per-op authorization (subscribe / unsubscribe / list_pending). |
+
+The DAL never imports `psycopg` directly; all DB plumbing goes
+through `bbsengine6.database`. Async DAL is not yet provided — the
+current implementation is fully sync via
+`bbsengine6.database.getpool` / `pool.connection()`. See
+[`../../SPEC.md`](../../SPEC.md#11-layered-package-layout).
 
 ---
 
-### Layer 4: Module System (Cross-Layer)
+## 3. Domain Organization
 
-**Responsibility:** Runtime plugin loading and execution framework
+bbsengine6 can also be viewed as a collection of feature domains.
+This section lists which packages participate in each domain; the
+"depends on" column points at the layer they live in.
 
-The module system overlays across layers 2 and 3, allowing dynamic loading of modules at runtime.
+### 3.1 Session domain
 
-**Key Concepts:**
-- Modules are Python packages with standardized interface
-- Required functions: `init()`, `access()`, `buildargs()`, `main()`
-- Access control via database queries
-- Error handling and validation
+- `bbsengine6.session` — `SessionManager` (in-memory WS map) +
+  DB-backed `start/read/write/garbagecollect` lifecycle.
+- `bbsengine6.database` — persistence.
+- `bbsengine6.member` — member identity bound to a session.
+- `bbsengine6.io` — logging.
 
-**Module Lifecycle:**
-```
-1. check() - Verify access permission
-2. load() - Load module from filesystem
-3. validate_function() - Check required functions exist
-4. runcallback() - Execute with error handling
-5. run() - Call main() with validated arguments
-```
+Session record shape (DB row):
 
-**Depends On:**
-- All lower layers (can call anything)
-
----
-
-## Domain-Based Organization
-
-bbsengine6 can also be viewed as a collection of **feature domains**, each with supporting modules:
-
-### Domain 1: Session Management
-
-**Purpose:** Manage user session lifecycle and persistence
-
-**Modules:**
-- `bbsengine6.session` (package: `session/lib.py`)
-- `database.py` (persistence)
-- `member.py` (session member info)
-- `io.echo` (logging)
-
-**Workflows:**
-- Start session (login)
-- Read session state
-- Update session activity
-- Expire session (logout/timeout)
-
-**Data Structures:**
 ```python
 {
-  "id": "session-uuid",
-  "expiry": "2026-02-24T10:30:00",
-  "lastactivity": "2026-02-23T18:40:00",
-  "data": {...},  # JSONB in database
-  "ipaddress": "192.168.1.1",
-  "useragent": "Mozilla/5.0...",
-  "datecreated": "2026-02-23T09:00:00",
-  "dateupdated": "2026-02-23T18:40:00",
-  "moniker": "username"
+  "id": UUID,
+  "expiry": datetime,
+  "lastactivity": datetime,
+  "data": dict,            # JSONB column
+  "ipaddress": str,
+  "useragent": str,
+  "moniker": str,
+  "datecreated": datetime,
+  "dateupdated": datetime,
 }
 ```
 
----
+### 3.2 Member domain
 
-### Domain 2: Member Management
+- `bbsengine6.member` — `member.lib` (CRUD, password verify, audit),
+  `member.api.handler`.
+- `bbsengine6.pgrole` — `ensure_login_role`, `sync_groups`.
+- `bbsengine6.invite` — invite-code gating.
+- `bbsengine6.password` — bcrypt single source of truth.
+- `bbsengine6.password_cipher` — AES-256-GCM for IMAP/SMTP secrets.
+- `bbsengine6.util` — `encryptpassword`, range/format helpers.
 
-**Purpose:** User authentication, profiles, permissions
+Member record shape:
 
-**Modules:**
-- `member.py` (primary)
-- `database.py` (persistence)
-- `util.py` (password hashing, utilities)
-- `io.echo` (logging)
-
-**Workflows:**
-- Create member account
-- Authenticate credentials
-- Read member profile
-- Update member info
-- Check member permissions (flags)
-
-**Data Structures:**
 ```python
 {
-  "id": 123,
-  "loginid": "username",
-  "moniker": "Display Name",
-  "email": "user@example.com",
-  "password": "hashed_password",
-  "credits": 500,
-  "flags": {"admin": False, "moderator": False},
-  "attrs": {},  # JSONB for custom attributes
-  "datecreated": "2026-01-01T00:00:00",
-  "dateupdated": "2026-02-23T18:40:00",
-  "ui": ["term", "web"]  # Available interfaces
+  "id": int,
+  "loginid": str,
+  "moniker": str,
+  "email": str,
+  "password": "$2b$06$...",     # bcrypt, CHECK constraint enforced
+  "credits": int,
+  "flags": dict,                # JSONB
+  "attrs": dict,                # JSONB
+  "ui": list[str],              # ARRAY of interface types
+  "approved": bool,             # gates messageview reads
+  "datecreated": datetime,
+  "dateupdated": datetime,
+  "lastlogin": datetime,
 }
 ```
 
----
+### 3.3 Message domain
 
-### Domain 3: Message Storage & Display
+The message domain has its own layered package — see
+[§2.4](#24-bbsengine6message-layered-package). Briefly:
 
-**Purpose:** Store, retrieve, and display messages/posts
+- `bbsengine6.message.service` — orchestration (`store_message`,
+  `store_message_with_checks`, `send` legacy shim, `enable/disable`).
+- `bbsengine6.message.dal.*` — Postgres I/O, one module per table family.
+- `bbsengine6.message.cache` — local in-memory unread counter.
+- `bbsengine6.message.templates` — pure rendering helpers.
+- `bbsengine6.message.access` — per-op authorization.
+- `bbsengine6.blurb` — legacy blurb surface kept for the PHP namespace.
+- `bbsengine6.startup.message_subscription` — bed push subscription.
 
-**Modules:**
-- `blurb.py` (message operations)
-- `database.py` (persistence)
-- `folder.py` (organization)
-- `listbox.py` (display/navigation)
-- `util.py` (formatting)
-- `io.*` (terminal display)
+### 3.4 Bank domain
 
-**Workflows:**
-- Create message
-- Store in folder/thread
-- Retrieve for display
-- Update attributes/signatures
-- Navigate via listbox widget
+- `bbsengine6.bank` — `Account`, `Transaction`, `Transfer`,
+  `BankService`.
+- `bbsengine6.bank.access` — per-op policy (mirrors `auth.access`).
+- `bbsengine6.bank.api.handler` — `BankServiceHandler` invoked by
+  bed over the wire.
 
-**Data Structures:**
-```python
-{
-  "id": 456,
-  "folderid": 789,
-  "from": "sender",
-  "to": "recipient",
-  "subject": "Title",
-  "body": "Message content",
-  "attributes": {
-    "read": True,
-    "replied": False
-  },
-  "datecreated": "2026-02-23T10:15:00"
-}
-```
+### 3.5 Channel domain
 
----
+- `bbsengine6.channel` — channel WebSocket plumbing.
+- `bbsengine6.services.channel` — server-side handler.
+- `bbsengine6.net.transport` — TCP/UDP/WebSocket transport shared
+  with `bed`.
 
-### Domain 4: Module/Plugin System
+### 3.6 Module / plugin domain
 
-**Purpose:** Extensibility through runtime-loaded plugins
+- `bbsengine6.module` — module-registry / plugin loader.
+- `bbsengine6.menu_next` — `MenuOption` registry consumed by
+  every game submodule (see `casino/SPEC.md` §3 for the consumer
+  pattern).
 
-**Modules:**
-- `module.py` (primary)
-- `database.py` (access control)
-- `util.py` (logging, utilities)
-- `io.echo` (error display)
+### 3.7 Terminal I/O domain
 
-**Workflows:**
-- Check user has access to module
-- Load module from filesystem
-- Validate required functions exist
-- Execute module with error handling
-- Return results to caller
+- `bbsengine6.io` — TUI primitives.
+- `bbsengine6.menu` / `menu_next` — menu widgets.
+- `bbsengine6.listbox` / `listboxcursor` — paginated lists.
+- `bbsengine6.form` — `FormItem`.
+- `bbsengine6.input`, `inputdate`, `getdate` — input wrappers.
+- `bbsengine6.ed` — terminal visual editor.
+- `bbsengine6.bottombar` — per-package fragment registry.
 
-**Module Requirements:**
-```python
-# Every module must implement:
+### 3.8 Web domain
 
-def init(args, **kwargs) -> None:
-  """Initialize module"""
+- `engine/*.php` — request entry points (`router.php`, `login.php`,
+  `logout.php`, `join.php`, `direct.php`, `simple.php`,
+  `standalone.php`, `test.php`, `test2.php`, `serve-md.php`).
+- `php/` — library (`engine.php`, `database.php`, `session.php`,
+  `libmember.php`, `blurb.php`, `page.php`, `util.php`, the
+  `bbsengine6\\password` namespace, the `Form/` clone).
+- `smarty/` — ~13 plugins (functions `apidocs`, `fa`, `repo`,
+  `teos`; modifiers `ago`, `datestamp`, `filesize`, `fromnow`,
+  `linkurl`, `markdown`, `parsedown`, `summarize`, `wpprop`).
+- `skin/` — SCSS partials + Smarty templates.
+- `js/` — `bbsengine6.js` singleton, vendored `jquery.smoothState.js`,
+  per-widget init scripts.
 
-def access(args, **kwargs) -> bool:
-  """Check if current user can access this module"""
+### 3.9 Console / admin domain
 
-def buildargs(args, **kwargs) -> argparse.Namespace:
-  """Build and validate arguments for main()"""
-
-def main(args, **kwargs) -> Any:
-  """Execute module functionality"""
-```
-
----
-
-### Domain 5: Terminal I/O
-
-**Purpose:** Rich terminal interaction (colors, widgets, keyboard)
-
-**Modules:**
-- `menu.py` (interactive menus)
-- `listbox.py` (paginated lists)
-- `form.py` (forms)
-- `editor.py` (text editing)
-- `input.py` (input parsing)
-- `io.*` (low-level I/O)
-
-**Features:**
-- ANSI color support (16-color, 256-color, 24-bit RGB)
-- C64 palette option
-- Keyboard navigation (arrows, page up/down, home/end)
-- Word wrapping and pagination
-- Interactive widgets
+- `bbsengine6.console` — admin CLI menu, `createdatabase`,
+  `member`, `memberapproval`, `showpgrole`, `session`.
+- `bbsengine6.backend` — DB staging wizard and the `check*`
+  routines (`stage_zero`, `stage_one`, `engine`, `bank`,
+  `checkroles`, `checkextensions`, `checkdatabase`,
+  `checksuperuser`, `checkfunctions`, `checkclasses`, `checkflag`,
+  `checkbank`, `checkloginid`, `checkwebserverrole`,
+  `checkpasswordformat`, `checkzoid6role`, `checkzoid6owner`,
+  `checkengine`).
 
 ---
 
-### Domain 6: Web Interface
+## 4. Cross-Layer Data Flow
 
-**Purpose:** HTTP-based access to BBS features
-
-**Modules:**
-- `engine.php` (request handling)
-- `database.php` (persistence)
-- `session.php` (session management)
-- `libmember.php` (member utilities)
-- Smarty templates
-- JavaScript libraries
-
-**Workflows:**
-- HTTP request arrives
-- PHP maps to page template
-- Smarty renders with Twig-like syntax
-- JavaScript handles client-side interaction
-- Session/member data flows through PHP layer
-- Can call back to Python backend if needed
-
----
-
-## Data Flow Between Layers
-
-### Scenario 1: User Login Flow
+### 4.1 User login (terminal)
 
 ```
-Terminal I/O Layer (menu.py)
-  ↓ (user selects "Login")
-Business Logic (module.py)
-  ↓ (load login module)
-Business Logic (member.py)
-  ↓ (authenticate credentials)
-Data Layer (database.py)
-  ↓ (query member table)
-PostgreSQL
-  ↓ (return member record)
-Data Layer (database.py)
-  ↓ (return dict)
-Business Logic (session/lib.py)
-  ↓ (create new session)
-Data Layer (database.py)
-  ↓ (insert session)
-PostgreSQL
-  ↓ (confirm insert)
-Data Layer (database.py)
-  ↓ (return session ID)
-Business Logic (session/lib.py)
-  ↓ (store currentsessionid)
-Terminal I/O (io.echo)
-  ↓ (display success message)
-User's Terminal
+Terminal I/O (io.getch + io.inputstring)
+   │ user enters moniker/password
+   ▼
+bbsengine6.member.checkpassword(args, loginid, password)
+   │ SELECT password FROM engine.member WHERE loginid = ?
+   │ verify locally (bcrypt $2[abxy]$); opportunistic rehash for legacy $1$
+   ▼
+bbsengine6.session.setcurrentsessionid(new_id)   # thread-local
+bbsengine6.member.setthreadlocal_moniker(moniker)
+   │
+   ▼
+io.echo("Welcome, …") + render menu
 ```
 
-### Scenario 2: Message Display Flow
+The corresponding web path is `engine/login.php` →
+`bbsengine6\\password\\libpassword.verify_password` → DB UPDATE of
+`lastlogin`. The `bbsengine6\\password` namespace mirrors Python's
+`bbsengine6.password` (see [`../../CHANGELOG.md`](../../CHANGELOG.md)
+"php: local bcrypt hashing, no PostgreSQL crypt() round-trip").
+
+### 4.2 Message posting (terminal)
 
 ```
-Terminal I/O (menu.py)
-  ↓ (user selects "Messages")
-Business Logic (module.py)
-  ↓ (load messages module)
-Business Logic (blurb.py)
-  ↓ (query messages)
-Data Layer (database.py)
-  ↓ (build listbox query)
-PostgreSQL
-  ↓ (return message list)
-Data Layer (database.py)
-  ↓ (return list of dicts)
-Terminal I/O (listbox.py)
-  ↓ (create ListboxItem objects)
-Terminal I/O (menu loop)
-  ↓ (wait for user selection)
-Terminal (keyboard input)
-  ↓ (user presses arrow keys)
-Terminal I/O (listbox.handle)
-  ↓ (page up/down)
-Terminal I/O (listbox.display)
-  ↓ (render updated view)
-User's Terminal
+menu / listbox
+   │ recipient selected
+   ▼
+editor / form
+   │ subject + body captured
+   ▼
+bbsengine6.message.service.store_message_with_checks(...)
+   │ rate-limit gating, blocking filter, recipient expansion
+   ▼
+bbsengine6.message.dal.messages.insert(...)
+   │ INSERT INTO engine.__message / engine.__message_recipient
+   ▼
+bbsengine6.message.cache.incr_unread(recipient_moniker)
+   │
+   ▼
+io.echo("Message posted!")
 ```
 
-### Scenario 3: Web Request Flow
+### 4.3 Web request
 
 ```
-Browser HTTP Request
-  ↓
-Apache Web Server
-  ↓ (route to PHP)
-PHP (index.php)
-  ↓
-PHP (engine.php - displaypage)
-  ↓
-Smarty Template Engine
-  ↓ (load .tpl file)
-Smarty (apply modifiers)
-  ↓
-PHP (render HTML)
-  ↓ (insert JavaScript)
+Browser → Apache → engine/router.php
+   │ load Smarty plugin cache
+   ▼
+engine/login.php / engine/logout.php / page.php
+   │ PHP namespace bbsengine6\\… resolves via SPL autoload
+   │   (php/bootstrap.php sets include_path; class autoloader handles bbsengine6\\*)
+   ▼
+PHP database helper OR Python handler via WS (bed)
+   │
+   ▼
+Smarty render + JS bundle (bbsengine6.js)
+   │
+   ▼
 Browser
-  ↓ (JavaScript executes)
-Browser (AJAX to PHP endpoint)
-  ↓ (optional async request)
-PHP
-  ↓
-Database/Backend Processing
-  ↓
-PHP (return JSON)
-  ↓
-Browser (update DOM)
-  ↓
-User's Browser
 ```
+
+See [`../../SPEC.md`](../../SPEC.md#4-php-web-layer) for the PHP file
+inventory.
 
 ---
 
-## Module System Architecture
+## 5. Module System
 
-### Module Loading Process
+### 5.1 Module contract
+
+Every registered module exposes four entry points:
+
+```python
+def init(args, **kwargs) -> bool: ...
+def access(args, op: str, **kwargs) -> bool: ...
+def buildargs(args, **kwargs) -> argparse.Namespace | None: ...
+def main(args, **kwargs) -> Any: ...
+```
+
+Modules are Python packages discovered via `importlib.import_module`
+with the full module name. There is no fixed `bbsengine6/modules/`
+directory — user plugins are typically installed in a separate
+package (e.g. `mygame/`) on `PYTHONPATH`.
+
+### 5.2 Loading flow
 
 ```
-module.run(modulename, **kwargs)
+module.run(args, modulename, **kwargs)
   │
   ├─ check(modulename, op, **kwargs)
   │    ├─ importlib.reload() if args.debug is True
@@ -924,7 +467,7 @@ module.run(modulename, **kwargs)
   │
   ├─ [if --help/-h in argv]
   │    ├─ runcallback("modulename.buildargs") → parser
-  │    ├─ parser.print_help() (or auto-generated from docstring)
+  │    ├─ parser.print_help()
   │    └─ return True
   │
   ├─ runcallback("modulename.buildargs", **kwargs) → parser
@@ -934,20 +477,30 @@ module.run(modulename, **kwargs)
        └─ Return result to caller
 ```
 
-Note: `validate_function()` is a standalone utility (uses `get_type_hints()`) and is **not** part of the `check()`/`run()` flow. Those use `_check_params()` + `inspect.signature()` instead.
+`validate_function()` is a standalone utility (uses
+`get_type_hints()`) and is **not** part of the `check()` / `run()`
+flow. Those use `_check_params()` + `inspect.signature()` instead.
 
-### Module File Structure
+### 5.3 Access policy modules
 
-Modules are Python packages discovered via `sys.path`. There is no `bbsengine6/modules/` directory -- the module system uses `importlib.import_module()` with the full module name. User plugins are typically installed in a separate package (e.g., `mygame/`, `plugins/`) added to `PYTHONPATH`.
+Several packages carry their own `access(args, op, **kwargs)`:
+
+| Package | Recognised ops |
+|---------|----------------|
+| `bbsengine6.auth.access` | `login`, `reconnect`, `refresh`, `revoke`. The bed handler decodes the HMAC token and stuffs claims under `message["claims"]`; `access` only inspects decoded claims. |
+| `bbsengine6.bank.access` | Domain verbs over a `BankServiceHandler` envelope. |
+| `bbsengine6.message.access` | `subscribe`, `unsubscribe`, `list_pending`. |
+
+These all follow the same shape: the per-op rules read
+`session` (the live state) and `message` (the wire-shaped payload)
+but never the raw token / secret. See
+[`auth-bank.md`](./auth-bank.md) for the full pattern.
+
+### 5.4 Module file structure
 
 ```
 mymodule/
-├── __init__.py
-│   ├── init(args, **kwargs)
-│   ├── access(args, **kwargs) -> bool
-│   ├── buildargs(args, **kwargs) -> argparse.Namespace
-│   └── main(args, **kwargs) -> Any
-│
+├── __init__.py          # init, access, buildargs, main
 ├── submodule1.py
 ├── submodule2.py
 └── data/
@@ -956,175 +509,142 @@ mymodule/
 
 ---
 
-## Visual Architecture Diagrams
+## 6. Visual Diagrams
 
-### System Architecture
+### 6.1 System architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Web Browser                          │
-└────────────┬──────────────────────┬────────────────────┘
-             │ HTTP Request         │ HTTP Response
-             ▼                      ▲
-┌─────────────────────────────────────────────────────────┐
-│                  Apache Web Server                       │
-│ (Route to PHP endpoints: index.php, login.php, etc.)    │
-└────────────┬──────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────┐
-│             PHP Layer (engine.php)                       │
-│ ┌────────────────────────────────────────────────────┐ │
-│ │ database.php   ← ─ ─ ─ ─ ─ ─ ─ ─ ┐               │ │
-│ │ session.php    ← ─ ─ ─ ─ ─ ─ ─ ─ ├─ Queries     │ │
-│ │ libmember.php  ← ─ ─ ─ ─ ─ ─ ─ ─ ┘               │ │
-│ └────────────────────────────────────────────────────┘ │
-│            │                        │                   │
-│            ├─ Smarty Template ──────┤                   │
-│            │   (page*.tpl)          │                   │
-│            └─ JavaScript ───────────┘                   │
-└────────────┬──────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────┐
-│         Python Backend (Core Business Logic)            │
-│                                                          │
-│ ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│ │session/lib.py│  │   member.py  │  │  module.py   │  │
-│ │              │  │              │  │              │  │
-│ │  blurb.py    │  │   folder.py  │  │   util.py    │  │
-│ │  listbox.py  │  │   menu.py    │  │   form.py    │  │
-│ │  editor.py   │  │   input.py   │  │              │  │
-│ └──────────────┘  └──────────────┘  └──────────────┘  │
-│         │                │                  │            │
-│         └────────────────┼──────────────────┘            │
-│                          ▼                               │
-│         ┌────────────────────────────┐                  │
-│         │   database.py              │                  │
-│         │   (Connection Pool, ORM)   │                  │
-│         └────────────────┬───────────┘                  │
-│                          │                               │
-│  ┌──────────────────────┴──────────────────────┐        │
-│  │   io subpackage (Terminal I/O)              │        │
-│  │ echo.py, screen.py, getch.py,              │        │
-│  │ inputstring.py, inputinteger.py, etc.      │        │
-│  └──────────────────────────────────────────┘        │
-│                                                          │
-│  ┌──────────────────────────────────────────┐         │
-│  │   console subpackage (Admin Tools)        │        │
-│  │ checkdatabase.py, checkroles.py,          │        │
-│  │ member.py, createdatabase.py, etc.        │        │
-│  └──────────────────────────────────────────┘         │
-│                                                          │
-└────────────┬──────────────────────────────────────────┘
-             │
-             ▼
-┌─────────────────────────────────────────────────────────┐
-│       PostgreSQL Database                              │
-│ (Sessions, Members, Messages, Folders, Permissions)    │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                Web Browser / WebSocket client               │
+└──────────┬────────────────────────────┬─────────────────────┘
+           │ HTTP                       │ WS
+           ▼                            ▼
+┌──────────────────────────────────────────────────────────────┐
+│  Apache + mod_php  ──►  php/  ──►  Smarty  ──►  skin/       │
+│       ▲                                                       │
+│       └────►  net/WebSocketServer  ◄────  bed AuthService      │
+│                    ▲                                            │
+│                    │     ┌────────────────────────────────┐     │
+│              io/  │     │  bbsengine6 Python packages  │     │
+│                    │     │  module, message, bank,      │     │
+│                    ▼     │  member, channel, session,    │     │
+│               database   │  auth, services, invite,      │     │
+│                    ▲     │  pgrole, password_cipher,     │     │
+│                    │     │  menu_next, bottombar, util   │     │
+│                    │     └─────────────┬──────────────────┘     │
+│                    │                   ▼                        │
+│                    │     ┌────────────────────────────────┐     │
+│                    └────►│  PostgreSQL (engine.* schema) │     │
+│                          └────────────────────────────────┘     │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Layer Dependencies
+### 6.2 Layer dependencies
 
 ```
 Layer 4: MODULE SYSTEM (module.py)
   │ Uses everything below
   │
 Layer 3: PRESENTATION
-  ├─ Terminal UI:   menu.py, listbox.py, form.py, editor.py
-  ├─ Terminal I/O:  io.*
-  └─ Web:           PHP, Smarty, JavaScript
+  ├─ TUI:   io/, menu.py, listbox.py, form.py, editor.py, ed/, input.py
+  └─ Web:   engine/, php/, smarty/, skin/, js/
   │ Depends on Layers 1-2
   │
 Layer 2: BUSINESS LOGIC
-  ├─ session/lib.py, member.py, blurb.py, folder.py
-  ├─ util.py (shared utilities)
-  └─ input.py
+  ├─ session/, member/, bank/, channel/, message/, auth/
+  ├─ services/, invite.py, pgrole.py, password.py, password_cipher/
+  ├─ blurb.py, folder.py, util.py, bottombar.py, menu_next/
   │ Depends on Layer 1
   │
-Layer 1: DATA LAYER
-  └─ database.py → psycopg → PostgreSQL
-    (Connection pooling, query execution, ORM)
+Layer 1: DATA
+  └─ database.py → psycopg / psycopg_pool → PostgreSQL
 ```
 
-### Module Flow Through System
+### 6.3 Request flow (terminal)
 
 ```
 User Input
-    │
-    ▼
-Terminal I/O (io.getch)
-    │
-    ▼
-Presentation Widget (menu.py / listbox.py)
-    │
-    ▼
-Module System (module.py)
-    │
-    ├─ Check access (database.py query)
-    ├─ Load module (importlib)
-    ├─ Validate functions
-    │
-    ▼
-Business Logic Layer
-    │
-    ├─ Session (session/lib.py)
-    ├─ Member (member.py)
-    ├─ Messages (blurb.py)
-    └─ Utilities (util.py)
-    │
-    ▼
-Data Layer (database.py)
-    │
-    ▼
+   │
+   ▼
+io.getch / io.inputstring
+   │
+   ▼
+Presentation widget (menu / listbox / form / editor)
+   │
+   ▼
+module.run(modulename)
+   ├─ check(modulename, op)
+   ├─ load / validate / init / access / buildargs
+   └─ main(args)
+        │
+        ▼
+Business logic (member / session / bank / message / …)
+        │
+        ▼
+bbsengine6.database → psycopg → PostgreSQL
+        │
+        ▼
+Back up through the layers
+        │
+        ▼
+io.echo / io.screen
+        │
+        ▼
+User's terminal
+```
+
+### 6.4 Request flow (web)
+
+```
+Browser HTTP / WS
+   │
+   ▼
+Apache + mod_php / net.WebSocketServer
+   │
+   ▼
+engine/router.php (PHP)            net.DefaultRouter (Python)
+   │                                       │
+   ▼                                       ▼
+engine.php / login.php / …          bed.AuthService / bed.MessageService
+   │                                       │
+   ▼                                       ▼
+PHP namespaces (bbsengine6\\password,   bbsengine6.auth.access
+bbsengine6\\session, …)                bbsengine6.message.service
+   │                                       │
+   ▼                                       ▼
+bbsengine6.database (shared)  ◄─────────────┘
+   │
+   ▼
 PostgreSQL
-    │
-    ▼
-Back up through layers...
-    │
-    ▼
-Terminal I/O (io.echo)
-    │
-    ▼
-User's Terminal Display
 ```
 
 ---
 
-## Key Architectural Properties
+## 7. Cross-Cutting Concerns
 
-1. **Layering:** Clear separation of concerns (data ↔ logic ↔ presentation)
-2. **Modularity:** Plugin system allows runtime code loading
-3. **Reusability:** Shared utilities and widgets across all modules
-4. **Abstraction:** Database layer abstract from business logic
-5. **Extensibility:** New modules can be added without modifying core
-6. **Terminal-First:** Rich terminal UI as primary interface, web as secondary
+**Logging.** All layers write through `bbsengine6.util.logentry`,
+which uses `conf.LOGGER_NAME = "bbsengine6"`. `io.echo(..., level="debug")`
+suppresses output above the configured threshold.
 
----
+**Error handling.** The module system catches and surfaces errors via
+`runcallback`. The DAL/service layers raise; `bbsengine6.database`
+raises `psycopg.Error`. The TUI layer prints a traceback via
+`io.echo_traceback`.
 
-## Cross-Cutting Concerns
+**Access control.** Member flags are read via `member.lib.getflags`.
+Per-op policy lives in `auth.access`, `bank.access`, and
+`message.access`; the wire envelope is checked in the bed handler
+*before* the access policy runs.
 
-**Logging & Debugging:**
-- All layers use `util.logentry()` for logging
-- `io.echo()` supports debug level output
-- `database.mogrifysql()` shows executed queries
+**State management.** Session id and moniker live in `threading.local`
+inside `session.lib` and `member.lib`. JSONB columns
+(`engine.member.flags`, `engine.member.attrs`, `engine.__session.data`)
+hold flexible per-row state.
 
-**Error Handling:**
-- Module system catches and displays errors
-- Database layer raises exceptions
-- I/O layer handles terminal errors gracefully
-
-**Access Control:**
-- Member flags checked via `member.getflags()`
-- Module system enforces permissions
-- Database queries validated before execution
-
-**State Management:**
-- Global `currentsessionid` in `session/lib.py`
-- Global `currentmoniker` in `member.py`
-- JSONB fields in PostgreSQL for flexible attributes
+**Concurrency.** The data layer uses `psycopg_pool.ConnectionPool`
+(default max 20). The DAL goes through `bbsengine6.database.getpool`
+so every consumer shares the same pool.
 
 ---
 
-*Specification for bbsengine6 Architecture*
+*Architecture for bbsengine6.*

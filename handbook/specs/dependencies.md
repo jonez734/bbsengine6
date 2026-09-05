@@ -1,650 +1,345 @@
-# bbsengine6 Module Dependencies Specification
+# bbsengine6 Module Dependencies
 
-**Version:** 0.0.1.dev  
-**Last Updated:** 2026-02-23
+> Status: canonical. Last updated 2026-09-04.
+> Cross-package matrix only. Console-package sub-dependency maps
+> live in [`./console.md`](./console.md); the net layer is
+> documented in [`./net-layer.md`](./net-layer.md). The legacy
+> `NET_LAYER_SPEC.md` was folded into the current spec set during
+> the 2026-09-04 consolidation.
 
-This document describes module dependencies, their rationale, and how modules relate to each other.
+## Contents
 
-## Table of Contents
-
-1. [Dependency Matrix](#dependency-matrix)
-2. [Layer-to-Layer Dependencies](#layer-to-layer-dependencies)
-3. [Inter-Module Dependencies](#inter-module-dependencies)
-4. [External Package Dependencies](#external-package-dependencies)
-5. [Dependency Rationale](#dependency-rationale)
-6. [Circular Dependencies](#circular-dependencies)
+1. [Cross-Package Matrix](#1-cross-package-matrix)
+2. [Layer-to-Layer Edges](#2-layer-to-layer-edges)
+3. [External Dependencies](#3-external-dependencies)
+4. [Circular Dependencies](#4-circular-dependencies)
+5. [Coupling Notes](#5-coupling-notes)
 
 ---
 
-## Dependency Matrix
+## 1. Cross-Package Matrix
 
-### Python Core Modules
+`→` means "depends on". Entries are limited to direct imports
+between `bbsengine6.*` packages / sub-packages.
 
-```
-Legend: → means "depends on"
+### 1.1 Top-level → top-level
 
-database.py        → psycopg, psycopg_pool, io.echo
-session/lib.py      → database.py, member.py, io.echo
-member.py          → database.py, util.py, io.echo
-module.py          → database.py, io.echo, importlib
-util.py            → io.echo, logging, hashlib
-menu.py            → util.py, io.*, database.py
-listbox.py         → database.py, util.py, io.*
-form.py            → util.py, io.*
-editor.py          → io.getch, io.echo, io.screen
-input.py           → io.*
-blurb.py           → database.py, util.py
-folder.py          → database.py
-readfile.py        → util.py, io.echo
-conf.py            → os (stdlib)
-common.py          → logging (stdlib)
-engine.py          → [stub, minimal]
-screen.py          → io.screen
-```
+| Module | Imports |
+|--------|---------|
+| `bbsengine6.database` | psycopg, psycopg_pool, `bbsengine6.io` (logging) |
+| `bbsengine6.session` | `bbsengine6.database`, `bbsengine6.member`, `bbsengine6.io` |
+| `bbsengine6.member` | `bbsengine6.database`, `bbsengine6.pgrole`, `bbsengine6.password`, `bbsengine6.util`, `bbsengine6.io` |
+| `bbsengine6.bank` | `bbsengine6.database`, `bbsengine6.util` |
+| `bbsengine6.channel` | `bbsengine6.net` (transport), `bbsengine6.util` |
+| `bbsengine6.message` | `bbsengine6.database`, `bbsengine6.io`, `bbsengine6.util` |
+| `bbsengine6.auth` | (none — pure policy module) |
+| `bbsengine6.services` | `bbsengine6.channel`, `bbsengine6.member`, `bbsengine6.bank`, `bbsengine6.util` |
+| `bbsengine6.invite` | `bbsengine6.database`, `bbsengine6.io` |
+| `bbsengine6.pgrole` | `bbsengine6.database`, `bbsengine6.util` |
+| `bbsengine6.password` | (none — bcrypt single source of truth) |
+| `bbsengine6.password_cipher` | (none — strategy pattern, no upward imports) |
+| `bbsengine6.blurb` | `bbsengine6.database`, `bbsengine6.util` |
+| `bbsengine6.folder` | `bbsengine6.database`, `bbsengine6.util` |
+| `bbsengine6.menu` | `bbsengine6.util`, `bbsengine6.io`, `bbsengine6.database` |
+| `bbsengine6.menu_next` | (none — pure registry dataclass) |
+| `bbsengine6.bottombar` | `bbsengine6.module`, `bbsengine6.database`, `bbsengine6.io` |
+| `bbsengine6.editor` | `bbsengine6.util`, `bbsengine6.screen`, `bbsengine6.io`, `bbsengine6.member` |
+| `bbsengine6.screen` | `bbsengine6.io` (re-export shim) |
+| `bbsengine6.util` | `bbsengine6.io` (logging), stdlib only |
+| `bbsengine6.common` | stdlib (`logging`) only |
+| `bbsengine6.conf` | stdlib (`os`) only |
+| `bbsengine6.module` | `bbsengine6.database`, `bbsengine6.io`, stdlib (`importlib`) |
+| `bbsengine6.bed` | `bbsengine6.io`, `bbsengine6.database`, `bbsengine6.net` |
 
-### Dependency Graph (Core)
+### 1.2 Sub-package → sub-package
+
+| Source | Imports |
+|--------|---------|
+| `bbsengine6.session.api` | `bbsengine6.session.lib` |
+| `bbsengine6.member.api` | `bbsengine6.member.lib` |
+| `bbsengine6.bank.api` | `bbsengine6.bank.*` (account / bank / transaction / transfer) |
+| `bbsengine6.channel.api` | `bbsengine6.channel.lib` (handler shape) |
+| `bbsengine6.message.service` | `bbsengine6.database`, `bbsengine6.io`, `bbsengine6.message.cache`, `bbsengine6.message.dal.*`, `bbsengine6.message.lib`, `bbsengine6.message.templates` |
+| `bbsengine6.message.dal.*` | `bbsengine6.database` (every DAL module goes through `bbsengine6.database.getpool`); never `psycopg` directly |
+| `bbsengine6.message.cache` | (none — in-memory state) |
+| `bbsengine6.message.templates` | (none — pure rendering) |
+| `bbsengine6.message.lib` | `bbsengine6.database`, internal re-exports |
+| `bbsengine6.password_cipher.{manager,storage,cipher,config}` | stdlib only (strategy pattern) |
+| `bbsengine6.io.*` | other `bbsengine6.io.*` modules only |
+| `bbsengine6.ed.common` | `bbsengine6.io` (terminal primitives) |
+| `bbsengine6.ed.line` | `bbsengine6.ed.common` |
+| `bbsengine6.ed.visual` | `bbsengine6.ed.common` |
+| `bbsengine6.backend.*` | `bbsengine6.database`, `bbsengine6.io`, `bbsengine6.util`, `bbsengine6.module` |
+| `bbsengine6.console.*` | shims re-exporting `bbsengine6.backend.*` (see [console.md](./console.md)); non-shim modules (`createdatabase`, `member`, `memberapproval`, `showpgrole`, `session`, `main`) depend on `bbsengine6.database`, `bbsengine6.member`, `bbsengine6.session`, `bbsengine6.util` |
+| `bbsengine6.startup.*` | shims re-exporting `bbsengine6.backend.*`; `startup.main` additionally imports `bbsengine6.io`, `bbsengine6.database`, `bbsengine6.util`, `bbsengine6.member`, `startup.message_subscription` |
+| `bbsengine6.startup.message_subscription` | `bbsengine6.io`, optional `bed.client.connection` |
+| `bbsengine6.net.*` | `bbsengine6.io`, stdlib (`asyncio`, `socket`, `ssl`) — full list in [`./net-layer.md`](./net-layer.md) |
+
+### 1.3 Dependency graph (cross-package)
 
 ```
 PostgreSQL
-    ↑
+    ▲
     │
-database.py ←────── session/lib.py
-    ↑                   ↑
-    │                   │
-    │              member.py ←─ util.py ←─ io.echo ←─ terminal.py
-    │                   ↑
-    │                   │
-module.py ←────────────┘
-    ↑
-    │
-menu.py ←─── listbox.py ←─ util.py
-    ↑             ↑
-    │             │
-io.* modules ────┴─────┐
-(getch, echo,           │
-screen, input*)        folder.py
-                        blurb.py
-                        editor.py
+bbsengine6.database
+    ▲           ▲           ▲           ▲           ▲
+    │           │           │           │           │
+session   member   bank     channel   message      auth
+    ▲       │   ▲    ▲           ▲           ▲
+    │       │   │    │           │           │
+    └───┬───┘   │    │           │           │
+        │       │    │           │           │
+      io  ◄──── util  ◄───────────┴───────────┘
+        ▲
+        │
+       module (cross-layer)
+        ▲
+        │
+       bed
 ```
 
-### Python I/O Subpackage
-
-```
-echo.py        → terminal.py, palette.py, const.py, echovars.py
-screen.py      → terminal.py, const.py
-getch.py       → keymap.py
-inputstring.py → getch.py, echo.py
-inputinteger.py → inputstring.py, echo.py
-inputboolean.py → getch.py, echo.py
-inputchoice.py  → getch.py, echo.py
-terminal.py    → shutil, terminfo (system)
-palette.py     → [no dependencies]
-keymap.py      → [no dependencies]
-const.py       → [no dependencies]
-echovars.py    → [no dependencies]
-```
-
-### Python Console Subpackage
-
-```
-main.py                    → database.py, various check modules
-checkdatabase.py           → database.py
-checkschema.py             → database.py
-checkroles.py              → database.py
-checksuperuser.py          → database.py
-checkextensions.py         → database.py
-checkfunctions.py          → database.py
-checkclasses.py            → database.py
-checkflag.py               → database.py
-createdatabase.py          → database.py
-member.py (console)        → database.py, member.py (core)
-memberapproval.py          → database.py, member.py
-checkloginid.py            → member.py
-email.py                   → util.py
-```
-
-### PHP Modules
-
-```
-bootstrap.php    → [sets include path, bbsengine6\bootstrap(array) function]
-engine.php       → database.php, session.php, libmember.php, util.php, Smarty
-database.php     → PDO, PostgreSQL driver
-session.php      → database.php, libmember.php
-libmember.php    → database.php, util.php
-util.php         → [no dependencies]
-InputDate.php    → HTML_QuickForm2
-InputDateTime.php → HTML_QuickForm2
-InputEmail.php   → HTML_QuickForm2
-InputUrl.php     → HTML_QuickForm2
-libsig.php       → [utilities]
-page.php         → engine.php
-blurb.php        → database.php, util.php
-```
+`auth` has no upward imports — it's a pure policy module invoked
+by `bed` over decoded claims.
 
 ---
 
-## Layer-to-Layer Dependencies
+## 2. Layer-to-Layer Edges
 
-### Data Layer → Nothing
-(Foundation - no upward dependencies)
-
-```
-database.py
-  └─ External: psycopg, psycopg_pool
-```
-
-### Business Logic Layer → Data Layer
+### 2.1 Data → nothing
 
 ```
-session/lib.py ────┐
-                 ├──→ database.py
-member.py ───────┘
-module.py ───────┘
-blurb.py ────────┘
-folder.py ───────┘
+bbsengine6.database
+  └─ external: psycopg, psycopg_pool
 ```
 
-**Rationale:**
-- All persistence goes through database.py
-- Ensures consistent query execution
-- Enables centralized error handling
-- Allows future database swaps (e.g., MySQL)
+The data layer is the root of the DAG. No upward imports.
 
-### Presentation Layer → Business Logic & Data
+### 2.2 Business Logic → Data + Utilities
 
 ```
-menu.py ──────────┐
-                  ├──→ database.py
-listbox.py ───────┤
-editor.py ────────┤
-form.py ──────────┘
-
-menu.py ──────────┐
-                  ├──→ util.py
-listbox.py ───────┤
-form.py ──────────┘
+session/  ─┐
+member/   ─┤
+bank/     ─┼─→ database
+channel/  ─┤
+message/  ─┤   (message DAL talks only to database)
+invite    ─┤
+pgrole    ─┤
+blurb     ─┤
+folder    ─┘
 ```
 
-**Rationale:**
-- Widgets directly query database for data
-- Widgets use utilities for formatting
-- No business logic in presentation layer (thin client)
+`message.dal.*` follows the same rule but is broken out into
+one module per `engine.__message*` table family. None of them
+import `psycopg` directly — they all go through
+`bbsengine6.database`.
 
-### Module System → Everything
-
-```
-module.py ──────→ database.py (access control)
-            ├──→ io.echo (error display)
-            ├──→ imported modules (dynamic)
-            └──→ util.py (helpers)
-```
-
-**Rationale:**
-- Module system is meta-layer that loads other code
-- Must interface with access control
-- Must handle errors gracefully
-
-### I/O Subpackage → No upward dependencies
+### 2.3 Presentation → Business Logic + Data
 
 ```
-io/echo.py
-io/screen.py
-io/getch.py
-etc.
-  └─ Only depend on lower-level I/O or system calls
+menu.py  ─┐
+listbox.py ─┤
+form.py   ─┼─→ database
+editor.py ─┤
+ed/       ─┤
+input.py  ─┘
+   │
+   └─→ util
+   └─→ io.*
 ```
 
-**Rationale:**
-- I/O is foundation for terminal interface
-- Shouldn't create circular dependencies
-- Easy to swap with other I/O implementations
+Widgets query `database` for paginated lists and use `util` for
+formatting. `menu_next` is a separate, dependency-free
+`MenuOption` registry.
+
+### 2.4 Module System → Everything
+
+```
+bbsengine6.module
+   ├─→ database (access control)
+   ├─→ io.echo (error display)
+   ├─→ imported modules (dynamic)
+   └─→ util (helpers)
+```
+
+Modules loaded via `module.run` may import any business-logic
+package; they must not import `module.py` itself.
+
+### 2.5 I/O Subpackage → I/O Subpackage only
+
+```
+echo → terminal, palette, const, echovars
+screen → terminal, const
+getch → keymap
+inputstring → getch, echo
+inputinteger → inputstring, echo
+inputboolean → getch, echo
+inputchoice → getch, echo
+terminal → stdlib (shutil, terminfo)
+palette, keymap, const, echovars → no imports
+```
+
+The `io/` subpackage never reaches into business logic. Higher
+levels (widgets, modules) reach into it.
+
+### 2.6 Service / Handler Surface
+
+```
+bank/api/handler.py     (BankServiceHandler)   consumed by bed
+member/api/handler.py   (MemberServiceHandler) consumed by bed
+channel/api/handler.py  (ChannelServiceHandler) consumed by bed
+services/invite.py                            consumed by bed
+services/channel.py                           consumed by bed
+services/member.py                            consumed by bed
+```
+
+These handlers are the wire surface. Each package exposes its
+own `access(args, op, **kwargs)` for the policy; the handler
+owns the wire envelope (HMAC decode, JSON parse, response
+shape). See [decisions.md §10](./decisions.md#decision-10-per-op-accessargs-op-kwargs-policy-modules)
+and [`auth-bank.md`](./auth-bank.md).
 
 ---
 
-## Inter-Module Dependencies
+## 3. External Dependencies
 
-### Session ↔ Member Bidirectional
-
-**session/lib.py depends on member.py:**
-- Calls `member.getcurrentmoniker()` during session operations
-- Needs member info for session validation
-
-**member.py depends on session/lib.py:**
-- No direct dependency, but uses shared session globals
-
-**Rationale:**
-- Session and member are separate concerns
-- Session tracks login state (when/where/how)
-- Member tracks identity (who/what)
-- Separation allows independent testing
-
-### Module System ↔ Database
-
-**module.py depends on database.py:**
-- Queries access control rules before loading module
-- Ensures unauthorized modules don't execute
-
-**database.py does NOT depend on module.py:**
-- No circular dependency
-- Database is lower layer
-
-**Rationale:**
-- Security: access control checked first
-- Prevents untrusted code execution
-- Database doesn't need to know about modules
-
-### Utility Functions (Star Dependencies)
-
-**Many modules depend on util.py:**
+### 3.1 Python (required)
 
 ```
-session/lib.py   ──┐
-member.py    ──┤
-blurb.py     ──┤──→ util.py
-folder.py    ──┤
-editor.py    ──┘
-form.py      ──┤
-menu.py      ──┤
-listbox.py   ──┘
+psycopg >= 3.0                PostgreSQL driver
+psycopg-pool                  Connection pooling
+python-dateutil               (getdate.py)
 ```
 
-**Rationale:**
-- util.py = shared code library
-- Prevents duplication
-- Centralized formatting/logging
-- Easy to maintain common behavior
-- util.py has NO upward dependencies
+### 3.2 Python (stdlib)
 
-### I/O Subpackage Dependencies
+`os`, `sys`, `types`, `logging`, `argparse`, `uuid`, `datetime`,
+`json`, `copy`, `pwd`, `time`, `re`, `hashlib`, `random`, `shutil`,
+`importlib`, `pickle`, `subprocess`, `termios`, `tty`, `fcntl`,
+`select`, `secrets`, `threading`, `contextvars`, `asyncio`,
+`dataclasses`, `enum`, `itertools`, `abc`.
 
-**All input modules depend on lower-level I/O:**
+### 3.3 Python (optional)
 
 ```
-inputinteger.py ──→ inputstring.py ──→ getch.py ──→ keymap.py
-inputboolean.py ────→ getch.py ─────────→ keymap.py
-inputchoice.py ─────→ getch.py ─────────→ keymap.py
+wcwidth                      terminal width (io.terminal fallback)
+bed.client.connection        only consumed by startup.message_subscription
 ```
 
-**Rationale:**
-- Builds abstraction layers from ground up
-- char input (getch) → string input → typed input
-- Higher levels don't care about key codes
-- Easy to replace with different input method
+### 3.4 PHP (required)
 
----
-
-## External Package Dependencies
-
-### Python
-
-**Critical (required to run):**
-```
-psycopg >= 3.0                   (PostgreSQL driver)
-  └─ Required for database.py
-  
-psycopg-pool                     (Connection pooling)
-  └─ Required for database.py
-```
-
-**Standard Library (always available):**
-```
-import os, sys, types, logging, argparse, uuid
-import datetime, json, copy, pwd, time
-import re, hashlib, random, shutil
-import importlib, pickle, subprocess
-import termios, tty, fcntl, select
-```
-
-**Optional (for features):**
-```
-wcwidth                          (Terminal width calculation)
-  └─ Used in io.terminal module
-```
-
-### PHP
-
-**Required:**
 ```
 PHP >= 8.1
-PDO (PHP Data Objects)
-PDO PostgreSQL driver
+PDO + PDO PostgreSQL driver
+Smarty >= 3.0
+HTML_QuickForm2              (Form/ clone)
 ```
 
-**Libraries:**
+### 3.5 PHP (vendored)
+
+`bbsengine6/php/` ships its own `bbsengine6\\password` namespace
+(`libpassword.php`) and a `Form/` clone (QuickForm2 + Captcha
+providers + DataSource + Rule registry + ArrayRenderer).
+
+### 3.6 Browser
+
 ```
-Smarty >= 3.0                    (Template engine)
-PEAR Log                         (Logging)
-HTML_QuickForm2                  (Form handling)
-ReCaptcha                        (CAPTCHA protection)
+jQuery >= 3.0                DOM + AJAX
+jquery.smoothState.js        vendored (handbook/js/)
+bbsengine6.js                project singleton (handbook/js/)
 ```
 
-### JavaScript
+### 3.7 PostgreSQL
 
-**Required:**
 ```
-jQuery >= 3.0                    (DOM manipulation)
-```
-
-**Optional:**
-```
-jquery.smoothState.js            (AJAX page transitions)
-TinyMCE >= 5.0                   (Rich text editor)
-```
-
-### PostgreSQL
-
-**Version:** 12+
-
-**Required Extensions:**
-```
-ltree                            (Hierarchical data)
-uuid-ossp                        (UUID generation)
-```
-
-**Optional Features:**
-```
-JSON support (built-in)
-JSONB support (for flexibility)
-Roles/permissions system
+PostgreSQL >= 12
+ltree                        hierarchical folders
+uuid-ossp                    session ids
+pgcrypto                     (legacy; verify path removed in 2026-08)
 ```
 
 ---
 
-## Dependency Rationale
+## 4. Circular Dependencies
 
-### Why database.py has no upward dependencies
+### Status: NONE
 
-**Benefit:**
-- Can be replaced with any database backend
-- Tests can mock database without mocking whole system
-- Database changes don't break business logic
+bbsengine6 has no circular dependencies. The rule is enforced
+by review:
 
-**Example swap:**
-```python
-# Current: PostgreSQL
-database.connect() → psycopg
+- The data layer is a leaf.
+- `bbsengine6.util` is a leaf (only depends on `bbsengine6.io`
+  for logging).
+- `bbsengine6.io` is a leaf within itself.
+- `bbsengine6.module` is the cross-layer loader; loaded modules
+  do not import `bbsengine6.module` back.
+- Per-package `access(args, op, **kwargs)` is pure (no upward
+  imports in `auth`; the others are confined to their package).
 
-# Could swap to: MySQL, SQLite, etc.
-database.connect() → mysql.connector
-# Rest of code doesn't change
-```
+### Adding a new module
 
-### Why util.py is widely used
+When adding a new module or sub-package:
 
-**Benefit:**
-- Single source of truth for common operations
-- Easy to fix bugs (fix once, everywhere benefits)
-- Consistent formatting across all modules
-- Easy to add logging/debugging
-
-**Example:**
-```python
-# If you fix pluralize() bug in util.py
-# It's fixed everywhere it's used:
-menu.py, listbox.py, form.py, all benefit
-```
-
-### Why session/lib.py and member.py are separate
-
-**Benefit:**
-- Can test member authentication independently
-- Can test session management independently
-- Can trace session issues without member code
-- Supports multiple authentication schemes
-
-**Example:**
-```
-If adding OAuth:
-  ├─ Keep session/lib.py unchanged
-  ├─ Modify member.py to support OAuth
-  └─ No ripple effects in session code
-```
-
-### Why module.py is meta-layer
-
-**Benefit:**
-- Modules are black boxes
-- module.py doesn't need to know module internals
-- Modules don't depend on module.py
-- Easy to add new modules without changing framework
-
-**Example:**
-```
-Adding new module:
-  ├─ Create my_module/__init__.py
-  ├─ Implement: init(), access(), buildargs(), main()
-  └─ module.py loads it automatically
-  
-No changes to module.py needed!
-```
-
-### Why io module is isolated
-
-**Benefit:**
-- Terminal I/O details hidden
-- Can swap with web/GUI without changing callers
-- Testable independently
-- Easy to add new input/output types
-
-**Example:**
-```
-# Current: Terminal
-io.echo() → writes to sys.stdout
-io.getch() → reads from sys.stdin
-
-# Could be: Web
-io.echo() → returns JSON
-io.getch() → expects HTTP POST
-
-# Callers don't change!
-```
+1. **Verify the dependency direction.** Lower layers must not
+   import upward. New code in `bbsengine6.io` cannot import
+   `bbsengine6.member`.
+2. **Use the `bbsengine6.database` boundary.** New DAL modules
+   under any sub-package go through `bbsengine6.database`;
+   never `import psycopg` directly.
+3. **Use the package-local `access(args, op, **kwargs)`.** New
+   authorization policies live in the package that owns the
+   domain verb, not in bed or in `module.py`.
+4. **Extract if a cycle appears.** If two packages need each
+   other, extract the shared code into a third leaf and have
+   both depend on it.
 
 ---
 
-## Circular Dependencies
+## 5. Coupling Notes
 
-### Current Status: NONE
+### 5.1 Coupling levels
 
-bbsengine6 has **no circular dependencies**.
+| Package | Coupling | Notes |
+|---------|----------|-------|
+| `bbsengine6.database` | low | only external libs + `io.echo` for logging |
+| `bbsengine6.util` | low | stdlib + `io.echo` only |
+| `bbsengine6.io` | low | intra-package only |
+| `bbsengine6.auth` | none | pure policy module |
+| `bbsengine6.menu_next` | none | pure registry dataclass |
+| `bbsengine6.password` | none | bcrypt single source of truth |
+| `bbsengine6.password_cipher` | none | strategy pattern |
+| `bbsengine6.session` | medium | `database` + `member` + `io` |
+| `bbsengine6.member` | medium | `database` + `pgrole` + `password` + `util` |
+| `bbsengine6.bank` | medium | `database` + `util` |
+| `bbsengine6.message` | medium | `database` + `io` + `util` + own sub-packages |
+| `bbsengine6.module` | medium | `database` + `io` + `importlib` |
 
-This is achieved through:
+### 5.2 Reusability rank
 
-**1. Clear layer separation**
-```
-Lower layers don't know about upper layers
-  Database ← Business Logic ← Presentation
-    ↑           ↑
-    └─ No upward dependencies
-```
+1. `bbsengine6.database` — used by every higher layer.
+2. `bbsengine6.util` — used by most business-logic modules.
+3. `bbsengine6.io` — used by every TUI widget and module.
+4. `bbsengine6.session` / `member` / `bank` / `channel` /
+   `message` — used by bed and the daemons.
+5. Widgets (`menu`, `listbox`, `form`, `editor`, `ed/`) —
+   terminal-client specific.
+6. `bbsengine6.bed` — entry point only.
 
-**2. Module system is meta**
-```
-module.py loads other modules dynamically
-  Other modules don't load module.py
-  No circular reference
-```
+### 5.3 Performance implications
 
-**3. Shared utilities pattern**
-```
-util.py is shared code
-Many modules use util.py
-util.py doesn't import any of them
-  No circular imports
-```
+`bbsengine6.database.getpool` returns the shared
+`psycopg_pool.ConnectionPool` (default max 20). Every consumer
+shares it. DAL modules use the same pool; the
+`CONN_POOL_PATTERN` (`cur= / conn= / pool= / args=` priority)
+is the standard way to accept a connection in helpers.
 
-**4. Explicit initialization order**
-```
-Session needs Member data
-  Member module can be loaded first
-  Session initialized after
-  No circular initialization
-```
+Caching:
+- `bbsengine6.message.cache` — in-memory local unread counter.
+- `bbsengine6.session.SessionManager` — in-memory WS session map.
+- `bbsengine6.io.bottombar` — fragment registry cache.
 
-### How to Maintain This
-
-When adding new modules:
-
-1. **Check dependency direction**
-   ```python
-   # Good: lower depends on upper
-   util.py → nothing
-   database.py → util.py
-   session/lib.py → database.py
-   
-   # Bad: upper depends on lower (AVOID)
-   database.py → session/lib.py  # DON'T DO THIS
-   ```
-
-2. **Use message passing instead of direct calls**
-   ```python
-   # Instead of:
-   # module_a imports module_b
-   # module_b imports module_a
-   
-   # Use:
-   # Pass data through callbacks
-   # Use events/signals
-   # Use dependency injection
-   ```
-
-3. **Refactor if cycles appear**
-   ```python
-   # If cycle detected:
-   # module_a ← module_b ← module_a
-   
-   # Solution: Extract common code to shared module
-   # module_a ← common ← module_b
-   #           (no cycle)
-   ```
+There is no global cross-process cache; PostgreSQL is the
+authoritative store.
 
 ---
 
-## Dependency Metrics
-
-### Coupling Analysis
-
-**Low Coupling (Good):**
-- database.py: only depends on external libs
-- util.py: only depends on stdlib
-- io modules: only depend on other io modules
-
-**Medium Coupling (Acceptable):**
-- session/lib.py: depends on database, member
-- menu.py: depends on database, io, util
-- module.py: depends on database, io, importlib
-
-**High Coupling (Monitor):**
-- engine.php: depends on many PHP modules
-- Action: Could be refactored if grows much larger
-
-### Reusability Rank
-
-**Highest Reusability:**
-1. database.py - used by everything
-2. util.py - used by most modules
-3. io modules - core for terminal interface
-4. session/lib.py - critical for auth
-
-**Medium Reusability:**
-5. member.py - auth
-6. menu.py, listbox.py - widgets
-7. module.py - plugin system
-
-**Specific Use:**
-8. editor.py, form.py - specific features
-9. blurb.py, folder.py - message domain
-
----
-
-## Cross-Deployment Dependencies
-
-### Terminal Application
-
-Required modules:
-```
-database.py          (database access)
-session/lib.py, member.py (auth)
-module.py             (plugin system)
-util.py               (utilities)
-io/*                  (terminal I/O)
-menu.py, listbox.py   (widgets)
-editor.py, form.py    (editing)
-blurb.py, folder.py   (messages)
-```
-
-### Web Application (PHP)
-
-Required modules:
-```
-engine.php            (request handling)
-database.php          (database access)
-session.php, libmember.php (auth)
-util.php              (utilities)
-Smarty                (templates)
-InputDate, etc.       (form elements)
-```
-
-### Console Tools
-
-Required modules:
-```
-database.py           (database access)
-console/*             (admin tools)
-util.py               (utilities)
-```
-
-### Shared Layer
-
-Used by multiple deployments:
-```
-PostgreSQL            (database backend)
-member table          (user data)
-__session table       (session data)
-```
-
----
-
-## Performance Implications
-
-### Connection Pooling
-
-**database.py uses psycopg_pool:**
-- Reduces connection overhead
-- Reuses connections across requests
-- Limits max connections (20)
-
-**Impact:**
-- First query: slight overhead (pool setup)
-- Subsequent: minimal overhead (connection reuse)
-- Concurrent: up to 20 queries in parallel
-
-### Caching Opportunities
-
-**Not yet implemented, but possible:**
-
-```python
-# Cache member flags during session
-member.getflags()  # Could cache for duration of session
-  └─ Cache hit: O(1)
-  └─ Cache miss: O(database query)
-
-# Cache OID lookups
-database.getoid()  # Should cache results in conf.py
-  └─ Current: queries each time
-  └─ Optimal: query once, cache forever
-```
-
-### Query Optimization Potential
-
-**Indexes on frequently accessed columns:**
-```sql
-CREATE INDEX idx_member_loginid ON engine.member(loginid);
-CREATE INDEX idx_session_id ON engine.__session(id);
-CREATE INDEX idx_blurb_folderid ON engine.__blurb(folderid);
-```
-
-**Currently assumed but not documented.**
-
----
-
-*Module Dependencies Specification for bbsengine6*
+*Module Dependencies for bbsengine6.*
