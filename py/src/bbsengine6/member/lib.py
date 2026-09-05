@@ -31,6 +31,9 @@ _threadlocal = threading.local()
 # installs that need additional reservations should fork this constant or
 # add their own gating layer in their own code; bbsengine6 does not provide
 # a config-driven extension hook.
+#
+# See also: bbsengine6/EXTENDING_CHANNELS.md for the namespacing convention
+# and module onboarding pattern.
 RESERVED_MONIKERS = frozenset({"sysop", "term", "web", "bed"})
 
 

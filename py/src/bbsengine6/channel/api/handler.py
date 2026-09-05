@@ -418,7 +418,9 @@ class MessageRouter:
     When ``channel_cfg.auto_seed`` is populated, the seed step runs once
     at register time. Namespaced daemon members (e.g. ``zoid6:casino``)
     are auto-created via :func:`bbsengine6.member.lib.register_module_member`
-    so operators don't need to bootstrap them by hand.
+    so operators don't need to bootstrap them by hand. See
+    bbsengine6/EXTENDING_CHANNELS.md for the namespacing convention and
+    module onboarding pattern.
     """
 
     def __init__(

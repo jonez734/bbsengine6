@@ -135,10 +135,10 @@
 
 ## Phase 7.5 — Extensibility documentation
 
-- [ ] Edit `bbsengine6/py/src/bbsengine6/member/lib.py` module docstring: cross-reference `register_module_member`; explain `<module>:<purpose>` convention
-- [ ] Edit `bbsengine6/py/src/bbsengine6/channel/api/handler.py` `MessageRouter.__init__` docstring: note auto-seed uses `register_module_member`; cross-reference
-- [ ] Edit `bed/src/bed/data/bed.json` `channel.auto_seed` comment: note list is shared across all modules; `createdby` should be namespaced per owning module
-- [ ] Create `bbsengine6/py/src/bbsengine6/EXTENDING_CHANNELS.md`: four-step onboarding pattern (add `channel_state` kwarg; plumb `sender_moniker`; add JSON entry; pre-create or let auto-seed handle daemon member)
+- [x] Edit `bbsengine6/py/src/bbsengine6/member/lib.py` module docstring: cross-reference `register_module_member`; explain `<module>:<purpose>` convention; cross-link EXTENDING_CHANNELS.md
+- [x] Edit `bbsengine6/py/src/bbsengine6/channel/api/handler.py` `MessageRouter.__init__` docstring: note auto-seed uses `register_module_member`; cross-link EXTENDING_CHANNELS.md
+- [x] Edit `bed/src/bed/data/bed.json` `channel.auto_seed` comment: already notes the list is shared and createdby should be namespaced (added in Phase 1.5)
+- [x] Create `bbsengine6/py/src/bbsengine6/EXTENDING_CHANNELS.md`: 7-step onboarding pattern (accept channel_state; plumb sender_moniker; use namespaced daemon members; add to auto_seed; read per-module config; use naming helpers; opt into ChannelAdminHandler)
 
 ## Phase 8 — Tests
 
