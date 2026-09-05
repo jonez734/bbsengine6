@@ -1,554 +1,440 @@
 # bbsengine6.database Specification
 
-## Overview
+> Status: canonical. Updated 2026-09-04.
 
-`database.py` is a PostgreSQL database utility module providing connection pooling, CRUD operations, schema/role/extension management, and SQL execution helpers for bbsengine6.
+`bbsengine6.database` owns the PostgreSQL connection pool, DSN handling,
+schema/role/extension inspection, and the helper API that every other module
+uses to talk to the database. This document merges the canonical spec with
+the `handbook/database.md` function index.
 
-## Core Architecture
+## Contents
 
-### Connection Management
+- [Connection pool](#connection-pool)
+- [DSN parsing](#dsn-parsing)
+- [Metadata checks](#metadata-checks)
+- [Role management](#role-management)
+- [Connection helpers](#connection-helpers)
+- [DDL helpers](#ddl-helpers)
+- [Result helpers](#result-helpers)
+- [JSON bridge](#json-bridge)
+- [SECURITY DEFINER ownership](#security-definer-ownership)
+- [DB-API 2.0 wrapper classes](#db-api-20-wrapper-classes)
+- [Argument parsing](#argument-parsing)
+- [Reference: function index](#reference-function-index)
 
-- **Connection Pool**: Uses `psycopg_pool.ConnectionPool` with configurable min/max size (default: 10/100)
-- **DSN Construction**: `make_dsn()` builds connection string from args or kwargs
-- **Context Managers**: `connect()` gets connection from pool; `cursor()` creates dict-row cursors
-
-### Key Patterns
-
-1. **Pool-first**: Most functions accept either `conn` or `pool` kwarg
-2. **Nested cursors**: Uses `with cursor(conn) as cur:` pattern
-3. **Debug logging**: Many functions support `mogrify=True` for SQL logging (reserved for future use)
-
-### Error Handling
-
-- Pool/connection errors: return `False`
-- Database errors: return `False` with `echo_traceback()` for full stack trace
-- Return types: consistent `bool` for success/failure operations
-
-## Public API
-
-### Connection Functions
+## Connection pool
 
 ```python
-getpool(args: Any, **kwargs: Any) -> ConnectionPool
+getpool(args, **kwargs) -> ConnectionPool
 ```
-Create connection pool with DSN from args.
 
----
+Create a connection pool from the DSN implied by `args`. Internally calls
+`parse_dsn` and `make_dsn`. The pool is process-local and cached; repeated
+calls return the same object until `reset_pool_cache()` is called.
+
+The default pool is `min_size=10`, `max_size=100`; both bounds are
+overridable through `args` or kwargs.
 
 ```python
 @contextmanager
-connect(args: Any, pool: Any = None, *, auto_commit: bool = True, wrapper: bool = False, set_role: str | None = None, **kwargs: Any)
-```
-Context manager that gets a connection from the passed `pool` using `pool.getconn()`
-and returns it via `pool.putconn()` on exit. Raises `ValueError` if `pool is None`.
-The `readonly` kwarg is stripped from kwargs (not supported by psycopg_pool). 
-
-**Parameters:**
-- `args` - Application args (optional, used for debug logging only)
-- `pool` - ConnectionPool instance
-- `auto_commit` (default: `True`) - Commit before returning connection to pool
-- `wrapper` (default: `False`) - If `True`, yield DatabaseConnection wrapper with method-style API
-- `set_role` (default: `None`) - If provided, validates the role exists in `pg_roles`, then runs `SET LOCAL ROLE <set_role>` after acquiring the connection. The role reverts automatically at transaction end. Requires the DSN user to be a member of the target role (or a superuser).
-
-**Note:** `args` parameter is optional and only used for debug logging. Can be `None` without affecting core functionality.
-
-Use (original):
-```python
-with database.connect(args, pool=pool) as conn:
-    database.cursor(conn)  # or pass conn to other database functions
+connect(args, pool=None, *, auto_commit=True, wrapper=False, set_role=None, **kwargs)
 ```
 
-Use (with wrapper):
-```python
-with database.connect(args, pool=pool, wrapper=True) as conn:
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM foo")
-    conn.commit()
-```
+Context manager that borrows a connection from `pool` via `pool.getconn()`
+and returns it via `pool.putconn()` on exit. `auto_commit=False` is required
+for multi-statement transactions.
 
-Use (with role switching):
+`set_role` is the per-transaction role-switch entry point: when supplied,
+`connect` validates the role exists in `pg_roles`, then runs
+`SET LOCAL ROLE <set_role>` after acquiring the connection. The role
+reverts automatically at transaction end. The DSN user must be a member of
+the target role (or a superuser). This is the path used for the
+`SET LOCAL ROLE member` request-scoped role switch documented in
+[`pg-ident-auth.md`](./pg-ident-auth.md).
+
 ```python
-# Run queries as the member group role
 with database.connect(args, pool=pool, set_role="member") as conn:
     cur = conn.cursor(row_factory=dict_row)
-    cur.execute("SELECT * FROM engine.message ...")
+    cur.execute("SELECT * FROM engine.member ...")
 ```
 
----
+If `pool` is `None`, `connect` raises `ValueError`. The optional `args`
+parameter is used only for debug logging; the function tolerates `args=None`.
 
-```python
-cursor(conn: Any, row_factory: Any = dict_row, **kwargs: Any) -> Any
-```
-Create cursor with dict row factory.
-
----
-
-```python
-transaction(conn: Any, **kwargs: Any) -> Any
-```
-Context manager for transactions.
-
----
-
-```python
-commit(args: Any, conn: Any = None, **kwargs: Any) -> bool
-```
-Commit transaction on connection. Returns `True` on success, `False` if no connection.
-
----
-
-```python
-rollback(args: Any, conn: Any = None, **kwargs: Any) -> None
-```
-Roll back transaction on connection.
-
-### CRUD Operations
-
-```python
-update(args: Any, table: str, pk: str, items: dict, **kwargs: Any) -> bool
-```
-Update rows. 
-
-Kwargs:
-- `primarykey` (default: `"id"`) - name of primary key column
-- `mogrify` (default: `False`) - log SQL query for debugging
-- `updatepk` (default: `False`) - if `True`, allows updating the primary key itself (use with care; required for moniker changes)
-- `commit` (default: `True`) - if `True`, commits transaction immediately; if `False`, keeps transaction open
-
-Uses `sql.Identifier()` for table/column names to prevent SQL injection.
-Returns `True` on success, `False` on error.
-
-**Note:** When changing a primary key (e.g., member moniker), the calling code must explicitly handle related table updates BEFORE calling this function, to avoid FK constraint violations. The `updatepk=True` parameter is only half the solution; proper transaction ordering is required.
-
----
-
-```python
-insert(args: Any, table: str, items: dict, **kwargs: Any) -> int | bool
-```
-Insert row.
-
-Kwargs:
-- `primarykey` (default: `"id"`) - name of primary key column for `RETURNING` clause
-- `returnid` (default: `True`) - if `True`, return inserted ID; if `False`, return `True`
-- `mogrify` (default: `True`) - log SQL query for debugging
-- `commit` (default: `True`) - if `True`, commits transaction immediately; if `False`, keeps transaction open for caller
-
-Uses `sql.Identifier()` for table/column names to prevent SQL injection.
-Returns inserted ID if `returnid=True`, otherwise `True` on success, `False` on error.
-
-**Note:** Pass `commit=False` when inserting as part of a multi-step transaction (e.g., when flags must also be inserted atomically with the parent record).
-
-### Metadata Functions
-
-```python
-classexists(args: Any, name: str, **kwargs: Any) -> bool
-```
-Check if table/view exists via `to_regclass()`.
-
----
-
-```python
-schemaexists(args: Any, name: str, **kwargs: Any) -> bool
-```
-Check if schema exists in information_schema.
-
----
-
-```python
-functionexists(args: Any, name: str, **kwargs: Any) -> bool
-```
-Check if function exists in pg_proc.
-
----
-
-```python
-extensionavailable(args: Any, ext: str, **kwargs: Any) -> bool
-```
-Check if extension is available in pg_available_extensions.
-
----
-
-```python
-extensioninstalled(args: Any, ext: str, **kwargs: Any) -> bool
-```
-Check if extension is installed in pg_extension.
-
-### Role Management
-
-```python
-createrol(args: Any, name: str, **kwargs: Any) -> bool
-```
-Create role. Uses `sql.Identifier()` for role name to prevent SQL injection.
-Kwargs: `login`, `superuser`, `createdb`, `createrole`, `inherit`, `replication`, `password`, `expiration`.
-
----
-
-```python
-rolexists(args: Any, rolname: str, **kwargs: Any) -> bool
-```
-Check if role exists in pg_roles.
-
----
-
-```python
-get_role_privs(args: Any, rolname: str, cur: Any = None, **kwargs: Any) -> dict | bool
-```
-Get role privileges via `get_role_privs()` function.
-Returns `dict` on success, `False` if pool is `None`.
-
----
-
-```python
-manage_role_privs(args: Any, role_name: str, action: str, priv: str, **kwargs: Any) -> Any
-```
-Manage role privileges via `manage_role_privs()` function.
-
----
-
-```python
-manage_secondary_role(args: Any, role_name: str, action: str, secondary: str, **kwargs: Any) -> Any
-```
-Manage secondary roles via `manage_secondary_role()` function.
-
----
-
-```python
-manage_database_priv(args: Any, action: str, priv: str, database_name: str, target_role: str, **kwargs: Any) -> bool
-```
-Manage database privileges.
-
----
-
-```python
-manage_schema_priv(args: Any, action: str, priv: str, database_name: str, target_role: str, **kwargs: Any) -> bool
-```
-Manage schema privileges.
-
-### SECURITY DEFINER helpers and ownership
-
-The five privilege-management helpers listed above (`get_role_privs`,
-`manage_role_privs`, `manage_secondary_role`, `manage_database_priv`,
-`manage_schema_priv`) are `SECURITY DEFINER` functions installed in
-the `public` schema by `sql/manage_*.sql` /
-`sql/get_role_privs.sql`. They are owned by the dedicated
-unprivileged PostgreSQL role `zoid6` (`NOSUPERUSER NOCREATEDB
-NOCREATEROLE NOLOGIN INHERIT`), created by
-`backend.checkzoid6role` and enforced at bootstrap by
-`backend.checkzoid6owner` (which runs `ALTER FUNCTION ... OWNER TO
-zoid6` against the five helpers if ownership has drifted).
-
-`database.verify_function_owner` is the hard guard that rejects
-bootstrap if any of the five is owned by a role other than those in
-the hard-coded allow-list `("zoid6", "postgres")`. The `postgres`
-entry is a one-release transition aid; it will be dropped in the
-next release — see `bbsengine6/TODO_zoid6_role.md`.
-
-Because the helpers are now NOSUPERUSER-owned, the `engine` schema
-is created with `AUTHORIZATION zoid6` (fresh installs) or
-`ALTER SCHEMA engine OWNER TO zoid6` (BC upgrades). The `bank`
-schema is unaffected because its grants live in `bank_schema.sql`
-(executed by the bootstrap superuser), not via `manage_schema_priv`.
-
-### Database/Schema Operations
-
-```python
-exists(args: Any, databasename: str, **kwargs: Any) -> bool
-```
-Check if database exists in pg_catalog.
-
----
-
-```python
-create(args: Any, name: str, **kwargs: Any) -> bool
-```
-Create database using `CREATE DATABASE` with safe identifier.
-
----
-
-```python
-createschema(args: Any, name: str, **kwargs: Any) -> bool
-```
-Create schema using `CREATE SCHEMA`.
-
----
-
-```python
-creatextension(args: Any, ext: str, **kwargs: Any) -> bool
-```
-Create extension with error handling for permission/file issues.
-
-### SQL Execution
-
-```python
-execute(cur: Any, query: Any, *params: Any) -> Any
-```
-Execute query with auto-converted params for safe JSONB encoding. Use this instead of
-direct `cur.execute()` when params may contain dicts, lists, datetime objects, or type objects.
-
----
-
-```python
-executemany(cur: Any, operation: str, seq_of_params: list) -> None
-```
-Execute operation against all parameter sequences with auto-conversion through `convert_for_jsonb()`.
-Consistent with `execute()` in handling complex types.
-
----
-
-```python
-importsql(args: Any, filename: str, **kwargs: Any) -> bool
-```
-Load and execute SQL file. Kwargs: `package` (for SQL directory), `conn`, `pool`.
-
----
-
-```python
-resultiter(cur: Any, arraysize: int = 1000, filterfunc: callable = None, **kwargs: dict) -> Iterator
-```
-Iterator for memory-efficient result fetching.
-
----
-
-```python
-query(sql_template: str, *params: Any, **kwargs: Any) -> sql.SQL
-```
-Build a parameterized SQL query from readable string.
-
-**Purpose:** Allows natural-reading SQL like `SELECT * FROM $engine.member WHERE moniker = :moniker` instead of verbose `sql.SQL("...") + sql.Identifier("...")` chains.
-
-**Security:** Table/column names use `sql.Identifier()` for SQL injection protection. Values use parameterized placeholders.
-
-**Syntax:**
-- `$schema.table` or `$table` - identifiers (becomes `sql.Identifier('schema', 'table')`)
-- `$1, $2` - positional placeholders (passed through to psycopg)
-- `:name` - named placeholders (converted to `%(name)s` for psycopg)
-
-**Args:**
-- `sql_template` - SQL string with `$identifiers` and placeholders
-- `*params` - Positional values for `$1, $2` placeholders
-- `**kwargs` - Named values for `:name` placeholders
-
-**Returns:** `sql.SQL` (Composed) object ready for `cursor.execute()`
-
-**Examples:**
-```python
-# Named placeholders (:name)
-cur.execute(database.query("SELECT * FROM $engine.member WHERE moniker = :moniker", moniker="test"))
-
-# Positional placeholders ($1, $2)
-cur.execute(database.query("SELECT * FROM $engine.member WHERE moniker = $1", "test"))
-
-# JOINs
-cur.execute(database.query("SELECT * FROM $engine.member p JOIN $engine.room r ON p.room_id = r.id WHERE p.moniker = :moniker", moniker="test"))
-
-# Cross-schema queries (e.g., empyre.player)
-cur.execute(database.query("SELECT * FROM $empyre.player WHERE moniker = :moniker", moniker="test"))
-```
-
-```php
-// PHP - Named placeholders (use single quotes to avoid escaping $)
-$stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.member WHERE moniker = :moniker', [":moniker" => "test"]);
-
-// PHP - Positional placeholders
-$stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.member WHERE moniker = $1', ["test"]);
-
-// PHP - DELETE/UPDATE
-\bbsengine6\database\query($dbh, 'DELETE FROM $engine.__session WHERE id = :id', [":id" => $sessionid]);
-
-// PHP - JOINs
-$stmt = \bbsengine6\database\query($dbh, 'SELECT * FROM $engine.member p JOIN $engine.room r ON p.room_id = r.id WHERE p.moniker = :moniker', [":moniker" => "test"]);
-```
-
-### Utility Functions
-
-```python
-mogrifysql(cur: Any, query: str, params: tuple) -> str
-```
-Format query with params for debugging (safe for display only). Uses manual escaping to prevent SQL injection in logs.
-
----
+## DSN parsing
 
 ```python
 parse_dsn(dsn: str) -> dict[str, str]
 ```
-Parse DSN string into dict. Skips parts without `=`.
 
----
-
-```python
-make_dsn(args: Any, **kwargs: Any) -> str
-```
-Build DSN string from args or kwargs. Handles missing args attributes gracefully.
-
----
+Parse a DSN string into a dict of `key=value` pairs. Skips parts that
+lack an `=` (so libpq URI-style prefixes like `postgres://` pass through
+intact).
 
 ```python
-getoid(args: Any, typ: str, cur: Any = None) -> int | None
+make_dsn(args, **kwargs) -> str
 ```
-Get OID for a PostgreSQL type.
 
-### Argument Parsing
+Build a DSN string from `args` attributes (or supplied kwargs). Handles
+missing `args` attributes gracefully by omitting them from the result.
 
 ```python
-buildargs(parentparser: Any, defaults: dict | None = None, label: str = "database options", suppress: bool = False) -> None
+mogrifysql(cur, query, params) -> str
 ```
-Add database arguments to argparse parser. Note: `defaults` uses `None` default to avoid Python mutable default gotcha.
 
-## Constants
+Render a query with params for display in debug output. Uses manual
+escaping so the rendered string is safe to print in logs but is **not**
+safe to re-execute.
 
-- `DEFAULTDATABASE = "postgres"` - Default database for connection checks
+## Metadata checks
 
-## Security
+All checks return `bool`. They run against the catalog (`pg_*` and
+`information_schema`) and require either a `conn` or `pool` kwarg.
 
-- All user-provided identifiers (table names, column names, role names) use `sql.Identifier()` to prevent SQL injection
-- Passwords and expirations are passed as parameterized values
+| Function | Catalog probe |
+| --- | --- |
+| `classexists(args, name)` | `to_regclass()` on a table or view |
+| `schemaexists(args, name)` | `information_schema.schemata` |
+| `typeexists(args, name)` | `pg_type` |
+| `tableexists(args, schema, table)` | `information_schema.tables` |
+| `functionexists(args, name)` | `pg_proc` |
+| `constraintexists(args, ...)` | `pg_constraint` |
+| `extensionavailable(args, ext)` | `pg_available_extensions` |
+| `extensioninstalled(args, ext)` | `pg_extension` |
+| `exists(args, databasename)` | `pg_database` |
 
-## Known Issues / TODOs
+The four `*exists` helpers short-circuit when no `conn`/`pool` is
+supplied and return `False` with an `io.echo_traceback()` log line.
 
-1. `mogrify` kwargs in several functions are reserved for future debug logging use
+## Role management
 
----
+```python
+createrol(args, name, **kwargs) -> bool
+```
 
-## DB-API 2.0 Compatible Wrapper Classes
+Create a role. Identifier-safe via `sql.Identifier()`. Recognized kwargs:
+`login`, `superuser`, `createdb`, `createrole`, `inherit`, `replication`,
+`password`, `expiration`.
 
-The module provides optional wrapper classes that expose a method-style API compatible with Python's DB-API 2.0 specification (PEP 249).
+```python
+rolexists(args, rolname) -> bool
+```
+
+Check `pg_roles`.
+
+```python
+set_current_role(role)        # process-wide role for subsequent connects
+get_current_role() -> str | None
+```
+
+Module-level helpers used by `connect()` when `set_role=` is not passed
+explicitly.
+
+```python
+switch_role(args, role_name, **kwargs) -> bool
+```
+
+Persistent role switch across statements (uses `SET ROLE`, not `SET LOCAL ROLE`).
+Most callers should pass `set_role=` to `connect()` instead so the role
+reverts at transaction end.
+
+```python
+set_role(args, role_name, **kwargs) -> bool
+```
+
+Apply `SET ROLE` on the supplied connection. Returns `True` on success.
+
+The remaining helpers in this section are SECURITY DEFINER and are
+discussed under [SECURITY DEFINER ownership](#security-definer-ownership):
+
+- `get_role_privs`
+- `manage_role_privs`
+- `manage_secondary_role`
+- `manage_database_priv`
+- `manage_schema_priv`
+
+## Connection helpers
+
+```python
+cursor(conn=None, row_factory=dict_row, **kwargs) -> Cursor
+```
+
+Return a cursor with `dict_row` factory by default. If `conn=None`,
+attempts to acquire from `pool=` or fall back to `getpool(args)`.
+
+```python
+transaction(conn, **kwargs)
+```
+
+Context manager wrapping `conn.transaction()`. Provided so callers can
+use the same keyword in both `with database.connect(...)` and
+`with database.transaction(conn)` blocks.
+
+```python
+execute(cur, query, *params)
+executemany(cur, operation, seq_of_params)
+```
+
+Execute with auto-conversion of params through `convert_for_jsonb`. Use
+these instead of raw `cur.execute()` whenever params may contain dicts,
+lists, datetimes, or type objects. `executemany` is consistent with
+`execute` for complex types.
+
+```python
+query(sql_template, *params, **kwargs) -> sql.SQL
+```
+
+Build a parameterized `sql.SQL` (Composed) object from a readable template.
+
+| Token | Meaning |
+| --- | --- |
+| `$schema.table` or `$table` | Identifier (becomes `sql.Identifier('schema', 'table')`) |
+| `$1`, `$2` | Positional placeholders, passed through to psycopg |
+| `:name` | Named placeholders, converted to `%(name)s` for psycopg |
+
+Example:
+
+```python
+cur.execute(
+    database.query(
+        "SELECT * FROM $engine.member WHERE moniker = :moniker",
+        moniker="alice",
+    )
+)
+```
+
+The PHP-side equivalent is `\bbsengine6\database\query($dbh, '...', $params)`
+with identical syntax.
+
+```python
+getoid(args, typ, cur=None) -> int | None
+```
+
+Look up a type's OID. Pass a cursor for use inside an existing transaction.
+
+## DDL helpers
+
+```python
+create(args, name, **kwargs) -> bool
+exists(args, databasename) -> bool
+createschema(args, name, **kwargs) -> bool
+creatextension(args, ext, **kwargs) -> bool
+importsql(args, filename, **kwargs) -> bool
+verify_function_owner(args, name, expected_owners, **kwargs) -> bool
+```
+
+`importsql` loads a file from the engine SQL package (default) or the
+package named in `package=`, splits on `;`, and executes each statement.
+`kwargs` accepts `conn=` and `pool=`; if both are missing, `importsql`
+raises `ValueError`.
+
+`verify_function_owner` is the runtime guard for SECURITY DEFINER
+helpers: it checks `pg_proc.proowner` against the supplied
+`expected_owners` (a string or a tuple) and returns `False` (with an
+`io.echo` error log) if the function is missing or owned by another
+role. See [SECURITY DEFINER ownership](#security-definer-ownership) for
+the canonical allow-list.
+
+## Result helpers
+
+```python
+commit(args, conn=None, **kwargs) -> bool
+rollback(args, conn=None, **kwargs) -> None
+update(args, table, pk, items, **kwargs) -> bool
+upsert(args, table, conflict_target, items, **kwargs) -> bool
+insert(args, table, items, **kwargs) -> int | bool
+```
+
+`update`/`insert`/`upsert` apply `convert_for_jsonb` to each value
+internally; callers pass plain Python dicts. See
+[`bestpractices.md`](./bestpractices.md) for the boundary rules.
+
+`update` kwargs:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `primarykey` | `"id"` | Name of the primary key column |
+| `mogrify` | `False` | Reserved for debug SQL logging |
+| `updatepk` | `False` | Allow updating the PK itself (required for moniker changes; transaction ordering is the caller's responsibility) |
+| `commit` | `True` | Commit immediately; pass `commit=False` for multi-step transactions |
+
+`insert` returns the inserted ID when `returnid=True` (default) and `True`
+when `returnid=False`. `commit=False` keeps the transaction open so the
+caller can roll back on error.
+
+`upsert` requires a `conflict_target=` argument naming the columns of a
+unique constraint; on conflict it sets the listed columns to the supplied
+values and returns `True`.
+
+## JSON bridge
+
+```python
+convert_for_jsonb(v, *, wrap: bool = True) -> Any
+```
+
+Convert Python objects to psycopg3 types for safe JSONB encoding. The
+top-level dict/list is wrapped in `psycopg.types.json.Jsonb`; inner
+dicts/lists are returned as plain Python objects so psycopg's dumper
+can serialize the outer `Jsonb` without tripping the `Object of type
+Jsonb is not JSON serializable` error. `wrap=False` is intended for
+internal recursion; callers should use the default.
+
+Datetimes become ISO strings. Unknown non-serializable types are
+converted via `str()` and logged at debug level.
+
+For end-to-end examples of the layer responsibilities (application
+keeps dicts as dicts, `database.update` calls `convert_for_jsonb`
+internally), see
+[`bestpractices.md`](./bestpractices.md#json-handling-at-the-database-boundary).
+
+## SECURITY DEFINER ownership
+
+The five privilege-management helpers are `SECURITY DEFINER` functions
+installed in the `public` schema by the engine SQL package:
+
+| Function | SQL file |
+| --- | --- |
+| `get_role_privs` | `sql/get_role_privs.sql` |
+| `manage_role_privs` | `sql/manage_role_privs.sql` |
+| `manage_secondary_role` | `sql/manage_secondary_role.sql` |
+| `manage_database_priv` | `sql/manage_database_priv.sql` |
+| `manage_schema_priv` | `sql/manage_schema_priv.sql` |
+
+They are owned by the dedicated unprivileged PostgreSQL role `zoid6`:
+
+```sql
+NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN INHERIT
+```
+
+`zoid6` is created by `backend.checkzoid6role` and enforced at bootstrap
+by `backend.checkzoid6owner`, which runs `ALTER FUNCTION ... OWNER TO
+zoid6` against the five helpers if ownership has drifted.
+
+`database.verify_function_owner` is the runtime guard. It rejects
+bootstrap if any of the five is owned by a role outside the hard-coded
+allow-list `("zoid6", "postgres")`. The `postgres` entry is a one-release
+transition aid; it will be dropped in a subsequent release. See
+`bbsengine6/TODO_zoid6_role.md`.
+
+Because the helpers are now NOSUPERUSER-owned, the `engine` schema is
+created with `AUTHORIZATION zoid6` on fresh installs and reassigned via
+`ALTER SCHEMA engine OWNER TO zoid6` on BC upgrades. The `bank` schema
+is unaffected: its grants live in `bank_schema.sql`, executed by the
+bootstrap superuser.
+
+For per-member role provisioning (the `l_<loginid>` pattern used by the
+ident-based psql flow), see [`pg-ident-auth.md`](./pg-ident-auth.md).
+The `l_<loginid>` and `m_<moniker>` patterns are distinct: `zoid6` is
+the SECURITY DEFINER ownership role, the per-member roles are
+LOGIN-capable end-user identities.
+
+## DB-API 2.0 wrapper classes
+
+The module provides optional DB-API 2.0 (PEP 249) wrapper classes
+exposing a method-style API. The wrapper coexists with the
+function-based API; set `wrapper=False` (default) to use the original
+behaviour.
 
 ### DatabaseConnection
 
-```python
-class DatabaseConnection:
-    """Wrapper around psycopg Connection providing DB-API compatible method interface."""
-```
+Wraps a psycopg connection with method-style access. Yields from
+`connect(..., wrapper=True)`.
 
-A context manager that wraps a psycopg connection with method-style API.
-
-**Properties:**
-- `autocommit` (get/set) - Connection autocommit mode
-
-**Attributes:**
-- `_set_role` - The role name passed via `set_role` parameter (or `None`)
-
-**Methods:**
-
-```python
-cursor(row_factory: Any = dict_row) -> DatabaseCursor
-```
-Return a new cursor using this connection.
-
-```python
-commit() -> None
-```
-Commit pending transaction.
-
-```python
-rollback() -> None
-```
-Roll back current transaction.
-
-```python
-close() -> None
-```
-Return connection to the pool.
-
-**Access to raw connection:**
-- `_conn` - The underlying psycopg connection object for advanced use
-
----
+| Member | Meaning |
+| --- | --- |
+| `autocommit` (property) | Connection autocommit mode |
+| `_set_role` (attr) | The role name passed via `set_role=` (or `None`) |
+| `_conn` (attr) | The raw psycopg connection |
+| `cursor(row_factory=dict_row)` | Return a `DatabaseCursor` |
+| `commit()` | Commit pending transaction |
+| `rollback()` | Roll back current transaction |
+| `close()` | Return connection to pool |
 
 ### DatabaseCursor
 
-```python
-class DatabaseCursor:
-    """Wrapper around psycopg Cursor with auto-conversion and DB-API methods."""
-```
+Wraps a psycopg cursor with auto-conversion and DB-API extensions.
 
-Wraps a psycopg cursor with auto-conversion for JSONB and DB-API compatible methods.
+| Member | Meaning |
+| --- | --- |
+| `description` | Column metadata (read-only) |
+| `rowcount` | Rows affected by last execute (read-only) |
+| `arraysize` | Rows per `fetchmany` (read/write) |
+| `rownumber` | Current 0-based index (DB-API extension, read-only) |
+| `connection` | Reference to parent `DatabaseConnection` |
+| `execute(op, params=None)` | Execute with auto-conversion |
+| `executemany(op, seq_of_params)` | Execute against all sequences with auto-conversion |
+| `fetchone()` | Next row |
+| `fetchmany(size=None)` | Next set of rows |
+| `fetchall()` | All remaining rows |
+| `scroll(value, mode="relative")` | Reposition cursor (`"relative"` or `"absolute"`) |
+| `nextset()` | Advance to next result set |
+| `close()` | Close cursor |
+| `__iter__()` | Iterate |
+| `_cursor` | The raw psycopg cursor |
 
-**Properties:**
-
-- `description` - Result set column metadata (read-only)
-- `rowcount` - Number of rows affected by last execute (read-only)
-- `arraysize` - Number of rows to fetch with fetchmany (read/write)
-- `rownumber` - Current 0-based index in result set (DB-API extension, read-only)
-- `connection` - Reference to parent DatabaseConnection
-
-**Methods:**
-
-```python
-execute(operation: str, params: Any = None) -> None
-```
-Execute operation with auto-conversion of params through `convert_for_jsonb()`.
-
-```python
-executemany(operation: str, seq_of_params: list) -> None
-```
-Execute operation against all parameter sequences with auto-conversion.
+Example:
 
 ```python
-fetchone() -> Any
-```
-Fetch next row.
-
-```python
-fetchmany(size: int = None) -> Any
-```
-Fetch next set of rows. Defaults to arraysize if size not specified.
-
-```python
-fetchall() -> Any
-```
-Fetch all remaining rows.
-
-```python
-scroll(value: int, mode: str = "relative") -> None
-```
-Scroll cursor in result set (DB-API extension). Modes: `"relative"` (default) or `"absolute"`.
-
-```python
-nextset() -> bool | None
-```
-Advance to next result set (optional DB-API).
-
-```python
-close() -> None
-```
-Close cursor.
-
-```python
-__iter__()
-```
-Make cursor iterable.
-
-**Access to raw cursor:**
-- `_cursor` - The underlying psycopg cursor object for advanced use
-
----
-
-### Using Wrapper Classes
-
-```python
-# With wrapper=True, connect() yields DatabaseConnection
 with database.connect(args, pool=pool, wrapper=True) as conn:
     cur = conn.cursor()
     cur.execute("SELECT * FROM foo WHERE id = %s", (1,))
     row = cur.fetchone()
-    
-    # DB-API extensions
-    cur.scroll(0, mode='absolute')  # reposition to start
-    cur.rownumber  # current position
-    
-    # Commit via connection method
+    cur.scroll(0, mode="absolute")
     conn.commit()
-
-# With role switching
-with database.connect(args, pool=pool, set_role="member") as conn:
-    cur = conn.cursor(row_factory=dict_row)
-    cur.execute("SELECT * FROM engine.member")
-    rows = cur.fetchall()
-
-# Or use raw psycopg connection via _conn
-with database.connect(args, pool=pool, wrapper=True) as conn:
-    raw_conn = conn._conn  # access psycopg connection directly
 ```
 
-**Note:** The wrapper API coexists with the function-based API. Set `wrapper=False` (default) to use the original behavior.
+## Argument parsing
+
+```python
+buildargs(parentparser, defaults=None, label="database options", suppress=False)
+```
+
+Add the database argparse arguments (`--dbhost`, `--dbport`, `--dbname`,
+`--dbuser`, ...) to `parentparser`. `defaults` defaults to `None`
+(sentinel), avoiding the Python mutable-default gotcha.
+
+## Constants
+
+| Name | Value |
+| --- | --- |
+| `DEFAULTDATABASE` | `"postgres"` |
+
+## Security
+
+- All user-provided identifiers (table names, column names, role names)
+  use `sql.Identifier()` to prevent SQL injection.
+- Passwords, expirations, and `convert_for_jsonb` payloads are passed
+  as parameterized values.
+- `verify_function_owner` is the runtime guard against owner drift on
+  SECURITY DEFINER helpers.
+
+## Reference: function index
+
+The following names are exported from `bbsengine6.database`. This
+duplicates the short index in `handbook/database.md` for in-doc
+lookup.
+
+| Function | Purpose |
+| --- | --- |
+| `getpool()` | Acquire the process-local `ConnectionPool` |
+| `connect()` | Context manager: borrow connection from pool |
+| `cursor()` | Dict-row cursor factory |
+| `transaction()` | Transaction context manager |
+| `commit()`, `rollback()` | Transaction terminators |
+| `update()`, `insert()`, `upsert()` | CRUD on a single row |
+| `execute()`, `executemany()` | Auto-converting parameter execution |
+| `query()` | `$ident` / `:name` template builder |
+| `getoid()` | Type OID lookup |
+| `resultiter()` | Memory-efficient row iterator |
+| `buildargs()` | Argparse integration |
+| `parse_dsn()`, `make_dsn()`, `mogrifysql()` | DSN helpers |
+| `classexists()`, `schemaexists()`, `typeexists()`, `tableexists()` | Catalog probes |
+| `functionexists()`, `constraintexists()` | Catalog probes |
+| `extensionavailable()`, `extensioninstalled()` | Extension probes |
+| `create()`, `exists()` | Database lifecycle |
+| `createschema()`, `creatextension()`, `importsql()` | Schema/extension/SQL-file DDL |
+| `createrol()`, `rolexists()`, `set_role()`, `switch_role()` | Role lifecycle |
+| `set_current_role()`, `get_current_role()` | Process-wide role tracking |
+| `get_role_privs()`, `manage_role_privs()`, `manage_secondary_role()`, `manage_database_priv()`, `manage_schema_priv()` | SECURITY DEFINER helpers (owned by `zoid6`) |
+| `verify_function_owner()` | Runtime owner allow-list gate |
+| `convert_for_jsonb()` | JSONB bridge |
