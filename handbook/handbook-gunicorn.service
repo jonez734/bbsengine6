@@ -1,8 +1,17 @@
+# Status: alternative deployment path. NOT the production setup on
+# bbsengine.org. The production host runs uWSGI behind mod_proxy_uwsgi;
+# see handbook/DEPLOYMENT.md ("mod_proxy_uwsgi (recommended for
+# production)"). This unit exists for operators who already run
+# gunicorn elsewhere and prefer its operational model.
+#
+# Pairs with handbook/handbook-gunicorn.conf (Apache vhost that
+# proxies /handbook/ to 127.0.0.1:8000).
+
 [Unit]
-Description=BBSEngine Handbook Gunicorn Application Server
+Description=BBSEngine Handbook Gunicorn Application Server (alternative, non-production)
 Documentation=https://gunicorn.org/
+Documentation=file:///home/opencode/data/work/bbsengine6/handbook/DEPLOYMENT.md
 After=network.target
-Wants=handbook-gunicorn.socket
 
 [Service]
 # Service metadata
@@ -16,7 +25,6 @@ ExecStart=/usr/local/bin/gunicorn \
     --workers 4 \
     --worker-class sync \
     --worker-connections 1000 \
-    --bind unix:/run/handbook.sock \
     --bind 127.0.0.1:8000 \
     --timeout 30 \
     --graceful-timeout 30 \
@@ -26,7 +34,8 @@ ExecStart=/usr/local/bin/gunicorn \
     --log-level info \
     wsgi:application
 
-# Reload on config change (SIGHUP)
+# Reload on config change (SIGHUP) -- also reopens access/error log
+# files, which logrotate relies on.
 ExecReload=/bin/kill -s HUP $MAINPID
 
 # Auto-restart on failure
@@ -44,6 +53,9 @@ KillSignal=SIGTERM
 # Service hardening
 PrivateTmp=true
 NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log /var/log/handbook
 
 # Logging
 StandardOutput=journal
