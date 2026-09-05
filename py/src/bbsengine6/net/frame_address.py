@@ -119,7 +119,7 @@ class FrameAddressParser:
             tcp://host:4200/
             tcp://user:pass@host:4200/resource?timeout=30&custom=val
             udp://host/
-            unix:///var/run/frame.sock
+            unix:///run/frame.sock
             ws://host:80/path?token=abc123
         """
         if not dsn or not isinstance(dsn, str):

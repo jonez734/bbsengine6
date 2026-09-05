@@ -55,10 +55,10 @@ class TestFrameAddressParsing:
 
     def test_parse_unix_socket(self):
         """Parse unix socket address."""
-        result = FrameAddressParser.parse("unix:///var/run/frame.sock")
+        result = FrameAddressParser.parse("unix:///run/frame.sock")
         assert result.success
         assert result.value.scheme == FrameScheme.UNIX
-        assert result.value.socket_path == "/var/run/frame.sock"
+        assert result.value.socket_path == "/run/frame.sock"
         assert result.value.host is None
         assert result.value.port is None
 
@@ -145,7 +145,7 @@ class TestFrameAddressRoundTrip:
 
     def test_roundtrip_unix(self):
         """Unix socket roundtrip."""
-        dsn = "unix:///var/run/frame.sock"
+        dsn = "unix:///run/frame.sock"
         result1 = FrameAddressParser.parse(dsn)
         assert result1.success
 
