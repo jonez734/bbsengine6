@@ -51,6 +51,14 @@ def main(args, **kwargs):
             "checkmemberflag",
             "checkmessage",
             "checkchannel",
+            # Always-run migration for the chk_member_moniker_format
+            # constraint. The checkclasses step only loads member.sql
+            # when engine.__member doesn't exist, so legacy DBs with
+            # the flat-form constraint never pick up the namespaced
+            # pattern. This module re-runs the DO migration on every
+            # startup; the block is a no-op when the constraint already
+            # permits namespaced monikers.
+            "checkmember_moniker_format",
             "checkbank",
         ):
             result = lib.runmodule(

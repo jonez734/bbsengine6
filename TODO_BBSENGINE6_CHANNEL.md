@@ -30,6 +30,10 @@
 
 - [x] Create `bbsengine6/py/src/bbsengine6/backend/checkchannel.py`: mirror `checkmessage.py:1-129`; loads `engine.__channel`, `engine.__channel_announcer` from `channel.sql`
 - [x] Edit `bbsengine6/py/src/bbsengine6/backend/stage_one.py:24-54`: add `"checkchannel"` to iteration tuple after `"checkmessage"`
+- [x] Add `bbsengine6/py/src/bbsengine6/sql/checkmember_moniker_format.sql`: idempotent migration for `chk_member_moniker_format` constraint (namespacing extension)
+- [x] Add `bbsengine6/py/src/bbsengine6/backend/checkmember_moniker_format.py`: always-run migration module so legacy DBs pick up the namespaced pattern on next startup
+- [x] Add `"checkmember_moniker_format"` to `stage_one.py` after `"checkchannel"`
+- [x] Remove redundant inline DO block from `member.sql` (now in dedicated migration file)
 
 ### Channel config in JSON
 
