@@ -50,6 +50,7 @@ def main(args, **kwargs):
             "checkzoid6owner",
             "checkmemberflag",
             "checkmessage",
+            "checkchannel",
             "checkbank",
         ):
             result = lib.runmodule(

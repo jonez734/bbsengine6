@@ -14,6 +14,139 @@ from bbsengine6 import bank, database, io, password, util
 _threadlocal = threading.local()
 
 
+# Flat-form monikers reserved for system use.
+#
+# bbsengine6 only reserves the names it actually depends on: the PostgreSQL
+# role names that appear in GRANT statements shipped with the package
+# (sql/grants.sql, sql/member.sql, sql/channel.sql, etc.). These collide
+# with member monikers because both live in identifier namespaces that
+# overlap in GRANT statements and role-membership checks.
+#
+# The namespacing convention (see ``register_module_member`` below) is the
+# PRIMARY defense against human/machine moniker collisions: module-owned
+# daemon identities use the "<module>:<purpose>" form, which the SQL
+# constraint allows but the standard registration path rejects (so humans
+# cannot grab them by accident). This list is a backstop that rejects
+# flat-form registrations matching the shipped role names. Downstream
+# installs that need additional reservations should fork this constant or
+# add their own gating layer in their own code; bbsengine6 does not provide
+# a config-driven extension hook.
+RESERVED_MONIKERS = frozenset({"sysop", "term", "web", "bed"})
+
+
+def is_namespaced_moniker(moniker: str) -> bool:
+    """True if ``moniker`` follows the ``<module>:<purpose>`` namespace convention.
+
+    The naming convention lets modules register daemon identities that humans
+    cannot claim through the standard registration flow. See
+    ``register_module_member`` below.
+    """
+    return isinstance(moniker, str) and ":" in moniker
+
+
+def _validate_moniker_shape(moniker: str) -> None:
+    """Reject ``moniker`` values that violate the registration policy.
+
+    The standard registration path (``console.member.add`` ->
+    ``libmember.insert``) rejects:
+
+    - empty / non-string values
+    - namespaced monikers (``x:y``) — these are reserved for the module
+      bootstrap path; humans registering via the console cannot use them.
+    - flat monikers in ``RESERVED_MONIKERS`` (defense-in-depth against
+      humans claiming shipped role names).
+    """
+    if not isinstance(moniker, str) or not moniker:
+        raise ValueError("moniker must be a non-empty string")
+    if is_namespaced_moniker(moniker):
+        raise ValueError(
+            f"moniker {moniker!r} is namespaced; namespaced monikers are "
+            f"reserved for module bootstrap (use register_module_member)"
+        )
+    if moniker in RESERVED_MONIKERS:
+        raise ValueError(
+            f"moniker {moniker!r} is reserved for system use"
+        )
+
+
+def register_module_member(
+    args,
+    moniker: str,
+    *,
+    email: str | None = None,
+    approved: bool = True,
+    conn=None,
+    pool=None,
+    **kwargs,
+) -> str | None:
+    """Insert a namespaced member row, bypassing the flat-form reservation check.
+
+    Use only from module bootstrap code that legitimately needs a daemon
+    identity (e.g. ``bbsengine6.channel.api.handler._auto_seed_channels``
+    creating ``zoid6:casino`` for channel auto-seed). The bypass is
+    STRUCTURAL: the moniker MUST be namespaced (``<module>:<purpose>``),
+    lowercase, and well-formed. Calling this function with a flat moniker
+    raises ``ValueError`` regardless of whether the name is in
+    ``RESERVED_MONIKERS`` — the bypass requires the namespace prefix, not
+    just a non-reserved name.
+
+    Args:
+        args: Application args (carries DB connection info).
+        moniker: Namespaced moniker of the form ``"<module>:<purpose>"``.
+            Must contain ``:``, must be lowercase, must match
+            ``^[a-zA-Z0-9_]+:[a-zA-Z0-9_]+$``.
+        email: Optional email address. Defaults to ``f"{moniker}@localhost"``
+            when None (daemon identities typically don't have real email).
+        approved: Whether the daemon member is pre-approved. Defaults to
+            True (daemon identities don't go through the human approval
+            flow).
+        conn: Optional open connection to thread through.
+        pool: Optional pool to thread through.
+
+    Returns:
+        The moniker on success, ``None`` on failure.
+    """
+    if not isinstance(moniker, str) or ":" not in moniker:
+        raise ValueError(
+            f"register_module_member requires a namespaced moniker "
+            f"(e.g. 'zoid6:casino'), got {moniker!r}"
+        )
+    if moniker != moniker.lower():
+        raise ValueError(
+            f"register_module_member moniker must be lowercase, got {moniker!r}"
+        )
+    # Defensive shape check mirrors the SQL regex (without the colons-group,
+    # since namespacing mandates a colon).
+    if not re.match(r"^[a-zA-Z0-9_]+:[a-zA-Z0-9_]+$", moniker):
+        raise ValueError(
+            f"register_module_member moniker {moniker!r} does not match "
+            f"the expected shape '<module>:<purpose>'"
+        )
+
+    member = {
+        "moniker": moniker,
+        "email": email if email is not None else f"{moniker}@localhost",
+        "loginid": moniker,  # daemon identity uses its moniker as loginid
+        "approved": approved,
+        "datecreated": "now()",
+        "dateapproved": "now()" if approved else None,
+        # Self-referential FK target. The FK columns are nullable with
+        # ``on delete set null``, so the self-reference is structurally
+        # valid even though it creates a chicken-and-egg situation that
+        # would normally break. SQL accepts it because the row exists
+        # before the constraint is checked against itself.
+        "createdbymoniker": moniker,
+        "approvedbymoniker": moniker if approved else None,
+    }
+    return insert(
+        args,
+        member,
+        conn=conn,
+        pool=pool,
+        **kwargs,
+    )
+
+
 def _get_thread_id() -> int:
     return threading.get_ident()
 
@@ -1528,6 +1661,8 @@ def insert(args, member, **kwargs):
 
     table = kwargs.get("table", "engine.__member")
     conn = kwargs.get("conn", None)
+
+    _validate_moniker_shape(member.get("moniker"))
 
     cols = copy.copy(member)
     flags_dict = cols.pop("flags", None)

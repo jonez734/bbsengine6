@@ -73,9 +73,10 @@ class TestStartupChainsIntoPostoffice:
     package="postoffice") after stage_one succeeds.
 
     Mirrors the casino pattern: casino's __main__ calls runmodule(args,
-    "startup", package="bbsengine6"); bbsengine6.startup.main in turn
-    calls runmodule(args, "startup", package="casino") for casino's own
-    schema setup. Here we test the analogous chain for postoffice.
+    "startup", package="bbsengine6") which invokes bbsengine6.startup.main
+    to land the engine schema; casino's own schema setup is invoked
+    directly via bin/casino --direct (casino.startup.main), not chained
+    from bbsengine6. Here we test the analogous chain for postoffice.
     """
 
     def test_postoffice_chain_runs_after_stage_one(self):
