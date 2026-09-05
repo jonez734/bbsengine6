@@ -296,20 +296,11 @@ canonical pattern and the open follow-ups.
 | Topic                                 | Handbook file                                       |
 |---------------------------------------|-----------------------------------------------------|
 | Quick start                           | `handbook/QUICKSTART.md`                            |
-| Database setup                        | `handbook/SETUP.md`                                 |
-| Production deployment                 | `handbook/PRODUCTION_DEPLOYMENT.md`                 |
+| Production deployment (Apache paths)  | `handbook/DEPLOYMENT.md`                            |
+| Handbook serving (Flask vs. static)   | `handbook/HANDBOOK_SERVING.md`                      |
 | Security model                        | `handbook/SECURITY.md`                              |
-| Apache integration                    | `handbook/APACHE_INTEGRATION.md` / `APACHE_QUICK_COMPARISON.md` / `APACHE_UWSGI_SETUP.md` |
-| Runtime conversion (zoidweb4 → 6)     | `handbook/RUNTIME_CONVERSION.md`                    |
-| PHP SPL autoload                      | `handbook/BBSENGINE6_PHP_SPL.md`                    |
 | Router guide                          | `handbook/ROUTER.md`                                |
-| JSON handling                         | `handbook/JSON_HANDLING_GUIDE.md`                   |
-| Network layer guide                   | `handbook/NET_LAYER_GUIDE.md`                       |
-| WebSocket realtime plan               | `handbook/WEBSOCKET_REALTIME_PLAN.md`               |
-| Web-server realtime plan              | `handbook/WEBSERVER_REALTIME_PLAN.md`               |
-| Notify migration (historical)         | `handbook/README_NOTIFY.md` + `NOTIFY_*.md`         |
-| Per-module design specs               | `handbook/specs/*.md`                               |
-| Per-module manual pages               | `handbook/{database,listbox,module,util,blurb_demo,…}.md` |
+| Per-subsystem design specs            | `handbook/specs/*.md`                               |
 
 `handbook/specs/` (the design specs) holds the canonical reference
 for each subsystem:
@@ -320,19 +311,30 @@ for each subsystem:
 | `decisions.md`                        | Architectural Decision Records                     |
 | `flows.md`                            | End-to-end message / request flows                |
 | `dependencies.md`                     | Cross-package dependency map                      |
-| `index.md`                            | Spec index                                         |
-| `modules.md`                          | Module-registry contract                          |
-| `module.md`                           | `module.py` contract                              |
-| `member.md`                           | `member` subsystem (recipient validation, groups) |
-| `database.md`                         | Database / contextvars / role plumbing            |
+| `index.md`                            | Spec index (TOC)                                  |
+| `database.md`                         | `bbsengine6.database` (pool, DSN, role plumbing) |
+| `util.md`                             | `bbsengine6.util`                                 |
+| `member.md`                           | `bbsengine6.member` (recipient validation, groups)|
+| `auth-bank.md`                        | WS auth → bank authorization flow                 |
+| `pg-ident-auth.md`                    | Per-member `l_<loginid>` / `m_<moniker>` roles    |
+| `bestpractices.md`                    | `io.echo` f-string rule + JSONB boundary rule     |
+| `messaging.md`                        | `bbsengine6.message` (Phase 11 layered package)   |
+| `net-layer.md`                        | `bbsengine6.net` (transport, packets, registry)  |
+| `console.md`                          | Admin CLI                                          |
+| `module.md`                           | `bbsengine6.module` registry / plugin loader     |
 | `listbox.md`                          | TUI listbox widget contract                       |
-| `md2tpl.md`                           | Markdown → Smarty template converter             |
-| `blurb.md` `BLURB_SPEC.md` `FOLDER_SPEC.md` | Content / folder management                |
+| `blurb.md`                            | Content entity                                     |
+| `folder.md`                           | ltree-backed folder hierarchy                     |
 | `bottombar.md`                        | Per-package fragment registry                     |
-| `console.md` `console/*.md`           | Admin CLI                                          |
-| `BBSENGINE6_NOTIFYD_*.md` (10 files)  | **HISTORICAL** — notify subsystem (deleted)       |
-| `NET_LAYER_SPEC.md`                   | Network layer                                      |
-| `BESTPRACTICE.md`                     | Best practices                                     |
+| `md2tpl.md`                           | Markdown → Smarty template converter             |
+
+Historical specs that have been folded into the canonical set above
+and removed from disk: `BBSENGINE6_NOTIFYD_*.md` (10 files),
+`notify.md`, `NOTIFY_MESSAGING.md`, `NET_LAYER_SPEC.md`, `web.md`,
+`modules.md`, `BLURB_SPEC.md`, `FOLDER_SPEC.md`, and the 13
+`handbook/specs/console/*.md` files. The 2026-09-04 rewrite
+superseded all of them. See [`specs/index.md`](handbook/specs/index.md)
+"Out of scope (HISTORICAL)" for the deletion ledger.
 
 ## 7. Phase 0-5 hardening summary
 
@@ -471,13 +473,12 @@ Phase 3 regression tests (created 2026-08-02):
 | `js/bbsengine6.js`                         | Browser singleton                     |
 | `js/jquery.smoothState.js`                 | Vendored page-transition framework    |
 | `handbook/QUICKSTART.md`                   | Quick start                           |
-| `handbook/SETUP.md`                        | DB setup                              |
-| `handbook/PRODUCTION_DEPLOYMENT.md`        | Production deploy                     |
-| `handbook/specs/`                          | Per-module design specs               |
+| `handbook/DEPLOYMENT.md`                  | Production deploy (Apache paths)     |
+| `handbook/HANDBOOK_SERVING.md`            | Flask vs. static handbook serving    |
+| `handbook/SECURITY.md`                    | Security overview                     |
+| `handbook/ROUTER.md`                      | `/engine/router.php` operation        |
+| `handbook/specs/`                          | Per-subsystem design specs            |
 | `ROBUSTNESS_REVIEW.md`                     | Phase 0-5 audit                       |
-| `router.md` `NET_LAYER.md` `FEATURES_NET_LAYER.md` | Net-layer deep dives        |
-| `module_registration.md`                   | Module-registry contract              |
-| `listbox_feature_multicolumn.md`           | Listbox multi-column spec             |
 | `composer.json`                            | PHP deps (`erusev/parsedown-extra`)   |
 | `Makefile`                                 | Root build orchestrator               |
 
@@ -486,17 +487,20 @@ Phase 3 regression tests (created 2026-08-02):
 - **Authentication wire-protocol** — bed's `AuthService`.
 - **Daemon lifecycle** — bed.
 - **Per-game logic** — each game repo.
-- **The notify messaging subsystem** — deleted; see
-  `CHANGELOG_NOTIFY_MESSAGING.md` (HISTORICAL) for the changelog.
+- **The notify messaging subsystem** — deleted 2026-07-22
+  (commit `a689c89`, Phase 7 of `TODO-message-migration.md`).
   The three surviving functions are in
-  `py/src/bbsengine6/member/lib.py`.
-- **The `BBSENGINE6_NOTIFYD_*.md` specs** — 10 files in
-  `handbook/specs/` marked SUPERSEDED. They are kept for
-  archaeology; do not link to them from new docs.
+  `py/src/bbsengine6/member/lib.py`: `member.moniker_exists`,
+  `member.group_exists`, `member.get_group_members`. The canonical
+  replacement is [`handbook/specs/messaging.md`](handbook/specs/messaging.md)
+  (the Phase 11 layered `bbsengine6.message` package). The
+  historical `BBSENGINE6_NOTIFYD_*.md` specs and the
+  `CHANGELOG_NOTIFY_MESSAGING.md` changelog are HISTORICAL only
+  and were removed from the canonical tree on 2026-09-04; do not
+  link to them from new docs.
 - **PHP framework refactor** — `php/zoid6.php` and the
-  zoid6-vintage monoliths are frozen; new PHP code should follow
-  the SPL autoload pattern documented in
-  `handbook/BBSENGINE6_PHP_SPL.md`.
+  zoid6-vintage monoliths are frozen; new PHP code follows the SPL
+  autoload pattern.
 
 ## 11. Layered package layout
 

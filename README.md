@@ -35,17 +35,19 @@ It is shipped in three forms:
 > **See [`SPEC.md`](SPEC.md)** for the architecture spec, the
 > module layout, and the cross-reference map into the handbook.
 >
-> **`handbook/`** is the user-facing manual (Apache deployment,
-> production checklist, security, runtime conversion, router
-> guide, JSON handling, net-layer guide, WebSocket/Web-realtime
-> plans, per-module specs).
+> **`handbook/`** is the user-facing manual: a five-page set of
+> operator docs ([QUICKSTART](handbook/QUICKSTART.md),
+> [DEPLOYMENT](handbook/DEPLOYMENT.md),
+> [HANDBOOK_SERVING](handbook/HANDBOOK_SERVING.md),
+> [SECURITY](handbook/SECURITY.md),
+> [ROUTER](handbook/ROUTER.md)) plus the per-subsystem
+> [`handbook/specs/`](handbook/specs/) design docs.
 >
 > **[`ROBUSTNESS_REVIEW.md`](ROBUSTNESS_REVIEW.md)** is the Phase 0-5
-> audit (681 lines) — the canonical record of every Python and
-> PHP bug found and fixed in 2026.
+> audit — the canonical record of every Python and PHP bug found
+> and fixed in 2026.
 >
-> **`CHANGELOG.md`** records user-visible changes. **`NOTES.md`** has
-> pip-install / build instructions.
+> **`CHANGELOG.md`** records user-visible changes.
 
 ## Dependencies
 
@@ -98,9 +100,10 @@ pip install -e .
 composer install
 ```
 
-See `handbook/PRODUCTION_DEPLOYMENT.md`, `handbook/SETUP.md`,
-`handbook/QUICKSTART.md`, and `handbook/APACHE_INTEGRATION.md`
-for the full deployment sequence.
+See [`handbook/QUICKSTART.md`](handbook/QUICKSTART.md) for the
+five-minute bring-up sequence and
+[`handbook/DEPLOYMENT.md`](handbook/DEPLOYMENT.md) for the full
+production deployment (Apache mod_proxy_uwsgi, mod_wsgi, gunicorn).
 
 ## What's in this repo
 
@@ -116,9 +119,11 @@ bbsengine6/
 │   │   ├── io/                  TUI primitives (echo, getch, inputstring,
 │   │   │                        listbox, inputdate, …)
 │   │   ├── member/              Member subsystem + WebSocket handler
+│   │   ├── message/             Layered pub/sub (Service / DAL / State / Domain)
 │   │   ├── net/                 Network layer (transport, packet, crypto,
 │   │   │                        WebSocket server, registry)
-│   │   ├── password/            Pluggable password ciphers + storage
+│   │   ├── password/            bcrypt (single source of truth)
+│   │   ├── password_cipher/     AES-256-GCM reversible encryption
 │   │   ├── services/            ChannelService, InviteService, MemberService
 │   │   ├── session/             Generic SessionManager
 │   │   ├── sql/                 ~50 schema files (schema, views, enums,
@@ -130,12 +135,13 @@ bbsengine6/
 │   │   ├── bed.py               BED shim (delegates to the bed package)
 │   │   ├── blurb.py  bottombar.py  common.py  conf.py
 │   │   ├── database.py  editor.py  engine.py  folder.py  form.py
-│   │   ├── getdate.py  group.py  input.py  inputdate.py  invite.py
+│   │   ├── getdate.py  input.py  inputdate.py  invite.py
 │   │   ├── listbox.py  listboxcursor.py  md2tpl.py  menu.py
-│   │   ├── message.py  module.py  password_hash.py  pgrole.py
-│   │   ├── readfile.py  screen.py  sig.py  util.py
+│   │   ├── menu_next/           MenuOption registry
+│   │   ├── message.py  module.py  pgrole.py  readfile.py
+│   │   ├── screen.py  sig.py  util.py
 │   │   └── _version.py
-│   └── tests/                   pytest suite (~50 modules)
+│   └── tests/                   pytest suite
 │
 ├── php/                         PHP web library
 │   ├── bootstrap.php            include-path setup
@@ -159,7 +165,7 @@ bbsengine6/
 ├── skin/                        SCSS + Smarty templates
 │   ├── scss/                    ~18 partials + vars/mixins/fonts
 │   └── tmpl/                    ~40 templates (page, topbar*, blurb,
-│                                sigs, breadcrumbs, notify, …)
+│                                sigs, breadcrumbs, …)
 │
 ├── smarty/                      Smarty plugins
 │   ├── function.{apidocs,fa,repo,teos}.php
@@ -167,14 +173,12 @@ bbsengine6/
 │                 parsedown,summarize,wpprop}.php
 │
 ├── handbook/                    User-facing manual
-│   ├── QUICKSTART.md  SETUP.md  PRODUCTION_DEPLOYMENT.md  SECURITY.md
-│   ├── APACHE_INTEGRATION.md  APACHE_QUICK_COMPARISON.md  APACHE_UWSGI_SETUP.md
-│   ├── RUNTIME_CONVERSION.md  ROUTER.md  JSON_HANDLING_GUIDE.md
-│   ├── NET_LAYER_GUIDE.md  WEBSOCKET_REALTIME_PLAN.md  WEBSERVER_REALTIME_PLAN.md
-│   ├── specs/                   Per-module design specs (see SPEC.md §9)
-│   ├── migrations/              *.sql migrations
+│   ├── index.md                 Landing page (table of contents)
+│   ├── QUICKSTART.md  DEPLOYMENT.md  HANDBOOK_SERVING.md
+│   ├── SECURITY.md  ROUTER.md
+│   ├── specs/                   Per-subsystem design specs
 │   ├── csrf/                    CSRF markdown docs
-│   └── NOTIFY_*.md              Notify migration planning
+│   └── migrations/              *.sql migrations
 │
 ├── www/                         Per-host prod sites
 │   ├── com/  org/               vhost trees (config, htaccess, php/, skin/)
@@ -191,11 +195,7 @@ bbsengine6/
 ├── Makefile                     Root build orchestrator
 ├── composer.json
 ├── composer.lock
-├── README.md  SPEC.md  CHANGELOG.md  NOTES.md
-├── ROBUSTNESS_REVIEW.md         Phase 0-5 audit
-├── router.md  NET_LAYER.md  NET_LAYER_INDEX.md  FEATURES_NET_LAYER.md
-├── module_registration.md  listbox_feature_multicolumn.md
-├── map_member_flag.sql
+├── README.md  SPEC.md  CHANGELOG.md  ROBUSTNESS_REVIEW.md
 └── TODO*.md                     Working notes (NOT specs)
 ```
 
@@ -215,6 +215,9 @@ bed --router zoid6.api.handler.MessageRouter \
 # 4. Stand up the database (idempotent)
 python -m bbsengine6.startup
 ```
+
+See [`handbook/QUICKSTART.md`](handbook/QUICKSTART.md) for the
+full operator walkthrough.
 
 ## License
 
