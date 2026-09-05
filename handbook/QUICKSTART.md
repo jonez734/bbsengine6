@@ -1,352 +1,137 @@
-# Quick Start Guide - Markdown Handbook
+# Quick Start
 
-Choose your approach based on your needs.
+> Status: canonical. Updated 2026-09-04.
+> Audience: operators standing up bbsengine6 for the first time.
 
-## Option 1: Runtime Conversion (Recommended for Development)
+## Goal
 
-No build step - changes visible immediately.
+Stand up bbsengine6 from a clean checkout in roughly five minutes: install
+OS and Python deps, build the wheel, bring up the database, run the BBS
+door, and confirm the public website renders. For production
+deployment, jump to [./DEPLOYMENT.md](./DEPLOYMENT.md).
 
-### Setup (5 minutes)
+## 1. OS packages (Debian / Ubuntu)
 
 ```bash
-# 1. Install dependencies
-pip install flask markdown pygments
-
-# 2. Run development server
-cd /home/opencode/data/work/bbsengine6/handbook
-python3 app.py
-
-# 3. Visit http://localhost:5000/handbook/
+sudo apt-get install \
+ postgresql postgresql-contrib libpq-dev \
+    python3 python3-venv python3-dev build-essential \
+    php8.1 php8.1-cli php8.1-pgsql libapache2-mod-php \
+    apache2 libapache2-mod-wsgi-py3 libapache2-mod-proxy-uwsgi \
+    libapache2-mod-rewrite
 ```
 
-### For Production with Apache
+PHP extensions `pdo` and `pgsql` are pulled in by `php8.1-pgsql`.
+Smarty and HTML_QuickForm2 come from PEAR:
 
 ```bash
-# 1. Install mod_wsgi
-sudo apt-get install libapache2-mod-wsgi-py3
-sudo a2enmod wsgi
+sudo pear install html_quickform2 Smarty Log
+```
 
-# 2. Copy Apache config
+## 2. Python package
+
+Install into Python 3.10 (mediapipe does not support 3.13+):
+
+```bash
+cd bbsengine6/py/src
+python3.10 -m build
+python3.10 -m pip install dist/bbsengine6-*.whl --force-reinstall
+```
+
+Editable install for development:
+
+```bash
+cd bbsengine6/py
+python3 -m pip install -e .
+```
+
+## 3. PHP deps (Composer)
+
+```bash
+cd bbsengine6
+composer install
+```
+
+This pulls `erusev/parsedown-extra` (declared in `composer.json`) into
+`vendor/`.
+
+## 4. Bring up the database
+
+`python -m bbsengine6.startup` is the idempotent bootstrap. It runs the
+`backend.check*` routines (role provisioning, schema ownership, schema
+import), then opens the interactive console menu.
+
+```bash
+python -m bbsengine6.startup
+```
+
+For a non-interactive bring-up, use the `stage_one` routine directly
+(see `py/src/bbsengine6/backend/`).
+
+The startup wizard expects PostgreSQL to be reachable as the current
+user (typically via `ident` or `peer` auth on the local socket). The
+dedicated `zoid6` role is created by `backend.checkzoid6role` and the
+five `SECURITY DEFINER` helpers are reassigned to it by
+`backend.checkzoid6owner` — both idempotent.
+
+## 5. Run the BBS door
+
+The `bed` console script is the TUI client:
+
+```bash
+bed
+```
+
+For browser/CLI clients, run the WebSocket daemon. The router is loaded
+from `zoid6.api.handler.MessageRouter`:
+
+```bash
+bed --router zoid6.api.handler.MessageRouter \
+    --config /etc/zoid6/bed.json
+```
+
+`bed` is the thin shim in `py/src/bbsengine6/bed.py`; the daemon
+lifecycle (auth, services, signal handling) lives in the bed package
+above this repo. The daemon opens a TCP/WS port that the
+`net/transport.py` WebSocket clients connect to.
+
+## 6. Serve the public website
+
+Add the Apache site config (see [./DEPLOYMENT.md](./DEPLOYMENT.md) for
+the full production deployment, including WSGI/uWSGI):
+
+```bash
 sudo cp handbook/handbook-wsgi.conf /etc/apache2/sites-available/
 sudo a2ensite handbook-wsgi.conf
-
-# 3. Restart Apache
 sudo systemctl restart apache2
-
-# 4. Visit https://bbsengine.org/handbook/
 ```
 
-**Advantages:**
-- No build step
-- Changes visible immediately
-- Automatic caching
-- Single source of truth
-
-**Disadvantages:**
-- Slightly slower on first request
-- Uses more CPU
-
----
-
-## Option 2: Pre-conversion to Static HTML
-
-Build markdown once, serve fast.
-
-### Setup (5 minutes)
-
-```bash
-# 1. Install dependencies
-pip install markdown pygments
-
-# 2. Convert all files
-cd /home/opencode/data/work/bbsengine6/handbook
-make convert
-
-# 3. Enable Apache
-sudo a2enmod rewrite
-sudo cp handbook/.htaccess /etc/apache2/sites-available/handbook.conf
-# or just copy .htaccess to handbook/ directory for per-directory config
-
-# 4. Restart Apache
-sudo systemctl restart apache2
-
-# 5. Visit https://bbsengine.org/handbook/
-```
-
-### Workflow
-
-When you update markdown:
-
-```bash
-# Regenerate HTML
-cd handbook
-make convert
-```
-
-Or watch for changes:
-
-```bash
-cd handbook
-make watch  # Auto-converts on file changes
-```
-
-**Advantages:**
-- Faster page loads (static files)
-- Lower CPU usage
-- Standard Apache serving
-- Can cache aggressively
-
-**Disadvantages:**
-- Must rebuild on changes
-- Two files per document
-- Build step in deployment
-
----
-
-## Adding Documentation
-
-### 1. Create markdown file
-
-```bash
-# Example: Create new documentation
-vim handbook/specs/my-feature.md
-```
-
-Start with a title:
-
-```markdown
-# My Feature Documentation
-
-This is about my feature.
-
-## Details
-
-More details...
-```
-
-### 2. View it
-
-**Runtime approach:**
-- Just visit: `http://localhost:5000/handbook/specs/my-feature/`
-- No build needed!
-
-**Static approach:**
-```bash
-make convert
-# Then visit: `http://localhost/handbook/specs/my-feature/`
-```
-
-### 3. Update existing docs
-
-Same process - just edit the markdown file.
-
----
-
-## Common Tasks
-
-### View HTML output (runtime)
-
-```bash
-python3 app.py
-# Visit: http://localhost:5000/handbook/
-```
-
-### Generate HTML files (static)
-
-```bash
-make convert
-# Files appear at handbook/*/index.html
-```
-
-### Watch for changes (static)
-
-```bash
-make watch
-```
-
-### Clean up backups
-
-```bash
-make clean
-```
-
-### Show help
-
-```bash
-make help
-```
-
----
-
-## File Structure
-
-After editing your markdown:
-
-```
-handbook/
-├── index.md                    ← Homepage
-├── README.md                   ← About handbook
-├── database.md                 ← Database docs
-├── specs/
-│   ├── index.md               ← Specs overview
-│   ├── architecture.md         ← Architecture
-│   ├── console/
-│   │   ├── index.md           ← Console overview
-│   │   └── main-console.md    ← Main console
-│   └── ...
-└── csrf/                       ← CSRF docs
-    ├── README.md
-    └── ...
-```
-
-URLs map to file paths:
-- `handbook/database.md` → `/handbook/database/`
-- `handbook/specs/index.md` → `/handbook/specs/`
-- `handbook/specs/architecture.md` → `/handbook/specs/architecture/`
-
----
-
-## Troubleshooting
-
-### Flask app won't start
-
-```bash
-# Check Python dependencies
-python3 -c "import flask, markdown; print('OK')"
-
-# If missing:
-pip install flask markdown pygments
-```
-
-### Markdown not converting
-
-```bash
-# Check syntax
-python3 convert_markdown.py handbook/test.md
-
-# Or test directly
-python3 -c "
-import markdown
-content = open('handbook/test.md').read()
-html = markdown.markdown(content)
-print(html[:100])
-"
-```
-
-### Apache not serving
-
-```bash
-# Check Apache config
-sudo apache2ctl configtest
-
-# Check logs
-sudo tail -f /var/log/apache2/error.log
-
-# Verify .htaccess enabled
-grep AllowOverride /etc/apache2/apache2.conf
-```
-
----
-
-## Which Approach?
-
-| Need | Choose |
-|------|--------|
-| Want to test locally | **Runtime (app.py)** |
-| Frequently updating docs | **Runtime (Flask)** |
-| Maximum performance | **Pre-convert (static)** |
-| Simple setup | **Pre-convert (.htaccess)** |
-| Production use | **Either, with proper config** |
-
----
-
-## Next Steps
-
-### Read Full Guides
-
-- **Runtime conversion:** See [RUNTIME_CONVERSION.md](RUNTIME_CONVERSION.md)
-- **Static conversion:** See [SETUP.md](SETUP.md)
-
-### Apache Configuration
-
-- **Runtime with mod_wsgi:** `handbook-wsgi.conf`
-- **Static with .htaccess:** `.htaccess` in handbook directory
-
-### Build Automation
-
-- **Makefile:** Run `make help` for all targets
-
----
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `app.py` | Flask application (runtime) |
-| `wsgi.py` | Apache mod_wsgi entry point |
-| `convert_markdown.py` | Standalone converter |
-| `Makefile` | Build automation |
-| `.htaccess` | Apache per-directory config |
-| `handbook-wsgi.conf` | Apache site config (runtime) |
-| `bbsengine-handbook.conf` | Apache site config (static) |
-
----
-
-## Example: Complete Setup (Runtime)
-
-```bash
-# 1. Install packages
-pip install flask markdown pygments
-
-# 2. Create first doc
-echo "# Home" > handbook/index.md
-echo "Welcome to docs" >> handbook/index.md
-
-# 3. Run development server
-cd handbook
-python3 app.py
-
-# 4. Open browser to http://localhost:5000/handbook/
-
-# 5. Create more docs
-echo "# Database" > handbook/database.md
-echo "Database schema..." >> handbook/database.md
-
-# 6. Reload browser - it's already there!
-```
-
-Done! Zero build steps, changes visible instantly.
-
----
-
-## Example: Complete Setup (Static)
-
-```bash
-# 1. Install packages
-pip install markdown pygments
-
-# 2. Create docs directory with markdown
-mkdir -p handbook/specs
-echo "# Home" > handbook/index.md
-echo "# Specs" > handbook/specs/index.md
-
-# 3. Convert to HTML
-cd handbook
-make convert
-
-# 4. Set up Apache
-sudo cp .htaccess /var/www/handbook/
-sudo systemctl restart apache2
-
-# 5. Visit http://localhost/handbook/
-
-# 6. Update and rebuild
-echo "# Architecture" > handbook/specs/architecture.md
-make convert
-```
-
-Done! Now docs are served as static files.
-
----
-
-For more details, see the full documentation guides.
+Then visit `http://localhost/handbook/` for the docs and
+`http://localhost/engine/` for the public site.
+
+## 7. Verify
+
+| Check | Command |
+|---|---|
+| Package installed | `python -c "import bbsengine6; print(bbsengine6.__file__)"` |
+| Database reachable | `python -m bbsengine6.startup` (re-run is safe) |
+| `bed` on PATH | `which bed` |
+| Apache config valid | `sudo apache2ctl configtest` |
+| Handbook renders | `curl -fsSL http://localhost/handbook/ \| head` |
+| Composer install clean | `composer validate --no-check-publish` |
+
+## Next steps
+
+- **Production deployment** — [./DEPLOYMENT.md](./DEPLOYMENT.md)
+  covers Apache mod_proxy_uwsgi, mod_wsgi, and gunicorn+mod_proxy,
+  systemd units, log rotation, and the production checklist.
+- **Handbook serving model** — [./HANDBOOK_SERVING.md](./HANDBOOK_SERVING.md)
+  covers runtime conversion vs. pre-built static HTML and the Flask
+  app.
+- **Security model** — [./SECURITY.md](./SECURITY.md) summarises the
+  Phase 0-5 hardening and links to `../ROBUSTNESS_REVIEW.md`.
+- **Router operation** — [./ROUTER.md](./ROUTER.md) documents the
+  `/engine/router.php` entry point and its handler chain.
+- **Build / install notes** — the `python -m build` +
+  `pip install --force-reinstall` sequence and the Python 3.10
+  constraint are captured in the `CHANGELOG.md` build-system entries.
