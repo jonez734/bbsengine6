@@ -1,186 +1,174 @@
-# bbsengine6.blurb Specification
+# bbsengine6.blurb — content entity
 
-> **STATUS (2026-07-22): PARTIALLY STALE.** This spec describes a
-> Python-side blurb entity model with `bigserial` PKs and JSONB
-> attributes, but the actual implementation (`py/src/bbsengine6/blurb.py`
-> + `sql/blurb.sql`) uses `text` PKs and a hybrid approach where the
-> body is stored on the filesystem (matching the PHP-side
-> `BLURB_SPEC.md`). The spec is preserved for the schema
-> relationships (`map_blurb_sig`, `blurb_flag`, etc.) which are still
-> accurate, but the `__blurb` table definition here is out of date.
-> See `BLURB_SPEC.md` for the live PHP handler spec.
+> **Status:** canonical. The filesystem-based blurb handler
+> described here is the live implementation. The older
+> `handbook/specs/blurb.md` (with `bigserial` PKs and JSONB-only
+> content) describes a superseded Python-side entity model and is
+> retained only for the schema relationship map; it is **not** the
+> live spec.
 
-## Summary
+A **blurb** is a content node (post, page, article) in the BBS
+engine. Blurbs live on the filesystem (markdown files with optional
+YAML frontmatter) with metadata stored in `engine.__blurb`. URI
+paths map directly to file paths.
 
-A **blurb** is a content node in the BBS engine that represents a post, page, or article. Blurbs can be nested (parent/child relationships), categorized by sigpath (forum/section location), and tagged. They serve as the core content entity for the bulletin board system.
+## Contents
 
-## Brief Description
+- [Schema](#schema)
+- [File layout](#file-layout)
+- [Python module](#python-module)
+- [PHP counterpart](#php-counterpart)
+- [SQL files](#sql-files)
+- [Content format](#content-format)
+- [Public API](#public-api)
 
-Blurbs are stored in PostgreSQL with metadata for creation, modification, and approval. Each blurb belongs to one or more SIGs (Special Interest Groups) via a mapping table, and can have multiple tags. Blurbs support hierarchical content through parent/child relationships, enabling threaded discussions and nested pages.
+## Schema
 
-## Database Schema
+```sql
+CREATE TABLE engine.__blurb (
+    id              TEXT PRIMARY KEY,
+    kind            TEXT NOT NULL,
+    attributes      JSONB,
+    contentfilename TEXT,
+    datecreated     TIMESTAMPTZ,
+    createdbymoniker TEXT REFERENCES engine.__member(moniker)
+);
 
-### Table: `engine.__blurb`
-
-Base table storing blurb content and metadata.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | bigserial | Primary key |
-| `parentid` | bigint | FK to `__blurb.id` (self-referencing, for nesting) |
-| `kind` | text | Blurb type (e.g., `folder`, `post`, `empyre.player`) |
-| `attributes` | jsonb | Flexible key-value metadata |
-| `datecreated` | timestamptz | Creation timestamp |
-| `createdbymoniker` | citext | Author's member moniker |
-| `dateupdated` | timestamptz | Last modification timestamp |
-| `updatedbymoniker` | citext | Last editor's member moniker |
-| `dateapproved` | timestamptz | Approval timestamp (nullable) |
-| `approvedbymoniker` | citext | Approver's member moniker (nullable) |
-
-### Table: `engine.blurb_flag`
-
-Blurb-specific flags (e.g., `sticky`, `frozen`). Separate from member flags.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `name` | citext | Primary key - flag name |
-| `description` | text | Human-readable description |
-
-### Table: `engine.map_blurb_flag`
-
-Maps blurbs to flags.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `blurbid` | bigint | FK to `__blurb.id` |
-| `name` | citext | FK to `blurb_flag.name` |
-| `value` | text | Flag value (nullable) |
-
-Unique constraint on `(blurbid, name)`.
-
-### Table: `engine.map_member_blurb_read`
-
-Tracks which members have read which blurbs. Used for "unread" indicators and "mark all as read" functionality.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `moniker` | citext | FK to `__member.moniker` |
-| `blurbid` | bigint | FK to `__blurb.id` |
-| `dateread` | timestamptz | Timestamp when the member read the blurb |
-
-**Indexes:**
-- Primary key on `(moniker, blurbid)` - fast "has member read this blurb?"
-- Index on `moniker` - fast "what has this member read?"
-- Index on `blurbid` - fast "who has read this blurb?"
-
-Unique constraint on `(blurbid, name)`.
-
-### Table: `engine.map_blurb_sig`
-
-Maps blurbs to SIGs (forum sections).
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `blurbid` | bigint | FK to `__blurb.id` |
-| `sigpath` | ltree | SIG path (e.g., `top.software.python`) |
-
-Unique constraint on `(blurbid, sigpath)`.
-
-### Table: `engine.map_blurb_tag`
-
-Maps blurbs to tags.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `blurbid` | bigint | FK to `__blurb.id` |
-| `tag` | text | Tag name |
-
-Unique constraint on `(blurbid, tag)`.
-
-### View: `engine.blurb`
-
-Public-facing view combining blurb data with computed fields.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `*` | - | All columns from `__blurb` |
-| `datecreatedepoch` | bigint | Unix timestamp of creation |
-| `dateupdatedepoch` | bigint | Unix timestamp of last update |
-| `dateapprovedepoch` | bigint | Unix timestamp of approval |
-| `sigs` | text[] | Array of SIG paths |
-| `tags` | text[] | Array of tag names |
-| `subblurbcount` | integer | Count of child blurbs |
-
-## PHP API
-
-### `\bbsengine6\blurb\buildbreadcrumbs($sigpath, $skiptop=true, $hidepath=null)`
-
-Returns a list of dictionaries with keys `title`, `path`, `uri` for each part of the SIG path hierarchy.
-
-**Parameters:**
-- `$sigpath` (string) - ltree path (e.g., `top.software.python`) or URI path (e.g., `software/python`). The input is normalized using `\bbsengine6\util\pathToLtree()` which replaces `/` with `.` and `-` with `_`.
-- `$skiptop` (bool) - Skip the `top` node in the path
-- `$hidepath` (string|null) - Optional path to exclude from results
-
-**Returns:** `array` of sig records in hierarchical order
-
-### `\bbsengine6\blurb\buildbreadcrumblist($blurbid)`
-
-Returns breadcrumbs for all SIGs a blurb is posted to. Flattens the `sigs` array, calls `buildbreadcrumbs()` for each, and returns a nested list.
-
-**Parameters:**
-- `$blurbid` (int) - Blurb ID
-
-**Returns:** `array` of breadcrumb arrays (one per SIG)
-
-## Content Storage
-
-### Attributes (JSONB)
-
-The `attributes` column stores flexible metadata as JSON. Common keys:
-
-```json
-{
-  "title": "Post Title",
-  "body": "Post content...",
-  "format": "markdown",
-  "mature": false,
-  "sticky": false
-}
+CREATE VIEW engine.blurb AS
+SELECT b.*,
+       array_agg(s.path ORDER BY s.path) AS sigs
+FROM engine.__blurb b
+LEFT JOIN engine.map_blurb_sig m ON m.blurbid = b.id
+LEFT JOIN engine.sig s ON s.path = m.sigpath
+GROUP BY b.id;
 ```
 
-### Hierarchy
+The primary key is **text**, not `bigserial`. A typical id is
+`"ec.john-edward"` — derived from the URI path with `.` as the
+separator. This is the live schema; see `py/src/bbsengine6/sql/blurb.sql`.
 
-Blurbs can be nested via `parentid`:
-- Parent blurb deleted → children become orphaned (parentid set to null)
-- Parent blurb moved → children follow automatically
+Related tables:
 
-## Thread Safety
+| Table                          | Purpose                                                                                  |
+|--------------------------------|------------------------------------------------------------------------------------------|
+| `engine.map_blurb_sig`         | `(blurbid, sigpath)` — many-to-many between blurbs and sig paths                          |
+| `engine.map_member_blurb_read` | `(moniker, blurbid, dateread)` — read-tracking for unread indicators                      |
+| `engine.map_blurb_tag`         | `(blurbid, tag)` — free-form tags                                                        |
+| `engine.map_blurb_flag`        | `(blurbid, name, value)` — blurb flags (sticky, frozen, approved, …)                       |
+| `engine.blurb_flag`            | `(name, description)` — flag definitions                                                  |
 
-- **Safe**: Database queries via PDO prepared statements are thread-safe.
-- The blurb functions read from the database and return arrays; no shared mutable state.
+## File layout
 
-## Relationships
+```
+BLURBDIR (default: /srv/www/blurbs/teos/)
+├── ec/
+│   ├── index.md
+│   └── john-edward.md
+├── comp/
+│   └── lang/
+│       └── python.md
+└── index.md
+```
 
-| Relationship | Via |
-|--------------|-----|
-| Member (author) | `createdbymoniker` → `__member.moniker` |
-| SIGs | `map_blurb_sig` → `__sig.path` |
-| Tags | `map_blurb_tag` → `__tag.name` |
-| Children | `parentid` → `__blurb.id` |
-| Parent | `parentid` (self-reference) |
+The URI mapping is `ec/john-edward.md` → blurbid `ec.john-edward`
+(slashes become dots; `.md` is stripped). The path is checked
+against the configured `BLURBDIR` to prevent traversal.
 
-## Use Cases
+## Python module
 
-1. **Forum Posts** - Blurbs posted to SIGs via `map_blurb_sig`
-2. **Pages** - Standalone blurbs (no SIG) for static content
-3. **Threads** - Parent blurb + child blurbs for replies
-4. **Articles** - Blurbs with tags for categorization
+`py/src/bbsengine6/blurb.py` exposes:
 
-## Known Issues / TODOs
+| Function              | Signature                                                                              | Notes                                                                                |
+|-----------------------|----------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------|
+| `get_content_dir`     | `(args) -> pathlib.Path`                                                               | Honors `args.blurb_content_dir` and `$BBSENGINE6_BLURB_CONTENT_DIR` (default `/var/bbsengine6/blurb_content`) |
+| `_safe_content_path`  | `(args, contentpath) -> pathlib.Path | None`                                            | Resolves `contentpath`, confirms it stays under `get_content_dir(args)`; returns `None` on traversal or unreadable path |
+| `insert`              | `(args, blurb, prg, table="engine.__blurb", returnid=True, primarykey="id", mogrify=False)` | Wraps `database.insert`; stamps `prg`, `datecreated`, `createdbymoniker`               |
+| `save_content`        | `(args, blurbid, content, mogrify=False) -> str`                                       | Writes `content_dir/<blurbid>.txt`; returns the absolute filepath                     |
+| `insert_with_content` | `(args, blurb, prg, content=None, **kwargs) -> int`                                    | `insert` + `save_content` + `updateattributes({contentpath: ...})`                     |
+| `load_content`        | `(args, blurbid) -> str | None`                                                        | Reads `content_dir/<blurbid>.txt`; returns `None` if missing                          |
+| `delete_content`      | `(args, blurbid) -> bool`                                                              | Unlinks `content_dir/<blurbid>.txt`; returns True on success                          |
+| `update_with_content` | `(args, id, blurb, content=None, **kwargs) -> int`                                    | `update` + `save_content`; useful for content edits                                   |
+| `updateattributes`    | `(args, blurbid, attributes, reset=False, table="engine.__blurb", mogrify=False)`     | `attributes || jsonb` merge (`reset=True` overwrites)                                  |
+| `update`              | `(args, id, blurb, reset=False, mogrify=False) -> int`                                | Stamps `dateupdated`, `updatedbymoniker`; delegates to `database.update`              |
+| `commit`              | `(args) -> Any`                                                                        | Pass-through to `database.commit`                                                     |
+| `build`               | `(args, rec, cur=None) -> dict`                                                       | Hydrate a blurb dict with computed `flags` from `engine.map_blurb_flag`               |
+| `_fetch_flags`        | `(cur, blurbid) -> dict`                                                               | Returns `{name: value}` for every flag joined to the blurb                            |
+| `get`                 | `(args, id) -> dict | None`                                                            | `select * from engine.__blurb where id = <id>`                                       |
+| `get_with_content`    | `(args, id) -> dict | None`                                                           | `get` + content read (preferring `attributes.contentpath` with `_safe_content_path`)  |
+| `approve`             | `(args, id, value=True) -> bool`                                                       | Upsert `engine.map_blurb_flag` row with `name='approved'`, `value='true'/'false'`     |
 
-1. The `prg` column is reserved but not yet implemented.
-2. No built-in content versioning/audit trail.
-3. No soft-delete (currently hard delete cascades to children).
-4. The `attributes` JSONB schema is not enforced; callers must agree on keys.
-5. No access control at the blurb level (relies on SIG permissions).
+`_safe_content_path` is the security boundary for filesystem access.
+`contentpath` is member-controlled JSON; without the path containment
+check, a crafted blurb could escape `BLURBDIR`. The function uses
+`Path.resolve()` + `candidate.relative_to(base)` and returns `None`
+on any failure (path doesn't exist, escapes the base, OSError,
+ValueError).
+
+## PHP counterpart
+
+`php/blurb.php` is the namespaced PHP handler that the Apache
+front-end renders. The `\bbsengine6\blurb` namespace exposes:
+
+| PHP function                                | Purpose                                                                        |
+|---------------------------------------------|--------------------------------------------------------------------------------|
+| `isBlurb(string $uri): bool`                | Check if a URI corresponds to a blurb in `engine.__blurb`                       |
+| `display(string $uri, ?string $filepath): void` | Render the blurb (Smarty template + markdown → HTML)                         |
+| `buildbreadcrumbs(string $sigpath, bool $skiptop=true, ?string $hidepath=null): array` | Build breadcrumb trail from a sig path             |
+| `buildbreadcrumblist(int $blurbid): array`  | Build breadcrumbs for every SIG a blurb is posted to                            |
+| `getcontentdir(): string`                   | Returns the configured content dir                                               |
+| `getcontent(int $blurbid): ?string`         | Read blurb content from file                                                     |
+| `getlist(int $offset=0, int $limit=20): array` | Paginated blurb list                                                          |
+| `getbyid(int $id): ?array`                  | Get a blurb by id (or null)                                                      |
+| `getcount(): int`                           | Total blurb count                                                                |
+
+Constants:
+
+| Constant                       | Default                          |
+|--------------------------------|----------------------------------|
+| `BLURBDIR`                     | `/srv/www/blurbs/teos/`          |
+| `BBSENGINE6_BLURB_CONTENT_DIR` | `/var/bbsengine6/blurb_content`  |
+
+## SQL files
+
+The canonical SQL lives under `py/src/bbsengine6/sql/`:
+
+| File              | Purpose                                                                       |
+|-------------------|-------------------------------------------------------------------------------|
+| `blurb.sql`       | `engine.__blurb`, `engine.map_blurb_sig`, `engine.map_blurb_tag`              |
+| `blurbview.sql`   | `engine.blurb` view                                                           |
+| `blurb_flag.sql`  | `engine.blurb_flag` / `engine.map_blurb_flag`                                 |
+| `blurb_read.sql`  | `engine.map_member_blurb_read`                                                |
+
+Bootstrap is verified by `py/src/bbsengine6/backend/checkmessage.py`
+or the equivalent blurb-specific backend check (called from
+`backend.stage_one.main`).
+
+## Content format
+
+Markdown files with optional YAML frontmatter:
+
+```markdown
+---
+title: John Edward Channeling
+author: Various Contributors
+category: mediumship
+---
+
+# John Edward
+
+Content body goes here. Markdown is rendered through Parsedown /
+Smarty on the PHP side and stored verbatim on the Python side
+(the body lives on disk, not in the database).
+```
+
+The `title` field is the canonical blurb title; the PHP renderer
+falls back to the filename if absent. There is no case
+transformation — the user's data is authoritative.
+
+## Public API
+
+The router's directory-listing path filters backup / scratch
+files (`.swp`, `.bak`, trailing `~`, `#name#`, etc.) before
+listing. See `handbook/specs/folder.md` §"Backup and Junk
+File Filtering" for the full list. The same filter is applied
+to blurb listings rendered through the router.
