@@ -772,6 +772,110 @@ the doubled URL in their templates can drop one copy.
 The `{teos}` plugin now accepts `title="…"` so callers can label the
 breadcrumb independently of the link text.
 
+### Phase 6: bbsengine6.channel — production schema, namespacing, admin
+
+`bbsengine6.channel` is now usable end-to-end by casino and other
+modules. The pub/sub primitives in `bbsengine6.net` have existed
+for a while but had no prod schema, no permission gating, no admin
+surface, and no shared channel state between the WebSocketServer
+and the message router.
+
+**New code:**
+
+- `bbsengine6/services/channel.py` — `ChannelService` with
+  `create_channel`, `get_channel`, `list_channels`,
+  `set_announce_only`, `add_announcer`, `remove_announcer`,
+  `can_publish`. Persistent via `engine.__channel`,
+  `engine.__channel_announcer`, `engine.channel` view.
+- `bbsengine6/channel/naming.py` — `table_channel`, `member_channel`,
+  `global_channel`, `announcement_channel`, `shout_channel`,
+  `parse_channel`. Single source of truth for the channel naming
+  convention so typos don't silently route messages to the wrong
+  audience.
+- `bbsengine6/channel/api/handler.py` — `MessageRouter` (subscribe /
+  unsubscribe / get_subscriptions), `ChannelAdminHandler`
+  (`channel_create` / `channel_list` / `channel_get` /
+  `channel_set_announce_only` / `channel_add_announcer` /
+  `channel_remove_announcer`), and `_auto_seed_channels` for lazy
+  daemon member + channel seeding at register time. Reads both
+  flat (bed.json) and nested (zoid6.json) config shapes.
+- `bbsengine6/console/channel.py` — `con channel <verb>` CLI.
+  JSON output. Each verb delegates to `ChannelService` and threads
+  the actor moniker through `_require_authority`.
+- `bbsengine6/backend/checkchannel.py` — `stage_one` checkclass
+  that loads `engine.__channel` + `engine.__channel_announcer` on
+  fresh DBs (idempotent on existing DBs).
+- `bbsengine6/backend/checkmember_moniker_format.py` — always-run
+  migration module that extends the `chk_member_moniker_format`
+  constraint to permit namespaced monikers. Runs every startup;
+  no-op once the constraint is updated.
+- `bbsengine6/member/lib.py` — `RESERVED_MONIKERS` (4 shipped PG
+  role names), `is_namespaced_moniker`, `_validate_moniker_shape`,
+  `register_module_member` (bypass path for module bootstrap with
+  structural namespacing requirement).
+
+**Schema changes:**
+
+- `engine.__channel` and `engine.__channel_announcer` — added.
+- `chk_member_moniker_format` — extended to allow
+  `<module>:<purpose>` namespaced monikers.
+
+**Permission hardening:**
+
+- `ChannelService._require_authority` returns None if the actor is
+  a sysop OR the channel's `createdby`. Gates all mutators.
+- `set_announce_only`, `add_announcer`, `remove_announcer` go
+  through `_require_authority`. `remove_announcer` got a new
+  required `actor_moniker` parameter (breaking change).
+
+**bed.json / zoid6.json:**
+
+- Top-level `channel` section with `enabled`, `modulepath`,
+  `admin_handler_enabled`, `auto_seed` list. The auto_seed step
+  lazily creates the namespaced daemon member (e.g. `zoid6:casino`)
+  via `register_module_member` and seeds `casino:global` +
+  `system:announcements` with the right announce-only settings.
+
+**bed.main.BED.start** now constructs one `ChannelState()` per
+daemon and threads it to both `WebSocketServer(channel_state=...)`
+and `MessageRouterClass(..., channel_state=state)`. Per-router
+`server._channel_state = self.channel_state` boilerplate removed.
+
+**zoid6** `_register_module` forwards `config=module_config` to
+sub-routers (TypeError fallback for older routers that don't
+accept it). Modules can now read their `services.<module>` sub-config
+without re-parsing the whole JSON.
+
+**Tests** — 117 in bbsengine6 (test_member_reserved,
+test_channel_config, test_cli_con, test_channel_naming,
+test_message_channel, test_channel_announce_only), 5 in casino
+(test_channel_integration). All pass.
+
+**Bug fix:** `add_announcer` was calling `verifyMemberFound`
+without the required `pool=` kwarg (pre-existing failure on legacy
+test runs). Replaced with inline existence check on the same
+connection as the INSERT.
+
+**Bug fix:** `register_module_member`'s bypass path was tripping
+on three layers of defense (shape validation, pool requirement,
+default primarykey="id" on a table that has no id column). Now
+threads `_skip_shape_validation=True`, builds its own
+`database.connect` context when no caller pool/conn is given, and
+defaults to `primarykey="moniker"`.
+
+**Docs:** `bbsengine6/EXTENDING_CHANNELS.md` walks module authors
+through the four-step onboarding pattern (channel_state kwarg,
+sender_moniker plumbing, namespaced daemon members, auto_seed
+entries). Cross-references added to `member/lib.py.RESERVED_MONIKERS`
+and `channel/api/handler.MessageRouter`.
+
+**Migration owner caveat:** `checkmember_moniker_format` runs
+`ALTER TABLE engine.__member` which requires the connecting role
+to own the table. In production that's `sysop` (per the GRANT
+chain in `channel.sql`/`grants.sql`). In dev sandboxes where the
+connecting role doesn't own the table, the migration can't apply
+— this is a sandbox limitation, not a code issue.
+
 ## [0.0.1.dev202608032039] — 2026-08-03
 
 ### Phase 5: regression tests + ROBUSTNESS_REVIEW.md
