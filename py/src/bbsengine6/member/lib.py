@@ -141,13 +141,36 @@ def register_module_member(
         "createdbymoniker": moniker,
         "approvedbymoniker": moniker if approved else None,
     }
-    return insert(
-        args,
-        member,
-        conn=conn,
-        pool=pool,
-        **kwargs,
-    )
+    # Borrow-or-open a connection. Caller-supplied conn/pool wins; when
+    # neither is provided we build a fresh pool for the duration of the
+    # insert and close it on exit. This mirrors what
+    # ``database.connect`` does for one-shot scripts and avoids the
+    # brittleness of ``database.insert`` requiring a pool kwarg at the
+    # call site.
+    insert_kwargs = dict(kwargs)
+    insert_kwargs["_skip_shape_validation"] = True
+    # engine.__member has no ``id`` column; the natural PK is moniker.
+    # ``database.insert`` defaults to primarykey="id" which fails with
+    # "column __member.id does not exist". The console add path passes
+    # primarykey="moniker" explicitly; we do the same here.
+    insert_kwargs.setdefault("primarykey", "moniker")
+    insert_kwargs.setdefault("returnid", False)
+
+    if conn is None:
+        if pool is None:
+            owned_pool = database.getpool(args)
+        else:
+            owned_pool = None
+        try:
+            with database.connect(args, pool=pool or owned_pool) as managed_conn:
+                return insert(args, member, conn=managed_conn, **insert_kwargs)
+        finally:
+            if owned_pool is not None:
+                try:
+                    owned_pool.closeall()
+                except Exception:
+                    pass
+    return insert(args, member, conn=conn, **insert_kwargs)
 
 
 def _get_thread_id() -> int:
@@ -1665,7 +1688,11 @@ def insert(args, member, **kwargs):
     table = kwargs.get("table", "engine.__member")
     conn = kwargs.get("conn", None)
 
-    _validate_moniker_shape(member.get("moniker"))
+    # Bypass the shape validation when called from register_module_member.
+    # The bypass path already validates namespaced-lowercase-shape upstream,
+    # and the standard validator rejects namespaced monikers entirely.
+    if not kwargs.pop("_skip_shape_validation", False):
+        _validate_moniker_shape(member.get("moniker"))
 
     cols = copy.copy(member)
     flags_dict = cols.pop("flags", None)

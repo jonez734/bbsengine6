@@ -136,20 +136,23 @@ class TestRegisterModuleMember:
             register_module_member(self._args(), "zoid6:")
 
     def test_accepts_namespaced_shape(self):
-        # The shape/lowercase/namespaced gates should all pass, then
-        # ``register_module_member`` falls through to ``insert()`` which
-        # re-runs ``_validate_moniker_shape``. That re-validation raises
-        # a ValueError complaining about namespaced monikers -- which is
-        # correct behavior at this layer (the bypass path still gates
-        # inserts through the standard validation). The point is that
-        # the bypass path itself doesn't raise on shape BEFORE the
-        # insert call.
-        with pytest.raises(ValueError) as exc:
+        # The shape/lowercase/namespaced gates should all pass. The
+        # ``_skip_shape_validation`` flag added to ``insert`` lets the
+        # bypass path through without re-validating. Any error after
+        # that point is from the underlying insert (e.g. DB unreachable,
+        # missing schema, missing FK) — NOT from shape validation.
+        try:
             register_module_member(self._args(), "zoid6:casino")
-        # The error message should be from the standard validation, not
-        # from the bypass shape checks (which would say "namespaced
-        # moniker" or "lowercase" or "<module>:<purpose>").
-        msg = str(exc.value)
-        assert "reserved for module bootstrap" in msg
-        assert "lowercase" not in msg
-        assert "expected shape" not in msg
+        except ValueError as e:
+            # Shape errors must NOT come through here. If they do, the
+            # bypass is broken.
+            msg = str(e)
+            assert "namespaced moniker" not in msg
+            assert "lowercase" not in msg
+            assert "expected shape" not in msg
+            assert "reserved for module bootstrap" not in msg
+            pytest.fail(f"bypass path leaked a shape validation error: {msg}")
+        except Exception:
+            # Non-ValueError exceptions (DB errors, FK violations, etc.)
+            # are expected when the test runs without a real DB.
+            pass

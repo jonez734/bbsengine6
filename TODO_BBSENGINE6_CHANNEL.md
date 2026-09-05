@@ -211,7 +211,7 @@
 | Test file | Tests | Status |
 |-----------|------:|--------|
 | `test_member_reserved.py` | 23 | all pass |
-| `test_channel_config.py` | 9 | all pass |
+| `test_channel_config.py` | 11 | all pass (added 2 tests for bypass path) |
 | `test_cli_con.py` | 15 | all pass |
 | `test_channel_naming.py` | 10 | all pass |
 | `test_message_channel.py` | 33 | all pass (pre-existing) |
@@ -222,12 +222,52 @@
 | | | existence check on the same connection |
 | | | as the INSERT) |
 | `casino/tests/test_channel_integration.py` | 5 | all pass |
-| **Total** | **120** | **all pass** |
+| **Total** | **122** | **all pass** |
 
 Note: `test_channel_announce_only.py` defaulted its DB to `zoid6test`;
 added a `BBSENGINE6_CHANNEL_TEST_DBNAME` env override so the same suite
 runs against `zoid6` (which exists in the dev sandbox) or any other
 target DB.
+
+### Bypass path brittleness fix
+
+The namespaced daemon member insert (used by channel auto-seed) was
+broken: `register_module_member` was structurally correct but tripped
+on three layers of defense:
+
+1. `_validate_moniker_shape` in `insert()` rejects namespaced monikers.
+2. `database.insert` requires pool-or-conn kwarg.
+3. `database.insert` defaults to `primarykey="id"` but engine.__member
+   has no `id` column.
+
+Fixed by:
+- Adding `_skip_shape_validation=True` kwarg threaded through
+  `register_module_member` → `insert`. The shape validation is already
+  enforced upstream by the bypass function.
+- `register_module_member` now builds a connection context itself via
+  `database.getpool(args)` + `database.connect(...)` when no caller-
+  supplied pool/conn is given, so callers like the channel auto-seed
+  don't have to know the connection-management dance.
+- `register_module_member` defaults `primarykey="moniker"` and
+  `returnid=False` to match the schema and bypass the broken RETURNING
+  clause.
+- Added `tests/test_channel_config.py::TestEnsureDaemonMember` cases for
+  the bypass path (verifies `_skip_shape_validation=True` is threaded;
+  verifies warn-and-skip on insert failure).
+
+### Migration owner caveat
+
+`checkmember_moniker_format` migration runs the ALTER TABLE on
+`engine.__member` and requires the connecting role to own the table.
+In production this is `sysop` (granted via channel.sql / member.sql /
+grants.sql). In the dev sandbox the connecting role is `opencode` but
+`engine.__member` is owned by `jam` — peer auth doesn't allow role
+elevation, so the migration can't run from `opencode`. The code path is
+correct; only the sandbox is limited.
+
+To verify the migration in dev: log in as `jam` (or any table owner)
+and run `bbsengine6.startup` once. Subsequent `opencode`-role startups
+will see the constraint already at the namespaced pattern and skip.
 
 ## Verification
 

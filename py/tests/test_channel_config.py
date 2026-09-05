@@ -67,3 +67,61 @@ class TestEnsureDaemonMember:
         args = argparse.Namespace()
         result = _ensure_daemon_member(args, "")
         assert result is None
+
+    def test_namespaced_creator_skips_shape_validation(self, monkeypatch):
+        """The bypass path passes _skip_shape_validation=True to insert.
+
+        We can't run a real insert without a DB, so we monkeypatch
+        ``member.lib.insert`` to capture the kwargs and verify the
+        shape-validation bypass flag is set.
+        """
+        import argparse
+        from bbsengine6.member import lib as member_lib
+
+        args = argparse.Namespace()
+
+        captured_kwargs = {}
+
+        def fake_insert(*args, **kwargs):
+            captured_kwargs.update(kwargs)
+            return "moniker:casino"
+
+        monkeypatch.setattr(member_lib, "insert", fake_insert)
+        monkeypatch.setattr(member_lib, "database", type("M", (), {
+            "getpool": staticmethod(lambda args: None),
+            "connect": staticmethod(lambda args, pool=None: _NullCtx()),
+        })())
+
+        result = _ensure_daemon_member(args, "moniker:casino")
+
+        assert result == "moniker:casino"
+        assert captured_kwargs.get("_skip_shape_validation") is True
+
+    def test_namespaced_creator_handles_insert_failure(self, monkeypatch):
+        """When insert fails, _ensure_daemon_member returns None (warn-and-skip)."""
+        import argparse
+        from bbsengine6.member import lib as member_lib
+
+        args = argparse.Namespace()
+
+        def fake_insert(*args, **kwargs):
+            raise RuntimeError("simulated DB error")
+
+        monkeypatch.setattr(member_lib, "insert", fake_insert)
+        monkeypatch.setattr(member_lib, "database", type("M", (), {
+            "getpool": staticmethod(lambda args: None),
+            "connect": staticmethod(lambda args, pool=None: _NullCtx()),
+        })())
+
+        result = _ensure_daemon_member(args, "moniker:casino")
+        assert result is None
+
+
+class _NullCtx:
+    """Minimal no-op context manager for mocking database.connect."""
+
+    def __enter__(self):
+        return None
+
+    def __exit__(self, *args):
+        return False
