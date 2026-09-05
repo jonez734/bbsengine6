@@ -20,45 +20,45 @@
 
 ### Namespacing foundation
 
-- [ ] Edit `bbsengine6/py/src/bbsengine6/sql/member.sql:39`: extend regex via `DO $$ ... $$` block to `^[a-zA-Z0-9_]+(?::[a-zA-Z0-9_]+)?$`; idempotent
-- [ ] Edit `bbsengine6/py/src/bbsengine6/member/lib.py`: add `RESERVED_MONIKERS = frozenset({"sysop", "term", "web", "bed"})` with rationale docstring (shipped roles only; namespacing is primary defense; downstream installs don't extend this constant)
-- [ ] Add `is_namespaced_moniker(moniker) -> bool` to `member/lib.py`: returns `":" in moniker`
-- [ ] Add `register_module_member(args, moniker, **kwargs)` to `member/lib.py`: bypass path; enforces namespaced form, lowercase, shape; skips reservation check; sets `createdbymoniker = approvedbymoniker = moniker` (self-referential FK target allowed)
-- [ ] Modify `libmember.insert` (called from `console/member.py:524`): reject `:` in moniker; reject reserved flat names
+- [x] Edit `bbsengine6/py/src/bbsengine6/sql/member.sql:39`: extend regex via `DO $$ ... $$` block to `^[a-zA-Z0-9_]+(?::[a-zA-Z0-9_]+)?$`; idempotent
+- [x] Edit `bbsengine6/py/src/bbsengine6/member/lib.py`: add `RESERVED_MONIKERS = frozenset({"sysop", "term", "web", "bed"})` with rationale docstring (shipped roles only; namespacing is primary defense; downstream installs don't extend this constant)
+- [x] Add `is_namespaced_moniker(moniker) -> bool` to `member/lib.py`: returns `":" in moniker`
+- [x] Add `register_module_member(args, moniker, **kwargs)` to `member/lib.py`: bypass path; enforces namespaced form, lowercase, shape; skips reservation check; sets `createdbymoniker = approvedbymoniker = moniker` (self-referential FK target allowed)
+- [x] Modify `libmember.insert` (called from `console/member.py:524`): reject `:` in moniker; reject reserved flat names
 
 ### Production schema bootstrap
 
-- [ ] Create `bbsengine6/py/src/bbsengine6/backend/checkchannel.py`: mirror `checkmessage.py:1-129`; loads `engine.__channel`, `engine.__channel_announcer` from `channel.sql`
-- [ ] Edit `bbsengine6/py/src/bbsengine6/backend/stage_one.py:24-54`: add `"checkchannel"` to iteration tuple after `"checkmessage"`
+- [x] Create `bbsengine6/py/src/bbsengine6/backend/checkchannel.py`: mirror `checkmessage.py:1-129`; loads `engine.__channel`, `engine.__channel_announcer` from `channel.sql`
+- [x] Edit `bbsengine6/py/src/bbsengine6/backend/stage_one.py:24-54`: add `"checkchannel"` to iteration tuple after `"checkmessage"`
 
 ### Channel config in JSON
 
-- [ ] Edit `bed/src/bed/data/bed.json`: add top-level `channel` section between line 42 and line 43:
-  - [ ] `enabled: true`
-  - [ ] `modulepath: "bbsengine6.channel.api.handler"`
-  - [ ] `description`
-  - [ ] `admin_handler_enabled: true`
-  - [ ] `auto_seed` list with `casino:global` (createdby=`zoid6:casino`, announce_only=false) and `system:announcements` (createdby=`zoid6:casino`, announce_only=true, announcers=[`sysop`])
-- [ ] Edit `zoid6/src/zoid6/data/zoid6.json`: extend existing `services.channel` (lines 26-30) with `admin_handler` sub-key; no `auto_seed` here (BED-level concern only)
+- [x] Edit `bed/src/bed/data/bed.json`: add top-level `channel` section between line 42 and line 43:
+  - [x] `enabled: true`
+  - [x] `modulepath: "bbsengine6.channel.api.handler"`
+  - [x] `description`
+  - [x] `admin_handler_enabled: true`
+  - [x] `auto_seed` list with `casino:global` (createdby=`zoid6:casino`, announce_only=false) and `system:announcements` (createdby=`zoid6:casino`, announce_only=true, announcers=[`sysop`])
+- [x] Edit `zoid6/src/zoid6/data/zoid6.json`: extend existing `services.channel` (lines 26-30) with `admin_handler` sub-key; no `auto_seed` here (BED-level concern only)
 
 ### ChannelService auto-seed (router-time)
 
-- [ ] Edit `bbsengine6/py/src/bbsengine6/channel/api/handler.py` `MessageRouter.__init__`: accept `config: Optional[Dict[str, Any]] = None`
-- [ ] Add dual-shape config resolution: `channel_cfg = (config or {}).get("channel") or (config or {}).get("services", {}).get("channel") or {}`
-- [ ] Gate `register_all` on `channel_cfg.get("enabled", True)`
-- [ ] Add `_auto_seed_channels(args, channel_cfg)`:
-  - [ ] For each entry in `channel_cfg.get("auto_seed", [])`:
-    - [ ] If `createdby` is not namespaced → warn-and-skip (option b)
-    - [ ] Else call `_ensure_daemon_member(args, createdby)`:
-      - [ ] Check if member exists
-      - [ ] If not, call `register_module_member(args, createdby, email=f"{createdby}@localhost", approved=True)`
-      - [ ] If creation fails → warn-and-skip
-    - [ ] Call `ChannelService(args).create_channel(...)`; treat `"Channel already exists"` as success
+- [x] Edit `bbsengine6/py/src/bbsengine6/channel/api/handler.py` `MessageRouter.__init__`: accept `config: Optional[Dict[str, Any]] = None`
+- [x] Add dual-shape config resolution: `channel_cfg = (config or {}).get("channel") or (config or {}).get("services", {}).get("channel") or {}`
+- [x] Gate `register_all` on `channel_cfg.get("enabled", True)`
+- [x] Add `_auto_seed_channels(args, channel_cfg)`:
+  - [x] For each entry in `channel_cfg.get("auto_seed", [])`:
+    - [x] If `createdby` is not namespaced → warn-and-skip (option b)
+    - [x] Else call `_ensure_daemon_member(args, createdby)`:
+      - [x] Check if member exists
+      - [x] If not, call `register_module_member(args, createdby, email=f"{createdby}@localhost", approved=True)`
+      - [x] If creation fails → warn-and-skip
+    - [x] Call `ChannelService(args).create_channel(...)`; treat `"Channel already exists"` as success
 
 ### Casino-side channel handling
 
-- [ ] Create `casino/src/casino/startup/checkchannels.py`: reads `args._casino_config`; warns-and-skips if `channel_creator` missing; applies `channel_overrides` if configured; returns True on warnings
-- [ ] Edit `casino/src/casino/startup/main.py`: after classlist loop (line 159-160), call `checkchannels.main(args, conn=conn)`
+- [x] Create `casino/src/casino/startup/checkchannels.py`: reads `args._casino_config`; warns-and-skips if `channel_creator` missing; applies `channel_overrides` if configured; returns True on warnings
+- [x] Edit `casino/src/casino/startup/main.py`: after classlist loop (line 159-160), call `checkchannels.main(args, conn=conn)`
 - [ ] Edit `casino/src/casino/config.py`: docstring update only (new keys)
 
 ## Phase 2 — Plumb sender context through casino publish calls
