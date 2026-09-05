@@ -1,336 +1,295 @@
-# Console Module Specification - Index
+# bbsengine6.console — admin CLI
 
-## Quick Links
+> **Status:** canonical. The `bbsengine6.console` package is a small
+> collection of admin UIs; the database-staging routines (the
+> `check*.py` modules) live in `bbsengine6.backend`, with thin shims
+> re-exported from `bbsengine6.console` for backward compatibility.
+> The canonical home for engine init is `bbsengine6.backend` (per
+> the Phase 0 backend refactor); the console package owns the
+> admin menus only.
 
-| Section | Purpose | File |
-|---------|---------|------|
-| **Overview** | File inventory, quick reference | `console/overview.md` |
-| **Architecture** | Design patterns, execution flow, layering | `console/architecture.md` |
-| **Core Library** | lib.py module discovery and helpers | `console/core-library.md` |
-| **Main Console** | __main__.py, main.py, stages, menu | `console/main-console.md` |
-| **Member Management** | member.py CRUD and editing | `console/member-management.md` |
-| **Member Approval** | memberapproval.py approval workflow | `console/member-approval.md` |
-| **Session Management** | session.py display and tracking | `console/session-management.md` |
-| **Database Checks** | check*.py modules grouped by category | `console/database-checks.md` |
-| **Notify Module** | notify.py notification system (stub) | `console/notify.md` |
-| **Email Module** | email.py email configuration (incomplete) | `console/email.md` |
-| **Data Flows** | Complete workflows with call sequences | `console/data-flows.md` |
-| **Dependencies** | Import map and relationships | `console/dependencies.md` |
-| **Comprehensive** | Consolidated detailed reference | `console/comprehensive.md` |
+The `bbsengine6.console` package provides the interactive and
+non-interactive admin tools for the BBS engine: an interactive menu
+loop, member CRUD, member approval, session display, psql role
+display, database creation, and a single-line `bbsengine6-msg`-style
+subcommand dispatch.
 
----
+## Contents
 
-## Module Summary
+- [Architecture](#architecture)
+- [Entry points](#entry-points)
+- [Interactive menu](#interactive-menu)
+- [Subcommand dispatch](#subcommand-dispatch)
+- [Module shape](#module-shape)
+- [Member management](#member-management)
+- [Session display](#session-display)
+- [PostgreSQL role display](#postgresql-role-display)
+- [Database creation](#database-creation)
+- [Database check routines](#database-check-routines)
+- [Incomplete features](#incomplete-features)
 
-The **console module** (`bbsengine6/console/`) provides the administrative command-line interface for BBS Engine 6. It implements:
+## Architecture
 
-- **Database initialization** via two-stage setup (prerequisites, then database structure)
-- **Member management** with interactive CRUD operations
-- **Member approval workflow** for new account processing
-- **Session monitoring** for active user tracking
-- **System configuration** for email and notifications (incomplete)
-- **Plugin architecture** for extensible console commands
+The console is **not** a 2,200-line monolith. The actual package is
+seven submodules:
 
-**Key Statistics:**
-- **Total:** ~2,203 lines across 21 Python modules
-- **Entry points:** `__main__.py`, `main.py`
-- **Core framework:** `lib.py` (module discovery and execution)
-- **Subcommands:** member, session, memberapproval, email, notify
-- **Database checks:** 11 verification modules (check*.py)
+| Module               | Lines | Role                                                                  |
+|----------------------|-------|-----------------------------------------------------------------------|
+| `__init__.py`        | 8     | `__all__` listing the public submodules                                |
+| `__main__.py`        | 72    | `console <subcommand>` dispatch (argparse + module loader)             |
+| `lib.py`             | 129   | subcommand parser + `runmodule` / `setbottombar` / `buildargs`        |
+| `main.py`            | 87    | interactive menu (`M`embers / `S`essions / `A`pprovals / e`X`it)      |
+| `member.py`          | 631   | member CRUD — list, add, edit, configurerole, editflags, editui       |
+| `memberapproval.py`  | 197   | approval workflow for pending `engine.member` rows                     |
+| `session.py`         | 78    | `engine.session` display                                               |
+| `showpgrole.py`      | 180   | show psql `rolname` / `osuser` / connect-string for the current login  |
+| `createdatabase.py`  | 30    | `console createdatabase` — invokes `bbsengine6.database.create`        |
+| `Makefile`           | —     | test / install / lint targets                                          |
 
----
+Database-staging routines (the 15 `check*.py` modules, the two
+`stage_*.py` orchestrators, and the engine / bank bring-up
+sequences) live in `py/src/bbsengine6/backend/`. The console
+package keeps thin shims that re-export from `bbsengine6.backend`
+so legacy callers that import `bbsengine6.console.checkroles`
+keep working unchanged.
 
-## Getting Started
+## Entry points
 
-### For New Developers
+```bash
+# Interactive menu (no subcommand)
+python -m bbsengine6.console
 
-1. Start with **Overview** (`console/overview.md`) for file inventory and module structure
-2. Read **Architecture** (`console/architecture.md`) for design patterns and execution flow
-3. Focus on sections relevant to your task:
-   - **Member Management** for user operations
-   - **Database Checks** for initialization
-   - **Core Library** for understanding module discovery
+# Subcommand dispatch
+python -m bbsengine6.console member
+python -m bbsengine6.console memberapproval
+python -m bbsengine6.console session
+python -m bbsengine6.console showpgrole
+python -m bbsengine6.console createdatabase
 
-### For Operations/Deployment
-
-1. **Main Console** (`console/main-console.md`) — Database setup stages
-2. **Database Checks** (`console/database-checks.md`) — Verification sequence
-3. **Data Flows** (`console/data-flows.md`) — Initialization workflow
-
-### For Maintenance/Debugging
-
-1. **Data Flows** (`console/data-flows.md`) — Call sequences and transaction boundaries
-2. **Dependencies** (`console/dependencies.md`) — Import relationships
-3. Specific module spec for the component you're debugging
-
----
-
-## Architecture Highlights
-
-### Module Discovery Pattern
-
-Console modules are auto-discovered from the `bbsengine6/console/` package. To add a new command:
-
-1. Create `newcommand.py` with standard 4-function interface
-2. Add module docstring (first line becomes help text)
-3. Module is automatically discovered and added to menu
-
-### Stage-Based Initialization
-
-Database setup happens in two stages:
-
-**Stage 0 (Prerequisites):**
-- Connect to PostgreSQL system database
-- Create/verify roles, functions, user permissions
-- Create main BBS database
-
-**Stage 1 (Database Structure):**
-- Connect to main BBS database
-- Create/verify schema, extensions, functions, tables, flags
-
-### Interactive Menu Pattern
-
-All interactive modules follow:
-- Display status → Show menu options → Get user choice → Execute → Return to menu
-- Bracket notation for options: `[M]embers`, `[N]ew`, `[E]dit`, `[X]it`
-- Input validation with retry
-
----
-
-## File Organization
-
-```
-bbsengine6/console/
-├── __init__.py              [1 line]       Module init, exports member
-├── __main__.py              [49 lines]     CLI entry point
-├── lib.py                   [311 lines]    Module discovery, framework
-├── main.py                  [199 lines]    Stages 0-1, interactive menu
-├── member.py                [610 lines]    Member CRUD, editing
-├── memberapproval.py        [128 lines]    Approval workflow
-├── session.py               [85 lines]     Session display
-├── notify.py                [25 lines]     Notifications (stub)
-├── email.py                 [87 lines]     Email config (incomplete)
-├── createdatabase.py        [29 lines]     DB creation utility
-└── check*.py (11 files)     [1,074 lines]  Database verification
-    ├── checkroles.py                      Verify PostgreSQL roles
-    ├── checkwebserverrole.py             Verify www-data role
-    ├── checkextensions.py                Verify PG extensions
-    ├── checkschema.py                    Verify engine schema
-    ├── checkdatabase.py                  Verify/create BBS DB
-    ├── checksuperuser.py                 Verify user permissions
-    ├── checkfunctions.py                 Verify stored functions
-    ├── checkloginid.py                   Verify system login (DBus)
-    ├── checkclasses.py                   Verify table structure
-    ├── checkpasswordformat.py            Install chk_member_password_bcrypt + audit
-    ├── checkflag.py                      Verify flag tables
-    └── checknotify.py                    Verify notification system
+# Backend utilities (re-exported shims)
+python -m bbsengine6.console checkroles
+python -m bbsengine6.console checkdatabase
+python -m bbsengine6.console checkcreatedb
+python -m bbsengine6.console checkextensions
+python -m bbsengine6.console checkfunctions
+python -m bbsengine6.console checkengine
+python -m bbsengine6.console checkclasses
+python -m bbsengine6.console checkmemberflag
+python -m bbsengine6.console checkmessage
+python -m bbsengine6.console checkbank
+python -m bbsengine6.console checkwebserverrole
+python -m bbsengine6.console checkloginid
+python -m bbsengine6.console checksuperuser
+python -m bbsengine6.console checknotify        # legacy, see Incomplete features
+python -m bbsengine6.console checknotifyd       # legacy, see Incomplete features
 ```
 
----
+`python -m bbsengine6.startup` is the recommended entry point for
+engine bring-up; the console subcommands are operator tools, not
+init plumbing.
 
-## Standard Module Interface
+## Interactive menu
 
-All console modules implement exactly four functions:
+`bbsengine6.console.main.main(args)` runs the interactive menu:
+
+```
+[M] Members
+[S] Sessions
+[A] Approvals
+[X] Exit
+```
+
+The loop calls `bbsengine6.console.lib.runmodule(args, "member"|"session"|"memberapproval", pool=pool)`
+for each selection. `pool` and `conn` are threaded through so the
+called module reuses the same connection that `main` opened.
+
+`--require-registration` (added in `console/lib.py`) calls
+`bbsengine6.module.set_require_registration(True)` before any
+module load — every `console` subcommand loaded thereafter must
+have registered itself with `bbsengine6.module.register_module`,
+or the call returns `False` from `module.check`.
+
+## Subcommand dispatch
+
+`bbsengine6.console.lib` defines two subcommand lists:
 
 ```python
-def init(args, **kwargs) -> bool:
-    """Initialize module (called once at startup)."""
+CONSOLE_SUBCOMMANDS = (
+    "createdatabase",
+    "member",
+    "memberapproval",
+    "session",
+    "showpgrole",
+)
 
-def access(args, op, **kwargs) -> bool:
-    """Check user access permissions."""
-
-def buildargs(args, **kwargs) -> ArgumentParser | None:
-    """Build CLI argument parser."""
-
-def main(args, **kwargs) -> bool:
-    """Execute module functionality."""
+BACKEND_SUBCOMMANDS = {
+    "bank",
+    "checkclasses",
+    "checkcreatedb",
+    "checkdatabase",
+    "checkengine",
+    "checkextensions",
+    "checkmemberflag",
+    "checkfunctions",
+    "checkloginid",
+    "checknotify",        # legacy shim
+    "checknotifyd",       # legacy shim
+    "checkroles",
+    "checksuperuser",
+    "checkwebserverrole",
+}
 ```
 
-**Important:** All four functions must accept `**kwargs` for framework compatibility.
+`build_subcommand_parser()` builds an `argparse.ArgumentParser` with
+the union of both lists as subcommands. `handle_subcommand(args,
+subcommand)` routes backend subcommands to
+`bbsengine6.backend.<subcommand>` and console subcommands to
+`bbsengine6.console.<subcommand>` via `module.runmodule(...)`.
 
----
+`runmodule(args, submodule, *, package="bbsengine6.console",
+**kwargs)` is a one-line wrapper around `module.runmodule(args,
+f"{package}.{submodule}", **kwargs)`. The `package=` kwarg is the
+extension point that `bbsengine6.startup.lib` reuses with
+`package="bbsengine6.startup"`.
 
-## Key Workflows
+## Module shape
 
-### Add New Member
+Every console module follows the standard four-function shape that
+the bbsengine6 module loader expects:
 
-```
-Console menu [M]embers → [N]ew
-  → member.add(args)
-    → member._edit(args, "add", {})   [interactive form]
-    → libmember.insert()              [create member record]
-    → libmember.setpassword()         [hash password]
-    → libmember.setcredits()          [set credits]
-    → libmember.setflag()             [set flags]
-    → configurerole()                 [create DB role]
-    → conn.commit()
-```
-
-### Approve Pending Members
-
-```
-Console menu [M]embers → [A]pprovals
-  → memberapproval.main(args)
-    → Query: SELECT * FROM engine.member WHERE approvedbyid IS NULL
-    → For each member:
-      - Confirm email verified
-      - Confirm approval
-      - Set flags: EMAILVERIFIED, APPROVED
-      - Update approvedbyid, approveddate
-      - conn.commit()
+```python
+def init(args, **kwargs) -> bool: ...
+def access(args, op: str, **kwargs) -> bool: ...
+def buildargs(args, **kwargs) -> argparse.ArgumentParser | None: ...
+def main(args, **kwargs) -> Any: ...
 ```
 
-### View Active Sessions
+See `handbook/specs/module.md` for the full contract.
 
+## Member management
+
+`bbsengine6.console.member` is the admin member CRUD module. It
+exposes:
+
+| Function / behavior | Description                                                                   |
+|---------------------|-------------------------------------------------------------------------------|
+| `editflags(args, moniker=None, **kwargs)` | In-memory flag toggle; persists through the surrounding add/edit operation. Honors `mode="add"` to use a blank flag dict |
+| `render_member(args, **kwargs)`           | Pretty-print a member dict with `[M]oniker`, `[L]oginid`, `[E]mail`, etc.    |
+| Interactive `main` | `[A]dd`, `[E]dit`, `[F]lags`, `[U]i`, `[C]onfig`, `[L]ist`, `[X]it`           |
+
+The module writes through `bbsengine6.member.libmember` (the
+`bbsengine6.member.lib` facade), `bbsengine6.bank` for credits, and
+`bbsengine6.pgrole` for the per-member psql role.
+
+## Member approval
+
+`bbsengine6.console.memberapproval` is the workflow for rows in
+`engine.member` with `approvedbymoniker IS NULL`. The module:
+
+1. `SELECT moniker FROM engine.member WHERE approvedbymoniker IS NULL`
+   — uses `cur.fetchall()` (not `fetchmany`) because psycopg's
+   `arraysize` defaults to 1.
+2. For each pending moniker: show loginid, email, and verified
+   state; prompt for the verified y/n and the approve y/n.
+3. On approve: set `APPROVED`, stamp `approvedbymoniker` /
+   `dateapproved`, and call
+   `bbsengine6.pgrole.ensure_login_role(args, moniker, conn=conn)`
+   to provision the `m_<moniker>` PG role.
+4. On disapprove: clear `APPROVED` and the audit columns.
+5. Any failure rolls back the transaction.
+
+Access requires `member.checkflag(args, "SYSOP", member.getcurrentid(args))`.
+
+## Session display
+
+`bbsengine6.console.session` runs:
+
+```sql
+select * from engine.session order by datecreated
 ```
-Console menu [S]essions
-  → session.main(args)
-    → Query: SELECT * FROM engine.session WHERE expires > NOW()
-    → Display: moniker, created, expires, lastactivity
-    → Show summary
+
+and prints each row with the moniker, created/expiry timestamps,
+last-activity delta, and user agent. The `pool` must be present in
+`kwargs` (passed by `console.main.main`); the module errors out
+otherwise.
+
+## PostgreSQL role display
+
+`bbsengine6.console.showpgrole` shows psql access info for a
+member — the `rolname`, the OS user (`osuser`), and the
+`created_at` / `last_ack_at` audit columns. The flow:
+
+1. If no `engine.pgrole` row exists for the member: tell the user to ask a
+   sysop to approve them.
+2. If `last_ack_at IS NULL`: render the welcome block, prompt for
+   ENTER, update `last_ack_at`.
+3. If `osuser` is blank: prompt for the OS username they connect
+   from. The welcome flow is skipped on non-TTY stdin.
+
+See [`./pg-ident-auth.md`](./pg-ident-auth.md) for the `bbbsmap` /
+`pg_ident.conf` setup the output expects.
+
+## Database creation
+
+`bbsengine6.console.createdatabase` wraps `bbsengine6.database.create`:
+
+```python
+database.create(args, args.databasename, **kwargs)
 ```
 
----
+The engine `BBSENGINE6_DBNAME` (default `zoid6`) is the default
+target.
 
-## Database Initialization
+## Database check routines
 
-### Stage 0 Sequence
+The 15 `check*.py` modules live under `py/src/bbsengine6/backend/`.
+Console keeps thin shims that re-export from `backend`:
 
-1. Connect to PostgreSQL system database (`postgres`)
-2. `lib.checkroles()` — Create web, sysop, term roles
-3. `lib.checkfunctions(stage=0)` — Load core functions
-4. `lib.checksuperuser()` — Verify user permissions
-5. `lib.checkwebserverrole()` — Create www-data role
-6. `lib.createdatabase()` — Create main BBS database
+| Backend module                  | Role                                                                       |
+|---------------------------------|----------------------------------------------------------------------------|
+| `checkroles`                    | Verify the `web` / `sysop` / `term` PG roles exist                          |
+| `checkextensions`               | Ensure `pgcrypto`, `ltree`, `citext` extensions are installed                |
+| `checkdatabase`                 | Verify / create the BBS database                                            |
+| `checkcreatedb`                 | Verify CREATEDB privilege on the bootstrap role                             |
+| `checksuperuser`                | Verify the current role is PG superuser                                     |
+| `checkfunctions`                | Install `engine.*` `SECURITY DEFINER` helpers                               |
+| `checkengine`                   | Install the `engine` schema with `AUTHORIZATION zoid6`                      |
+| `checkclasses`                  | Verify `engine.__*` tables                                                  |
+| `checkmemberflag`               | Verify `engine.member_flag` / `map_member_flag`                              |
+| `checkmessage`                  | Verify `engine.__message*` tables / views; install `message_enum.sql`        |
+| `checkbank`                     | Verify `engine.__bank_*` tables                                             |
+| `checkwebserverrole`            | Verify the `www-data` role exists                                            |
+| `checkloginid`                  | Verify system login (`/etc/login.defs` probe via DBus)                      |
+| `checkpasswordformat`           | Install `chk_member_password_bcrypt` CHECK constraint                       |
+| `checkzoid6role`                | Create the dedicated `zoid6` role (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOLOGIN INHERIT`) |
+| `checkzoid6owner`               | Reassign the 5 `SECURITY DEFINER` helpers to `zoid6` if ownership drifted   |
 
-### Stage 1 Sequence
+`bbsengine6.console.lib.checkroles(args, **kwargs)` (and similar)
+delegates to `bbsengine6.backend.lib.checkroles` which delegates to
+`module.runmodule(args, "bbsengine6.backend.checkroles")`. The
+console side is intentionally one-line so the engine bring-up path
+can call the same function from either package.
 
-1. Connect to main BBS database (created in stage 0)
-2. `lib.checkextensions()` — Create pgcrypto, ltree, citext extensions
-3. `lib.checkschema()` — Create engine schema
-4. `lib.checkfunctions(stage=1)` — Load engine functions
-5. `lib.checkclasses()` — Create tables
-6. `lib.checkpasswordformat()` — Install chk_member_password_bcrypt + audit
-7. `lib.checkflag()` — Create flag tables
-8. `lib.checknotify()` — Create notification system
+## Incomplete features
 
----
+**Email stub.** `bbsengine6/console/email.py` is referenced in some
+old docs as an SMTP-configuration admin module. The current
+package does not ship it; that functionality is unimplemented and
+should be added as a new `bbsengine6.console.email` module when
+needed.
 
-## Access Control
+**Messaging CLI.** The operator CLI for the messaging subsystem
+lives at `python -m bbsengine6.message` (subcommands `list-types`,
+`pending`, `unread`, `mark-read`, `mark-delivered`, `expunge`,
+`register-type`, `resolve`, `send`). It is **not** a console
+subcommand — see `handbook/specs/messaging.md` §CLI.
 
-**memberapproval.py:**
-- Requires `SYSOP` flag on current user
-- Accessed via `member.checkflag()`
-- Returns `False` if non-sysop attempts
-
----
-
-## Error Handling
-
-### Database Errors
-
-- Query fails → return False, log traceback
-- Transaction fails → rollback, return False
-- Connection fails → return False, log error
-
-### User Input Errors
-
-- Invalid menu choice → prompt again
-- Missing required field → highlight, prompt again
-- Duplicate moniker → show error, prompt again
-
-### Stop-on-Failure
-
-- Stage 0/1 errors → entire stage fails, user must fix and restart
-- Individual module errors → caught, user can retry or cancel
-
----
-
-## Dependencies
-
-**External Packages:**
-- `psycopg` — PostgreSQL operations
-- `dbus` — Linux system integration (checkloginid.py)
-- `argparse` — CLI parsing
-- `bcrypt` — Password hashing (via libmember)
-
-**Internal (bbsengine6):**
-- `bbsengine6.database` — Connection pooling, CRUD
-- `bbsengine6.member` — Member entity operations
-- `bbsengine6.io` — Input/output
-- `bbsengine6.util` — Utilities
-- `bbsengine6.session` — Session management
-- `bbsengine6.module` — Module framework
-
----
-
-## Extension Points
-
-Add new console commands by:
-1. Creating `bbsengine6/console/newcommand.py`
-2. Implementing standard 4-function interface
-3. Adding module docstring
-4. Module is auto-discovered and available via:
-   - `zoidoffice newcommand` (CLI)
-   - Console menu (if added to main.py)
-
----
-
-## Common Tasks
-
-### Check Module Status
-
-- "Is the database initialized?" → Run `main.stage_zero()` and `main.stage_one()`
-- "How many members?" → Query `engine.member` in `main.py` status display
-- "Who's logged in?" → View sessions via `session.main()`
-
-### Troubleshoot Member Issues
-
-- "Member can't log in" → Check `APPROVED` flag via `member.editflags()`
-- "Wrong member credits" → Edit via `member.edit()` and update credits
-- "Member needs approval" → Process via `memberapproval.main()`
-
-### Debug Database Issues
-
-- "Schema not created?" → Run `lib.checkschema()` to create/verify
-- "Functions missing?" → Run `lib.checkfunctions()` to load
-- "Extensions not installed?" → Run `lib.checkextensions()` to create
-
----
-
-## Incomplete Features
-
-**notify.py** — REMOVED (2026-07-22)
-- The `bbsengine6/console/notify.py` module and the
-  `bbsengine6/console/checknotify.py` /
-  `checknotifyd.py` helpers were **deleted** in Phase 7 of
-  `TODO-message-migration.md`. The replacement notification
-  system lives in `bbsengine6/message.py` (see
-  `handbook/specs/NOTIFY_MESSAGING.md` and the Phase 8 / Phase 9
-  entries in `TODO-message-migration.md`).
-- The "Incomplete Features" note that previously called this a
-  "stub" is now outdated; the subsystem is gone, not stubbed.
-  (Phase 11, 2026-09-01: `bbsengine6/message.py` is shorthand for
-  the `bbsengine6/message/` package; the live layer is
-`bbsengine6/message/service.py` + `bbsengine6/message/dal/`.
-Package surface unchanged.)
-
-**email.py** — Incomplete implementation
-- Stub module structure in place
-- Database schema not yet defined
-- Design: SMTP configuration, email templates, notification delivery
-
----
-
-## Related Documentation
-
-- **database.md** — Database module (connection, CRUD, schema ops)
-- **member.md** — Member entity module (member operations)
-- **module.md** — Module framework (module loading and execution)
-
----
-
-## Comprehensive Consolidated Reference
-
-For offline reading or detailed reference, see `console/comprehensive.md` which consolidates all sections into a single document.
-
+**Notify subsystem (deleted).** `bbsengine6.console.notify` and the
+`bbsengine6.console.checknotify` / `checknotifyd` shims were part
+of the legacy notify-based console flow. The notify package was
+deleted 2026-07-22 (Phase 7 of `bbsengine6/TODO-message-migration.md`).
+The shim modules still exist for backward compatibility (so
+`python -m bbsengine6.console checknotify` does not raise
+`ModuleNotFoundError`), but they are no-ops that return success
+without checking anything. Use the message CLI for messaging
+operations.
