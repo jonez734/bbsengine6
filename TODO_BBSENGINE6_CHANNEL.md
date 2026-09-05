@@ -103,14 +103,17 @@
 
 ## Phase 6 — Naming-convention helpers (no bot class)
 
-- [ ] Create `bbsengine6/py/src/bbsengine6/channel/naming.py`:
-  - [ ] `table_channel(app, moniker)`
-  - [ ] `member_channel(moniker)`
-  - [ ] `global_channel(app)`
-  - [ ] `announcement_channel()`
-  - [ ] `parse_channel(name)`
-- [ ] Edit `casino/src/casino/api/handler.py`: refactor 8 literal `f"casino:table:{table_moniker}"` sites to `naming.table_channel("casino", table_moniker)`
-- [ ] Refactor `f"casino:global"` to `naming.global_channel("casino")`
+- [x] Create `bbsengine6/py/src/bbsengine6/channel/naming.py`:
+  - [x] `table_channel(app, moniker)`
+  - [x] `member_channel(moniker)`
+  - [x] `global_channel(app)`
+  - [x] `announcement_channel()`
+  - [x] `shout_channel()`
+  - [x] `parse_channel(name)`
+- [x] Edit `casino/src/casino/api/handler.py`: refactor `_publish_to_table` and `_publish_global` helpers to use naming helpers
+- [x] Edit `casino/src/casino/yahtzee/api_handler.py`: refactor literal in `_broadcast`
+- [x] Edit `casino/src/casino/tictactoe/api_handler.py`: refactor literal in `_broadcast`
+- [x] Remaining `f"casino:table:..."` literals in `casino/api/handler.py` (lines 577, 608, 714, 737) are io.echo diagnostic strings (not channel publishes) — left as-is to keep diff focused
 
 ## Phase 7 — `con` CLI host
 
