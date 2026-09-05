@@ -75,8 +75,8 @@
 
 ## Phase 3 — Default router loads the channel handler
 
-- [ ] Edit `bbsengine6/py/src/bbsengine6/net/defaultrouter.py`: add `channel_state: Optional["ChannelState"] = None` to `__init__`
-- [ ] In `register_all`, instantiate `MessageRouter` from `bbsengine6.channel.api.handler` with shared state; call `register_all(server)`
+- [x] Edit `bbsengine6/py/src/bbsengine6/net/defaultrouter.py`: add `channel_state: Optional["ChannelState"] = None` (and accept auth-wiring kwargs) to `__init__`
+- [x] In `register_all`, instantiate `MessageRouter` from `bbsengine6.channel.api.handler` with shared state; call `register_all(server)`
 
 ## Phase 4 — `ChannelService` admin surface (WS)
 
