@@ -390,8 +390,11 @@ WantedBy=multi-user.target
 ProxyPass /ws/ ws://127.0.0.1:8001/ws/
 ProxyPassReverse /ws/ ws://127.0.0.1:8001/ws/
 
-# Optional fallback to Flask
-# ProxyPass /handbook/ http://127.0.0.1:8000/handbook/
+# Optional fallback to the handbook Flask app. Production runs uWSGI
+# behind mod_proxy_uwsgi; see DEPLOYMENT.md for the canonical config.
+# (A gunicorn alternative exists at handbook-gunicorn.service /
+# handbook-gunicorn.conf but is not the production path.)
+# ProxyPass /handbook/ uwsgi://127.0.0.1:5000/handbook/
 
 # Security headers (keep existing)
 # Logging (keep existing)
