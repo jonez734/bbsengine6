@@ -63,15 +63,15 @@
 
 ## Phase 2 — Plumb sender context through casino publish calls
 
-- [ ] Edit `casino/src/casino/api/handler.py`: add `_publish_to_table(server, table_moniker, message, sender_moniker)` helper
-- [ ] Add `_publish_global(server, message, sender_moniker)` helper
-- [ ] Replace `server.publish(...)` at line 886 with `_publish_to_table`
-- [ ] Replace at line 1023
-- [ ] Replace at line 1303
-- [ ] Replace at line 1585
-- [ ] Replace at line 1592
-- [ ] Edit `casino/src/casino/yahtzee/api_handler.py:174`: replace with helper call passing player moniker
-- [ ] Edit `casino/src/casino/tictactoe/api_handler.py:158`: same replacement
+- [x] Edit `casino/src/casino/api/handler.py`: add `_publish_to_table(server, table_moniker, message, sender_moniker)` helper on BaseService
+- [x] Add `_publish_global(server, message, sender_moniker)` helper
+- [x] Add `channel_state` kwarg to BaseService.__init__ so the helpers see the shared state
+- [x] Replace `server.publish(...)` at line 886 with `_publish_to_table`
+- [x] Replace at line 1023 (broadcast_state after bet)
+- [x] Replace at line 1358 (slot_result broadcast)
+- [x] Replace at line 1638/1640/1645 (handle_broadcast chat + game_state) with helpers resolving sender via session state
+- [x] Edit `casino/src/casino/yahtzee/api_handler.py:174`: replace with `channel_publish` direct call, sender = payload.player_moniker; resolve channel_state via parent router
+- [x] Edit `casino/src/casino/tictactoe/api_handler.py:158`: same replacement
 
 ## Phase 3 — Default router loads the channel handler
 
