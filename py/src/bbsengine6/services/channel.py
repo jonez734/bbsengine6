@@ -167,16 +167,19 @@ class ChannelService:
     ) -> Dict[str, Any]:
         """Toggle the announce_only flag on a channel.
 
+        Authorization: sysop OR the channel's creator (``createdby``).
+
         Args:
             name: Channel name.
             announce_only: New value for the flag.
-            by_moniker: Moniker performing the change (for auditing).
+            by_moniker: Moniker performing the change (for auth check).
 
         Returns:
             Dict with success status.
         """
-        if not member_module.verifyMemberFound(self.args, by_moniker, column="moniker"):
-            return {"success": False, "message": "Member not found"}
+        verdict = self._require_authority(name, by_moniker)
+        if verdict is not None:
+            return verdict
 
         with database.connect(self.args) as conn, database.cursor(conn) as cur:
             cur.execute(
@@ -198,13 +201,16 @@ class ChannelService:
     ) -> Dict[str, Any]:
         """Add a moniker to a channel's announcer list.
 
+        Authorization: sysop OR the channel's creator (``createdby``).
+
         Returns:
             Dict with success status.
         """
+        verdict = self._require_authority(channel_name, addedby)
+        if verdict is not None:
+            return verdict
         if not member_module.verifyMemberFound(self.args, moniker, column="moniker"):
             return {"success": False, "message": "Member not found"}
-        if not member_module.verifyMemberFound(self.args, addedby, column="moniker"):
-            return {"success": False, "message": "Adding member not found"}
 
         with database.connect(self.args) as conn, database.cursor(conn) as cur:
             cur.execute(
@@ -231,12 +237,25 @@ class ChannelService:
             )
             return {"success": True, "message": "Announcer added"}
 
-    def remove_announcer(self, channel_name: str, moniker: str) -> Dict[str, Any]:
+    def remove_announcer(
+        self, channel_name: str, moniker: str, actor_moniker: str
+    ) -> Dict[str, Any]:
         """Remove a moniker from a channel's announcer list.
+
+        Authorization: sysop OR the channel's creator (``createdby``).
+
+        Args:
+            channel_name: Channel name.
+            moniker: Member being removed from the announcer list.
+            actor_moniker: Member performing the removal (auth check).
 
         Returns:
             Dict with success status.
         """
+        verdict = self._require_authority(channel_name, actor_moniker)
+        if verdict is not None:
+            return verdict
+
         with database.connect(self.args) as conn, database.cursor(conn) as cur:
             cur.execute(
                 database.query(
@@ -253,6 +272,39 @@ class ChannelService:
             if cur.rowcount == 0:
                 return {"success": False, "message": "Announcer not found"}
             return {"success": True, "message": "Announcer removed"}
+
+    def _require_authority(
+        self, channel_name: str, by_moniker: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Authorize a mutating channel operation.
+
+        Returns ``None`` if ``by_moniker`` is a sysop or the channel's
+        creator. Returns an error dict otherwise. ``None`` on success is
+        the conventional sentinel for "no error" — callers do
+        ``if verdict is not None: return verdict``.
+
+        Args:
+            channel_name: Channel name (used to look up the creator).
+            by_moniker: Actor performing the operation.
+
+        Returns:
+            ``None`` on success; ``{"success": False, ...}`` on denial.
+        """
+        if not by_moniker:
+            return {"success": False, "message": "Actor moniker required"}
+        if member_module.issysop(self.args, moniker=by_moniker) is True:
+            return None
+        channel = self.get_channel(channel_name)
+        if not channel:
+            return {"success": False, "message": "Channel not found"}
+        if channel.get("createdby") == by_moniker:
+            return None
+        return {
+            "success": False,
+            "message": (
+                "Permission denied: sysop or channel creator required"
+            ),
+        }
 
     def can_publish(
         self, channel_name: str, moniker: str, is_sysop: Optional[bool] = None

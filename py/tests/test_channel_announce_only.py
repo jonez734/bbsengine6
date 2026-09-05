@@ -260,12 +260,72 @@ class TestAnnouncerManagement:
         )
 
         result = channel_service.remove_announcer(
-            channel_name=name, moniker=announcer
+            channel_name=name, moniker=announcer, actor_moniker=creator
         )
         assert result["success"] is True
 
         got = channel_service.get_channel(name)
         assert announcer not in got["announcers"]
+
+    def test_remove_announcer_denies_non_creator(self, channel_service, channel_cleanup):
+        """Non-creator non-sysop cannot remove an announcer."""
+        name = _unique_channel_name(getpass.getuser(), "remove_denied")
+        creator = _test_user(1)
+        announcer = _test_user(2)
+        intruder = _test_user(3)
+
+        channel_service.create_channel(
+            name=name, createdby=creator, announce_only=True
+        )
+        channel_service.add_announcer(
+            channel_name=name, moniker=announcer, addedby=creator
+        )
+
+        result = channel_service.remove_announcer(
+            channel_name=name, moniker=announcer, actor_moniker=intruder
+        )
+        assert result["success"] is False
+        assert "permission denied" in result["message"].lower()
+
+    def test_set_announce_only_denies_non_creator(self, channel_service, channel_cleanup):
+        """Non-creator non-sysop cannot toggle announce_only."""
+        name = _unique_channel_name(getpass.getuser(), "flag_denied")
+        creator = _test_user(1)
+        intruder = _test_user(2)
+
+        channel_service.create_channel(name=name, createdby=creator)
+        result = channel_service.set_announce_only(
+            name=name, announce_only=True, by_moniker=intruder
+        )
+        assert result["success"] is False
+        assert "permission denied" in result["message"].lower()
+
+    def test_set_announce_only_allows_creator(self, channel_service, channel_cleanup):
+        """The channel creator can toggle announce_only on their own channel."""
+        name = _unique_channel_name(getpass.getuser(), "flag_creator_ok")
+        creator = _test_user(1)
+
+        channel_service.create_channel(name=name, createdby=creator)
+        result = channel_service.set_announce_only(
+            name=name, announce_only=True, by_moniker=creator
+        )
+        assert result["success"] is True
+
+    def test_add_announcer_denies_non_creator(self, channel_service, channel_cleanup):
+        """Non-creator non-sysop cannot add an announcer."""
+        name = _unique_channel_name(getpass.getuser(), "add_denied")
+        creator = _test_user(1)
+        intruder = _test_user(2)
+        target = _test_user(3)
+
+        channel_service.create_channel(
+            name=name, createdby=creator, announce_only=True
+        )
+        result = channel_service.add_announcer(
+            channel_name=name, moniker=target, addedby=intruder
+        )
+        assert result["success"] is False
+        assert "permission denied" in result["message"].lower()
 
 
 # ---------------------------------------------------------------------------

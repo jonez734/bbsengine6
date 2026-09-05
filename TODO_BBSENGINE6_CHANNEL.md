@@ -93,10 +93,13 @@
 
 ## Phase 5 — `ChannelService` permission hardening
 
-- [ ] Edit `bbsengine6/py/src/bbsengine6/services/channel.py`: add `_require_authority(channel_name, by_moniker) -> Optional[Dict]` (returns None on success or `{success: False, ...}` on denial; allows sysop OR `createdby == by_moniker`)
-- [ ] `set_announce_only`: gate with `_require_authority`
-- [ ] `add_announcer`: gate with `_require_authority`
-- [ ] `remove_announcer`: add `actor_moniker` parameter (breaking signature); gate with `_require_authority`
+- [x] Edit `bbsengine6/py/src/bbsengine6/services/channel.py`: add `_require_authority(channel_name, by_moniker) -> Optional[Dict]` (returns None on success or `{success: False, ...}` on denial; allows sysop OR `createdby == by_moniker`)
+- [x] `set_announce_only`: gate with `_require_authority`
+- [x] `add_announcer`: gate with `_require_authority`
+- [x] `remove_announcer`: add `actor_moniker` parameter (breaking signature); gate with `_require_authority`
+- [x] Update existing tests in `test_channel_announce_only.py` for new `remove_announcer` signature
+- [x] Add creator-allowed case (`test_set_announce_only_allows_creator`)
+- [x] Add non-creator non-sysop-denied cases (`test_remove_announcer_denies_non_creator`, `test_set_announce_only_denies_non_creator`, `test_add_announcer_denies_non_creator`)
 
 ## Phase 6 — Naming-convention helpers (no bot class)
 
