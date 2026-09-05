@@ -316,58 +316,8 @@ function display($uri, $filepath)
 }
 function parseMarkdownSections(string $markdown): array
 {
-    $frontmatter = [];
-    $body = $markdown;
-
-    if (preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $markdown, $matches)) {
-        $frontmatterText = $matches[1];
-        $body = substr($markdown, strlen($matches[0]));
-
-        $lines = explode("\n", $frontmatterText);
-        foreach ($lines as $line) {
-            if (preg_match('/^(\w+):\s*(.*)$/', $line, $m)) {
-                $key = $m[1];
-                $value = trim($m[2], '"\' ');
-                $frontmatter[$key] = $value;
-            }
-        }
-    }
-
-    require_once("Parsedown.php");
-    require_once("ParsedownExtra.php");
-
-    static $parser = null;
-    if ($parser === null) {
-        $parser = new \ParsedownExtra();
-        $parser->setMarkupEscaped(true);
-        $parser->setSafeMode(true);
-    }
-    $html = $parser->text($body);
-
-    $title = $frontmatter["title"] ?? "";
-    $sections = [];
-
-    $parts = preg_split('/(<h1>.*?<\/h1>)/i', $html, -1, PREG_SPLIT_DELIM_CAPTURE);
-
-    $firstPart = true;
-    foreach ($parts as $part) {
-        if (preg_match('/<h1>(.*?)<\/h1>/i', $part, $m)) {
-            $headerText = strip_tags($m[1]);
-            if ($firstPart && $title === "") {
-                $title = $headerText;
-            }
-            $sections[] = ["header" => $headerText, "content" => ""];
-            $firstPart = false;
-        } elseif (!empty($part) && !empty($sections)) {
-            $sections[count($sections) - 1]["content"] .= $part;
-        }
-    }
-
-    if (empty($sections)) {
-        $sections[] = ["header" => $title, "content" => $html];
-    }
-
-    return ["title" => $title, "sections" => $sections];
+    require_once(__DIR__ . "/markdown.php");
+    return \bbsengine6\markdown\parseDocument($markdown, split: true);
 }
 
 }

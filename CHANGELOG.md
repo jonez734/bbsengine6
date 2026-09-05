@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### deploy bbsengine6.handbook — shared Markdown primitive
+
+New `deploy bbsengine6.handbook` sub-target (via `deploytool`)
+stages the handbook tree and ships a blurb/markdown-rendered
+handler for `https://bbsengine.org/handbook/<v>/<path>` on the
+org site. Replaces the legacy `\Michaelf\Markdown`-driven
+`.txt`-only reader.
+
+- New `php/markdown.php` — shared `\bbsengine6\markdown`
+  namespace exporting `splitFrontmatter()`, `renderHtml()`,
+  `splitHtmlSections()`, and `parseDocument()` against a single
+  shared `ParsedownExtra` instance with frozen
+  `setMarkupEscaped(true)` + `setSafeMode(true)`.
+- `php/blurb.php::parseMarkdownSections()` now delegates to
+  `\bbsengine6\markdown\parseDocument($md, split: true)` —
+  signature and behavior preserved; existing
+  `test_blurb_render.php` continues to pass.
+- `engine/router.php::router_displayMarkdownFile()` now
+  delegates to `\bbsengine6\markdown\parseDocument($md,
+  split: false, breaks: true)` (preserve the teos path's
+  historic `setBreaksEnabled(true)`). Removed the
+  un-referenced `router_parseYamlFrontmatter()` helper.
+- `engine/router.php::router_collectDirectoryItems()` now
+  uses `\bbsengine6\markdown\splitFrontmatter()` for md
+  title extraction instead of a private helper.
+- `smarty/modifier.parsedown.php` now delegates to
+  `\bbsengine6\markdown\renderHtml()`; the heading/bod
+  HTML wrapper shape (consumed by templates that call
+  `{$body|parsedown}`) is unchanged.
+- `www/org/php/handbook.php` rewritten: requests
+  `https://bbsengine.org/handbook/<v>/<path>` resolve
+  directly to `.md` files under `\config\HANDBOOKDIR` and
+  render via `\bbsengine6\markdown\parseDocument` instead
+  of `\Michaelf\Markdown::defaultTransform` against staged
+  `.txt` siblings. Path-traversal guarded with `realpath`
+  prefix check; no DB blurb row required (filesystem
+  fallback). Multi-segment URIs (`specs/architecture`,
+  `decisions`, ...) are reachable.
+- `www/org/htaccess-prod` rewrite widened from a single
+  chapter segment to multi-segment: `^handbook/(\d+)/(.*)$
+  → handbook.php?mode=chapter&uri=$2&version=$1`. The
+  `/handbook/<v>/` and `/handbook/current/...` aliases
+  are unchanged.
+- `www/org/skin/tmpl/handbook-index.tmpl`: chapter glob
+  switched from `*.txt` to `*.md` (now served directly by
+  the rewritten handler).
+- `www/org/skin/tmpl/handbook-chapter.tmpl`: removed the
+  legacy `|markdown` filter from `{$data.html}` —
+  `handbook.php` now feeds pre-rendered HTML
+  (`ParsedownExtra` with `setSafeMode + setMarkupEscaped`)
+  via `{$data.html nofilter}`.
+- `Makefile`: new `handbook-prod` and `deploy-handbook`
+  targets, added to `.PHONY:`. The deploy chain runs
+  `$(MAKE) -C handbook stage` then `$(MAKE) -C www org`
+  (which already chains `$(MAKE) -C ../handbook stage`).
+  Removed the legacy `handbook-prod` (staged-v6-rsync
+  via `.txt`) target; `prod:` no longer references it.
+- Behavior change: rendering engine for
+  `https://bbsengine.org/handbook/<v>/<path>` switched
+  from `\Michaelf\Markdown::defaultTransform` to
+  `ParsedownExtra(safeMode+escaped)`. Output is near-
+  identical for hand-written Markdown; raw-HTML in
+  handbooks is now escaped (a hardening, not a
+  regression).
+
 ### bbsengine6.message: extract `dal/` subpackage, split service from lib
 
 Refactor `bbsengine6.message.lib` (1850 lines) into a layered

@@ -194,34 +194,20 @@ function router_handleError(string $uri)
 
 function router_displayMarkdownFile(string $filepath, string $uri): string
 {
+  if (!function_exists('\bbsengine6\markdown\parseDocument')) {
+    require_once __DIR__ . '/../php/markdown.php';
+  }
+
   $content = file_get_contents($filepath);
-  $metadata = [];
-
-  if (preg_match('/^---\s*\n(.*?)\n---/s', $content, $m)) {
-    $metadata = router_parseYamlFrontmatter($m[1]);
-    $content = preg_replace('/^---\s*\n.*?\n---\s*\n/s', '', $content);
+  if ($content === false) {
+    return '';
   }
 
-  if (!class_exists('Parsedown', false)) {
-    try {
-      require_once 'Parsedown.php';
-    } catch (Throwable $e) {
-      // continue with raw content
-    }
-  }
+  $parsed = \bbsengine6\markdown\parseDocument($content, split: false, breaks: true);
 
-  if (class_exists('Parsedown', false)) {
-    $p = new Parsedown();
-    $p->setBreaksEnabled(true);
-    $p->setSafeMode(true);
-    $p->setMarkupEscaped(true);
-    $html = $p->text($content);
-  } else {
-    $html = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
-  }
-
-  $title = isset($metadata['title']) ? htmlspecialchars($metadata['title']) : basename($filepath, '.md');
-  $date = isset($metadata['date']) ? htmlspecialchars($metadata['date']) : '';
+  $doc = $parsed['doc'];
+  $doc['title'] = isset($doc['title']) ? htmlspecialchars($doc['title']) : basename($filepath, '.md');
+  $doc['date']  = isset($doc['date'])  ? htmlspecialchars($doc['date'])  : '';
 
   if (function_exists('bbsengine6\setcurrentpage')) {
     bbsengine6\setcurrentpage(router_get_teosurl() . $uri);
@@ -237,9 +223,9 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   }
 
   $data = [
-    'title' => $title,
-    'date' => $date,
-    'content' => $html,
+    'title' => $doc['title'],
+    'date' => $doc['date'],
+    'content' => $doc['html'],
     'breadcrumbs' => $breadcrumbs,
     'choices' => $choices,
   ];
@@ -249,8 +235,8 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
     return '';
   }
 
-  $date_html = $date ? "<p class=date>$date</p>" : '';
-  return "<html><head><title>$title</title></head><body>$date_html$html</body></html>";
+  $date_html = $doc['date'] ? "<p class=date>{$doc['date']}</p>" : '';
+  return "<html><head><title>{$doc['title']}</title></head><body>$date_html{$doc['html']}</body></html>";
 }
 
 function router_isIgnoredEntry(string $entry): bool
@@ -321,8 +307,11 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
 
     if ($ext === 'md') {
       $filecontent = file_get_contents($fullpath);
-      if (preg_match('/^---\s*\n(.*?)\n---/s', $filecontent, $matches)) {
-        $metadata = router_parseYamlFrontmatter($matches[1]);
+      if ($filecontent !== false && strncmp($filecontent, '---', 3) === 0) {
+        if (!function_exists('\bbsengine6\markdown\splitFrontmatter')) {
+          require_once __DIR__ . '/../php/markdown.php';
+        }
+        [$metadata, ] = \bbsengine6\markdown\splitFrontmatter($filecontent);
         if (isset($metadata['title'])) {
           $displayTitle = $metadata['title'];
         }
@@ -438,17 +427,6 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   $html .= '</ul></body></html>';
   return $html;
   // return '<html><body><h1>' . $title . '</h1><ul>' . implode('', array_map(fn($i) => '<li>' . $i['title'] . '</li>', $items)) . '</ul></body></html>';
-}
-
-function router_parseYamlFrontmatter(string $yaml): array
-{
-  $res = [];
-  foreach (explode("\n", $yaml) as $line) {
-    if (preg_match('/^(\w+):\s*(.*)$/', $line, $matches)) {
-      $res[trim($matches[1])] = trim($matches[2]);
-    }
-  }
-  return $res;
 }
 
 function router(string $uri): ?string

@@ -10,7 +10,7 @@
 {if count($chapters) > 0}
 <ul>
 {foreach $chapters as $chapter}
-<li><a href="/current/handbook/{$chapter.file|basename}">{$chapter.file|basename:".txt"}</a> (updated: {$chapter.datemodifiedepoch|datestamp} ({$chapter.datemodifiedepoch|ago})</li>
+<li><a href="/current/handbook/{$chapter.file|basename:".md"}">{$chapter.file|basename:".md"}</a> (updated: {$chapter.datemodifiedepoch|datestamp} ({$chapter.datemodifiedepoch|ago})</li>
 {/foreach}
 </ul>
 {else}

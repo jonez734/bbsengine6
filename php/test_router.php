@@ -64,9 +64,10 @@ if ($actual === $expected) {
 
 // Test 5: YAML frontmatter parsing
 echo "Test 5: YAML frontmatter parsing\n";
-$yaml = "title: Test Page\ndate: 2024-01-01\n";
-$metadata = router_parseYamlFrontmatter($yaml);
-if ($metadata['title'] === 'Test Page' && $metadata['date'] === '2024-01-01') {
+$md = "---\ntitle: Test Page\ndate: 2024-01-01\n---\n\nbody here\n";
+require_once __DIR__ . "/markdown.php";
+[$metadata, $body] = \bbsengine6\markdown\splitFrontmatter($md);
+if ($metadata['title'] === 'Test Page' && $metadata['date'] === '2024-01-01' && $body === "body here\n") {
     echo "  ✓ PASS: YAML frontmatter parsed correctly\n";
 } else {
     echo "  ✗ FAIL: YAML parsing failed\n";

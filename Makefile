@@ -123,10 +123,6 @@ apidocs:
 handbook:
 	-$(MAKE) -C handbook stage-convert
 
-handbook-prod:
-	-$(MAKE) VERSION=$(VERSION) -C handbook stage-convert
-	$(RSYNC) $(WWWSTAGEDOCROOT)handbook/$(VERSION)/ $(WWWPRODDOCROOT)handbook/$(VERSION)/
-
 prod:
 ##	$(MAKE) wwworg
 	$(MAKE) engine
@@ -241,7 +237,7 @@ sign:
 
 wheel-release: build rename-sdist sign
 
-.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-tui
+.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-tui
 .PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
 
@@ -270,6 +266,12 @@ markdown-deploy-prod: parsedown-deploy
 deploy-wwworg: wwworg
 
 deploy-wwwcom: wwwcom
+
+handbook-prod:
+	$(MAKE) -C handbook stage
+	$(MAKE) -C www org
+
+deploy-handbook: handbook-prod
 
 deploy:
 	$(MAKE) -C engine stage

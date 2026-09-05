@@ -1,34 +1,27 @@
 <?php
 /**
- * Smarty modifier to convert Markdown to HTML using ParsedownExtra
+ * Smarty modifier to convert Markdown to HTML using the shared
+ * \bbsengine6\markdown renderer.
  *
- * Security: Uses setMarkupEscaped and setSafeMode to prevent XSS
- * from user-generated content.
+ * The first heading is lifted out of the body and wrapped in a
+ * <div class="header">; the remainder goes inside <div class="body">.
+ * Templates that call `{$body|parsedown}` rely on this shape.
  *
- * Features: Supports tables, footnotes, abbreviations, and other
- * Markdown Extra features.
+ * Security settings are owned by \bbsengine6\markdown\renderHtml()
+ * (setMarkupEscaped, setSafeMode) — this modifier does not set them.
  */
 
-require_once("/srv/www/bbsengine6/php/bootstrap.php");
-require_once("Parsedown.php");
-require_once("ParsedownExtra.php");
+require_once(__DIR__ . "/../php/markdown.php");
 
 function smarty_modifier_parsedown($str)
 {
-  static $parser = null;
-  if ($parser === null) {
-    $parser = new \ParsedownExtra();
-    $parser->setMarkupEscaped(true);
-    $parser->setSafeMode(true);
-  }
-  $html = $parser->text($str);
+  $html = \bbsengine6\markdown\renderHtml((string) $str, breaks: false);
 
   $header = '';
-  $html = preg_replace_callback('/<h([1-6])>(.*?)<\/h\1>/', function($matches) use (&$header) {
-    $header = '<div class="header"><h' . $matches[1] . '>' . $matches[2] . '</h' . $matches[1] . '></div>';
+  $html = preg_replace_callback('/<h([1-6])>(.*?)<\/h\1>/', function($m) use (&$header) {
+    $header = '<div class="header"><h' . $m[1] . '>' . $m[2] . '</h' . $m[1] . '></div>';
     return '';
   }, $html);
 
-  $html = trim($html);
-  return $header . '<div class="body">' . $html . '</div>';
+  return $header . '<div class="body">' . trim($html) . '</div>';
 }

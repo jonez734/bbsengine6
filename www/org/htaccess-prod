@@ -19,7 +19,7 @@ RewriteRule ^(contact-us|about-us|credits)[/]?$ /page.php?file=$1.tmpl [last]
 RewriteRule ^handbook/current/(.*)$ handbook/6/$1
 RewriteRule ^handbook/current[/]?$ handbook/6/
 
-RewriteRule ^handbook/([\d]+)/([0-9a-zA-Z-]+).txt$ /handbook.php?mode=chapter&chapter=$2&version=$1 [last]
+RewriteRule ^handbook/([\d]+)/(.*)$ /handbook.php?mode=chapter&uri=$2&version=$1 [last]
 RewriteRule ^handbook/([\d]+)[/]?$ /handbook.php?mode=index&version=$1 [last]
 
 # RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)\.(md|txt)$ /page.php?version=$1&file=$2.$3 [last]
