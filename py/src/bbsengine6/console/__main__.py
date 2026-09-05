@@ -38,7 +38,11 @@ if __name__ == "__main__":
     if ARGCOMPLETE_AVAILABLE:
         argcomplete.autocomplete(parser)
 
-    args = parser.parse_args()
+    # parse_known_args so the tail (anything after the top-level
+    # subcommand) is captured and forwarded to the subcommand's own
+    # parser. Without this, `console channel create foo --announce-only`
+    # would have the `--announce-only` swallowed by the parent parser.
+    args, rest_argv = parser.parse_known_args()
 
     try:
         screen.init(args)
@@ -52,12 +56,14 @@ if __name__ == "__main__":
     rc = 0
     try:
         if args.subcommand:
-            if lib.handle_subcommand(args, args.subcommand) is False:
+            if lib.handle_subcommand(
+                args, args.subcommand, argv=rest_argv
+            ) is False:
                 io.echo(f"error running module {args.subcommand}", level="error")
                 rc = 1
         else:
             if lib.runmodule(args, "main") is False:
-                io.echo("error running module main", level="error")
+                io.echo(f"error running module main", level="error")
                 rc = 1
     except EOFError:
         io.echo("**EOF**")

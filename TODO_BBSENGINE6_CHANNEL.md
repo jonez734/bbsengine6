@@ -117,21 +117,21 @@
 
 ## Phase 7 — `con` CLI host
 
-- [ ] Create `bbsengine6/py/src/bbsengine6/cli/__init__.py` (empty marker)
-- [ ] Create `bbsengine6/py/src/bbsengine6/cli/con.py`:
-  - [ ] Subparser group with subverbs
-  - [ ] Subverb: `channel-create`
-  - [ ] Subverb: `channel-list`
-  - [ ] Subverb: `channel-get`
-  - [ ] Subverb: `channel-set-announce-only`
-  - [ ] Subverb: `channel-add-announcer`
-  - [ ] Subverb: `channel-remove-announcer`
-  - [ ] `console` registered as hidden alias
-  - [ ] Required flags: `--moniker` (or `--token-file` mirroring `bed.tools.message.py`), standard DB flags, `--debug`
-  - [ ] Output: JSON to stdout
-  - [ ] Each verb calls `ChannelService(args).<method>` directly
-- [ ] Edit `zoid6/src/zoid6/api/handler.py` `_register_module` (lines 129-188): forward `config=module_config` to sub-router constructor
-- [ ] Wire `con` into top-level dispatch site (TBD after Phase 0 recon)
+- [x] Recon: CLI dispatch is `bbsengine6.console` not `bbsengine6.cli`; plan's `bbsengine6/cli/con.py` becomes `bbsengine6/console/channel.py`, registered in `CONSOLE_SUBCOMMANDS`
+- [x] Create `bbsengine6/py/src/bbsengine6/console/channel.py`:
+  - [x] Subparser group with subverbs
+  - [x] Subverb: `create` (channel-create)
+  - [x] Subverb: `list` (channel-list)
+  - [x] Subverb: `get` (channel-get)
+  - [x] Subverb: `set-announce-only`
+  - [x] Subverb: `add-announcer`
+  - [x] Subverb: `remove-announcer`
+  - [x] Required flags: `--moniker`, standard DB flags via lib.buildargs inheritance, `--debug`
+  - [x] Output: JSON to stdout
+  - [x] Each verb calls `ChannelService(args).<method>` directly
+- [x] Edit `bbsengine6/py/src/bbsengine6/console/lib.py`: add `"channel"` to `CONSOLE_SUBCOMMANDS`
+- [x] Edit `bbsengine6/py/src/bbsengine6/console/__main__.py`: switch to `parse_known_args` and forward rest_argv to `handle_subcommand` so subverbs get their own argv
+- [x] Edit `zoid6/src/zoid6/api/handler.py` `_register_module` (lines 129-188): forward `config=module_config` to sub-router constructor
 
 ## Phase 7.5 — Extensibility documentation
 

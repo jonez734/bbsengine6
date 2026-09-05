@@ -10,6 +10,7 @@ CONSOLE_SUBCOMMANDS = (
     "memberapproval",
     "session",
     "showpgrole",
+    "channel",
 )
 
 BACKEND_SUBCOMMANDS = {
