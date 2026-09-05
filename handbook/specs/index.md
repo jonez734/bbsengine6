@@ -44,6 +44,10 @@
   layered package (Service / DAL / State / Domain)
 - [net-layer.md](./net-layer.md) — `bbsengine6.net` SMTP-style
   addressing, transport, packets, integration
+- [channel.md](./channel.md) — `bbsengine6.channel` in-process
+  pub/sub with announce-only enforcement; subscription + admin
+  WebSocket handlers; `con channel` CLI; auto-seed algorithm;
+  namespacing convention for module-owned daemon identities
 
 ## UI, modules, content
 
