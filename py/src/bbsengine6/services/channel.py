@@ -209,10 +209,20 @@ class ChannelService:
         verdict = self._require_authority(channel_name, addedby)
         if verdict is not None:
             return verdict
-        if not member_module.verifyMemberFound(self.args, moniker, column="moniker"):
-            return {"success": False, "message": "Member not found"}
 
+        # Member existence check shares the connection with the INSERT below.
+        # ``verifyMemberFound`` requires a pool kwarg that ``add_announcer``
+        # doesn't carry; doing the check inline avoids an extra connection
+        # round-trip and works for callers that don't manage a pool.
         with database.connect(self.args) as conn, database.cursor(conn) as cur:
+            cur.execute(
+                database.query(
+                    "SELECT 1 FROM $engine.member WHERE moniker = :moniker",
+                    moniker=moniker,
+                )
+            )
+            if cur.fetchone() is None:
+                return {"success": False, "message": "Member not found"}
             cur.execute(
                 database.query(
                     "SELECT id FROM $engine.__channel WHERE name = :name",

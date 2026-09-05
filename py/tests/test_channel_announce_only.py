@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import getpass
+import os
 import uuid
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
@@ -48,7 +49,17 @@ from bbsengine6.services.channel import ChannelService
 
 
 def make_test_args(databasename: str = "zoid6test") -> argparse.Namespace:
-    """Build args for ChannelService tests against the zoid6test DB."""
+    """Build args for ChannelService tests.
+
+    The default ``zoid6test`` can be overridden via the
+    ``BBSENGINE6_CHANNEL_TEST_DBNAME`` environment variable so the
+    same test suite runs against any target DB (e.g. ``zoid6`` in a
+    developer's local sandbox where a separate ``zoid6test`` database
+    has not been provisioned).
+    """
+    override = os.environ.get("BBSENGINE6_CHANNEL_TEST_DBNAME")
+    if override:
+        databasename = override
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", action="store_true", default=False)
     defaults = {

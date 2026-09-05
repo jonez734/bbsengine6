@@ -140,9 +140,17 @@ def _session_id_for(websocket: Any) -> int:
 class BaseService:
     """Base class for message handlers."""
 
-    def __init__(self, args: Any, session_manager: SessionManager):
+    def __init__(
+        self,
+        args: Any,
+        session_manager: SessionManager,
+        *,
+        channel_state: Optional[ChannelState] = None,
+        **kwargs,
+    ):
         self.args = args
         self.sessions = session_manager
+        self.channel_state = channel_state
 
     async def handle_message(
         self, server: Any, websocket: Any, path: str, message: Dict[str, Any]
