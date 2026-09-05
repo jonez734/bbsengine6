@@ -80,16 +80,16 @@
 
 ## Phase 4 — `ChannelService` admin surface (WS)
 
-- [ ] Edit `bbsengine6/py/src/bbsengine6/channel/api/handler.py`: add `ChannelAdminHandler` class
-  - [ ] Verb: `channel_create`
-  - [ ] Verb: `channel_list`
-  - [ ] Verb: `channel_get`
-  - [ ] Verb: `channel_set_announce_only`
-  - [ ] Verb: `channel_add_announcer`
-  - [ ] Verb: `channel_remove_announcer`
-- [ ] Each verb resolves actor moniker via `self.sessions.get_moniker(session_id)`
-- [ ] Each mutator delegates to `ChannelService._require_authority(channel_name, actor_moniker)`
-- [ ] Register `ChannelAdminHandler` conditionally based on `channel_cfg.get("admin_handler", {}).get("enabled", False)` (default off)
+- [x] Edit `bbsengine6/py/src/bbsengine6/channel/api/handler.py`: add `ChannelAdminHandler` class
+  - [x] Verb: `channel_create`
+  - [x] Verb: `channel_list`
+  - [x] Verb: `channel_get`
+  - [x] Verb: `channel_set_announce_only`
+  - [x] Verb: `channel_add_announcer`
+  - [x] Verb: `channel_remove_announcer`
+- [x] Each verb resolves actor moniker via `self.sessions.get_moniker(session_id)`
+- [x] Each mutator delegates to `ChannelService._require_authority(channel_name, actor_moniker)` (via ChannelService methods that internally call it)
+- [x] Register `ChannelAdminHandler` conditionally based on `channel_cfg.get("admin_handler", {}).get("enabled", False)` (default off; bed.json/zoid6.json opt-in)
 
 ## Phase 5 — `ChannelService` permission hardening
 

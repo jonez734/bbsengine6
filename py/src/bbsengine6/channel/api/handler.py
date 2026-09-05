@@ -233,6 +233,180 @@ class ChannelServiceHandler(BaseService):
         }
 
 
+class ChannelAdminHandler(BaseService):
+    """WS handler for channel admin verbs.
+
+    Each verb delegates to :class:`bbsengine6.services.channel.ChannelService`
+    and threads the actor moniker (resolved from the session) through
+    ``ChannelService._require_authority`` for permission checks.
+
+    Registered conditionally by :class:`MessageRouter` when
+    ``channel_cfg.admin_handler.enabled`` is True. Operators are
+    expected to use ``con channel-*`` instead of these verbs, but the
+    WS surface is useful for in-process admin tools.
+    """
+
+    def __init__(
+        self,
+        args: Any,
+        session_manager: SessionManager,
+        channel_state: ChannelState,
+        allowed_verbs: Optional[List[str]] = None,
+    ):
+        super().__init__(args, session_manager, channel_state=channel_state)
+        self.channel_state = channel_state
+        self.service = ChannelService(args)
+        self.allowed_verbs = set(allowed_verbs or [
+            "channel_create",
+            "channel_list",
+            "channel_get",
+            "channel_set_announce_only",
+            "channel_add_announcer",
+            "channel_remove_announcer",
+        ])
+
+    async def handle_message(
+        self, server: Any, websocket: Any, path: str, message: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        msg_type = message.get("type")
+        if msg_type not in self.allowed_verbs:
+            return None
+        handler = getattr(self, f"_handle_{msg_type}", None)
+        if handler is None:
+            return {"type": "error", "code": "unknown_verb", "message": msg_type}
+        return await handler(websocket, message)
+
+    def _resolve_actor(self, websocket: Any) -> Optional[str]:
+        """Return the acting moniker for this websocket, or None."""
+        session_id = _session_id_for(websocket)
+        return self.sessions.get_moniker(session_id) or None
+
+    async def _handle_channel_create(
+        self, websocket: Any, message: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        actor = self._resolve_actor(websocket)
+        if not actor:
+            return {"type": "error", "code": "not_authenticated"}
+        name = (message.get("name") or "").strip()
+        if not name:
+            return {
+                "type": "error",
+                "code": "invalid_request",
+                "message": "name required",
+            }
+        result = self.service.create_channel(
+            name=name,
+            createdby=actor,
+            description=message.get("description"),
+            announce_only=bool(message.get("announce_only", False)),
+            announcers=list(message.get("announcers") or []),
+        )
+        return {"type": "channel_create_result", **result}
+
+    async def _handle_channel_list(
+        self, websocket: Any, message: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if not self._resolve_actor(websocket):
+            return {"type": "error", "code": "not_authenticated"}
+        limit = int(message.get("limit", 100))
+        offset = int(message.get("offset", 0))
+        announce_only = message.get("announce_only")
+        if announce_only is not None:
+            announce_only = bool(announce_only)
+        channels = self.service.list_channels(
+            limit=limit, offset=offset, announce_only=announce_only
+        )
+        return {
+            "type": "channel_list_result",
+            "channels": channels,
+            "limit": limit,
+            "offset": offset,
+        }
+
+    async def _handle_channel_get(
+        self, websocket: Any, message: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        if not self._resolve_actor(websocket):
+            return {"type": "error", "code": "not_authenticated"}
+        name = (message.get("name") or "").strip()
+        if not name:
+            return {
+                "type": "error",
+                "code": "invalid_request",
+                "message": "name required",
+            }
+        channel = self.service.get_channel(name)
+        if not channel:
+            return {
+                "type": "error",
+                "code": "not_found",
+                "message": f"Channel {name!r} not found",
+            }
+        return {"type": "channel_get_result", "channel": channel}
+
+    async def _handle_channel_set_announce_only(
+        self, websocket: Any, message: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        actor = self._resolve_actor(websocket)
+        if not actor:
+            return {"type": "error", "code": "not_authenticated"}
+        name = (message.get("name") or "").strip()
+        if not name:
+            return {
+                "type": "error",
+                "code": "invalid_request",
+                "message": "name required",
+            }
+        if "value" not in message:
+            return {
+                "type": "error",
+                "code": "invalid_request",
+                "message": "value required",
+            }
+        result = self.service.set_announce_only(
+            name=name, announce_only=bool(message["value"]), by_moniker=actor
+        )
+        return {"type": "channel_set_announce_only_result", **result}
+
+    async def _handle_channel_add_announcer(
+        self, websocket: Any, message: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        actor = self._resolve_actor(websocket)
+        if not actor:
+            return {"type": "error", "code": "not_authenticated"}
+        name = (message.get("name") or "").strip()
+        moniker = (message.get("moniker") or "").strip()
+        if not name or not moniker:
+            return {
+                "type": "error",
+                "code": "invalid_request",
+                "message": "name and moniker required",
+            }
+        result = self.service.add_announcer(
+            channel_name=name, moniker=moniker, addedby=actor
+        )
+        return {"type": "channel_add_announcer_result", **result}
+
+    async def _handle_channel_remove_announcer(
+        self, websocket: Any, message: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        actor = self._resolve_actor(websocket)
+        if not actor:
+            return {"type": "error", "code": "not_authenticated"}
+        name = (message.get("name") or "").strip()
+        moniker = (message.get("moniker") or "").strip()
+        if not name or not moniker:
+            return {
+                "type": "error",
+                "code": "invalid_request",
+                "message": "name and moniker required",
+            }
+        result = self.service.remove_announcer(
+            channel_name=name, moniker=moniker, actor_moniker=actor
+        )
+        return {"type": "channel_remove_announcer_result", **result}
+
+
 class MessageRouter:
     """Main message handler for channel WebSocket services.
 
@@ -287,6 +461,18 @@ class MessageRouter:
                 "get_subscriptions",
             ],
         )
+        admin_cfg = self.channel_cfg.get("admin_handler", {})
+        if isinstance(admin_cfg, dict) and admin_cfg.get("enabled", False):
+            admin_handler = ChannelAdminHandler(
+                self.args,
+                self.sessions,
+                self.channel_state,
+                allowed_verbs=list(admin_cfg.get("verbs", []) or []) or None,
+            )
+            server.register_service(
+                admin_handler,
+                list(admin_handler.allowed_verbs),
+            )
         # Allow the server to call back on disconnect for cleanup.
         if self.server is None:
             self.server = server
