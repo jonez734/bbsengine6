@@ -1,5 +1,9 @@
-# Handbook/Documentation serving configuration
-# Serve markdown files cleanly through Apache
+# Handbook/Documentation serving configuration.
+#
+# Directory listings and URI dispatch are owned by www/org/php/handbook.php
+# (which delegates to engine/router.php); this .htaccess only configures
+# MIME types, security headers, compression, and caching for static
+# .md / .html assets when they bypass the router (e.g. raw fetches).
 
 # Enable mod_rewrite
 RewriteEngine On
@@ -27,13 +31,6 @@ AddType text/markdown .md
     Order allow,deny
     Deny from all
 </FilesMatch>
-
-# Directory listing for navigation
-Options +Indexes
-IndexOptions NameWidth=* VersionSort HTMLTable FancyIndexing Charset=UTF-8
-
-# Custom index file order
-DirectoryIndex index.html index.md README.md
 
 # Gzip compression for text files
 <IfModule mod_deflate.c>
