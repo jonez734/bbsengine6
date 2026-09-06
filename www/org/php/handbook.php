@@ -12,6 +12,7 @@
  */
 
 require_once("/srv/www/bbsengine6/php/bootstrap.php");
+\bbsengine6\bootstrap();
 require_once("config.php");
 require_once("engine.php");
 require_once("markdown.php");
