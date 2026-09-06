@@ -121,7 +121,7 @@ apidocs:
 	--template responsive
 
 handbook:
-	-$(MAKE) -C handbook stage-convert
+	-$(MAKE) -C handbook stage VERSION=$(VERSION)
 
 prod:
 ##	$(MAKE) wwworg

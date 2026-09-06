@@ -1,32 +1,29 @@
-.PHONY: all clean convert convert-tmpl help watch stage stage-convert
+.PHONY: all clean convert convert-tmpl help watch stage
 
 # Default target
-all: stage-convert
+all: stage
 
-# Stage handbook files to webroot (rsync only, no conversion)
+# Stage handbook sources to HANDBOOKDIR for runtime rendering by
+# www/org/php/handbook.php via \bbsengine6\markdown\parseDocument
+# (request-time path, matching teos's teospath chain). The new
+# handler reads .md files directly from the docroot, so this
+# rsync MUST include them — the legacy `--exclude '*.md'` (kept
+# here when handbook-prod converted to .txt siblings at install
+# time) silently dropped every chapter. Similarly, `--exclude
+# '*.py'` is gone: the gunicorn/Flask app.py / wsgi.py /
+# convert_markdown.py files are retired and no longer shipped.
 stage:
-	@echo "Staging handbook files..."
+	@echo "Staging handbook sources..."
 	@mkdir -p /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/
 	@rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --times --verbose \
 		--recursive --update --checksum \
-		--exclude '*.md' \
 		--exclude '*.pyc' \
 		--exclude '__pycache__' \
 		--exclude '.sass-cache' \
 		--exclude 'Makefile' \
-		--exclude '*.py' \
 		--exclude '.*' \
 		. /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/
-	@echo "✓ Handbook staged to /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/"
-
-# Convert markdown to .txt files and stage (all-in-one)
-stage-convert:
-	@echo "Converting markdown to txt and staging..."
-	@mkdir -p /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/
-	@find . -name "*.md" -not -name "*.md~" | while read f; do \
-		python3 -c "import markdown; content=open('$$f').read(); html=markdown.markdown(content, extensions=['extra','tables','fenced_code','codehilite']); print(html)" > /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/$$(basename $$f .md).txt; \
-	done
-	@echo "✓ Converted and staged to /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/"
+	@echo "✓ Handbook sources staged to /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/"
 
 # Convert markdown to HTML
 convert:
@@ -67,16 +64,15 @@ install-deps:
 # Display help
 help:
 	@echo "Handbook Makefile targets:"
-	@echo "  make stage          - Stage handbook files to webroot (rsync)"
-	@echo "  make stage-convert - Convert markdown to txt and stage (default)"
-	@echo "  make convert       - Convert markdown files to HTML"
+	@echo "  make stage          - Stage handbook sources (.md etc.) to HANDBOOKDIR for runtime rendering"
+	@echo "  make convert       - Convert markdown files to HTML (developer helper)"
+	@echo "  make convert-tmpl  - Convert markdown files to Smarty templates (developer helper)"
 	@echo "  make clean         - Remove backup files and temp content"
 	@echo "  make watch         - Watch for changes and auto-convert"
 	@echo "  make install-deps  - Install required dependencies"
 	@echo "  make help          - Display this help message"
 	@echo ""
 	@echo "Usage:"
-	@echo "  make                      # Convert markdown to txt and stage"
-	@echo "  make stage-convert        # Same as default"
-	@echo "  make stage                # Rsync files without conversion"
-	@echo "  python convert_markdown.py <file.md>  # Convert single file"
+	@echo "  make                      # Stage handbook sources (default)"
+	@echo "  make stage                # Same as default"
+	@echo "  python convert_markdown.py <file.md>  # Convert single file (developer helper)"

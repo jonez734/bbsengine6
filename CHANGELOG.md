@@ -86,6 +86,56 @@ org site. Replaces the legacy `\Michaelf\Markdown`-driven
   handbooks is now escaped (a hardening, not a
   regression).
 
+### handbook stage: drop .md exclude; retire gunicorn/Flask stack
+
+`bbsengine6/handbook/Makefile stage` had `--exclude '*.md'`
+left over from the legacy deploy-time `.txt` conversion
+chain (the `\Michaelf\Markdown`-driven reader that
+`handbook.php` superseded). With the exclude in place,
+`deploy bbsengine6.handbook` and `deploy bbsengine6.wwworg`
+(both chain into this target via `bbsengine6/Makefile:271`
+and `bbsengine6/www/Makefile:18` respectively) silently
+staged an empty handbook tree. The new request-time
+handler (`www/org/php/handbook.php`, rendering through the
+shared `\bbsengine6\markdown\parseDocument`, identical to
+teos's `teospath` path) reads `.md` files directly from
+`HANDBOOKDIR/<v>/`, so the `.md` tree must reach the
+docroot.
+
+- `bbsengine6/handbook/Makefile stage`: drop
+  `--exclude '*.md'`. Drop `--exclude '*.py'` (the
+  Python files are retired in this commit). Keep
+  `*.pyc`, `__pycache__`, `.sass-cache`, `Makefile`,
+  `.*` as hygiene excludes.
+- Delete the now-dead `stage-convert` target (legacy
+  `.txt` pre-conversion via `python3 -c "import
+  markdown; ..."`).
+- `bbsengine6/Makefile`: bare `handbook:` target now
+  invokes `$(MAKE) -C handbook stage VERSION=$(VERSION)`
+  (the corrected stage) instead of the deleted
+  `stage-convert`. `handbook-prod` (deploytool's
+  `deploy bbsengine6.handbook` entry point) and
+  `deploy-handbook` are unchanged.
+- Delete dead gunicorn / mod_wsgi / Flask artifacts
+  from `bbsengine6/handbook/`: `app.py`, `wsgi.py`,
+  `handbook-gunicorn.conf`, `handbook-gunicorn.service`,
+  `handbook-wsgi.conf`, `bbsengine-handbook.conf`,
+  `DEPLOYMENT.md`, `HANDBOOK_SERVING.md`,
+  `convert_markdown.py`, `csrf/`, `migrations/`. The new
+  architecture renders at request time via PHP; no Python
+  app server is needed. The `handbook-gunicorn.*` files
+  already self-flagged as "alternative deployment path,
+  NOT the production setup" — the new architecture retires
+  both the primary (mod_wsgi) and the alternative
+  (gunicorn) paths.
+- Replace `handbook/modules.adoc` (0 bytes, empty) with
+  a stub `handbook/modules.md` that preserves the
+  `/handbook/6/modules` URI shape. Delete the empty
+  Asciidoctor default-template snapshots
+  `handbook/modules.html`, `handbook/bbsengine.html`,
+  `handbook/bbsengine-modules.html` (all `<title>Untitled
+  </title>` boilerplate, no real chapter content).
+
 ### bbsengine6.message: extract `dal/` subpackage, split service from lib
 
 Refactor `bbsengine6.message.lib` (1850 lines) into a layered
