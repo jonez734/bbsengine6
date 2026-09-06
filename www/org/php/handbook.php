@@ -2,13 +2,24 @@
 /**
  * handbook.php - Handbook handler for bbsengine.org /handbook/<v>/<path>
  *
- * Routes a request like https://bbsengine.org/handbook/<v>/specs/architecture
- * to the right `.md` file under HANDBOOKDIR/<v>/ and renders it with the
- * shared \bbsengine6\markdown primitive (ParsedownExtra, setMarkupEscaped,
- * setSafeMode). Replaces the legacy \Michaelf\Markdown-driven .txt reader.
+ * Routes requests like https://bbsengine.org/handbook/<v>/<path> to:
+ *   - a single chapter's rendered HTML, when <path>.md exists;
+ *   - a directory-style chapter list scoped to <path>/, when
+ *     HANDBOOKDIR/<v>/<path>/ exists as a subdirectory;
+ *   - the root chapter list, when <path> is empty or just "/";
+ *   - the raw .md source as text/plain, when the .htaccess rewrites
+ *     /handbook/<v>/<path>.md to ?rawpath=<path>.md (see commit
+ *     feat(handbook): collapse .htaccess rules).
  *
- * No DB blurb row is required: the filesystem is the source of truth
- * (matches the per-decision "filesystem fallback" mode for this sub-target).
+ * Mirrors the teos engine router's pattern (engine/router.php):
+ * one entry point, a dispatcher that classifies the URI, and a
+ * per-classification render path. Replaces the prior `?mode=`
+ * switch and the "always append .md" assumption that broke
+ * directory URLs (e.g. /handbook/6/specs/).
+ *
+ * No DB blurb row is required: the filesystem is the source of
+ * truth (matches the per-decision "filesystem fallback" mode for
+ * this sub-target).
  */
 
 require_once("/srv/www/bbsengine6/php/bootstrap.php");
@@ -29,17 +40,77 @@ class handbook
         return rtrim($resolved, "/") . "/";
     }
 
-    public function displayindex(): void
+    /**
+     * Classify the request URI into a render mode.
+     *
+     * Returns one of:
+     *   - 'index'    : root chapter list (URI is empty or trailing-slash).
+     *   - 'chapter'  : URI maps to a regular .md file inside the handbook tree.
+     *   - 'directory': URI maps to a subdirectory of the handbook tree (chapter list scoped to it).
+     *   - 'error'    : URI maps to neither a .md file nor a directory inside the tree.
+     *
+     * Path-traversal guard: both 'chapter' and 'directory' resolutions
+     * require realpath($candidate) to live under realpath(handbookDir).
+     */
+    private function dispatch(string $version, string $uri): string
     {
-        $version = $_REQUEST["version"] ?? "6";
         $handbookdir = $this->handbookDir($version);
+        $realdir     = realpath($handbookdir);
 
-        $files = glob($handbookdir . "*.md");
+        // Empty URI or trailing-slash URI -> index.
+        if ($uri === "" || substr($uri, -1) === "/") {
+            return "index";
+        }
+
+        // Restrict URI characters to the safe alphabet. Mirrors the
+        // legacy guard from displaychapter (commit cfb9b76).
+        if (!preg_match('#^[a-zA-Z0-9_./-]+$#', $uri)) {
+            return "error";
+        }
+
+        $realbasedir = ($realdir === false) ? false : (rtrim($realdir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR);
+
+        // Try as a .md file first.
+        $candidatemd = $handbookdir . $uri . ".md";
+        $realfilemd  = realpath($candidatemd);
+        if ($realfilemd !== false
+            && $realbasedir !== false
+            && strpos($realfilemd, $realbasedir) === 0
+            && is_file($realfilemd)) {
+            return "chapter";
+        }
+
+        // Then as a directory.
+        $candidatedir = $handbookdir . $uri . "/";
+        $realdircheck = realpath($candidatedir);
+        if ($realdircheck !== false
+            && $realbasedir !== false
+            && strpos($realdircheck, $realbasedir) === 0
+            && is_dir($realdircheck)) {
+            return "directory";
+        }
+
+        return "error";
+    }
+
+    /**
+     * Render the chapter list. When $scope is non-empty, list
+     * *.md files inside HANDBOOKDIR/<v>/<scope>/ instead of the
+     * root. Used by both 'index' (root) and 'directory' (scoped)
+     * dispatch outcomes -- same template, different glob.
+     */
+    public function displayindex(string $scope = ""): void
+    {
+        $version     = $_REQUEST["version"] ?? "6";
+        $handbookdir = $this->handbookDir($version);
+        $scoped      = $handbookdir . $scope;
+        $files       = glob($scoped . "*.md");
+
         $chapters = [];
         if (is_array($files)) {
             foreach ($files as $f) {
                 $chapters[] = [
-                    "file" => $f,
+                    "file"              => $f,
                     "datemodifiedepoch" => filemtime($f),
                 ];
             }
@@ -48,40 +119,25 @@ class handbook
         $data = [
             "chapters"     => $chapters,
             "version"      => $version,
+            "scope"        => $scope,
             "title"        => "bbsengine " . $version . " handbook",
             "pagetemplate" => "handbook-index.tmpl",
         ];
         \bbsengine6\displaypage($data, "handbook-index.tmpl", false);
     }
 
-    public function displaychapter(): void
+    public function displaychapter(string $relpath): void
     {
-        $version = $_REQUEST["version"] ?? "6";
-        $uri     = $_REQUEST["uri"]     ?? "";
+        $version     = $_REQUEST["version"] ?? "6";
         $handbookdir = $this->handbookDir($version);
+        $realdir     = realpath($handbookdir);
+        $realbasedir = ($realdir === false) ? false : (rtrim($realdir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR);
 
-        $segments = array_values(array_filter(explode("/", trim($uri, "/"))));
-        if (empty($segments)) {
-            $this->displayindex();
-            return;
-        }
-        $relpath = implode("/", $segments);
-
-        // Path-traversal guard: ensure the requested .md file resolves
-        // inside the handbook tree for this version.
-        $candidate = $handbookdir . $relpath . ".md";
-        if (!preg_match('#^[a-zA-Z0-9_./-]+$#', $relpath)) {
-            \bbsengine6\displayerrorpage("Bad request (handbook)", 400);
-            return;
-        }
-        $filepath = realpath($candidate);
-        $realdir  = realpath($handbookdir);
-        if ($filepath === false || $realdir === false
-            || strpos($filepath, $realdir . DIRECTORY_SEPARATOR) !== 0) {
-            \bbsengine6\displayerrorpage("File Not Found (handbook)", 404);
-            return;
-        }
-        if (!is_file($filepath)) {
+        $filepath = realpath($handbookdir . $relpath . ".md");
+        if ($filepath === false
+            || $realbasedir === false
+            || strpos($filepath, $realbasedir) !== 0
+            || !is_file($filepath)) {
             \bbsengine6\displayerrorpage("File Not Found (handbook)", 404);
             return;
         }
@@ -111,10 +167,28 @@ class handbook
     public function main(): void
     {
         \bbsengine6\session\start();
-        $mode = $_REQUEST["mode"] ?? null;
-        switch ($mode) {
+        $version = $_REQUEST["version"] ?? "6";
+
+        // Raw .md URL: stream the file as text/plain. Runs before the
+        // dispatch so .md requests never accidentally land in the HTML
+        // rendering path.
+        if (isset($_REQUEST["rawpath"])) {
+            $basedir = \config\HANDBOOKDIR . $version . "/";
+            if (\bbsengine6\serveRawMarkdown($basedir, $_REQUEST["rawpath"])) {
+                return;
+            }
+            http_response_code(404);
+            echo "File not found\n";
+            return;
+        }
+
+        $uri = $_REQUEST["uri"] ?? "";
+        switch ($this->dispatch($version, $uri)) {
             case "chapter":
-                $this->displaychapter();
+                $this->displaychapter($uri);
+                break;
+            case "directory":
+                $this->displayindex($uri . "/");
                 break;
             case "index":
             default:
