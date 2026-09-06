@@ -19,8 +19,16 @@ RewriteRule ^(contact-us|about-us|credits)[/]?$ /page.php?file=$1.tmpl [last]
 RewriteRule ^handbook/current/(.*)$ handbook/6/$1
 RewriteRule ^handbook/current[/]?$ handbook/6/
 
-RewriteRule ^handbook/([\d]+)/(.*)$ /handbook.php?mode=chapter&uri=$2&version=$1 [last]
-RewriteRule ^handbook/([\d]+)[/]?$ /handbook.php?mode=index&version=$1 [last]
+# Raw .md URLs -> handbook.php?rawpath, which streams the file as
+# text/plain via \bbsengine6\serveRawMarkdown(). Mirrors teos's
+# /engine/serve-md.php behavior (bbsengine.org vhost has no /engine/
+# subdir; the bbsengine6-side helper ships via /srv/www/bbsengine6/php/).
+RewriteRule ^handbook/([\d]+)/(.+\.md)$ /handbook.php?version=$1&rawpath=$2 [last,qsappend]
+
+# Everything else under /handbook/<v>/ -> handbook.php with uri;
+# the handler dispatches on URI shape (chapter | directory | index).
+RewriteRule ^handbook/([\d]+)/(.*)$ /handbook.php?version=$1&uri=$2 [last]
+RewriteRule ^handbook/([\d]+)[/]?$ /handbook.php?version=$1 [last]
 
 # RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)\.(md|txt)$ /page.php?version=$1&file=$2.$3 [last]
 # RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)$ /page.php?version=$1&name=$2 [last]
