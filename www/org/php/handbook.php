@@ -2,20 +2,31 @@
 /**
  * handbook.php - Handbook handler for bbsengine.org /handbook/<v>/<path>
  *
+ * Delegates URI classification and rendering to engine/router.php so
+ * the handbook vhost shares a single dispatcher with teos/www. The only
+ * handbook-specific behavior kept here is:
+ *   - resolving HANDBOOKDIR/<v>/ to a real base directory (the router
+ *     already reads TEOSDIR via getenv());
+ *   - exposing the ?rawpath= stream-as-text/plain branch, which the
+ *     router's chapter handler doesn't (routing is to render, not
+ *     raw dump);
+ *   - the chapter/directory path-traversal guard (defence in depth on
+ *     top of bbsengine6\util\safe_path_web inside the router).
+ *
  * Routes requests like https://bbsengine.org/handbook/<v>/<path> to:
  *   - a single chapter's rendered HTML, when <path>.md exists;
  *   - a directory-style chapter list scoped to <path>/, when
  *     HANDBOOKDIR/<v>/<path>/ exists as a subdirectory;
  *   - the root chapter list, when <path> is empty or just "/";
  *   - the raw .md source as text/plain, when the .htaccess rewrites
- *     /handbook/<v>/<path>.md to ?rawpath=<path>.md (see commit
- *     feat(handbook): collapse .htaccess rules).
+ *     /handbook/<v>/<path>.md to ?rawpath=<path>.md.
  *
- * Mirrors the teos engine router's pattern (engine/router.php):
- * one entry point, a dispatcher that classifies the URI, and a
- * per-classification render path. Replaces the prior `?mode=`
- * switch and the "always append .md" assumption that broke
- * directory URLs (e.g. /handbook/6/specs/).
+ * TEOSDIR is set to the handbook root (containing all versions), and
+ * the URI prefix /handbook/ is stripped before forwarding to the
+ * router, so the router's handlers can resolve relative paths the
+ * same way they do under the teos vhost. TEOSURL is set to
+ * /handbook/ -- the router uses it only for breadcrumb/URI display,
+ * not for filesystem resolution.
  *
  * No DB blurb row is required: the filesystem is the source of
  * truth (matches the per-decision "filesystem fallback" mode for
@@ -95,74 +106,48 @@ class handbook
     }
 
     /**
-     * Render the chapter list. When $scope is non-empty, list
-     * *.md files inside HANDBOOKDIR/<v>/<scope>/ instead of the
-     * root. Used by both 'index' (root) and 'directory' (scoped)
-     * dispatch outcomes -- same template, different glob.
+     * Map a handbook URI to a router-shaped URI and dispatch through
+     * engine/router.php. The router's handlers run on URIs whose
+     * filesystem join is TEOSDIR + leading-slash URI -- matching the
+     * teos vhost where TEOSDIR is the document root and the URI is
+     * the public path under it.
+     *
+     * For the handbook, TEOSDIR is the handbook root (containing all
+     * versions) and the URI passed to the router is "/<version>/<rest>"
+     * with a trailing slash for directory requests so router_handleFolder
+     * keys off is_dir() on safe_path_web.
      */
-    public function displayindex(string $scope = ""): void
+    private function dispatchViaRouter(string $version, string $uri, string $mode): void
     {
-        $version     = $_REQUEST["version"] ?? "6";
-        $handbookdir = $this->handbookDir($version);
-        $scoped      = $handbookdir . $scope;
-        $files       = glob($scoped . "*.md");
-
-        $chapters = [];
-        if (is_array($files)) {
-            foreach ($files as $f) {
-                $chapters[] = [
-                    "file"              => $f,
-                    "datemodifiedepoch" => filemtime($f),
-                ];
-            }
+        $handler_uri = "/" . $version . "/" . ltrim($uri, "/");
+        if ($mode === "index") {
+            $handler_uri = "/" . $version . "/";
         }
 
-        $data = [
-            "chapters"     => $chapters,
-            "version"      => $version,
-            "scope"        => $scope,
-            "title"        => "bbsengine " . $version . " handbook",
-            "pagetemplate" => "handbook-index.tmpl",
-        ];
-        \bbsengine6\displaypage($data, "handbook-index.tmpl", false);
-    }
+        // TEOSDIR points at the handbook root (one level above <v>/).
+        // realpath defends against a missing HANDBOOKDIR deployment.
+        $handbook_root = \config\HANDBOOKDIR;
+        $real_root = realpath($handbook_root);
+        $base_dir = ($real_root === false)
+            ? rtrim($handbook_root, "/") . "/"
+            : rtrim($real_root, "/") . "/";
 
-    public function displaychapter(string $relpath): void
-    {
-        $version     = $_REQUEST["version"] ?? "6";
-        $handbookdir = $this->handbookDir($version);
-        $realdir     = realpath($handbookdir);
-        $realbasedir = ($realdir === false) ? false : (rtrim($realdir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR);
+        // Export base directory and public URL for the router.
+        // putenv wins over constants inside router_get_teosurl/dir.
+        putenv("TEOSDIR=" . $base_dir);
+        putenv("TEOSURL=/handbook/");
+        if (!defined("TEOSURL")) define("TEOSURL", "/handbook/");
+        if (!defined("TEOSDIR"))  define("TEOSDIR",  $base_dir);
 
-        $filepath = realpath($handbookdir . $relpath . ".md");
-        if ($filepath === false
-            || $realbasedir === false
-            || strpos($filepath, $realbasedir) !== 0
-            || !is_file($filepath)) {
-            \bbsengine6\displayerrorpage("File Not Found (handbook)", 404);
-            return;
+        require_once __DIR__ . "/../../engine/router.php";
+
+        $result = \router($handler_uri);
+        if ($result === null || $result === false) {
+            http_response_code(500);
+            echo "Router Error";
+        } else {
+            echo $result;
         }
-
-        $content = file_get_contents($filepath);
-        if ($content === false) {
-            \bbsengine6\displayerrorpage("Read failure (handbook)", 500);
-            return;
-        }
-
-        $parsed = \bbsengine6\markdown\parseDocument($content, split: false, breaks: false);
-        $doc = $parsed["doc"];
-
-        // Title priority: frontmatter `title:` > URI-segment-derived name.
-        $title = $doc["title"] ?? str_replace(["-", "_"], " ", basename($relpath));
-
-        $data = [
-            "title"        => $title,
-            "html"         => $doc["html"],
-            "version"      => $version,
-            "filename"     => basename($filepath),
-            "pagetemplate" => "handbook-chapter.tmpl",
-        ];
-        \bbsengine6\displaypage($data, "handbook-chapter.tmpl", false);
     }
 
     public function main(): void
@@ -183,17 +168,18 @@ class handbook
             return;
         }
 
-        $uri = $_REQUEST["uri"] ?? "";
-        switch ($this->dispatch($version, $uri)) {
+        $uri  = $_REQUEST["uri"] ?? "";
+        $mode = $this->dispatch($version, $uri);
+
+        switch ($mode) {
             case "chapter":
-                $this->displaychapter($uri);
-                break;
             case "directory":
-                $this->displayindex($uri . "/");
-                break;
             case "index":
+                $this->dispatchViaRouter($version, $uri, $mode);
+                break;
+            case "error":
             default:
-                $this->displayindex();
+                \bbsengine6\displayerrorpage("File Not Found (handbook)", 404);
                 break;
         }
     }
