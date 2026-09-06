@@ -135,6 +135,31 @@ docroot.
   `handbook/modules.html`, `handbook/bbsengine.html`,
   `handbook/bbsengine-modules.html` (all `<title>Untitled
   </title>` boilerplate, no real chapter content).
+- Doc cleanup for the new architecture:
+  `handbook/Makefile` — drop the `convert` and `watch`
+  targets (both called `convert_markdown.py`, which is gone)
+  and the `install-deps` target (its Python deps were for the
+  Flask app + `convert_markdown.py`); update `help`.
+  `handbook/WEBSOCKET_REALTIME_PLAN.md` — the WebSocket plan
+  was for an unimplemented migration that *replaced* the
+  just-retired Flask/WSGI stack with a WebSocket-native
+  server; the actual shipped architecture (request-time PHP
+  rendering via `handbook.php` + the shared
+  `\bbsengine6\markdown\parseDocument` primitive) is simpler
+  than either, so the plan is obsolete and the document is
+  deleted.
+  `handbook/QUICKSTART.md`, `handbook/index.md`, `README.md`,
+  `SPEC.md` — drop links to deleted `DEPLOYMENT.md` and
+  `HANDBOOK_SERVING.md`, drop the `libapache2-mod-wsgi-py3`
+  / `libapache2-mod-proxy-uwsgi` apt-get line, drop
+  references to the `handbook-wsgi.conf` vhost, drop the
+  `csrf/` link and tree entry from the doc structure, and
+  remove the runtime-conversion (`python3 app.py`) and
+  pre-built static (`make convert`) snippets from the dev
+  section. The "Flask" references in
+  `handbook/specs/decisions.md` are historical alternatives
+  that were rejected during architecture selection; they
+  stay.
 
 ### bbsengine6.message: extract `dal/` subpackage, split service from lib
 

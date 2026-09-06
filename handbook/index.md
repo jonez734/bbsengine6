@@ -10,10 +10,6 @@ guides related to the BBSEngine project.
 
 - [README](../README.md) — project overview, install, repo tree, quick start
 - [Quick Start](QUICKSTART.md) — five-minute first-run
-- [Deployment](DEPLOYMENT.md) — production deployment (Apache mod_proxy_uwsgi,
-  mod_wsgi, gunicorn)
-- [Handbook Serving](HANDBOOK_SERVING.md) — runtime conversion vs. pre-built
-  static, the Flask app, `convert_markdown.py`
 - [Security](SECURITY.md) — security overview and links to the Phase 0-5
   hardening audit
 - [Router](ROUTER.md) — `/engine/router.php` operation and post-mortems
@@ -47,7 +43,6 @@ own:
 
 ### Security
 
-- [CSRF Protection](csrf/README.md) — CSRF security implementation
 - [Phase 0-5 audit](../ROBUSTNESS_REVIEW.md) — every finding, every fix,
   every regression test
 
@@ -57,8 +52,6 @@ own:
 handbook/
 ├── index.md                 # this file
 ├── QUICKSTART.md            # five-minute first-run
-├── DEPLOYMENT.md            # Apache deployment paths
-├── HANDBOOK_SERVING.md      # runtime vs. static handbook serving
 ├── SECURITY.md              # security overview + audit links
 ├── ROUTER.md                # /engine/router.php operation
 ├── specs/                   # per-subsystem design specs
@@ -82,23 +75,22 @@ handbook/
 │   ├── folder.md
 │   ├── bottombar.md
 │   └── md2tpl.md
-├── csrf/                    # CSRF implementation docs (in scope)
-└── migrations/              # *.sql migrations
+└── modules.md               # placeholder; content forthcoming
 ```
 
 ## Development
 
-The handbook is written in plain Markdown. Two ways to serve it under
-Apache (see [HANDBOOK_SERVING.md](HANDBOOK_SERVING.md)):
-
-```bash
-# Runtime conversion (recommended)
-cd handbook && python3 app.py        # dev only
-# Production: mod_proxy_uwsgi → uwsgi → wsgi.py → app.py
-
-# Pre-built static HTML
-cd handbook && make convert           # writes <file>/index.html
-```
+The handbook is written in plain Markdown. Chapters are rendered
+at request time by `www/org/php/handbook.php` via the shared
+`\bbsengine6\markdown\parseDocument` primitive (matching teos's
+`teospath` path). The handbook `Makefile` `stage` target rsyncs
+the `.md` tree to `WWWSTAGE/handbook/<v>/`, where Apache +
+`mod_php` + the rewrite in `www/org/htaccess-prod` route every
+`/handbook/<v>/...` request to `handbook.php` for read-time
+rendering. The `make convert-tmpl` developer helper converts
+chapters into Smarty `.tmpl` snippets for embedding inside
+other templates (e.g. chapter summaries on the org-site
+front page).
 
 ### Contributing
 

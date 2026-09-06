@@ -7,8 +7,7 @@
 
 Stand up bbsengine6 from a clean checkout in roughly five minutes: install
 OS and Python deps, build the wheel, bring up the database, run the BBS
-door, and confirm the public website renders. For production
-deployment, jump to [./DEPLOYMENT.md](./DEPLOYMENT.md).
+door, and confirm the public website renders.
 
 ## 1. OS packages (Debian / Ubuntu)
 
@@ -17,8 +16,7 @@ sudo apt-get install \
  postgresql postgresql-contrib libpq-dev \
     python3 python3-venv python3-dev build-essential \
     php8.1 php8.1-cli php8.1-pgsql libapache2-mod-php \
-    apache2 libapache2-mod-wsgi-py3 libapache2-mod-proxy-uwsgi \
-    libapache2-mod-rewrite
+    apache2 libapache2-mod-rewrite
 ```
 
 PHP extensions `pdo` and `pgsql` are pulled in by `php8.1-pgsql`.
@@ -97,13 +95,18 @@ above this repo. The daemon opens a TCP/WS port that the
 
 ## 6. Serve the public website
 
-Add the Apache site config (see [./DEPLOYMENT.md](./DEPLOYMENT.md) for
-the full production deployment, including WSGI/uWSGI):
+The public website (org + com sites, including the handbook tree
+under `/handbook/<v>/<path>`) is served by Apache + `mod_php` +
+Smarty. No Python app server is needed: handbook chapters are read
+from disk at request time by `www/org/php/handbook.php` and rendered
+via the shared `\bbsengine6\markdown\parseDocument` primitive
+(matching teos's `teospath` path). Drop the org vhost config into
+place and reload:
 
 ```bash
-sudo cp handbook/handbook-wsgi.conf /etc/apache2/sites-available/
-sudo a2ensite handbook-wsgi.conf
-sudo systemctl restart apache2
+sudo cp www/org/htaccess-prod /var/www/.../.htaccess   # per your layout
+sudo apache2ctl configtest
+sudo systemctl reload apache2
 ```
 
 Then visit `http://localhost/handbook/` for the docs and
@@ -122,12 +125,6 @@ Then visit `http://localhost/handbook/` for the docs and
 
 ## Next steps
 
-- **Production deployment** — [./DEPLOYMENT.md](./DEPLOYMENT.md)
-  covers Apache mod_proxy_uwsgi, mod_wsgi, and gunicorn+mod_proxy,
-  systemd units, log rotation, and the production checklist.
-- **Handbook serving model** — [./HANDBOOK_SERVING.md](./HANDBOOK_SERVING.md)
-  covers runtime conversion vs. pre-built static HTML and the Flask
-  app.
 - **Security model** — [./SECURITY.md](./SECURITY.md) summarises the
   Phase 0-5 hardening and links to `../ROBUSTNESS_REVIEW.md`.
 - **Router operation** — [./ROUTER.md](./ROUTER.md) documents the

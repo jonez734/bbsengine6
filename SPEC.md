@@ -296,8 +296,6 @@ canonical pattern and the open follow-ups.
 | Topic                                 | Handbook file                                       |
 |---------------------------------------|-----------------------------------------------------|
 | Quick start                           | `handbook/QUICKSTART.md`                            |
-| Production deployment (Apache paths)  | `handbook/DEPLOYMENT.md`                            |
-| Handbook serving (Flask vs. static)   | `handbook/HANDBOOK_SERVING.md`                      |
 | Security model                        | `handbook/SECURITY.md`                              |
 | Router guide                          | `handbook/ROUTER.md`                                |
 | Per-subsystem design specs            | `handbook/specs/*.md`                               |
@@ -473,8 +471,6 @@ Phase 3 regression tests (created 2026-08-02):
 | `js/bbsengine6.js`                         | Browser singleton                     |
 | `js/jquery.smoothState.js`                 | Vendored page-transition framework    |
 | `handbook/QUICKSTART.md`                   | Quick start                           |
-| `handbook/DEPLOYMENT.md`                  | Production deploy (Apache paths)     |
-| `handbook/HANDBOOK_SERVING.md`            | Flask vs. static handbook serving    |
 | `handbook/SECURITY.md`                    | Security overview                     |
 | `handbook/ROUTER.md`                      | `/engine/router.php` operation        |
 | `handbook/specs/`                          | Per-subsystem design specs            |
