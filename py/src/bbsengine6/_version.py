@@ -1,2 +1,2 @@
-__version__ = "0.0.1.dev20260906142643"
-__datestamp__ = "20260906-1426-opencode"
+__version__ = "0.0.1.dev20260906192455"
+__datestamp__ = "20260906-1924-opencode"
