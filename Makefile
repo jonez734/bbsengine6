@@ -237,7 +237,7 @@ sign:
 
 wheel-release: build rename-sdist sign
 
-.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-tui
+.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui
 .PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
 
@@ -271,6 +271,21 @@ handbook-prod:
 	$(MAKE) -C handbook stage VERSION=$(VERSION)
 
 deploy-handbook: handbook-prod
+
+# Ship the full handbook stack: engine-side primitive
+# (php/markdown.php -> /srv/www/bbsengine6/php/), docroot handler
+# (www/org/php/handbook.php -> /srv/www/vhosts/.../html/), and the
+# .md sources under html/handbook/<v>/. wwworg already ssh-rsyncs to
+# merlin via ORGPROD; php-deploy and handbook-prod write to local
+# /srv/www paths that are assumed to be the same on this host and
+# merlin (bind-mount or rsync-mirror of the docroot/engine trees).
+#
+# After this runs, reload php-fpm on merlin so opcache picks up the
+# new files immediately:
+#   sudo systemctl reload php-fpm
+deploy-handbook-prod: php-deploy wwworg handbook-prod
+	@echo "Handbook stack deployed: php/markdown.php + html/handbook.php + html/handbook/$(VERSION)/"
+	@echo "Reminder on merlin: sudo systemctl reload php-fpm"
 
 deploy:
 	$(MAKE) -C engine stage
