@@ -1,5 +1,7 @@
 all:
 
+VERSION ?= 6
+
 clean:
 	-rm *~
 	$(MAKE) -C skin clean
@@ -13,7 +15,7 @@ clean:
 
 org:
 	$(MAKE) -C org stage
-	$(MAKE) -C ../handbook stage
+	$(MAKE) -C ../handbook stage VERSION=$(VERSION)
 	$(RSYNC) --exclude "releases" --exclude "templates_c" --chmod=Dg+rwxs $(ORGSTAGE) $(ORGPROD)
 
 com:

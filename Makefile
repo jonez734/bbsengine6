@@ -16,7 +16,7 @@ export RSYNC = rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --verbose \
 	--delete-after --mkpath \
 	--exclude 'captchas'
 
-VERSION = 6
+VERSION ?= 6
 
 # Python package version. PY_VERSION is a dev-timestamp captured once at
 # Makefile parse time; VERSION_PREFIX is the stable semver prefix. Combined
@@ -141,7 +141,7 @@ skin-prod:
 	$(RSYNC) $(ENGINESTAGE)skin/ $(ENGINEPROD)skin/
 
 wwworg:
-	$(MAKE) -C www org
+	$(MAKE) -C www org VERSION=$(VERSION)
 
 wwwcom:
 	$(MAKE) -C www com
@@ -268,8 +268,7 @@ deploy-wwworg: wwworg
 deploy-wwwcom: wwwcom
 
 handbook-prod:
-	$(MAKE) -C handbook stage
-	$(MAKE) -C www org
+	$(MAKE) -C handbook stage VERSION=$(VERSION)
 
 deploy-handbook: handbook-prod
 

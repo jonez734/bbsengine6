@@ -64,6 +64,20 @@ org site. Replaces the legacy `\Michaelf\Markdown`-driven
   (which already chains `$(MAKE) -C ../handbook stage`).
   Removed the legacy `handbook-prod` (staged-v6-rsync
   via `.txt`) target; `prod:` no longer references it.
+- `Makefile` follow-up: `handbook-prod` no longer chains
+  into `$(MAKE) -C www org` — the merlin production push
+  is owned by `deploy bbsengine6.wwworg`, whose `RSYNC`
+  already covers `/srv/www/vhosts/www.bbsengine.org/html/handbook/<v>/`
+  because that path lives under `WWWSTAGE`. `VERSION` is
+  now declared `?= 6` (was `= 6`) and passed inline as
+  `VERSION=$(VERSION)` to the handbook stage sub-make,
+  fixing the empty-VERSION rsync destination
+  `/srv/www/vhosts/www.bbsengine.org/html/handbook//`.
+  `www/Makefile:org` and `wwworg:` similarly pass
+  `VERSION=$(VERSION)` through the chain, and `www/Makefile`
+  declares `VERSION ?= 6` as a defensive fallback so the
+  empty-version bug cannot recur if `www org` is invoked
+  directly.
 - Behavior change: rendering engine for
   `https://bbsengine.org/handbook/<v>/<path>` switched
   from `\Michaelf\Markdown::defaultTransform` to
