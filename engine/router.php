@@ -18,6 +18,12 @@
  * router_isIgnoredEntry(). See handbook/ROUTER.md and
  * teos/SPEC.md section 9.6 for the policy and patterns covered.
  *
+ * Shared by both the teos/www vhost (TEOSURL=/teos/) and the handbook
+ * vhost at bbsengine.org (TEOSURL=/handbook/<v>/), where the calling
+ * entry point exports TEOSURL/TEOSDIR via putenv() before invocation.
+ * Handlers that depend on teos-only helpers (bbsengine6\blurb\*,
+ * bbsengine6\folder\*) no-op to ROUTER_NEXT when those helpers are absent.
+ *
  * @since 2026
  */
 
@@ -117,7 +123,11 @@ function router_handleBlurb(string $uri)
 {
   router_log('handleBlurb: ' . $uri);
 
-  if (function_exists('bbsengine6\blurb\isBlurb') && bbsengine6\blurb\isBlurb($uri)) {
+  if (!function_exists('bbsengine6\blurb\isBlurb')) {
+    return ROUTER_NEXT;
+  }
+
+  if (bbsengine6\blurb\isBlurb($uri)) {
     if (function_exists('bbsengine6\blurb\display')) {
       bbsengine6\blurb\display($uri, null);
       return '';
@@ -147,7 +157,7 @@ function router_handleFolder(string $uri)
     return ROUTER_NEXT;
   }
 
-  // folder visibility check
+  // folder visibility check (optional: only meaningful for the teos tree)
   $isVisible = true; $isSysop = false;
   if (function_exists('bbsengine6\folder\isFolderVisible')) {
     $isVisible = bbsengine6\folder\isFolderVisible($uri);
@@ -458,6 +468,12 @@ if (php_sapi_name() !== 'cli') {
     . PATH_SEPARATOR . "/srv/www/zoid6/php"
     . PATH_SEPARATOR . "/srv/www/zoid6/markdown");
 
+  // TEOSURL/TEOSDIR may already be set by the including entry point
+  // (e.g. handbook.php, which exports the handbook base via putenv()).
+  // Env wins over constants: the http entry-point at the bottom of this
+  // file reads them via router_get_teosurl()/router_get_teosdir(), which
+  // prefer getenv() over the constant. We therefore only define fallback
+  // defaults for the teos/www case where no caller has configured them.
   if (!defined('TEOSURL')) define('TEOSURL', '/teos/');
   if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
 
