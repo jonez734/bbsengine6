@@ -237,7 +237,7 @@ sign:
 
 wheel-release: build rename-sdist sign
 
-.PHONY: handbook handbook-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui
+.PHONY: handbook handbook-prod handbook-deploy-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui
 .PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
 
@@ -270,20 +270,33 @@ deploy-wwwcom: wwwcom
 handbook-prod:
 	$(MAKE) -C handbook stage VERSION=$(VERSION)
 
+# Local-stage then ssh-rsync to merlin. Mirrors the
+# php-deploy/php-deploy-prod split: handbook-prod writes to
+# $(WWWSTAGE)html/handbook/$(VERSION)/ locally; this target pushes
+# that tree to $(WWWPROD)html/handbook/$(VERSION)/ on merlin over
+# ssh (via $(RSYNC)'s --rsh=ssh). No fs bind-mount assumption.
+handbook-deploy-prod: handbook-prod
+	$(RSYNC) $(WWWSTAGE)html/handbook/$(VERSION)/ $(WWWPROD)html/handbook/$(VERSION)/
+
 deploy-handbook: handbook-prod
 
-# Ship the full handbook stack: engine-side primitive
-# (php/markdown.php -> /srv/www/bbsengine6/php/), docroot handler
-# (www/org/php/handbook.php -> /srv/www/vhosts/.../html/), and the
-# .md sources under html/handbook/<v>/. wwworg already ssh-rsyncs to
-# merlin via ORGPROD; php-deploy and handbook-prod write to local
-# /srv/www paths that are assumed to be the same on this host and
-# merlin (bind-mount or rsync-mirror of the docroot/engine trees).
+# Ship the full handbook stack to merlin over ssh. Each prereq
+# handles its own local-stage-then-ssh-rsync:
+#
+#   php-deploy-prod       -> /srv/www/bbsengine6/php/markdown.php
+#   wwworg                -> /srv/www/vhosts/www.bbsengine.org/html/{handbook.php,config.php,...}
+#   handbook-deploy-prod  -> /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/*.md
+#
+# All three use $(RSYNC) (which carries --rsh=ssh), so this runs
+# cleanly from a build host with no fs bind-mount between the build
+# host and merlin. wwworg additionally pushes its whole staged
+# docroot to merlin via ORGPROD, which carries the handbook handler
+# installed by www/org/php/.
 #
 # After this runs, reload php-fpm on merlin so opcache picks up the
 # new files immediately:
 #   sudo systemctl reload php-fpm
-deploy-handbook-prod: php-deploy wwworg handbook-prod
+deploy-handbook-prod: php-deploy-prod wwworg handbook-deploy-prod
 	@echo "Handbook stack deployed: php/markdown.php + html/handbook.php + html/handbook/$(VERSION)/"
 	@echo "Reminder on merlin: sudo systemctl reload php-fpm"
 

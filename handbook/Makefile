@@ -9,18 +9,23 @@ all: stage
 # reads .md files directly from the docroot, so this rsync MUST
 # include them — no install-time conversion happens anywhere in
 # the chain.
+#
+# Writes to $(WWWSTAGE)html/handbook/$(VERSION)/ (exported by the
+# root Makefile) so a sibling handbook-deploy-prod target can ssh
+# the staged tree to $(WWWPROD)html/handbook/$(VERSION)/ on merlin
+# without any fs bind-mount assumption. Uses $(RSYNC) (also
+# exported) for the --rsh=ssh + chmod consistency with the rest of
+# the deploy chain.
 stage:
 	@echo "Staging handbook sources..."
-	@mkdir -p /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/
-	@rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --times --verbose \
-		--recursive --update --checksum \
-		--exclude '*.pyc' \
+	@mkdir -p $(WWWSTAGE)html/handbook/$(VERSION)/
+	@$(RSYNC) --exclude '*.pyc' \
 		--exclude '__pycache__' \
 		--exclude '.sass-cache' \
 		--exclude 'Makefile' \
 		--exclude '.*' \
-		. /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/
-	@echo "✓ Handbook sources staged to /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/"
+		. $(WWWSTAGE)html/handbook/$(VERSION)/
+	@echo "✓ Handbook sources staged to $(WWWSTAGE)html/handbook/$(VERSION)/"
 
 # Convert markdown to Smarty templates
 convert-tmpl:
