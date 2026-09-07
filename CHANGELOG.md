@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### chore(www): re-introduction guard for legacy handbook artifacts
+
+The previous entry (`chore(www): one-shot removal of legacy
+Flask / gunicorn / mod_wsgi handbook artifacts`, commit
+910c27b) added a `remove-legacy-handbook` target that
+ssh-runs `rm` on merlin. Its header comment noted that a
+subsequent `make wwworg` from the build host's read-only
+local stage would re-push the four files and undo the
+cleanup, and that cleaning the build host's stage was out
+of scope for that commit. This commit closes that gap.
+
+- `www/Makefile` `org` target rsync: add four `--exclude`
+  patterns, each anchored at the transfer root:
+  - `--exclude "html/handbook/bbsengine-handbook.conf"`
+  - `--exclude "html/handbook/handbook-wsgi.conf"`
+  - `--exclude "html/handbook/modules.adoc"`
+  - `--exclude "html/handbook/modules.html"`
+
+  The patterns prevent the rsync from transferring the
+  four legacy files to merlin, so even though they remain
+  on the build host's read-only local stage, the next
+  `make wwworg` will not reintroduce them. The patterns
+  are anchored at `html/handbook/<file>` so they match
+  only the legacy files and not anything under
+  `html/handbook/6/` (the new content's sibling). The new
+  content's `specs/` subdir lives at `html/handbook/6/specs/`
+  and is unaffected because none of the four patterns is
+  `specs/`-prefixed.
+
+- `www/Makefile` `remove-legacy-handbook` header comment:
+  update the now-stale caveat about re-introduction. The
+  `org` rsync's `--exclude` patterns now keep the cleanup
+  in place even if the build host's read-only local stage
+  still has the files.
+
+- `tests/test_handbook_6_returns_200.sh` `[4]`: extend the
+  `www/Makefile` invariant check. After the existing
+  `--exclude engine/ / --exclude html/engine/` assertion,
+  a loop asserts each of the four new `--exclude` patterns
+  is present. Each missing pattern is reported individually
+  with a remediation hint. This catches source-side
+  regressions (a future careless edit that drops one of
+  the four patterns) before they manifest as
+  re-introduction of the legacy files on prod.
+
+Operational:
+
+  make -C www remove-legacy-handbook    # one-shot cleanup
+                                        # (operator runs once)
+  make wwworg                           # safe to re-run;
+                                        # excludes keep the
+                                        # cleanup in place
+
+Broader legacy cleanup (`bbsengine.html`,
+`bbsengine-modules.html`, `csrf/`, `migrations/`, top-level
+`specs/`) is intentionally out of scope: the operator's
+current scope is `modules.adoc`, `modules.html`, and `*.conf`.
+The follow-up can be a separate commit if desired.
+
 ### chore(www): one-shot removal of legacy Flask / gunicorn / mod_wsgi handbook artifacts
 
 `www/org/htaccess-prod` rewrites `/handbook/<v>/<path>` to
