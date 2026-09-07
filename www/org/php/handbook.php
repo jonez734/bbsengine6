@@ -142,7 +142,25 @@ class handbook
         if (!defined("TEOSURL")) define("TEOSURL", "/handbook/");
         if (!defined("TEOSDIR"))  define("TEOSDIR",  $base_dir);
 
-        require_once("router.php");
+        // @since 2026-09-07 — relative require to the vhost's own
+        // engine/ sibling. engine/Makefile deploy-engine /
+        // deploy ssh-pushes the engine tree straight to
+        // $(WWWENGINEPRODDOCROOT) =
+        // merlin:/srv/www/vhosts/www.bbsengine.org/html/engine/,
+        // so __DIR__ . "/engine/router.php" resolves to that file
+        // once `make engine-deploy-prod` has run. The previous
+        // bare-name require_once("router.php") depended on the
+        // include_path default set by php/bootstrap.php, which
+        // pointed at /srv/www/bbsengine6/engine/ — a directory on
+        // the prod source tree that the engine deploy never
+        // populates (it only ships the tree to the docroots, not
+        // to the source tree). When the engine deploy hadn't yet
+        // run on a fresh .org html/, the bare-name require raised
+        // "Failed opening required 'router.php'" at request time.
+        // The relative require makes the data dependency explicit
+        // and matches the engine/Makefile deploy target's
+        // canonical destination path.
+        require_once __DIR__ . "/engine/router.php";
 
         $result = \router($handler_uri);
         if ($result === null || $result === false) {
