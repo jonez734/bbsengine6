@@ -142,7 +142,7 @@ class handbook
         if (!defined("TEOSURL")) define("TEOSURL", "/handbook/");
         if (!defined("TEOSDIR"))  define("TEOSDIR",  $base_dir);
 
-        require_once __DIR__ . "/../../engine/router.php";
+        require_once("router.php");
 
         $result = \router($handler_uri);
         if ($result === null || $result === false) {
