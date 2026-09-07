@@ -21,8 +21,10 @@ RewriteRule ^handbook/current[/]?$ handbook/6/
 
 # Raw .md URLs -> handbook.php?rawpath, which streams the file as
 # text/plain via \bbsengine6\serveRawMarkdown(). Mirrors teos's
-# /engine/serve-md.php behavior (bbsengine.org vhost has no /engine/
-# subdir; the bbsengine6-side helper ships via /srv/www/bbsengine6/php/).
+# /engine/serve-md.php behavior. The .org vhost ships its own
+# /engine/ copy (router.php + siblings) so handbook.php's
+# relative require_once resolves locally; see Makefile
+# engine-deploy-prod.
 RewriteRule ^handbook/([\d]+)/(.+\.md)$ /handbook.php?version=$1&rawpath=$2 [last,qsappend]
 
 # Everything else under /handbook/<v>/ -> handbook.php with uri;

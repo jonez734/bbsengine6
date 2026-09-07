@@ -69,6 +69,14 @@ export WWWPRODDOCROOT = $(WWWPROD)html/
 export WWWSTAGE = /srv/www/vhosts/www.bbsengine.org/
 export WWWSTAGEDOCROOT = $(WWWSTAGE)html/
 
+# @since 2026-09-06 — engine/ is shipped to www.bbsengine.org's
+# docroot as well, so handbook.php's relative require_once
+# (__DIR__/../../engine/router.php) resolves. The engine/ deploy
+# unit (engine/Makefile) reads both docroots from env; this gives
+# it the .org side. Pair mirrors ENGINESTAGEDOCROOT / ENGINEPRODDOCROOT.
+export WWWENGINESTAGEDOCROOT = $(WWWSTAGE)html/engine/
+export WWWENGINEPRODDOCROOT = $(WWWPROD)html/engine/
+
 export ORGPROD = $(ORGHOST):/srv/www/vhosts/www.bbsengine.org/
 export ORGPRODDOCROOT = $(WWWPROD)html/
 
@@ -237,7 +245,7 @@ sign:
 
 wheel-release: build rename-sdist sign
 
-.PHONY: handbook handbook-prod handbook-deploy-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui
+.PHONY: handbook handbook-prod handbook-deploy-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod engine-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui
 .PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
 
@@ -247,6 +255,17 @@ php-deploy:
 
 php-deploy-prod: php-deploy
 	$(RSYNC) $(ENGINESTAGE)php/ $(ENGINEPROD)php/
+
+# @since 2026-09-06 — pushes engine/*.php to both prod docroots
+# (zoidtechnologies.com + www.bbsengine.org) over ssh. Companion
+# to php-deploy-prod; chained from deploy-handbook-prod so the
+# engine tree lands alongside the handbook artifacts.
+# engine/Makefile's deploy target ssh-pushes *.php straight to
+# each prod target; --mkpath in $(RSYNC) creates the destination
+# dir on the remote if it doesn't yet exist (relevant for .org,
+# where /html/engine/ did not exist before this change).
+engine-deploy-prod:
+	$(MAKE) -C engine deploy
 
 parsedown-deploy:
 	mkdir -p /srv/www/markdown/
@@ -286,8 +305,12 @@ deploy-handbook: handbook-prod
 #   php-deploy-prod       -> /srv/www/bbsengine6/php/markdown.php
 #   wwworg                -> /srv/www/vhosts/www.bbsengine.org/html/{handbook.php,config.php,...}
 #   handbook-deploy-prod  -> /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/*.md
+#   engine-deploy-prod    -> /srv/www/vhosts/zoidtechnologies.com/html/engine/*.php
+#                            + /srv/www/vhosts/www.bbsengine.org/html/engine/*.php
+#                            (so handbook.php's relative require_once
+#                             resolves on the .org vhost)
 #
-# All three use $(RSYNC) (which carries --rsh=ssh), so this runs
+# All four use $(RSYNC) (which carries --rsh=ssh), so this runs
 # cleanly from a build host with no fs bind-mount between the build
 # host and merlin. wwworg additionally pushes its whole staged
 # docroot to merlin via ORGPROD, which carries the handbook handler
@@ -296,8 +319,8 @@ deploy-handbook: handbook-prod
 # After this runs, reload php-fpm on merlin so opcache picks up the
 # new files immediately:
 #   sudo systemctl reload php-fpm
-deploy-handbook-prod: php-deploy-prod wwworg handbook-deploy-prod
-	@echo "Handbook stack deployed: php/markdown.php + html/handbook.php + html/handbook/$(VERSION)/"
+deploy-handbook-prod: php-deploy-prod wwworg handbook-deploy-prod engine-deploy-prod
+	@echo "Handbook stack deployed: engine/*.php + php/markdown.php + html/handbook.php + html/handbook/$(VERSION)/"
 	@echo "Reminder on merlin: sudo systemctl reload php-fpm"
 
 deploy:
@@ -308,7 +331,10 @@ deploy:
 	mkdir -p $(ENGINESTAGE)smarty/
 	$(RSYNC) smarty/*.php $(ENGINESTAGE)smarty/
 	$(RSYNC) $(ENGINESTAGE) $(ENGINEPROD)
-	$(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT)
+	# engine/*.php is shipped directly via `engine deploy-engine`
+	# above (both docroots are read-only locally, so no local
+	# staging-to-ssh hop is possible). Replaced the prior
+	# $(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT) line.
 
 deploy-tui: build
 	$(MAKE) -C py/src deploy-tui DEPLOY_EDITABLE=$(DEPLOY_EDITABLE) DEPLOY_UPGRADE=$(DEPLOY_UPGRADE) VERSION=$(PY_VERSION) VERSION_PREFIX=$(VERSION_PREFIX)

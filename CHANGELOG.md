@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### fix(deploy): ship `engine/` to www.bbsengine.org; handbook.php fatal on `/handbook/<v>/<path>`
+
+`handbook.php:145`'s relative
+`require_once __DIR__ . "/../../engine/router.php";` resolved to
+`/srv/www/vhosts/engine/router.php` — a path that does not exist
+on merlin. The `.org` vhost had no `/engine/` sibling, so every
+chapter / directory / index request to
+`https://www.bbsengine.org/handbook/<v>/<path>` hit a
+`Failed opening required` fatal. The raw `?rawpath=` branch
+escaped because it returns before `dispatchViaRouter()` is called.
+
+- `engine/Makefile` now ships the full engine tree
+  (`router.php`, `direct.php`, `join.php`, `login.php`, `logout.php`,
+  `serve-md.php`, `simple.php`, `standalone.php`, `test.php`,
+  `test2.php`) to both prod docroots —
+  `zoidtechnologies.com/html/engine/` and
+  `www.bbsengine.org/html/engine/`. `stage` `mkdir -p`'s both
+  local staging docroots (no ssh, errors propagate); `deploy-engine`
+  and `deploy` ssh-push `engine/*.php` straight to each prod
+  target. `--mkpath` in `$(RSYNC)` creates the destination dir
+  on the remote if it doesn't yet exist (relevant on the `.org`
+  side, where `/html/engine/` did not exist before this change).
+  The build host must have writable mounts under
+  `/srv/www/vhosts/{zoidtechnologies.com,www.bbsengine.org}/html/`
+  for `stage` to succeed; if either docroot is read-only
+  locally, `stage` will fail loudly and the deploy aborts.
+- `Makefile` defines + exports `WWWENGINESTAGEDOCROOT` /
+  `WWWENGINEPRODDOCROOT` (next to `ENGINESTAGE` / `ENGINEPROD`,
+  mirroring `WWWSTAGE` / `WWWPROD`) and a new `engine-deploy-prod`
+  target that runs `$(MAKE) -C engine deploy`. Chained into
+  `deploy-handbook-prod` so the engine tree ships alongside the
+  handbook artifacts; the deploy reminder echo now lists all four
+  (`engine/*.php + php/markdown.php + html/handbook.php +
+  html/handbook/<v>/`). `engine-deploy-prod` is also added to the
+  top-level `.PHONY` list. The top-level `deploy:` target's old
+  `$(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT)` line
+  (local-zoid-then-ssh) is removed; `engine deploy-engine` covers
+  both docroots directly via ssh.
+- `www/org/htaccess-prod` (lines 22-25): the trailing clause that
+  read "bbsengine.org vhost has no /engine/ subdir" is replaced —
+  the vhost now carries its own engine copy, parallel to
+  `zoidtechnologies.com`. Rewrite rules unchanged.
+- `handbook.php` is unchanged; the relative require becomes correct
+  as soon as `.org/html/engine/router.php` exists.
+
+After the next `make deploy-handbook-prod` and
+`sudo systemctl reload php-fpm` on merlin,
+`curl -sS -o /dev/null -w '%{http_code}\n'
+https://www.bbsengine.org/handbook/6/` returns 200.
+
 ### deploy bbsengine6.handbook — shared Markdown primitive
 
 New `deploy bbsengine6.handbook` sub-target (via `deploytool`)
