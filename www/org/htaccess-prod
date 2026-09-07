@@ -39,13 +39,32 @@ RewriteRule ^robots.txt$ seo.php?mode=robotstxt [last,qsappend]
 RewriteRule ^sitemap.xml$ seo.php?mode=sitemapxml [last,qsappend]
 RewriteRule ^favicon\.ico$ - [last]
 
-# Serve .md files as plain text via /engine/serve-md.php (mirrors
-# teos/www/htaccess-prod:19). CHANGELOG.txt etc. are .txt and fall
-# through to the catch-all below.
-RewriteRule ^(.+\.md)$ /engine/serve-md.php?path=$1 [last,qsappend]
+# Handbook raw .md URLs -> engine/serve-md.php (mirrors the
+# .md-as-text rule in teos/www/htaccess-prod:19, but scoped
+# to /handbook/<v>/ so other .md files on the vhost fall
+# through). The 'prefix=' query param tells serve-md.php's
+# HTTP entry-point which directory the file lives in.
+RewriteRule ^handbook/(\d+)/(.+\.md)$ /engine/serve-md.php?prefix=handbook/$1&path=$2 [last,qsappend]
 
-# Route clean URLs to /engine/router.php (mirrors
-# teos/www/htaccess-prod:32).
+# Handbook chapter URLs -> engine/router.php for markdown
+# rendering. The router detects /handbook/<v>/ from the
+# request URI, sets TEOSURL/TEOSDIR for that version, then
+# dispatches handleMarkdown on the chapter.
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=handbook/$1/$2 [last,qsappend]
+
+# Handbook directory URLs -> engine/router.php for the
+# directory listing. Mirrors teos/www/htaccess-prod:26-27
+# (the !-d catch-all there). uri=handbook/<v>/<dir>/ so the
+# router's prefix detection picks up the version.
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=handbook/$1/$2 [last,qsappend]
+
+# Route remaining clean URLs to /engine/router.php (mirrors
+# teos/www/htaccess-prod:32). The handbook-specific rules
+# above already match /handbook/<v>/...; this catch-all
+# covers everything else.
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^([a-zA-Z0-9_/-]+)$ /engine/router.php?uri=$1 [last,qsappend]
