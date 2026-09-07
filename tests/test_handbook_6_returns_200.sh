@@ -37,7 +37,8 @@
 #   [4]  build-host source invariants that catch a regression
 #        in the local working tree (relative require in
 #        handbook.php, no /engine/ entry in bootstrap.php,
-#        .htaccess in ENGINE_PHP)
+#        .htaccess in ENGINE_PHP, rsync --exclude patterns
+#        for engine/ and the four legacy handbook files)
 #
 # Each check's "bad" message points at the specific failure
 # mode and the operator action that resolves it.
@@ -165,11 +166,30 @@ else
 fi
 
 if [ -f "$LOCAL_BBSENGINE6/www/Makefile" ]; then
+  # --exclude engine/ + --exclude html/engine/: protect prod engine/ from --delete-after
   if grep -q 'exclude *"engine/"' "$LOCAL_BBSENGINE6/www/Makefile" 2>/dev/null \
      && grep -q 'exclude *"html/engine/"' "$LOCAL_BBSENGINE6/www/Makefile" 2>/dev/null; then
     ok "local www/Makefile org rsync carries --exclude engine/ and --exclude html/engine/"
   else
     bad "local www/Makefile org rsync is missing one of --exclude engine/ / --exclude html/engine/ -- future make wwworg runs will strip the prod engine/ tree"
+  fi
+  # --exclude html/handbook/{*.conf,modules.*}: prevent the read-only
+  # build-host local stage from re-pushing the four legacy Flask
+  # artifacts after `make -C www remove-legacy-handbook` cleans them
+  # on merlin.
+  legacy_excludes_ok=true
+  for pattern in \
+    'exclude *"html/handbook/bbsengine-handbook\.conf"' \
+    'exclude *"html/handbook/handbook-wsgi\.conf"' \
+    'exclude *"html/handbook/modules\.adoc"' \
+    'exclude *"html/handbook/modules\.html"'; do
+    if ! grep -qE "$pattern" "$LOCAL_BBSENGINE6/www/Makefile" 2>/dev/null; then
+      legacy_excludes_ok=false
+      bad "local www/Makefile org rsync is missing $pattern -- remove-legacy-handbook cleanup will be reverted on the next make wwworg run"
+    fi
+  done
+  if $legacy_excludes_ok; then
+    ok "local www/Makefile org rsync excludes the four legacy handbook artifacts (bbsengine-handbook.conf, handbook-wsgi.conf, modules.adoc, modules.html)"
   fi
 else
   bad "local www/Makefile missing"
