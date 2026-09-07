@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### fix(php): include `engine/` in bootstrap include_path; re-seed `.org/html/engine/` after rsync delete
+
+A late-August 2026 `make wwworg` run on merlin stripped
+`/srv/www/vhosts/www.bbsengine.org/html/engine/` because the local
+`ORGSTAGE` (`/srv/www/vhosts/www.bbsengine.org/`) is read-only on
+the build host (`jam:www` mode 755 — `opencode` cannot write),
+so engine/*.php is never staged there. `engine/Makefile` ships
+its tree straight to each prod docroot via ssh (`deploy-engine`
+/ `deploy` targets), which leaves the local stage permanently
+empty. The `www/Makefile:19` rsync then walked
+`$(ORGSTAGE) -> $(ORGPROD)` and rsync's source-side absence
+triggered `--delete-after` on the remote `html/engine/` tree,
+removing every `engine/*.php` plus `.htaccess`.
+
+Worse, the existing `www/org/php/handbook.php` requires the
+router with a bare name (`require_once("router.php")` at
+`handbook.php:145`), relying on PHP's `include_path` to find
+`/srv/www/bbsengine6/engine/router.php`. The default
+`include_path` set by `php/bootstrap.php` did not include
+`engine/` (it covered `__DIR__` = `/srv/www/bbsengine6/php/`,
+`dirname(__DIR__)` = `/srv/www/bbsengine6/`, plus
+`/srv/www/markdown/` and `/srv/www/smarty/`), so even with the
+prod `html/engine/` tree re-seeded the bare-name require would
+still fail with `Failed opening required 'router.php'`.
+
+- `www/Makefile` `org` target (line 19): rsync now carries
+  `--exclude engine/ --exclude html/engine/`. Both forms are
+  required because `ORGSTAGE` is bare (`/srv/www/vhosts/www.bbsengine.org/`)
+  while `ORGPROD` carries the `html/` prefix. The
+  `engine/Makefile` ssh-push path is the canonical owner of the
+  remote `html/engine/` tree; the org rsync must not touch it.
+- `engine/Makefile` `ENGINE_PHP` (line 43): extended from
+  `$(wildcard *.php)` to `.htaccess $(wildcard *.php)`. Make's
+  `$(wildcard)` skips dotfiles by default; the `.htaccess` carries
+  the RewriteEngine + RewriteRule plumbing that the `.org` engine/
+  tree relies on (same content as the `.com` vhost's `.htaccess`).
+- `php/bootstrap.php` `$defaults` (lines 14-19): added
+  `dirname(__DIR__) . "/engine/"` so `require_once("router.php")`
+  in `handbook.php:145` resolves to
+  `/srv/www/bbsengine6/engine/router.php` at request time. The
+  dev-tree case (e.g. `/home/opencode/data/work/bbsengine6/engine/`)
+  is symmetric — the formula uses `dirname(__DIR__)` rather than
+  a hardcoded `/srv/www/bbsengine6/` path. The de-dup loop at
+  lines 33-38 means callers that pre-pushed `engine/` via the
+  `$paths` parameter are unaffected.
+- `handbook.php` is unchanged (bare-name require was the design
+  intent — it lets the same `handbook.php` run from the build host
+  test tree, the local stage, or any prod docroot without
+  hand-tuning a relative path).
+- Operational: re-seed `/srv/www/vhosts/www.bbsengine.org/html/engine/`
+  on merlin via `make engine-deploy-prod` (ssh-pushes
+  `.htaccess *.php` with `--mkpath`), then
+  `sudo systemctl reload php-fpm` so opcache picks up the new
+  `php/bootstrap.php`. Verification:
+  `curl -sS -o /dev/null -w '%{http_code}\n'
+  https://www.bbsengine.org/handbook/6/` returns 200.
+
 ### fix(deploy): ship `engine/` to www.bbsengine.org; handbook.php fatal on `/handbook/<v>/<path>`
 
 `handbook.php:145`'s relative
