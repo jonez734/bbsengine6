@@ -136,19 +136,31 @@ function router_handleIndex(string $uri)
     return ROUTER_NEXT;
   }
 
-  $indexfile = router_get_teosdir() . 'index.php';
-  if (!file_exists($indexfile)) {
-    router_log('index.php not found', 'warning');
-    return ROUTER_NEXT;
+  $teosdir = router_get_teosdir();
+  $indexfile = $teosdir . 'index.php';
+  if (file_exists($indexfile)) {
+    try {
+      include($indexfile);
+      return ROUTER_STOP;
+    } catch (Throwable $e) {
+      router_log('index include failed: ' . $e->getMessage());
+      return ROUTER_NEXT;
+    }
   }
 
-  try {
-    include($indexfile);
-    return ROUTER_STOP;
-  } catch (Throwable $e) {
-    router_log('index include failed: ' . $e->getMessage());
-    return ROUTER_NEXT;
+  // @since 2026-09-07 — fall back to TEOSDIR/index.md and
+  // delegate to the markdown handler when the vhost's TEOSDIR
+  // ships a markdown index instead of a PHP one. The teos
+  // vhost ships index.php; the handbook vhost (bbsengine.org)
+  // ships handbook/<v>/index.md, so without this fallback
+  // /handbook/<v>/ is unrenderable through the router.
+  $mdfile = $teosdir . 'index.md';
+  if (file_exists($mdfile) && is_file($mdfile)) {
+    return router_displayMarkdownFile($mdfile, $uri);
   }
+
+  router_log('index.php and index.md both missing', 'warning');
+  return ROUTER_NEXT;
 }
 
 function router_handleBlurb(string $uri)
@@ -585,21 +597,28 @@ if (php_sapi_name() !== 'cli') {
     call_user_func('bbsengine6\util\logentry', "router.http: path=$path");
   }
 
-  if (!empty($path)) {
-    try {
-      $router_result = \router($path);
-      if ($router_result === null || $router_result === false) {
-        http_response_code(500);
-        echo 'Router Error';
-      } else {
-        echo $router_result;
-      }
-    } catch (Throwable $e) {
-      if (function_exists('bbsengine6\util\echo_traceback')) {
-        call_user_func('bbsengine6\util\echo_traceback', 'router.error: ' . $e->getMessage());
-      }
+  // @since 2026-09-07 — the previous version gated router()
+  // on `!empty($path)`, which silently 200'd with an empty
+  // body for bare-version URLs (e.g. /handbook/6/ where the
+  // htaccess sent ?uri=). That was the source of the 'silent
+  // 200 with empty body' behavior the test caught. Always
+  // call router() -- an empty $path triggers handleIndex
+  // (which renders TEOSDIR/index.md when present), so /handbook/
+  // <v>/ now returns a proper 200 with a rendered body instead
+  // of an empty 200.
+  try {
+    $router_result = \router($path);
+    if ($router_result === null || $router_result === false) {
       http_response_code(500);
       echo 'Router Error';
+    } else {
+      echo $router_result;
     }
+  } catch (Throwable $e) {
+    if (function_exists('bbsengine6\util\echo_traceback')) {
+      call_user_func('bbsengine6\util\echo_traceback', 'router.error: ' . $e->getMessage());
+    }
+    http_response_code(500);
+    echo 'Router Error';
   }
 }
