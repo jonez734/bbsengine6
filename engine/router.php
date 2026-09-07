@@ -107,34 +107,19 @@ function router_handleIndex(string $uri)
     return ROUTER_NEXT;
   }
 
-  $teosdir = router_get_teosdir();
-  $indexfile = $teosdir . 'index.php';
-  if (file_exists($indexfile)) {
-    try {
-      include($indexfile);
-      return ROUTER_STOP;
-    } catch (Throwable $e) {
-      router_log('index include failed: ' . $e->getMessage());
-      return ROUTER_NEXT;
-    }
+  $indexfile = router_get_teosdir() . 'index.php';
+  if (!file_exists($indexfile)) {
+    router_log('index.php not found', 'warning');
+    return ROUTER_NEXT;
   }
 
-  // @since 2026-09-07 — fall back to TEOSDIR/index.md and
-  // delegate to the markdown handler. The teos vhost ships
-  // index.php; the handbook vhost (bbsengine.org) ships
-  // index.md, so without this fallback /handbook/<v>/ is
-  // unrenderable through the router. The .htaccess rule
-  // routes the directory case to the router with uri=/<v>/,
-  // and after the URI-prefix strip in the HTTP entry point
-  // the router sees uri='' which is what this handler
-  // accepts.
-  $mdfile = $teosdir . 'index.md';
-  if (file_exists($mdfile) && is_file($mdfile)) {
-    return router_displayMarkdownFile($mdfile, $uri);
+  try {
+    include($indexfile);
+    return ROUTER_STOP;
+  } catch (Throwable $e) {
+    router_log('index include failed: ' . $e->getMessage());
+    return ROUTER_NEXT;
   }
-
-  router_log('index.php and index.md both missing', 'warning');
-  return ROUTER_NEXT;
 }
 
 function router_handleBlurb(string $uri)
