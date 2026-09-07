@@ -1,49 +1,51 @@
 #
-# $Id: htaccess-prod 1848 2011-08-16 00:20:12Z jam $
+# htaccess-prod - Production rewrite rules for bbsengine.org
 #
 
 RewriteEngine On
-
 RewriteBase /
 
+# HTTP -> HTTPS canonicalization (301). Kept from the previous
+# htaccess. [L] so subsequent rules (including the /handbook/
+# temp redirect) only run for HTTPS traffic, which is the
+# intended behavior on this vhost.
 RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://www.bbsengine.org/$1 [L,R=301]
 
-RewriteRule ^register[/]?$ register.php [last]
-RewriteRule ^login[/]?$ login.php [last]
-RewriteRule ^logout[/]?$ logout.php [last]
-RewriteRule ^$ index.php [last]
+# Temporary redirect: legacy /handbook/ -> current /handbook/6/.
+# @todo: replace with a permanent redirect once /handbook/<v>/ URLs
+# are stable. R=302 because this is intentionally temporary.
+RewriteRule ^handbook[/]?$ /handbook/6/ [R=302,L]
 
+# /join -> /engine/join.php (modernized, CSRF-protected member
+# registration). Replaces the legacy /register URL; /register is
+# no longer routed and falls through to the catch-all.
+RewriteRule ^join[/]?$ /engine/join.php [last]
+
+# /login and /logout -> /engine/ (modernized, CSRF-protected).
+# Other PHP entry points stay on legacy www/org/php/ for now.
+RewriteRule ^login[/]?$ /engine/login.php [last]
+RewriteRule ^logout[/]?$ /engine/logout.php [last]
+
+# Legacy entry points (kept on www/org/php/; migrate to /engine/
+# in a follow-up commit).
+RewriteRule ^$ /index.php [last]
 RewriteRule ^(contact-us|about-us|credits)[/]?$ /page.php?file=$1.tmpl [last]
-
-RewriteRule ^handbook/current/(.*)$ handbook/6/$1
-RewriteRule ^handbook/current[/]?$ handbook/6/
-
-# Raw .md URLs -> handbook.php?rawpath, which streams the file as
-# text/plain via \bbsengine6\serveRawMarkdown(). Mirrors teos's
-# /engine/serve-md.php behavior. The .org vhost ships its own
-# /engine/ copy (router.php + siblings) so handbook.php's
-# relative require_once resolves locally; see Makefile
-# engine-deploy-prod.
-RewriteRule ^handbook/([\d]+)/(.+\.md)$ /handbook.php?version=$1&rawpath=$2 [last,qsappend]
-
-# Everything else under /handbook/<v>/ -> handbook.php with uri;
-# the handler dispatches on URI shape (chapter | directory | index).
-RewriteRule ^handbook/([\d]+)/(.*)$ /handbook.php?version=$1&uri=$2 [last]
-RewriteRule ^handbook/([\d]+)[/]?$ /handbook.php?version=$1 [last]
-
-# RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)\.(md|txt)$ /page.php?version=$1&file=$2.$3 [last]
-# RewriteRule ^(v[\d]+)/([a-zA-Z0-9_-]+)$ /page.php?version=$1&name=$2 [last]
-# RewriteRule ^(v[\d]+)[/]?$ /dir.php?version=$1 [last]
-
-# RewriteRule ^(v[\d])/apidocs/(.*)$ /apidocs.php?version=$1&file=$2 [last]
-
-# RewriteRule ^(download|dl)/([\w./-]+)$ /download.php?name=$2 [last]
-
 RewriteRule ^archive[/]?$ /archive.php [last]
 RewriteRule ^archive/([0-9]{4})/([0-9]{2})?[/]?([0-9]{2})?[/]?([a-z0-9-.]+)?$ /archive.php?year=$1&month=$2&day=$3&name=$4 [last]
 
-# http://stackoverflow.com/questions/19618751/mod-rewrite-check-if-php-file-exists
-# RewriteCond handbook/([a-zA-Z0-9_-]+).txt -f
-# RewriteRule ^([a-zA-Z0-9_-]+)\.txt$ [last]
+# Robots / sitemap / favicon (same shape as teos/www/htaccess-prod).
+RewriteRule ^robots.txt$ seo.php?mode=robotstxt [last,qsappend]
+RewriteRule ^sitemap.xml$ seo.php?mode=sitemapxml [last,qsappend]
+RewriteRule ^favicon\.ico$ - [last]
 
+# Serve .md files as plain text via /engine/serve-md.php (mirrors
+# teos/www/htaccess-prod:19). CHANGELOG.txt etc. are .txt and fall
+# through to the catch-all below.
+RewriteRule ^(.+\.md)$ /engine/serve-md.php?path=$1 [last,qsappend]
+
+# Route clean URLs to /engine/router.php (mirrors
+# teos/www/htaccess-prod:32).
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^([a-zA-Z0-9_/-]+)$ /engine/router.php?uri=$1 [last,qsappend]
