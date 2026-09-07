@@ -228,10 +228,6 @@ function router_handleError(string $uri)
 
 function router_displayMarkdownFile(string $filepath, string $uri): string
 {
-  if (!function_exists('\bbsengine6\markdown\parseDocument')) {
-    require_once("php/markdown.php");
-  }
-
   $content = file_get_contents($filepath);
   if ($content === false) {
     return '';
@@ -545,11 +541,11 @@ if (php_sapi_name() !== 'cli') {
   if (!defined('TEOSURL')) define('TEOSURL', '/teos/');
   if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
 
-  @require_once('PEAR.php');
-  @require_once('Log.php');
-  @require_once('util.php');
-  @require_once('blurb.php');
-  @require_once('config.php');
+  require_once('/srv/www/bbsengine6/php/util.php');
+  require_once('/srv/www/bbsengine6/php/markdown.php');
+  require_once('/srv/www/bbsengine6/php/blurb.php');
+  require_once('/srv/www/bbsengine6/php/engine.php');
+  require_once('config.php');
 
   $path = $_GET['path'] ?? $_GET['uri'] ?? '';
   $path = preg_replace('/\.md$/', '', $path);
