@@ -7,8 +7,8 @@
  *   php test_router.php --db       # Run database integration tests
  */
 
-require_once("/home/opencode/data/work/bbsengine6/php/bootstrap.php");
-require_once("/home/opencode/data/work/bbsengine6/engine/router.php");
+require_once __DIR__ . "/bootstrap.php";
+require_once "engine/router.php";
 
 $run_db = in_array("--db", $argv);
 
@@ -65,7 +65,7 @@ if ($actual === $expected) {
 // Test 5: YAML frontmatter parsing
 echo "Test 5: YAML frontmatter parsing\n";
 $md = "---\ntitle: Test Page\ndate: 2024-01-01\n---\n\nbody here\n";
-require_once __DIR__ . "/markdown.php";
+require_once "markdown.php";
 [$metadata, $body] = \bbsengine6\markdown\splitFrontmatter($md);
 if ($metadata['title'] === 'Test Page' && $metadata['date'] === '2024-01-01' && $body === "body here\n") {
     echo "  ✓ PASS: YAML frontmatter parsed correctly\n";

@@ -11,7 +11,7 @@
  * (setMarkupEscaped, setSafeMode) — this modifier does not set them.
  */
 
-require_once(__DIR__ . "/../php/markdown.php");
+require_once("php/markdown.php");
 
 function smarty_modifier_parsedown($str)
 {
