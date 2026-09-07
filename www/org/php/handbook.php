@@ -39,6 +39,12 @@ require_once("config.php");
 require_once("engine.php");
 require_once("session.php");
 require_once("markdown.php");
+// @since 2026-09-07 — load serveRawMarkdown for the ?rawpath=
+// branch. The function is defined in /srv/www/bbsengine6/php/
+// (on include_path), so the bare name resolves. Without this
+// the rawpath branch (handbook.php:184) raises a fatal
+// "Call to undefined function" and produces an empty 500.
+require_once("serve-md.php");
 
 class handbook
 {

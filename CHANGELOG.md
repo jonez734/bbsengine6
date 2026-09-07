@@ -7,6 +7,109 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### fix(router+handbook): strip leading slash from URI before safe_path_web; require serve-md.php; graceful browse.tmpl fallback
+
+Three follow-on issues surfaced after the deploy chain landed
+the engine/ tree on merlin and handbook.php's relative require
+started resolving correctly:
+
+1. **Router URI shape mismatch.** The router's
+   `router_handleFolder` and `router_handleMarkdown` pass the
+   inbound `$uri` straight to
+   `bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath])`.
+   `www/org/php/handbook.php::dispatchViaRouter` builds URIs as
+   `"/" . $version . "/" . ...` (always leading-slash relative),
+   whereas the .com vhost's rewrite target passes a bare
+   relative like `decisions/architecture` (no leading slash).
+   `bbsengine6\util\safe_path_web` rejects any component that
+   starts with `/` as an absolute-path attempt (line 510-514 of
+   `php/util.php`); the function then returns `false`, the
+   folder / markdown handler logs "path validation failed" and
+   returns `ROUTER_NEXT`, and the router falls through to
+   `handleError` which produces a 404 with body
+   `Page not found: /6/`.
+
+   Fix: `engine/router.php` `handleFolder` and `handleMarkdown`
+   now `ltrim($uri, '/')` before passing to `safe_path_web`.
+   The containment check inside `safe_path_web`
+   (`str_starts_with($resolved, $base_real)`) is the real
+   security guard, so the `ltrim` does not weaken
+   path-traversal protection. After the fix,
+   `/handbook/6/specs/` resolves to `<handbook_root>/6/specs/`
+   inside `TEOSDIR` and the folder handler matches.
+
+2. **`serveRawMarkdown` undefined in handbook.php rawpath branch.**
+   `www/org/php/handbook.php:184` calls
+   `\bbsengine6\serveRawMarkdown($basedir, $_REQUEST["rawpath"])`
+   for the `?rawpath=` branch, but the function is defined in
+   `php/serve-md.php` which handbook.php never `require_once`'d.
+   Result: PHP fatal `Call to undefined function
+   \bbsengine6\serveRawMarkdown()` → empty 500 for any
+   `/handbook/<v>/<path>.md` request.
+
+   Fix: `www/org/php/handbook.php` now `require_once("serve-md.php")`
+   next to its existing `require_once("markdown.php")` line.
+   The function lives in `/srv/www/bbsengine6/php/` which is
+   on the include_path, so the bare name resolves.
+
+3. **`browse.tmpl` missing on .org vhost — folder handler 500.**
+   The router's `router_displayDirectoryListing` calls
+   `bbsengine6\displaypage(..., 'browse.tmpl')`. The
+   `browse.tmpl` Smarty template lives only in the
+   `zoidtechnologies.com` (bbsengine.com) docroot's
+   `skin/tmpl/`, not in `bbsengine6/skin/tmpl/` (which is what
+   the deploy chain ships to merlin's .org vhost). On .org,
+   Smarty raises `Unable to load template 'file:browse.tmpl'`
+   and the folder handler 500s.
+
+   Fix: `engine/router.php` `router_displayDirectoryListing`
+   now wraps the `displaypage(..., 'browse.tmpl')` call in a
+   try-catch and falls through to the inline-HTML renderer
+   that already existed for the no-`displaypage` case. The
+   .org URL now returns 200 with a usable (un-styled) list of
+   the directory contents. A future commit can ship a
+   `bbsengine6/skin/tmpl/browse.tmpl` to remove the
+   try-catch; the inline fallback is identical to the
+   pre-Smarty renderer in the .com vhost's
+   `engine/router.php` at the same location.
+
+- `tests/test_handbook_6_returns_200.sh` rewritten to operate
+  against the public endpoint and the build-host source
+  invariants only. Earlier checks 3-5b read
+  `/srv/www/bbsengine6/engine/` and
+  `/srv/www/vhosts/www.bbsengine.org/html/engine/` from the
+  build host, which is a *different machine* from merlin; the
+  build host's stale local-stage view was not a reliable
+  signal of merlin's prod state. The new test:
+    - probes the canonical URL and three additional
+      URLs (chapter, subdirectory, raw .md) to catch
+      per-mode regressions,
+    - greps the body for "page not found" / "router error" so
+      a 200 with the error-handler fallback HTML is still
+      flagged,
+    - checks the build-host source tree (handbook.php
+      require shape, bootstrap.php include_path shape,
+      engine/Makefile ENGINE_PHP, www/Makefile --exclude
+      flags) for the working-tree invariants this fix
+      establishes,
+    - on failure, prints a per-check diagnosis and a
+      remediation hint that names the specific
+      file-or-deploy-step the operator needs to address.
+
+Operational after this commit lands on prod:
+
+  cd /home/opencode/data/work/bbsengine6
+  make wwworg                    # push www/org/php/handbook.php
+  make php-deploy-prod           # push php/bootstrap.php + php/serve-md.php
+  make engine-deploy-prod        # ssh-push engine/ to both prod docroots
+  # on merlin:
+  sudo systemctl reload php-fpm
+
+then: tests/test_handbook_6_returns_200.sh
+  -- expected: 8/8 pass, handbook/6/ returns 200 with a
+     non-empty body, three additional probe URLs also
+     return 200.
+
 ### fix(handbook): use relative require for `engine/router.php`; revert misleading `engine/` in bootstrap include_path
 
 A late-August 2026 `make wwworg` run on merlin stripped

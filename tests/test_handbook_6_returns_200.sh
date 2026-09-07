@@ -1,24 +1,48 @@
 #!/usr/bin/env bash
 # test_handbook_6_returns_200.sh
-# Verifies that https://www.bbsengine.org/handbook/6/ returns 200.
-# Exits 0 on success, non-zero on failure. Prints a diagnosis that
-# pinpoints which upstream piece is missing (engine/ tree on merlin,
-# bootstrap.php on merlin, .htaccess rewrite in effect, etc.) so the
-# operator can fix the failing deploy step without guesswork.
-#
-# Run from the build host. No ssh is required -- the test only
-# hits the public URL and reads /srv/www/bbsengine6/* which is
-# bind-mounted on this host.
+# Verifies that https://www.bbsengine.org/handbook/6/ returns 200
+# with a rendered handbook body. Exits 0 on success, non-zero on
+# failure. All checks operate against the public endpoint and
+# the build-host filesystem (no ssh to merlin required).
 #
 # @since 2026-09-07
+#
+# What the test does NOT do (and why):
+#
+#   - It does not ssh to merlin. The build host is a separate
+#     machine; merlin's prod tree is not bind-mounted here. Any
+#     "is the file on merlin?" check would have to be a guess
+#     based on the build-host's stale view of /srv/www/bbsengine6.
+#     The HTTP probe is the only ground-truth signal of merlin's
+#     state, and the test leans on it.
+#
+#   - It does not check the build-host's /srv/www/bbsengine6/engine/
+#     or /srv/www/vhosts/www.bbsengine.org/html/engine/ for
+#     existence. Those are the local-stage paths, not the prod
+#     paths the engine/Makefile ssh-pushes to. Their presence
+#     here does not imply presence on merlin, and their absence
+#     here does not imply absence on merlin.
+#
+# What the test DOES check:
+#
+#   [1]  HTTP probe of https://www.bbsengine.org/handbook/6/
+#   [2]  body looks like a rendered handbook page (not a 404
+#        fallback, not a router-error 500)
+#   [3]  additional probes (chapter, directory, raw .md) all
+#        return 200 (verifies the router's per-mode dispatch
+#        works, not just the index path)
+#   [4]  build-host source invariants that catch a regression
+#        in the local working tree (relative require in
+#        handbook.php, no /engine/ entry in bootstrap.php,
+#        .htaccess in ENGINE_PHP)
+#
+# Each check's "bad" message points at the specific failure
+# mode and the operator action that resolves it.
 
 set -u
 
-URL="https://www.bbsengine.org/handbook/6/"
-PROD_PHP_DIR="/srv/www/bbsengine6/php"
-PROD_ENGINE_DIR="/srv/www/bbsengine6/engine"
-ORG_DOCROOT="/srv/www/vhosts/www.bbsengine.org/html"
-ORG_ENGINE_DIR="${ORG_DOCROOT}/engine"
+URL_BASE="https://www.bbsengine.org/handbook/6"
+LOCAL_BBSENGINE6="/home/opencode/data/work/bbsengine6"
 
 pass=0
 fail=0
@@ -27,113 +51,101 @@ diagnosis=""
 ok()  { echo "  ok   $*"; pass=$((pass+1)); }
 bad() { echo "  FAIL $*"; fail=$((fail+1)); diagnosis="$diagnosis\n  - $*"; }
 
-echo "=== test_handbook_6_returns_200.sh ==="
-echo "URL: $URL"
-echo
+probe() {
+  # $1 = URL, $2 = output file
+  curl -sS -o "$2" -w '%{http_code}' "$1" 2>/dev/null || echo "000"
+}
 
-# --- 1. HTTP probe ------------------------------------------------------
-http_code=$(curl -sS -o /tmp/handbook6.body -w '%{http_code}' "$URL" 2>/dev/null || echo "000")
+# --- 1. HTTP probe of the canonical URL ---------------------------------
+http_code=$(probe "$URL_BASE/" /tmp/handbook6.body)
 body_bytes=$(wc -c < /tmp/handbook6.body 2>/dev/null | tr -d ' ' || echo 0)
-echo "[1] HTTP probe"
+echo "[1] HTTP probe of $URL_BASE/"
 echo "    status: $http_code"
 echo "    body:   $body_bytes bytes"
 if [ "$http_code" = "200" ] && [ "$body_bytes" -gt 0 ]; then
   ok "HTTP 200 with non-empty body"
 else
-  bad "expected HTTP 200 with non-empty body, got $http_code ($body_bytes bytes)"
+  bad "expected HTTP 200 with non-empty body, got $http_code ($body_bytes bytes) -- first line of body: $(head -1 /tmp/handbook6.body 2>/dev/null | head -c 200)"
 fi
 echo
 
-# --- 2. body sanity: it should be a rendered handbook page --------------
+# --- 2. body sanity: rendered handbook, not error fallback --------------
 echo "[2] body content check"
 if [ "$body_bytes" -gt 0 ] && grep -q -i -E 'bbsengine6|handbook' /tmp/handbook6.body 2>/dev/null; then
-  ok "body mentions 'bbsengine6' or 'handbook' (looks like a rendered page)"
+  if grep -q -i -E 'page not found|router error' /tmp/handbook6.body 2>/dev/null; then
+    bad "body contains 'page not found' or 'router error' -- the router's error handler ran, the page did not render. Body: $(head -1 /tmp/handbook6.body 2>/dev/null | head -c 200)"
+  else
+    ok "body mentions 'bbsengine6' or 'handbook' and does not look like a router error"
+  fi
 else
-  bad "body does not look like a rendered handbook page (no bbsengine6/handbook keyword)"
+  bad "body does not look like a rendered handbook page (no bbsengine6/handbook keyword). Body: $(head -1 /tmp/handbook6.body 2>/dev/null | head -c 200)"
 fi
 echo
 
-# --- 3. /srv/www/bbsengine6/engine/ must exist on the prod source tree ---
-echo "[3] prod source tree: $PROD_ENGINE_DIR"
-if [ -d "$PROD_ENGINE_DIR" ]; then
-  ok "engine/ directory exists on prod source tree"
-  if [ -f "$PROD_ENGINE_DIR/router.php" ]; then
-    ok "engine/router.php present"
-  else
-    bad "engine/router.php MISSING -- make engine-deploy-prod did not take effect"
-  fi
-  if [ -f "$PROD_ENGINE_DIR/.htaccess" ]; then
-    ok "engine/.htaccess present"
-  else
-    bad "engine/.htaccess MISSING -- Makefile ENGINE_PHP doesn't include it (see fix(engine/Makefile) commit)"
-  fi
-else
-  bad "$PROD_ENGINE_DIR does not exist -- engine/Makefile deploy never landed the engine tree on merlin"
-fi
+# --- 3. additional probes verify per-mode dispatch ----------------------
+echo "[3] additional probes"
+extra_probes=(
+  "$URL_BASE/index.md|200 (raw .md via ?rawpath=)"
+  "$URL_BASE/specs/|200 (subdirectory listing)"
+  "$URL_BASE/specs/architecture.md|200 (subdirectory chapter)"
+)
+for entry in "${extra_probes[@]}"; do
+  url="${entry%%|*}"
+  desc="${entry#*|}"
+  code=$(probe "$url" /tmp/handbook6.extra)
+  echo "    $url -> $code ($desc)"
+  case "$code" in
+    200) ok "extra probe $url returned 200" ;;
+    404) bad "extra probe $url returned 404 -- a per-mode handler fell through to handleError. Body: $(head -1 /tmp/handbook6.extra 2>/dev/null | head -c 200)" ;;
+    500) bad "extra probe $url returned 500 -- a handler threw (e.g. template not found, fatal). Body: $(head -1 /tmp/handbook6.extra 2>/dev/null | head -c 200)" ;;
+    *)   bad "extra probe $url returned unexpected $code" ;;
+  esac
+done
 echo
 
-# --- 4. /srv/www/vhosts/www.bbsengine.org/html/engine/ must exist -------
-echo "[4] prod .org docroot engine: $ORG_ENGINE_DIR"
-if [ -d "$ORG_ENGINE_DIR" ]; then
-  ok ".org/html/engine/ directory exists (re-seeded)"
-else
-  bad "$ORG_ENGINE_DIR does not exist -- engine/Makefile deploy did not recreate it (--mkpath missing or step not run)"
-fi
-echo
+# --- 4. build-host source invariants ------------------------------------
+echo "[4] build-host source invariants"
 
-# --- 5. bootstrap.php on prod must NOT include the misleading /engine/ entry
-echo "[5] prod php/bootstrap.php include_path defaults"
-if [ -f "$PROD_PHP_DIR/bootstrap.php" ]; then
-  if grep -q 'dirname(__DIR__) *\. *"/engine/"' "$PROD_PHP_DIR/bootstrap.php" 2>/dev/null \
-     || grep -q '"/engine/"' "$PROD_PHP_DIR/bootstrap.php" 2>/dev/null; then
-    bad "php/bootstrap.php \$defaults still includes a /engine/ entry -- that path is never populated and gives a false sense of correctness. The correct fix is the relative require in handbook.php, not an include_path entry. Run \`make php-deploy-prod\` after the relative-require commit lands."
+if [ -f "$LOCAL_BBSENGINE6/www/org/php/handbook.php" ]; then
+  if grep -q 'require_once *__DIR__ *\. *"/engine/router\.php"' "$LOCAL_BBSENGINE6/www/org/php/handbook.php" 2>/dev/null; then
+    ok "local handbook.php uses require_once __DIR__ . \"/engine/router.php\" (relative require)"
   else
-    ok "php/bootstrap.php \$defaults no longer includes the misleading /engine/ entry"
+    bad "local handbook.php does NOT use the relative require -- fix(handbook) commit not in working tree"
   fi
 else
-  bad "$PROD_PHP_DIR/bootstrap.php missing entirely"
+  bad "local handbook.php missing entirely"
 fi
-echo
 
-# --- 5b. handbook.php on prod must use the relative require shape -------
-echo "[5b] prod handbook.php require shape"
-if [ -f "$ORG_DOCROOT/handbook.php" ]; then
-  if grep -q 'require_once *("router\.php")' "$ORG_DOCROOT/handbook.php" 2>/dev/null; then
-    bad "handbook.php still has bare require_once(\"router.php\") -- depends on include_path that the engine deploy never populates. The commit that switches to require_once __DIR__ . \"/engine/router.php\" is not yet on prod. Run \`make wwworg\` (or \`make deploy-handbook-prod\`) after the relative-require commit lands."
-  elif grep -q 'require_once *__DIR__ *\. *"/engine/router\.php"' "$ORG_DOCROOT/handbook.php" 2>/dev/null; then
-    ok "handbook.php uses require_once __DIR__ . \"/engine/router.php\" (relative require)"
+if [ -f "$LOCAL_BBSENGINE6/php/bootstrap.php" ]; then
+  if grep -q 'dirname(__DIR__) *\. *"/engine/"' "$LOCAL_BBSENGINE6/php/bootstrap.php" 2>/dev/null \
+     || grep -q '"/engine/"' "$LOCAL_BBSENGINE6/php/bootstrap.php" 2>/dev/null; then
+    bad "local php/bootstrap.php \$defaults still includes a /engine/ entry -- that path is never populated; remove it"
   else
-    bad "handbook.php require shape is unrecognized -- inspect manually"
+    ok "local php/bootstrap.php \$defaults no longer includes a misleading /engine/ entry"
   fi
 else
-  bad "$ORG_DOCROOT/handbook.php missing"
+  bad "local php/bootstrap.php missing"
 fi
-echo
 
-# --- 6. .htaccess on the .org docroot must rewrite /handbook/<v>/... to handbook.php
-echo "[6] .org .htaccess rewrite rule"
-if [ -f "$ORG_DOCROOT/.htaccess" ]; then
-  if grep -qE 'handbook/\\\\?\\d\\+|handbook/.*\\.php' "$ORG_DOCROOT/.htaccess" 2>/dev/null \
-     || grep -qE 'handbook/' "$ORG_DOCROOT/.htaccess" 2>/dev/null; then
-    ok ".htaccess appears to carry a /handbook/ rewrite rule"
+if [ -f "$LOCAL_BBSENGINE6/engine/Makefile" ]; then
+  if grep -q 'ENGINE_PHP *= *\.htaccess' "$LOCAL_BBSENGINE6/engine/Makefile" 2>/dev/null; then
+    ok "local engine/Makefile ENGINE_PHP includes .htaccess"
   else
-    bad ".htaccess on $ORG_DOCROOT does not appear to carry a /handbook/ rewrite"
+    bad "local engine/Makefile ENGINE_PHP does NOT include .htaccess -- fix(engine/Makefile) commit not in working tree"
   fi
 else
-  bad "$ORG_DOCROOT/.htaccess missing"
+  bad "local engine/Makefile missing"
 fi
-echo
 
-# --- 7. legacy Flask artifacts under html/handbook/ should be gone -----
-echo "[7] legacy Flask docroot cleanup"
-if [ -d "$ORG_DOCROOT/handbook" ]; then
-  if [ -f "$ORG_DOCROOT/handbook/bbsengine-handbook.conf" ] || [ -d "$ORG_DOCROOT/handbook/csrf" ]; then
-    bad "$ORG_DOCROOT/handbook/ still contains legacy Flask artifacts (bbsengine-handbook.conf / csrf/ / migrations/ / handbook-wsgi.conf) -- the old docroot was not removed when the new request-time handbook.php shipped"
+if [ -f "$LOCAL_BBSENGINE6/www/Makefile" ]; then
+  if grep -q 'exclude *"engine/"' "$LOCAL_BBSENGINE6/www/Makefile" 2>/dev/null \
+     && grep -q 'exclude *"html/engine/"' "$LOCAL_BBSENGINE6/www/Makefile" 2>/dev/null; then
+    ok "local www/Makefile org rsync carries --exclude engine/ and --exclude html/engine/"
   else
-    ok "html/handbook/ exists but no legacy Flask artifacts"
+    bad "local www/Makefile org rsync is missing one of --exclude engine/ / --exclude html/engine/ -- future make wwworg runs will strip the prod engine/ tree"
   fi
 else
-  ok "html/handbook/ does not exist (legacy docroot fully retired)"
+  bad "local www/Makefile missing"
 fi
 echo
 
@@ -143,22 +155,37 @@ echo "passed: $pass"
 echo "failed: $fail"
 if [ "$fail" -gt 0 ]; then
   echo
-  echo "diagnosis (most likely causes, in order):"
+  echo "diagnosis:"
   printf "%b\n" "$diagnosis"
   echo
-  echo "remediation on the build host (no ssh required for the rsync"
-  echo "step itself, but ENGINE_PHP ssh-pushes to merlin):"
+  echo "common remediation paths:"
   echo
-  echo "  cd /home/opencode/data/work/bbsengine6"
-  echo "  make php-deploy-prod             # push php/bootstrap.php to merlin"
-  echo "  make engine-deploy-prod          # ssh-push engine/ to both prod docroots"
-  echo "  # on merlin:"
-  echo "  sudo systemctl reload php-fpm"
+  echo "  if the HTTP probe is 200 but body checks fail:"
+  echo "    -- the router's leading-slash URI handling in"
+  echo "       engine/router.php (handleFolder, handleMarkdown) does"
+  echo "       not strip the leading '/' before calling"
+  echo "       bbsengine6\\\\util\\\\safe_path_web, which rejects"
+  echo "       leading-slash components. Fix in router.php to ltrim()"
+  echo "       the URI before passing it to safe_path_web."
   echo
-  echo "then re-run: $0"
+  echo "  if the HTTP probe is 500 with 'Failed opening required':"
+  echo "    -- engine/ tree did not land on merlin. Run:"
+  echo "       make engine-deploy-prod"
+  echo "       sudo systemctl reload php-fpm   # on merlin"
+  echo
+  echo "  if the HTTP probe is 500 with 'Unable to load template':"
+  echo "    -- the skin/ template (e.g. browse.tmpl) is missing on"
+  echo "       merlin. Run: make skin-prod"
+  echo
+  echo "  if a filesystem check (3-5b in the old version) failed"
+  echo "    despite the HTTP probe being 200:"
+  echo "    -- the test was reading the build host's stale local-stage"
+  echo "       view, not merlin's prod tree. The build host and merlin"
+  echo "       are different machines; only the HTTP probe is ground truth."
+  echo
+  echo "to re-run: $0"
   exit 1
 fi
 echo
-echo "all checks passed; handbook/6/ returns 200 and the upstream"
-echo "engine/ + bootstrap.php + .htaccess state is consistent."
+echo "all checks passed; handbook/6/ returns 200 with a rendered body."
 exit 0

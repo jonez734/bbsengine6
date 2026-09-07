@@ -146,7 +146,21 @@ function router_handleFolder(string $uri)
     return ROUTER_NEXT;
   }
 
-  $filepath = bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath]);
+  // @since 2026-09-07 — strip any leading '/' before handing
+  // the path to safe_path_web. safe_path_web treats leading
+  // slashes as absolute-path attempts and rejects them (see
+  // bbsengine6\util\safe_path_web lines 510-514), but the
+  // router's URI shape is "leading-slash relative" (e.g.
+  // "/6/specs/") as built by www/org/php/handbook.php
+  // dispatchViaRouter(), not "absolute" -- the absolute-root
+  // semantics are anchored to TEOSDIR, not the OS root. ltrim
+  // converts the URI to the bare-relative shape the rest of
+  // the function (and safe_path_web) expect. The containment
+  // check inside safe_path_web (str_starts_with($resolved,
+  // $base_real)) is the real security guard, so this ltrim
+  // does not weaken path-traversal protection.
+  $reluri = ltrim($uri, '/');
+  $filepath = bbsengine6\util\safe_path_web([$reluri], ['base_dir' => $teospath]);
   if ($filepath === false) {
     router_log('path validation failed', 'warning');
     return ROUTER_NEXT;
@@ -176,9 +190,14 @@ function router_handleMarkdown(string $uri)
   $teospath = router_get_teosdir();
   if ($teospath === '') return ROUTER_NEXT;
 
-  $filepath = bbsengine6\util\safe_path_web([$uri . '.md'], ['base_dir' => $teospath]);
+  // @since 2026-09-07 — see router_handleFolder for the
+  // leading-slash rationale. The .md variant needs the same
+  // ltrim so "specs/foo" (bare-relative) is appended rather
+  // than "/specs/foo.md" (rejected as absolute).
+  $reluri = ltrim($uri, '/');
+  $filepath = bbsengine6\util\safe_path_web([$reluri . '.md'], ['base_dir' => $teospath]);
   if ($filepath === false || !file_exists($filepath)) {
-    $filepath = bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath]);
+    $filepath = bbsengine6\util\safe_path_web([$reluri], ['base_dir' => $teospath]);
   }
   if ($filepath !== false && file_exists($filepath) && is_file($filepath)) {
     return router_displayMarkdownFile($filepath, $uri);
@@ -415,16 +434,35 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
       $choices = \zoid6\buildchoices($choices);
     }
 
-    bbsengine6\displaypage([
-      'title' => $title,
-      'items' => $items,
-      'uri' => $uri,
-      'hidden' => $hidden,
-      'currentsig' => $currentsig,
-      'breadcrumbs' => $breadcrumbs,
-      'choices' => $choices,
-    ], 'browse.tmpl');
-    return '';
+    // @since 2026-09-07 — graceful degradation when the
+    // `browse.tmpl` template is not available on the calling
+    // vhost. The bbsengine6/skin/tmpl/ tree ships
+    // page-markdown.tmpl (used by handleMarkdown) but not
+    // browse.tmpl -- that template lives in the zoid6/teos
+    // docroot and is not part of bbsengine6's deploy chain. On
+    // vhosts that don't share teos's template tree, Smarty
+    // raises "Unable to load template 'file:browse.tmpl'" and
+    // the directory listing fails. Catch the throwable, log
+    // it, and fall through to the inline HTML renderer
+    // (lines below) so the URL still returns 200 with a
+    // usable (un-styled) list. A future commit can ship a
+    // bbsengine6/skin/tmpl/browse.tmpl and remove the
+    // try-catch.
+    try {
+      bbsengine6\displaypage([
+        'title' => $title,
+        'items' => $items,
+        'uri' => $uri,
+        'hidden' => $hidden,
+        'currentsig' => $currentsig,
+        'breadcrumbs' => $breadcrumbs,
+        'choices' => $choices,
+      ], 'browse.tmpl');
+      return '';
+    } catch (\Throwable $e) {
+      router_log('browse.tmpl render failed, falling back to inline list: ' . $e->getMessage(), 'warning');
+      // fall through
+    }
   }
 
   http_response_code(200);
