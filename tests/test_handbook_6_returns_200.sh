@@ -31,6 +31,9 @@
 #   [3]  additional probes (chapter, directory, raw .md) all
 #        return 200 (verifies the router's per-mode dispatch
 #        works, not just the index path)
+#   [3b] legacy Flask / gunicorn / mod_wsgi artifact paths
+#        return 404 (verifies the remove-legacy-handbook
+#        cleanup ran and was not reverted)
 #   [4]  build-host source invariants that catch a regression
 #        in the local working tree (relative require in
 #        handbook.php, no /engine/ entry in bootstrap.php,
@@ -83,7 +86,7 @@ fi
 echo
 
 # --- 3. additional probes verify per-mode dispatch ----------------------
-echo "[3] additional probes"
+echo "[3] additional probes (new handbook content)"
 extra_probes=(
   "$URL_BASE/index.md|200 (raw .md via ?rawpath=)"
   "$URL_BASE/specs/|200 (subdirectory listing)"
@@ -99,6 +102,30 @@ for entry in "${extra_probes[@]}"; do
     404) bad "extra probe $url returned 404 -- a per-mode handler fell through to handleError. Body: $(head -1 /tmp/handbook6.extra 2>/dev/null | head -c 200)" ;;
     500) bad "extra probe $url returned 500 -- a handler threw (e.g. template not found, fatal). Body: $(head -1 /tmp/handbook6.extra 2>/dev/null | head -c 200)" ;;
     *)   bad "extra probe $url returned unexpected $code" ;;
+  esac
+done
+echo
+
+# --- 3b. legacy Flask / gunicorn / mod_wsgi artifacts must be gone -----
+# These paths served dead weight from the retired Flask stack. The
+# new request-time PHP handbook (handbook.php + engine/router.php)
+# does not reference any of them. `make -C www remove-legacy-handbook`
+# ssh-deletes them on merlin; the test verifies they are gone.
+echo "[3b] legacy handbook artifacts (should be 404 after remove-legacy-handbook)"
+legacy_paths=(
+  "https://www.bbsengine.org/handbook/bbsengine-handbook.conf"
+  "https://www.bbsengine.org/handbook/handbook-wsgi.conf"
+  "https://www.bbsengine.org/handbook/modules.adoc"
+  "https://www.bbsengine.org/handbook/modules.html"
+)
+for path in "${legacy_paths[@]}"; do
+  code=$(probe "$path" /tmp/handbook6.legacy)
+  echo "    $path -> $code"
+  case "$code" in
+    404) ok "legacy path $path returned 404 (removed)" ;;
+    200) bad "legacy path $path still returns 200 -- \`make -C www remove-legacy-handbook\` has not been run, or the cleanup was reverted by a subsequent \`make wwworg\` from the build host's read-only local stage" ;;
+    301|302) bad "legacy path $path returned $code (redirect) -- cleanup did not remove the file" ;;
+    *)   bad "legacy path $path returned unexpected $code" ;;
   esac
 done
 echo
@@ -176,6 +203,18 @@ if [ "$fail" -gt 0 ]; then
   echo "  if the HTTP probe is 500 with 'Unable to load template':"
   echo "    -- the skin/ template (e.g. browse.tmpl) is missing on"
   echo "       merlin. Run: make skin-prod"
+  echo
+  echo "  if a legacy handbook artifact check (3b) returns 200:"
+  echo "    -- \`make -C www remove-legacy-handbook\` removes the"
+  echo "       four files (bbsengine-handbook.conf, handbook-wsgi.conf,"
+  echo "       modules.adoc, modules.html) on merlin via ssh. Run"
+  echo "       that target. Note: the build host's local stage at"
+  echo "       /srv/www/vhosts/www.bbsengine.org/html/handbook/ is"
+  echo "       read-only and still has the files; a subsequent"
+  echo "       \`make wwworg\` from the read-only mount will re-push"
+  echo "       them unless the build host's stage is also cleaned"
+  echo "       (out of scope for the Makefile -- requires sudo /"
+  echo "       remount on the build host)."
   echo
   echo "  if a filesystem check (3-5b in the old version) failed"
   echo "    despite the HTTP probe being 200:"

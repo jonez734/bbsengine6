@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### chore(www): one-shot removal of legacy Flask / gunicorn / mod_wsgi handbook artifacts
+
+`www/org/htaccess-prod` rewrites `/handbook/<v>/<path>` to
+`handbook.php`, and the new request-time PHP handbook renders
+through `engine/router.php` (deployed via `engine-deploy-prod`).
+Four files in `merlin:/srv/www/vhosts/www.bbsengine.org/html/handbook/`
+survived from the retired Flask stack and serve dead weight on
+every request:
+
+- `bbsengine-handbook.conf` (gunicorn service unit)
+- `handbook-wsgi.conf` (mod_wsgi vhost config)
+- `modules.adoc` (Asciidoctor source, 0 bytes; rendered
+  `modules.html` and `bbsengine-modules.html` siblings also
+  remain but are out of scope for this commit)
+- `modules.html` (static-rendered Asciidoctor output)
+
+The build host's local stage at
+`/srv/www/vhosts/www.bbsengine.org/html/handbook/` still
+contains these files, and the directory is mounted
+**read-only** (`jam:www` mode 2755, `opencode` cannot write;
+the `mount` reports "Read-only file system" on `rm` attempts).
+The existing `wwworg` rsync would re-push the files on every
+run from the local stage, so a plain `--exclude` on the
+rsync is not sufficient (it prevents transfer but does not
+trigger `--delete` on the dest for files still present on
+the source side).
+
+`www/Makefile` adds a `remove-legacy-handbook` target that
+ssh-runs `rm` on merlin directly for the four files. Shape
+mirrors the existing `engine/Makefile deploy` ssh-pushes:
+`ssh $(ORGHOST) 'cd /.../handbook/ && rm -f <files>'`. The
+target is added to `.PHONY`. Operator runs it once as a
+one-shot cleanup. Build host's read-only local stage is
+flagged as out-of-scope in the target's header comment —
+a follow-up that remounts or sudo-cleans the build host's
+stage would prevent re-introduction via subsequent
+`make wwworg` runs.
+
+`tests/test_handbook_6_returns_200.sh` adds a `[3b]` check
+that probes each of the four legacy URLs on prod and asserts
+they return 404. Pre-cleanup the check fails (as expected);
+post-cleanup the four probes flip to pass. The test's
+"remediation paths" block now names the new target.
+
+Note: `csrf/`, `migrations/`, `bbsengine.html`, and
+`bbsengine-modules.html` (also under html/handbook/) are
+still served. The user-requested scope was `modules.adoc`,
+`modules.html`, and `*.conf`; the bbsengine*.html legacy
+renderers and the empty Flask-era `csrf/` / `migrations/`
+dirs can be added to a future commit if desired.
+
 ### fix(router+handbook): strip leading slash from URI before safe_path_web; require serve-md.php; graceful browse.tmpl fallback
 
 Three follow-on issues surfaced after the deploy chain landed
