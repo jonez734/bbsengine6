@@ -40,7 +40,13 @@ stage:
 # doesn't exist yet (relevant for .org, where /html/engine/ did not
 # exist before this change). Source list is expanded by make's
 # $(wildcard) so the shell doesn't try to execute the bare glob.
-ENGINE_PHP = $(wildcard *.php)
+# @since 2026-09-06 — also ship .htaccess. make's $(wildcard) skips
+# dotfiles by default, so it's listed explicitly. The .htaccess
+# carries the RewriteEngine + RewriteRule plumbing that the .org
+# vhost's engine/ tree relies on (the zoidtechnologies.com vhost
+# ships the same file via the existing pipeline). If a future
+# dotfile appears under engine/, add it here.
+ENGINE_PHP = .htaccess $(wildcard *.php)
 
 deploy-engine:
 	$(RSYNC) $(ENGINE_PHP) $(ENGINEPRODDOCROOT)
