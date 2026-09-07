@@ -117,6 +117,18 @@ if (strpos($youarehere_src, 'teos-breadcrumbs.tmpl') === false) {
 }
 test_pass("youarehere.tmpl uses teos-breadcrumbs.tmpl");
 
+// Test: teos-breadcrumbs.tmpl exists on disk. Catches the half-finished
+// refactor from commit ff0981a where youarehere.tmpl was updated to
+// include teos-breadcrumbs.tmpl but the target template was never
+// authored. Without this assertion the build looks green until
+// Smarty tries to render a page that uses youarehere.tmpl.
+echo "Test 6b: skin/tmpl/teos-breadcrumbs.tmpl exists\n";
+$target = "/home/opencode/data/work/bbsengine6/skin/tmpl/teos-breadcrumbs.tmpl";
+if (!file_exists($target)) {
+    test_fail("skin/tmpl/teos-breadcrumbs.tmpl missing", $target);
+}
+test_pass("skin/tmpl/teos-breadcrumbs.tmpl exists");
+
 // Test: page-markdown.tmpl uses youarehere.tmpl
 echo "Test 7: page-markdown.tmpl uses youarehere.tmpl\n";
 $page_md = "/home/opencode/data/work/bbsengine6/skin/tmpl/page-markdown.tmpl";
