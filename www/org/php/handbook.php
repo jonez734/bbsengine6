@@ -136,6 +136,9 @@ class handbook
         // putenv wins over constants inside router_get_teosurl/dir.
         putenv("TEOSDIR=" . $base_dir);
         putenv("TEOSURL=/handbook/");
+        // Per-vhost top-breadcrumb label; consumed by blurb::getlabel().
+        // Default for unconfigured environments is "teos".
+        putenv("TEOS_LABEL=bbsengine6 handbook");
         if (!defined("TEOSURL")) define("TEOSURL", "/handbook/");
         if (!defined("TEOSDIR"))  define("TEOSDIR",  $base_dir);
 
