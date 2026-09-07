@@ -205,7 +205,7 @@ function router_handleError(string $uri)
 function router_displayMarkdownFile(string $filepath, string $uri): string
 {
   if (!function_exists('\bbsengine6\markdown\parseDocument')) {
-    require_once "php/markdown.php";
+    require_once("php/markdown.php");
   }
 
   $content = file_get_contents($filepath);
@@ -319,7 +319,7 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
       $filecontent = file_get_contents($fullpath);
       if ($filecontent !== false && strncmp($filecontent, '---', 3) === 0) {
         if (!function_exists('\bbsengine6\markdown\splitFrontmatter')) {
-          require_once "php/markdown.php";
+          require_once("php/markdown.php");
         }
         [$metadata, ] = \bbsengine6\markdown\splitFrontmatter($filecontent);
         if (isset($metadata['title'])) {

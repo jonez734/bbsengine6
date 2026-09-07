@@ -341,7 +341,7 @@ function display($uri, $filepath)
 }
 function parseMarkdownSections(string $markdown): array
 {
-    require_once "markdown.php";
+    require_once("markdown.php");
     return \bbsengine6\markdown\parseDocument($markdown, split: true);
 }
 
