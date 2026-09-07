@@ -52,14 +52,14 @@ RewriteRule ^handbook/(\d+)/(.+\.md)$ /engine/serve-md.php?prefix=handbook/$1&pa
 # dispatches handleMarkdown on the chapter.
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=handbook/$1/$2 [last,qsappend]
+RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]
 
 # Handbook directory URLs -> engine/router.php for the
 # directory listing. Mirrors teos/www/htaccess-prod:26-27
-# (the !-d catch-all there). uri=handbook/<v>/<dir>/ so the
-# router's prefix detection picks up the version.
+# (the !-d catch-all there). uri=<dir> (no handbook/<v>/ prefix)
+# so the router's prefix detection picks up the version.
 RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=handbook/$1/$2 [last,qsappend]
+RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]
 
 # Route remaining clean URLs to /engine/router.php (mirrors
 # teos/www/htaccess-prod:32). The handbook-specific rules
