@@ -157,6 +157,25 @@ skin-prod:
 
 wwworg:
 	$(MAKE) -C www org VERSION=$(VERSION)
+	# @since 2026-09-07 — engine/ ships with wwworg because the
+	# test (tests/test_handbook_6_returns_200.sh) probes
+	# /handbook/<v>/... which requires engine/router.php and
+	# engine/serve-md.php on the .org vhost. Previously engine/
+	# shipped via engine-deploy-prod only; that required the
+	# operator to run a separate target after wwworg. The two
+	# are now combined so a single `make wwworg` brings up the
+	# whole .org vhost end-to-end.
+	$(MAKE) engine-deploy-prod VERSION=$(VERSION)
+	# @since 2026-09-07 — php/ helpers (util.php, markdown.php,
+	# blurb.php, engine.php) ship with wwworg because
+	# engine/router.php requires them at /srv/www/bbsengine6/php/
+	# (absolute paths, not include_path lookup). Without this
+	# step the router's require_once chain raises
+	# 'Failed opening required' and the request 500s with no
+	# router-emitted body. Combined with engine-deploy-prod
+	# above so wwworg is a single-shot end-to-end deploy for
+	# the .org vhost.
+	$(MAKE) php-deploy-prod
 
 wwwcom:
 	$(MAKE) -C www com
