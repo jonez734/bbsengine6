@@ -54,6 +54,35 @@ function router_get_teosdir(): string
   return getenv('TEOSDIR') ?: (defined('TEOSDIR') ? TEOSDIR : '');
 }
 
+/**
+ * Wrapper around bbsengine6\util\safe_path_web that no-ops to
+ * false when the helper is undefined.
+ *
+ * The router's bootstrap chain may fail on a partial
+ * php-deploy-prod (where util.php hasn't landed yet); in
+ * that case the require_once raises a Warning to the error
+ * log, the helper isn't defined, and downstream handler
+ * code would fatal with "Call to undefined function". The
+ * wrapper lets the handler chain fall through to
+ * handleError's 404 page instead. PHP still raises on the
+ * missing require_once -- this helper doesn't suppress
+ * that warning; it only guards the secondary call-site
+ * fatal.
+ *
+ * @param array $components Path components relative to base_dir.
+ * @param array $opts       Options (base_dir, must_exist, resolve_symlinks).
+ * @return string|false     Resolved path string, or false on
+ *                          failure (including when the helper
+ *                          isn't loaded).
+ */
+function router_safe_path_web(array $components, array $opts = []): string|false
+{
+  if (!function_exists('bbsengine6\util\safe_path_web')) {
+    return false;
+  }
+  return bbsengine6\util\safe_path_web($components, $opts);
+}
+
 function router_buildBreadcrumbs(string $uri): array
 {
   $segments = array_values(array_filter(explode("/", trim($uri, "/"))));
@@ -150,22 +179,24 @@ function router_handleFolder(string $uri)
   }
 
   // @since 2026-09-07 — strip any leading '/' before handing
-  // the path to safe_path_web. safe_path_web treats leading
-  // slashes as absolute-path attempts and rejects them (see
-  // bbsengine6\util\safe_path_web lines 510-514), but the
-  // router's URI shape is "leading-slash relative" (e.g.
-  // "/6/specs/") as routed by the bbsengine.org htaccess-prod
-  // (RewriteRule ^handbook/(\d+)/?(.*)$ -> /engine/router.php?uri=$2
-  // plus the leading '/' that may be present on bare
-  // /handbook/6/), not "absolute" -- the absolute-root
-  // semantics are anchored to TEOSDIR, not the OS root. ltrim
-  // converts the URI to the bare-relative shape the rest of
-  // the function (and safe_path_web) expect. The containment
-  // check inside safe_path_web (str_starts_with($resolved,
-  // $base_real)) is the real security guard, so this ltrim
-  // does not weaken path-traversal protection.
+  // the path to router_safe_path_web (which forwards to
+  // bbsengine6\util\safe_path_web). safe_path_web treats
+  // leading slashes as absolute-path attempts and rejects
+  // them (see bbsengine6\util\safe_path_web lines 510-514),
+  // but the router's URI shape is "leading-slash relative"
+  // (e.g. "/6/specs/") as routed by the bbsengine.org
+  // htaccess-prod (RewriteRule ^handbook/(\d+)/?(.*)$ ->
+  // /engine/router.php?uri=$2 plus the leading '/' that
+  // may be present on bare /handbook/6/), not "absolute" --
+  // the absolute-root semantics are anchored to TEOSDIR,
+  // not the OS root. ltrim converts the URI to the
+  // bare-relative shape the rest of the function (and
+  // safe_path_web) expect. The containment check inside
+  // safe_path_web (str_starts_with($resolved, $base_real))
+  // is the real security guard, so this ltrim does not
+  // weaken path-traversal protection.
   $reluri = ltrim($uri, '/');
-  $filepath = bbsengine6\util\safe_path_web([$reluri], ['base_dir' => $teospath]);
+  $filepath = router_safe_path_web([$reluri], ['base_dir' => $teospath]);
   if ($filepath === false) {
     router_log('path validation failed', 'warning');
     return ROUTER_NEXT;
@@ -200,9 +231,9 @@ function router_handleMarkdown(string $uri)
   // ltrim so "specs/foo" (bare-relative) is appended rather
   // than "/specs/foo.md" (rejected as absolute).
   $reluri = ltrim($uri, '/');
-  $filepath = bbsengine6\util\safe_path_web([$reluri . '.md'], ['base_dir' => $teospath]);
+  $filepath = router_safe_path_web([$reluri . '.md'], ['base_dir' => $teospath]);
   if ($filepath === false || !file_exists($filepath)) {
-    $filepath = bbsengine6\util\safe_path_web([$reluri], ['base_dir' => $teospath]);
+    $filepath = router_safe_path_web([$reluri], ['base_dir' => $teospath]);
   }
   if ($filepath !== false && file_exists($filepath) && is_file($filepath)) {
     return router_displayMarkdownFile($filepath, $uri);
