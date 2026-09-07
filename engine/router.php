@@ -19,8 +19,11 @@
  * teos/SPEC.md section 9.6 for the policy and patterns covered.
  *
  * Shared by both the teos/www vhost (TEOSURL=/teos/) and the handbook
- * vhost at bbsengine.org (TEOSURL=/handbook/<v>/), where the calling
- * entry point exports TEOSURL/TEOSDIR via putenv() before invocation.
+ * vhost at bbsengine.org (TEOSURL=/handbook/<v>/). Each vhost's
+ * htaccess-prod rewrites its URIs to /engine/router.php?uri=<rel>;
+ * the HTTP entry-point at the bottom of this file detects a
+ * /handbook/<v>/... URI prefix and exports TEOSURL/TEOSDIR via
+ * putenv() for that vhost, then dispatches to the handlers below.
  * Handlers that depend on teos-only helpers (bbsengine6\blurb\*,
  * bbsengine6\folder\*) no-op to ROUTER_NEXT when those helpers are absent.
  *
@@ -104,19 +107,34 @@ function router_handleIndex(string $uri)
     return ROUTER_NEXT;
   }
 
-  $indexfile = router_get_teosdir() . 'index.php';
-  if (!file_exists($indexfile)) {
-    router_log('index.php not found', 'warning');
-    return ROUTER_NEXT;
+  $teosdir = router_get_teosdir();
+  $indexfile = $teosdir . 'index.php';
+  if (file_exists($indexfile)) {
+    try {
+      include($indexfile);
+      return ROUTER_STOP;
+    } catch (Throwable $e) {
+      router_log('index include failed: ' . $e->getMessage());
+      return ROUTER_NEXT;
+    }
   }
 
-  try {
-    include($indexfile);
-    return ROUTER_STOP;
-  } catch (Throwable $e) {
-    router_log('index include failed: ' . $e->getMessage());
-    return ROUTER_NEXT;
+  // @since 2026-09-07 — fall back to TEOSDIR/index.md and
+  // delegate to the markdown handler. The teos vhost ships
+  // index.php; the handbook vhost (bbsengine.org) ships
+  // index.md, so without this fallback /handbook/<v>/ is
+  // unrenderable through the router. The .htaccess rule
+  // routes the directory case to the router with uri=/<v>/,
+  // and after the URI-prefix strip in the HTTP entry point
+  // the router sees uri='' which is what this handler
+  // accepts.
+  $mdfile = $teosdir . 'index.md';
+  if (file_exists($mdfile) && is_file($mdfile)) {
+    return router_displayMarkdownFile($mdfile, $uri);
   }
+
+  router_log('index.php and index.md both missing', 'warning');
+  return ROUTER_NEXT;
 }
 
 function router_handleBlurb(string $uri)
@@ -151,8 +169,10 @@ function router_handleFolder(string $uri)
   // slashes as absolute-path attempts and rejects them (see
   // bbsengine6\util\safe_path_web lines 510-514), but the
   // router's URI shape is "leading-slash relative" (e.g.
-  // "/6/specs/") as built by www/org/php/handbook.php
-  // dispatchViaRouter(), not "absolute" -- the absolute-root
+  // "/6/specs/") as routed by the bbsengine.org htaccess-prod
+  // (RewriteRule ^handbook/(\d+)/?(.*)$ -> /engine/router.php?uri=$2
+  // plus the leading '/' that may be present on bare
+  // /handbook/6/), not "absolute" -- the absolute-root
   // semantics are anchored to TEOSDIR, not the OS root. ltrim
   // converts the URI to the bare-relative shape the rest of
   // the function (and safe_path_web) expect. The containment
@@ -499,19 +519,44 @@ function route(string $uri): ?string
 
 // === HTTP entry point ===
 if (php_sapi_name() !== 'cli') {
+  // include_path: portable absolute paths that resolve on both
+  // the zoidtechnologies.com and www.bbsengine.org vhosts (both
+  // ship php/markdown.php via php-deploy-prod and vendor/erusev
+  // parsedown libs via parsedown-deploy-prod). The prior block
+  // added per-vhost teos-tree paths that only resolve on the
+  // .com vhost; drop them so the .org vhost can bootstrap the
+  // same library set.
   set_include_path(get_include_path()
-    . PATH_SEPARATOR . "/srv/www/vhosts/zoidtechnologies.com/html/teos"
     . PATH_SEPARATOR . "/srv/www/bbsengine6/php"
-    . PATH_SEPARATOR . "/srv/www/markdown/"
-    . PATH_SEPARATOR . "/srv/www/zoid6/php"
-    . PATH_SEPARATOR . "/srv/www/zoid6/markdown");
+    . PATH_SEPARATOR . "/srv/www/markdown/");
 
-  // TEOSURL/TEOSDIR may already be set by the including entry point
-  // (e.g. handbook.php, which exports the handbook base via putenv()).
-  // Env wins over constants: the http entry-point at the bottom of this
-  // file reads them via router_get_teosurl()/router_get_teosdir(), which
-  // prefer getenv() over the constant. We therefore only define fallback
-  // defaults for the teos/www case where no caller has configured them.
+  // Detect the /handbook/<v>/... URI prefix and set TEOSURL/
+  // TEOSDIR for that request so handlers below read from the
+  // matching handbook tree. Same shape as teos: htaccess rewrites
+  // the URI, this entry-point adapts the working dir, the
+  // handlers do not need to know which vhost they're serving.
+  // Env wins over constants -- router_get_teosurl()/_teosdir()
+  // (lines 44-52) prefer getenv() over the define() below, so
+  // a handbook request that supplies its own env vars here
+  // overrides the teos fallback. The define()s stay for the
+  // teos case where neither env nor a prefix-derived override
+  // is present.
+  $requesturi = $_SERVER['REQUEST_URI'] ?? '';
+  $handbookhome = '/srv/www/vhosts/www.bbsengine.org/html/handbook/';
+  if (preg_match('#^/handbook/(\d+)/(.*)$#', $requesturi, $m)) {
+    putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
+    putenv('TEOSURL=/handbook/' . $m[1] . '/');
+    if (!isset($_GET['uri']) && !isset($_GET['path'])) {
+      $_GET['uri'] = $m[2];
+    }
+  } elseif (preg_match('#^/handbook/(\d+)/?$#', $requesturi, $m)) {
+    putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
+    putenv('TEOSURL=/handbook/' . $m[1] . '/');
+    if (!isset($_GET['uri']) && !isset($_GET['path'])) {
+      $_GET['uri'] = '';
+    }
+  }
+
   if (!defined('TEOSURL')) define('TEOSURL', '/teos/');
   if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
 
