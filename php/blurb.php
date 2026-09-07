@@ -11,6 +11,29 @@ namespace bbsengine6\blurb {
 require_once(__DIR__ . "/../../zoid6/php/bootstrap.php");
 \zoid6\bootstrap();
 
+/**
+ * Get the display label for the top-level "root" breadcrumb.
+ *
+ * Defaults to "teos" so existing callers (and any environment that
+ * neither defines nor exports the constant) see no change. The
+ * handbook vhost entry point sets TEOS_LABEL="bbsengine6 handbook"
+ * via putenv() before invoking the router, mirroring how TEOSURL
+ * and TEOSDIR are already exported.
+ *
+ * @return string The label to render for the top breadcrumb.
+ */
+function getlabel(): string
+{
+    $v = getenv('TEOS_LABEL');
+    if (is_string($v) && $v !== '') {
+        return $v;
+    }
+    if (defined('TEOS_LABEL')) {
+        return TEOS_LABEL;
+    }
+    return 'teos';
+}
+
 require_once("zoid6config.php");
 require_once("zoid6.php");
 
@@ -48,10 +71,12 @@ function buildbreadcrumbs($sigpath, $skiptop = true, $hidepath = null)
             $crumbs[] = $sig;
         }
 
-        // Prepend "teos" crumb
+        // Prepend "root" crumb. Title is per-vhost via TEOS_LABEL;
+        // path stays "teos" as the internal identifier; uri follows
+        // TEOSURL so it points at the correct vhost root.
         $teosurl = defined('TEOSURL') ? TEOSURL : '';
         array_unshift($crumbs, [
-            'title' => 'teos',
+            'title' => getlabel(),
             'path' => 'teos',
             'uri' => rtrim($teosurl, '/') . '/',
         ]);
