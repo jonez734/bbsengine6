@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### chore(www): eradicate `www/org/php/handbook.php`
+
+The legacy `/handbook/<v>/...` dispatcher (`www/org/php/handbook.php`,
+deleted in `b5eb331`) is fully replaced by:
+
+- `engine/router.php` (HTTP entry-point detects `/handbook/<v>/...`
+  URI prefix, sets `TEOSURL/TEOSDIR` for that request, dispatches
+  `handleMarkdown` / `handleFolder` / `handleIndex`).
+- `engine/serve-md.php` (HTTP entry-point streams raw `.md` files
+  as `text/plain`).
+- `bbsengine6/www/org/htaccess-prod` (rewrites `/handbook/<v>/<chapter>`
+  / `<dir>` / `<uri>.md` to the corresponding engine/ script).
+- `bbsengine6/www/org/skin/tmpl/Makefile` (ships the Smarty
+  templates that `engine/router.php`'s chapter rendering
+  requires: `page-markdown.tmpl`, `youarehere.tmpl`,
+  `teos-breadcrumbs.tmpl`, and `zoid6-page.tmpl`).
+- `bbsengine6/skin/tmpl/page-markdown.tmpl` (extends target renamed
+  to `zoid6-page.tmpl` so it doesn't collide with the legacy
+  `www/org/skin/tmpl/page.tmpl` that the legacy `archive-*`,
+  `contact-us`, `dir`, `errormessage`, `file`, and `index`
+  templates still extend).
+
+Verified fixes:
+
+- `https://www.bbsengine.org/handbook/6/specs/console.md` returns
+  200 with `text/plain` and the chapter source.
+- `https://www.bbsengine.org/handbook/6/specs/console` returns
+  200 with rendered HTML (was 500 before).
+
+`www/org/php/handbook-index.php` and `www/org/php/handbook-chapter.php`
+were also removed in `b5eb331`; this entry covers the full chain.
+
+Historical CHANGELOG entries still reference `handbook.php` /
+`handbook-index.tmpl` / `handbook-chapter.tmpl` — those are
+descriptions of past commits and are left intact. The Unreleased
+section is the current state of the world.
+
 ### chore(www): re-introduction guard for legacy handbook artifacts
 
 The previous entry (`chore(www): one-shot removal of legacy

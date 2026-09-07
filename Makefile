@@ -70,10 +70,17 @@ export WWWSTAGE = /srv/www/vhosts/www.bbsengine.org/
 export WWWSTAGEDOCROOT = $(WWWSTAGE)html/
 
 # @since 2026-09-06 — engine/ is shipped to www.bbsengine.org's
-# docroot as well, so handbook.php's relative require_once
-# (__DIR__/../../engine/router.php) resolves. The engine/ deploy
-# unit (engine/Makefile) reads both docroots from env; this gives
-# it the .org side. Pair mirrors ENGINESTAGEDOCROOT / ENGINEPRODDOCROOT.
+# docroot as well. The .org vhost's htaccess-prod rewrites
+# /handbook/<v>/... URIs to /engine/router.php and
+# /engine/serve-md.php (mirroring teos/www/htaccess-prod), so
+# the engine tree must exist there. The engine/ deploy unit
+# (engine/Makefile) reads both docroots from env; this gives
+# it the .org side. Pair mirrors ENGINESTAGEDOCROOT /
+# ENGINEPRODDOCROOT.
+#
+# @since 2026-09-07 — handbook.php eradicated; no per-vhost
+# PHP dispatcher under www/org/php/handbook.php; engine/ is the
+# only .org-vhost PHP handler set.
 export WWWENGINESTAGEDOCROOT = $(WWWSTAGE)html/engine/
 export WWWENGINEPRODDOCROOT = $(WWWPROD)html/engine/
 
@@ -303,24 +310,29 @@ deploy-handbook: handbook-prod
 # handles its own local-stage-then-ssh-rsync:
 #
 #   php-deploy-prod       -> /srv/www/bbsengine6/php/markdown.php
-#   wwworg                -> /srv/www/vhosts/www.bbsengine.org/html/{handbook.php,config.php,...}
+#   wwworg                -> /srv/www/vhosts/www.bbsengine.org/html/{config.php,index.php,...}
+#                            (legacy PHP entry points; no handbook
+#                             handler lives here since the 2026-09-07
+#                             eradication of www/org/php/handbook.php)
 #   handbook-deploy-prod  -> /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/*.md
 #   engine-deploy-prod    -> /srv/www/vhosts/zoidtechnologies.com/html/engine/*.php
 #                            + /srv/www/vhosts/www.bbsengine.org/html/engine/*.php
-#                            (so handbook.php's relative require_once
-#                             resolves on the .org vhost)
+#                            (so /handbook/<v>/<uri> requests on the
+#                             .org vhost hit /engine/router.php and
+#                             /engine/serve-md.php, the only .org
+#                             PHP handlers after the eradication)
 #
 # All four use $(RSYNC) (which carries --rsh=ssh), so this runs
 # cleanly from a build host with no fs bind-mount between the build
-# host and merlin. wwworg additionally pushes its whole staged
-# docroot to merlin via ORGPROD, which carries the handbook handler
-# installed by www/org/php/.
+# host and merlin. wwworg pushes its whole staged docroot minus
+# the engine/ + html/engine/ + four legacy handbook artifact
+# excludes (see www/Makefile:50-56) to merlin via ORGPROD.
 #
 # After this runs, reload php-fpm on merlin so opcache picks up the
 # new files immediately:
 #   sudo systemctl reload php-fpm
 deploy-handbook-prod: php-deploy-prod wwworg handbook-deploy-prod engine-deploy-prod
-	@echo "Handbook stack deployed: engine/*.php + php/markdown.php + html/handbook.php + html/handbook/$(VERSION)/"
+	@echo "Handbook stack deployed: engine/*.php + php/markdown.php + html/config.php + html/handbook/$(VERSION)/"
 	@echo "Reminder on merlin: sudo systemctl reload php-fpm"
 
 deploy:

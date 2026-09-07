@@ -98,8 +98,8 @@ above this repo. The daemon opens a TCP/WS port that the
 The public website (org + com sites, including the handbook tree
 under `/handbook/<v>/<path>`) is served by Apache + `mod_php` +
 Smarty. No Python app server is needed: handbook chapters are read
-from disk at request time by `www/org/php/handbook.php` and rendered
-via the shared `\bbsengine6\markdown\parseDocument` primitive
+from disk at request time by `engine/router.php` and rendered via
+the shared `\bbsengine6\markdown\parseDocument` primitive
 (matching teos's `teospath` path). Drop the org vhost config into
 place and reload:
 

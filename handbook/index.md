@@ -81,13 +81,18 @@ handbook/
 ## Development
 
 The handbook is written in plain Markdown. Chapters are rendered
-at request time by `www/org/php/handbook.php` via the shared
+at request time by `engine/router.php` via the shared
 `\bbsengine6\markdown\parseDocument` primitive (matching teos's
 `teospath` path). The handbook `Makefile` `stage` target rsyncs
 the `.md` tree to `WWWSTAGE/handbook/<v>/`, where Apache +
 `mod_php` + the rewrite in `www/org/htaccess-prod` route every
-`/handbook/<v>/...` request to `handbook.php` for read-time
-rendering. The `make convert-tmpl` developer helper converts
+`/handbook/<v>/...` request to `/engine/router.php` for read-time
+rendering (raw `.md` URLs go through `/engine/serve-md.php`,
+which streams the file as `text/plain`). The router detects the
+`/handbook/<v>/` URI prefix, sets `TEOSDIR` to the matching
+version tree, and dispatches `handleMarkdown` for chapters,
+`handleFolder` for directories, and `handleIndex` for the bare
+version URL. The `make convert-tmpl` developer helper converts
 chapters into Smarty `.tmpl` snippets for embedding inside
 other templates (e.g. chapter summaries on the org-site
 front page).

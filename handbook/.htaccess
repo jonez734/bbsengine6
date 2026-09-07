@@ -1,9 +1,12 @@
 # Handbook/Documentation serving configuration.
 #
-# Directory listings and URI dispatch are owned by www/org/php/handbook.php
-# (which delegates to engine/router.php); this .htaccess only configures
-# MIME types, security headers, compression, and caching for static
-# .md / .html assets when they bypass the router (e.g. raw fetches).
+# URI dispatch is owned by the bbsengine.org vhost's htaccess-prod
+# (see www/org/htaccess-prod), which rewrites /handbook/<v>/<uri>
+# to /engine/router.php (chapter | directory | index) or
+# /engine/serve-md.php (raw .md). This handbook/.htaccess only
+# configures the /handbook/current/ alias and MIME types, security
+# headers, compression, and caching for static .md / .html assets
+# when they bypass the rewriting (e.g. raw fetches).
 
 # Enable mod_rewrite
 RewriteEngine On

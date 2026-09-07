@@ -4,13 +4,18 @@
 #
 # @since 2026-09-06 — fan-out to multiple docroots. The original
 # single-docroot design shipped engine/*.php only to the
-# zoidtechnologies.com vhost. handbook.php on the www.bbsengine.org
-# vhost also requires engine/router.php via a relative path
-# (__DIR__/../../engine/router.php), so the engine tree must exist
-# at the .org docroot too. WWWENGINESTAGEDOCROOT /
-# WWWENGINEPRODDOCROOT mirror the existing ENGINESTAGE / ENGINEPROD
-# pair. stage mkdir-p's local staging roots (no ssh); deploy-engine
-# ssh-pushes *.php to each prod docroot.
+# zoidtechnologies.com vhost. The www.bbsengine.org vhost's
+# htaccess-prod now rewrites its /handbook/<v>/... URIs to
+# /engine/router.php and /engine/serve-md.php, so the engine
+# tree must exist at the .org docroot too.
+# WWWENGINESTAGEDOCROOT / WWWENGINEPRODDOCROOT mirror the
+# existing ENGINESTAGE / ENGINEPROD pair. stage mkdir-p's local
+# staging roots (no ssh); deploy-engine ssh-pushes *.php to
+# each prod docroot.
+#
+# @since 2026-09-07 — handbook.php eradicated. The old
+# .org-vhost entry point (www/org/php/handbook.php) is gone;
+# engine/ is the only .org-vhost PHP handler set.
 
 # Uses exported variables from parent Makefile:
 # ENGINESTAGE, ENGINESTAGEDOCROOT, ENGINEHOST, ENGINEPROD, ENGINEPRODDOCROOT, RSYNC,

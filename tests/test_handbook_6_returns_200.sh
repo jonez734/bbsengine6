@@ -35,10 +35,11 @@
 #        return 404 (verifies the remove-legacy-handbook
 #        cleanup ran and was not reverted)
 #   [4]  build-host source invariants that catch a regression
-#        in the local working tree (relative require in
-#        handbook.php, no /engine/ entry in bootstrap.php,
-#        .htaccess in ENGINE_PHP, rsync --exclude patterns
-#        for engine/ and the four legacy handbook files)
+#        in the local working tree (handbook.php is absent,
+#        htaccess-prod has the new /handbook/<v>/ routing rules,
+#        no /engine/ entry in bootstrap.php, .htaccess in
+#        ENGINE_PHP, rsync --exclude patterns for engine/ and
+#        the four legacy handbook files)
 #
 # Each check's "bad" message points at the specific failure
 # mode and the operator action that resolves it.
@@ -89,7 +90,7 @@ echo
 # --- 3. additional probes verify per-mode dispatch ----------------------
 echo "[3] additional probes (new handbook content)"
 extra_probes=(
-  "$URL_BASE/index.md|200 (raw .md via ?rawpath=)"
+  "$URL_BASE/index.md|200 (raw .md via engine/serve-md.php)"
   "$URL_BASE/specs/|200 (subdirectory listing)"
   "$URL_BASE/specs/architecture.md|200 (subdirectory chapter)"
 )
@@ -109,7 +110,8 @@ echo
 
 # --- 3b. legacy Flask / gunicorn / mod_wsgi artifacts must be gone -----
 # These paths served dead weight from the retired Flask stack. The
-# new request-time PHP handbook (handbook.php + engine/router.php)
+# current request-time PHP handbook (engine/router.php +
+# engine/serve-md.php, both shipped via engine-deploy-prod)
 # does not reference any of them. `make -C www remove-legacy-handbook`
 # ssh-deletes them on merlin; the test verifies they are gone.
 echo "[3b] legacy handbook artifacts (should be 404 after remove-legacy-handbook)"
@@ -134,14 +136,10 @@ echo
 # --- 4. build-host source invariants ------------------------------------
 echo "[4] build-host source invariants"
 
-if [ -f "$LOCAL_BBSENGINE6/www/org/php/handbook.php" ]; then
-  if grep -q 'require_once *__DIR__ *\. *"/engine/router\.php"' "$LOCAL_BBSENGINE6/www/org/php/handbook.php" 2>/dev/null; then
-    ok "local handbook.php uses require_once __DIR__ . \"/engine/router.php\" (relative require)"
-  else
-    bad "local handbook.php does NOT use the relative require -- fix(handbook) commit not in working tree"
-  fi
+if [ ! -f "$LOCAL_BBSENGINE6/www/org/php/handbook.php" ]; then
+  ok "local www/org/php/handbook.php is absent (eradicated; engine/router.php + engine/serve-md.php are the .org handbook handlers)"
 else
-  bad "local handbook.php missing entirely"
+  bad "local www/org/php/handbook.php exists -- the handler is supposed to be eradicated; engine/router.php + engine/serve-md.php are the .org handbook handlers"
 fi
 
 if [ -f "$LOCAL_BBSENGINE6/php/bootstrap.php" ]; then
@@ -163,6 +161,27 @@ if [ -f "$LOCAL_BBSENGINE6/engine/Makefile" ]; then
   fi
 else
   bad "local engine/Makefile missing"
+fi
+
+if [ -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
+  # @since 2026-09-07 — handbook.php eradicated; the .org
+  # htaccess must route /handbook/<v>/<chapter> and
+  # /handbook/<v>/<dir> through /engine/router.php, and
+  # /handbook/<v>/<uri>.md through /engine/serve-md.php.
+  # A catch-all .md rule that matches anywhere on the vhost
+  # is too greedy; the handbook-specific .md rule must be
+  # present and prefixed.
+  handbook_md_ok=false
+  if grep -qE 'RewriteRule \^handbook/\(\\d\+\)/\(.+\\\.md\)\$ /engine/serve-md\.php' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null; then
+    handbook_md_ok=true
+  fi
+  if $handbook_md_ok; then
+    ok "local htaccess-prod routes /handbook/<v>/<uri>.md to engine/serve-md.php"
+  else
+    bad "local htaccess-prod does NOT route /handbook/<v>/<uri>.md to engine/serve-md.php -- fix(www/htaccess-prod) routing rule missing"
+  fi
+else
+  bad "local www/org/htaccess-prod missing"
 fi
 
 if [ -f "$LOCAL_BBSENGINE6/www/Makefile" ]; then

@@ -102,7 +102,7 @@ composer install
 
 See [`handbook/QUICKSTART.md`](handbook/QUICKSTART.md) for the
 five-minute bring-up sequence. Handbook chapters are rendered
-at request time by `www/org/php/handbook.php` via the shared
+at request time by `engine/router.php` via the shared
 `\bbsengine6\markdown\parseDocument` primitive (matching teos's
 request-time path); no Python app server is needed.
 

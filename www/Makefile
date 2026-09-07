@@ -58,20 +58,22 @@ org:
 # @since 2026-09-07 — one-shot cleanup of the legacy Flask /
 # gunicorn / mod_wsgi artifacts that survive under
 # merlin:/srv/www/vhosts/www.bbsengine.org/html/handbook/.
-# The new request-time PHP handbook (handbook.php + engine/router.php)
-# does not reference any of these files; they have been dead weight
-# since the Flask stack was retired. The build host's local stage at
-# /srv/www/vhosts/www.bbsengine.org/html/handbook/ still contains
-# them but is mounted read-only (cannot rm locally), so the
-# `org` target's rsync carries --exclude patterns for the same
-# four files (see above) that prevent re-introduction on
-# subsequent runs. Run this target once to remove the files on
-# merlin; after it runs, the `org` excludes keep them gone even
-# if `make wwworg` is re-invoked from the read-only local stage.
-# Uses ssh directly rather than rsync so the deletion is
-# unambiguous and does not depend on rsync's source-side filter
-# behavior; ssh invocation is identical in shape to the
-# engine/Makefile ssh-pushes elsewhere in this deploy chain.
+# The current request-time PHP handbook (engine/router.php +
+# engine/serve-md.php, both shipped via engine-deploy-prod)
+# does not reference any of these files; they have been dead
+# weight since the Flask stack was retired. The build host's
+# local stage at /srv/www/vhosts/www.bbsengine.org/html/handbook/
+# still contains them but is mounted read-only (cannot rm
+# locally), so the `org` target's rsync carries --exclude
+# patterns for the same four files (see above) that prevent
+# re-introduction on subsequent runs. Run this target once to
+# remove the files on merlin; after it runs, the `org` excludes
+# keep them gone even if `make wwworg` is re-invoked from the
+# read-only local stage. Uses ssh directly rather than rsync
+# so the deletion is unambiguous and does not depend on
+# rsync's source-side filter behavior; ssh invocation is
+# identical in shape to the engine/Makefile ssh-pushes
+# elsewhere in this deploy chain.
 remove-legacy-handbook:
 	ssh $(ORGHOST) 'cd /srv/www/vhosts/www.bbsengine.org/html/handbook/ && \
 		rm -f bbsengine-handbook.conf handbook-wsgi.conf modules.adoc modules.html && \

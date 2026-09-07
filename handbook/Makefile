@@ -4,11 +4,12 @@
 all: stage
 
 # Stage handbook sources to HANDBOOKDIR for runtime rendering by
-# www/org/php/handbook.php via \bbsengine6\markdown\parseDocument
-# (request-time path, matching teos's teospath chain). The handler
-# reads .md files directly from the docroot, so this rsync MUST
-# include them — no install-time conversion happens anywhere in
-# the chain.
+# engine/router.php via \bbsengine6\markdown\parseDocument
+# (request-time path, matching teos's teospath chain). The router
+# reads .md files directly from TEOSDIR (set by the URI-prefix
+# detection in engine/router.php's HTTP entry point to the matched
+# /handbook/<v>/ tree), so this rsync MUST include them — no
+# install-time conversion happens anywhere in the chain.
 #
 # Writes to $(WWWSTAGE)html/handbook/$(VERSION)/ (exported by the
 # root Makefile) so a sibling handbook-deploy-prod target can ssh
