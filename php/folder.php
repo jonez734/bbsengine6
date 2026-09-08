@@ -26,9 +26,9 @@ function getFolderMeta(string $uri): ?array
 {
     $prefix = ROOT_SIG_PREFIX;
     $path = $prefix ? $prefix . '.' . $uri : $uri;
-    
+
     $sql = "SELECT path, title, uri, attrs as attributes
-            FROM engine.sig 
+            FROM engine.sig
             WHERE path = :path::ltree
             LIMIT 1";
 
@@ -53,7 +53,7 @@ function getFolderSigs(string $uri): array
 {
     $prefix = ROOT_SIG_PREFIX;
     $path = $prefix ? $prefix . '.' . $uri : $uri;
-    
+
     $sql = "SELECT s.path, s.title, s.uri, s.attrs as attributes
             FROM engine.sig s
             WHERE s.path ~ :pattern
@@ -80,9 +80,9 @@ function getFolderBreadcrumbs(string $uri): array
 {
     $prefix = ROOT_SIG_PREFIX;
     $path = $prefix ? $prefix . '.' . $uri : $uri;
-    
-    $sql = "SELECT title, path, uri 
-            FROM engine.sig 
+
+    $sql = "SELECT title, path, uri
+            FROM engine.sig
             WHERE path @> :sigpath
             ORDER BY path ASC";
 
@@ -244,19 +244,19 @@ function parseYamlFrontmatter(string $yaml): array
 {
     $result = [];
     $lines = explode("\n", $yaml);
-    
+
     foreach ($lines as $line) {
         if (preg_match('/^(\w+):\s*(.*)$/', $line, $matches)) {
             $key = $matches[1];
             $value = $matches[2];
-            
+
             $value = trim($value, '"');
             $value = trim($value, "'");
-            
+
             $result[$key] = $value;
         }
     }
-    
+
     return $result;
 }
 
@@ -303,7 +303,7 @@ function display($uri)
     $data["hidden"] = !isFolderVisible($uri) && isSysop();
 
     if (function_exists('\bbsengine6\displaypage')) {
-        return \bbsengine6\displaypage($data, "directory-listing.tmpl");
+        return \bbsengine6\displaypage($data, "folder.tmpl");
     }
 
     $lockIcon = $data["hidden"] ? " 🔒" : "";
