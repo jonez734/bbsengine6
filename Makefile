@@ -69,20 +69,30 @@ export WWWPRODDOCROOT = $(WWWPROD)html/
 export WWWSTAGE = /srv/www/vhosts/www.bbsengine.org/
 export WWWSTAGEDOCROOT = $(WWWSTAGE)html/
 
-# @since 2026-09-06 — engine/ is shipped to www.bbsengine.org's
-# docroot as well. The .org vhost's htaccess-prod rewrites
-# /handbook/<v>/... URIs to /engine/router.php and
-# /engine/serve-md.php (mirroring teos/www/htaccess-prod), so
-# the engine tree must exist there. The engine/ deploy unit
-# (engine/Makefile) reads both docroots from env; this gives
-# it the .org side. Pair mirrors ENGINESTAGEDOCROOT /
-# ENGINEPRODDOCROOT.
+# @since 2026-09-09 — single canonical install. The previous
+# design fanned engine/*.php out to two prod docroots: this
+# Makefile exported WWWENGINESTAGEDOCROOT/WWWENGINEPRODDOCROOT
+# for the .org side, and engine/Makefile deploy-engine rsynced
+# engine/*.php to both /srv/www/vhosts/zoidtechnologies.com/
+# html/engine/ and /srv/www/vhosts/www.bbsengine.org/html/engine/.
+# The .org vhost now serves the engine entry points at the
+# docroot root (no /engine/ URL prefix; see www/org/htaccess-prod
+# for the flattened /router.php, /serve-md.php, /join.php,
+# /login.php, /logout.php rewrite targets), and the docroot's
+# entry-point files are SYMLINKS to the canonical install at
+# /srv/www/bbsengine6/ (already exported as ENGINESTAGE /
+# ENGINEPROD above; the rsync target is the same path). The
+# engine/Makefile deploy-engine now pushes the install to
+# ENGINEHOST:$(ENGINESTAGE) (the canonical install) AND to
+# $(ENGINEPRODDOCROOT) (the .com docroot copy). The .org
+# docroot no longer receives a real-file engine/ tree from
+# this Makefile; the docroot symlinks are created by
+# www/org/Makefile stage. The WWWENGINESTAGEDOCROOT /
+# WWWENGINEPRODDOCROOT pair is dropped.
 #
 # @since 2026-09-07 — handbook.php eradicated; no per-vhost
 # PHP dispatcher under www/org/php/handbook.php; engine/ is the
 # only .org-vhost PHP handler set.
-export WWWENGINESTAGEDOCROOT = $(WWWSTAGE)html/engine/
-export WWWENGINEPRODDOCROOT = $(WWWPROD)html/engine/
 
 export ORGPROD = $(ORGHOST):/srv/www/vhosts/www.bbsengine.org/
 export ORGPRODDOCROOT = $(WWWPROD)html/
@@ -157,6 +167,13 @@ skin-prod:
 
 wwworg:
 	$(MAKE) -C www org VERSION=$(VERSION)
+	# @since 2026-09-09 — single canonical install. The
+	# wwworg target first stages the .org docroot (including
+	# the symlinks at html/router.php, html/serve-md.php, etc.
+	# pointing at /srv/www/bbsengine6/), then engine-deploy-prod
+	# ships the install to ENGINEHOST:/srv/www/bbsengine6/.
+	# Both land in seconds and Apache isn't serving mid-deploy,
+	# so the brief window where symlinks dangle is harmless.
 	# @since 2026-09-07 — engine/ ships with wwworg because the
 	# test (tests/test_handbook_6_returns_200.sh) probes
 	# /handbook/<v>/... which requires engine/router.php and
@@ -330,28 +347,40 @@ deploy-handbook: handbook-prod
 #
 #   php-deploy-prod       -> /srv/www/bbsengine6/php/markdown.php
 #   wwworg                -> /srv/www/vhosts/www.bbsengine.org/html/{config.php,index.php,...}
-#                            (legacy PHP entry points; no handbook
-#                             handler lives here since the 2026-09-07
-#                             eradication of www/org/php/handbook.php)
+#                            + symlinks html/router.php,
+#                              html/serve-md.php, html/join.php,
+#                              html/login.php, html/logout.php ->
+#                              /srv/www/bbsengine6/{router,serve-md,
+#                              join,login,logout}.php
+#                            (no /engine/ URL prefix; the
+#                             .org vhost serves the engine entry
+#                             points at the docroot root, see
+#                             www/org/htaccess-prod)
 #   handbook-deploy-prod  -> /srv/www/vhosts/www.bbsengine.org/html/handbook/$(VERSION)/*.md
-#   engine-deploy-prod    -> /srv/www/vhosts/zoidtechnologies.com/html/engine/*.php
-#                            + /srv/www/vhosts/www.bbsengine.org/html/engine/*.php
-#                            (so /handbook/<v>/<uri> requests on the
-#                             .org vhost hit /engine/router.php and
-#                             /engine/serve-md.php, the only .org
-#                             PHP handlers after the eradication)
+#   engine-deploy-prod    -> /srv/www/bbsengine6/{router,serve-md,join,login,logout}.php
+#                            (canonical install) +
+#                            /srv/www/vhosts/zoidtechnologies.com/html/engine/*.php
+#                            (legacy /engine/... copy on the .com vhost)
+#                            Note: engine-deploy-prod is NOT a
+#                            direct prereq of deploy-handbook-prod
+#                            because wwworg already chains it
+#                            (see the wwworg target above), so
+#                            it would double-run if listed here.
 #
 # All four use $(RSYNC) (which carries --rsh=ssh), so this runs
 # cleanly from a build host with no fs bind-mount between the build
 # host and merlin. wwworg pushes its whole staged docroot minus
-# the engine/ + html/engine/ + four legacy handbook artifact
-# excludes (see www/Makefile:50-56) to merlin via ORGPROD.
+# the four legacy handbook artifact excludes (see www/Makefile:50-56)
+# to merlin via ORGPROD. The engine/ and html/engine/ excludes that
+# were previously in the org rsync are gone (this commit) because
+# the .org docroot no longer has an html/engine/ subdir; the entry
+# points are symlinks at the docroot root.
 #
 # After this runs, reload php-fpm on merlin so opcache picks up the
 # new files immediately:
 #   sudo systemctl reload php-fpm
-deploy-handbook-prod: php-deploy-prod wwworg handbook-deploy-prod engine-deploy-prod
-	@echo "Handbook stack deployed: engine/*.php + php/markdown.php + html/config.php + html/handbook/$(VERSION)/"
+deploy-handbook-prod: php-deploy-prod wwworg handbook-deploy-prod
+	@echo "Handbook stack deployed: /srv/www/bbsengine6/{router,serve-md,join,login,logout}.php (canonical install) + php/markdown.php + html/{config.php,router.php,serve-md.php,join.php,login.php,logout.php,.htaccess} + html/handbook/$(VERSION)/"
 	@echo "Reminder on merlin: sudo systemctl reload php-fpm"
 
 deploy:

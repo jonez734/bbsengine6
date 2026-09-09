@@ -16,16 +16,25 @@ clean:
 org:
 	$(MAKE) -C org stage
 	$(MAKE) -C ../handbook stage VERSION=$(VERSION)
-	# @since 2026-09-06 — exclude engine/ from this rsync. The local
-	# ORGSTAGE (/srv/www/vhosts/www.bbsengine.org/) is read-only on
-	# the build host (owned jam:www mode 755), so engine/*.php is
-	# never staged there — only engine/Makefile's `deploy` ssh-pushes
-	# it straight to both prod docroots (see engine/Makefile:53-55 and
-	# the top-level engine-deploy-prod target). Without these excludes
-	# rsync deletes the remote html/engine/ tree on every `make wwworg`
-	# because the source side has no engine/ to mirror. Both forms
-	# (engine/, html/engine/) are required because ORGPROD carries the
-	# html/ prefix while ORGSTAGE doesn't.
+	# @since 2026-09-09 — drop the engine/ + html/engine/
+	# excludes. The previous design staged engine/*.php to
+	# merlin:/srv/www/vhosts/www.bbsengine.org/html/engine/
+	# via engine/Makefile's deploy-engine, so the org rsync
+	# had to --exclude the local engine/ tree to avoid
+	# rsync's --delete-after stripping the remote tree
+	# (source side had no engine/ to mirror). With the
+	# single-install model (this commit), the .org docroot
+	# has no html/engine/ subdir; the engine entry points
+	# are symlinks at the docroot root (html/router.php,
+	# html/serve-md.php, html/join.php, html/login.php,
+	# html/logout.php), created by www/org/Makefile stage
+	# and carried by $(RSYNC) (which preserves symlinks
+	# via --archive/-l). The symlinks land in the ORGSTAGE
+	# via the build-host ln -sfn commands in www/org/Makefile
+	# stage, so the rsync source now contains them and
+	# the exclude is no longer needed (and would be
+	# actively harmful if left in, because it would strip
+	# the symlinks from prod on --delete-after).
 	#
 	# @since 2026-09-07 — exclude the four legacy handbook
 	# artifacts (modules.adoc, modules.html, *.conf) from the
@@ -48,7 +57,6 @@ org:
 	# modules.html, *.conf) and can be added in a follow-up
 	# commit if desired.
 	$(RSYNC) --exclude "releases" --exclude "templates_c" \
-	         --exclude "engine/" --exclude "html/engine/" \
 	         --exclude "html/handbook/bbsengine-handbook.conf" \
 	         --exclude "html/handbook/handbook-wsgi.conf" \
 	         --exclude "html/handbook/modules.adoc" \
