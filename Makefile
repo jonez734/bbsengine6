@@ -390,11 +390,32 @@ deploy:
 	$(MAKE) php-deploy
 	mkdir -p $(ENGINESTAGE)smarty/
 	$(RSYNC) smarty/*.php $(ENGINESTAGE)smarty/
-	$(RSYNC) $(ENGINESTAGE) $(ENGINEPROD)
-	# engine/*.php is shipped directly via `engine deploy-engine`
-	# above (both docroots are read-only locally, so no local
-	# staging-to-ssh hop is possible). Replaced the prior
-	# $(RSYNC) $(ENGINESTAGEDOCROOT) $(ENGINEPRODDOCROOT) line.
+	# @since 2026-09-09 — drop --delete-after from this rsync.
+	# The previous design (pre-refactor) had engine/*.php
+	# living only at the docroots, not at
+	# /srv/www/bbsengine6/ on merlin, so the rsync from the
+	# build host's $(ENGINESTAGE) (containing php/, skin/,
+	# smarty/) to merlin's $(ENGINEPROD) was safe with
+	# --delete-after: anything merlin had that the source
+	# didn't was orphan cruft. The single-install refactor
+	# (this commit series) makes /srv/www/bbsengine6/ the
+	# CANONICAL install of engine/*.php (shipped by
+	# `engine deploy-engine` above), so this rsync would
+	# then delete those engine/*.php files because they
+	# aren't in the build host's local stage (the build
+	# host's $(ENGINESTAGE) is read-only and never had
+	# engine/*.php). Without --delete-after, the rsync
+	# still pushes new/updated php/, skin/, smarty/ files
+	# but preserves engine/*.php on merlin. The
+	# canonical-install path (/srv/www/bbsengine6/) now
+	# carries files from two sources: the build host
+	# (php/, skin/, smarty/) and the engine/Makefile
+	# deploy-engine (engine/*.php), and the rsync that
+	# pushes the former must not delete the latter. The
+	# $(RSYNC) macro carries --delete-after; we override
+	# it with --no-delete-after on this specific line so
+	# engine/*.php on merlin is preserved.
+	$(RSYNC) --no-delete-after $(ENGINESTAGE) $(ENGINEPROD)
 
 deploy-tui: build
 	$(MAKE) -C py/src deploy-tui DEPLOY_EDITABLE=$(DEPLOY_EDITABLE) DEPLOY_UPGRADE=$(DEPLOY_UPGRADE) VERSION=$(PY_VERSION) VERSION_PREFIX=$(VERSION_PREFIX)
