@@ -27,14 +27,14 @@ org:
 	# has no html/engine/ subdir; the engine entry points
 	# are symlinks at the docroot root (html/router.php,
 	# html/serve-md.php, html/join.php, html/login.php,
-	# html/logout.php), created by www/org/Makefile stage
-	# and carried by $(RSYNC) (which preserves symlinks
-	# via --archive/-l). The symlinks land in the ORGSTAGE
-	# via the build-host ln -sfn commands in www/org/Makefile
-	# stage, so the rsync source now contains them and
-	# the exclude is no longer needed (and would be
-	# actively harmful if left in, because it would strip
-	# the symlinks from prod on --delete-after).
+	# html/logout.php). The symlinks cannot be staged on
+	# the build host (the local stage at
+	# /srv/www/vhosts/www.bbsengine.org/html/ is mounted
+	# read-only, so `ln -sfn` fails with EROFS), so they
+	# are created on merlin directly via ssh after the
+	# rsync (see the prod-symlinks target below). The
+	# engine/ + html/engine/ excludes are no longer needed
+	# (the docroot has no engine/ subdir to protect).
 	#
 	# @since 2026-09-07 — exclude the four legacy handbook
 	# artifacts (modules.adoc, modules.html, *.conf) from the
@@ -62,6 +62,24 @@ org:
 	         --exclude "html/handbook/modules.adoc" \
 	         --exclude "html/handbook/modules.html" \
 	         --chmod=Dg+rwxs $(ORGSTAGE) $(ORGPROD)
+	# @since 2026-09-09 — create the single-install symlinks
+	# on merlin's .org docroot AFTER the rsync. The canonical
+	# install at /srv/www/bbsengine6/ on merlin is shipped by
+	# engine/Makefile deploy-engine, which wwworg chains (see
+	# the top-level Makefile wwworg target), so the install
+	# lands before this step. The symlinks cannot be staged
+	# in the build-host local stage (read-only mount, EROFS),
+	# so we ssh to merlin and `ln -sfn` directly on the
+	# writable prod docroot. Mirrors the ssh-based pattern
+	# from remove-legacy-handbook (ssh $(ORGHOST) '...') so
+	# the deployment is unambiguous and not dependent on
+	# rsync's symlink-resolution behavior. The `ln -sfn -f`
+	# (combined with -f) overwrites existing symlinks on
+	# re-runs (idempotent). The `||` echoes a non-fatal
+	# message if any single ln fails; we deliberately do not
+	# abort the deploy on a partial symlink failure so the
+	# operator can investigate without breaking wwworg.
+	$(MAKE) -C org prod-symlinks
 
 # @since 2026-09-07 — one-shot cleanup of the legacy Flask /
 # gunicorn / mod_wsgi artifacts that survive under

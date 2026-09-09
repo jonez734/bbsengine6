@@ -156,27 +156,38 @@ fi
 # @since 2026-09-09 — single canonical install. The .org
 # vhost's engine entry points are symlinks at the docroot
 # root (no /engine/ URL prefix); the symlinks are created
-# by www/org/Makefile stage and point at
-# /srv/www/bbsengine6/ on merlin. The install itself is
+# on merlin by www/org/Makefile prod-symlinks (an ssh-based
+# step; the build host's local stage is mounted read-only
+# so `ln -sfn` cannot run there). The install itself is
 # shipped by engine/Makefile deploy-engine. Verify the
-# symlink-creation lines are present in the per-vhost
-# Makefile; this is the new invariant replacing the
-# previous engine/Makefile ENGINE_PHP check.
+# prod-symlinks target exists and ssh-runs ln -sfn for
+# each of the five entry points. This is the new
+# invariant replacing the previous engine/Makefile
+# ENGINE_PHP check.
 if [ -f "$LOCAL_BBSENGINE6/www/org/Makefile" ]; then
-  symlinks_ok=true
-  for entry in \
-    'ln -sfn */srv/www/bbsengine6/router\.php' \
-    'ln -sfn */srv/www/bbsengine6/serve-md\.php' \
-    'ln -sfn */srv/www/bbsengine6/join\.php' \
-    'ln -sfn */srv/www/bbsengine6/login\.php' \
-    'ln -sfn */srv/www/bbsengine6/logout\.php'; do
-    if ! grep -qE "$entry" "$LOCAL_BBSENGINE6/www/org/Makefile" 2>/dev/null; then
-      symlinks_ok=false
-      bad "local www/org/Makefile stage is missing symlink-creation line: $entry"
+  if ! grep -qF 'prod-symlinks:' "$LOCAL_BBSENGINE6/www/org/Makefile" 2>/dev/null; then
+    bad "local www/org/Makefile missing prod-symlinks target -- single-install refactor not in working tree"
+  else
+    symlinks_ok=true
+    for entry in \
+      'ln -sfn /srv/www/bbsengine6/router\.php' \
+      'ln -sfn /srv/www/bbsengine6/serve-md\.php' \
+      'ln -sfn /srv/www/bbsengine6/join\.php' \
+      'ln -sfn /srv/www/bbsengine6/login\.php' \
+      'ln -sfn /srv/www/bbsengine6/logout\.php'; do
+      if ! grep -qE "$entry" "$LOCAL_BBSENGINE6/www/org/Makefile" 2>/dev/null; then
+        symlinks_ok=false
+        bad "local www/org/Makefile prod-symlinks is missing symlink-creation line: $entry"
+      fi
+    done
+    if $symlinks_ok; then
+      ok "local www/org/Makefile prod-symlinks creates the five symlinks (router.php, serve-md.php, join.php, login.php, logout.php) -> /srv/www/bbsengine6/ on merlin"
     fi
-  done
-  if $symlinks_ok; then
-    ok "local www/org/Makefile stage creates the five symlinks (router.php, serve-md.php, join.php, login.php, logout.php) -> /srv/www/bbsengine6/"
+  fi
+  if ! grep -qE '\$\(MAKE\)[^|]*-C org prod-symlinks' "$LOCAL_BBSENGINE6/www/Makefile" 2>/dev/null; then
+    bad "local www/Makefile org target does not chain prod-symlinks -- symlinks won't be created on wwworg"
+  else
+    ok "local www/Makefile org target chains prod-symlinks (wwworg deploys end-to-end)"
   fi
 else
   bad "local www/org/Makefile missing"
