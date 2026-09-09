@@ -609,8 +609,8 @@ if (php_sapi_name() !== 'cli') {
   try {
     $router_result = \router($path);
     if ($router_result === null || $router_result === false) {
-      http_response_code(500);
-      echo 'Router Error';
+//      http_response_code(500);
+      echo 'Router Error (null)';
     } else {
       echo $router_result;
     }
@@ -618,7 +618,7 @@ if (php_sapi_name() !== 'cli') {
     if (function_exists('bbsengine6\util\echo_traceback')) {
       call_user_func('bbsengine6\util\echo_traceback', 'router.error: ' . $e->getMessage());
     }
-    http_response_code(500);
+//    http_response_code(500);
     echo 'Router Error';
   }
 }
