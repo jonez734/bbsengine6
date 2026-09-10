@@ -74,7 +74,7 @@ function buildbreadcrumbs($sigpath, $skiptop = true, $hidepath = null)
         // Prepend "root" crumb. Title is per-vhost via TEOS_LABEL;
         // path stays "teos" as the internal identifier; uri follows
         // TEOSURL so it points at the correct vhost root.
-        $teosurl = defined('TEOSURL') ? TEOSURL : '';
+        $teosurl = \bbsengine6\util\teos_url();
         array_unshift($crumbs, [
             'title' => getlabel(),
             'path' => 'teos',
@@ -268,7 +268,7 @@ function isBlurb($uri)
     }
 
     // 2. Fallback: check if .md file exists on disk
-    $teospath = defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
+    $teospath = \bbsengine6\util\teos_dir();
     $mdfile = $teospath . str_replace(".", "/", $blurbid) . '.md';
     return file_exists($mdfile);
 }
@@ -286,7 +286,7 @@ function display($uri, $filepath)
     $uri = preg_replace('/^teos\//', '', $uri);
     $blurbid = str_replace("/", ".", $uri);
 
-    $blurbdir = defined('TEOSDIR') ? TEOSDIR : "/srv/www/vhosts/zoidtechnologies.com/html/teos/";
+    $blurbdir = \bbsengine6\util\teos_dir();
     $blurbfile = $blurbdir . $uri . ".md";
 
     if (!file_exists($blurbfile)) {
