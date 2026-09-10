@@ -83,6 +83,16 @@
 #        ^handbook/(\d+)/(.*) targeting /router.php
 #        (the no-.md route); without this rule, the
 #        test's URL would not reach router_handleMarkdown
+#   [7]  breadcrumb top-crumb structure: the rendered
+#        "You are here" root crumb links to /handbook/6/
+#        with text 'bbsengine6 handbook' (the TEOS_LABEL
+#        value putenv()'d by the handbook dispatch in
+#        engine/router.php), the last crumb links to
+#        /handbook/6/specs/auth-bank, and no <a> in the
+#        breadcrumb reads the literal 'teos' (regression
+#        of the pre-fix double-link bug). Catches a
+#        partial deploy where the router was updated
+#        but the .tmpl was not, or vice versa.
 #
 # Each check's "bad" message points at the specific
 # failure mode and the operator action that resolves it.
@@ -740,6 +750,150 @@ else
 fi
 echo
 
+# --- 7. breadcrumb top-crumb structure ----------------------------------
+# @since 2026-09-10 — regression check for the "double-teos"
+# bug on the .org vhost. Before the fix, the "You are here"
+# root crumb rendered as the literal string "teos" twice: once
+# from router_buildBreadcrumbs' hardcoded root crumb, and
+# again from the {teos} Smarty plugin (function.teos.php:25-
+# 44) which derived its visible text from end($uriSegments)
+# of the path when no title= argument was supplied. The fix:
+#   - engine/router.php putenv()s TEOS_LABEL="bbsengine6
+#     handbook" for /handbook/<v>/... requests, and
+#     router_buildBreadcrumbs now reads it via
+#     bbsengine6\util\vhost_label().
+#   - skin/tmpl/teos-breadcrumbs.tmpl and breadcrumbs.tmpl
+#     pass title=$b.title into {teos} so the breadcrumb data
+#     reaches the rendered link text.
+# The live assertion: the rendered breadcrumb's first <a>
+# points at /handbook/6/ and reads "bbsengine6 handbook"
+# (not "teos"), no <a> in the breadcrumb reads the literal
+# "teos", and the chapter crumb links to
+# /handbook/6/specs/auth-bank. This catches a regression
+# in any of: the router's TEOS_LABEL putenv, the
+# router_buildBreadcrumbs -> vhost_label plumbing, the
+# template's title= forwarding, or the .tmpl deploy chain.
+echo "[7] breadcrumb top-crumb structure (vhost_label + title=\$b.title)"
+if [ "$body_bytes" -gt 0 ] && [ -s "$BODY" ]; then
+  python3 - "$BODY" "$TMPDIR_TEST/crumbs.json" <<'PYEOF' 2>"$TMPDIR_TEST/crumbs.err"
+import json
+import sys
+from bs4 import BeautifulSoup
+
+body_path, out_path = sys.argv[1], sys.argv[2]
+with open(body_path, "r", encoding="utf-8", errors="replace") as fh:
+    soup = BeautifulSoup(fh.read(), "lxml")
+
+# Locate the breadcrumb <ul>. The handbook page's
+# page-markdown.tmpl -> youarehere.tmpl -> teos-breadcrumbs.tmpl
+# chain emits <ul class="inlinelist nobullets breadcrumbs">.
+# If absent, the template chain is broken (separate failure
+# mode from a wrong label).
+crumb_ul = soup.find("ul", class_="breadcrumbs")
+crumb_items = []
+if crumb_ul is not None:
+    for li in crumb_ul.find_all("li", recursive=False):
+        a = li.find("a")
+        if a is not None:
+            crumb_items.append({
+                "href": a.get("href", ""),
+                "text": a.get_text(" ", strip=True),
+            })
+
+# Also count the literal 'teos' occurrences inside any
+# <a> within the breadcrumb. Pre-fix the root crumb read
+# "teos" (from the hardcoded router title) AND the {teos}
+# plugin also rendered "teos" (path-derived), so the
+# double-link symptom manifested as a duplicate literal
+# 'teos' inside <a> tags within the breadcrumb.
+double_teos_links = [
+    item for item in crumb_items
+    if item["text"].strip().lower() == "teos"
+]
+
+with open(out_path, "w", encoding="utf-8") as fh:
+    json.dump({
+        "crumb_ul_present": crumb_ul is not None,
+        "crumb_items": crumb_items,
+        "double_teos_link_count": len(double_teos_links),
+    }, fh, indent=2)
+PYEOF
+  crumbs_rc=$?
+  if [ "$crumbs_rc" -ne 0 ] || [ ! -s "$TMPDIR_TEST/crumbs.json" ]; then
+    bad "python3 breadcrumb parse failed (rc=$crumbs_rc); stderr: $(head -3 "$TMPDIR_TEST/crumbs.err" 2>/dev/null | head -c 300)"
+  else
+    crumb_ul_present=$(python3 -c "import json; d=json.load(open('$TMPDIR_TEST/crumbs.json')); print(d.get('crumb_ul_present'))")
+    crumb_count=$(python3 -c "import json; d=json.load(open('$TMPDIR_TEST/crumbs.json')); print(len(d.get('crumb_items', [])))")
+    first_href=$(python3 -c "import json; d=json.load(open('$TMPDIR_TEST/crumbs.json')); v=d.get('crumb_items', []); print(v[0]['href'] if v else '')")
+    first_text=$(python3 -c "import json; d=json.load(open('$TMPDIR_TEST/crumbs.json')); v=d.get('crumb_items', []); print(v[0]['text'] if v else '')")
+    last_href=$(python3 -c "import json; d=json.load(open('$TMPDIR_TEST/crumbs.json')); v=d.get('crumb_items', []); print(v[-1]['href'] if v else '')")
+    last_text=$(python3 -c "import json; d=json.load(open('$TMPDIR_TEST/crumbs.json')); v=d.get('crumb_items', []); print(v[-1]['text'] if v else '')")
+    double_teos=$(python3 -c "import json; print(json.load(open('$TMPDIR_TEST/crumbs.json')).get('double_teos_link_count'))")
+
+    echo "    crumb <ul> present: $crumb_ul_present"
+    echo "    crumb count: $crumb_count"
+    echo "    first: href='$first_href' text='$first_text'"
+    echo "    last:  href='$last_href' text='$last_text'"
+    echo "    <a> with literal 'teos' text in breadcrumb: $double_teos"
+
+    if [ "$crumb_ul_present" = "True" ]; then
+      ok "breadcrumb <ul class='breadcrumbs'> present in rendered body"
+    else
+      bad "no breadcrumb <ul> in body -- the page-markdown.tmpl -> youarehere.tmpl -> teos-breadcrumbs.tmpl chain did not render"
+    fi
+    if [ "$crumb_count" -ge 3 ]; then
+      ok "breadcrumb has $crumb_count items (root + chapter + section, as expected for /handbook/6/specs/auth-bank)"
+    else
+      bad "expected >= 3 breadcrumb items, got $crumb_count -- the breadcrumb trail is truncated"
+    fi
+    # The handbook vhost's top crumb must read "bbsengine6
+    # handbook" and link to /handbook/6/ (the vhost root
+    # index). Match prefix '/handbook/6' with optional
+    # trailing slash, NOT '/handbook/6/specs/...' (which
+    # would mean the root crumb was built from a deeper
+    # URI segment).
+    if [ "$first_text" = "bbsengine6 handbook" ]; then
+      ok "root crumb text is 'bbsengine6 handbook' (TEOS_LABEL applied)"
+    else
+      bad "root crumb text is '$first_text', expected 'bbsengine6 handbook' -- TEOS_LABEL='bbsengine6 handbook' was not exported by engine/router.php for the /handbook/<v>/ branch, or router_buildBreadcrumbs did not call bbsengine6\\\\util\\\\vhost_label()"
+    fi
+    case "$first_href" in
+      /handbook/6/|/handbook/6)
+        ok "root crumb href is '$first_href' (vhost root)"
+        ;;
+      *)
+        bad "root crumb href is '$first_href', expected '/handbook/6/' -- TEOSURL was not exported to '/handbook/6/' for the /handbook/<v>/ branch, or router_buildBreadcrumbs did not honor TEOSURL"
+        ;;
+    esac
+    # The chapter crumb is the second one; on
+    # /handbook/6/specs/auth-bank that's the 'specs'
+    # directory, linking to /handbook/6/specs/. The last
+    # crumb is the spec itself.
+    if [ "$last_href" = "/handbook/6/specs/auth-bank" ] || [ "$last_href" = "/handbook/6/specs/auth-bank/" ]; then
+      ok "last crumb href is '$last_href' (the spec)"
+    else
+      bad "last crumb href is '$last_href', expected '/handbook/6/specs/auth-bank' -- the page URL is not the trailing crumb"
+    fi
+    # The pre-fix bug: the root crumb rendered as the
+    # literal "teos" because (a) router_buildBreadcrumbs
+    # hardcoded the title, and (b) the template's
+    # {teos path=...} (without title=) fell through to
+    # end($uriSegments) = 'teos'. So *two* <a>s read
+    # 'teos' (root crumb + duplicate from the {teos}
+    # plugin's path-derivation). With the fix in place,
+    # no <a> in the breadcrumb should read the literal
+    # 'teos'. Assert zero.
+    if [ "$double_teos" = "0" ]; then
+      ok "no <a> in breadcrumb reads the literal 'teos' (the double-link bug is fixed)"
+    else
+      bad "$double_teos <a> in breadcrumb read the literal 'teos' -- the double-link bug is back; check engine/router.php (TEOS_LABEL putenv + vhost_label call) and skin/tmpl/teos-breadcrumbs.tmpl (title= forwarding)"
+    fi
+  fi
+else
+  bad "skipped -- [1] did not produce a non-empty body"
+fi
+echo
+
 # --- summary ------------------------------------------------------------
 echo "=== summary ==="
 echo "passed: $pass"
@@ -810,6 +964,30 @@ if [ "$fail" -gt 0 ]; then
   echo "       /engine/router.php target. Restore the rule"
   echo "       before running this test -- without it, the test"
   echo "       is meaningless."
+  echo
+  echo "  if [7] fails (breadcrumb top crumb):"
+  echo "    -- the 'You are here' root crumb is not 'bbsengine6"
+  echo "       handbook' (or the literal 'teos' is rendering"
+  echo "       again as a second <a>). Three places can break"
+  echo "       this; check all of them on the build host AND on"
+  echo "       merlin:"
+  echo "         1. engine/router.php: the /handbook/(\\\\d+)/..."
+  echo "            dispatch block must putenv('TEOS_LABEL="
+  echo "            bbsengine6 handbook') alongside TEOSDIR/"
+  echo "            TEOSURL, and router_buildBreadcrumbs must"
+  echo "            call bbsengine6\\\\util\\\\vhost_label() (or the"
+  echo "            blurb-namespaced getlabel() shim)."
+  echo "         2. php/util.php: the vhost_label() helper must"
+  echo "            exist and read TEOS_LABEL (env then constant,"
+  echo "            default 'teos')."
+  echo "         3. skin/tmpl/teos-breadcrumbs.tmpl (and"
+  echo "            breadcrumbs.tmpl) must pass title=\$b.title"
+  echo "            into {teos}; without title=, the {teos}"
+  echo "            plugin derives its text from end(\$uriSegments)"
+  echo "            and re-renders 'teos' for the root crumb."
+  echo "       Each requires a separate deploy step on merlin"
+  echo "       (engine-deploy-prod, php-deploy-prod, skin-prod);"
+  echo "       missing any one of them re-introduces the bug."
   echo
   echo "to re-run: $0"
   exit 1
