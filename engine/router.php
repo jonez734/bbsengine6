@@ -191,8 +191,18 @@ function router_handleBlurb(string $uri)
 
   if (bbsengine6\blurb\isBlurb($uri)) {
     if (function_exists('bbsengine6\blurb\display')) {
-      bbsengine6\blurb\display($uri, null);
-      return '';
+      // @since 2026-09-10 — wrap the blurb render in a
+      // try/catch so a database failure (missing engine schema,
+      // partial deploy, db down) doesn't 500 the request. Log
+      // the failure and let the next handler (folder, error)
+      // try to render instead.
+      try {
+        bbsengine6\blurb\display($uri, null);
+        return '';
+      } catch (\Throwable $e) {
+        router_log('blurb display failed: ' . $e->getMessage(), 'error');
+        return ROUTER_NEXT;
+      }
     }
     return ROUTER_NEXT;
   }
@@ -240,14 +250,36 @@ function router_handleFolder(string $uri)
   // folder visibility check (optional: only meaningful for the teos tree)
   $isVisible = true; $isSysop = false;
   if (function_exists('bbsengine6\folder\isFolderVisible')) {
-    $isVisible = bbsengine6\folder\isFolderVisible($uri);
-    $isSysop = function_exists('bbsengine6\folder\isSysop') && bbsengine6\folder\isSysop();
+    // @since 2026-09-10 — wrap DB-touching visibility checks
+    // so a database failure (missing schema, partial deploy)
+    // doesn't 500 the request. Default to "visible to all" on
+    // DB failure so the listing still renders; the user can
+    // then see the directory contents even if the hidden-state
+    // lookup is offline.
+    try {
+      $isVisible = bbsengine6\folder\isFolderVisible($uri);
+      $isSysop = function_exists('bbsengine6\folder\isSysop') && bbsengine6\folder\isSysop();
+    } catch (\Throwable $e) {
+      router_log('folder visibility check failed: ' . $e->getMessage(), 'error');
+      $isVisible = true;
+      $isSysop = false;
+    }
     if (!$isVisible && !$isSysop) {
       return ROUTER_NEXT;
     }
   }
 
-  return router_displayDirectoryListing($filepath, $uri, (!$isVisible && $isSysop));
+  // @since 2026-09-10 — wrap the listing render in a try/catch
+  // so a database failure inside the renderer (the chain
+  // bbsengine6\displaypage -> getsmarty -> ... -> zoid6\buildchoices
+  // -> member\lib\checkflag -> engine.checkflag SQL function)
+  // doesn't 500 the request. Log and let the next handler try.
+  try {
+    return router_displayDirectoryListing($filepath, $uri, (!$isVisible && $isSysop));
+  } catch (\Throwable $e) {
+    router_log('directory listing render failed: ' . $e->getMessage(), 'error');
+    return ROUTER_NEXT;
+  }
 }
 
 function router_handleMarkdown(string $uri)
@@ -266,7 +298,16 @@ function router_handleMarkdown(string $uri)
     $filepath = router_safe_path_web([$reluri], ['base_dir' => $teospath]);
   }
   if ($filepath !== false && file_exists($filepath) && is_file($filepath)) {
-    return router_displayMarkdownFile($filepath, $uri);
+    // @since 2026-09-10 — same graceful-degradation wrapper as
+    // router_handleBlurb / router_handleFolder: a DB failure
+    // during markdown rendering (e.g. breadcrumb lookup) must
+    // not 500 the request.
+    try {
+      return router_displayMarkdownFile($filepath, $uri);
+    } catch (\Throwable $e) {
+      router_log('markdown render failed: ' . $e->getMessage(), 'error');
+      return ROUTER_NEXT;
+    }
   }
   return ROUTER_NEXT;
 }
@@ -493,7 +534,18 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
 
     $choices = [];
     if (function_exists('\zoid6\buildchoices')) {
-      $choices = \zoid6\buildchoices($choices);
+      // @since 2026-09-10 — same graceful-degradation wrapper
+      // as the rest of the handler chain. buildchoices() calls
+      // into bbsengine6\engine\buildchoices() ->
+      // member\lib\checkflag() which can throw if the engine
+      // schema is missing or the database is unavailable.
+      // Treat that as "no menu items" rather than 500ing the
+      // whole listing.
+      try {
+        $choices = \zoid6\buildchoices($choices);
+      } catch (\Throwable $e) {
+        router_log('zoid6\buildchoices failed: ' . $e->getMessage(), 'warning');
+      }
     }
 
     // @since 2026-09-07 — graceful degradation when the

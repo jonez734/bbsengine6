@@ -127,31 +127,52 @@ SQL;
      * @since 20080324
      * @since 20221116
      */ 
-    function checkflag($name, $moniker=null)
-    {
-      if ($moniker === null)
-      {
-        $moniker = getcurrentmoniker();
-      }
-            
-      $sql = "select engine.checkflag(:name, :moniker)";
-      $dat = ["name" => $name, "moniker" => $moniker];
-      $pdo = \bbsengine6\database\connect(getDSN());
-      $stmt = $pdo->prepare($sql);
-      $stmt->execute($dat);
-      if ($stmt->rowCount() == 0)
-      {
-        \bbsengine6\util\logentry("query for flag {$name} for moniker {$moniker} failed.");
-        return null;
-      }
-      $value = $stmt->fetchColumn();
-      if ($value === null) // invalid flag
-      {
-        \bbsengine6\util\logentry("invalid flag {$name} for moniker {$moniker} requested");
-        return null;
-      }
-      return $value;
-    }
+     function checkflag($name, $moniker=null)
+     {
+       if ($moniker === null)
+       {
+         $moniker = getcurrentmoniker();
+       }
+
+       $sql = "select engine.checkflag(:name, :moniker)";
+       $dat = ["name" => $name, "moniker" => $moniker];
+
+       try {
+         $pdo = \bbsengine6\database\connect(getDSN());
+       } catch (\Throwable $e) {
+         // @since 2026-09-10 — the database may be unavailable
+         // (e.g. maintentance window, partial deploy). Log and
+         // return null so the caller can fall through gracefully
+         // instead of 500ing the whole request.
+         \bbsengine6\util\logentry("libmember.checkflag.connect-fail: " . $e->getMessage());
+         return null;
+       }
+
+       try {
+         $stmt = $pdo->prepare($sql);
+         $stmt->execute($dat);
+       } catch (\Throwable $e) {
+         // @since 2026-09-10 — the engine.checkflag db function
+         // is not always present (older schemas, partial restores,
+         // dev mirrors). Don't 500 the request; log and return
+         // null so the caller can fall through gracefully.
+         \bbsengine6\util\logentry("libmember.checkflag.query-fail: " . $e->getMessage() . " sql=" . $sql);
+         return null;
+       }
+
+       if ($stmt->rowCount() == 0)
+       {
+         \bbsengine6\util\logentry("query for flag {$name} for moniker {$moniker} failed.");
+         return null;
+       }
+       $value = $stmt->fetchColumn();
+       if ($value === null) // invalid flag
+       {
+         \bbsengine6\util\logentry("invalid flag {$name} for moniker {$moniker} requested");
+         return null;
+       }
+       return $value;
+     }
 
     /**
      * @since 20121017
