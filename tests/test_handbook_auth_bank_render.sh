@@ -505,3 +505,93 @@ else
   bad "skipped -- [1] did not produce a non-empty body or local source missing"
 fi
 echo
+
+# --- 5. anti-error sentinels --------------------------------------------
+# The render path can 200 with HTML that looks superficially
+# like a rendered page but is actually a router/Smarty/PHP
+# error fallback. The strings below are the known markers
+# for those failure modes:
+#   - "Page Not Found" : router_handleError's hardcoded 404
+#     fallback (engine/router.php:275). The proper 404 page
+#     also contains this string (per bbsengine6\page\error),
+#     so a 200 + 'Page Not Found' is the diagnostic signature
+#     of the router's error handler running with the wrong
+#     status code, or a Smarty template that delegates back
+#     to the error path.
+#   - "router error"  : a generic router_log() 'error' level
+#     message that ended up in the response body (caught by
+#     display errors / log-to-output).
+#   - "Unable to load template" : Smarty's failure message
+#     when page-markdown.tmpl is missing on merlin.
+#   - "Failed opening required" : PHP's fatal error when an
+#     engine include (router.php, serve-md.php, php/markdown.php)
+#     is missing from the prod tree.
+# Any one of these in a 200 + text/html body means the
+# response is *not* a clean render of the spec.
+echo "[5] anti-error sentinels (live body must not contain error markers)"
+if [ "$body_bytes" -gt 0 ] && [ -s "$BODY" ]; then
+  error_markers=(
+    "Page Not Found"
+    "router error"
+    "Unable to load template"
+    "Failed opening required"
+    "Fatal error"
+    "Warning: "
+    "Notice: "
+    "Parse error"
+  )
+  markers_found=""
+  for marker in "${error_markers[@]}"; do
+    if grep -qF "$marker" "$BODY" 2>/dev/null; then
+      markers_found="$markers_found '$marker'"
+    fi
+  done
+  markers_found=$(echo "$markers_found" | xargs)
+  if [ -z "$markers_found" ]; then
+    ok "no error markers in live body (clean render, no Smarty/PHP/router fallbacks)"
+  else
+    bad "live body contains error marker(s):$markers_found -- the response is an error fallback, not a clean render of the spec"
+  fi
+else
+  bad "skipped -- [1] did not produce a non-empty body"
+fi
+echo
+
+# --- 6. build-host plumbing invariant -----------------------------------
+# The /handbook/<v>/<chapter> rewrite in
+# www/org/htaccess-prod must target /router.php (not
+# /engine/router.php) and must be present. If this rule
+# is missing, the test's URL would 404 (no handler) or
+# 500 (rewrite target missing). We check it explicitly
+# so a missing rule is diagnosed as "plumbing", not as
+# a content-sync issue.
+echo "[6] build-host plumbing invariant (htaccess-prod chapter rule)"
+if [ ! -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
+  bad "local www/org/htaccess-prod missing"
+else
+  # The no-.md chapter rule: RewriteRule ^handbook/(\d+)/(.*)$ /router.php?uri=$2
+  # Use grep -E for the pattern + grep -F for the rewrite target
+  # substring (the same pattern as test_handbook_6_returns_200.sh:246).
+  chapter_rule_ok=false
+  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/\(\\\\d\+\)' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/router.php?uri='; then
+    chapter_rule_ok=true
+  fi
+  if $chapter_rule_ok; then
+    ok "local www/org/htaccess-prod routes /handbook/<v>/<chapter> to /router.php (no-.md render path is wired)"
+  else
+    bad "local www/org/htaccess-prod does NOT route /handbook/<v>/<chapter> to /router.php -- the no-.md render path is not wired in the local working tree; without this rule the test's URL would 404 on merlin"
+  fi
+  # @since 2026-09-09 -- single-install refactor. The rewrite
+  # target should be /router.php at the docroot root (a
+  # symlink), not /engine/router.php. An active rewrite line
+  # that still uses /engine/ would mean the rule was missed
+  # in the refactor and would 404 on merlin (no /engine/
+  # subdir at the docroot).
+  active_engine_refs=$(grep -E '^[[:space:]]*Rewrite(Rule|Cond)' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -c '/engine/router\.php' || true)
+  if [ "$active_engine_refs" -eq 0 ]; then
+    ok "local www/org/htaccess-prod has no /engine/router.php references in active rewrite lines (single-install refactor applied)"
+  else
+    bad "local www/org/htaccess-prod has $active_engine_refs active rewrite line(s) referencing /engine/router.php -- single-install refactor not fully applied to the chapter route"
+  fi
+fi
+echo
