@@ -592,11 +592,22 @@ echo "[6] build-host plumbing invariant (htaccess-prod chapter rule)"
 if [ ! -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
   bad "local www/org/htaccess-prod missing"
 else
-  # The no-.md chapter rule: RewriteRule ^handbook/(\d+)/(.*)$ /router.php?uri=$2
-  # Use grep -E for the pattern + grep -F for the rewrite target
-  # substring (the same pattern as test_handbook_6_returns_200.sh:246).
+  # The no-.md chapter rule:
+  #   RewriteRule ^handbook/(\d+)/(.*)$ /router.php?uri=$2 [last,qsappend]
+  # (as distinct from the .md raw rule which targets /serve-md.php
+  # and which has a `\.md$` in the second capture group).
+  #
+  # The first version of this check used BRE-escaped parens
+  # (`\(\\\\d\+\)`) inside a grep -E pattern; that mismatched
+  # the file's literal `(\d+)` and falsely reported the rule
+  # as missing. The fix: use grep -P (PCRE) for the pattern
+  # match and grep -F for the rewrite target substring, with
+  # a negative look-ahead that excludes the .md raw rule.
+  # The .md rule's second group is `(.+\.md)$`; the chapter
+  # rule's is `(.*)$`. A pattern that requires the path group
+  # to NOT end in `\.md$` correctly distinguishes them.
   chapter_rule_ok=false
-  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/\(\\\\d\+\)' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/router.php?uri='; then
+  if grep -P '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/\(\\d\+\)/\((?:[^\\]|\\.)*\)\$[[:space:]]+/router\.php\?uri=' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -vqF '.md'; then
     chapter_rule_ok=true
   fi
   if $chapter_rule_ok; then
