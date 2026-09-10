@@ -144,6 +144,39 @@ if [ ! -s "$LOCAL_SRC" ]; then
 fi
 src_bytes=$(wc -c < "$LOCAL_SRC" | tr -d ' ')
 ok "local source $LOCAL_SRC exists and is non-empty ($src_bytes bytes)"
+# @since 2026-09-09 — regression prevention for the
+# handbook_home() bootstrap-order bug fixed in 34491fb.
+# engine/router.php must require_once php/util.php BEFORE
+# calling \bbsengine6\util\handbook_home(). If a future
+# refactor moves the call site but forgets to move the
+# require_once, the entire no-.md render path returns 500
+# (the .md raw path through serve-md.php is unaffected and
+# the regression hides behind a partially-working handbook).
+# The check is a precondition because a working [0] plus a
+# broken [0.5] would cause [1] to fail in a way that looks
+# like a prod outage; flagging it at [0.5] with a clear
+# "fix in working tree" message is more actionable.
+echo "[0.5] build-host bootstrap-order invariant (router.php must load util.php before handbook_home())"
+ROUTER_PHP="$LOCAL_BBSENGINE6/engine/router.php"
+if [ ! -f "$ROUTER_PHP" ]; then
+  bad "local $ROUTER_PHP missing"
+else
+  # Find the line number of the require_once('php/util.php')
+  # and the line number of the first call to handbook_home().
+  # The require_once must come first.
+  util_line=$(grep -n -F "require_once('/srv/www/bbsengine6/php/util.php')" "$ROUTER_PHP" 2>/dev/null | head -1 | cut -d: -f1)
+  util_line_any=$(grep -n -F "php/util.php" "$ROUTER_PHP" 2>/dev/null | head -3)
+  hb_line=$(grep -n -F 'handbook_home()' "$ROUTER_PHP" 2>/dev/null | head -1 | cut -d: -f1)
+  if [ -z "$util_line" ]; then
+    bad "local $ROUTER_PHP has no require_once of /srv/www/bbsengine6/php/util.php -- the handbook render path cannot bootstrap (regression of 34491fb)"
+  elif [ -z "$hb_line" ]; then
+    ok "local $ROUTER_PHP requires util.php and does not call handbook_home() at module load (pre-handbook_home() layout)"
+  elif [ "$util_line" -lt "$hb_line" ]; then
+    ok "local $ROUTER_PHP requires util.php (line $util_line) before handbook_home() call (line $hb_line) -- bootstrap order is correct (regression 34491fb not reintroduced)"
+  else
+    bad "local $ROUTER_PHP calls handbook_home() (line $hb_line) before requiring php/util.php (line $util_line) -- regression of 34491fb reintroduced; the no-.md render path will 500 in production. Fix: move the require_once of /srv/www/bbsengine6/php/util.php to a line above $hb_line"
+  fi
+fi
 echo
 
 # --- 1. HTTP probe -------------------------------------------------------
