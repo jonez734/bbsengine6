@@ -112,9 +112,21 @@ function router_buildBreadcrumbs(string $uri): array
     ];
   }
 
-  // Prepend "teos" crumb
+  // Prepend "root" crumb. Title is per-vhost via TEOS_LABEL
+  // (bbsengine6\util\vhost_label(), php/util.php); the
+  // handbook dispatch block below putenv()s TEOS_LABEL=
+  // "bbsengine6 handbook" for /handbook/<v>/... requests and
+  // leaves the default ("teos") for /teos/ requests, so this
+  // label diverges by vhost without any change to the internal
+  // path ("teos", the route's internal identifier) or the uri
+  // (still TEOSURL-rooted). blurb.php's buildbreadcrumbs()
+  // delegates to the same helper, so the DB-driven and
+  // filesystem-driven breadcrumb paths stay in lockstep.
+  $rootlabel = function_exists('bbsengine6\\util\\vhost_label')
+    ? \bbsengine6\util\vhost_label()
+    : 'teos';
   array_unshift($autoCrumbs, [
-    'title' => 'teos',
+    'title' => $rootlabel,
     'path' => 'teos',
     'uri' => $teosurl . '/',
   ]);
@@ -599,12 +611,22 @@ if (php_sapi_name() !== 'cli') {
   if (preg_match('#^/handbook/(\d+)/(.*)$#', $requesturi, $m)) {
     putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
     putenv('TEOSURL=/handbook/' . $m[1] . '/');
+    // Per-vhost top-breadcrumb label. Consumed by
+    // bbsengine6\util\vhost_label() (php/util.php) and (now)
+    // by router_buildBreadcrumbs above; default for
+    // unconfigured environments is "teos", so /teos/ requests
+    // see no change. Mirrors the original export in the
+    // now-deleted www/org/php/handbook.php (c40c79a).
+    putenv('TEOS_LABEL=bbsengine6 handbook');
     if (!isset($_GET['uri']) && !isset($_GET['path'])) {
       $_GET['uri'] = $m[2];
     }
   } elseif (preg_match('#^/handbook/(\d+)/?$#', $requesturi, $m)) {
     putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
     putenv('TEOSURL=/handbook/' . $m[1] . '/');
+    // Per-vhost top-breadcrumb label; see the matching comment
+    // in the chapter branch above for the rationale.
+    putenv('TEOS_LABEL=bbsengine6 handbook');
     if (!isset($_GET['uri']) && !isset($_GET['path'])) {
       $_GET['uri'] = '';
     }
