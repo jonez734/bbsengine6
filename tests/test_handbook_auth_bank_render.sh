@@ -156,13 +156,36 @@ echo
 # the body is *the spec* and not some other rendered page.
 http_code=$(probe "$URL" "$BODY")
 body_bytes=$(wc -c < "$BODY" 2>/dev/null | tr -d ' ' || echo 0)
+# Always fetch headers for the [1] failure path so the
+# operator can see what the server actually returned
+# (e.g. a 500 with empty body and a 'Server: nginx/1.x'
+# header is a different triage path from a 500 with
+# 'Failed opening required' in the body). On 200 the
+# header dump is redundant with [2] but cheap.
+probe_headers "$URL" "$HEADERS" >/dev/null 2>&1
+header_summary=$(head -5 "$HEADERS" 2>/dev/null | tr -d '\r' | sed 's/^/      /' | head -c 400)
 echo "[1] HTTP probe of $URL"
 echo "    status: $http_code"
 echo "    body:   $body_bytes bytes"
 if [ "$http_code" = "200" ] && [ "$body_bytes" -gt 0 ]; then
   ok "HTTP 200 with non-empty body"
 else
-  bad "expected HTTP 200 with non-empty body, got $http_code ($body_bytes bytes) -- first line of body: $(head -1 "$BODY" 2>/dev/null | head -c 200)"
+  # Dump everything we have so the operator can triage
+  # without re-running. The body may be empty on a PHP
+  # fatal; in that case the headers + status are the
+  # only signal.
+  echo "    headers (first 5 lines):"
+  echo "$header_summary" | sed 's/^/    /'
+  if [ "$body_bytes" -gt 0 ]; then
+    body_first=$(head -1 "$BODY" 2>/dev/null | head -c 200)
+    body_dump=$(head -c 500 "$BODY" 2>/dev/null | sed 's/^/      /')
+    echo "    body (first 500 bytes):"
+    echo "$body_dump"
+  else
+    echo "    body: (empty -- likely a PHP fatal that exited before any output;"
+    echo "           check merlin's php-fpm error log for the matching request)"
+  fi
+  bad "expected HTTP 200 with non-empty body, got $http_code ($body_bytes bytes)"
 fi
 echo
 
