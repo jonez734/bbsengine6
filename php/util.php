@@ -747,31 +747,51 @@ function safe_path_web(array $components, array $opts = [])
     }
 
     /**
-     * canonical vhost-polymorphic content root
+     * canonical catalog content root (the "catalog" is the teos
+     * content tree: rec/, ec/, comp/, alt/, sci/, usgov/, etc.)
      *
-     * TEOSDIR is intentionally polymorphic: router.php:577-585
-     * putenv()s it to the handbook tree root (/srv/www/vhosts/
-     * www.bbsengine.org/html/handbook/<v>/) for /handbook/<v>/
-     * requests, and leaves it at the teos docroot for /teos/
-     * requests. Callers that read files (blurb.php, folder.php,
-     * engine.php) used to repeat `defined('TEOSDIR') ? TEOSDIR :
-     * '/srv/.../zoid...'`. This helper centralizes that pattern.
+     * Sibling of handbook_home() (which returns the handbook
+     * tree root) and teos_dir() (which returns the same value
+     * via the TEOSDIR env/constant/default chain). Exists so
+     * callers that semantically want "the catalog root, not the
+     * teos docroot" can read it without the TEOSDIR indirection
+     * -- in particular, the /engine/router.php HTTP entry point
+     * and the bbsengine6\blurb\* helpers that render
+     * /rec/arts/... (catalog) pages, which used to read TEOSDIR
+     * directly and 500'd on the live vhost when TEOSDIR was
+     * misconfigured or pointed at a non-catalog tree.
      *
      * Resolution order:
-     *   1. getenv('TEOSDIR') -- the value router.php putenv()'d
-     *      for this request, or a test-harness override.
-     *   2. defined('TEOSDIR') -- a PHP-side override (e.g. set
-     *      in config.php).
-     *   3. Hardcoded default: the teos docroot.
+     *   1. getenv('CATALOG_ROOT') -- test-harness or operator
+     *      override.
+     *   2. defined('CATALOG_ROOT') -- PHP-side override (e.g.
+     *      set in config.php).
+     *   3. defined('TEOSDIR') -- the legacy teos-catalog constant
+     *      (preserved so existing config.php files keep working
+     *      without modification).
+     *   4. Hardcoded default: the teos docroot.
      *
-     * For file-existence probes, the default must be a real path;
-     * callers that fail the probe should handle the result.
-     *
-     * @since 2026-09-09
+     * @since 2026-09-10
      * @return string absolute filesystem path, with trailing slash
      */
-    function teos_dir(): string
+    function catalog_root(): string
     {
+        $env = getenv('CATALOG_ROOT');
+        if (is_string($env) && $env !== '') {
+            return rtrim($env, '/') . '/';
+        }
+        if (defined('CATALOG_ROOT')) {
+            $c = constant('CATALOG_ROOT');
+            if (is_string($c) && $c !== '') {
+                return rtrim($c, '/') . '/';
+            }
+        }
+        // Fall back to TEOSDIR (env first, then constant) for
+        // backward compat with existing vhost configs that only
+        // set TEOSDIR. The handbook/6 router entry point putenv()s
+        // TEOSDIR for the handbook tree, so any caller reaching
+        // here from /handbook/<v>/... should still see the
+        // handbook path.
         $env = getenv('TEOSDIR');
         if (is_string($env) && $env !== '') {
             return rtrim($env, '/') . '/';
@@ -783,6 +803,34 @@ function safe_path_web(array $components, array $opts = [])
             }
         }
         return '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
+    }
+
+    /**
+     * canonical vhost-polymorphic content root
+     *
+     * TEOSDIR is intentionally polymorphic: router.php:577-585
+     * putenv()s it to the handbook tree root (/srv/www/vhosts/
+     * www.bbsengine.org/html/handbook/<v>/) for /handbook/<v>/
+     * requests, and leaves it at the teos docroot for /teos/
+     * requests. Callers that read files (blurb.php, folder.php,
+     * engine.php) used to repeat `defined('TEOSDIR') ? TEOSDIR :
+     * '/srv/.../zoid...'`. This helper centralizes that pattern.
+     *
+     * @since 2026-09-09
+     * @return string absolute filesystem path, with trailing slash
+     */
+    function teos_dir(): string
+    {
+        // @since 2026-09-10 — delegate to catalog_root() so the
+        // catalog and the teos-dir helpers stay in lockstep when
+        // a CATALOG_ROOT override is set (the catalog is the
+        // teos content tree; they're the same path, just
+        // different framings of "where do rec/, ec/, comp/, etc.
+        // live"). Callers that want the vhost-agnostic
+        // handbook-vs-catalog split should call
+        // bbsengine6\util\handbook_home() or
+        // bbsengine6\util\catalog_root() directly.
+        return catalog_root();
     }
 
     /**
