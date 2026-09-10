@@ -163,10 +163,53 @@ if [ ! -f "$ROUTER_PHP" ]; then
 else
   # Find the line number of the require_once('php/util.php')
   # and the line number of the first call to handbook_home().
-  # The require_once must come first.
-  util_line=$(grep -n -F "require_once('/srv/www/bbsengine6/php/util.php')" "$ROUTER_PHP" 2>/dev/null | head -1 | cut -d: -f1)
-  util_line_any=$(grep -n -F "php/util.php" "$ROUTER_PHP" 2>/dev/null | head -3)
-  hb_line=$(grep -n -F 'handbook_home()' "$ROUTER_PHP" 2>/dev/null | head -1 | cut -d: -f1)
+  # The require_once must come first. Strip PHP comments
+  # (lines starting with // or inside /* ... */ blocks)
+  # before searching so a long comment block mentioning
+  # handbook_home() does not produce a false-positive line
+  # number. The first version of this check matched the
+  # literal substring 'handbook_home()' inside a comment
+  # and reported the fix commit as a regression.
+  php_strip_comments() {
+    # Strip // line comments and /* ... */ block comments.
+    # Pure shell/awk -- no PHP CLI dependency.
+    awk '
+      BEGIN { in_block = 0 }
+      {
+        line = $0
+        # inside a block comment?
+        if (in_block) {
+          if (match(line, /\*\//)) {
+            line = substr(line, RSTART + 2)
+            in_block = 0
+          } else {
+            next
+          }
+        }
+        # start of a block comment?
+        while (match(line, /\/\*/)) {
+          pre = substr(line, 1, RSTART - 1)
+          rest = substr(line, RSTART + 2)
+          if (match(rest, /\*\//)) {
+            line = pre substr(rest, RSTART + 2)
+          } else {
+            line = pre
+            in_block = 1
+            break
+          }
+        }
+        # strip // line comments (but not inside strings --
+        # for the limited matches we care about, the simple
+        # form is enough)
+        sub(/\/\/.*$/, "", line)
+        print line
+      }
+    ' "$1"
+  }
+  TMP_ROUTER="$TMPDIR_TEST/router.stripped.php"
+  php_strip_comments "$ROUTER_PHP" > "$TMP_ROUTER"
+  util_line=$(grep -n -F "require_once('/srv/www/bbsengine6/php/util.php')" "$TMP_ROUTER" 2>/dev/null | head -1 | cut -d: -f1)
+  hb_line=$(grep -n -F 'handbook_home()' "$TMP_ROUTER" 2>/dev/null | head -1 | cut -d: -f1)
   if [ -z "$util_line" ]; then
     bad "local $ROUTER_PHP has no require_once of /srv/www/bbsengine6/php/util.php -- the handbook render path cannot bootstrap (regression of 34491fb)"
   elif [ -z "$hb_line" ]; then
