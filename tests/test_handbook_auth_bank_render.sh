@@ -145,3 +145,43 @@ fi
 src_bytes=$(wc -c < "$LOCAL_SRC" | tr -d ' ')
 ok "local source $LOCAL_SRC exists and is non-empty ($src_bytes bytes)"
 echo
+
+# --- 1. HTTP probe -------------------------------------------------------
+# The no-.md URL routes through
+#   www/org/htaccess-prod: RewriteRule ^handbook/(\d+)/(.*)$ /router.php?uri=$2
+# which lands in router_handleMarkdown(), which renders the
+# .md source through bbsengine6\markdown\parseDocument and
+# emits it via page-markdown.tmpl. A 200 + non-empty body is
+# the floor; the structural / sentinel checks below verify
+# the body is *the spec* and not some other rendered page.
+http_code=$(probe "$URL" "$BODY")
+body_bytes=$(wc -c < "$BODY" 2>/dev/null | tr -d ' ' || echo 0)
+echo "[1] HTTP probe of $URL"
+echo "    status: $http_code"
+echo "    body:   $body_bytes bytes"
+if [ "$http_code" = "200" ] && [ "$body_bytes" -gt 0 ]; then
+  ok "HTTP 200 with non-empty body"
+else
+  bad "expected HTTP 200 with non-empty body, got $http_code ($body_bytes bytes) -- first line of body: $(head -1 "$BODY" 2>/dev/null | head -c 200)"
+fi
+echo
+
+# --- 2. Content-Type is text/html ---------------------------------------
+# router_handleMarkdown wraps the parsed doc in page-markdown.tmpl
+# and emits it as text/html. If Content-Type is text/plain the
+# response is serve-md.php's raw .md output (the wrong handler
+# ran) and the structural / sentinel checks below would be
+# meaningless. Fail this check first so the diagnosis points
+# at the routing layer.
+echo "[2] Content-Type check"
+probe_headers "$URL" "$HEADERS"
+ct=$(grep -i -E '^content-type:' "$HEADERS" 2>/dev/null | head -1 | tr -d '\r' || true)
+echo "    $ct"
+if [ -z "$ct" ]; then
+  bad "no Content-Type header in response -- router_handleMarkdown did not run (or the no-.md route fell through to a different handler)"
+elif echo "$ct" | grep -qi '^content-type: *text/html'; then
+  ok "Content-Type is text/html (page-markdown.tmpl rendered the spec)"
+else
+  bad "Content-Type is not text/html: '$ct' -- the no-.md route did not reach router_handleMarkdown; likely htaccess-prod is missing the /router.php chapter rule, or a symlink is dangling"
+fi
+echo
