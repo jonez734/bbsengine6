@@ -642,6 +642,110 @@ function safe_path_web(array $components, array $opts = [])
     set_include_path(implode($separator, $current));
 }
 
+    /**
+     * canonical filesystem root for the bbsengine.org handbook tree
+     *
+     * Resolution order:
+     *   1. getenv('BBSENGINE6_HANDBOOK_HOME') -- lets htaccess/apache
+     *      or a test harness override the location without editing
+     *      this file.
+     *   2. defined('BBSENGINE6_HANDBOOK_HOME') -- a PHP-side override
+     *      (e.g. set in config.php).
+     *   3. The canonical install path on the bbsengine.org vhost:
+     *      /srv/www/vhosts/www.bbsengine.org/html/handbook/.
+     *      This is the same path engine/router.php:569 hardcoded
+     *      before this helper existed.
+     *
+     * @since 2026-09-09
+     * @return string absolute filesystem path, with trailing slash
+     */
+    function handbook_home(): string
+    {
+        $env = getenv('BBSENGINE6_HANDBOOK_HOME');
+        if (is_string($env) && $env !== '') {
+            return rtrim($env, '/') . '/';
+        }
+        if (defined('BBSENGINE6_HANDBOOK_HOME')) {
+            $c = constant('BBSENGINE6_HANDBOOK_HOME');
+            if (is_string($c) && $c !== '') {
+                return rtrim($c, '/') . '/';
+            }
+        }
+        return '/srv/www/vhosts/www.bbsengine.org/html/handbook/';
+    }
+
+    /**
+     * resolve a handbook-relative (prefix, path) pair to an absolute
+     * filesystem path, with traversal and extension safety checks.
+     *
+     * Contract:
+     *   $prefix is the handbook subdirectory (e.g. 'handbook/6'),
+     *   as emitted by the htaccess-prod rule for /handbook/<v>/<uri>.md
+     *   (see www/org/htaccess-prod:55).
+     *   $path is the file under that prefix (e.g. 'specs/auth-bank.md').
+     *   The resolved file must:
+     *     - exist as a regular file,
+     *     - have a .md extension,
+     *     - lie under handbook_home() (defense against path
+     *       traversal in either argument).
+     *
+     * @since 2026-09-09
+     * @param string $prefix handbook subdirectory (e.g. 'handbook/6')
+     * @param string $path   file relative to prefix (e.g. 'specs/auth-bank.md')
+     * @return string|false  absolute path on success, false on any
+     *                       failure (missing args, traversal, missing
+     *                       file, wrong extension).
+     */
+    function handbook_resolve(string $prefix, string $path)
+    {
+        if ($prefix === '' || $path === '') {
+            return false;
+        }
+        // Normalize: the htaccess-prod rule emits prefix=handbook/<v>
+        // (because the URL path is /handbook/<v>/<uri>.md), but
+        // handbook_home() already ends in /handbook/. Strip a
+        // leading 'handbook/' from the prefix so callers can pass
+        // either shape (prefix='6' or prefix='handbook/6') without
+        // having to know about handbook_home()'s tail.
+        if (strpos($prefix, 'handbook/') === 0) {
+            $prefix = substr($prefix, strlen('handbook/'));
+        }
+        if ($prefix === '') {
+            return false;
+        }
+        $home = handbook_home();
+        $baseRaw = $home . $prefix;
+        $base = realpath($baseRaw);
+        if ($base === false) {
+            return false;
+        }
+        $homeReal = realpath($home);
+        if ($homeReal === false) {
+            return false;
+        }
+        $homeReal = rtrim($homeReal, '/') . '/';
+        $base = rtrim($base, '/') . '/';
+        // prefix must be a descendant of handbook_home()
+        if (strpos($base, $homeReal) !== 0) {
+            return false;
+        }
+        $file = realpath($base . $path);
+        if ($file === false) {
+            return false;
+        }
+        // file must be a descendant of $base
+        if (strpos($file, $base) !== 0) {
+            return false;
+        }
+        if (!is_file($file)) {
+            return false;
+        }
+        if (pathinfo($file, PATHINFO_EXTENSION) !== 'md') {
+            return false;
+        }
+        return $file;
+    }
+
 } /* namespace bbsengine6\util */
 
 ?>
