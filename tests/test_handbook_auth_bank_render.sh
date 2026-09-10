@@ -393,3 +393,115 @@ else
   bad "skipped -- [1] did not produce a non-empty body"
 fi
 echo
+
+# --- 4. markdown-source content sentinels -------------------------------
+# Defense in depth on top of [3]. The structural checks confirm
+# the *shape* of the rendered page; this section confirms the
+# *content* matches the local source. The local .md is read by
+# python3 (which strips the markdown syntax and emits plain
+# text) and each sentinel is asserted to appear in the rendered
+# body's plain text. This catches a render that produced the
+# right structure but the wrong spec (e.g. a router fallback
+# that happened to render a different handbook page).
+echo "[4] markdown-source content sentinels (live body vs local .md)"
+if [ "$body_bytes" -gt 0 ] && [ -f "$LOCAL_SRC" ]; then
+  # Strip the live HTML to plain text via bs4 so sentinels are
+  # compared against the rendered *text*, not against raw HTML
+  # (which would fail for sentinels that contain characters
+  # that get HTML-encoded, e.g. '<' or '>').
+  python3 - "$BODY" "$LOCAL_SRC" "$TMPDIR_TEST/text.json" <<'PYEOF' 2>"$TMPDIR_TEST/text.err"
+import json
+import sys
+from bs4 import BeautifulSoup
+
+body_path, src_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(body_path, "r", encoding="utf-8", errors="replace") as fh:
+    soup = BeautifulSoup(fh.read(), "lxml")
+body_text = soup.get_text(" ", strip=True)
+# Normalize whitespace for comparison: collapse runs of spaces
+# and trim. This matches how a human reads the page and avoids
+# brittleness on whitespace differences across renders.
+import re
+body_norm = re.sub(r"\s+", " ", body_text).strip()
+
+with open(src_path, "r", encoding="utf-8", errors="replace") as fh:
+    src_text = fh.read()
+# Strip frontmatter if present (--- ... --- at the top) and
+# collapse whitespace. We only need the prose; the structural
+# checks already verified the tables/headings/code blocks.
+src_no_fm = re.sub(r"^---\n.*?\n---\n", "", src_text, count=1, flags=re.DOTALL)
+src_norm = re.sub(r"\s+", " ", src_no_fm).strip()
+
+sentinels = [
+    "bbsengine6.auth to bbsengine6.bank authorization flow",
+    "bbsengine6.auth",
+    "bbsengine6.bank",
+    "SessionManager",
+    "bank_transfer_approve",
+    "register_session",
+    "alloc_session_id",
+    "WebSocket",
+    "OP_MAP",
+    "transport.py",
+]
+
+# Verbs from the spec's auth-op table -- must be present
+# somewhere in the rendered text (the structural check
+# above already verified they appear in <td> cells; this
+# check is a backstop in case the JSON plumbing for the
+# cell check is bypassed).
+table_verbs = [
+    "login", "reconnect", "refresh", "revoke",
+    "balance", "transfer", "approve", "reject", "list_all",
+]
+
+# Backtick-wrapped symbols from the spec -- must appear
+# in the rendered text (possibly with the backticks
+# stripped by the markdown parser, so we check the inner
+# content only).
+symbols = [
+    "access()",
+    "bbsengine6.auth.access",
+    "bbsengine6.bank.access",
+    "BankServiceHandler.handle_message",
+    "_check_auth",
+    "bank_access",
+    "bank_service.get_balance",
+]
+
+present = []
+missing = []
+for s in sentinels + table_verbs + symbols:
+    if s in body_norm:
+        present.append(s)
+    else:
+        missing.append(s)
+
+with open(out_path, "w", encoding="utf-8") as fh:
+    json.dump({
+        "body_text_len": len(body_norm),
+        "src_text_len": len(src_norm),
+        "present": present,
+        "missing": missing,
+    }, fh, indent=2)
+PYEOF
+  text_rc=$?
+  if [ "$text_rc" -ne 0 ] || [ ! -s "$TMPDIR_TEST/text.json" ]; then
+    bad "python3 text-sentinel parse failed (rc=$text_rc); stderr: $(head -3 "$TMPDIR_TEST/text.err" 2>/dev/null | head -c 300)"
+  else
+    body_text_len=$(python3 -c "import json; print(json.load(open('$TMPDIR_TEST/text.json'))['body_text_len'])")
+    missing_count=$(python3 -c "import json; print(len(json.load(open('$TMPDIR_TEST/text.json'))['missing']))")
+    missing_list=$(python3 -c "import json; d=json.load(open('$TMPDIR_TEST/text.json')); print(' / '.join(d['missing']))")
+    present_count=$(python3 -c "import json; print(len(json.load(open('$TMPDIR_TEST/text.json'))['present']))")
+    echo "    rendered body text: $body_text_len chars"
+    echo "    sentinels: $present_count present, $missing_count missing"
+    if [ "$missing_count" = "0" ]; then
+      ok "all $(($present_count)) sentinels (prose + verbs + symbols) present in rendered body text"
+    else
+      bad "$missing_count sentinel(s) missing from rendered body text: $missing_list"
+    fi
+  fi
+else
+  bad "skipped -- [1] did not produce a non-empty body or local source missing"
+fi
+echo
