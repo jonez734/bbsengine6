@@ -46,12 +46,18 @@ function router_log(string $message, string $level = "info"): void
 
 function router_get_teosurl(): string
 {
-  return getenv('TEOSURL') ?: (defined('TEOSURL') ? TEOSURL : '');
+  // @since 2026-09-09 — thin wrapper kept for backward compat.
+  // Prefer \bbsengine6\util\teos_url() in new code; this function
+  // delegates to it.
+  return \bbsengine6\util\teos_url();
 }
 
 function router_get_teosdir(): string
 {
-  return getenv('TEOSDIR') ?: (defined('TEOSDIR') ? TEOSDIR : '');
+  // @since 2026-09-09 — thin wrapper kept for backward compat.
+  // Prefer \bbsengine6\util\teos_dir() in new code; this function
+  // delegates to it.
+  return \bbsengine6\util\teos_dir();
 }
 
 /**
@@ -559,8 +565,9 @@ if (php_sapi_name() !== 'cli') {
   // matching handbook tree. Same shape as teos: htaccess rewrites
   // the URI, this entry-point adapts the working dir, the
   // handlers do not need to know which vhost they're serving.
-  // Env wins over constants -- router_get_teosurl()/_teosdir()
-  // (lines 44-52) prefer getenv() over the define() below, so
+  // Env wins over constants --
+  // \bbsengine6\util\teos_url()/teos_dir() (php/util.php)
+  // prefer getenv() over the define() below, so
   // a handbook request that supplies its own env vars here
   // overrides the teos fallback. The define()s stay for the
   // teos case where neither env nor a prefix-derived override
