@@ -746,6 +746,78 @@ function safe_path_web(array $components, array $opts = [])
         return $file;
     }
 
+    /**
+     * canonical vhost-polymorphic content root
+     *
+     * TEOSDIR is intentionally polymorphic: router.php:577-585
+     * putenv()s it to the handbook tree root (/srv/www/vhosts/
+     * www.bbsengine.org/html/handbook/<v>/) for /handbook/<v>/
+     * requests, and leaves it at the teos docroot for /teos/
+     * requests. Callers that read files (blurb.php, folder.php,
+     * engine.php) used to repeat `defined('TEOSDIR') ? TEOSDIR :
+     * '/srv/.../zoid...'`. This helper centralizes that pattern.
+     *
+     * Resolution order:
+     *   1. getenv('TEOSDIR') -- the value router.php putenv()'d
+     *      for this request, or a test-harness override.
+     *   2. defined('TEOSDIR') -- a PHP-side override (e.g. set
+     *      in config.php).
+     *   3. Hardcoded default: the teos docroot.
+     *
+     * For file-existence probes, the default must be a real path;
+     * callers that fail the probe should handle the result.
+     *
+     * @since 2026-09-09
+     * @return string absolute filesystem path, with trailing slash
+     */
+    function teos_dir(): string
+    {
+        $env = getenv('TEOSDIR');
+        if (is_string($env) && $env !== '') {
+            return rtrim($env, '/') . '/';
+        }
+        if (defined('TEOSDIR')) {
+            $c = constant('TEOSDIR');
+            if (is_string($c) && $c !== '') {
+                return rtrim($c, '/') . '/';
+            }
+        }
+        return '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
+    }
+
+    /**
+     * canonical vhost-polymorphic content URL prefix
+     *
+     * Mirror of teos_dir() for the URL prefix (TEOSURL). router.php
+     * putenv()s TEOSURL to '/handbook/<v>/' for handbook requests
+     * and '/teos/' for teos requests. engine.php's bare \TEOSURL
+     * callers used to read the constant directly, returning an
+     * empty string with a PHP notice if undefined.
+     *
+     * The default is '' (matching the bare-constant behavior) so
+     * that callers which previously relied on \TEOSURL returning
+     * empty string when not configured continue to behave the same
+     * way. Callers that need a real prefix should read it from the
+     * per-vhost config.
+     *
+     * @since 2026-09-09
+     * @return string URL prefix (e.g. '/handbook/6/' or '/teos/')
+     */
+    function teos_url(): string
+    {
+        $env = getenv('TEOSURL');
+        if (is_string($env) && $env !== '') {
+            return $env;
+        }
+        if (defined('TEOSURL')) {
+            $c = constant('TEOSURL');
+            if (is_string($c) && $c !== '') {
+                return $c;
+            }
+        }
+        return '';
+    }
+
 } /* namespace bbsengine6\util */
 
 ?>
