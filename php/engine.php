@@ -996,23 +996,23 @@ function accesssig($op, $sig=null, $memberid=null)
     $actions = [];
     if (accesssig("sig.edit", $sig) === true)
     {
-      $actions[] = ["href" => \TEOSURL . $uri . "edit-sig", "title" => "edit sig", "class" => "fa fa-edit fa-fw"];
+      $actions[] = ["href" => \bbsengine6\util\teos_url() . $uri . "edit-sig", "title" => "edit sig", "class" => "fa fa-edit fa-fw"];
     }
     if (accesssig("link.add", $sig) === true)
     {
-      $actions[] = ["href" => \TEOSURL . $uri . "add-link", "title" => "add link", "class" => "fa fa-plus fa-fw"];
+      $actions[] = ["href" => \bbsengine6\util\teos_url() . $uri . "add-link", "title" => "add link", "class" => "fa fa-plus fa-fw"];
     }
     if (accesssig("post.add", $sig) === true)
     {
-      $actions[] = ["href" => \TEOSURL . $uri . "add-post", "title" => "add post", "class" => "fa fa-fw fa-plus"];
+      $actions[] = ["href" => \bbsengine6\util\teos_url() . $uri . "add-post", "title" => "add post", "class" => "fa fa-fw fa-plus"];
     }
     if (accesssig("sig.add", $sig) === true)
     {
-      $actions[] = ["href" => \TEOSURL . $uri . "add-sig", "title" => "add sig", "class" => "fas fa-fw fa-folder-plus"];
+      $actions[] = ["href" => \bbsengine6\util\teos_url() . $uri . "add-sig", "title" => "add sig", "class" => "fas fa-fw fa-folder-plus"];
     }
     if (accesssig("sig.detail", $sig) === true)
     {
-      $actions[] = ["href" => \TEOSURL . $uri . "sig-detail", "title" => "detail", "class" => "fa fa-fw fa-angle-double-down"];
+      $actions[] = ["href" => \bbsengine6\util\teos_url() . $uri . "sig-detail", "title" => "detail", "class" => "fa fa-fw fa-angle-double-down"];
     }
 
     return $actions;
