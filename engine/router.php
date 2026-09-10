@@ -579,6 +579,21 @@ if (php_sapi_name() !== 'cli') {
   // by engine/serve-md.php). The handbook home can be
   // overridden via the BBSENGINE6_HANDBOOK_HOME env var or
   // constant (see php/util.php).
+  //
+  // @since 2026-09-09 — load php/util.php BEFORE calling
+  // handbook_home(). The 2026-09-09 refactor that introduced
+  // this call moved the function-call but left the
+  // require_once at line ~601 below; the result was a
+  // "Call to undefined function" fatal on every no-.md
+  // URL (the .md raw path through engine/serve-md.php was
+  // unaffected, which masked the regression behind a
+  // partially-working handbook). The minimal fix is to
+  // require util.php here so handbook_home() is in scope
+  // for the prefix-detection block. The other requires
+  // (markdown.php, blurb.php, engine.php, config.php) stay
+  // below because they are not needed for handbook_home().
+  require_once('/srv/www/bbsengine6/php/util.php');
+
   $requesturi = $_SERVER['REQUEST_URI'] ?? '';
   $handbookhome = \bbsengine6\util\handbook_home();
   if (preg_match('#^/handbook/(\d+)/(.*)$#', $requesturi, $m)) {
