@@ -3,9 +3,9 @@
 	{foreach $breadcrumbs as $b}
 		<li itemprop="child" itemscope itemtype="http://data-vocabulary.org/Breadcrumb">
 		{if $b@last == false}
-			{teos path=$b.path itemprop=true} <i class="fas fa-angle-double-right"></i>
+			{teos path=$b.path title=$b.title itemprop=true} <i class="fas fa-angle-double-right"></i>
 		{else}
-			{teos path=$b.path itemprop=true}
+			{teos path=$b.path title=$b.title itemprop=true}
 		{/if}
 		</li>
 	{/foreach}
