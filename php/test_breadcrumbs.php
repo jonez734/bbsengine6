@@ -9,7 +9,21 @@
  *   php test_breadcrumbs.php
  */
 
+// @since 2026-09-10 — bootstrap order. The pre-existing test
+// bootstrap only required bbsengine6/php/bootstrap.php (which
+// sets the include_path) and engine/router.php, leaving the
+// Tests 20-21 data-structure block unable to run with a
+// "Call to undefined function bbsengine6\util\teos_url()"
+// fatal. The new TEOS_LABEL plumbing tests (22-24) need
+// bbsengine6\util\vhost_label(), which lives in php/util.php
+// and is reached by router_buildBreadcrumbs through
+// bbsengine6\util\teos_url(). Requiring php/util.php before
+// engine/router.php makes both the pre-existing data tests
+// and the new TEOS_LABEL tests runnable without dragging in
+// the blurb.php require chain (zoid6\bootstrap, zoid6config,
+// zoid6.php, ...).
 require_once("/home/opencode/data/work/bbsengine6/php/bootstrap.php");
+require_once("/home/opencode/data/work/bbsengine6/php/util.php");
 require_once("/home/opencode/data/work/bbsengine6/engine/router.php");
 
 echo "=== Breadcrumb Regression Tests ===\n\n";
@@ -138,6 +152,35 @@ if (strpos($page_md_src, 'youarehere.tmpl') === false) {
 }
 test_pass("page-markdown.tmpl uses youarehere.tmpl");
 
+// Test: teos-breadcrumbs.tmpl and breadcrumbs.tmpl pass title=$b.title
+// into {teos}. @since 2026-09-10 — regression check for the
+// "double-teos" bug where the root crumb rendered as the
+// literal string "teos" twice. The {teos} Smarty plugin
+// (smarty/function.teos.php:25-44) defaults its rendered
+// text to end($uriSegments) when no title= argument is
+// supplied, so for the root crumb (path='teos', one
+// segment) it printed 'teos' regardless of $b.title.
+// Passing title=$b.title through to the plugin makes the
+// visible text follow the breadcrumb data, which the
+// handbook vhost now populates with 'bbsengine6 handbook'
+// via the TEOS_LABEL plumbing (Test 23/24 above).
+$title_arg_check = [
+    "/home/opencode/data/work/bbsengine6/skin/tmpl/teos-breadcrumbs.tmpl",
+    "/home/opencode/data/work/bbsengine6/skin/tmpl/breadcrumbs.tmpl",
+];
+foreach ($title_arg_check as $tpl) {
+    $label = basename($tpl);
+    echo "Test 8: $label passes title=\$b.title to {teos}\n";
+    if (!file_exists($tpl)) {
+        test_fail("$label missing", $tpl);
+    }
+    $src = file_get_contents($tpl);
+    if (strpos($src, 'title=$b.title') === false) {
+        test_fail("$label does not pass title=\$b.title to {teos} (regression: the top crumb will render its path-derived title, causing the double-'teos'-link bug on the handbook vhost)");
+    }
+    test_pass("$label passes title=\$b.title to {teos}");
+}
+
 echo "\n";
 
 // =============================================================================
@@ -245,6 +288,65 @@ if ($last['title'] !== 'the a team') {
     test_fail("last crumb title is not 'the a team'", $last['title']);
 }
 test_pass("last crumb title is 'the a team'");
+
+// Test: top-crumb title defaults to 'teos' when TEOS_LABEL is unset.
+// @since 2026-09-10 — regression check for the
+// router_buildBreadcrumbs() -> bbsengine6\util\vhost_label()
+// plumbing. Without TEOS_LABEL set (or with it empty) the
+// top crumb must still be 'teos', so existing /teos/ vhost
+// callers see no change.
+echo "Test 22: top-crumb title defaults to 'teos' when TEOS_LABEL unset\n";
+putenv('TEOS_LABEL'); // clear any pre-existing value
+$crumbs = router_buildBreadcrumbs("specs/foo");
+if ($crumbs[0]['title'] !== 'teos') {
+    test_fail("expected top crumb title 'teos', got '" . var_export($crumbs[0]['title'], true) . "'");
+}
+if ($crumbs[0]['path'] !== 'teos') {
+    test_fail("expected top crumb path 'teos', got '" . var_export($crumbs[0]['path'], true) . "'");
+}
+test_pass("default top crumb is title='teos', path='teos'");
+
+// Test: top-crumb title honors TEOS_LABEL env var.
+// @since 2026-09-10 — the handbook vhost entry point in
+// engine/router.php putenv()s TEOS_LABEL="bbsengine6
+// handbook" before dispatching; bbsengine6\util\vhost_label()
+// in php/util.php reads it. router_buildBreadcrumbs was
+// updated to call vhost_label() so the same vhost label
+// reaches the filesystem-driven breadcrumb path. Catches
+// a future refactor that decouples the two code paths
+// (blurb.php vs router.php) or drops the env read.
+echo "Test 23: top-crumb title honors TEOS_LABEL env var\n";
+putenv('TEOS_LABEL=handbook test label');
+$crumbs = router_buildBreadcrumbs("specs/foo");
+if ($crumbs[0]['title'] !== 'handbook test label') {
+    test_fail("expected top crumb title 'handbook test label', got '" . var_export($crumbs[0]['title'], true) . "'");
+}
+if ($crumbs[0]['path'] !== 'teos') {
+    test_fail("path identifier should still be 'teos' (internal), got '" . var_export($crumbs[0]['path'], true) . "'");
+}
+if (!str_ends_with($crumbs[0]['uri'], '/')) {
+    test_fail("top crumb uri should end with /, got '" . var_export($crumbs[0]['uri'], true) . "'");
+}
+test_pass("TEOS_LABEL env var → top crumb title matches; path and uri unchanged");
+putenv('TEOS_LABEL'); // clean up
+
+// Test: top-crumb uri still follows TEOSURL after the
+// TEOS_LABEL change. The handbook vhost sets TEOSURL to
+// '/handbook/6/' via putenv() before TEOS_LABEL; the
+// teos vhost sets TEOSURL='/teos/'. The root crumb's
+// uri must follow whichever TEOSURL is in effect, not
+// the literal 'teos' string.
+echo "Test 24: top-crumb uri follows TEOSURL when TEOS_LABEL is set\n";
+putenv('TEOSURL=/handbook/6/');
+putenv('TEOS_LABEL=bbsengine6 handbook');
+$crumbs = router_buildBreadcrumbs("specs/foo");
+if ($crumbs[0]['uri'] !== '/handbook/6/') {
+    test_fail("expected top crumb uri '/handbook/6/', got '" . var_export($crumbs[0]['uri'], true) . "'");
+}
+test_pass("top crumb uri is /handbook/6/ when TEOSURL is /handbook/6/");
+// restore defaults so subsequent test runs are unaffected
+putenv('TEOSURL');
+putenv('TEOS_LABEL');
 
 echo "\n";
 
