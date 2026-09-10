@@ -185,3 +185,211 @@ else
   bad "Content-Type is not text/html: '$ct' -- the no-.md route did not reach router_handleMarkdown; likely htaccess-prod is missing the /router.php chapter rule, or a symlink is dangling"
 fi
 echo
+
+# --- 3. strict HTML structural parse ------------------------------------
+# A 200 + text/html is not enough: an empty page-markdown.tmpl,
+# a Smarty error page, or a markdown parser misconfig can all
+# 200 with HTML. The structural checks below anchor the
+# response to the spec's actual shape:
+#   - one <html>/<head>/<body>
+#   - non-empty <title>
+#   - exactly one <h1> whose text matches the spec title
+#   - several <h2>/<h3> (Components, bbsengine6.bank,
+#     bbsengine6.bank.api.handler, End-to-end sequence,
+#     Wire-level mapping, Token-aware path, Failure modes,
+#     Files involved)
+#   - at least one <table> (the source has two markdown
+#     tables: the auth-op table and the wire-level mapping)
+#   - at least one <pre> or <code> block (the source has
+#     a fenced code block for the session_id mapping and
+#     a fenced json block for the error envelope)
+#
+# The parse runs as a single python3 invocation that
+# emits a JSON object of facts. Each fact is then asserted
+# by the shell from the JSON. This keeps the python logic
+# out of the shell and the assertions out of python.
+echo "[3] strict HTML structural parse (python3 + bs4)"
+if [ "$body_bytes" -gt 0 ] && [ -s "$BODY" ]; then
+  python3 - "$BODY" "$PARSE_JSON" <<'PYEOF' 2>"$TMPDIR_TEST/parse.err"
+import json
+import sys
+from bs4 import BeautifulSoup
+
+body_path, out_path = sys.argv[1], sys.argv[2]
+with open(body_path, "r", encoding="utf-8", errors="replace") as fh:
+    html = fh.read()
+
+try:
+    soup = BeautifulSoup(html, "lxml")
+    parse_ok = True
+    parse_error = ""
+except Exception as e:
+    soup = BeautifulSoup(html, "html.parser")
+    parse_ok = False
+    parse_error = "{0}: {1}".format(type(e).__name__, e)
+
+# structural facts
+html_tag = soup.find("html")
+head_tag = soup.find("head")
+body_tag = soup.find("body")
+title_tag = soup.find("title")
+title_text = title_tag.get_text(strip=True) if title_tag else ""
+
+h1_tags = soup.find_all("h1")
+h1_texts = [h.get_text(" ", strip=True) for h in h1_tags]
+h2_count = len(soup.find_all("h2"))
+h3_count = len(soup.find_all("h3"))
+table_count = len(soup.find_all("table"))
+pre_count = len(soup.find_all("pre"))
+code_count = len(soup.find_all("code"))
+td_cells = [td.get_text(" ", strip=True) for td in soup.find_all("td")]
+li_count = len(soup.find_all("li"))
+
+facts = {
+    "parse_ok": parse_ok,
+    "parse_error": parse_error,
+    "has_html": html_tag is not None,
+    "has_head": head_tag is not None,
+    "has_body": body_tag is not None,
+    "title_text": title_text,
+    "h1_count": len(h1_tags),
+    "h1_texts": h1_texts,
+    "h2_count": h2_count,
+    "h3_count": h3_count,
+    "table_count": table_count,
+    "pre_count": pre_count,
+    "code_count": code_count,
+    "li_count": li_count,
+    "td_cells": td_cells,
+    "body_text_len": len(body_tag.get_text(" ", strip=True)) if body_tag else 0,
+}
+
+with open(out_path, "w", encoding="utf-8") as fh:
+    json.dump(facts, fh, indent=2)
+PYEOF
+  parse_rc=$?
+  if [ "$parse_rc" -ne 0 ]; then
+    bad "python3 parse failed (rc=$parse_rc); stderr: $(head -3 "$TMPDIR_TEST/parse.err" 2>/dev/null | head -c 300)"
+  elif [ ! -s "$PARSE_JSON" ]; then
+    bad "python3 parse produced no output (empty $PARSE_JSON); stderr: $(head -3 "$TMPDIR_TEST/parse.err" 2>/dev/null | head -c 300)"
+  else
+    # extract facts via python3 -c (no jq dependency)
+    jget() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get(sys.argv[2], ''))" "$PARSE_JSON" "$1" 2>/dev/null; }
+    jgeti() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); print(int(d.get(sys.argv[2], 0)))" "$PARSE_JSON" "$1" 2>/dev/null; }
+    jgetl() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); v=d.get(sys.argv[2], []); print(len(v))" "$PARSE_JSON" "$1" 2>/dev/null; }
+    jgetls() { python3 -c "import json,sys; d=json.load(open(sys.argv[1])); v=d.get(sys.argv[2], []); print('|'.join(str(x) for x in v))" "$PARSE_JSON" "$1" 2>/dev/null; }
+
+    parse_ok=$(jget parse_ok)
+    has_html=$(jget has_html)
+    has_head=$(jget has_head)
+    has_body=$(jget has_body)
+    title_text=$(jget title_text)
+    h1_count=$(jgeti h1_count)
+    h1_texts=$(jgetls h1_texts)
+    h2_count=$(jgeti h2_count)
+    h3_count=$(jgeti h3_count)
+    table_count=$(jgeti table_count)
+    pre_count=$(jgeti pre_count)
+    code_count=$(jgeti code_count)
+    li_count=$(jgeti li_count)
+    td_count=$(jgetl td_cells)
+    body_text_len=$(jgeti body_text_len)
+
+    echo "    parse_ok=$parse_ok html=$has_html head=$has_head body=$has_body"
+    echo "    title: $title_text"
+    echo "    h1 count: $h1_count  texts: $h1_texts"
+    echo "    h2: $h2_count  h3: $h3_count  li: $li_count"
+    echo "    table: $table_count  pre: $pre_count  code: $code_count  td: $td_count"
+    echo "    body text length: $body_text_len"
+
+    if [ "$parse_ok" = "True" ] || [ "$parse_ok" = "true" ]; then
+      ok "html parsed cleanly under lxml"
+    else
+      ok "html parsed under html.parser fallback (lxml reported: $(jget parse_error))"
+    fi
+    if [ "$has_html" = "True" ] && [ "$has_head" = "True" ] && [ "$has_body" = "True" ]; then
+      ok "structural <html>/<head>/<body> present"
+    else
+      bad "missing structural element (html=$has_html head=$has_head body=$has_body) -- response is not a rendered page"
+    fi
+    if [ -n "$title_text" ]; then
+      ok "<title> is non-empty: '$title_text'"
+    else
+      bad "<title> is empty -- page-markdown.tmpl did not receive the doc title"
+    fi
+    if [ "$h1_count" = "1" ]; then
+      ok "exactly one <h1> (spec title heading rendered once)"
+    elif [ "$h1_count" = "0" ]; then
+      bad "no <h1> -- the spec's '# bbsengine6.auth to bbsengine6.bank authorization flow' heading was not rendered"
+    else
+      bad "expected 1 <h1>, got $h1_count (h1_texts: $h1_texts) -- page rendered multiple H1s or duplicated the heading"
+    fi
+    # verify the h1 text matches the spec title (Parsedown strips the
+    # leading '# ' and emits the rest as the heading text)
+    if echo "$h1_texts" | grep -qF 'bbsengine6.auth to bbsengine6.bank authorization flow'; then
+      ok "<h1> text matches the spec title"
+    else
+      bad "<h1> text does not match the spec title (got: '$h1_texts') -- markdown parser dropped or mangled the heading"
+    fi
+    # the spec has these h2 headings: Components, End-to-end sequence,
+    # Wire-level mapping (bank), Token-aware path, Failure modes,
+    # Files involved. The H3 sub-headings under Components account
+    # for the rest. Expect >= 6 h2.
+    if [ "$h2_count" -ge 6 ]; then
+      ok ">= 6 <h2> headings (spec has Components, End-to-end sequence, Wire-level mapping, Token-aware path, Failure modes, Files involved)"
+    else
+      bad "expected >= 6 <h2>, got $h2_count -- markdown parser collapsed or skipped section headings"
+    fi
+    if [ "$h3_count" -ge 3 ]; then
+      ok ">= 3 <h3> headings (spec has bbsengine6.auth, SessionManager, bbsengine6.bank, bbsengine6.bank.api.handler)"
+    else
+      bad "expected >= 3 <h3>, got $h3_count -- subsection headings collapsed"
+    fi
+    # the spec has two markdown tables (auth-op table, wire-level
+    # mapping) plus the SessionManager method table -- at least 1
+    # table must render. >= 1 is the floor; > 1 catches a partial
+    # render that only handled the first table.
+    if [ "$table_count" -ge 1 ]; then
+      ok "at least 1 <table> rendered (markdown table support working; got $table_count)"
+    else
+      bad "no <table> in response -- the markdown tables were not rendered (likely a markdown parser config that escapes pipes, or a template that strips tables)"
+    fi
+    # the spec has a fenced code block (session_id mapping) and a
+    # fenced json block (error envelope). At least one <pre> must
+    # render.
+    if [ "$pre_count" -ge 1 ]; then
+      ok "at least 1 <pre> block rendered (fenced code blocks working; got $pre_count)"
+    else
+      bad "no <pre> block in response -- fenced code blocks were not rendered (likely a markdown parser config that escapes backticks, or a template that strips <pre>)"
+    fi
+    if [ "$code_count" -ge 1 ]; then
+      ok "at least 1 <code> element rendered (inline + fenced code; got $code_count)"
+    else
+      bad "no <code> element in response -- inline code was stripped (spec uses backticks for symbols like 'access()', 'session_id', etc.)"
+    fi
+    if [ "$li_count" -ge 1 ]; then
+      ok "at least 1 <li> rendered (the spec's numbered list under End-to-end sequence; got $li_count)"
+    else
+      bad "no <li> in response -- the spec's numbered list was not rendered"
+    fi
+    # the spec's tables contain verb names (login, reconnect, refresh,
+    # revoke on the auth side; balance, add, remove, history, pending,
+    # transfer, approve, reject, list_all on the bank side). At least
+    # one of these must appear inside a <td> cell.
+    verbs_found=""
+    for verb in login reconnect refresh revoke balance add remove history pending transfer approve reject list_all; do
+      if echo "$(python3 -c "import json; d=json.load(open('$PARSE_JSON')); print(' '.join(d.get('td_cells', [])))")" | grep -qwF "$verb"; then
+        verbs_found="$verbs_found $verb"
+      fi
+    done
+    verbs_found=$(echo "$verbs_found" | xargs)
+    if [ -n "$verbs_found" ]; then
+      ok "verb names appear inside <td> cells:$verbs_found (markdown tables rendered as HTML tables, not as raw text)"
+    else
+      bad "no spec verb names (login/reconnect/.../list_all) found inside any <td> cell -- tables may be rendered as plain text or escaped"
+    fi
+  fi
+else
+  bad "skipped -- [1] did not produce a non-empty body"
+fi
+echo
