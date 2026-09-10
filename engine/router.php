@@ -565,8 +565,15 @@ if (php_sapi_name() !== 'cli') {
   // overrides the teos fallback. The define()s stay for the
   // teos case where neither env nor a prefix-derived override
   // is present.
+  //
+  // @since 2026-09-09 — $handbookhome now reads from
+  // \bbsengine6\util\handbook_home() (the single source of
+  // truth for the canonical install path; same constant used
+  // by engine/serve-md.php). The handbook home can be
+  // overridden via the BBSENGINE6_HANDBOOK_HOME env var or
+  // constant (see php/util.php).
   $requesturi = $_SERVER['REQUEST_URI'] ?? '';
-  $handbookhome = '/srv/www/vhosts/www.bbsengine.org/html/handbook/';
+  $handbookhome = \bbsengine6\util\handbook_home();
   if (preg_match('#^/handbook/(\d+)/(.*)$#', $requesturi, $m)) {
     putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
     putenv('TEOSURL=/handbook/' . $m[1] . '/');
@@ -609,7 +616,7 @@ if (php_sapi_name() !== 'cli') {
   try {
     $router_result = \router($path);
     if ($router_result === null || $router_result === false) {
-//      http_response_code(500);
+      http_response_code(500);
       echo 'Router Error (null)';
     } else {
       echo $router_result;
@@ -618,7 +625,7 @@ if (php_sapi_name() !== 'cli') {
     if (function_exists('bbsengine6\util\echo_traceback')) {
       call_user_func('bbsengine6\util\echo_traceback', 'router.error: ' . $e->getMessage());
     }
-//    http_response_code(500);
+    http_response_code(500);
     echo 'Router Error';
   }
 }
