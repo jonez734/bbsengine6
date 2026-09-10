@@ -14,22 +14,40 @@ require_once(__DIR__ . "/../../zoid6/php/bootstrap.php");
 /**
  * Get the display label for the top-level "root" breadcrumb.
  *
- * Defaults to "teos" so existing callers (and any environment that
- * neither defines nor exports the constant) see no change. The
- * handbook vhost entry point sets TEOS_LABEL="bbsengine6 handbook"
- * via putenv() before invoking the router, mirroring how TEOSURL
- * and TEOSDIR are already exported.
+ * @since 2026-09-10 — promoted to bbsengine6\util\vhost_label()
+ * (php/util.php) so callers outside the blurb namespace
+ * (specifically router_buildBreadcrumbs in engine/router.php)
+ * can read the label without pulling in the blurb.php require
+ * chain. This wrapper remains for backward compatibility with
+ * any external callers that imported the blurb-namespaced name;
+ * new code should call bbsengine6\util\vhost_label() directly.
+ *
+ * Defaults to "teos" so existing callers (and any environment
+ * that neither defines nor exports the constant) see no change.
+ * The handbook vhost entry point (engine/router.php) sets
+ * TEOS_LABEL="bbsengine6 handbook" via putenv() before invoking
+ * the router, mirroring how TEOSURL and TEOSDIR are already
+ * exported.
  *
  * @return string The label to render for the top breadcrumb.
  */
 function getlabel(): string
 {
+    if (function_exists('bbsengine6\\util\\vhost_label')) {
+        return \bbsengine6\util\vhost_label();
+    }
+    // Fallback if util.php isn't loaded (e.g. a thin caller that
+    // requires blurb.php without util.php). Replicates the
+    // original logic so the function is still self-contained.
     $v = getenv('TEOS_LABEL');
     if (is_string($v) && $v !== '') {
         return $v;
     }
     if (defined('TEOS_LABEL')) {
-        return TEOS_LABEL;
+        $c = constant('TEOS_LABEL');
+        if (is_string($c) && $c !== '') {
+            return $c;
+        }
     }
     return 'teos';
 }

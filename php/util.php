@@ -818,6 +818,47 @@ function safe_path_web(array $components, array $opts = [])
         return '';
     }
 
+    /**
+     * per-vhost display label for the top-level "root" breadcrumb
+     *
+     * Used by both router_buildBreadcrumbs (engine/router.php)
+     * and bbsengine6\blurb\buildbreadcrumbs (php/blurb.php) to
+     * keep the DB-driven and filesystem-driven breadcrumb paths
+     * in lockstep. Default is "teos" so existing /teos/ callers
+     * (and any environment that neither defines nor exports the
+     * constant) see no change. The bbsengine.org /handbook/<v>/
+     * dispatch block in engine/router.php putenv()s
+     * TEOS_LABEL="bbsengine6 handbook" for handbook requests,
+     * mirroring the pattern used for TEOSDIR/TEOSURL and the
+     * original export in the (now-deleted) www/org/php/handbook.php
+     * (commit c40c79a).
+     *
+     * Promoted from bbsengine6\blurb\getlabel (php/blurb.php)
+     * to util so that callers outside the blurb namespace
+     * (specifically router_buildBreadcrumbs) can read the
+     * label without pulling in the blurb.php require chain
+     * (zoid6\bootstrap, zoid6config.php, zoid6.php, ...). The
+     * blurb.php function still exists for backward compat and
+     * delegates to this helper.
+     *
+     * @since 2026-09-10
+     * @return string The label to render for the top breadcrumb.
+     */
+    function vhost_label(): string
+    {
+        $env = getenv('TEOS_LABEL');
+        if (is_string($env) && $env !== '') {
+            return $env;
+        }
+        if (defined('TEOS_LABEL')) {
+            $c = constant('TEOS_LABEL');
+            if (is_string($c) && $c !== '') {
+                return $c;
+            }
+        }
+        return 'teos';
+    }
+
 } /* namespace bbsengine6\util */
 
 ?>
