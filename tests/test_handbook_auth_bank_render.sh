@@ -595,3 +595,81 @@ else
   fi
 fi
 echo
+
+# --- summary ------------------------------------------------------------
+echo "=== summary ==="
+echo "passed: $pass"
+echo "failed: $fail"
+if [ "$fail" -gt 0 ]; then
+  echo
+  echo "diagnosis:"
+  printf "%b\n" "$diagnosis"
+  echo
+  echo "common remediation paths:"
+  echo
+  echo "  if [1] returns 404:"
+  echo "    -- the no-.md chapter route is not reaching"
+  echo "       /router.php. Check www/org/htaccess-prod has"
+  echo "       'RewriteRule ^handbook/(\\\\d+)/(.*)\$ /router.php?uri=\$2'"
+  echo "       and that the symlink at html/router.php on"
+  echo "       merlin points at /srv/www/bbsengine6/router.php"
+  echo "       (created by 'make -C www org' via prod-symlinks)."
+  echo
+  echo "  if [1] returns 200 but [2] is not text/html:"
+  echo "    -- the wrong handler ran. If Content-Type is"
+  echo "       text/plain, serve-md.php handled the request"
+  echo "       (the .md route matched the no-.md URL --"
+  echo "       likely a rewrite-ordering issue in"
+  echo "       htaccess-prod). If Content-Type is something"
+  echo "       else entirely, a different handler is in the"
+  echo "       rewrite chain. Same plumbing check as the 404 case."
+  echo
+  echo "  if [3] fails (wrong structure):"
+  echo "    -- a markdown parser regression: bbsengine6\\\\markdown\\\\"
+  echo "       parseDocument() in php/markdown.php is dropping"
+  echo "       headings, collapsing tables, or stripping code"
+  echo "       blocks. Check the parser config (split: false,"
+  echo "       breaks: true) and the Parsedown install under"
+  echo "       vendor/erusev/parsedown/. Run"
+  echo "       'php php/markdown.php' locally with the spec to"
+  echo "       reproduce."
+  echo
+  echo "  if [4] fails (wrong content):"
+  echo "    -- the response rendered a different page (a router"
+  echo "       fallback that happened to have the right structure)"
+  echo "       or a stale page-markdown.tmpl cached. Flush the"
+  echo "       compiled-template cache on merlin and re-run"
+  echo "       'make wwworg' to push the canonical handbook."
+  echo
+  echo "  if [5] fails (error markers in body):"
+  echo "    -- an error page is being served with status 200."
+  echo "       The marker in the 'bad' line names the failure"
+  echo "       mode:"
+  echo "         'Page Not Found'           : router_handleError"
+  echo "                                       fallback (engine/router.php:275)"
+  echo "         'router error'             : a router_log() error"
+  echo "                                       leaked into the body"
+  echo "         'Unable to load template'  : Smarty; page-markdown.tmpl"
+  echo "                                       missing on merlin -- run"
+  echo "                                       'make skin-prod'"
+  echo "         'Failed opening required'  : an engine/ include"
+  echo "                                       (router.php, serve-md.php,"
+  echo "                                       php/markdown.php) is missing"
+  echo "                                       on merlin -- run"
+  echo "                                       'make engine-deploy-prod'"
+  echo "                                       + 'sudo systemctl reload"
+  echo "                                       php-fpm'"
+  echo
+  echo "  if [6] fails (plumbing):"
+  echo "    -- the local www/org/htaccess-prod is missing the"
+  echo "       /router.php chapter rule, or still uses the old"
+  echo "       /engine/router.php target. Restore the rule"
+  echo "       before running this test -- without it, the test"
+  echo "       is meaningless."
+  echo
+  echo "to re-run: $0"
+  exit 1
+fi
+echo
+echo "all checks passed; $URL returns 200 with auth-bank.md rendered as HTML."
+exit 0
