@@ -2,6 +2,9 @@
 # htaccess-prod - Production rewrite rules for bbsengine.org
 #
 
+SetEnv VHOST_LABEL bbsengine
+SetEnv TEOS_BASEDIR /srv/www/vhosts/www.bbsengine.org/html/handbook/6/
+
 RewriteEngine On
 RewriteBase /
 

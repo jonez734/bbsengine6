@@ -894,17 +894,17 @@ function safe_path_web(array $components, array $opts = [])
      */
     function vhost_label(): string
     {
-        $env = getenv('TEOS_LABEL');
+        $env = getenv('VHOST_LABEL');
         if (is_string($env) && $env !== '') {
             return $env;
         }
-        if (defined('TEOS_LABEL')) {
-            $c = constant('TEOS_LABEL');
+        if (defined('VHOST_LABEL')) {
+            $c = constant('VHOST_LABEL');
             if (is_string($c) && $c !== '') {
                 return $c;
             }
         }
-        return 'teos';
+        return 'NEEDINFO:vhost_label';
     }
 
 } /* namespace bbsengine6\util */

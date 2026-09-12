@@ -35,15 +35,10 @@ if (!defined('ROUTER_STOP')) { define('ROUTER_STOP', 'ROUTER_STOP'); }
 
 function router_log(string $message, string $level = "info"): void
 {
-  static $func = null;
-  if ($func === null) {
-    $func = function_exists('\bbsengine6\util\logentry') ? '\bbsengine6\util\logentry' : false;
-  }
-  if ($func) {
-    $func('router.' . strtoupper($level) . ': ' . $message);
-  }
+  \bbsengine6\util\logentry("router".strlower($level).':'.$message);
 }
 
+/*
 function router_get_teosurl(): string
 {
   // @since 2026-09-09 — thin wrapper kept for backward compat.
@@ -51,7 +46,9 @@ function router_get_teosurl(): string
   // delegates to it.
   return \bbsengine6\util\teos_url();
 }
+*/
 
+/*
 function router_get_teosdir(): string
 {
   // @since 2026-09-09 — thin wrapper kept for backward compat.
@@ -59,6 +56,7 @@ function router_get_teosdir(): string
   // delegates to it.
   return \bbsengine6\util\teos_dir();
 }
+*/
 
 /**
  * Wrapper around bbsengine6\util\safe_path_web that no-ops to
@@ -83,9 +81,6 @@ function router_get_teosdir(): string
  */
 function router_safe_path_web(array $components, array $opts = []): string|false
 {
-  if (!function_exists('bbsengine6\util\safe_path_web')) {
-    return false;
-  }
   return bbsengine6\util\safe_path_web($components, $opts);
 }
 
@@ -122,9 +117,7 @@ function router_buildBreadcrumbs(string $uri): array
   // (still TEOSURL-rooted). blurb.php's buildbreadcrumbs()
   // delegates to the same helper, so the DB-driven and
   // filesystem-driven breadcrumb paths stay in lockstep.
-  $rootlabel = function_exists('bbsengine6\\util\\vhost_label')
-    ? \bbsengine6\util\vhost_label()
-    : 'teos';
+  $rootlabel = \bbsengine6\util\vhost_label();
   array_unshift($autoCrumbs, [
     'title' => $rootlabel,
     'path' => 'teos',
@@ -190,12 +183,6 @@ function router_handleBlurb(string $uri)
   }
 
   if (bbsengine6\blurb\isBlurb($uri)) {
-    if (function_exists('bbsengine6\blurb\display')) {
-      // @since 2026-09-10 — wrap the blurb render in a
-      // try/catch so a database failure (missing engine schema,
-      // partial deploy, db down) doesn't 500 the request. Log
-      // the failure and let the next handler (folder, error)
-      // try to render instead.
       try {
         bbsengine6\blurb\display($uri, null);
         return '';
@@ -203,8 +190,7 @@ function router_handleBlurb(string $uri)
         router_log('blurb display failed: ' . $e->getMessage(), 'error');
         return ROUTER_NEXT;
       }
-    }
-    return ROUTER_NEXT;
+      return ROUTER_NEXT;
   }
   return ROUTER_NEXT;
 }
@@ -249,24 +235,18 @@ function router_handleFolder(string $uri)
 
   // folder visibility check (optional: only meaningful for the teos tree)
   $isVisible = true; $isSysop = false;
-  if (function_exists('bbsengine6\folder\isFolderVisible')) {
-    // @since 2026-09-10 — wrap DB-touching visibility checks
-    // so a database failure (missing schema, partial deploy)
-    // doesn't 500 the request. Default to "visible to all" on
-    // DB failure so the listing still renders; the user can
-    // then see the directory contents even if the hidden-state
-    // lookup is offline.
-    try {
-      $isVisible = bbsengine6\folder\isFolderVisible($uri);
-      $isSysop = function_exists('bbsengine6\folder\isSysop') && bbsengine6\folder\isSysop();
-    } catch (\Throwable $e) {
-      router_log('folder visibility check failed: ' . $e->getMessage(), 'error');
-      $isVisible = true;
-      $isSysop = false;
-    }
-    if (!$isVisible && !$isSysop) {
-      return ROUTER_NEXT;
-    }
+  try {
+    $isVisible = bbsengine6\folder\isFolderVisible($uri);
+    $isSysop = bbsengine6\folder\isSysop();
+  } catch (\Throwable $e) {
+    \bbsengine6\util\echo_traceback("folder visibility check failed");
+    router_log('folder visibility check failed: ' . $e->getMessage(), 'error');
+    $isVisible = true;
+    $isSysop = false;
+  }
+
+  if (!$isVisible && !$isSysop) {
+    return ROUTER_NEXT;
   }
 
   // @since 2026-09-10 — wrap the listing render in a try/catch
@@ -317,11 +297,9 @@ function router_handleError(string $uri)
   $msg = 'Page not found: ' . htmlspecialchars($uri);
   router_log($msg, 'error');
 
-  if (function_exists('bbsengine6\page\error')) {
-    $r = bbsengine6\page\error($msg, 404);
-    if ($r !== null && $r !== false) {
-      return $r;
-    }
+  $r = bbsengine6\page\error($msg, 404);
+  if ($r !== null && $r !== false) {
+    return $r;
   }
 
   http_response_code(404);
@@ -341,18 +319,13 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   $doc['title'] = isset($doc['title']) ? htmlspecialchars($doc['title']) : basename($filepath, '.md');
   $doc['date']  = isset($doc['date'])  ? htmlspecialchars($doc['date'])  : '';
 
-  if (function_exists('bbsengine6\setcurrentpage')) {
-    bbsengine6\setcurrentpage(router_get_teosurl() . $uri);
-  }
+  bbsengine6\setcurrentpage(router_get_teosurl() . $uri);
 
   $uri_parts = explode("/", $uri);
   array_pop($uri_parts);
   $breadcrumbs = router_buildBreadcrumbs(implode("/", $uri_parts));
 
-  $choices = [];
-  if (function_exists('\zoid6\buildchoices')) {
-    $choices = \zoid6\buildchoices($choices);
-  }
+  $choices = \zoid6\buildchoices($choices);
 
   $data = [
     'title' => $doc['title'],
@@ -440,9 +413,7 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
     if ($ext === 'md') {
       $filecontent = file_get_contents($fullpath);
       if ($filecontent !== false && strncmp($filecontent, '---', 3) === 0) {
-        if (!function_exists('\bbsengine6\markdown\splitFrontmatter')) {
-          require_once("php/markdown.php");
-        }
+        require_once("markdown.php");
         [$metadata, ] = \bbsengine6\markdown\splitFrontmatter($filecontent);
         if (isset($metadata['title'])) {
           $displayTitle = $metadata['title'];
@@ -503,9 +474,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   $title = basename($uri) ?: $uri;
   $teosurl = router_get_teosurl();
 
-  if (function_exists('bbsengine6\setcurrentpage')) {
-    bbsengine6\setcurrentpage($teosurl . $uri);
-  }
+  \bbsengine6\setcurrentpage($teosurl.$uri);
 
   if (function_exists('bbsengine6\displaypage')) {
     $breadcrumbs = router_buildBreadcrumbs($uri);
@@ -688,17 +657,15 @@ if (php_sapi_name() !== 'cli') {
   if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
 
   require_once('/srv/www/bbsengine6/php/util.php');
-  require_once('/srv/www/bbsengine6/php/markdown.php');
-  require_once('/srv/www/bbsengine6/php/blurb.php');
-  require_once('/srv/www/bbsengine6/php/engine.php');
-  require_once('config.php');
+//  require_once('/srv/www/bbsengine6/php/markdown.php');
+//  require_once('/srv/www/bbsengine6/php/blurb.php');
+//  require_once('/srv/www/bbsengine6/php/engine.php');
+//  require_once('config.php');
 
   $path = $_GET['path'] ?? $_GET['uri'] ?? '';
   $path = preg_replace('/\.md$/', '', $path);
 
-  if (function_exists('bbsengine6\util\logentry')) {
-    call_user_func('bbsengine6\util\logentry', "router.http: path=$path");
-  }
+  bbsengine6\util\logentry("router.http: path=$path");
 
   // @since 2026-09-07 — the previous version gated router()
   // on `!empty($path)`, which silently 200'd with an empty
@@ -718,9 +685,7 @@ if (php_sapi_name() !== 'cli') {
       echo $router_result;
     }
   } catch (Throwable $e) {
-    if (function_exists('bbsengine6\util\echo_traceback')) {
-      call_user_func('bbsengine6\util\echo_traceback', 'router.error: ' . $e->getMessage());
-    }
+    bbsengine6\util\echo_traceback("router.http.100:".$e->getMessage());
     http_response_code(500);
     echo 'Router Error';
   }
