@@ -124,7 +124,7 @@ function getTopLevelFolders(): array
  */
 function getteospath(): string
 {
-    return \bbsengine6\util\teos_dir();
+    return defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
 }
 
 /**
@@ -226,7 +226,7 @@ function getDirectoryItems(string $dirpath, string $uri): array
 
         $items[] = [
             'title' => $displayTitle,
-            'uri' => \bbsengine6\util\teos_url() . $fileuri,
+            'uri' => \TEOSURL . $fileuri,
             'filename' => $filename,
         ];
     }
