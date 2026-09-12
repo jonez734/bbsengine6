@@ -153,8 +153,8 @@ bbsengine6/
 │
 ├── engine/                      Web-facing PHP entry points
 │   ├── router.php               Handler-registry router
-│   ├── login.php  logout.php  join.php  direct.php
-│   └── standalone.php  serve-md.php
+│   ├── login.php  logout.php  join.php  direct.php  simple.php
+│   └── standalone.php  test.php  test2.php  serve-md.php
 │
 ├── js/                          Browser-side scripts
 │   ├── bbsengine6.js            Singleton (AJAX, CSRF, sanitization)

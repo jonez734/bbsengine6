@@ -182,7 +182,7 @@ The package lives at `py/src/bbsengine6/`.
 | `login.php`      | Member authentication                         |
 | `logout.php`     | Member logout (destroys session)              |
 | `join.php`       | Member registration                           |
-| `direct.php` `standalone.php` `serve-md.php` | Smaller entry points / smoke probes |
+| `direct.php` `simple.php` `standalone.php` `test.php` `test2.php` `serve-md.php` | Smaller entry points / smoke probes |
 
 ### 4.3 Smarty plugins (`smarty/`)
 
