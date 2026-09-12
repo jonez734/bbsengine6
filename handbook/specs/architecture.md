@@ -337,8 +337,8 @@ The message domain has its own layered package — see
 ### 3.8 Web domain
 
 - `engine/*.php` — request entry points (`router.php`, `login.php`,
-  `logout.php`, `join.php`, `direct.php`, `standalone.php`,
-  `serve-md.php`).
+  `logout.php`, `join.php`, `direct.php`, `simple.php`,
+  `standalone.php`, `test.php`, `test2.php`, `serve-md.php`).
 - `php/` — library (`engine.php`, `database.php`, `session.php`,
   `libmember.php`, `blurb.php`, `page.php`, `util.php`, the
   `bbsengine6\\password` namespace, the `Form/` clone).
