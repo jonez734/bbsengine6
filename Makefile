@@ -288,26 +288,8 @@ sign:
 
 wheel-release: build rename-sdist sign
 
-# @since 2026-09-09 — top-level 'test' target. Runs the
-# bash handbook probe tests in tests/. Scope is
-# intentionally narrow (just the two handbook tests
-# that probe live .org endpoints); the Python tests
-# under py/tests/ have their own pytest runner and
-# require a venv, and the PHP tests under tests/ are
-# standalone scripts invoked individually. Folding
-# those in is a separate decision. Each script prints
-# its own pass/fail detail and exits non-zero on
-# failure; the Makefile target inherits that exit
-# code via the default rule shell, so the first
-# failing test aborts the run (fail-fast).
-test:
-	@echo "=== bbsengine6 test ==="
-	bash tests/test_handbook_6_returns_200.sh
-	bash tests/test_handbook_auth_bank_content.sh
-	@echo "=== all tests passed ==="
-
 .PHONY: handbook handbook-prod handbook-deploy-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod engine-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui
-.PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release test
+.PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
 
 
