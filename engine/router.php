@@ -35,10 +35,9 @@ if (!defined('ROUTER_STOP')) { define('ROUTER_STOP', 'ROUTER_STOP'); }
 
 function router_log(string $message, string $level = "info"): void
 {
-  \bbsengine6\util\logentry("router".strlower($level).':'.$message);
+  \bbsengine6\util\logentry("router".strtolower($level).':'.$message);
 }
 
-/*
 function router_get_teosurl(): string
 {
   // @since 2026-09-09 — thin wrapper kept for backward compat.
@@ -46,9 +45,7 @@ function router_get_teosurl(): string
   // delegates to it.
   return \bbsengine6\util\teos_url();
 }
-*/
 
-/*
 function router_get_teosdir(): string
 {
   // @since 2026-09-09 — thin wrapper kept for backward compat.
@@ -56,7 +53,6 @@ function router_get_teosdir(): string
   // delegates to it.
   return \bbsengine6\util\teos_dir();
 }
-*/
 
 /**
  * Wrapper around bbsengine6\util\safe_path_web that no-ops to
@@ -92,6 +88,7 @@ function router_buildBreadcrumbs(string $uri): array
   }
 
   $teosurl = rtrim(router_get_teosurl(), '/');
+
 
   // Build breadcrumbs from URI segments
   $autoCrumbs = [];
@@ -623,9 +620,9 @@ if (php_sapi_name() !== 'cli') {
   // partially-working handbook). The minimal fix is to
   // require util.php here so handbook_home() is in scope
   // for the prefix-detection block. The other requires
-  // (markdown.php, blurb.php, engine.php, config.php) stay
+  // (markdown.php, blurb.php, engine.php) stay
   // below because they are not needed for handbook_home().
-  require_once('/srv/www/bbsengine6/php/util.php');
+  require_once('util.php');
 
   $requesturi = $_SERVER['REQUEST_URI'] ?? '';
   $handbookhome = \bbsengine6\util\handbook_home();
@@ -656,11 +653,9 @@ if (php_sapi_name() !== 'cli') {
   if (!defined('TEOSURL')) define('TEOSURL', '/teos/');
   if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
 
-  require_once('/srv/www/bbsengine6/php/util.php');
-//  require_once('/srv/www/bbsengine6/php/markdown.php');
-//  require_once('/srv/www/bbsengine6/php/blurb.php');
-//  require_once('/srv/www/bbsengine6/php/engine.php');
-//  require_once('config.php');
+  require_once('markdown.php');
+  require_once('blurb.php');
+  require_once('engine.php');
 
   $path = $_GET['path'] ?? $_GET['uri'] ?? '';
   $path = preg_replace('/\.md$/', '', $path);
