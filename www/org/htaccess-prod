@@ -4,6 +4,7 @@
 
 SetEnv VHOST_LABEL bbsengine
 SetEnv TEOS_BASEDIR /srv/www/vhosts/www.bbsengine.org/html/handbook/6/
+SetEnv TEOS_BASEURI /handbook/
 
 RewriteEngine On
 RewriteBase /
@@ -20,22 +21,10 @@ RewriteRule ^(.*)$ https://www.bbsengine.org/$1 [L,R=301]
 # are stable. R=302 because this is intentionally temporary.
 RewriteRule ^handbook[/]?$ /handbook/6/ [R=302,L]
 
-# /join -> /join.php (modernized, CSRF-protected member
-# registration). Replaces the legacy /register URL; /register is
-# no longer routed and falls through to the catch-all.
-# @since 2026-09-09 — flattened from /engine/join.php. The .org
-# vhost's html/join.php is a symlink to the canonical install
-# at /srv/www/bbsengine6/join.php (see www/org/Makefile stage).
-RewriteRule ^join[/]?$ /join.php [last]
+RewriteRule ^join[/]?$ /engine/join.php [last]
 
-# /login and /logout -> /login.php and /logout.php
-# (modernized, CSRF-protected). Other PHP entry points stay
-# on legacy www/org/php/ for now.
-# @since 2026-09-09 — flattened from /engine/login.php and
-# /engine/logout.php. The .org vhost's html/{login,logout}.php
-# are symlinks to the canonical install at /srv/www/bbsengine6/.
-RewriteRule ^login[/]?$ /login.php [last]
-RewriteRule ^logout[/]?$ /logout.php [last]
+RewriteRule ^login[/]?$ /engine/login.php [last]
+RewriteRule ^logout[/]?$ /engine/logout.php [last]
 
 # Legacy entry points (kept on www/org/php/).
 RewriteRule ^$ /index.php [last]
@@ -48,51 +37,12 @@ RewriteRule ^robots.txt$ seo.php?mode=robotstxt [last,qsappend]
 RewriteRule ^sitemap.xml$ seo.php?mode=sitemapxml [last,qsappend]
 RewriteRule ^favicon\.ico$ - [last]
 
-# Handbook raw .md URLs -> /serve-md.php (mirrors the
-# .md-as-text rule in teos/www/htaccess-prod:19, but scoped
-# to /handbook/<v>/ so other .md files on the vhost fall
-# through). The 'prefix=' query param tells serve-md.php's
-# HTTP entry-point which directory the file lives in.
-# @since 2026-09-09 — flattened from /engine/serve-md.php.
-# html/serve-md.php is a symlink to the canonical install.
-RewriteRule ^handbook/(\d+)/(.+\.md)$ /serve-md.php?prefix=handbook/$1&path=$2 [last,qsappend]
+# Handbook raw .md URLs -> /serve-md.php (scoped to /handbook/<v>/).
+# 'prefix=' tells serve-md.php's HTTP entry-point which directory
+# the file lives in. /engine/serve-md.php is the .org vhost's
+# per-vhost /engine/ install (rsynced by 'make wwworg').
+RewriteRule ^handbook/(\d+)/(.+\.md)$ /engine/serve-md.php?prefix=handbook/$1&path=$2 [last,qsappend]
 
-# Handbook chapter URLs -> /router.php for markdown rendering.
-# The router detects /handbook/<v>/ from the request URI, sets
-# TEOSURL/TEOSDIR for that version, then dispatches handleMarkdown
-# on the chapter.
-# @since 2026-09-09 — flattened from /engine/router.php.
-# html/router.php is a symlink to the canonical install.
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^handbook/(\d+)/(.*)$ /router.php?uri=$2 [last,qsappend]
-
-# Handbook directory URLs -> /router.php for the directory
-# listing. Mirrors teos/www/htaccess-prod:26-27 (the !-d
-# catch-all there). uri=<dir> (no handbook/<v>/ prefix) so
-# the router's prefix detection picks up the version.
-# @since 2026-09-09 — flattened from /engine/router.php.
-RewriteCond %{REQUEST_FILENAME} -d
-RewriteRule ^handbook/(\d+)/(.*)$ /router.php?uri=$2 [last,qsappend]
-
-# Route remaining clean URLs to /router.php (mirrors
-# teos/www/htaccess-prod:32). The handbook-specific rules
-# above already match /handbook/<v>/...; this catch-all
-# covers everything else.
-# @since 2026-09-09 — flattened from /engine/router.php.
-# @since 2026-09-10 — exclude /router.php (and /serve-md.php
-# etc.) from the catch-all to prevent the mod_rewrite loop
-# that surfaced on the teos vhost ([Thu Sep 10 10:53:05]
-# AH00124: Request exceeded the limit of 10 internal
-# redirects). The previous `^([a-zA-Z0-9_/-]+)$` pattern
-# matched the rewritten URL /router.php?uri=... too, so on
-# each subsequent iteration the rule fired again with the
-# same path and a longer query (qsappend), until
-# LimitInternalRecursion=10 aborted. The %{REQUEST_URI}
-# check below short-circuits the rule when the URL is
-# already under /router.php or /serve-md.php, so the
-# rewrite chain terminates after one hop.
-RewriteCond %{REQUEST_URI} !^/(router|serve-md)\.php
-RewriteCond %{REQUEST_FILENAME} !-d
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^([a-zA-Z0-9_/-]+)$ /router.php?uri=$1 [last,qsappend]
+RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]

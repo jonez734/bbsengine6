@@ -36,10 +36,9 @@
 #        cleanup ran and was not reverted)
 #   [4]  build-host source invariants that catch a regression
 #        in the local working tree (handbook.php is absent,
-#        htaccess-prod has the new /handbook/<v>/ routing rules,
-#        no /engine/ entry in bootstrap.php, .htaccess in
-#        ENGINE_PHP, rsync --exclude patterns for engine/ and
-#        the four legacy handbook files)
+#        bootstrap.php has no /engine/ entry, the per-vhost
+#        install via ENGINESTAGEDOCROOT is wired in, htaccess
+#        routes to the vhost's own html/engine/ install)
 #
 # Each check's "bad" message points at the specific failure
 # mode and the operator action that resolves it.
@@ -153,138 +152,83 @@ else
   bad "local php/bootstrap.php missing"
 fi
 
-# @since 2026-09-09 — single canonical install. The .org
-# vhost's engine entry points are symlinks at the docroot
-# root (no /engine/ URL prefix); the symlinks are created
-# on merlin by www/org/Makefile prod-symlinks (an ssh-based
-# step; the build host's local stage is mounted read-only
-# so `ln -sfn` cannot run there). The install itself is
-# shipped by engine/Makefile deploy-engine. Verify the
-# prod-symlinks target exists and ssh-runs ln -sfn for
-# each of the five entry points. This is the new
-# invariant replacing the previous engine/Makefile
-# ENGINE_PHP check.
-if [ -f "$LOCAL_BBSENGINE6/www/org/Makefile" ]; then
-  if ! grep -qF 'prod-symlinks:' "$LOCAL_BBSENGINE6/www/org/Makefile" 2>/dev/null; then
-    bad "local www/org/Makefile missing prod-symlinks target -- single-install refactor not in working tree"
-  else
-    symlinks_ok=true
-    for entry in \
-      'ln -sfn /srv/www/bbsengine6/router\.php' \
-      'ln -sfn /srv/www/bbsengine6/serve-md\.php' \
-      'ln -sfn /srv/www/bbsengine6/join\.php' \
-      'ln -sfn /srv/www/bbsengine6/login\.php' \
-      'ln -sfn /srv/www/bbsengine6/logout\.php'; do
-      if ! grep -qE "$entry" "$LOCAL_BBSENGINE6/www/org/Makefile" 2>/dev/null; then
-        symlinks_ok=false
-        bad "local www/org/Makefile prod-symlinks is missing symlink-creation line: $entry"
-      fi
-    done
-    if $symlinks_ok; then
-      ok "local www/org/Makefile prod-symlinks creates the five symlinks (router.php, serve-md.php, join.php, login.php, logout.php) -> /srv/www/bbsengine6/ on merlin"
-    fi
-  fi
-  if ! grep -qE '\$\(MAKE\)[^|]*-C org prod-symlinks' "$LOCAL_BBSENGINE6/www/Makefile" 2>/dev/null; then
-    bad "local www/Makefile org target does not chain prod-symlinks -- symlinks won't be created on wwworg"
-  else
-    ok "local www/Makefile org target chains prod-symlinks (wwworg deploys end-to-end)"
-  fi
-else
-  bad "local www/org/Makefile missing"
-fi
-
+# Per-vhost /engine/ install: engine/Makefile takes
+# ENGINESTAGEDOCROOT/ENGINEPRODDOCROOT as inputs (each caller
+# passes its own vhost path), and the top-level wwworg recipe
+# threads the .org vhost path overrides into engine-deploy-prod.
 if [ -f "$LOCAL_BBSENGINE6/engine/Makefile" ]; then
-  if grep -q 'ENGINE_PHP *= *\.htaccess' "$LOCAL_BBSENGINE6/engine/Makefile" 2>/dev/null; then
-    ok "local engine/Makefile ENGINE_PHP includes .htaccess"
-  else
-    bad "local engine/Makefile ENGINE_PHP does NOT include .htaccess -- fix(engine/Makefile) commit not in working tree"
+  per_vhost_ok=true
+  if ! grep -qF 'ENGINESTAGEDOCROOT' "$LOCAL_BBSENGINE6/engine/Makefile" 2>/dev/null; then
+    per_vhost_ok=false
+    bad "local engine/Makefile missing ENGINESTAGEDOCROOT -- per-vhost /engine/ install not wired"
   fi
-  # @since 2026-09-09 — single canonical install. The engine
-  # Makefile now ships the install to ENGINEHOST:INSTALL_DIR
-  # in addition to the .com docroot copy. The .org docroot
-  # is no longer a target of engine/Makefile.
-  if grep -q 'INSTALL_DIR' "$LOCAL_BBSENGINE6/engine/Makefile" 2>/dev/null; then
-    ok "local engine/Makefile ships canonical install to INSTALL_DIR (single-install model)"
-  else
-    bad "local engine/Makefile missing INSTALL_DIR rsync target -- single-install refactor not in working tree"
+  if ! grep -qF 'ENGINEPRODDOCROOT' "$LOCAL_BBSENGINE6/engine/Makefile" 2>/dev/null; then
+    per_vhost_ok=false
+    bad "local engine/Makefile missing ENGINEPRODDOCROOT -- per-vhost /engine/ install not wired"
+  fi
+  if grep -qE '^[^#].*htaccess-prod' "$LOCAL_BBSENGINE6/engine/Makefile" 2>/dev/null; then
+    per_vhost_ok=false
+    bad "local engine/Makefile still ships an htaccess-prod -- per-vhost htaccess should own routing"
   fi
   if grep -qE '^[A-Z_]*=.*WWWENGINEPRODDOCROOT|^[A-Z_]*=.*WWWENGINESTAGEDOCROOT' "$LOCAL_BBSENGINE6/engine/Makefile" 2>/dev/null; then
-    bad "local engine/Makefile still defines WWWENGINEPRODDOCROOT / WWWENGINESTAGEDOCROOT -- these were dropped in the single-install refactor"
-  else
-    ok "local engine/Makefile no longer defines the .org docroot rsync vars (single-install refactor applied)"
+    per_vhost_ok=false
+    bad "local engine/Makefile still defines WWWENGINEPRODDOCROOT / WWWENGINESTAGEDOCROOT -- abandoned symlink-design vars must be removed"
+  fi
+  if $per_vhost_ok; then
+    ok "local engine/Makefile honors per-vhost ENGINESTAGEDOCROOT/ENGINEPRODDOCROOT and does not ship a per-install .htaccess"
   fi
 else
   bad "local engine/Makefile missing"
 fi
 
+if [ -f "$LOCAL_BBSENGINE6/Makefile" ]; then
+  # wwworg must thread the .org vhost path overrides into
+  # engine-deploy-prod so the engine install lands at the
+  # vhost's html/engine/ (not the canonical /srv/www/bbsengine6/).
+  if grep -qF 'ENGINESTAGEDOCROOT=/srv/www/vhosts/www.bbsengine.org/html/engine/' "$LOCAL_BBSENGINE6/Makefile" 2>/dev/null \
+     && grep -qF 'ENGINEPRODDOCROOT=$(ORGHOST):/srv/www/vhosts/www.bbsengine.org/html/engine/' "$LOCAL_BBSENGINE6/Makefile" 2>/dev/null; then
+    ok "local wwworg recipe threads .org vhost path overrides into engine-deploy-prod"
+  else
+    bad "local wwworg recipe missing .org vhost ENGINESTAGEDOCROOT/ENGINEPRODDOCROOT overrides -- per-vhost /engine/ install not wired"
+  fi
+else
+  bad "local Makefile missing"
+fi
+
 if [ -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
-  # @since 2026-09-07 — handbook.php eradicated; the .org
-  # htaccess must route /handbook/<v>/<chapter> and
-  # /handbook/<v>/<dir> through /router.php, and
-  # /handbook/<v>/<uri>.md through /serve-md.php.
-  # A catch-all .md rule that matches anywhere on the vhost
-  # is too greedy; the handbook-specific .md rule must be
-  # present and prefixed. Use grep -F (fixed string) for the
-  # rewrite target substrings; the prior test used BRE-escaped
-  # parens that didn't actually match the ERE pattern in
-  # htaccess-prod, so the regex check was broken even when the
-  # rule was present and correct.
-  handbook_md_ok=false
-  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/serve-md.php'; then
-    handbook_md_ok=true
+  # Each vhost's htaccess must route the five engine entry points
+  # to the vhost's own html/engine/ install. The /engine/ URL
+  # prefix is correct in the per-vhost-rsync model (the install
+  # is at html/engine/, not at the docroot root).
+  rewrite_targets_ok=true
+  for target in '/engine/router.php' '/engine/serve-md.php' '/engine/join.php' '/engine/login.php' '/engine/logout.php'; do
+    if ! grep -E '^[[:space:]]*RewriteRule' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF "$target"; then
+      rewrite_targets_ok=false
+      bad "local htaccess-prod has no active RewriteRule targeting $target -- engine entry-point routing missing"
+    fi
+  done
+  if $rewrite_targets_ok; then
+    ok "local htaccess-prod routes the five engine entry points (/router.php, /serve-md.php, /join.php, /login.php, /logout.php) to the .org vhost's html/engine/ install"
   fi
-  if $handbook_md_ok; then
-    ok "local htaccess-prod routes /handbook/<v>/<uri>.md to /serve-md.php (no /engine/ prefix)"
+  # /handbook/<v>/<chapter> and /handbook/<v>/<uri>.md must route
+  # through /router.php and /serve-md.php respectively (the
+  # router detects the /handbook/<v>/ URI prefix and dispatches).
+  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/serve-md.php'; then
+    ok "local htaccess-prod routes /handbook/<v>/<uri>.md to /engine/serve-md.php"
   else
-    bad "local htaccess-prod does NOT route /handbook/<v>/<uri>.md to /serve-md.php -- fix(www/htaccess-prod) routing rule missing or uses /engine/ prefix"
+    bad "local htaccess-prod does NOT route /handbook/<v>/<uri>.md to /engine/serve-md.php -- the .org vhost's per-vhost /engine/ install must be the rewrite target"
   fi
-  # @since 2026-09-09 — chapter + directory routes target
-  # /router.php, not /engine/router.php. Use grep -F
-  # (fixed string) for the rewrite target; the prior test's
-  # BRE-escaped regex was broken (see .md check above).
-  handbook_chapter_ok=false
-  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/router.php?uri='; then
-    handbook_chapter_ok=true
-  fi
-  if $handbook_chapter_ok; then
-    ok "local htaccess-prod routes /handbook/<v>/<chapter> to /router.php (no /engine/ prefix)"
+  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/router.php?uri='; then
+    ok "local htaccess-prod routes /handbook/<v>/<chapter> to /engine/router.php"
   else
-    bad "local htaccess-prod does NOT route /handbook/<v>/<chapter> to /router.php -- chapter rule missing or uses /engine/ prefix"
-  fi
-  # @since 2026-09-09 — no /engine/ prefix in any rewrite
-  # rule's target. The single-install refactor moved the
-  # entry points to the docroot root, so rewrite targets
-  # are /router.php, /serve-md.php, /join.php, /login.php,
-  # /logout.php. Lines that mention /engine/ in COMMENTS
-  # (e.g. "@since 2026-09-09 — flattened from
-  # /engine/router.php") are still allowed; this check
-  # inspects the active rewrite rules only.
-  active_rewrite_engine_refs=$(grep -E '^[[:space:]]*Rewrite(Rule|Cond)' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -c '/engine/' || true)
-  if [ "$active_rewrite_engine_refs" -eq 0 ]; then
-    ok "local htaccess-prod has no /engine/ references in active RewriteRule/RewriteCond lines"
-  else
-    bad "local htaccess-prod has $active_rewrite_engine_refs active RewriteRule/RewriteCond line(s) referencing /engine/ -- all rewrite targets should be flattened"
+    bad "local htaccess-prod does NOT route /handbook/<v>/<chapter> to /engine/router.php -- the .org vhost's per-vhost /engine/ install must be the rewrite target"
   fi
 else
   bad "local www/org/htaccess-prod missing"
 fi
 
 if [ -f "$LOCAL_BBSENGINE6/www/Makefile" ]; then
-  # @since 2026-09-09 — single-install refactor dropped the
-  # --exclude engine/ and --exclude html/engine/ lines from
-  # the org rsync. The .org docroot no longer has an
-  # html/engine/ subdir; engine entry points are symlinks
-  # at the docroot root, created by www/org/Makefile stage
-  # and carried by $(RSYNC)'s --archive/-l. The excludes
-  # would now be actively harmful (rsync --delete-after
-  # would strip the symlinks). Verify they are absent.
-  if grep -qE 'exclude *"engine/"' "$LOCAL_BBSENGINE6/www/Makefile" 2>/dev/null \
-     || grep -qE 'exclude *"html/engine/"' "$LOCAL_BBSENGINE6/www/Makefile" 2>/dev/null; then
-    bad "local www/Makefile org rsync still has --exclude engine/ or --exclude html/engine/ -- these were dropped in the single-install refactor and would strip the docroot symlinks on --delete-after"
-  else
-    ok "local www/Makefile org rsync no longer excludes engine/ or html/engine/ (single-install refactor applied)"
-  fi
-  # --exclude html/handbook/{*.conf,modules.*}: prevent the read-only
+  # Legacy-handbook-artifact excludes: prevent the read-only
   # build-host local stage from re-pushing the four legacy Flask
   # artifacts after `make -C www remove-legacy-handbook` cleans them
   # on merlin.

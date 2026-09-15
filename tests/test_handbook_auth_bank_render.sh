@@ -82,7 +82,11 @@
 #        www/org/htaccess-prod has a RewriteRule for
 #        ^handbook/(\d+)/(.*) targeting /router.php
 #        (the no-.md route); without this rule, the
-#        test's URL would not reach router_handleMarkdown
+#        test's URL would not reach router_handleMarkdown.
+#        In the per-vhost /engine/ install model, the
+#        rewrite target is /engine/router.php (the vhost's
+#        html/engine/ install), not the canonical
+#        /srv/www/bbsengine6/.
 #   [7]  breadcrumb top-crumb structure: the rendered
 #        "You are here" root crumb links to /handbook/6/
 #        with text 'bbsengine6 handbook' (the TEOS_LABEL
@@ -295,7 +299,7 @@ if [ -z "$ct" ]; then
 elif echo "$ct" | grep -qi '^content-type: *text/html'; then
   ok "Content-Type is text/html (page-markdown.tmpl rendered the spec)"
 else
-  bad "Content-Type is not text/html: '$ct' -- the no-.md route did not reach router_handleMarkdown; likely htaccess-prod is missing the /router.php chapter rule, or a symlink is dangling"
+    bad "Content-Type is not text/html: '$ct' -- the no-.md route did not reach router_handleMarkdown; likely htaccess-prod is missing the /router.php chapter rule, or the engine install at /srv/www/vhosts/www.bbsengine.org/html/engine/ did not land on merlin"
 fi
 echo
 
@@ -702,12 +706,12 @@ echo
 
 # --- 6. build-host plumbing invariant -----------------------------------
 # The /handbook/<v>/<chapter> rewrite in
-# www/org/htaccess-prod must target /router.php (not
-# /engine/router.php) and must be present. If this rule
-# is missing, the test's URL would 404 (no handler) or
-# 500 (rewrite target missing). We check it explicitly
-# so a missing rule is diagnosed as "plumbing", not as
-# a content-sync issue.
+# www/org/htaccess-prod must target /engine/router.php
+# (the vhost's html/engine/ install) and must be present.
+# If this rule is missing, the test's URL would 404
+# (no handler) or 500 (rewrite target missing). We
+# check it explicitly so a missing rule is diagnosed as
+# "plumbing", not as a content-sync issue.
 echo "[6] build-host plumbing invariant (htaccess-prod chapter rule)"
 if [ ! -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
   bad "local www/org/htaccess-prod missing"
@@ -727,25 +731,13 @@ else
   # rule's is `(.*)$`. A pattern that requires the path group
   # to NOT end in `\.md$` correctly distinguishes them.
   chapter_rule_ok=false
-  if grep -P '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/\(\\d\+\)/\((?:[^\\]|\\.)*\)\$[[:space:]]+/router\.php\?uri=' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -vqF '.md'; then
+  if grep -P '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/\(\\d\+\)/\((?:[^\\]|\\.)*\)\$[[:space:]]+(?:/engine)?/router\.php\?uri=' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -vqF '.md'; then
     chapter_rule_ok=true
   fi
   if $chapter_rule_ok; then
-    ok "local www/org/htaccess-prod routes /handbook/<v>/<chapter> to /router.php (no-.md render path is wired)"
+    ok "local www/org/htaccess-prod routes /handbook/<v>/<chapter> to /engine/router.php (no-.md render path is wired)"
   else
     bad "local www/org/htaccess-prod does NOT route /handbook/<v>/<chapter> to /router.php -- the no-.md render path is not wired in the local working tree; without this rule the test's URL would 404 on merlin"
-  fi
-  # @since 2026-09-09 -- single-install refactor. The rewrite
-  # target should be /router.php at the docroot root (a
-  # symlink), not /engine/router.php. An active rewrite line
-  # that still uses /engine/ would mean the rule was missed
-  # in the refactor and would 404 on merlin (no /engine/
-  # subdir at the docroot).
-  active_engine_refs=$(grep -E '^[[:space:]]*Rewrite(Rule|Cond)' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -c '/engine/router\.php' || true)
-  if [ "$active_engine_refs" -eq 0 ]; then
-    ok "local www/org/htaccess-prod has no /engine/router.php references in active rewrite lines (single-install refactor applied)"
-  else
-    bad "local www/org/htaccess-prod has $active_engine_refs active rewrite line(s) referencing /engine/router.php -- single-install refactor not fully applied to the chapter route"
   fi
 fi
 echo
@@ -909,9 +901,11 @@ if [ "$fail" -gt 0 ]; then
   echo "    -- the no-.md chapter route is not reaching"
   echo "       /router.php. Check www/org/htaccess-prod has"
   echo "       'RewriteRule ^handbook/(\\\\d+)/(.*)\$ /router.php?uri=\$2'"
-  echo "       and that the symlink at html/router.php on"
-  echo "       merlin points at /srv/www/bbsengine6/router.php"
-  echo "       (created by 'make -C www org' via prod-symlinks)."
+  echo "       and that engine/router.php landed at"
+  echo "       /srv/www/vhosts/www.bbsengine.org/html/engine/ on"
+  echo "       merlin (run 'make engine-deploy-prod' on the build"
+  echo "       host; the .org vhost path is passed automatically"
+  echo "       via 'make wwworg')."
   echo
   echo "  if [1] returns 200 but [2] is not text/html:"
   echo "    -- the wrong handler ran. If Content-Type is"
@@ -960,8 +954,7 @@ if [ "$fail" -gt 0 ]; then
   echo
   echo "  if [6] fails (plumbing):"
   echo "    -- the local www/org/htaccess-prod is missing the"
-  echo "       /router.php chapter rule, or still uses the old"
-  echo "       /engine/router.php target. Restore the rule"
+  echo "       /router.php chapter rule. Restore the rule"
   echo "       before running this test -- without it, the test"
   echo "       is meaningless."
   echo

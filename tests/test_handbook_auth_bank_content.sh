@@ -62,8 +62,8 @@
 #   [6]  Build-host plumbing invariant: the
 #        htaccess-prod rewrite rule that routes
 #        /handbook/<v>/<uri>.md to /serve-md.php
-#        is present and uses the flattened
-#        docroot-root target (no /engine/ prefix).
+#        is present and targets the .org vhost's
+#        html/engine/ install (/engine/serve-md.php).
 #        Without this rule, the test's URL would
 #        not reach serve-md.php at all.
 #
@@ -122,7 +122,7 @@ if [ -z "$ct" ]; then
 elif echo "$ct" | grep -qi '^content-type: *text/plain'; then
   ok "Content-Type is text/plain (serve-md.php ran and readfile()'d the source)"
 else
-  bad "Content-Type is not text/plain: '$ct' -- serve-md.php did not run; the router served an HTML error page or a different handler. Likely htaccess-prod is missing the /serve-md.php .md rewrite, or the symlink at html/serve-md.php is dangling"
+  bad "Content-Type is not text/plain: '$ct' -- serve-md.php did not run; the router served an HTML error page or a different handler. Likely htaccess-prod is missing the /serve-md.php .md rewrite, or the engine install did not land at /srv/www/vhosts/www.bbsengine.org/html/engine/"
 fi
 echo
 
@@ -184,38 +184,25 @@ echo
 
 # --- 6. build-host plumbing invariant -----------------------------------
 # The /handbook/<v>/<uri>.md rewrite in
-# www/org/htaccess-prod must target /serve-md.php
-# (not /engine/serve-md.php) and must be present.
+# www/org/htaccess-prod must target /engine/serve-md.php
+# (the .org vhost's per-vhost /engine/ install) and must be present.
 # If this rule is missing, the test's URL would
 # not reach serve-md.php at all and [1] would
 # fail with a 404/500. We check it explicitly
 # so a missing rule is diagnosed as "plumbing",
 # not as a content-sync issue.
-echo "[6] build-host plumbing invariant (htaccess-prod /serve-md.php .md rule)"
+echo "[6] build-host plumbing invariant (htaccess-prod /engine/serve-md.php .md rule)"
 if [ ! -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
   bad "local www/org/htaccess-prod missing"
 else
   md_rule_ok=false
-  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/serve-md.php'; then
+  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/serve-md.php'; then
     md_rule_ok=true
   fi
   if $md_rule_ok; then
-    ok "local www/org/htaccess-prod routes /handbook/<v>/<uri>.md to /serve-md.php"
+    ok "local www/org/htaccess-prod routes /handbook/<v>/<uri>.md to /engine/serve-md.php (the .org vhost's per-vhost /engine/ install)"
   else
-    bad "local www/org/htaccess-prod does NOT route /handbook/<v>/<uri>.md to /serve-md.php -- fix(www/htaccess-prod) routing rule missing or uses /engine/ prefix"
-  fi
-  # @since 2026-09-09 — single-install refactor. The
-  # rewrite target should be /serve-md.php at the
-  # docroot root (a symlink), not /engine/serve-md.php.
-  # An active rewrite line that still uses /engine/
-  # would mean the rule was missed in the refactor and
-  # would 404 on merlin (no /engine/ subdir at the
-  # docroot).
-  active_engine_md_refs=$(grep -E '^[[:space:]]*Rewrite(Rule|Cond)' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -c '/engine/serve-md\.php' || true)
-  if [ "$active_engine_md_refs" -eq 0 ]; then
-    ok "local www/org/htaccess-prod has no /engine/serve-md.php references in active rewrite lines (single-install refactor applied)"
-  else
-    bad "local www/org/htaccess-prod has $active_engine_md_refs active rewrite line(s) referencing /engine/serve-md.php -- single-install refactor not fully applied to the .md route"
+    bad "local www/org/htaccess-prod does NOT route /handbook/<v>/<uri>.md to /engine/serve-md.php -- the .org vhost's per-vhost /engine/ install must be the rewrite target"
   fi
 fi
 echo
@@ -233,11 +220,13 @@ if [ "$fail" -gt 0 ]; then
   echo
   echo "  if [1] returns 404:"
   echo "    -- the /handbook/<v>/<uri>.md route is not reaching"
-  echo "       /serve-md.php. Check htaccess-prod has the active"
-  echo "       RewriteRule for ^handbook/ ... /serve-md.php,"
-  echo "       and that the symlink at html/serve-md.php on"
-  echo "       merlin points at /srv/www/bbsengine6/serve-md.php"
-  echo "       (created by 'make -C www org' via prod-symlinks)."
+  echo "       /engine/serve-md.php. Check htaccess-prod has the active"
+  echo "       RewriteRule for ^handbook/ ... /engine/serve-md.php,"
+  echo "       and that engine/serve-md.php landed at"
+  echo "       /srv/www/vhosts/www.bbsengine.org/html/engine/ on"
+  echo "       merlin (run 'make engine-deploy-prod' on the build"
+  echo "       host; the .org vhost path is passed automatically"
+  echo "       via 'make wwworg')."
   echo
   echo "  if [1] returns 200 but [2] is not text/plain:"
   echo "    -- serve-md.php did not run. The router served an"
@@ -253,10 +242,9 @@ if [ "$fail" -gt 0 ]; then
   echo
   echo "  if [6] fails:"
   echo "    -- the local www/org/htaccess-prod is missing the"
-  echo "       /serve-md.php rewrite (or still uses the old"
-  echo "       /engine/serve-md.php target). Restore the rule"
-  echo "       before running this test -- without it, the test"
-  echo "       is meaningless."
+  echo "       /engine/serve-md.php rewrite. Restore the rule before"
+  echo "       running this test -- without it, the test is"
+  echo "       meaningless."
   echo
   echo "to re-run: $0"
   exit 1

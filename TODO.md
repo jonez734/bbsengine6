@@ -2060,7 +2060,7 @@ behavior.
   import. If/when other entry points are wired in, revisit.
 - Remove `startup.py~` and other editor backups in the package.
 
-- [ ] Update tests + strip stale comments for per-vhost /engine/ install (commit 2).
+- [x] Update tests + strip stale comments for per-vhost /engine/ install (commit 2).
   Three handbook test scripts (tests/test_handbook_6_returns_200.sh,
   tests/test_handbook_auth_bank_content.sh,
   tests/test_handbook_auth_bank_render.sh) encode the abandoned
