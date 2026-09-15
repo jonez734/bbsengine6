@@ -2059,3 +2059,14 @@ behavior.
   (package + `lib.py` + `module.run` registration) or stay a direct
   import. If/when other entry points are wired in, revisit.
 - Remove `startup.py~` and other editor backups in the package.
+
+- [ ] Update tests + strip stale comments for per-vhost /engine/ install (commit 2).
+  Three handbook test scripts (tests/test_handbook_6_returns_200.sh,
+  tests/test_handbook_auth_bank_content.sh,
+  tests/test_handbook_auth_bank_render.sh) encode the abandoned
+  symlink/flattened-docroot design. Rewrite their assertions to
+  match the new per-vhost-rsync shape: each vhost gets its own
+  engine install rsynced into html/engine/ (no symlinks, no
+  docroot-root entry points). Also strip stale "flattened"
+  comments from www/org/htaccess-prod. See commit 1 (Makefile
+  changes) for the new design.
