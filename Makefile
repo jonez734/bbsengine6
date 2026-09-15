@@ -74,6 +74,7 @@ clean:
 	-$(MAKE) -C py clean
 	-$(MAKE) -C www clean
 	-$(MAKE) -C skin clean
+	-$(MAKE) -C engine clean
 	-rm *~
 
 release:
