@@ -49,7 +49,7 @@ require_once("serve-tmpl.php");
 if (!defined('ROUTER_NEXT')) { define('ROUTER_NEXT', 'ROUTER_NEXT'); }
 if (!defined('ROUTER_STOP')) { define('ROUTER_STOP', 'ROUTER_STOP'); }
 
-router_log("router.300: ".var_export(get_include_path()));
+router_log("router.300: ".var_export(get_include_path(),true));
 
 function router_log(string $message, string $level = "info"): void
 {
