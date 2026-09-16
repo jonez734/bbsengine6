@@ -144,16 +144,23 @@ function router_buildBreadcrumbs(string $uri): array
 
 function router_gethandlers(): array
 {
+  // FQCN strings so the variable-function dispatch at line ~593
+  // resolves each handler in the right namespace. Before the
+  // 2026-09-15 namespace refactor (bfaca68) these were bare
+  // names that resolved correctly in the global namespace;
+  // once router.php declared `namespace bbsengine6\router;`,
+  // the same bare names broke because PHP variable-function
+  // calls do not apply the call-site namespace. Production
+  // saw the regression on 2026-09-16 as
+  // `Call to undefined function router_handleIndex()` in
+  // engine/router.php:593, traced from frame #0 line 687.
   return [
-    'index'    => 'router_handleIndex',
-    'blurb'    => 'router_handleBlurb',
-    'folder'   => 'router_handleFolder',
-    'markdown' => 'router_handleMarkdown',
-    // @since 2026-09-16 — page-namespace handler registered
-    // after markdown (which owns *.md URIs in the teos tree)
-    // and before error. See engine/serve-tmpl.php.
-    'page'     => 'router_handlePage',
-    'error'    => 'router_handleError',
+    'index'    => 'bbsengine6\\router\\router_handleIndex',
+    'blurb'    => 'bbsengine6\\router\\router_handleBlurb',
+    'folder'   => 'bbsengine6\\router\\router_handleFolder',
+    'markdown' => 'bbsengine6\\router\\router_handleMarkdown',
+    'page'     => 'bbsengine6\\servepage\\router_handlePage',
+    'error'    => 'bbsengine6\\router\\router_handleError',
   ];
 }
 

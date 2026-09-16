@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### fix(engine/router): restore variable-function dispatch under namespace
+
+The 2026-09-15 namespace refactor (`bfaca68`, "declare namespace
+bbsengine6\\router; hoist requires") declared `namespace bbsengine6\\router;`
+on `engine/router.php` but left `router_gethandlers()` returning bare
+function-name strings (`'router_handleIndex'`, etc.). The dispatch
+loop calls each handler as `$handler($uri)` — a PHP variable-function
+call, which resolves the function against the **global** namespace,
+not the call-site namespace. Result: every HTTP request through the
+router threw `Call to undefined function router_handleIndex()` from
+`engine/router.php` line ~593, with frame #0 at line 687. The catch
+at line 694 turned it into a 500 "Router Error" body. The
+production syslog entry on 2026-09-16 captured the failure (host
+redacted from this changelog).
+
+Fix: return fully-qualified handler-name strings from
+`router_gethandlers()` so the variable-function lookup resolves in
+the correct namespace. The same fix protects `router_handlePage`,
+which lives in `bbsengine6\\servepage` (a separate namespace) and
+would have failed next on any URI not consumed by an earlier handler.
+
+Also covered by new tests in `php/test_router.php`:
+
+- `Test 3: Handler order` updated to include the `'page'` entry
+  registered on 2026-09-16.
+- New assertion that every handler value is an FQCN string.
+- New dispatch smoke test that actually invokes `router()`, so a
+  future regression of the same shape cannot ship silently.
+
 ### chore(www): eradicate `www/org/php/handbook.php`
 
 The legacy `/handbook/<v>/...` dispatcher (`www/org/php/handbook.php`,
