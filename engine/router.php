@@ -33,6 +33,10 @@ namespace bbsengine6\router;
  * @since 2026
  */
 
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+
+router_log("router.300: ".var_export(get_include_path()));
+
 require_once('util.php');
 require_once('markdown.php');
 require_once('blurb.php');
@@ -86,7 +90,7 @@ function router_get_teosdir(): string
  */
 function router_safe_path_web(array $components, array $opts = []): string|false
 {
-  return bbsengine6\util\safe_path_web($components, $opts);
+  return \bbsengine6\util\safe_path_web($components, $opts);
 }
 
 function router_buildBreadcrumbs(string $uri): array
@@ -188,7 +192,7 @@ function router_handleBlurb(string $uri)
     return ROUTER_NEXT;
   }
 
-  if (bbsengine6\blurb\isBlurb($uri)) {
+  if (\bbsengine6\blurb\isBlurb($uri)) {
       try {
         bbsengine6\blurb\display($uri, null);
         return '';
@@ -325,7 +329,7 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   $doc['title'] = isset($doc['title']) ? htmlspecialchars($doc['title']) : basename($filepath, '.md');
   $doc['date']  = isset($doc['date'])  ? htmlspecialchars($doc['date'])  : '';
 
-  bbsengine6\setcurrentpage(router_get_teosurl() . $uri);
+  \bbsengine6\setcurrentpage(router_get_teosurl() . $uri);
 
   $uri_parts = explode("/", $uri);
   array_pop($uri_parts);
@@ -349,7 +353,7 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   ];
 
   if (function_exists('bbsengine6\displaypage')) {
-    bbsengine6\displaypage($data, 'page-markdown.tmpl', false);
+    \bbsengine6\displaypage($data, 'page-markdown.tmpl', false);
     return '';
   }
 
