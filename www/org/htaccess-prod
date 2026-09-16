@@ -37,11 +37,11 @@ RewriteRule ^robots.txt$ seo.php?mode=robotstxt [last,qsappend]
 RewriteRule ^sitemap.xml$ seo.php?mode=sitemapxml [last,qsappend]
 RewriteRule ^favicon\.ico$ - [last]
 
-# Handbook raw .md URLs -> /serve-md.php (scoped to /handbook/<v>/).
-# 'prefix=' tells serve-md.php's HTTP entry-point which directory
-# the file lives in. /engine/serve-md.php is the .org vhost's
-# per-vhost /engine/ install (rsynced by 'make wwworg').
-RewriteRule ^handbook/(\d+)/(.+\.md)$ /engine/serve-md.php?prefix=handbook/$1&path=$2 [last,qsappend]
+# Handbook raw .md URLs -> /engine/serve-md.php. The rewrite
+# passes the entire post-version URI in ?path=; serve-md.php
+# derives the handbook version from REQUEST_URI and resolves
+# the file via bbsengine6\util\handbook_resolve() (see php/util.php).
+RewriteRule ^handbook/(\d+)/(.+\.md)$ /engine/serve-md.php?path=$2 [last,qsappend]
 
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME} !-f

@@ -5,46 +5,31 @@ require_once("util.php");
 
 \bbsengine6\util\logentry("serve-md.100: start");
 
-/**
- * serve-md.php - Serve .md files as plain text
- *
- * Outputs markdown files with Content-Type: text/plain
- */
+$uri = $_GET['path'] ?? '';
 
-if (php_sapi_name() === 'cli' && basename($_SERVER['PHP_SELF']) === 'serve-md.php') {
-    echo "serve-md.php - serves .md files as text/plain\n";
-    exit(0);
+if ($uri === '' || $uri[0] !== '/') {
+    $uri = '/' . $uri;
 }
 
-// Get the requested path
-$path = $_GET['path'] ?? $_GET['uri'] ?? '';
+$relpath = ltrim($uri, '/');
 
-// Define TEOSDIR if not defined
-if (!defined('TEOSDIR')) {
-    define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
-}
-
-// Security: validate path
-$teospath = getenv("TEOSDIR");
-$filepath = realpath($teospath . $path);
-
-// Ensure the resolved path is within TEOSDIR (prevent directory traversal)
-if ($filepath === false || strpos($filepath, $teospath) !== 0) {
+if ($relpath === '' || !preg_match('#^/handbook/(\d+)/#', $_SERVER['REQUEST_URI'] ?? '', $m)) {
     http_response_code(404);
-    echo "File not found";
-    \bbsengine6\util\logentry("serve-md.200: filepath=".var_export($filepath, True));
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'File not found';
     exit;
 }
 
-// Check file exists and has .md extension
-if (!file_exists($filepath) || !is_file($filepath) || pathinfo($filepath, PATHINFO_EXTENSION) !== 'md') {
+$prefix = 'handbook/' . $m[1];
+$file = \bbsengine6\util\handbook_resolve($prefix, $relpath);
+
+if ($file === false) {
+    \bbsengine6\util\logentry("serve-md.200: resolve failed for prefix=$prefix path=$relpath");
     http_response_code(404);
-    echo "File not found";
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'File not found';
     exit;
 }
 
-// Set content type to plain text
 header('Content-Type: text/plain; charset=utf-8');
-
-// Output the raw file
-readfile($filepath);
+readfile($file);
