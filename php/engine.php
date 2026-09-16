@@ -38,7 +38,7 @@ namespace bbsengine6 {
  * @since 20240807 ported to bbsengine6
  * @param mixed field
  * @param string label
- * @param boolean default 
+ * @param boolean default
  * @return boolean
  */
 function toboolean($value, $label="label", $default=false)
@@ -164,12 +164,12 @@ function setreturnto($url=null, $title=null)
   $returnto = ["url" => $url, "title" => $title];
 
   $_SESSION["returnto"] = $returnto;
-    
+
 //  logentry("setreturnto: url='{$url}'  title='{$title}'");
 
   return $old;
 }
-               
+
 /**
  * get the 'returnto' session var which contains 'url' and 'title', falling back to SITEURL and SITETITLE from config
  *
@@ -181,7 +181,7 @@ function getreturnto()
 {
  return isset($_SESSION["returnto"]) ? $_SESSION["returnto"] : array("url" => SITEURL, "title" => SITETITLE);
 }
-                 
+
 /**
  * returns the returntourl as a string if it has been set, else uses SITEURL define
  *
@@ -191,7 +191,7 @@ function getreturnto()
 function getreturntourl()
 {
   $url = isset($_SESSION["returnto"]["url"]) ? $_SESSION["returnto"]["url"] : SITEURL;
-  
+
   if (isset($url) && !empty($url) && !is_null($url))
   {
     return $url;
@@ -201,7 +201,7 @@ function getreturntourl()
     return SITEURL;
   }
 }
-                   
+
 /**
  * @since 20221116
  */
@@ -212,14 +212,14 @@ function getreturntotitle()
 
 /**
  * permission checking function
- * 
+ *
  * permissions "PUBLIC" and "AUTHENTICATED" are built-in and checked for
  * specially before any database connection is made. other permissions are
  * in uppercase and must be listed in the flag table. if the member being
  * checked does not have a value set for a particular flag, the default
  * value will be returned.
  *
- * @param string $name 
+ * @param string $name
  * @param integer $memberid
  * @return boolean
  * @since 20080324
@@ -233,14 +233,14 @@ function getreturntotitle()
 function getfortune($fortuneid)
 {
   $fortuneid = intval($fortuneid);
-  
+
   $sql = "select * from engine.mantra where id=?";
   $dat = [$fortuneid];
   $pdo = \bbsengine6\database\connect(\bbsengine6\database\getDSN());
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   $res = $stmt->fetch();
-  
+
   if ($res === false)
   {
     return null;
@@ -258,7 +258,7 @@ function getfortune($fortuneid)
   $mantra["lastmodifiedepoch"] = $res["lastmodifiedepoch"];
   $mantra["lastmodifiedbyid"] = $res["lastmodifiedbyid"];
   $mantra["actions"] = buildfortuneactions(["fortuneid" => $fortuneid]);
-  
+
   return $mantra;
 }
 
@@ -292,7 +292,7 @@ function buildfortuneactions($data)
 //  $currentsection = getcurrentsection();
 
 //  logentry("buildmantraactions.100: currentaction=".var_export($currentaction, true));
-  
+
   $actions = [];
   if (accessfortune("detail") === true)
   {
@@ -377,7 +377,7 @@ function getsmarty($options=null)
   $baseCompileId = $options["compileid"] ?? (defined('\config\LOGENTRYPREFIX') ? \config\LOGENTRYPREFIX : 'bbsengine6');
   $options["compileid"] = $baseCompileId . ($options["escapehtml"] ? '' : '-noescape');
 
-  // logentry("getsmarty.100: options=".var_export($options, true));
+  util\logentry("getsmarty.100: options=".var_export($options, true));
 
   $s = new \Smarty();
   umask(0002);
@@ -387,7 +387,7 @@ function getsmarty($options=null)
   $currentcart = [];
   $currentcart["items"] = [];
   $currentcart["itemcount"] = 0;
-*/  
+*/
 //  $s->assign("currentcart", $currentcart); // getcurrentcart());
 
   if (is_array($options))
@@ -417,7 +417,7 @@ function getsmarty($options=null)
       }
     }
   }
-  
+
   $currentmoniker = member\lib\getcurrentmoniker();
   $currentmemberid = member\lib\getcurrentid();
   $currentmember = member\lib\getbymoniker($currentmoniker);
@@ -454,7 +454,7 @@ function getsmarty($options=null)
 
 /**
  * function that returns the current url (protocol, hostname, etc) even tho it is named ..uri()
- * 
+ *
  * @since 20110804
  * @since 20221116
  */
@@ -491,7 +491,7 @@ function getcurrentpath($uri=null)
   {
     $path .= "/";
   }
-  
+
   return $path;
 }
 
@@ -531,7 +531,7 @@ function buildbreadcrumbs($path)
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   $res = $stmt->fetchAll();
-  
+
   $crumbs = [];
   foreach ($res as $rec)
   {
@@ -548,7 +548,7 @@ function buildsiguri($sigpath)
   {
     return "/";
   }
-  
+
   $sigpath = str_replace($sigpath, "top.", "");
   $sigpath = str_replace($sigpath, ".", "/");
   $sigpath = str_replace($sigpath, "_", "-");
@@ -571,7 +571,7 @@ function buildsigpath($uri)
 }
 /**
  * copied from zoidweb2
- * 
+ *
  * @since 20180223
  * @since 20221120
  * @since 20221222 renamed
@@ -595,7 +595,7 @@ function sortchoices($a, $b)
 
 /**
  * copied from zoidweb2
- * 
+ *
  * @since 20131014
  * @since 20221120
  */
@@ -624,7 +624,7 @@ function buildchoices($choices=[])
 //  $menu[] = array("name" => "aolbonics", "title" => "Urban Dictionary", "url" => AOLBONICSURL, "desc" => "Urban Dictionary");
   $menu[] = ["name" => "projects", "title" => "projects", "url" => "http://projects.zoidtechnologies.com/", "desc" => "Projects Site"];
   $menu[] = ["name" => "sophia", "title" => "sophia", "url" => SOPHIAURL, "desc" => "forum/blog"];
-  
+
   $menu[] = ["name" => "psyche", "title" => "psyche", "url" => PSYCHEURL, "desc" => ""];
   $menu[] = ["name" => "agora", "title" => "agora", "url" => AGORAURL, "desc" => "a Worthy marketplace", "class" => "fas fa-fw fa-store"];
 //  $menu[] = ["name" => "jamhacks", "title" => "jamhacks", "url" => WWWURL."jamhacks", "desc" => "combination resume, biography, and portfolio"];
@@ -664,7 +664,7 @@ function buildbreadcrumbs($sigpath, $skiptop=true, $hidepath=null)
   $stmt = $pdo->prepare($sql);
   $stmt->execute($dat);
   $res = $stmt->fetchAll();
-  
+
   $crumbs = [];
   foreach ($res as $sig)
   {
@@ -747,7 +747,7 @@ function normalizelabelpath()
  * Example: joinpath('/var','www/html/','/try.php'); // returns 'var/www/html/try.php'
  * original idea from http://www.bin-co.com/php//scripts/filesystem/join_path/
  * re-written to not use for loops (array_filter, join instead)
- * 
+ *
  * @since 20240619 copied from bbsengine5
  * @todo consider using preg_replace
  */
@@ -783,7 +783,7 @@ function joinpath()
 }
 
 /**
- * @since 20240621 copied from bbsengine4 
+ * @since 20240621 copied from bbsengine4
  */
 function normalizeuri($uri)
 {
@@ -905,7 +905,7 @@ function getsig($labelpath, $subsigs=true)
   $sig["title"] = \bbsengine6\decode_entities($sig["title"] ?? "");
   if ($sig["uri"] === null)
   {
-   $sig["uri"] = util\ltreeToPath($sig["path"]); 
+   $sig["uri"] = util\ltreeToPath($sig["path"]);
   }
   $sig["actions"] = buildsigactions($sig);
 
@@ -990,7 +990,7 @@ function accesssig($op, $sig=null, $memberid=null)
   {
     $uri = isset($sig["uri"]) ? $sig["uri"] : null;
     $labelpath = isset($sig["path"]) ? $sig["path"] : null;
-    
+
     $currentmemberid = member\lib\getcurrentid();
 
     $actions = [];
@@ -1060,11 +1060,11 @@ function getquickform($id, $method="post", $attributes="", $tracksubmit=true, $e
 function getquickformrenderer($options=null)
 {
  $_options = array(
-  "group_errors" => true, 
-  "group_hiddens" => true, 
+  "group_errors" => true,
+  "group_hiddens" => true,
   "required_note" => "<span class='requiredstar'>*</span> denotes required fields."
  );
- 
+
  if (is_array($options))
  {
   $_options = array_merge($_options, $options);
@@ -1087,7 +1087,7 @@ function buildcaptchafieldset($form, $sessionVar=null, $options=null)
   }
 
   util\logentry("buildcaptchafieldset.5: sessionVar=".var_export($sessionVar, true));
-  
+
   $_options = [
     "width"        => 250,
     "height"       => 90,
@@ -1117,7 +1117,7 @@ function buildcaptchafieldset($form, $sessionVar=null, $options=null)
   util\logentry("options=".var_export($options, true));
 //  $form->addElement(new \HTML_QuickForm2_Element_Static, "<div class='g-recaptcha' data-sitekey=".\config\RECAPTCHASITEKEY."></div>");
   return;
-  
+
   $captcha_question = &$form->addElement(new \HTML_QuickForm2_Element_Captcha_ReCaptcha(
       'captcha[recaptcha]',
       ['id' => 'captcha_recaptcha'],
@@ -1154,7 +1154,7 @@ function buildcaptchafieldset($form, $sessionVar=null, $options=null)
  );
 //  $captcha_question = &$form->addElement("CAPTCHA_Image", "captcha_question",
 //                                         "Type the letters you see", $options);
-*/  
+*/
   if (\PEAR::isError($captcha_question))
   {
     util\logentry("buildcaptchafieldset.10: " . $captcha_question->toString());
@@ -1170,7 +1170,7 @@ function buildcaptchafieldset($form, $sessionVar=null, $options=null)
 
 //  $form->addRule("captcha", "Enter the answer to the verification",
 //                 "required");
-//                 
+//
 //  $form->addRule("captcha", "You did not answer the verification correctly",
 //                  "CAPTCHA", $captcha_question);
 
@@ -1184,7 +1184,7 @@ function handleform($form, $callback)
   $validate = $form->validate();
 
   util\logentry("handleform.100: issubmitted=".var_export($issubmitted, true)." validate=".var_export($validate, true));
-  
+
   if ($issubmitted === true && !\bbsengine6\util\csrfCheckRequest())
   {
     util\logentry("handleform.105: CSRF validation failed");
@@ -1209,7 +1209,7 @@ function handleform($form, $callback)
     }
 
     util\logentry("handleform.110: form validated");
-    
+
     $form->toggleFrozen(true);
 // now done in getquickform()
 //    $form->addRecursiveFilter("trim");
@@ -1233,7 +1233,7 @@ function handleform($form, $callback)
   }
 
 /*
-  $renderer = getquickformrenderer(); 
+  $renderer = getquickformrenderer();
   $form->render($renderer);
   $rendered = $renderer->toArray();
 
@@ -1262,7 +1262,7 @@ function handleform($form, $callback)
     util\logentry("bbsengine6.displayform.125: pagetemplate=".var_export($pagetemplate, true));
     $data["title"] = $title;
     $data["form"] = $renderer->toArray();
-    
+
     displaypage($data, $pagetemplate);
   }
 
@@ -1293,7 +1293,7 @@ function handleform($form, $callback)
   */
    $memberid = isset($data["memberid"]) ? intval($data["memberid"]) : null;
    util\logentry("buildpasswordfieldset.100: memberid=".var_export($memberid, true));
-   
+
    $fieldset = $form->addElement("fieldset")->setLabel("Password");
    $oldPassword = $fieldset->addElement("password", "oldPassword", array("class" => "form-control"))->setLabel("Type your old password");
 
@@ -1359,7 +1359,7 @@ function handleform($form, $callback)
    \bbsengine6\util\logentry("accesspost.140: op=".var_export($op, true));
    return true;
   }
-  
+
   /**
    * @since 20240810 copied from zoidweb4
    */
