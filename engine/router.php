@@ -663,7 +663,7 @@ if (php_sapi_name() !== 'cli') {
   $path = $_GET['path'] ?? $_GET['uri'] ?? '';
   $path = preg_replace('/\.md$/', '', $path);
 
-  bbsengine6\util\logentry("router.http: path=$path");
+  \bbsengine6\util\logentry("router.http: path=$path");
 
   // @since 2026-09-07 — the previous version gated router()
   // on `!empty($path)`, which silently 200'd with an empty
