@@ -49,7 +49,7 @@ require_once("session.php");
 
 /**
  * display an error page template with message
- * 
+ *
  * @param string $message
  * @param integer $statuscode http error code (i.e. 500, 404)
  * @param string $title
@@ -119,7 +119,7 @@ class Page
 
     $data = [];
     $data["content"] = $content;
-    
+
     $res = \bbsengine6\displaypage($data, $pagetemplate);
     return $res;
   }
