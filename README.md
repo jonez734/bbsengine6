@@ -211,7 +211,12 @@ bed --router zoid6.api.handler.MessageRouter \
     --config /etc/zoid6/bed.json
 
 # 3. Render the public website (Apache + mod_php)
-#    per www/{com,org}/htaccess-prod and config-prod.php
+#    per www/{com,org}/htaccess-prod and config-prod.php.
+#    Each vhost must publish its document root via `SetEnv VHOSTDOCROOT`
+#    (already in htaccess-prod). Requires mod_env loaded and
+#    AllowOverride FileInfo (or All). See ROBUSTNESS_REVIEW.md
+#    "Vhost config.php resolution for Apache rewrites" for the full
+#    rationale and prerequisites.
 
 # 4. Stand up the database (idempotent)
 python -m bbsengine6.startup

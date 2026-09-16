@@ -679,3 +679,32 @@ Expected results:
   legacy `__notify_group` tests in `test_member_verify_found.py`).
 - PHP: every test script reports `0 failed` in the summary line.
 - PHP `-l`: no syntax errors.
+
+---
+
+## Phase 6 — Vhost `config.php` resolution for Apache rewrites
+
+### Finding 6.1 — `require_once("config.php")` fails when mod_rewrite dispatches into `html/engine/`
+
+- **Severity:** HIGH (production fatal on handbook URLs, login, logout, join)
+- **Where:** `engine/join.php:11`, `engine/login.php:11`, `engine/logout.php:11`, `engine/router.php` (transitively via `php/page.php` → `php/session.php:12`)
+- **Symptom:** PHP warning `require_once(config.php): Failed to open stream: No such file or directory`, followed by a fatal `Failed opening required 'config.php'`. Visible in syslog for handbook URLs (`/handbook/<v>/...` → `/engine/router.php`), `/login`, `/logout`, `/join`.
+- **Root cause:** Apache `mod_rewrite` rewrites those URLs to scripts under `html/engine/`. The cwd of the dispatched script is `html/engine/`, not the vhost root, so `include_path`'s `.` (= `html/engine/`) does not see the vhost's `config.php` at `html/config.php`. The shared paths on the include path (`/srv/www/bbsengine6/php`, `/srv/www/bbsengine6`) don't contain a vhost-specific `config.php` either.
+- **Fix:**
+  - `php/bootstrap.php` — at module load, above the first `require_once()`, read `getenv('VHOSTDOCROOT')` and, if it points at a valid directory, call `bbsengine6\bootstrap([$vhostRoot])`. The function prepends the path to `include_path` (dedup'd against the existing entries), so bare `require_once("config.php")` in `engine/*.php` resolves to the vhost's `config.php` first.
+  - `www/org/htaccess-prod` — added `SetEnv VHOSTDOCROOT /srv/www/vhosts/www.bbsengine.org/html` so the env var is published to PHP.
+  - `php/page.php` — removed the dead `//require_once("config.php");` comment. The only `\config\*` reference in the file was inside a commented-out class block (`Page::main`), so the line was unused.
+
+### Finding 6.2 — `SetEnv` in `.htaccess` is silently ignored without `AllowOverride FileInfo` and `mod_env`
+
+- **Severity:** MEDIUM (configuration footgun; the fix above won't take effect on misconfigured vhosts)
+- **Where:** any vhost that dispatches into `bbsengine6/engine/*.php` via `.htaccess`
+- **Symptom:** after deploying the `VHOSTDOCROOT` fix, `config.php` still fails to load. No Apache error; the directive is silently dropped.
+- **Root cause:** `SetEnv` in `.htaccess` requires:
+  1. `mod_env` loaded (`a2enmod env` on Debian/Ubuntu; default on most distros).
+  2. `AllowOverride FileInfo` (or `All`) on the vhost's parent directory. Debian/Ubuntu's default for `/srv/www` is `AllowOverride None`, which silently ignores the directive.
+- **Fix:** documented here. When deploying a vhost that uses `bbsengine6/www/*/htaccess-prod`:
+  - Verify `mod_env` is loaded: `apache2ctl -M | grep env`.
+  - Verify `AllowOverride` is at least `FileInfo` on the vhost path: `grep -rn AllowOverride /etc/apache2/sites-enabled/` or `<VirtualHost>` block.
+  - Alternatively, move `SetEnv VHOSTDOCROOT <docroot>` into the `<VirtualHost>` block, which bypasses `.htaccess` restrictions.
+  - If `VHOSTDOCROOT` is unset or invalid, bootstrap silently falls through; bare `require_once("config.php")` will then fail with the same PHP warning/fatal seen before this fix. The error message is the diagnostic for misconfigured vhosts.
