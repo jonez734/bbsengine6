@@ -9,7 +9,7 @@ $zoid_root = getenv('ZOID_ROOT') ?: '/srv/www/zoid6';
 $smarty_root = getenv('SMARTY_ROOT') ?: '/srv/www/smarty';
 $vhost_dir = getenv('VHOST_DIR') ?: '/srv/www/vhosts/www.bbsengine.org';
 $repo_dir = getenv('REPO_DIR') ?: '/srv/repo';
-
+$teos_dir = getenv('TEOS_DIR') ?: '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
 $includepath = get_include_path().":{$zoid_root}/php/:{$bbsengine_root}/php/:{$smarty_root}/php/";
 if (set_include_path($includepath) === false)
 {
@@ -38,7 +38,7 @@ define("config\DOCUMENTROOT", \config\VHOSTDIR . "html/");
 define("config\SMARTYCOMPILEDTEMPLATESDIR", \config\VHOSTDIR."templates_c");
 define("config\SMARTYPLUGINSDIR", [ 0 => \config\VHOSTDIR."smarty/"]);
 //define("SMARTYTEMPLATESDIR", [ 0 => DOCUMENTROOT."skin/tmpl/", 1 => ZOIDWEBDIR."skin/tmpl/", 2 => $bbsengine_root."/skin/tmpl/"]);
-define("config\SMARTYTEMPLATESDIR", [ 0 => \config\DOCUMENTROOT."skin/tmpl/", 1 => $bbsengine_root."/skin/tmpl/"]);
+define("config\SMARTYTEMPLATESDIR", [ 0 => \config\DOCUMENTROOT."skin/tmpl/", 1 => $bbsengine_root."/skin/tmpl/", 2 => $teos_dir."skin/tmpl"]);
 
 // @see http://php.net/strftime
 define("DATEFORMAT", "%Y-%b-%d %I:%M %p %Z (%A)");
