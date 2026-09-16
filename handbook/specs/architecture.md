@@ -415,7 +415,7 @@ io.echo("Message posted!")
 Browser → Apache → engine/router.php
    │ load Smarty plugin cache
    ▼
-engine/login.php / engine/logout.php / page.php
+engine/login.php / engine/logout.php / serve-page.php
    │ PHP namespace bbsengine6\\… resolves via SPL autoload
    │   (php/bootstrap.php sets include_path; class autoloader handles bbsengine6\\*)
    ▼
