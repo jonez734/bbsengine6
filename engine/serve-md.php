@@ -1,50 +1,20 @@
 <?php
 
-require_once("/srv/www/bbsengine6/php/bootstrap.php");
-require_once("util.php");
-
-\bbsengine6\util\logentry("serve-md.100: start");
-
 /**
- * serve-md.php - Serve .md files as plain text
+ * serve-md.php - Stream a .md file as text/plain.
  *
- * Outputs markdown files with Content-Type: text/plain
+ * Shim to the canonical library at php/serve-md.php, which
+ * exposes \bbsengine6\serveRawMarkdown($basedir, $relpath)
+ * and its own HTTP entry-point. This shim exists so the
+ * htaccess rewrite `^(.+)\.md$ -> /engine/serve-md.php` has
+ * a stable target under /engine/, while the real logic
+ * lives in php/ and ships via php-deploy-prod. The previous
+ * in-line implementation here used TEOS_BASEDIR (env) and a
+ * bare realpath() that bypassed the canonical library shape;
+ * that diverged from the htaccess rewrite, which passes
+ * ?prefix=<dir>&path=<rel>. Routing through the php/
+ * canonical version restores a single source of truth and
+ * avoids the env-var mismatch.
  */
 
-if (php_sapi_name() === 'cli' && basename($_SERVER['PHP_SELF']) === 'serve-md.php') {
-    echo "serve-md.php - serves .md files as text/plain\n";
-    exit(0);
-}
-
-// Get the requested path
-$path = $_GET['path'] ?? $_GET['uri'] ?? '';
-
-// Define TEOSDIR if not defined
-if (!defined('TEOSDIR')) {
-    define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
-}
-
-// Security: validate path
-$teospath = getenv("TEOSDIR");
-$filepath = realpath($teospath . $path);
-
-// Ensure the resolved path is within TEOSDIR (prevent directory traversal)
-if ($filepath === false || strpos($filepath, $teospath) !== 0) {
-    http_response_code(404);
-    echo "File not found";
-    \bbsengine6\util\logentry("serve-md.200: filepath=".var_export($filepath, True));
-    exit;
-}
-
-// Check file exists and has .md extension
-if (!file_exists($filepath) || !is_file($filepath) || pathinfo($filepath, PATHINFO_EXTENSION) !== 'md') {
-    http_response_code(404);
-    echo "File not found";
-    exit;
-}
-
-// Set content type to plain text
-header('Content-Type: text/plain; charset=utf-8');
-
-// Output the raw file
-readfile($filepath);
+require_once("/srv/www/bbsengine6/php/serve-md.php");
