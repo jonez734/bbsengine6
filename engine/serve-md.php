@@ -1,7 +1,13 @@
 <?php
+
+require_once("/srv/www/bbsengine6/php/bootstrap.php");
+require_once("util.php");
+
+\bbsengine6\util\logentry("serve-md.100: start");
+
 /**
  * serve-md.php - Serve .md files as plain text
- * 
+ *
  * Outputs markdown files with Content-Type: text/plain
  */
 
@@ -19,13 +25,14 @@ if (!defined('TEOSDIR')) {
 }
 
 // Security: validate path
-$teospath = TEOSDIR;
+$teospath = getenv("TEOSDIR");
 $filepath = realpath($teospath . $path);
 
 // Ensure the resolved path is within TEOSDIR (prevent directory traversal)
 if ($filepath === false || strpos($filepath, $teospath) !== 0) {
     http_response_code(404);
     echo "File not found";
+    \bbsengine6\util\logentry("serve-md.200: filepath=".var_export($filepath, True));
     exit;
 }
 
