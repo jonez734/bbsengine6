@@ -1,7 +1,6 @@
 <?php
 
-namespace bbsengine6\util
-{
+namespace bbsengine6\util;
     /**
      * put $message into a log at the given priority
      *
@@ -906,7 +905,5 @@ function safe_path_web(array $components, array $opts = [])
         }
         return 'NEEDINFO:vhost_label';
     }
-
-} /* namespace bbsengine6\util */
 
 ?>
