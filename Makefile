@@ -259,7 +259,6 @@ deploy:
 	$(MAKE) php-deploy
 	mkdir -p $(ENGINESTAGE)smarty/
 	$(RSYNC) smarty/*.php $(ENGINESTAGE)smarty/
-	# --no-delete-after preserves engine/*.php on merlin against a build-host stage that doesn't include them
 	$(RSYNC) --no-delete-after $(ENGINESTAGE) $(ENGINEPROD)
 
 deploy-tui: build
