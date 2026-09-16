@@ -161,12 +161,23 @@ if ($run_db) {
     
     // Test 3: Router handles non-existent content
     echo "Test 9: Router handles non-existent content gracefully\n";
-    $result = router("nonexistent/xyz123");
-    // Should return null (error handler result without full page infrastructure)
-    if ($result === null || $result === false) {
-        echo "  ✓ PASS: router returned error result\n";
+    // FQCN call: test_router.php runs in the global namespace, so
+    // an unqualified router() is a lookup miss. Same shape as
+    // Test 3b (which runs unconditionally), but here we exercise
+    // the path through the database-aware blurb handler before
+    // falling through to router_handleError.
+    $result = \bbsengine6\router\router("nonexistent/xyz123");
+    // router_handleError's inline fallback (when bbsengine6\page\error
+    // is unavailable, e.g. CLI without displaypage infra) returns
+    // an HTML string containing 'Page Not Found'. When displaypage
+    // is wired up, the page\error() return is null/false and the
+    // same fallback fires. Both paths land here.
+    if (is_string($result)
+        && strlen($result) > 0
+        && strpos($result, "Page Not Found") !== false) {
+        echo "  ✓ PASS: router returned error result (length=" . strlen($result) . ")\n";
     } else {
-        echo "  ✗ FAIL: unexpected result from router\n";
+        echo "  ✗ FAIL: unexpected result from router: " . var_export($result, true) . "\n";
         exit(1);
     }
     
