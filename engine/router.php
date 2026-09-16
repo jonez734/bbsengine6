@@ -294,7 +294,7 @@ function router_handleError(string $uri)
   $msg = 'Page not found: ' . htmlspecialchars($uri);
   router_log($msg, 'error');
 
-  $r = bbsengine6\page\error($msg, 404);
+  $r = \bbsengine6\page\error($msg, 404);
   if ($r !== null && $r !== false) {
     return $r;
   }
@@ -322,7 +322,14 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   array_pop($uri_parts);
   $breadcrumbs = router_buildBreadcrumbs(implode("/", $uri_parts));
 
-  $choices = \zoid6\buildchoices($choices);
+  $choices = [];
+  if (function_exists('\zoid6\buildchoices')) {
+    try {
+      $choices = \zoid6\buildchoices($choices);
+    } catch (\Throwable $e) {
+      router_log('zoid6\buildchoices failed: ' . $e->getMessage(), 'warning');
+    }
+  }
 
   $data = [
     'title' => $doc['title'],
