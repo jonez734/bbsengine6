@@ -45,6 +45,15 @@ function bootstrap(array $paths = []): bool
 }
 
 namespace {
+$bbsengine6_vhostroot = getenv('VHOSTDOCROOT');
+if (is_string($bbsengine6_vhostroot)
+    && $bbsengine6_vhostroot !== ''
+    && is_dir($bbsengine6_vhostroot)
+    && function_exists('bbsengine6\\bootstrap'))
+{
+    bbsengine6\bootstrap([$bbsengine6_vhostroot]);
+}
+
 require_once('Log.php');
 
 // Backward compatibility: auto-run when included directly
