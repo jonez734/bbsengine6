@@ -6,6 +6,14 @@ SetEnv VHOST_LABEL bbsengine
 SetEnv TEOS_BASEDIR /srv/www/vhosts/www.bbsengine.org/html/handbook/6/
 SetEnv TEOS_BASEURI /handbook/6/
 
+# @since 2026-09-16 — publish vhost document root so bbsengine6\bootstrap()
+# can prepend it to include_path. Bare require_once("config.php") in
+# engine/*.php then resolves to the vhost's config.php even when
+# mod_rewrite dispatches with cwd = html/engine/.
+# Requires AllowOverride FileInfo (or All) on the vhost parent, and
+# mod_env loaded. See ROBUSTNESS_REVIEW.md for full rationale.
+SetEnv VHOSTDOCROOT /srv/www/vhosts/www.bbsengine.org/html
+
 RewriteEngine On
 RewriteBase /
 
