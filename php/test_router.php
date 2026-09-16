@@ -39,14 +39,53 @@ if (defined("ROUTER_STOP") && ROUTER_STOP === "ROUTER_STOP") {
 }
 
 // Test 3: Handler order is correct
-echo "Test 3: Handler order (blurb → folder → markdown → error)\n";
-$expectedOrder = ['index', 'blurb', 'folder', 'markdown', 'error'];
+echo "Test 3: Handler order (index → blurb → folder → markdown → page → error)\n";
+$expectedOrder = ['index', 'blurb', 'folder', 'markdown', 'page', 'error'];
 $handlers = router_gethandlers();
 $actualOrder = array_keys($handlers);
 if ($actualOrder === $expectedOrder) {
     echo "  ✓ PASS: Handler order is correct\n";
 } else {
     echo "  ✗ FAIL: Handler order incorrect, got: " . implode(", ", $actualOrder) . "\n";
+    exit(1);
+}
+
+// Test 3a: Handler values are FQCN strings so PHP variable-function
+// dispatch resolves them under the call-site namespace. Regression
+// guard for the 2026-09-15 namespace refactor (commit bfaca68),
+// which left bare-name strings in router_gethandlers() and broke
+// the dispatch loop on every HTTP request.
+echo "Test 3a: Handler names are FQCN strings (regression guard for variable-function dispatch)\n";
+$fqcn_ok = true;
+foreach ($handlers as $name => $fqcn) {
+    if (strpos($fqcn, 'bbsengine6\\') !== 0) {
+        echo "  ✗ FAIL: handler '$name' is not FQCN: $fqcn\n";
+        $fqcn_ok = false;
+    }
+}
+if (!$fqcn_ok) {
+    exit(1);
+}
+echo "  ✓ PASS: all " . count($handlers) . " handlers are FQCN strings\n";
+
+// Test 3b: Dispatch smoke test. Actually invokes router() so the
+// variable-function call inside the dispatch loop is exercised.
+// Catches the 2026-09-16 regression where router_gethandlers()
+// returned bare-name strings; bare names broke because PHP
+// variable-function lookup goes to the global namespace, not
+// the call-site namespace, so every request threw
+// `Call to undefined function router_handleIndex()`.
+//
+// FQCN call: test_router.php runs in the global namespace, so
+// an unqualified `router()` would itself be a lookup miss.
+echo "Test 3b: router() dispatches through full handler chain without 'undefined function' errors\n";
+$dispatch_result = \bbsengine6\router\router("nonexistent/xyz123");
+if (is_string($dispatch_result)
+    && strlen($dispatch_result) > 0
+    && strpos($dispatch_result, "Page Not Found") !== false) {
+    echo "  ✓ PASS: router() returned error body (length=" . strlen($dispatch_result) . ")\n";
+} else {
+    echo "  ✗ FAIL: router() did not return error body: " . var_export($dispatch_result, true) . "\n";
     exit(1);
 }
 
