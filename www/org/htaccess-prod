@@ -4,7 +4,7 @@
 
 SetEnv VHOST_LABEL bbsengine
 SetEnv TEOS_BASEDIR /srv/www/vhosts/www.bbsengine.org/html/handbook/6/
-SetEnv TEOS_BASEURI /handbook/
+SetEnv TEOS_BASEURI /handbook/6/
 
 RewriteEngine On
 RewriteBase /
