@@ -691,7 +691,7 @@ if (php_sapi_name() !== 'cli') {
   // <v>/ now returns a proper 200 with a rendered body instead
   // of an empty 200.
   try {
-    $router_result = \router($path);
+    $router_result = router($path);
     if ($router_result === null || $router_result === false) {
       http_response_code(500);
       echo 'Router Error (null)';
