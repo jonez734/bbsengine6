@@ -40,6 +40,11 @@ require_once('markdown.php');
 require_once('blurb.php');
 require_once('engine.php');
 require_once("page.php");
+// @since 2026-09-16 — hands page-namespace URIs
+// (e.g. /contact-us -> DOCUMENTROOT/skin/tmpl/contact-us.tmpl)
+// to bbsengine6\servepage\router_handlePage via the
+// router_gethandlers() chain below.
+require_once("serve-tmpl.php");
 
 if (!defined('ROUTER_NEXT')) { define('ROUTER_NEXT', 'ROUTER_NEXT'); }
 if (!defined('ROUTER_STOP')) { define('ROUTER_STOP', 'ROUTER_STOP'); }
@@ -144,6 +149,10 @@ function router_gethandlers(): array
     'blurb'    => 'router_handleBlurb',
     'folder'   => 'router_handleFolder',
     'markdown' => 'router_handleMarkdown',
+    // @since 2026-09-16 — page-namespace handler registered
+    // after markdown (which owns *.md URIs in the teos tree)
+    // and before error. See engine/serve-tmpl.php.
+    'page'     => 'router_handlePage',
     'error'    => 'router_handleError',
   ];
 }
