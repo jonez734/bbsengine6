@@ -1,4 +1,7 @@
 <?php
+
+namespace bbsengine6\router;
+
 /**
  * router.php - Handler registry for routing requests.
  *
@@ -29,6 +32,12 @@
  *
  * @since 2026
  */
+
+require_once('util.php');
+require_once('markdown.php');
+require_once('blurb.php');
+require_once('engine.php');
+require_once("page.php");
 
 if (!defined('ROUTER_NEXT')) { define('ROUTER_NEXT', 'ROUTER_NEXT'); }
 if (!defined('ROUTER_STOP')) { define('ROUTER_STOP', 'ROUTER_STOP'); }
@@ -417,7 +426,6 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
     if ($ext === 'md') {
       $filecontent = file_get_contents($fullpath);
       if ($filecontent !== false && strncmp($filecontent, '---', 3) === 0) {
-        require_once("markdown.php");
         [$metadata, ] = \bbsengine6\markdown\splitFrontmatter($filecontent);
         if (isset($metadata['title'])) {
           $displayTitle = $metadata['title'];
@@ -617,19 +625,6 @@ if (php_sapi_name() !== 'cli') {
   // overridden via the BBSENGINE6_HANDBOOK_HOME env var or
   // constant (see php/util.php).
   //
-  // @since 2026-09-09 — load php/util.php BEFORE calling
-  // handbook_home(). The 2026-09-09 refactor that introduced
-  // this call moved the function-call but left the
-  // require_once at line ~601 below; the result was a
-  // "Call to undefined function" fatal on every no-.md
-  // URL (the .md raw path through engine/serve-md.php was
-  // unaffected, which masked the regression behind a
-  // partially-working handbook). The minimal fix is to
-  // require util.php here so handbook_home() is in scope
-  // for the prefix-detection block. The other requires
-  // (markdown.php, blurb.php, engine.php) stay
-  // below because they are not needed for handbook_home().
-  require_once('util.php');
 
   $requesturi = $_SERVER['REQUEST_URI'] ?? '';
   $handbookhome = \bbsengine6\util\handbook_home();
@@ -660,9 +655,6 @@ if (php_sapi_name() !== 'cli') {
   if (!defined('TEOSURL')) define('TEOSURL', '/teos/');
   if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
 
-  require_once('markdown.php');
-  require_once('blurb.php');
-  require_once('engine.php');
 
   $path = $_GET['path'] ?? $_GET['uri'] ?? '';
   $path = preg_replace('/\.md$/', '', $path);
