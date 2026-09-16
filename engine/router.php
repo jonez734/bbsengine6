@@ -35,8 +35,6 @@ namespace bbsengine6\router;
 
 require_once("/srv/www/bbsengine6/php/bootstrap.php");
 
-router_log("router.300: ".var_export(get_include_path()));
-
 require_once('util.php');
 require_once('markdown.php');
 require_once('blurb.php');
@@ -45,6 +43,8 @@ require_once("page.php");
 
 if (!defined('ROUTER_NEXT')) { define('ROUTER_NEXT', 'ROUTER_NEXT'); }
 if (!defined('ROUTER_STOP')) { define('ROUTER_STOP', 'ROUTER_STOP'); }
+
+router_log("router.300: ".var_export(get_include_path()));
 
 function router_log(string $message, string $level = "info"): void
 {
