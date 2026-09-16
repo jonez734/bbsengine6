@@ -16,6 +16,7 @@ function bootstrap(array $paths = []): bool
         dirname(__DIR__),
         "/srv/www/markdown/",
         "/srv/www/smarty/",
+        "/usr/share/pear/",
     ];
 
     $current = array_filter(
