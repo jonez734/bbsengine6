@@ -1,8 +1,9 @@
 [x] upgrade bbsengine.org to use bootstrap.php (to fix Smarty.class.php include error) - DONE
    - Problem: engine.php:14 requires Smarty.class.php directly but can't find it
    - Solution: Add `require_once("/srv/www/bbsengine6/php/bootstrap.php");` at top of each PHP file
-   - Files updated in www/org/php/: index.php, login.php, logout.php, register.php, post.php, serve-page.php, archive.php, download.php, dir.php, about.php, testform.php, phpinfo.php, bbsenginedotorg.php, gencaptchaimage.php
-     (handbook.php, handbook-index.php, handbook-chapter.php were removed in the 2026-09-07 eradication; routing moved to engine/router.php + engine/serve-md.php)
+- Files updated in www/org/php/: index.php, login.php, logout.php, register.php, post.php, archive.php, download.php, dir.php, about.php, testform.php, phpinfo.php, bbsenginedotorg.php, gencaptchaimage.php
+      (handbook.php, handbook-index.php, handbook-chapter.php were removed in the 2026-09-07 eradication; routing moved to engine/router.php + engine/serve-md.php)
+      (serve-page.php was relocated to engine/serve-tmpl.php on 2026-09-16 and now participates in the router handler chain as bbsengine6\servepage\router_handlePage)
    - Files updated in engine/: join.php, login.php, logout.php, router.php
    - Also updated: php/session.php, php/page.php, smarty/*.php, www/org/smarty/*.php
    - Note: No Composer changes - use existing bootstrap.php
