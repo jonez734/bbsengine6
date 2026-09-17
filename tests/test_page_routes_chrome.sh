@@ -397,6 +397,26 @@ if [ "$bytes" -gt 0 ] && [ -s "$BODY_SPECS" ]; then
   else
     ok "/handbook/6/specs/ body does not contain the ENGINEURL duplicate-define sentinel"
   fi
+  # @since 2026-09-17 — TEOSURL-prefix guard. The pre-fix
+  # rendering emitted href="/teos/specs/..." for every
+  # breadcrumb and item link on /handbook/6/specs/, because
+  # zoid6/php/zoid6config.php defined TEOSURL=/teos/
+  # unconditionally and folder.php:231 plus
+  # skin/tmpl/function.teos.tmpl read the bare constant. The
+  # fix is SetEnv TEOSURL=/handbook/6/ in www/org/htaccess-prod
+  # + env-aware define in zoid6config.php + teos_url() helper
+  # in folder.php:231. The two checks below assert the live
+  # body is consistent with that.
+  if grep -qE 'href="/teos/specs/' "$BODY_SPECS" 2>/dev/null; then
+    bad "/handbook/6/specs/ body contains href=\"/teos/specs/...\" -- TEOSURL env override not propagating; check www/org/htaccess-prod SetEnv, zoid6/php/zoid6config.php env-aware define, and php/folder.php:231 teos_url() helper"
+  else
+    ok "/handbook/6/specs/ body has no href=\"/teos/specs/...\" (TEOSURL env override is honored)"
+  fi
+  if grep -qE 'href="/handbook/6/specs/[a-zA-Z0-9_-]+"' "$BODY_SPECS" 2>/dev/null; then
+    ok "/handbook/6/specs/ body has at least one href=\"/handbook/6/specs/<chapter>\" link"
+  else
+    bad "/handbook/6/specs/ body has no href=\"/handbook/6/specs/<chapter>\" link -- the directory listing rendered no per-item hrefs"
+  fi
 fi
 
 # Static invariant: engine/router.php (in the bbsengine6

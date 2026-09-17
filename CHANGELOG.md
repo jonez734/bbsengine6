@@ -1,5 +1,75 @@
 ## [Unreleased]
 
+### fix(wwworg, folder, zoid6config): /handbook/6/specs/ links to /handbook/6/specs/, not /teos/specs/
+
+The handbook directory listing at
+`https://www.bbsengine.org/handbook/6/specs/` rendered
+200 with a populated body but every internal link —
+breadcrumb crumb `specs`, every item link
+(`architecture`, `auth-bank`, `blurb`, …) — pointed at
+`/teos/specs/...` instead of `/handbook/6/specs/...`.
+Following any link 404'd on this vhost because there is
+no `/teos/` rewrite target on www.bbsengine.org (that's
+the zoidtechnologies.com vhost).
+
+**Root cause.** `zoid6/php/zoid6config.php` defines
+`TEOSURL="/teos/"` unconditionally. That file is pulled
+in by `bbsengine6/php/blurb.php` (via the
+`../../zoid6/php/bootstrap.php` and `zoid6config.php`
+requires), which `php/folder.php`'s `isFolderVisible()`
+indirectly loads when handling a directory listing.
+Once loaded, the `TEOSURL` constant is `/teos/` for the
+remainder of the request, shadowing the per-request
+`putenv('TEOSURL=/handbook/6/')` that `engine/router.php`
+issues when it detects the `/handbook/<v>/` URI prefix.
+
+Two callers read `TEOSURL` as a constant (not via the
+env-first `bbsengine6\util\teos_url()` helper):
+
+  - `bbsengine6/skin/tmpl/function.teos.tmpl` lines 2-4
+    use `{$smarty.const.TEOSURL}` to render breadcrumb
+    hrefs and tooltip data URLs.
+  - `bbsengine6/php/folder.php:231` (now line 250) built
+    item URIs as `\TEOSURL . $fileuri`.
+
+Both landed on `/teos/...` for handbook requests,
+producing the broken links.
+
+**Fix.**
+
+1. **`zoid6/php/zoid6config.php`** — `TEOSURL` now
+   honors an env-var override (mirroring the
+   `if (!defined("ENGINEURL"))` pattern already used
+   a few lines above). When `getenv('TEOSURL')` is set
+   and non-empty, the constant reflects it; otherwise it
+   defaults to `/teos/` so every other zoid6 consumer
+   (zoidtechnologies.com teos, atlas, achilles, empyre,
+   murdermotel, soctools, socrates, vulcan, …) sees no
+   behavior change.
+2. **`bbsengine6/www/org/htaccess-prod`** — adds
+   `SetEnv TEOSURL /handbook/6/` next to the existing
+   `SetEnv TEOS_BASEDIR` / `SetEnv TEOS_BASEURI` lines.
+   The htaccess is the per-vhost source of truth; the
+   `engine/router.php` `putenv()` from the detected
+   prefix still runs for routes that hit the regex, and
+   this SetEnv covers everything else (legacy /handbook/
+   redirects, static asset requests, error pages).
+3. **`bbsengine6/php/folder.php:231`** — switches the
+   item URI from `\TEOSURL` (constant-only) to
+   `\bbsengine6\util\teos_url()` (env-first, then
+   constant). `folder.php` now matches
+   `router_buildBreadcrumbs`'s prefix-resolution
+   strategy and is robust to any future bootstrap
+   reordering.
+
+**Result.** `https://www.bbsengine.org/handbook/6/specs/`
+renders breadcrumbs and item links under
+`/handbook/6/specs/...`, and clicking them serves the
+expected handbook chapter (or, for subfolders, the
+expected subdirectory listing).
+
+### fix(engine/router, wwworg): namespace-prefix + ENGINEURL duplicate guard
+
 ### fix(engine/router, wwworg): namespace-prefix + ENGINEURL duplicate guard
 
 After `fix(wwworg): render chrome` landed on merlin, the

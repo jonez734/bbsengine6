@@ -8,6 +8,8 @@
  */
 
 namespace bbsengine6\folder {
+    require_once("bootstrap.php");
+    require_once("util.php");
 
 /**
  * Root sig path prefix.
@@ -226,7 +228,16 @@ function getDirectoryItems(string $dirpath, string $uri): array
 
         $items[] = [
             'title' => $displayTitle,
-            'uri' => \TEOSURL . $fileuri,
+            // @since 2026-09-17 — use the env-first teos_url()
+            // helper instead of the bare \TEOSURL constant. The
+            // bare constant is defined by zoid6/php/zoid6config.php
+            // to "/teos/" regardless of which vhost is serving,
+            // which made handbook/6/specs/ render href="/teos/specs/..."
+            // on www.bbsengine.org. router.php putenv()s the right
+            // prefix per request, and teos_url() honors that env
+            // var, so the directory listing now follows the same
+            // vhost-polymorphic prefix as router_buildBreadcrumbs.
+            'uri' => \bbsengine6\util\teos_url() . $fileuri,
             'filename' => $filename,
         ];
     }

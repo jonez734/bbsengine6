@@ -120,6 +120,25 @@ for entry in "${extra_probes[@]}"; do
         else
           ok "extra probe $url body is not Apache autoindex (router's handleFolder served the listing)"
         fi
+        # @since 2026-09-17 — guard against the
+        # /handbook/<v>/specs/ -> /teos/specs/... link drift.
+        # zoid6/php/zoid6config.php defines TEOSURL=/teos/
+        # unconditionally; before the SetEnv TEOSURL=/handbook/6/
+        # was added to www/org/htaccess-prod and folder.php:231
+        # was switched to bbsengine6\util\teos_url(), every
+        # breadcrumb and item link in this body started with
+        # /teos/specs/ instead of /handbook/6/specs/. Following
+        # any of them 404'd on www.bbsengine.org.
+        if grep -qE 'href="/teos/specs/' /tmp/handbook6.extra 2>/dev/null; then
+          bad "extra probe $url body contains href=\"/teos/specs/...\" -- TEOSURL env override not propagating to folder.php:231 / function.teos.tmpl; check www/org/htaccess-prod SetEnv TEOSURL and zoid6/php/zoid6config.php env-aware define"
+        else
+          ok "extra probe $url body has no href=\"/teos/specs/...\" (TEOSURL env override is honored)"
+        fi
+        if grep -qE 'href="/handbook/6/specs/[a-zA-Z0-9_-]+"' /tmp/handbook6.extra 2>/dev/null; then
+          ok "extra probe $url body has at least one href=\"/handbook/6/specs/<chapter>\" link"
+        else
+          bad "extra probe $url body has no href=\"/handbook/6/specs/<chapter>\" link -- the directory listing rendered no per-item hrefs; investigate router_handleFolder / folder.php:231"
+        fi
       fi
       ;;
     404) bad "extra probe $url returned 404 -- a per-mode handler fell through to handleError. Body: $(head -1 /tmp/handbook6.extra 2>/dev/null | head -c 200)" ;;

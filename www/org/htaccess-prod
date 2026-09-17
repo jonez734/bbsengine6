@@ -5,6 +5,18 @@
 SetEnv VHOST_LABEL bbsengine
 SetEnv TEOS_BASEDIR /srv/www/vhosts/www.bbsengine.org/html/handbook/6/
 SetEnv TEOS_BASEURI /handbook/6/
+# @since 2026-09-17 — publish TEOSURL so the handbook
+# directory listing and breadcrumbs resolve to /handbook/6/
+# rather than the teos default /teos/. zoid6/php/zoid6config.php
+# honors this env var when defining the TEOSURL constant; without
+# it, the constant defaulted to /teos/ and folder.php:231 plus
+# skin/tmpl/function.teos.tmpl emitted /teos/<uri> links on this
+# vhost (e.g. /handbook/6/specs/ rendered href="/teos/specs/...").
+# router.php also putenv()s TEOSURL=/handbook/<v>/ from the
+# detected URI prefix, so this SetEnv is the per-vhost default
+# that wins when the router's regex doesn't match (e.g. legacy
+# /handbook/ aliases, static asset requests).
+SetEnv TEOSURL /handbook/6/
 
 # @since 2026-09-16 — publish vhost document root so bbsengine6\bootstrap()
 # can prepend it to include_path. Bare require_once("config.php") in
