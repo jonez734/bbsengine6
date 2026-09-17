@@ -1,5 +1,82 @@
 ## [Unreleased]
 
+### fix(engine/router, wwworg): namespace-prefix + ENGINEURL duplicate guard
+
+After `fix(wwworg): render chrome` landed on merlin, the
+.org vhost log started surfacing three cascading errors
+on `/handbook/6/<dir>/` URLs (which dispatch to
+`router_handleFolder`):
+
+```
+routererror:folder visibility check failed: Call to
+  undefined function bbsengine6\router\bbsengine6\folder\isFolderVisible()
+routererror:directory listing render failed: ...
+Trace: Constant ENGINEURL already defined in
+  /srv/www/vhosts/www.bbsengine.org/html/config.php line 80
+```
+
+Two compounding root causes, both fixed in this commit.
+
+**1. engine/router.php cross-namespace call sites were
+missing the leading backslash.** router.php declares
+`namespace bbsengine6\router;` (bfaca68). Unqualified
+namespaced calls like `bbsengine6\folder\isFolderVisible($uri)`
+resolve to `bbsengine6\router\bbsengine6\folder\isFolderVisible()`,
+which doesn't exist (the function lives in
+`bbsengine6\folder`). PHP's variable-function dispatch (used
+in the handler chain via FQCN strings in
+`router_gethandlers()`) honors call-site namespace
+separately, but bare names in function bodies do not. The
+fix adds a leading-backslash prefix on every
+cross-namespace call site inside router.php that was
+missed in bfaca68:
+
+  - `router_handleFolder`: `\bbsengine6\folder\isFolderVisible`
+    and `\bbsengine6\folder\isSysop` (the visible-cascade
+    source).
+  - `router_handleBlurb`: `\bbsengine6\blurb\display`. The
+    sibling `isBlurb()` call directly above already used
+    the leading backslash; `display()` was missed.
+  - `router_displayDirectoryListing`:
+    `\bbsengine6\displaypage`. The two other `displaypage()`
+    call sites (`router_displayMarkdownFile` and the
+    `route()` return) already use the leading backslash;
+    this one was missed.
+  - `router_handleIndex` and the HTTP entry-point catch
+    block: `catch (Throwable $e)` → `catch (\Throwable $e)`.
+    The bare `Throwable` typehint resolves to
+    `bbsengine6\router\Throwable` which does not exist, so
+    PHP refuses to bind the catch.
+
+**2. www/org/config-prod.php line 80 bare-defined
+ENGINEURL.** `php/zoid6/php/zoid6config.php` line 36
+defines it first (with a `!defined()` guard). When
+`engine/router.php → blurb.php → zoid6config.php` loads
+(blurb is required at engine/router.php line 40),
+ENGINEURL is already defined. When `page.php → session.php
+→ config.php` loads later (page.php is required at
+engine/router.php line 42; session.php line 12 requires
+config.php), the bare
+`define("ENGINEURL", "/engine/")` at config.php line 80
+emits PHP `E_NOTICE` "Constant ENGINEURL already defined".
+That notice surfaces via
+`\bbsengine6\util\echo_traceback("folder visibility check
+failed")` (engine/router.php:280) as the "Trace:" string
+in the same log line. The fix wraps the define in
+`if (!defined("ENGINEURL"))` so the engineurl is
+idempotent across `zoid6config.php` + `config.php` load
+order.
+
+`tests/test_page_routes_chrome.sh` extended with a new
+section [6] that probes `/handbook/6/specs/` and asserts
+the response is the styled listing (chrome + render)
+NOT the inline-list fallback, plus static checks that
+engine/router.php's `bbsengine6\<ns>\<fn>()` call sites
+all use the leading backslash (an `awk`-based
+comment-stripped grep, the same approach as the
+auth-bank render test) and that config-prod.php's
+ENGINEURL define is guarded.
+
 ### fix(wwworg): render chrome (pageheader + topbar + content + pagefooter) on /contact-us, /about-us, /credits
 
 Pre-fix, those three URIs all dispatched to
