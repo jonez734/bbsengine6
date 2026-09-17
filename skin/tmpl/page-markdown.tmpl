@@ -2,7 +2,7 @@
 {block name="head" append}
 <link rel="stylesheet" type="text/css" href="{$smarty.const.ENGINESKINURL}css/youarehere.css" media="screen">
 {/block}
-{block name="main"}
+{block name="content"}
 {if !empty($data.breadcrumbs)}
 {include file="youarehere.tmpl" breadcrumbs=$data.breadcrumbs linklast=true}
 {/if}
