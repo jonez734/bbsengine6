@@ -1,0 +1,35 @@
+{extends file="page.tmpl"}
+{block name="content"}
+<div class="blurb aboutus">
+<div class="header"><h1>About bbsengine</h1></div>
+<div class="body">
+<p>bbsengine is an open source (GPLv2+) application platform. It
+primarily uses text interfaces with a web version available. The
+project was started around 2002 and has evolved through several
+major revisions: bbsengine3, bbsengine4, bbsengine5, and the
+current bbsengine6.</p>
+
+<h2>What it does</h2>
+<p>bbsengine has been used to build office applications
+("projectflow") as well as games ("empyre" for starters). It
+provides ANSI escape sequence support for vt102 / ECMA-48
+terminals, a structured input layer, and a session/member
+abstraction layer that backs both text-mode BBS doors and a web
+frontend.</p>
+
+<h2>How it's organized</h2>
+<p>The engine ships as a per-vhost <code>/engine/</code> install
+(<code>engine/router.php</code>, <code>engine/serve-md.php</code>,
+<code>engine/join.php</code>, ...) backed by PHP Smarty templates
+under <code>skin/tmpl/</code>. The handbook at
+<code>/handbook/6/</code> is the canonical spec tree and is
+rendered live by the same router via
+<code>page-markdown.tmpl</code>.</p>
+
+<h2>How do I get it?</h2>
+<p>There are no public downloads of bbsengine6 available at this
+time. The source tree is maintained in the project's internal
+git repository.</p>
+</div>
+</div>
+{/block}

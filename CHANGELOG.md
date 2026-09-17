@@ -1,5 +1,88 @@
 ## [Unreleased]
 
+### fix(wwworg): render chrome (pageheader + topbar + content + pagefooter) on /contact-us, /about-us, /credits
+
+Pre-fix, those three URIs all dispatched to
+`engine/router.php` correctly and returned HTTP 200, but
+the response body was a chrome shell wrapped around the
+literal `NEEDINFO:content` placeholder (or, for
+`/about-us`, a 404 with a stale `errormessage.tmpl`
+fallback). Two compounding bugs:
+
+1. `www/org/skin/tmpl/page.tmpl` was flattened in commit
+   `2c818d8` ("Assign ENGINEURL in getsmarty") from a
+   nested `{block name="content"}<main>{block name="main"}...{/block}</main>{/block}`
+   shape to a single
+   `{block name="content"}NEEDINFO:content{/block}` -- but
+   the child templates that defined the now-orphaned
+   `main` block were never updated.
+   `www/org/skin/tmpl/contact-us.tmpl` was the most visible
+   casualty: it extended `page.tmpl` with
+   `{block name="main"}...{/block}`, so Smarty silently
+   dropped the block (child block whose name does not
+   match any parent block is ignored) and the parent's
+   `NEEDINFO:content` placeholder rendered in the body
+   slot. `www/org/skin/tmpl/credits.tmpl` had a different
+   version of the same bug: it had no `{extends}` line at
+   all, so it never inherited `page.tmpl`'s chrome. And
+   `www/org/skin/tmpl/about-us.tmpl` didn't exist, so
+   `/about-us` 404'd.
+
+2. `engine/serve-tmpl.php::servePage()` called
+   `displaypage(["content" => $smarty->fetch($basename),
+   "pagetemplate" => "page.tmpl"], "page.tmpl")`. But
+   `bbsengine6\displaypage()` ignores the `$data["pagetemplate"]`
+   key -- it always renders the literal second argument,
+   which was `"page.tmpl"`. The fetched child body was
+   available as `$data.content`, but `page.tmpl`'s content
+   block never references `$data.content`; it renders
+   `NEEDINFO:content` directly. The fetched string was
+   unreachable. Even with bug (1) fixed, this design would
+   render nested chrome (because `fetch($basename)` on a
+   template that extends `page.tmpl` returns the *fully
+   rendered* page chrome + body, which would then be
+   wrapped in another chrome by `displaypage(...)`).
+
+The two-part fix:
+
+- `engine/serve-tmpl.php::servePage()` now calls
+  `displaypage($data, $basename)` -- passing the child
+  template as the entry point so Smarty's `{extends}` /
+  `{block}` machinery merges the child's content block
+  with `page.tmpl`'s chrome in a single render pass.
+  This mirrors the flow that
+  `engine/router.php::router_displayMarkdownFile()` uses
+  for `page-markdown.tmpl`.
+- `www/org/skin/tmpl/contact-us.tmpl`:
+  `{block name="main"}` -> `{block name="content"}`.
+- `www/org/skin/tmpl/credits.tmpl`: now begins with
+  `{extends file="page.tmpl"}` and wraps the existing
+  body markup in `{block name="content"}...{/block}`.
+- `www/org/skin/tmpl/about-us.tmpl`: new, mirrors the
+  chrome-wrapped shape of `contact-us.tmpl` and ships
+  with a short project overview body (was 404 before).
+
+After the fix:
+
+- `/contact-us` returns 200 with chrome + `Contact Us`
+  blurb body.
+- `/about-us` returns 200 with chrome + `About bbsengine`
+  blurb body.
+- `/credits` returns 200 with chrome + `Site Credits`
+  blurb body.
+
+`tests/test_page_routes_chrome.sh` is the regression
+test. It probes all three URIs against the live
+endpoint, asserts the chrome is present in the right
+order (pageheader -> topbar -> pagefooter), asserts
+the page-specific h1 is in the body, asserts the
+`NEEDINFO:content` placeholder is absent, and asserts
+that the build-host's `www/org/htaccess-prod` and
+`www/org/skin/tmpl/*.tmpl` still hold the correct
+shapes (so a partial deploy that lands the engine edit
+but not the template edits, or vice versa, is caught
+before the next prod push).
+
 ### fix(www/org/htaccess-prod): route /handbook/<v>/<dir> through engine/router.php
 
 `/handbook/6/specs/` (and any other real directory under

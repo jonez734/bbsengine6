@@ -65,10 +65,23 @@ function servePage(string $basedir, string $relpath): string|false
     return false;
   }
 
-  \bbsengine6\displaypage(
-    ["content" => $smarty->fetch($basename), "pagetemplate" => "page.tmpl"],
-    "page.tmpl"
-  );
+  // @since 2026-09-17 — display the CHILD template, not
+  // page.tmpl. The previous implementation fetched $basename
+  // into a string and stuffed it into $data.content, then
+  // called displaypage(..., "page.tmpl") -- but page.tmpl
+  // (www/org/skin/tmpl/page.tmpl) defines
+  // {block name="content"}NEEDINFO:content{/block} and never
+  // references $data.content, so the result was a chrome
+  // shell with the literal "NEEDINFO:content" in the body.
+  //
+  // The fix: pass $basename as the $pagetemplate argument
+  // so Smarty treats the child template as the entry point.
+  // Smarty's {extends} / {block} machinery then merges the
+  // child's content block with page.tmpl's chrome, which
+  // is the same flow router_displayMarkdownFile uses for
+  // page-markdown.tmpl.
+  $data = ["pagetemplate" => $basename];
+  \bbsengine6\displaypage($data, $basename);
   return "";
 }
 
