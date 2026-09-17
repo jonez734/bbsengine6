@@ -77,7 +77,16 @@ define("config\RELEASENOTES", \config\HANDBOOKURI . "RELEASENOTES.txt");
 
 define("PROJECTURL", "https://projects.zoidtechnologies.com/");
 
-define("ENGINEURL", "/engine/");
+// @since 2026-09-17 — guard the define so loading this file
+// twice (zoid6config.php and the vhost's config.php both define
+// ENGINEURL to the same value, but bare define() emits an
+// E_NOTICE on the second call) does not produce a Constant
+// already defined warning. Engine.php reads ENGINEURL via
+// defined('\config\ENGINEURL') ? \config\ENGINEURL : ... so the
+// namespaced lookup is unaffected; ENGINEURL is the global
+// fallback for vhost templates that use {$ENGINEURL} without
+// the smarty.const. prefix.
+if (!defined("ENGINEURL")) define("ENGINEURL", "/engine/");
 
 // @since 20180502 to squash a php notice
 define("WWWURL", "//zoidtechnologies.com/");

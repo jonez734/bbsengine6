@@ -326,6 +326,180 @@ for tmpl in contact-us.tmpl credits.tmpl; do
 done
 echo
 
+# --- [6] folder-handler namespace-prefix guard --------------------------
+# engine/router.php declares `namespace bbsengine6\router;`. A
+# bare-namespaced call site like
+#   $isVisible = bbsengine6\folder\isFolderVisible($uri);
+# resolves to bbsengine6\router\bbsengine6\folder\isFolderVisible(),
+# which doesn't exist (the function lives in bbsengine6\folder).
+# This was the source of the handleFolder log noise on merlin
+# after the page-chrome deploy landed:
+#   "Call to undefined function
+#    bbsengine6\router\bbsengine6\folder\isFolderVisible()"
+# The /handbook/6/specs/ URL is the canary: it dispatches into
+# router_handleFolder, which used to throw on the visibility
+# check and fall through to the inline-list fallback
+# (router_displayDirectoryListing's else branch).
+#
+# The check probes /handbook/6/specs/ AND asserts the response
+# is the styled listing (chrome + render) not the inline-list
+# fallback. It also probes the live response for the inline-list
+# signature (<ul><li><a href="...md">...</a></li> ... </ul></body>)
+# which is what the catch-fall-through produced pre-fix.
+echo "[6] /handbook/6/specs/ directory listing (router_handleFolder namespace + folder visibility check)"
+BODY_SPECS="$TMPDIR_TEST/specs.html"
+code=$(probe "$URL_BASE/handbook/6/specs/" "$BODY_SPECS")
+bytes=$(wc -c < "$BODY_SPECS" 2>/dev/null | tr -d ' ' || echo 0)
+echo "    status: $code"
+echo "    body:   $bytes bytes"
+
+if [ "$code" = "200" ] && [ "$bytes" -gt 0 ]; then
+  ok "/handbook/6/specs/ returned 200 with non-empty body"
+else
+  bad "/handbook/6/specs/ expected 200 with body, got $code ($bytes bytes)"
+fi
+
+if [ "$bytes" -gt 0 ] && [ -s "$BODY_SPECS" ]; then
+  # Anti-fallback sentinels. The pre-fix signature was:
+  #   - body starts with "Error: folder visibility check failed"
+  #     (echo_traceback's $showToUser=true branch)
+  #   - then <html><head><title>specs</title></head><body>...
+  #     (the inline-list fallback)
+  if grep -q -F 'Error: folder visibility check failed' "$BODY_SPECS" 2>/dev/null; then
+    bad "/handbook/6/specs/ body contains 'Error: folder visibility check failed' -- the folder-visibility throwable is firing; namespace-prefix fix on bbsengine6\\\\folder\\\\isFolderVisible() in router_handleFolder did not deploy, or php/folder.php was not loaded"
+  else
+    ok "/handbook/6/specs/ body does not contain 'Error: folder visibility check failed' (router_handleFolder completed without throwing)"
+  fi
+  # Inline-list signature: the router's catch fall-through
+  # path emits '<title>specs</title>' followed by a bare
+  # '<ul><li>...</li></ul></body></html>' (no <header
+  # id="pageheader"> chrome). The styled listing uses
+  # browse.tmpl or the catch's inline fallback, but in both
+  # cases a real failure-mode marks the body with one of
+  # these markers.
+  pageheader_count=$(grep -c -F '<header id="pageheader">' "$BODY_SPECS" 2>/dev/null | head -1)
+  if [ "$pageheader_count" -ge 1 ]; then
+    ok "/handbook/6/specs/ body has the pageheader chrome (not the inline-list fallback)"
+  else
+    if grep -qE '<html><head><title>specs</title></head><body><h1>specs</h1><ul><li><a href="[^"]*\.md">' "$BODY_SPECS" 2>/dev/null; then
+      bad "/handbook/6/specs/ body matches the inline-list-fallback signature -- catch in router_displayDirectoryListing fell through because browse.tmpl render failed; check that the leading-backslash prefix on bbsengine6\\\\displaypage() in router.php is in place, and that the page.tmpl / browse.tmpl templates are in merlin's compiled-templates cache"
+    else
+      bad "/handbook/6/specs/ body has no pageheader chrome but does not match the inline-list signature either -- inspect manually"
+    fi
+  fi
+  # Anti-ENGINEURL sentinel. The pre-fix log noise on merlin
+  # was "Constant ENGINEURL already defined in
+  # /srv/www/vhosts/www.bbsengine.org/html/config.php line
+  # 80" -- surfaced via util\\\\echo_traceback's
+  # error_get_last() inside the visibility-check catch.
+  if grep -q -F 'Constant ENGINEURL already defined' "$BODY_SPECS" 2>/dev/null; then
+    bad "/handbook/6/specs/ body contains 'Constant ENGINEURL already defined' -- ENGINEURL guard in www/org/config-prod.php (line 80) did not deploy"
+  else
+    ok "/handbook/6/specs/ body does not contain the ENGINEURL duplicate-define sentinel"
+  fi
+fi
+
+# Static invariant: engine/router.php (in the bbsengine6
+# tree, not the mirrored meta-repo copy) must use a
+# leading-backslash prefix on all bbsengine6\\<ns>\\
+# call sites that are NOT inside a comment. The check is a
+# safer ground-truth than the live response because the
+# live response depends on the deploy + php-fpm reload
+# having caught up. A bare-namespaced call resolves to
+# bbsengine6\\router\\bbsengine6\\<ns>\\<fn>(), which
+# doesn't exist.
+ROUTER_PHP="$LOCAL_BBSENGINE6/engine/router.php"
+if [ ! -f "$ROUTER_PHP" ]; then
+  bad "local $ROUTER_PHP missing"
+else
+  # Strip PHP comments the same way test_handbook_auth_bank_render.sh:[177-225]
+  # does, then look for call sites that are NOT leading-backslash
+  # qualified. Allow the namespace declaration itself
+  # (line 3: `namespace bbsengine6\router;`).
+  php_strip_comments_strict() {
+    awk '
+      BEGIN { in_block = 0 }
+      {
+        line = $0
+        if (in_block) {
+          if (match(line, /\*\//)) {
+            line = substr(line, RSTART + 2)
+            in_block = 0
+          } else {
+            next
+          }
+        }
+        while (match(line, /\/\*/)) {
+          pre = substr(line, 1, RSTART - 1)
+          rest = substr(line, RSTART + 2)
+          if (match(rest, /\*\//)) {
+            line = pre substr(rest, RSTART + 2)
+          } else {
+            line = pre
+            in_block = 1
+            break
+          }
+        }
+        sub(/\/\/.*$/, "", line)
+        print line
+      }
+    ' "$1"
+  }
+  TMP_ROUTER_STRIPPED="$TMPDIR_TEST/router.stripped.php"
+  php_strip_comments_strict "$ROUTER_PHP" > "$TMP_ROUTER_STRIPPED"
+  # Call sites that were missing the leading backslash pre-fix:
+  #   bbsengine6\folder\isFolderVisible($uri)
+  #   bbsengine6\folder\isSysop()
+  #   bbsengine6\blurb\display($uri, null)
+  #   bbsengine6\displaypage([...], 'browse.tmpl')
+  missing_calls=()
+  for call in 'bbsengine6\\folder\\isFolderVisible' 'bbsengine6\\folder\\isSysop' 'bbsengine6\\blurb\\display' 'bbsengine6\\displaypage\\[' 'bbsengine6\\util\\echo_traceback'; do
+    # grep for the literal call (preceded by whitespace, NOT preceded by a backslash).
+    # Use a Perl regex with a negative lookbehind for the backslash.
+    if grep -P "(?<!\\\\)$call" "$TMP_ROUTER_STRIPPED" >/dev/null 2>&1; then
+      missing_calls+=("$call")
+    fi
+  done
+  if [ "${#missing_calls[@]}" -eq 0 ]; then
+    ok "local $ROUTER_PHP: all bbsengine6\\\\<ns>\\\\<fn>() call sites use the leading-backslash namespace lookup"
+  else
+    bad "local $ROUTER_PHP: bare-namespaced call site(s) found: ${missing_calls[*]} -- these resolve to bbsengine6\\\\router\\\\bbsengine6\\\\<ns>\\\\<fn>() at runtime and fatal with 'Call to undefined function'"
+  fi
+
+  # Catch types must be leading-backslash too: `catch (Throwable $e)`
+  # resolves `Throwable` against the call-site namespace and finds
+  # nothing. The same applies to `catch (\Throwable $e)` -- but
+  # the grep below would flag the correct form too because the
+  # regex doesn't distinguish. Tighten to: bare `catch (Throwable`
+  # (no preceding backslash on the type) is the bug.
+  if grep -E "catch[[:space:]]*\([[:space:]]*Throwable[[:space:]]+" "$TMP_ROUTER_STRIPPED" >/dev/null 2>&1; then
+    bad "local $ROUTER_PHP: bare 'catch (Throwable \$e)' found (no leading backslash on the type) -- resolves to bbsengine6\\\\router\\\\Throwable at runtime and refuses to compile"
+  else
+    ok "local $ROUTER_PHP: all catch types use the leading-backslash form (catch (\\\\Throwable ...))"
+  fi
+fi
+echo
+
+# Static invariant: www/org/config-prod.php's ENGINEURL
+# define must be guarded with `if (!defined())` so loading
+# the file twice (zoid6config.php first via blurb.php,
+# then config.php via page.php -> session.php) does not
+# emit an E_NOTICE that propagates into util\\\\
+# echo_traceback's "Trace:" field.
+CONFIG_PROD="$LOCAL_BBSENGINE6/www/org/config-prod.php"
+if [ ! -f "$CONFIG_PROD" ]; then
+  bad "local $CONFIG_PROD missing"
+else
+  if grep -E "^define\\(\"ENGINEURL\"" "$CONFIG_PROD" >/dev/null 2>&1; then
+    bad "local $CONFIG_PROD: line 80 ENGINEURL is a bare define() -- emits E_NOTICE when zoid6config.php runs first. Wrap in 'if (!defined(\"ENGINEURL\")) define(...)'."
+  elif grep -F 'if (!defined("ENGINEURL"))' "$CONFIG_PROD" >/dev/null 2>&1; then
+    ok "local $CONFIG_PROD: ENGINEURL define is guarded with !defined() (idempotent across zoid6config.php + config.php load order)"
+  else
+    bad "local $CONFIG_PROD: ENGINEURL define not detected at all (unexpected file shape)"
+  fi
+fi
+echo
+
 # --- summary ------------------------------------------------------------
 echo "=== summary ==="
 echo "passed: $pass"

@@ -179,7 +179,10 @@ function router_handleIndex(string $uri)
     try {
       include($indexfile);
       return ROUTER_STOP;
-    } catch (Throwable $e) {
+    // @since 2026-09-17 — qualify the catch type with a
+    // leading backslash so it resolves the global \Throwable,
+    // not the non-existent `bbsengine6\router\Throwable`.
+    } catch (\Throwable $e) {
       router_log('index include failed: ' . $e->getMessage());
       return ROUTER_NEXT;
     }
@@ -210,7 +213,15 @@ function router_handleBlurb(string $uri)
 
   if (\bbsengine6\blurb\isBlurb($uri)) {
       try {
-        bbsengine6\blurb\display($uri, null);
+        // @since 2026-09-17 — leading-backslash namespace
+        // lookup. router.php is in `namespace bbsengine6\router;`;
+        // bare `bbsengine6\blurb\display()` would resolve to
+        // the non-existent
+        // `bbsengine6\router\bbsengine6\blurb\display()`. The
+        // sibling isBlurb() call above uses the leading
+        // backslash; this display() call site was missed
+        // by bfaca68.
+        \bbsengine6\blurb\display($uri, null);
         return '';
       } catch (\Throwable $e) {
         router_log('blurb display failed: ' . $e->getMessage(), 'error');
@@ -262,8 +273,19 @@ function router_handleFolder(string $uri)
   // folder visibility check (optional: only meaningful for the teos tree)
   $isVisible = true; $isSysop = false;
   try {
-    $isVisible = bbsengine6\folder\isFolderVisible($uri);
-    $isSysop = bbsengine6\folder\isSysop();
+    // @since 2026-09-17 — qualify the namespace lookup with a
+    // leading backslash. router.php declares `namespace
+    // bbsengine6\router;` (bfaca68), so an unqualified
+    // `bbsengine6\folder\isFolderVisible()` call resolves to
+    // `bbsengine6\router\bbsengine6\folder\isFolderVisible()`,
+    // which does not exist (the function lives in
+    // `bbsengine6\folder`). Variable-function dispatch (line
+    // ~600) honors call-site namespace because the call is
+    // routed through the FQCN table returned by
+    // router_gethandlers(), but bare names in this function
+    // body do not.
+    $isVisible = \bbsengine6\folder\isFolderVisible($uri);
+    $isSysop = \bbsengine6\folder\isSysop();
   } catch (\Throwable $e) {
     \bbsengine6\util\echo_traceback("folder visibility check failed");
     router_log('folder visibility check failed: ' . $e->getMessage(), 'error');
@@ -564,7 +586,15 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
     // bbsengine6/skin/tmpl/browse.tmpl and remove the
     // try-catch.
     try {
-      bbsengine6\displaypage([
+      // @since 2026-09-17 — leading-backslash namespace lookup;
+      // router.php is in `namespace bbsengine6\router;` so bare
+      // `bbsengine6\displaypage()` would resolve to the
+      // non-existent `bbsengine6\router\bbsengine6\displaypage()`.
+      // The two other displaypage() call sites in this file
+      // (router_displayMarkdownFile and the route() return)
+      // already use the leading-backslash form; this one was
+      // missed in bfaca68.
+      \bbsengine6\displaypage([
         'title' => $title,
         'items' => $items,
         'uri' => $uri,
@@ -698,8 +728,13 @@ if (php_sapi_name() !== 'cli') {
     } else {
       echo $router_result;
     }
-  } catch (Throwable $e) {
-    bbsengine6\util\echo_traceback("router.http.100:".$e->getMessage());
+  } catch (\Throwable $e) {
+    // @since 2026-09-17 — leading-backslash namespace lookup;
+    // see the comment at router_handleFolder for the rationale.
+    // Also qualify the catch type with a leading backslash so
+    // the catch resolves the global \Throwable instead of the
+    // non-existent `bbsengine6\router\Throwable`.
+    \bbsengine6\util\echo_traceback("router.http.100:".$e->getMessage());
     http_response_code(500);
     echo 'Router Error';
   }
