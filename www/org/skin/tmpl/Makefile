@@ -7,7 +7,6 @@ stage:
 	$(RSYNC) *.tmpl $(WWWSTAGEDOCROOT)skin/tmpl/
 	# @since 2026-09-07 -- engine/router.php at the .org vhost
 	# renders chapters via Smarty's displaypage(..., 'page-markdown.tmpl', ...)
-<<<<<<< HEAD
 	# which extends page.tmpl + defines a {block name="content"}.
 	# page-markdown.tmpl also {include}s youarehere.tmpl, which in
 	# turn {include}s teos-breadcrumbs.tmpl. The .org vhost's

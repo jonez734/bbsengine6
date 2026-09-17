@@ -20,6 +20,12 @@ div#topbar {
         margin: 0;
     }
 
+    .body {
+        display: flex;
+        flex-direction: row;
+        flex: 1;
+    }
+
     .start, .end {
         padding: 0.50em;
     }
