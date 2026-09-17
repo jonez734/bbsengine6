@@ -99,7 +99,29 @@ for entry in "${extra_probes[@]}"; do
   code=$(probe "$url" /tmp/handbook6.extra)
   echo "    $url -> $code ($desc)"
   case "$code" in
-    200) ok "extra probe $url returned 200" ;;
+    200)
+      ok "extra probe $url returned 200"
+      # /handbook/6/specs/ is a real on-disk directory under
+      # html/handbook/6/. mod_rewrite's !-d guard in the chapter
+      # rule short-circuits the rewrite, so before the -d rule
+      # was restored (bbsengine6/www/org/htaccess-prod lines
+      # 60-71) Apache's autoindex would serve a raw "Index of
+      # /handbook/6/specs" listing and the response would
+      # still be HTTP 200. The 200 alone is therefore not
+      # enough to prove the router ran; check that the body
+      # is the router's rendered listing, not the Apache
+      # autoindex. The Apache/2.x Server header is the
+      # simplest discriminator -- the router does not emit
+      # one.
+      if [ "$url" = "$URL_BASE/specs/" ]; then
+        if grep -q 'Index of /' /tmp/handbook6.extra 2>/dev/null \
+           || grep -q -E '<address>Apache/[[:digit:]]+\.[[:digit:]]+' /tmp/handbook6.extra 2>/dev/null; then
+          bad "extra probe $url returned 200 but body looks like Apache's autoindex listing -- the !-d guard in www/org/htaccess-prod is sending real directories to autoindex instead of engine/router.php's handleFolder"
+        else
+          ok "extra probe $url body is not Apache autoindex (router's handleFolder served the listing)"
+        fi
+      fi
+      ;;
     404) bad "extra probe $url returned 404 -- a per-mode handler fell through to handleError. Body: $(head -1 /tmp/handbook6.extra 2>/dev/null | head -c 200)" ;;
     500) bad "extra probe $url returned 500 -- a handler threw (e.g. template not found, fatal). Body: $(head -1 /tmp/handbook6.extra 2>/dev/null | head -c 200)" ;;
     *)   bad "extra probe $url returned unexpected $code" ;;

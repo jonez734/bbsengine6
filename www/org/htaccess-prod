@@ -57,6 +57,19 @@ RewriteRule ^favicon\.ico$ - [last]
 # the file via bbsengine6\util\handbook_resolve() (see php/util.php).
 RewriteRule ^handbook/(\d+)/(.+\.md)$ /engine/serve-md.php?path=$2 [last,qsappend]
 
+# Handbook directory URLs -> /engine/router.php for the
+# directory listing. uri=<dir> (no handbook/<v>/ prefix) so
+# the router's prefix detection picks up the version.
+# Mirrors teos/www/htaccess-prod:49-51. Without this rule a
+# real directory under html/handbook/<v>/ (e.g. /handbook/6/
+# specs/) falls through the !-d guard below and is served as
+# Apache's raw autoindex listing instead of handleFolder.
+# The ^handbook/(\d+)/ pattern cannot match the rewritten
+# /engine/router.php URL, so no %{REQUEST_URI} !^/engine/
+# cycle guard is needed (unlike teos's broader ^(.+)$ rule).
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]
+
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]

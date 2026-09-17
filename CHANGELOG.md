@@ -1,5 +1,87 @@
 ## [Unreleased]
 
+### fix(www/org/htaccess-prod): route /handbook/<v>/<dir> through engine/router.php
+
+`/handbook/6/specs/` (and any other real directory under
+`html/handbook/<v>/`) was being served by Apache's
+`DirectoryIndex`/autoindex as a raw file listing instead of
+the styled `handleFolder` listing produced by
+`bbsengine6\router\router_handleFolder` /
+`bbsengine6\router\router_displayDirectoryListing`.
+
+Root cause: the handbook chapter rule in `www/org/htaccess-prod`
+(lines 60-62) was guarded by `RewriteCond %{REQUEST_FILENAME}
+!-d !-f`. The intent was to skip the rewrite when the URI
+already resolves to a real file or directory on disk, so
+Apache's default handler could serve it. But the .org vhost
+ships a real `html/handbook/6/specs/` directory (and others
+as the handbook grows), so `!-d` skipped the rewrite and
+autoindex served the raw listing. The companion `-d` rewrite
+that would have routed real directories through
+`engine/router.php` was dropped in commit `032878163`
+("rewrite handbook tests for per-vhost /engine/ install"),
+which consolidated the per-vhost install refactor; the
+teos htaccess kept the equivalent pair (lines 49-51 +
+55-58) but wwworg lost both halves of its prior
+`-d` / `!-d` pair.
+
+Fix: re-add the missing `-d` rule between the `.md` rule
+(line 58) and the existing `!-d !-f` rule (now line 73).
+The new rule mirrors `teos/www/htaccess-prod:49-51` and
+forwards real directories to `engine/router.php?uri=$2`,
+where the router's `handleFolder` produces the styled
+listing.
+
+Notes:
+
+- No `RewriteCond %{REQUEST_URI} !^/engine/` cycle guard is
+  needed: the inner pattern `^handbook/(\d+)/` cannot match
+  the rewritten `/engine/router.php` URL on the second
+  iteration. (The teos rule needs the guard because its
+  inner pattern is the broader `^(.+)$`.)
+- Ordering: the new `-d` rule must precede the existing
+  `!-d !-f` rule. They are mutually exclusive
+  (`-d` vs `!-d`), so the order between them is purely a
+  readability/stability preference; mod_rewrite's RewriteCond
+  evaluation decides which fires. Placing `-d` first matches
+  the original `3a606cc` ordering and the teos htaccess
+  layout.
+- The `.md` rule (line 58) still takes precedence over both
+  the new `-d` rule and the existing chapter rule because
+  `(.+\.md)$` is more specific than `(.*)$` and rules in the
+  same RewriteRule block are tried top-to-bottom. A URL
+  like `/handbook/6/specs/foo.md` continues to route to
+  `engine/serve-md.php` regardless of whether `specs/` is a
+  real directory.
+
+Tests:
+
+- `tests/test_handbook_6_returns_200.sh:[3]` already probed
+  `/handbook/6/specs/` with a `200` expectation; this commit
+  extends that probe to additionally assert the response
+  body is **not** Apache's autoindex (no `Index of /`
+  heading, no `<address>Apache/x.y`). The 200 alone was
+  not a sufficient regression check -- autoindex returns 200
+  too, so a regression to the pre-fix behavior passed the
+  old test while serving an ugly listing.
+
+Verification:
+
+- After `make wwworg` on the build host + apache reload on
+  merlin, `curl -i https://www.bbsengine.org/handbook/6/
+  specs/` should return HTTP 200 with a body that contains
+  the heading "specs" (rendered by
+  `router_displayDirectoryListing`) and does **not** contain
+  `Index of /handbook/6/specs` (Apache autoindex).
+- Adjacent URLs continue to dispatch correctly: `/handbook/
+  6/specs/architecture.md` -> `serve-md.php` (`.md` rule),
+  `/handbook/6/specs/architecture` -> `router.php` chapter
+  (`!-d !-f` rule, file does not exist on disk), `/handbook/
+  6/` -> `router.php` index (`handleIndex` + TEOSDIR/
+  index.md fallback).
+
+
+
 ### fix(skin/tmpl): revert page-markdown.tmpl extends target from zoid6-page.tmpl to page.tmpl; align block name with parent's {block name="content"}
 
 On 2026-09-07 the `page-markdown.tmpl` extends target was renamed
