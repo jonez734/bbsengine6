@@ -10,4 +10,6 @@ dist/
 *.pgdump
 *~
 .sass-cache/
+skin/css/*.css
+**/skin/css/*.css
 
