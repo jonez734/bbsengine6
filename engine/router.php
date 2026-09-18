@@ -248,11 +248,12 @@ function router_handleFolder(string $uri)
   // them (see bbsengine6\util\safe_path_web lines 510-514),
   // but the router's URI shape is "leading-slash relative"
   // (e.g. "/6/specs/") as routed by the bbsengine.org
-  // htaccess-prod (RewriteRule ^handbook/(\d+)/?(.*)$ ->
-  // /engine/router.php?uri=$2 plus the leading '/' that
-  // may be present on bare /handbook/6/), not "absolute" --
-  // the absolute-root semantics are anchored to TEOSDIR,
-  // not the OS root. ltrim converts the URI to the
+  // htaccess-prod (RewriteRule ^handbook/(\d+)/(.*)$ ->
+  // /engine/router.php?uri=$2 in the unified-dispatch block,
+  // which catches both directory URLs and non-asset catch-all
+  // requests), not "absolute" -- the absolute-root semantics
+  // are anchored to TEOSDIR, not the OS root. ltrim converts
+  // the URI to the
   // bare-relative shape the rest of the function (and
   // safe_path_web) expect. The containment check inside
   // safe_path_web (str_starts_with($resolved, $base_real))
@@ -679,24 +680,24 @@ if (php_sapi_name() !== 'cli') {
   $requesturi = $_SERVER['REQUEST_URI'] ?? '';
   $handbookhome = \bbsengine6\util\handbook_home();
   if (preg_match('#^/handbook/(\d+)/(.*)$#', $requesturi, $m)) {
-    putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
-    putenv('TEOSURL=/handbook/' . $m[1] . '/');
+///    putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
+///    putenv('TEOSURL=/handbook/' . $m[1] . '/');
     // Per-vhost top-breadcrumb label. Consumed by
     // bbsengine6\util\vhost_label() (php/util.php) and (now)
     // by router_buildBreadcrumbs above; default for
     // unconfigured environments is "teos", so /teos/ requests
     // see no change. Mirrors the original export in the
     // now-deleted www/org/php/handbook.php (c40c79a).
-    putenv('TEOS_LABEL=bbsengine6 handbook');
+///    putenv('TEOS_LABEL=bbsengine6 handbook');
     if (!isset($_GET['uri']) && !isset($_GET['path'])) {
       $_GET['uri'] = $m[2];
     }
   } elseif (preg_match('#^/handbook/(\d+)/?$#', $requesturi, $m)) {
-    putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
-    putenv('TEOSURL=/handbook/' . $m[1] . '/');
+///    putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
+///    putenv('TEOSURL=/handbook/' . $m[1] . '/');
     // Per-vhost top-breadcrumb label; see the matching comment
     // in the chapter branch above for the rationale.
-    putenv('TEOS_LABEL=bbsengine6 handbook');
+///    putenv('TEOS_LABEL=bbsengine6 handbook');
     if (!isset($_GET['uri']) && !isset($_GET['path'])) {
       $_GET['uri'] = '';
     }
@@ -709,7 +710,7 @@ if (php_sapi_name() !== 'cli') {
   $path = $_GET['path'] ?? $_GET['uri'] ?? '';
   $path = preg_replace('/\.md$/', '', $path);
 
-  \bbsengine6\util\logentry("router.http: path=$path");
+  router_log("router.450: path=$path");
 
   // @since 2026-09-07 — the previous version gated router()
   // on `!empty($path)`, which silently 200'd with an empty
