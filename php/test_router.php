@@ -160,27 +160,39 @@ if ($run_db) {
     }
     
     // Test 3: Router handles non-existent content
-    echo "Test 9: Router handles non-existent content gracefully\n";
+    echo "Test 9: Router handles non-existent content gracefully (no duplication)\n";
     // FQCN call: test_router.php runs in the global namespace, so
     // an unqualified router() is a lookup miss. Same shape as
     // Test 3b (which runs unconditionally), but here we exercise
     // the path through the database-aware blurb handler before
     // falling through to router_handleError.
+    //
+    // Production contract (post-fix):
+    //   - page\error() prints the styled chrome via displaypage()
+    //     and returns null.
+    //   - router_handleError then returns '' so the HTTP entry-
+    //     point's `echo $router_result` is a no-op.
+    //   - The handler NEVER emits a trailing <html><title>404>
+    //     fallback block in production; that would duplicate the
+    //     already-printed styled chrome.
+    //
+    // Capture stdout and assert there's exactly one <title> tag
+    // (i.e. the styled chrome is present once, with no trailing
+    // duplicate block). The pre-fix shape had two <title> tags
+    // (the styled chrome + the trailing fallback).
+    ob_start();
     $result = \bbsengine6\router\router("nonexistent/xyz123");
-    // router_handleError's inline fallback (when bbsengine6\page\error
-    // is unavailable, e.g. CLI without displaypage infra) returns
-    // an HTML string containing 'Page Not Found'. When displaypage
-    // is wired up, the page\error() return is null/false and the
-    // same fallback fires. Both paths land here.
-    if (is_string($result)
-        && strlen($result) > 0
-        && strpos($result, "Page Not Found") !== false) {
-        echo "  ✓ PASS: router returned error result (length=" . strlen($result) . ")\n";
+    $body = ob_get_clean();
+    $titleCount = substr_count($body, '<title>');
+    if ($result === ''
+        && $titleCount === 1
+        && strpos($body, 'bbsengine.org errormessage.tmpl') !== false) {
+        echo "  ✓ PASS: router returned ''; stdout contains exactly one styled error (title count=$titleCount)\n";
     } else {
-        echo "  ✗ FAIL: unexpected result from router: " . var_export($result, true) . "\n";
+        echo "  ✗ FAIL: expected '' return + single styled body; got result="
+             . var_export($result, true) . ", title count=$titleCount, body length=" . strlen($body) . "\n";
         exit(1);
     }
-    
     echo "\n";
 }
 
