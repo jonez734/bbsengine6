@@ -304,7 +304,17 @@ function display($uri)
     $title = getDirectoryTitle($uri);
 
     if (function_exists('\bbsengine6\setcurrentpage')) {
-        \bbsengine6\setcurrentpage("teos/" . $uri);
+        // @since YYYY-MM-DD — use the env-first teos_url() helper
+        // instead of the hard-coded "teos/" prefix. The bare
+        // constant \TEOSURL is defined by zoid6/php/zoid6config.php
+        // to "/teos/" regardless of which vhost is serving, which
+        // made handbook/<v>/<dir>/ breadcrumbs render the wrong
+        // path on www.bbsengine.org (e.g. "teos/specs/auth-bank"
+        // instead of "handbook/6/specs/auth-bank"). teos_url()
+        // honors the per-vhost TEOSURL env var putenv()d by
+        // engine/router.php:683/696 for /handbook/<v>/ requests,
+        // matching the directory-item URI fix on line 240.
+        \bbsengine6\setcurrentpage(\bbsengine6\util\teos_url() . $uri);
     }
 
     $data = [];
