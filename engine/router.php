@@ -346,11 +346,29 @@ function router_handleError(string $uri)
   $msg = 'Page not found: ' . htmlspecialchars($uri);
   router_log($msg, 'error');
 
-  $r = \bbsengine6\page\error($msg, 404);
-  if ($r !== null && $r !== false) {
-    return $r;
+  // page\error() loaded (page.php is on the require chain above)
+  // and rendered the styled chrome (pageheader + topbar +
+  // errormessage div + pagefooter) to stdout via displaypage(),
+  // then returned null. Mirror the handleBlurb /
+  // router_displayMarkdownFile pattern: return '' so the HTTP
+  // entry-point's `echo $router_result` is a no-op. Returning a
+  // non-empty string here would duplicate the body (the styled
+  // chrome already on stdout + this echo'd fallback). See the
+  // file header comment at the top of this file for the broader
+  // contract handlers must follow when they render via
+  // displaypage().
+  if (function_exists('\bbsengine6\page\error')) {
+    \bbsengine6\page\error($msg, 404);
+    http_response_code(404);
+    return '';
   }
 
+  // page\error() was unreachable (page.php failed to load, or
+  // the namespace lookup failed under router.php's
+  // `namespace bbsengine6\router;` declaration). Return the bare
+  // fallback string so the HTTP entry-point's echo surfaces it.
+  // We cannot use displaypage() here -- page.php owns that and
+  // it isn't loaded in this branch.
   http_response_code(404);
   return '<html><head><title>404</title></head><body><h1>Page Not Found</h1><p>' . $msg . '</p></body></html>';
 }
