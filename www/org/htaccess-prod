@@ -31,8 +31,10 @@ RewriteBase /
 
 # HTTP -> HTTPS canonicalization (301). Kept from the previous
 # htaccess. [L] so subsequent rules (including the /handbook/
-# temp redirect) only run for HTTPS traffic, which is the
-# intended behavior on this vhost.
+# legacy redirects) only run for HTTPS traffic, which is the
+# intended behavior on this vhost. The /handbook redirect was
+# upgraded from R=302 to R=301 in the unified-dispatch commit;
+# HTTPS remains the outer transport-canonicalization layer.
 RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://www.bbsengine.org/$1 [L,R=301]
 
@@ -95,3 +97,44 @@ RewriteRule ^favicon\.ico$ - [last]
 # derives the handbook version from REQUEST_URI and resolves
 # the file via bbsengine6\util\handbook_resolve() (see php/util.php).
 RewriteRule ^handbook/(\d+)/(.+\.md)$ /engine/serve-md.php?path=$2 [last,qsappend]
+
+# @since YYYY-MM-DD — unified /handbook/<v>/... dispatch. Router's
+# prefix detection (engine/router.php:681-703) re-derives
+# TEOSDIR/TEOSURL from REQUEST_URI; the handler chain (index ->
+# blurb -> folder -> markdown -> page -> error) decides what to
+# render based on filesystem + DB lookups. handleError returns
+# 404 for paths the router can't resolve, using the same chrome
+# (pageheader + topbar + content + pagefooter) as successful
+# page renders. Replaces the prior split between !-d/-d rules
+# since router_handleFolder (engine/router.php:235) does the
+# is_dir() check internally. Raw .md passthrough
+# (Content-Type: text/markdown) is preserved by the earlier
+# ^handbook/(\d+)/(.+\.md)$ -> serve-md.php rule which wins by
+# virtue of appearing earlier with [last].
+RewriteCond %{REQUEST_URI} !^/engine/
+RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]
+
+# @since YYYY-MM-DD — vhost-wide directory dispatch. Mirrors
+# teos/www/htaccess-prod:38-51. Any request whose filesystem
+# path resolves to an existing directory is routed through
+# /engine/router.php so the page-namespace handler chain can
+# render a custom listing / chrome instead of apache's raw
+# autoindex. The %{REQUEST_URI} check prevents the mod_rewrite
+# loop surfaced on the teos vhost (AH00124: Request exceeded
+# the limit of 10 internal redirects) where the catch-all would
+# otherwise re-fire on the rewritten /engine/router.php URL with
+# qsappend growing the query.
+RewriteCond %{REQUEST_URI} !^/engine/
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^(.+)$ /engine/router.php?uri=$1 [last,qsappend]
+
+# @since YYYY-MM-DD — vhost-wide non-asset catch-all. Handles
+# paths that are neither real files, real directories, nor
+# under /engine/. Router's handleError renders a styled 404
+# instead of apache's bare 404. Mirrors teos/www/htaccess-prod:
+# 53-58 (clean URL routing). Static assets (.css, .js, images,
+# fonts, etc.) bypass via the !-f guard above.
+RewriteCond %{REQUEST_URI} !^/engine/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([a-zA-Z0-9_/-]+)$ /engine/router.php?uri=$1 [last,qsappend]
