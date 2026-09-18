@@ -36,10 +36,37 @@ RewriteBase /
 RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://www.bbsengine.org/$1 [L,R=301]
 
-# Temporary redirect: legacy /handbook/ -> current /handbook/6/.
-# @todo: replace with a permanent redirect once /handbook/<v>/ URLs
-# are stable. R=302 because this is intentionally temporary.
-RewriteRule ^handbook[/]?$ /handbook/6/ [R=302,L]
+# Permanent redirect: legacy /handbook/ -> current /handbook/6/.
+# @since YYYY-MM-DD — upgraded from R=302 to R=301. /handbook/<v>/
+# URLs are now stable across deployments, so legacy versionless
+# URLs (including the bare /handbook path here and the versioned
+# forms below) return 301 to give clients (and crawlers) a strong
+# signal to update bookmarks. The companion rules below handle
+# /handbook/<rest> (versionless-with-path) and /handbook/<v>
+# (bare-version-no-trailing-slash) with the same R=301.
+RewriteRule ^handbook[/]?$ /handbook/6/ [R=301,L]
+
+# @since YYYY-MM-DD — legacy versionless /handbook/<rest> redirects
+# to /handbook/6/<rest>/ with a canonical trailing slash. The bare
+# /handbook redirect above handles the no-rest case; this block
+# handles /handbook/specs/security, /handbook/specs/foo/, etc.
+# The negative lookahead (?!(\d+)/) skips requests that are
+# already versioned (/handbook/6/...) so we don't double-rewrite
+# them. Two rules normalize trailing slashes without an extra hop:
+# one for sources without a trailing slash (target gets one), one
+# for sources with (target drops it). Both return R=301 — see the
+# bare /handbook rule above for the permanence rationale.
+RewriteRule ^handbook/(?!(\d+)/)([^/]+(?:/[^/]+)*)$ /handbook/6/$2/ [R=301,L]
+RewriteRule ^handbook/(?!(\d+)/)(.+)/$ /handbook/6/$2 [R=301,L]
+
+# @since YYYY-MM-DD — bare /handbook/<v> (no trailing slash)
+# canonicalizes to /handbook/<v>/ so the handbook collapse rule
+# below (^handbook/(\d+)/(.*)$) matches and dispatches to
+# router.php. Without this, /handbook/6 hits no htaccess rule
+# (the handbook collapse rule requires a slash after the digits)
+# and Apache 404s instead of serving the handbook index. R=301
+# for the same permanence rationale as the legacy redirects above.
+RewriteRule ^handbook/(\d+)$ /handbook/$1/ [R=301,L]
 
 RewriteRule ^join[/]?$ /engine/join.php [last]
 
