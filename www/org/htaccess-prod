@@ -112,6 +112,7 @@ RewriteRule ^handbook/(\d+)/(.+\.md)$ /engine/serve-md.php?path=$2 [last,qsappen
 # ^handbook/(\d+)/(.+\.md)$ -> serve-md.php rule which wins by
 # virtue of appearing earlier with [last].
 RewriteCond %{REQUEST_URI} !^/engine/
+RewriteCond %{REQUEST_URI} !\.php$
 RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]
 
 # @since YYYY-MM-DD — vhost-wide directory dispatch. Mirrors
@@ -125,6 +126,7 @@ RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]
 # otherwise re-fire on the rewritten /engine/router.php URL with
 # qsappend growing the query.
 RewriteCond %{REQUEST_URI} !^/engine/
+RewriteCond %{REQUEST_URI} !\.php$
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^(.+)$ /engine/router.php?uri=$1 [last,qsappend]
 
@@ -135,6 +137,7 @@ RewriteRule ^(.+)$ /engine/router.php?uri=$1 [last,qsappend]
 # 53-58 (clean URL routing). Static assets (.css, .js, images,
 # fonts, etc.) bypass via the !-f guard above.
 RewriteCond %{REQUEST_URI} !^/engine/
+RewriteCond %{REQUEST_URI} !\.php$
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^([a-zA-Z0-9_/-]+)$ /engine/router.php?uri=$1 [last,qsappend]
