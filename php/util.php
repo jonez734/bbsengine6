@@ -906,4 +906,93 @@ function safe_path_web(array $components, array $opts = [])
         return 'NEEDINFO:vhost_label';
     }
 
+/**
+ * Read a configuration value from the environment with a 3-tier
+ * fallback chain.
+ *
+ * Resolution order:
+ *   1. getenv($key)              -- operator / shell / .htaccess override
+ *   2. defined($key) constant    -- PHP-side override (e.g. config.php)
+ *   3. $default                  -- caller-supplied fallback
+ *
+ * Empty-string values from either tier are treated as missing
+ * (consistent with the pattern used by handbook_home(), catalog_root(),
+ * teos_dir(), teos_url(), and vhost_label() in this file). Mirrors
+ * Python's dict.get(key, default) for the common case.
+ *
+ * @since 20260918
+ * @param string $key
+ * @param mixed  $default
+ * @return mixed
+ */
+function env(string $key, mixed $default = false): mixed
+{
+    $env = getenv($key);
+    if (is_string($env) && $env !== '') {
+        return $env;
+    }
+    if (defined($key)) {
+        $c = constant($key);
+        if ($c !== '' && $c !== null) {
+            return $c;
+        }
+    }
+    return $default;
+}
+
+/**
+ * Typed wrapper around env(). Returns env($key, $default) coerced
+ * to string.
+ *
+ * @since 20260918
+ * @param string $key
+ * @param string $default
+ * @return string
+ */
+function env_string(string $key, string $default = ''): string
+{
+    $v = env($key, $default);
+    return is_string($v) ? $v : (string)$v;
+}
+
+/**
+ * Typed wrapper around env(). Returns env($key, $default) coerced
+ * to int. Non-numeric strings fall back to $default.
+ *
+ * @since 20260918
+ * @param string $key
+ * @param int    $default
+ * @return int
+ */
+function env_int(string $key, int $default = 0): int
+{
+    $v = env($key, $default);
+    if (is_int($v)) return $v;
+    if (is_numeric($v)) return (int)$v;
+    return $default;
+}
+
+/**
+ * Typed wrapper around env(). Returns env($key, $default) coerced
+ * to bool. Recognizes the same string spellings as bbsengine6\util\toboolean()
+ * plus a few common variants (yes/no, on/off). Empty string and
+ * unrecognized values fall back to $default.
+ *
+ * @since 20260918
+ * @param string $key
+ * @param bool   $default
+ * @return bool
+ */
+function env_bool(string $key, bool $default = false): bool
+{
+    $v = env($key, $default);
+    if (is_bool($v)) return $v;
+    if (is_string($v)) {
+        $l = strtolower(trim($v));
+        if (in_array($l, ['1','true','t','yes','on'], true)) return true;
+        if (in_array($l, ['0','false','f','no','off',''], true)) return false;
+    }
+    if (is_int($v)) return $v !== 0;
+    return $default;
+}
 ?>
