@@ -53,24 +53,24 @@ router_log("router.300: ".var_export(get_include_path(),true));
 
 function router_log(string $message, string $level = "info"): void
 {
-  \bbsengine6\util\logentry("router".strtolower($level).':'.$message);
+  \bbsengine6\util\logentry("router.".strtolower($level).':'.$message);
 }
 
-function router_get_teosurl(): string
-{
+///function router_get_teosurl(): string
+///{
   // @since 2026-09-09 — thin wrapper kept for backward compat.
   // Prefer \bbsengine6\util\teos_url() in new code; this function
   // delegates to it.
-  return \bbsengine6\util\teos_url();
-}
+///  return \bbsengine6\util\teos_url();
+//}
 
-function router_get_teosdir(): string
-{
-  // @since 2026-09-09 — thin wrapper kept for backward compat.
-  // Prefer \bbsengine6\util\teos_dir() in new code; this function
-  // delegates to it.
-  return \bbsengine6\util\teos_dir();
-}
+///function router_get_teosdir(): string/
+///{
+///  // @since 2026-09-09 — thin wrapper kept for backward compat.
+///  // Prefer \bbsengine6\util\teos_dir() in new code; this function
+///  // delegates to it.
+///  return \bbsengine6\util\teos_dir();
+///}
 
 /**
  * Wrapper around bbsengine6\util\safe_path_web that no-ops to
@@ -105,7 +105,7 @@ function router_buildBreadcrumbs(string $uri): array
     return [];
   }
 
-  $teosurl = rtrim(router_get_teosurl(), '/');
+  $teosurl = rtrim(\bbsengine6\util\env("TEOSURI", "NEEDINFO:teosurl"));
 
 
   // Build breadcrumbs from URI segments
@@ -173,7 +173,7 @@ function router_handleIndex(string $uri)
     return ROUTER_NEXT;
   }
 
-  $teosdir = router_get_teosdir();
+  $teosdir = \bbsengine6\util\env("TEOSDIR");
   $indexfile = $teosdir . 'index.php';
   if (file_exists($indexfile)) {
     try {
@@ -188,12 +188,6 @@ function router_handleIndex(string $uri)
     }
   }
 
-  // @since 2026-09-07 — fall back to TEOSDIR/index.md and
-  // delegate to the markdown handler when the vhost's TEOSDIR
-  // ships a markdown index instead of a PHP one. The teos
-  // vhost ships index.php; the handbook vhost (bbsengine.org)
-  // ships handbook/<v>/index.md, so without this fallback
-  // /handbook/<v>/ is unrenderable through the router.
   $mdfile = $teosdir . 'index.md';
   if (file_exists($mdfile) && is_file($mdfile)) {
     return router_displayMarkdownFile($mdfile, $uri);
@@ -235,32 +229,14 @@ function router_handleBlurb(string $uri)
 function router_handleFolder(string $uri)
 {
   router_log('handleFolder: ' . $uri);
-  $teospath = router_get_teosdir();
-  if ($teospath === '') {
+  $teosdir = \bbsengine6\util\env("TEOSDIR", "NEEDINFO:router_handlefolder");
+  if ($teosdir === '') {
     router_log('TEOSDIR not configured, skipping folder handler');
     return ROUTER_NEXT;
   }
 
-  // @since 2026-09-07 — strip any leading '/' before handing
-  // the path to router_safe_path_web (which forwards to
-  // bbsengine6\util\safe_path_web). safe_path_web treats
-  // leading slashes as absolute-path attempts and rejects
-  // them (see bbsengine6\util\safe_path_web lines 510-514),
-  // but the router's URI shape is "leading-slash relative"
-  // (e.g. "/6/specs/") as routed by the bbsengine.org
-  // htaccess-prod (RewriteRule ^handbook/(\d+)/(.*)$ ->
-  // /engine/router.php?uri=$2 in the unified-dispatch block,
-  // which catches both directory URLs and non-asset catch-all
-  // requests), not "absolute" -- the absolute-root semantics
-  // are anchored to TEOSDIR, not the OS root. ltrim converts
-  // the URI to the
-  // bare-relative shape the rest of the function (and
-  // safe_path_web) expect. The containment check inside
-  // safe_path_web (str_starts_with($resolved, $base_real))
-  // is the real security guard, so this ltrim does not
-  // weaken path-traversal protection.
   $reluri = ltrim($uri, '/');
-  $filepath = router_safe_path_web([$reluri], ['base_dir' => $teospath]);
+  $filepath = router_safe_path_web([$reluri], ['base_dir' => $teosdir]);
   if ($filepath === false) {
     router_log('path validation failed', 'warning');
     return ROUTER_NEXT;
@@ -314,8 +290,8 @@ function router_handleFolder(string $uri)
 function router_handleMarkdown(string $uri)
 {
   router_log('handleMarkdown: ' . $uri);
-  $teospath = router_get_teosdir();
-  if ($teospath === '') return ROUTER_NEXT;
+  $teosdir = \bbsengine6\util\env("TEOSDIR", "NEEDINFO:router_handlemarkdown");
+  if ($teosdir === '') return ROUTER_NEXT;
 
   // @since 2026-09-07 — see router_handleFolder for the
   // leading-slash rationale. The .md variant needs the same
@@ -674,55 +650,20 @@ if (php_sapi_name() !== 'cli') {
     . PATH_SEPARATOR . "/srv/www/bbsengine6/php"
     . PATH_SEPARATOR . "/srv/www/markdown/");
 
-  // Detect the /handbook/<v>/... URI prefix and set TEOSURL/
-  // TEOSDIR for that request so handlers below read from the
-  // matching handbook tree. Same shape as teos: htaccess rewrites
-  // the URI, this entry-point adapts the working dir, the
-  // handlers do not need to know which vhost they're serving.
-  // Env wins over constants --
-  // \bbsengine6\util\teos_url()/teos_dir() (php/util.php)
-  // prefer getenv() over the define() below, so
-  // a handbook request that supplies its own env vars here
-  // overrides the teos fallback. The define()s stay for the
-  // teos case where neither env nor a prefix-derived override
-  // is present.
-  //
-  // @since 2026-09-09 — $handbookhome now reads from
-  // \bbsengine6\util\handbook_home() (the single source of
-  // truth for the canonical install path; same constant used
-  // by engine/serve-md.php). The handbook home can be
-  // overridden via the BBSENGINE6_HANDBOOK_HOME env var or
-  // constant (see php/util.php).
-  //
 
   $requesturi = $_SERVER['REQUEST_URI'] ?? '';
-  $handbookhome = \bbsengine6\util\handbook_home();
   if (preg_match('#^/handbook/(\d+)/(.*)$#', $requesturi, $m)) {
-///    putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
-///    putenv('TEOSURL=/handbook/' . $m[1] . '/');
-    // Per-vhost top-breadcrumb label. Consumed by
-    // bbsengine6\util\vhost_label() (php/util.php) and (now)
-    // by router_buildBreadcrumbs above; default for
-    // unconfigured environments is "teos", so /teos/ requests
-    // see no change. Mirrors the original export in the
-    // now-deleted www/org/php/handbook.php (c40c79a).
-///    putenv('TEOS_LABEL=bbsengine6 handbook');
     if (!isset($_GET['uri']) && !isset($_GET['path'])) {
       $_GET['uri'] = $m[2];
     }
   } elseif (preg_match('#^/handbook/(\d+)/?$#', $requesturi, $m)) {
-///    putenv('TEOSDIR=' . $handbookhome . $m[1] . '/');
-///    putenv('TEOSURL=/handbook/' . $m[1] . '/');
-    // Per-vhost top-breadcrumb label; see the matching comment
-    // in the chapter branch above for the rationale.
-///    putenv('TEOS_LABEL=bbsengine6 handbook');
     if (!isset($_GET['uri']) && !isset($_GET['path'])) {
       $_GET['uri'] = '';
     }
   }
 
-  if (!defined('TEOSURL')) define('TEOSURL', '/teos/');
-  if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
+///  if (!defined('TEOSURL')) define('TEOSURL', '/teos/');
+///  if (!defined('TEOSDIR')) define('TEOSDIR', '/srv/www/vhosts/zoidtechnologies.com/html/teos/');
 
 
   $path = $_GET['path'] ?? $_GET['uri'] ?? '';
