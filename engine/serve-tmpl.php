@@ -103,10 +103,17 @@ function servePage(string $basedir, string $relpath): string|false
  * Router handler for page-namespace URIs (bare URIs that
  * resolve to a Smarty template under DOCUMENTROOT/skin/tmpl/).
  *
- * Mirrors router_handleMarkdown's two-pass extension probe
- * (see engine/router.php:275-303): try <uri>.tmpl first, then
- * <uri> as-is. Returns ROUTER_NEXT to defer to the next
- * handler, anything else short-circuits the chain.
+ * Two-pass extension probe (try <uri>.tmpl first, then
+ * <uri> as-is). Unlike router_handleMarkdown -- which used
+ * to do the same shape but no longer does, because the
+ * HTTP entry-point strips ".md" once and the markdown
+ * handler therefore only needs the bare probe -- the
+ * ".tmpl" probe here is still required: htaccess rewrites
+ * bare slugs (e.g. /contact-us) into the router with no
+ * extension, so the handler has to append ".tmpl" itself.
+ *
+ * Returns ROUTER_NEXT to defer to the next handler,
+ * anything else short-circuits the chain.
  *
  * Defensive `..` and NUL-byte check on the URI before any
  * filesystem work; the realpath() containment check inside
@@ -140,9 +147,17 @@ function router_handlePage(string $uri)
 
   $skin = rtrim($docroot, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'skin/tmpl/';
 
-  // two-pass probe mirroring router_handleMarkdown:
+  // two-pass extension probe:
   //   pass 1: append .tmpl (canonical "URI has no extension" case)
   //   pass 2: try the URI as-is (URI already carries an extension)
+  //
+  // @since 2026-09-19 — this is the ONLY handler in the
+  // registry that still does a two-pass extension probe.
+  // router_handleMarkdown dropped its "$uri . '.md'" branch
+  // (dead code) because the HTTP entry-point strips ".md"
+  // once at the top of the script (see engine/router.php
+  // line ~724). ".tmpl" is NOT stripped at the entry-point,
+  // so the handler still has to append it itself.
   foreach ([$reluri . '.tmpl', $reluri] as $rel)
   {
     $realbase = realpath($skin);

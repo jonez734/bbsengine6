@@ -216,6 +216,43 @@ if ($filepath === '/srv/www/vhosts/zoidtechnologies.com/html/teos/ec/john-edward
     exit(1);
 }
 
+// Test 6a: router_handleMarkdown source does NOT probe
+// "$uri . '.md'". The HTTP entry-point strips a trailing
+// ".md" once at the top of the script (router.php:
+// preg_replace('/\.md$/', '', $path)), so by the time the
+// dispatch loop walks handlers the URI never carries a
+// .md suffix. A "$uri . '.md'" probe in the markdown
+// handler is dead code. Pins the 2026-09-19 cleanup that
+// removed the dead branch.
+echo "Test 6a: router_handleMarkdown does not probe for '\$uri . .md' (dead-code regression guard)\n";
+$router_src = file_get_contents(__DIR__ . "/../engine/router.php");
+if (preg_match('/function\s+router_handleMarkdown\s*\([^)]*\)\s*\{(.*?)^\}/sm', $router_src, $m)) {
+    $handler_body = $m[1];
+    // The dead probe looks like: $reluri . '.md' or $uri . '.md'
+    // inside the handler body.
+    if (preg_match('/\$\w+\s*\.\s*[\'"]\.md[\'"]/', $handler_body)) {
+        echo "  ✗ FAIL: router_handleMarkdown still has a '\$uri . .md' probe; " .
+             "the dead-code branch should have been removed when the HTTP entry-point " .
+             "started stripping .md at line ~724.\n";
+        exit(1);
+    }
+    echo "  ✓ PASS: no dead-code '\$uri . .md' probe in router_handleMarkdown\n";
+} else {
+    echo "  ✗ FAIL: could not extract router_handleMarkdown body\n";
+    exit(1);
+}
+
+// Test 6b: HTTP entry-point strips a trailing ".md" from
+// the URI before passing it to router(). Pins the contract
+// that makes the dead-code removal safe.
+echo "Test 6b: HTTP entry-point strips trailing .md from URI\n";
+if (!preg_match('/preg_replace\s*\(\s*[\'"]\/\\\\\.md\\\$\/[\'"]/', $router_src)) {
+    echo "  ✗ FAIL: HTTP entry-point no longer strips .md; " .
+         "the dead-code removal in router_handleMarkdown is unsafe.\n";
+    exit(1);
+}
+echo "  ✓ PASS: HTTP entry-point strips trailing .md before dispatch\n";
+
 echo "\n";
 
 // =============================================================================
