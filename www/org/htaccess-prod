@@ -2,21 +2,9 @@
 # htaccess-prod - Production rewrite rules for bbsengine.org
 #
 
-SetEnv VHOST_LABEL bbsengine
-SetEnv TEOS_BASEDIR /srv/www/vhosts/www.bbsengine.org/html/handbook/6/
-SetEnv TEOS_BASEURI /handbook/6/
-# @since 2026-09-17 — publish TEOSURL so the handbook
-# directory listing and breadcrumbs resolve to /handbook/6/
-# rather than the teos default /teos/. zoid6/php/zoid6config.php
-# honors this env var when defining the TEOSURL constant; without
-# it, the constant defaulted to /teos/ and folder.php:231 plus
-# skin/tmpl/function.teos.tmpl emitted /teos/<uri> links on this
-# vhost (e.g. /handbook/6/specs/ rendered href="/teos/specs/...").
-# router.php also putenv()s TEOSURL=/handbook/<v>/ from the
-# detected URI prefix, so this SetEnv is the per-vhost default
-# that wins when the router's regex doesn't match (e.g. legacy
-# /handbook/ aliases, static asset requests).
-SetEnv TEOSURL /handbook/6/
+SetEnv TEOSLABEL bbsengine
+SetEnv TEOSDIR /srv/www/vhosts/www.bbsengine.org/html/handbook/6/
+SetEnv TEOSURI /handbook/
 
 # @since 2026-09-16 — publish vhost document root so bbsengine6\bootstrap()
 # can prepend it to include_path. Bare require_once("config.php") in
@@ -48,26 +36,9 @@ RewriteRule ^(.*)$ https://www.bbsengine.org/$1 [L,R=301]
 # (bare-version-no-trailing-slash) with the same R=301.
 RewriteRule ^handbook[/]?$ /handbook/6/ [R=301,L]
 
-# @since YYYY-MM-DD — legacy versionless /handbook/<rest> redirects
-# to /handbook/6/<rest>/ with a canonical trailing slash. The bare
-# /handbook redirect above handles the no-rest case; this block
-# handles /handbook/specs/security, /handbook/specs/foo/, etc.
-# The negative lookahead (?!(\d+)/) skips requests that are
-# already versioned (/handbook/6/...) so we don't double-rewrite
-# them. Two rules normalize trailing slashes without an extra hop:
-# one for sources without a trailing slash (target gets one), one
-# for sources with (target drops it). Both return R=301 — see the
-# bare /handbook rule above for the permanence rationale.
 RewriteRule ^handbook/(?!(\d+)/)([^/]+(?:/[^/]+)*)$ /handbook/6/$2/ [R=301,L]
 RewriteRule ^handbook/(?!(\d+)/)(.+)/$ /handbook/6/$2 [R=301,L]
 
-# @since YYYY-MM-DD — bare /handbook/<v> (no trailing slash)
-# canonicalizes to /handbook/<v>/ so the handbook collapse rule
-# below (^handbook/(\d+)/(.*)$) matches and dispatches to
-# router.php. Without this, /handbook/6 hits no htaccess rule
-# (the handbook collapse rule requires a slash after the digits)
-# and Apache 404s instead of serving the handbook index. R=301
-# for the same permanence rationale as the legacy redirects above.
 RewriteRule ^handbook/(\d+)$ /handbook/$1/ [R=301,L]
 
 RewriteRule ^join[/]?$ /engine/join.php [last]
@@ -98,44 +69,15 @@ RewriteRule ^favicon\.ico$ - [last]
 # the file via bbsengine6\util\handbook_resolve() (see php/util.php).
 RewriteRule ^handbook/(\d+)/(.+\.md)$ /engine/serve-md.php?path=$2 [last,qsappend]
 
-# @since YYYY-MM-DD — unified /handbook/<v>/... dispatch. Router's
-# prefix detection (engine/router.php:681-703) re-derives
-# TEOSDIR/TEOSURL from REQUEST_URI; the handler chain (index ->
-# blurb -> folder -> markdown -> page -> error) decides what to
-# render based on filesystem + DB lookups. handleError returns
-# 404 for paths the router can't resolve, using the same chrome
-# (pageheader + topbar + content + pagefooter) as successful
-# page renders. Replaces the prior split between !-d/-d rules
-# since router_handleFolder (engine/router.php:235) does the
-# is_dir() check internally. Raw .md passthrough
-# (Content-Type: text/markdown) is preserved by the earlier
-# ^handbook/(\d+)/(.+\.md)$ -> serve-md.php rule which wins by
-# virtue of appearing earlier with [last].
-RewriteCond %{REQUEST_URI} !^/engine/
-RewriteCond %{REQUEST_URI} !\.php$
-RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]
+##RewriteCond %{REQUEST_URI} !^/engine/
+##RewriteCond %{REQUEST_URI} !\.php$
+###RewriteRule ^handbook/(\d+)/(.*)$ /engine/router.php?uri=$2 [last,qsappend]
 
-# @since YYYY-MM-DD — vhost-wide directory dispatch. Mirrors
-# teos/www/htaccess-prod:38-51. Any request whose filesystem
-# path resolves to an existing directory is routed through
-# /engine/router.php so the page-namespace handler chain can
-# render a custom listing / chrome instead of apache's raw
-# autoindex. The %{REQUEST_URI} check prevents the mod_rewrite
-# loop surfaced on the teos vhost (AH00124: Request exceeded
-# the limit of 10 internal redirects) where the catch-all would
-# otherwise re-fire on the rewritten /engine/router.php URL with
-# qsappend growing the query.
 RewriteCond %{REQUEST_URI} !^/engine/
 RewriteCond %{REQUEST_URI} !\.php$
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^(.+)$ /engine/router.php?uri=$1 [last,qsappend]
 
-# @since YYYY-MM-DD — vhost-wide non-asset catch-all. Handles
-# paths that are neither real files, real directories, nor
-# under /engine/. Router's handleError renders a styled 404
-# instead of apache's bare 404. Mirrors teos/www/htaccess-prod:
-# 53-58 (clean URL routing). Static assets (.css, .js, images,
-# fonts, etc.) bypass via the !-f guard above.
 RewriteCond %{REQUEST_URI} !^/engine/
 RewriteCond %{REQUEST_URI} !\.php$
 RewriteCond %{REQUEST_FILENAME} !-f
