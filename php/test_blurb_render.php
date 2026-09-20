@@ -11,19 +11,23 @@
  *   4. The router loop sees null and falls through to the next handler
  *   5. The next handler (folder or markdown) renders page.tmpl again
  *
- * The fix: router_handleBlurb must return '' (or similar non-null sentinel)
- * after calling display(), so the router stops.
+ * The fix: router_handleBlurb must return ROUTER_RENDERED after
+ * calling display(), so the dispatch loop short-circuits without
+ * rendering again. ROUTER_RENDERED is a sentinel the dispatcher
+ * maps to ''; the HTTP entry-point emits nothing more.
  *
  * This test is a self-contained regression test that:
  *  - Stubs displaypage() to record calls and return null (the original bug)
  *  - Calls router_handleBlurb() in isolation
- *  - Asserts that the router receives a non-null sentinel
+ *  - Asserts that the router receives ROUTER_RENDERED
  *  - Asserts that the captured output contains page.tmpl exactly once
  *  - Asserts the output does not contain debug junk from templates
  *
  * Run: php test_blurb_render.php
  *
  * @since 2026-07-12
+ * @since 2026-09-19 — updated for the ROUTER_RENDERED sentinel
+ *                    (previously the contract was implicit empty-string).
  */
 
 namespace bbsengine6\blurb {
@@ -48,7 +52,7 @@ $tests_failed = 0;
 $test_results = [];
 
 if (!defined("ROUTER_NEXT")) define("ROUTER_NEXT", "ROUTER_NEXT");
-if (!defined("ROUTER_STOP")) define("ROUTER_STOP", "ROUTER_STOP");
+if (!defined("ROUTER_RENDERED")) define("ROUTER_RENDERED", "ROUTER_RENDERED");
 
 $GLOBALS["__displaypage_calls"] = 0;
 
@@ -109,7 +113,7 @@ function fake_handleBlurb_buggy(string $uri) {
 function fake_handleBlurb_fixed(string $uri) {
     if (function_exists('bbsengine6\\blurb\\display')) {
         bbsengine6\blurb\display($uri, null);
-        return '';
+        return ROUTER_RENDERED;
     }
     return ROUTER_NEXT;
 }
@@ -120,16 +124,20 @@ function fake_handleBlurb_fixed(string $uri) {
 function fake_handleFolder_also_renders(string $uri) {
     $GLOBALS["__displaypage_calls"]++;
     echo "<!DOCTYPE html><html><body>page.tmpl fallthrough render</body></html>";
-    return '';
+    return ROUTER_RENDERED;
 }
 
 /**
- * Router loop, mirroring the production one.
+ * Router loop, mirroring the production one (post-2026-09-19).
+ * Maps ROUTER_RENDERED -> '' so the HTTP entry-point's
+ * `echo $router_result` is a no-op after the handler has
+ * already emitted the body via displaypage().
  */
 function fake_router(array $handlers, string $uri) {
     foreach ($handlers as $handler) {
         $result = $handler($uri);
         if ($result === ROUTER_NEXT) continue;
+        if ($result === ROUTER_RENDERED) return '';
         if ($result === null || $result === false) continue;
         return $result;
     }
@@ -241,9 +249,9 @@ run_test("production router_handleBlurb returns non-null sentinel", function() u
         );
     }
 
-    if (!preg_match("/return\s+(''|" . '""' . "|ROUTER_STOP)\s*;/", $body, $m)) {
+    if (!preg_match("/return\s+(ROUTER_RENDERED|ROUTER_STOP)\s*;/", $body, $m)) {
         throw new Exception(
-            "router_handleBlurb must return a non-null sentinel. " .
+            "router_handleBlurb must return ROUTER_RENDERED. " .
             "Found: " . trim($m[0] ?? "<none>")
         );
     }
