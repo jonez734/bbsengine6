@@ -201,6 +201,18 @@ function router_gethandlers(): array
     ],
     'markdown' => [
       'fn'      => 'bbsengine6\\router\\router_handleMarkdown',
+      // No '.md' here on purpose: the HTTP entry-point strips
+      // a trailing '.md' once at the top of the script
+      // (line ~724: preg_replace('/\.md$/', '', $path)),
+      // so by the time the dispatch loop preg_match()es this
+      // pattern the URI never carries a '.md' suffix. The
+      // handler then probes the filesystem for the bare
+      // <reluri> under TEOSDIR (no extension appended) --
+      // see router_handleMarkdown line ~371. Compare to the
+      // 'page' handler below, which keeps a two-pass probe
+      // because '.tmpl' is NOT stripped at the entry-point
+      // (htaccess rewrites bare slugs into the router with no
+      // extension).
       'pattern' => '#^/?[A-Za-z0-9_][A-Za-z0-9_./-]*$#',
     ],
     'page' => [
