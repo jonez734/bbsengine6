@@ -161,9 +161,11 @@ gets a `l_<loginid>` PG role), see [./specs/pg-ident-auth.md](./specs/pg-ident-a
 ## Router path safety
 
 `engine/router.php` validates every user-supplied URI through
-`bbsengine6\util\safe_path_web()` before any filesystem access. A
-path traversal attempt returns 404. See [./ROUTER.md](./ROUTER.md)
-for the full handler chain.
+`router_safe_path_web()` (a thin wrapper around
+`\bbsengine6\util\safe_path_web()` that no-ops to `false` when
+the underlying helper isn't loaded) before any filesystem
+access. A path traversal attempt returns 404. See
+[./ROUTER.md](./ROUTER.md) for the full handler chain.
 
 ## Regression tests
 

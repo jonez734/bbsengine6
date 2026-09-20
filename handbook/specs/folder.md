@@ -114,9 +114,16 @@ Router integration (in `engine/router.php`):
 
 ```php
 if (\bbsengine6\folder\isFolder($uri)) {
-    return \bbsengine6\folder\display($uri);
+    \bbsengine6\folder\display($uri);  // echoes via displaypage()
+    return \bbsengine6\router\ROUTER_RENDERED;
 }
 ```
+
+`bbsengine6\folder\display()` echoes the chrome through
+`displaypage()` (it returns `null`), so the handler returns the
+`ROUTER_RENDERED` sentinel; the dispatch loop maps it to `''`
+so the HTTP entry-point emits nothing more. See
+[../ROUTER.md](../ROUTER.md#handler-return-value-contract).
 
 ## YAML frontmatter title resolution
 

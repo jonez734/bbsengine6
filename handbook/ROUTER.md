@@ -112,24 +112,50 @@ Apache from re-routing real files and directories.
 2. If not, it routes to `/engine/router.php?mode=browse&uri=…`.
 3. The router walks handlers in order:
    - **index** — root `/` or empty URI (renders `TEOSDIR/index.php`
-     or `TEOSDIR/index.md`)
-   - **blurb** — `engine.__blurb` table (database-backed content)
-   - **folder** — `TEOSFILEPATH` (default `/srv/www/zoid6/teos/`)
-     for directories
-   - **markdown** — `TEOSFILEPATH` for `.md` files
+     or `TEOSDIR/index.md`); pattern `^/?$`.
+   - **blurb** — `engine.__blurb` table (database-backed content);
+     pattern `[A-Za-z0-9_][A-Za-z0-9_./-]*` (hierarchical
+     dot-path shape).
+   - **folder** — `TEOSDIR` (default `/srv/www/zoid6/teos/`) for
+     directories; no pattern (filesystem probe decides).
+   - **markdown** — `TEOSDIR` for `.md` files; pattern
+     `[A-Za-z0-9_][A-Za-z0-9_./-]*` (same shape as blurb, no
+     trailing slash). Single-pass probe: the HTTP entry-point
+     strips a trailing `.md` once at the top of the script
+     (`preg_replace('/\.md$/', '', $path)`), so the handler
+     only needs the bare `$reluri` probe; the previous
+     `$reluri . '.md'` branch was dead code. The pattern
+     deliberately has no `.md` suffix because the URI is
+     already post-strip when the dispatch loop matches it —
+     see the inline comment at `router_gethandlers()`
+     (engine/router.php) for the contrast with the `page`
+     handler.
    - **page** — Smarty `.tmpl` under `DOCUMENTROOT/skin/tmpl/`
-     (e.g. `/contact-us` → `contact-us.tmpl`)
+     (e.g. `/contact-us` → `contact-us.tmpl`); two-pass probe
+     (`<slug>.tmpl` then `<slug>` as-is); pattern
+     `[a-z][a-z0-9-]*` (narrowest — bare lowercase slug).
+     Two-pass is required here because `.tmpl` is NOT
+     stripped at the entry-point (htaccess rewrites bare
+     slugs into the router with no extension, so the
+     handler has to append `.tmpl` itself).
 4. Each handler entry may carry an optional `pattern` (PCRE
-   regex). The dispatch loop `preg_match()`es the URI against
-   the pattern; on miss the handler is skipped without
-   invocation, avoiding filesystem/DB probes for obviously
-   non-matching URIs. A `null` pattern means "always try".
+   regex, anchored with `^...$`). The dispatch loop
+   `preg_match()`es the URI against the pattern; on miss the
+   handler is skipped without invocation, avoiding filesystem/DB
+   probes for obviously non-matching URIs. Patterns match the
+   post-`.md`-strip URI (so `/contact-us`, not
+   `/contact-us.md`). A `null` pattern means "always try".
+   Compile failure is logged and falls through to handler
+   invocation rather than silently swallowing the URI.
 5. The first handler that produces output wins.
-6. If no handler matches, the router calls `router_handleError()`
-   which always returns a 404 HTML page and sets
-   `http_response_code(404)`. `error` is intentionally not in
-   the registry — the post-loop fallback is the single point
-   of truth.
+6. If no handler matches, the dispatch loop falls through to
+   `router_handleError($uri)`, which logs, calls
+   `\bbsengine6\page\error($msg, 404)` (which renders styled
+   chrome via `displaypage()`), sets `http_response_code(404)`,
+   and returns `ROUTER_RENDERED`. `error` is intentionally NOT
+   in the registry — registering it would fire it twice on a
+   miss. The post-loop fallback is the single point of truth
+   for 404s.
 
 ## Handler return-value contract
 
@@ -204,8 +230,10 @@ redirect helper (replaces the deprecated bare `header()` redirect).
 ### Security (post Phase 3)
 
 - **Path traversal prevention** — the router validates all
-  user-supplied paths through `\bbsengine6\util\safe_path_web()`
-  before filesystem access. A traversal attempt returns 404.
+  user-supplied paths through `router_safe_path_web()` (a
+  thin wrapper around `\bbsengine6\util\safe_path_web()` that
+  no-ops to `false` if the helper isn't loaded) before
+  filesystem access. A traversal attempt returns 404.
 - **Cookie domain** — uses `\config\SESSIONCOOKIEDOMAIN` instead of
   hardcoded values.
 - **Credits validation** — non-SYSOP users cannot set the credits
@@ -288,6 +316,109 @@ WSOD (white screen of death — empty response body). Other paths
 - `test_rec_all_pages_nonempty` — every rec blurb subdirectory
   renders content.
 
+### `router_handleError` double-body and the `ROUTER_RENDERED` sentinel (2026-09-19)
+
+**Symptom.** After the 2026-09 fix (above), a 404 response
+contained two `<title>` tags: the styled chrome from
+`page\error()` and a trailing `<html><title>404</title>...`
+fallback block emitted by the HTTP entry-point when
+`router_handleError` returned `null`. Operators saw duplicate
+chromes and `echo $router_result` printed an empty 500 instead
+of stopping cleanly.
+
+**Root cause.** The handler contract implicitly used an empty
+string `''` as "I rendered via `displaypage()`; emit nothing
+more." But the dispatch loop returned any non-empty string as
+the response body and treated `null`/`false` as "try the next
+handler". So `router_handleError` calling `page\error()` →
+`displaypage()` (which echoes to stdout) and then returning
+`null` left the dispatcher falling into "null → next handler",
+the loop ended with `return router_handleError($uri)`, the
+handler returned `null`, and the HTTP entry-point translated
+`null` to "Router Error (null)" with a 500.
+
+The same foot-gun existed for `router_handleBlurb`,
+`router_displayMarkdownFile`, and `servePage` (in
+`engine/serve-tmpl.php`): they each rendered via
+`displaypage()` and returned `''`, which the dispatcher
+treated as "short-circuit, emit empty body". Worked because
+the HTTP entry-point's `echo ''` is a no-op, but the contract
+was implicit and easy to break.
+
+**Fix.** Introduced a `ROUTER_RENDERED` sentinel constant.
+Handlers that render via `displaypage()` now return
+`ROUTER_RENDERED`; the dispatch loop maps it to `''` and
+short-circuits the chain. Removed `ROUTER_STOP` (no caller
+returned it). Removed `error` from the registry — the
+post-loop fallback is the single source of truth for 404s.
+
+**Regression tests** (`php/test_router.php`):
+
+- `Test 2` — `ROUTER_RENDERED` constant is defined.
+- `Test 3b` — `error` is not in the registry.
+- `Test 9` — `router()` returns `''` for a non-existent URI;
+  stdout contains exactly one styled error (one `<title>`
+  tag), not the pre-fix double-chrome shape.
+
+### Dead `.md` probe in `router_handleMarkdown` (2026-09-19)
+
+**Symptom.** Reading the dispatch chain: `router_handleMarkdown`
+did a two-pass extension probe (`$reluri . '.md'`, then bare
+`$reluri`) mirroring the `.tmpl` probe in
+`router_handlePage`. The first pass was unreachable: the HTTP
+entry-point already strips a trailing `.md` once at the top of
+the script (`preg_replace('/\.md$/', '', $path)`), so by the
+time the dispatch loop walks handlers the URI never carries
+a `.md` suffix.
+
+**Root cause.** Mirror reflex: the markdown handler was
+written before the entry-point `.md`-strip existed. When the
+strip was added, the markdown handler's `$uri . '.md'` branch
+became dead code but stayed in place. The `.tmpl` branch in
+`serve-tmpl.php` is still legitimate (`.tmpl` is NOT stripped
+at the entry-point; htaccess rewrites bare slugs into the
+router with no extension).
+
+**Fix.** Removed the `$reluri . '.md'` probe from
+`router_handleMarkdown`. Updated `serve-tmpl.php`'s doc
+comments that previously referenced "router_handleMarkdown's
+two-pass extension probe" to describe the actual remaining
+two-pass handler (`page`) and explain why the markdown
+handler dropped it.
+
+**Regression tests** (`php/test_router.php`):
+
+- `Test 6a` — handler body MUST NOT contain a `'$uri . .md'`
+  probe (regression guard against re-introducing the dead
+  branch).
+- `Test 6b` — HTTP entry-point MUST strip trailing `.md`
+  before dispatch (the contract that makes the dead-code
+  removal safe).
+
+### `router_handleIndex` referenced retired `ROUTER_STOP` (2026-09-19)
+
+**Symptom.** After the `ROUTER_STOP` retirement in the same
+release, `router_handleIndex` still returned `ROUTER_STOP`
+after including `TEOSDIR/index.php`. In PHP 7 this returned
+the literal string `"ROUTER_STOP"` which the HTTP entry-point
+would echo (empty body); in PHP 8 it throws a fatal
+"Undefined constant" on every `/` request that hits an
+`index.php`.
+
+**Root cause.** The C2 retirement of `ROUTER_STOP` was driven
+by a global `define` removal but missed the call site at line
+~228 of `router_handleIndex`. The variable-function dispatch
+loop's `return ROUTER_STOP` was an unreachable shape
+(`ROUTER_STOP` was never actually handled in the dispatcher),
+but the literal constant name in the source was still valid
+syntax until C2 removed the `define`.
+
+**Fix.** Replaced with `ROUTER_RENDERED`. The included
+`TEOSDIR/index.php` is expected to render to stdout (either
+via `displaypage()` or direct `echo`); the sentinel tells the
+dispatcher the body is already on the wire and the HTTP
+entry-point should emit nothing more.
+
 ### Directory listing duplicates (2026-07-29)
 
 Editor backup files (e.g. `major-characters.md~`) and patch
@@ -303,6 +434,8 @@ collapses. Regression test in
 
 | Date | Change |
 |---|---|
+| 2026-09-19 | `pattern` attribute on handler registry entries (skip handler on URI regex miss); drop `error` from registry (single source of truth via post-loop fallback); `ROUTER_RENDERED` sentinel replaces the implicit empty-string-as-success contract; `ROUTER_STOP` retired; `teospath` → `$teosdir` typo fix in `router_handleMarkdown`; breadcrumb root `path` hardcoded to `'teos'` (matches `blurb.php::buildbreadcrumbs`); `router_safe_path_web()` wrapper extracted; `engine/serve-tmpl.php::servePage()` returns the new sentinel. |
+| 2026-09-19 | Dead `$reluri . '.md'` probe dropped from `router_handleMarkdown` (HTTP entry-point strips `.md` once at the top of the script, so the branch was unreachable); `router_handleIndex` returns `ROUTER_RENDERED` after `include($indexfile)` instead of the retired `ROUTER_STOP`; `php/test_router.php` Tests 6a/6b pin the new contract. |
 | 2026-07-29 | Directory listing skips editor backup / junk files (`router_isIgnoredEntry`) and dedupes case-variant filenames (`router_dedupeItems`). Fixes the `/rec/arts/tv/mash/` regression. |
 | 2026-06-15 | Security fixes + modernization (path traversal, functional style, namespace imports, redirect helper). |
 | 2025-06-15 | Router moved to `/engine/router.php` for clean URL support. The web root previously held `/router.php` with a shim. |
