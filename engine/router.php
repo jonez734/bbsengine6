@@ -122,20 +122,12 @@ function router_buildBreadcrumbs(string $uri): array
     ];
   }
 
-  // Prepend "root" crumb. Title is per-vhost via TEOS_LABEL
-  // (bbsengine6\util\vhost_label(), php/util.php); the
-  // handbook dispatch block below putenv()s TEOS_LABEL=
-  // "bbsengine6 handbook" for /handbook/<v>/... requests and
-  // leaves the default ("teos") for /teos/ requests, so this
-  // label diverges by vhost without any change to the internal
-  // path ("teos", the route's internal identifier) or the uri
-  // (still TEOSURL-rooted). blurb.php's buildbreadcrumbs()
-  // delegates to the same helper, so the DB-driven and
-  // filesystem-driven breadcrumb paths stay in lockstep.
-  $rootlabel = \bbsengine6\util\vhost_label();
+  $rootlabel = \bbsengine6\util\env("TEOSLABEL", "teos");
+  $teosuri = \bbsengine6\util\env("TEOSURI", "/teos");
+  // why are there two attributes with the same value?
   array_unshift($autoCrumbs, [
     'title' => $rootlabel,
-    'path' => 'teos',
+    'path' => $teosuri, // 'teos',
     'uri' => $teosurl . '/',
   ]);
 
@@ -322,31 +314,9 @@ function router_handleError(string $uri)
   $msg = 'Page not found: ' . htmlspecialchars($uri);
   router_log($msg, 'error');
 
-  // page\error() loaded (page.php is on the require chain above)
-  // and rendered the styled chrome (pageheader + topbar +
-  // errormessage div + pagefooter) to stdout via displaypage(),
-  // then returned null. Mirror the handleBlurb /
-  // router_displayMarkdownFile pattern: return '' so the HTTP
-  // entry-point's `echo $router_result` is a no-op. Returning a
-  // non-empty string here would duplicate the body (the styled
-  // chrome already on stdout + this echo'd fallback). See the
-  // file header comment at the top of this file for the broader
-  // contract handlers must follow when they render via
-  // displaypage().
-  if (function_exists('\bbsengine6\page\error')) {
-    \bbsengine6\page\error($msg, 404);
-    http_response_code(404);
-    return '';
-  }
-
-  // page\error() was unreachable (page.php failed to load, or
-  // the namespace lookup failed under router.php's
-  // `namespace bbsengine6\router;` declaration). Return the bare
-  // fallback string so the HTTP entry-point's echo surfaces it.
-  // We cannot use displaypage() here -- page.php owns that and
-  // it isn't loaded in this branch.
+  \bbsengine6\page\error($msg, 404);
   http_response_code(404);
-  return '<html><head><title>404</title></head><body><h1>Page Not Found</h1><p>' . $msg . '</p></body></html>';
+  return;
 }
 
 function router_displayMarkdownFile(string $filepath, string $uri): string
@@ -362,7 +332,7 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   $doc['title'] = isset($doc['title']) ? htmlspecialchars($doc['title']) : basename($filepath, '.md');
   $doc['date']  = isset($doc['date'])  ? htmlspecialchars($doc['date'])  : '';
 
-  \bbsengine6\setcurrentpage(router_get_teosurl() . $uri);
+  \bbsengine6\setcurrentpage(rtrim(\bbsengine6\util\env("TEOSURI", "NEEDINFO:displaymd:teosurl"), '/') . $uri);
 
   $uri_parts = explode("/", $uri);
   array_pop($uri_parts);
@@ -385,13 +355,8 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
     'choices' => $choices,
   ];
 
-  if (function_exists('bbsengine6\displaypage')) {
-    \bbsengine6\displaypage($data, 'page-markdown.tmpl', false);
-    return '';
-  }
-
-  $date_html = $doc['date'] ? "<p class=date>{$doc['date']}</p>" : '';
-  return "<html><head><title>{$doc['title']}</title></head><body>$date_html{$doc['html']}</body></html>";
+  \bbsengine6\displaypage($data, 'page-markdown.tmpl', false);
+  return '';
 }
 
 function router_isIgnoredEntry(string $entry): bool
@@ -429,7 +394,7 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
     return [];
   }
 
-  $teosurl = router_get_teosurl();
+  $teosurl = rtrim(\bbsengine6\util\env("TEOSURI", "NEEDINFO:collect:teosurl"), '/');
   $items = [];
 
   foreach ($entries as $entry) {
@@ -521,7 +486,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   $items = router_dedupeItems($items);
 
   $title = basename($uri) ?: $uri;
-  $teosurl = router_get_teosurl();
+  $teosurl = rtrim(\bbsengine6\util\env("TEOSURI", "NEEDINFO:displaydir:teosurl"), '/');
 
   \bbsengine6\setcurrentpage($teosurl.$uri);
 
