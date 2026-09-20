@@ -114,6 +114,9 @@ function router_log(string $message, string $level = "info"): void
  */
 function router_safe_path_web(array $components, array $opts = []): string|false
 {
+  if (!function_exists('\bbsengine6\util\safe_path_web')) {
+    return false;
+  }
   return \bbsengine6\util\safe_path_web($components, $opts);
 }
 
@@ -203,16 +206,15 @@ function router_gethandlers(): array
       'fn'      => 'bbsengine6\\router\\router_handleMarkdown',
       // No '.md' here on purpose: the HTTP entry-point strips
       // a trailing '.md' once at the top of the script
-      // (line ~724: preg_replace('/\.md$/', '', $path)),
-      // so by the time the dispatch loop preg_match()es this
-      // pattern the URI never carries a '.md' suffix. The
-      // handler then probes the filesystem for the bare
-      // <reluri> under TEOSDIR (no extension appended) --
-      // see router_handleMarkdown line ~371. Compare to the
-      // 'page' handler below, which keeps a two-pass probe
-      // because '.tmpl' is NOT stripped at the entry-point
-      // (htaccess rewrites bare slugs into the router with no
-      // extension).
+      // (preg_replace('/\.md$/', '', $path)), so by the time
+      // the dispatch loop preg_match()es this pattern the URI
+      // never carries a '.md' suffix. The handler then probes
+      // the filesystem for the bare <reluri> under TEOSDIR
+      // (no extension appended) -- see router_handleMarkdown
+      // below. Compare to the 'page' handler, which keeps a
+      // two-pass probe because '.tmpl' is NOT stripped at the
+      // entry-point (htaccess rewrites bare slugs into the
+      // router with no extension).
       'pattern' => '#^/?[A-Za-z0-9_][A-Za-z0-9_./-]*$#',
     ],
     'page' => [
@@ -267,7 +269,7 @@ function router_handleBlurb(string $uri)
 {
   router_log('handleBlurb: ' . $uri);
 
-  if (!function_exists('bbsengine6\blurb\isBlurb')) {
+  if (!function_exists('\bbsengine6\blurb\isBlurb')) {
     return ROUTER_NEXT;
   }
 
@@ -292,7 +294,6 @@ function router_handleBlurb(string $uri)
         router_log('blurb display failed: ' . $e->getMessage(), 'error');
         return ROUTER_NEXT;
       }
-      return ROUTER_NEXT;
   }
   return ROUTER_NEXT;
 }
@@ -371,15 +372,14 @@ function router_handleMarkdown(string $uri)
   // probe ($reluri . '.md', then bare $reluri) mirroring the
   // .tmpl probe in router_handlePage. The .md branch was
   // dead code: the HTTP entry-point strips a trailing ".md"
-  // once at the top of the script (line ~724:
-  // preg_replace('/\.md$/', '', $path)), so by the time the
-  // dispatch loop walks handlers the URI never carries a
-  // .md suffix. Only the bare $reluri probe can match. The
-  // .tmpl branch in serve-tmpl.php is still legitimate
-  // because ".tmpl" is NOT stripped at the entry-point —
-  // htaccess rewrites bare slugs (e.g. /contact-us) into
-  // the router with no extension, so the handler has to
-  // append ".tmpl" itself.
+  // once at the top of the script (preg_replace('/\.md$/',
+  // '', $path)), so by the time the dispatch loop walks
+  // handlers the URI never carries a .md suffix. Only the
+  // bare $reluri probe can match. The .tmpl branch in
+  // serve-tmpl.php is still legitimate because ".tmpl" is
+  // NOT stripped at the entry-point — htaccess rewrites
+  // bare slugs (e.g. /contact-us) into the router with no
+  // extension, so the handler has to append ".tmpl" itself.
   $reluri = ltrim($uri, '/');
   $filepath = router_safe_path_web([$reluri], ['base_dir' => $teosdir]);
   if ($filepath !== false && file_exists($filepath) && is_file($filepath)) {
@@ -585,7 +585,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
 
   \bbsengine6\setcurrentpage($teosurl.$uri);
 
-  if (function_exists('bbsengine6\displaypage')) {
+  if (function_exists('\bbsengine6\displaypage')) {
     $breadcrumbs = router_buildBreadcrumbs($uri);
 
     $sigs = [];
