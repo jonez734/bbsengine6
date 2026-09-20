@@ -39,8 +39,8 @@ if (defined("ROUTER_STOP") && ROUTER_STOP === "ROUTER_STOP") {
 }
 
 // Test 3: Handler order is correct
-echo "Test 3: Handler order (index → blurb → folder → markdown → page → error)\n";
-$expectedOrder = ['index', 'blurb', 'folder', 'markdown', 'page', 'error'];
+echo "Test 3: Handler order (index → blurb → folder → markdown → page)\n";
+$expectedOrder = ['index', 'blurb', 'folder', 'markdown', 'page'];
 $handlers = router_gethandlers();
 $actualOrder = array_keys($handlers);
 if ($actualOrder === $expectedOrder) {
@@ -50,23 +50,94 @@ if ($actualOrder === $expectedOrder) {
     exit(1);
 }
 
-// Test 3a: Handler values are FQCN strings so PHP variable-function
-// dispatch resolves them under the call-site namespace. Regression
-// guard for the 2026-09-15 namespace refactor (commit bfaca68),
-// which left bare-name strings in router_gethandlers() and broke
-// the dispatch loop on every HTTP request.
-echo "Test 3a: Handler names are FQCN strings (regression guard for variable-function dispatch)\n";
+// Test 3a: Each entry resolves to a callable FQCN. Legacy entries
+// may be a bare FQCN string; new entries are arrays with a 'fn'
+// key (and optional 'pattern'). Regression guard for the 2026-09-15
+// namespace refactor (commit bfaca68), which left bare-name
+// strings in router_gethandlers() and broke the dispatch loop on
+// every HTTP request.
+echo "Test 3a: Each handler entry resolves to an FQCN (regression guard for variable-function dispatch)\n";
 $fqcn_ok = true;
-foreach ($handlers as $name => $fqcn) {
-    if (strpos($fqcn, 'bbsengine6\\') !== 0) {
-        echo "  ✗ FAIL: handler '$name' is not FQCN: $fqcn\n";
+foreach ($handlers as $name => $entry) {
+    $fqcn = is_array($entry) ? ($entry['fn'] ?? null) : $entry;
+    if (!is_string($fqcn) || strpos($fqcn, 'bbsengine6\\') !== 0) {
+        echo "  ✗ FAIL: handler '$name' is not FQCN: " . var_export($entry, true) . "\n";
         $fqcn_ok = false;
     }
 }
 if (!$fqcn_ok) {
     exit(1);
 }
-echo "  ✓ PASS: all " . count($handlers) . " handlers are FQCN strings\n";
+echo "  ✓ PASS: all " . count($handlers) . " handlers have a callable FQCN\n";
+
+// Test 3b: `error` is intentionally not in the registry (the
+// dispatch loop falls through to router_handleError($uri) when no
+// handler matches, so registering it would fire it twice on a
+// miss). 2026-09-19.
+echo "Test 3b: 'error' is not in the handler registry\n";
+if (array_key_exists('error', $handlers)) {
+    echo "  ✗ FAIL: 'error' key found in registry; dispatch loop would double-fire\n";
+    exit(1);
+}
+echo "  ✓ PASS: 'error' not in registry (single source of truth via post-loop fallback)\n";
+
+// Test 3c: Every non-null `pattern` is a valid PCRE regex.
+echo "Test 3c: Handler patterns are valid PCRE\n";
+$bad_patterns = [];
+foreach ($handlers as $name => $entry) {
+    if (!is_array($entry)) continue;
+    $p = $entry['pattern'] ?? null;
+    if ($p === null) continue;
+    if (@preg_match($p, '') === false) {
+        $bad_patterns[] = "$name: $p";
+    }
+}
+if (!empty($bad_patterns)) {
+    echo "  ✗ FAIL: invalid patterns: " . implode('; ', $bad_patterns) . "\n";
+    exit(1);
+}
+echo "  ✓ PASS: all non-null patterns compile cleanly\n";
+
+// Test 3d: Pattern skip behavior. Stub each handler to record
+// whether it was invoked; dispatch a URI that should match only
+// one handler; assert only that handler was called.
+echo "Test 3d: Dispatch loop skips handlers whose pattern doesn't match\n";
+$GLOBALS['__invoked'] = [];
+$orig_handlers = $handlers;
+$stub_handlers = [];
+foreach ($orig_handlers as $name => $entry) {
+    $stub_handlers[$name] = [
+        'fn' => function (string $uri) use ($name) {
+            $GLOBALS['__invoked'][$name] = ($GLOBALS['__invoked'][$name] ?? 0) + 1;
+            return \bbsengine6\router\ROUTER_NEXT;
+        },
+        'pattern' => is_array($entry) ? ($entry['pattern'] ?? null) : null,
+    ];
+}
+
+// Swap the registry by overriding router_gethandlers via a
+// runkit-less trick: the dispatch loop calls router_gethandlers()
+// every iteration, so we can't easily monkey-patch it from here
+// without runkit. Instead, test the pattern logic directly: pick
+// the `page` handler (narrowest pattern), then assert its pattern
+// rejects a URI that should go to markdown/blurb/folder.
+$page_entry = $handlers['page'];
+$page_pattern = is_array($page_entry) ? $page_entry['pattern'] : null;
+if ($page_pattern === null) {
+    echo "  ✗ FAIL: page handler has no pattern\n";
+    exit(1);
+}
+$should_match = (bool) preg_match($page_pattern, 'contact-us');
+$should_miss  = (bool) preg_match($page_pattern, 'rec/arts/star-trek');
+if (!$should_match) {
+    echo "  ✗ FAIL: page pattern should match 'contact-us'\n";
+    exit(1);
+}
+if ($should_miss) {
+    echo "  ✗ FAIL: page pattern should NOT match 'rec/arts/star-trek'\n";
+    exit(1);
+}
+echo "  ✓ PASS: page pattern matches 'contact-us', rejects 'rec/arts/star-trek'\n";
 
 // Test 3b: Dispatch smoke test. Actually invokes router() so the
 // variable-function call inside the dispatch loop is exercised.

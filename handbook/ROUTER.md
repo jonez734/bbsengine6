@@ -111,15 +111,25 @@ Apache from re-routing real files and directories.
 1. Apache checks if the request matches a static file or directory.
 2. If not, it routes to `/engine/router.php?mode=browse&uri=…`.
 3. The router walks handlers in order:
+   - **index** — root `/` or empty URI (renders `TEOSDIR/index.php`
+     or `TEOSDIR/index.md`)
    - **blurb** — `engine.__blurb` table (database-backed content)
-   - **folder** — `TEOSFILEPATH` (default `/srv/www/zoid6/teos/`) for
-     directories
+   - **folder** — `TEOSFILEPATH` (default `/srv/www/zoid6/teos/`)
+     for directories
    - **markdown** — `TEOSFILEPATH` for `.md` files
-   - **error** — 404 page (always returns a non-empty string)
-4. The first handler that produces output wins.
-5. If no handler matches, the router calls `router_handleError()`
+   - **page** — Smarty `.tmpl` under `DOCUMENTROOT/skin/tmpl/`
+     (e.g. `/contact-us` → `contact-us.tmpl`)
+4. Each handler entry may carry an optional `pattern` (PCRE
+   regex). The dispatch loop `preg_match()`es the URI against
+   the pattern; on miss the handler is skipped without
+   invocation, avoiding filesystem/DB probes for obviously
+   non-matching URIs. A `null` pattern means "always try".
+5. The first handler that produces output wins.
+6. If no handler matches, the router calls `router_handleError()`
    which always returns a 404 HTML page and sets
-   `http_response_code(404)`.
+   `http_response_code(404)`. `error` is intentionally not in
+   the registry — the post-loop fallback is the single point
+   of truth.
 
 ## Handler return-value contract
 

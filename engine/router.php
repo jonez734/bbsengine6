@@ -5,13 +5,23 @@ namespace bbsengine6\router;
 /**
  * router.php - Handler registry for routing requests.
  *
- * Handler order: index -> blurb -> folder -> error
+ * Handler order: index -> blurb -> folder -> markdown -> page
+ *
+ * Each handler entry may carry an optional `pattern` (PCRE regex).
+ * The dispatch loop matches the URI against the pattern; on miss
+ * the handler is skipped without invocation, avoiding filesystem
+ * and DB probes for obviously non-matching URIs. A null/absent
+ * pattern means "always try". The HTTP entry point strips any
+ * trailing ".md" before pattern matching, so patterns match the
+ * bare URI (e.g. "/contact-us", not "/contact-us.md").
  *
  * ROUTER_NEXT instructs the loop to continue on to the next handler.
- * Returning ROUTER_STOP will short-circuit the chain.
- * Returning null, false, or an empty string will also short-circuit the chain,
- * but handlers that render via displaypage() must not pass through its null
- * return value, as that would cause the next handler to render again.
+ * Returning null or false continues to the next handler.
+ * Returning a non-empty string short-circuits and emits the body.
+ *
+ * `error` is intentionally NOT in the registry: the dispatch loop
+ * falls through to router_handleError($uri) when no handler
+ * matches, so registering it would fire it twice on a miss.
  *
  * No handler may ever produce a WSOD.
  * The error handler must always produce either a return string or end the request.
@@ -136,23 +146,53 @@ function router_buildBreadcrumbs(string $uri): array
 
 function router_gethandlers(): array
 {
-  // FQCN strings so the variable-function dispatch at line ~593
-  // resolves each handler in the right namespace. Before the
-  // 2026-09-15 namespace refactor (bfaca68) these were bare
-  // names that resolved correctly in the global namespace;
-  // once router.php declared `namespace bbsengine6\router;`,
-  // the same bare names broke because PHP variable-function
-  // calls do not apply the call-site namespace. Production
-  // saw the regression on 2026-09-16 as
-  // `Call to undefined function router_handleIndex()` in
-  // engine/router.php:593, traced from frame #0 line 687.
+  // FQCN strings so the variable-function dispatch below resolves
+  // each handler in the right namespace. Before the 2026-09-15
+  // namespace refactor (bfaca68) these were bare names that
+  // resolved correctly in the global namespace; once router.php
+  // declared `namespace bbsengine6\router;`, the same bare names
+  // broke because PHP variable-function calls do not apply the
+  // call-site namespace. Production saw the regression on
+  // 2026-09-16 as `Call to undefined function router_handleIndex()`
+  // in engine/router.php, traced from frame #0 in the dispatch
+  // loop. Fixed in ccbe268.
+  //
+  // @since 2026-09-19 — entries may carry an optional `pattern`
+  // (PCRE regex, anchored). The dispatch loop preg_match()es the
+  // URI against it and skips the handler on miss, avoiding
+  // filesystem/DB probes for obviously non-matching URIs.
+  // A null pattern means "always try". `error` is intentionally
+  // omitted; the dispatch loop falls through to
+  // router_handleError($uri) when nothing else matches.
+  //
+  // Pattern semantics:
+  //   - matched against $path (the post-".md"-strip URI from the
+  //     HTTP entry point, so "/contact-us" not "/contact-us.md")
+  //   - full-match (anchored with ^...$)
+  //   - compile-failure is treated as "always try" (defensive)
   return [
-    'index'    => 'bbsengine6\\router\\router_handleIndex',
-    'blurb'    => 'bbsengine6\\router\\router_handleBlurb',
-    'folder'   => 'bbsengine6\\router\\router_handleFolder',
-    'markdown' => 'bbsengine6\\router\\router_handleMarkdown',
-    'page'     => 'bbsengine6\\servepage\\router_handlePage',
-    'error'    => 'bbsengine6\\router\\router_handleError',
+    'index' => [
+      'fn'      => 'bbsengine6\\router\\router_handleIndex',
+      'pattern' => '#^/?$#',
+    ],
+    'blurb' => [
+      'fn'      => 'bbsengine6\\router\\router_handleBlurb',
+      // hierarchical dot-paths like ec/john-edward
+      'pattern' => '#^/?[A-Za-z0-9_][A-Za-z0-9_./-]*/?$#',
+    ],
+    'folder' => [
+      'fn'      => 'bbsengine6\\router\\router_handleFolder',
+      'pattern' => null, // filesystem probe decides
+    ],
+    'markdown' => [
+      'fn'      => 'bbsengine6\\router\\router_handleMarkdown',
+      'pattern' => '#^/?[A-Za-z0-9_][A-Za-z0-9_./-]*$#',
+    ],
+    'page' => [
+      'fn'      => 'bbsengine6\\servepage\\router_handlePage',
+      // narrowest: bare lowercase slug (e.g. /contact-us)
+      'pattern' => '#^/?[a-z][a-z0-9-]*/?$#',
+    ],
   ];
 }
 
@@ -586,8 +626,25 @@ function router(string $uri): ?string
 {
   router_log('routing: ' . var_export($uri, true));
 
-  foreach (router_gethandlers() as $name => $handler) {
-    $result = $handler($uri);
+  foreach (router_gethandlers() as $name => $entry) {
+    $fn      = is_array($entry) ? $entry['fn']      : $entry;
+    $pattern = is_array($entry) ? ($entry['pattern'] ?? null) : null;
+
+    if ($pattern !== null) {
+      $matched = @preg_match($pattern, $uri);
+      if ($matched === false) {
+        // malformed pattern in the registry -- log and fall
+        // through to invoking the handler rather than silently
+        // swallowing the URI.
+        router_log("handler $name has invalid pattern; ignoring",
+                   'warning');
+      } elseif ($matched === 0) {
+        router_log("handler $name skipped (pattern miss)");
+        continue;
+      }
+    }
+
+    $result = $fn($uri);
     router_log('handler ' . $name . ' returned ' . var_export($result, true));
     if ($result === ROUTER_NEXT) continue;
     if ($result === null || $result === false) continue;
