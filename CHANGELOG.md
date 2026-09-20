@@ -1,5 +1,134 @@
 ## [Unreleased]
 
+### feat(engine/router): 'pattern' attribute on handler registry
+
+`router_gethandlers()` entries may now carry an optional
+`pattern` (PCRE regex, anchored `^...$`). The dispatch loop
+`preg_match()`es the URI against the pattern; on miss the
+handler is skipped without invocation, avoiding
+filesystem/DB probes for obviously non-matching URIs (e.g.
+`/contact-us` should not probe for markdown files or
+ltree-pathed blurbs). A `null` pattern means "always try".
+Compile failure is logged and falls through to handler
+invocation. `error` is intentionally removed from the
+registry; the dispatch loop's post-loop fallback is the
+single point of truth for 404s.
+
+Pattern summary:
+
+| Handler  | Pattern                                |
+|----------|----------------------------------------|
+| index    | `^/?$`                                 |
+| blurb    | `[A-Za-z0-9_][A-Za-z0-9_./-]*`         |
+| folder   | (null — filesystem probe)              |
+| markdown | `[A-Za-z0-9_][A-Za-z0-9_./-]*`         |
+| page     | `[a-z][a-z0-9-]*` (bare lowercase slug) |
+
+### fix(engine/router, serve-tmpl): teospath typos, ROUTER_RENDERED sentinel, breadcrumb root path
+
+Five related cleanups in router.php and serve-tmpl.php:
+
+1. `router_handleMarkdown` used undefined `$teospath` (typo)
+   in two `router_safe_path_web()` calls. Renamed to
+   `$teosdir` to match the env() lookup at the top of the
+   function. Latent bug — masked only because
+   `router_safe_path_web` no-ops when
+   `\bbsengine6\util\safe_path_web` isn't loaded.
+2. Replaced the implicit empty-string-as-success contract
+   with a `ROUTER_RENDERED` sentinel. Handlers that render
+   via `displaypage()` (`router_handleBlurb`,
+   `router_displayMarkdownFile`, `servePage`,
+   `router_handleError`) now return the sentinel; the
+   dispatcher maps it to `''`. Makes the contract explicit
+   and removes the foot-gun where an accidental
+   `return '';` would silently short-circuit the chain.
+3. `router_handleError` now returns `ROUTER_RENDERED`
+   instead of `null`. Previously the dispatcher would see
+   `null` and the HTTP entry-point would emit
+   "Router Error (null)" with a 500.
+4. `router_buildBreadcrumbs` had an open-question comment
+   ("why are there two attributes with the same value?")
+   about the root crumb's `path` field. Hardcoded to
+   `'teos'` to match `blurb.php::buildbreadcrumbs` (line
+   80), which is the canonical reference for the
+   ltree-rooted identifier.
+5. `ROUTER_STOP` define removed; nothing returned it.
+
+`serve-tmpl.php` declares `ROUTER_RENDERED` too (it loads
+before router.php and its `servePage()` needs the sentinel
+at return time).
+
+### docs(router): markdown pattern comment documents the .md strip
+
+The `markdown` handler entry's pattern
+(`#^/?[A-Za-z0-9_][A-Za-z0-9_./-]*$#`) has no `.md`
+anywhere. The reason is non-obvious: the HTTP entry-point
+strips a trailing `.md` once at the top of the script
+(`engine/router.php` line ~724:
+`preg_replace('/\.md$/', '', $path)`), so by the time the
+dispatch loop preg_match()es this pattern the URI never
+carries a `.md` suffix. The handler then probes the
+filesystem for the bare `<reluri>` under `TEOSDIR` (no
+extension appended).
+
+Without the comment, a reader scanning the registry sees
+an asymmetry they can't explain: `page` has a two-pass
+probe that appends `.tmpl`, but `markdown` has no `.md`
+anywhere. The asymmetry is real and intentional — but
+until this comment, only the dead-code removal commit
+recorded why.
+
+Adds an inline comment in the registry entry that names
+the entry-point strip and the bare `<reluri>` probe
+(`router_handleMarkdown` line ~371). Compare-and-contrast
+to the `page` handler's two-pass probe. No behaviour
+change.
+
+### fix(engine/router, serve-tmpl): drop dead .md probe; replace ROUTER_STOP in handleIndex
+
+Two related cleanups:
+
+1. `router_handleMarkdown` did a two-pass extension probe
+   (`$reluri . '.md'`, then bare `$reluri`) mirroring the
+   `.tmpl` probe in `router_handlePage`. The `.md` branch
+   was dead code: the HTTP entry-point strips a trailing
+   `.md` once at the top of the script (`router.php`:
+   `preg_replace('/\.md$/', '', $path)`), so by the time
+   the dispatch loop walks handlers the URI never carries
+   a `.md` suffix. The `.tmpl` branch in `serve-tmpl.php`
+   is still legitimate because `.tmpl` is NOT stripped at
+   the entry-point — htaccess rewrites bare slugs (e.g.
+   `/contact-us`) into the router with no extension, so
+   the handler has to append `.tmpl` itself.
+
+   Updated `serve-tmpl.php`'s doc comments that referenced
+   "router_handleMarkdown's two-pass extension probe" to
+   describe the actual remaining two-pass handler (page)
+   and explain why the markdown handler dropped it.
+
+   Added regression guards in `php/test_router.php`:
+
+   - **Test 6a** — handler body MUST NOT contain a
+     `'$uri . .md'` probe (regression guard against
+     re-introducing the dead branch).
+   - **Test 6b** — HTTP entry-point MUST strip trailing
+     `.md` before dispatch (the contract that makes the
+     dead-code removal safe).
+
+2. `router_handleIndex` returned `ROUTER_STOP` after
+   including `TEOSDIR/index.php`. `ROUTER_STOP` was
+   retired in the 2026-09-19 cleanup; the reference was
+   missed (the LSP error showed up but no inner commit
+   addressed it). In PHP 7 this returned the literal
+   string `"ROUTER_STOP"` which the HTTP entry-point
+   would echo (empty body); in PHP 8 it throws a fatal
+   "Undefined constant" on every `/` request that hits
+   an `index.php`. Replaced with `ROUTER_RENDERED`: the
+   included `index.php` is expected to render to stdout
+   (either via `displaypage()` or direct `echo`), and
+   the sentinel tells the dispatcher the body is already
+   on the wire.
+
 ### fix(wwworg, folder, zoid6config): /handbook/6/specs/ links to /handbook/6/specs/, not /teos/specs/
 
 The handbook directory listing at

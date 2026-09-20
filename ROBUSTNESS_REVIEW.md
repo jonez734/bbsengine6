@@ -2,7 +2,8 @@
 
 This document captures the robustness audit and remediation of `bbsengine6/`,
 the Python + PHP BBS engine that powers `bbsengine.org`. The audit and the
-fixes were split into five phases (plus a regression-test phase). Each
+fixes were split into five phases (plus a regression-test phase), with
+additional phases appended as the codebase evolves. Each
 finding below is annotated with the file and line that triggered it and
 the fix that was applied.
 
@@ -20,6 +21,14 @@ Phases:
   `_input_dirty` global, `filter` kwarg, `_raw_lock`, listbox math,
   bottombar padding).
 - **Phase 5** — regression tests + this document.
+- **Phase 6** — vhost `config.php` resolution for Apache rewrites
+  (`VHOSTDOCROOT` env var + `php/bootstrap.php` autodetect).
+- **Phase 7** — handler-registry pattern attribute + `ROUTER_RENDERED`
+  sentinel + dead-`.md`-probe cleanup + `router_handleIndex`
+  `ROUTER_STOP` retirement (post-Phase-3 follow-ups; see
+  [handbook/ROUTER.md](handbook/ROUTER.md) "Recent fixes →
+  router_handleError double-body and the ROUTER_RENDERED
+  sentinel (2026-09-19)").
 
 Every finding is paired with the regression test that pins the corrected
 behaviour so a future refactor can't quietly reintroduce the bug.
@@ -708,3 +717,234 @@ Expected results:
   - Verify `AllowOverride` is at least `FileInfo` on the vhost path: `grep -rn AllowOverride /etc/apache2/sites-enabled/` or `<VirtualHost>` block.
   - Alternatively, move `SetEnv VHOSTDOCROOT <docroot>` into the `<VirtualHost>` block, which bypasses `.htaccess` restrictions.
   - If `VHOSTDOCROOT` is unset or invalid, bootstrap silently falls through; bare `require_once("config.php")` will then fail with the same PHP warning/fatal seen before this fix. The error message is the diagnostic for misconfigured vhosts.
+
+## Phase 7 — Handler-registry `pattern` attribute + `ROUTER_RENDERED` sentinel
+
+Post-Phase-3 follow-ups to `engine/router.php` and
+`engine/serve-tmpl.php`. The dispatch loop's per-handler
+PCRE pre-filter avoids wasted filesystem/DB probes, and the
+explicit `ROUTER_RENDERED` sentinel replaces an implicit
+empty-string-as-success contract that was both a foot-gun
+and the cause of double-chrome 404s.
+
+### Finding 7.1 — Dispatch loop invoked every handler on every URI
+
+- **Severity:** LOW (performance and clarity, not correctness)
+- **Where:** `engine/router.php::router()` (the dispatch loop)
+- **Symptom:** a request for `/contact-us` (which only the `page`
+  handler can serve) walked every registered handler:
+  `index` (root-only, returns `ROUTER_NEXT`),
+  `blurb` (DB roundtrip via `\bbsengine6\blurb\isBlurb()`),
+  `folder` (`realpath()` + visibility DB query via
+  `\bbsengine6\folder\isFolderVisible()`),
+  `markdown` (two `realpath()` probes against `TEOSDIR`),
+  `page` (finally matches). Each of the first four paid
+  the cost of its decision logic before short-circuiting.
+- **Root cause:** the registry was a flat `name => FQCN-string`
+  map with no per-handler URI-shape hint. The dispatch loop
+  had no choice but to call every handler and let each one
+  decide internally.
+- **Fix:** each registry entry may now carry an optional
+  `pattern` (PCRE regex, anchored `^...$`). The dispatch
+  loop `preg_match()`es the URI against the pattern; on
+  miss the handler is skipped without invocation. A
+  `null` pattern means "always try". `error` is
+  intentionally removed from the registry — the
+  post-loop fallback to `router_handleError($uri)` is the
+  single source of truth for 404s.
+
+  Per-handler patterns after the fix:
+
+  | Handler  | Pattern                                |
+  |----------|----------------------------------------|
+  | index    | `^/?$`                                 |
+  | blurb    | `[A-Za-z0-9_][A-Za-z0-9_./-]*`         |
+  | folder   | (null — filesystem probe decides)      |
+  | markdown | `[A-Za-z0-9_][A-Za-z0-9_./-]*`         |
+  | page     | `[a-z][a-z0-9-]*` (bare lowercase slug) |
+
+- **Regression tests** (`php/test_router.php`):
+  - `Test 3a` — every entry resolves to an FQCN (regression
+    guard for the 2026-09-15 namespace refactor).
+  - `Test 3b` — `error` is not in the registry.
+  - `Test 3c` — every non-null `pattern` is valid PCRE.
+  - `Test 3d` — `page` pattern matches `'contact-us'` and
+    rejects `'rec/arts/star-trek'`.
+
+### Finding 7.2 — Implicit empty-string-as-success contract caused double-chrome 404s
+
+- **Severity:** MEDIUM (visible regression: two `<title>` tags
+  on 404 responses; HTTP entry-point emitted 500 instead of
+  returning cleanly)
+- **Where:** `engine/router.php::router_handleError`,
+  `engine/router.php::router_handleBlurb`,
+  `engine/router.php::router_displayMarkdownFile`,
+  `engine/serve-tmpl.php::servePage`.
+- **Symptom:** 404 responses contained two `<title>` tags:
+  the styled chrome from `\bbsengine6\page\error()` (which
+  renders via `displaypage()` and returns `null`), and a
+  trailing `<html><title>404</title>...` fallback block
+  emitted by the HTTP entry-point when `router_handleError`
+  returned `null`. Operators also saw the entry-point log
+  "Router Error (null)" with a 500 status code on
+  non-existent URIs.
+- **Root cause:** the contract for handlers that render via
+  `displaypage()` was implicit — return `''`, and the
+  dispatch loop's `if ($result === null || $result === false)
+  continue; return $result;` chain would emit `''` (a no-op).
+  The contract was easy to break: a future handler returning
+  `''` after a failed render would silently short-circuit
+  the chain with no body. More importantly, `router_handleError`
+  called `page\error()` and returned `null` (since
+  `displaypage()` returns `null`); the dispatcher fell
+  through to `return router_handleError($uri)`, the handler
+  returned `null`, and the HTTP entry-point translated
+  `null` to "Router Error (null)" with a 500.
+- **Fix:** introduced a `ROUTER_RENDERED` sentinel constant.
+  Handlers that render via `displaypage()` (`router_handleBlurb`,
+  `router_displayMarkdownFile`, `servePage`,
+  `router_handleError`) now return `ROUTER_RENDERED`. The
+  dispatch loop maps `ROUTER_RENDERED` to `''` and
+  short-circuits the chain. `ROUTER_STOP` is removed (no
+  caller returned it). `engine/serve-tmpl.php` declares
+  `ROUTER_RENDERED` too — it loads before router.php and
+  its `servePage()` needs the sentinel at return time.
+- **Regression tests** (`php/test_router.php`):
+  - `Test 2` — `ROUTER_RENDERED` constant is defined.
+  - `Test 3e` — dispatch smoke; accepts the new contract
+    (`''` return with page\error chrome on stdout) or the
+    legacy inline body.
+  - `Test 9` (database integration) — `router()` returns
+    `''` for a non-existent URI; stdout contains exactly
+    one styled error (one `<title>` tag), not the
+    pre-fix double-chrome shape.
+  - `php/test_blurb_render.php` — `fake_router()` mirrors
+    the new dispatch contract (`ROUTER_RENDERED` → `''`).
+
+### Finding 7.3 — `router_handleMarkdown` used undefined `$teospath` in two `router_safe_path_web()` calls
+
+- **Severity:** LOW (latent bug, masked by the
+  `router_safe_path_web` no-op guard)
+- **Where:** `engine/router.php::router_handleMarkdown`
+- **Symptom:** when `bbsengine6\util\safe_path_web` was
+  loaded (the production case), the markdown handler
+  resolved paths against an undefined `$teospath` variable.
+  PHP raised a Warning ("Undefined variable") and
+  `router_safe_path_web` rejected the path, causing
+  `router_handleMarkdown` to fall through to the next
+  handler on every URI. In practice the markdown content
+  was served by a later handler in the chain; the bug was
+  masked because the warning was logged but not surfaced.
+- **Root cause:** the function declares
+  `$teosdir = \bbsengine6\util\env("TEOSDIR", ...)` at
+  the top, then references `$teospath` (typo) in two
+  `router_safe_path_web` calls below. The typo was
+  introduced when the variable was renamed in commit
+  `ffdaaca` (router env cleanup, 2026-09-19) but two
+  call sites were missed.
+- **Fix:** renamed both occurrences from `$teospath` to
+  `$teosdir`.
+- **Regression test:** `php/test_router.php` Test 6
+  (filepath construction) exercises the markdown path
+  with a populated TEOSDIR; the test now relies on the
+  fixed variable name to resolve the right base.
+
+### Finding 7.4 — `router_buildBreadcrumbs` had an open-question comment about the root crumb's `path` field
+
+- **Severity:** LOW (clarity; the code was functional but
+  inconsistent with `blurb.php::buildbreadcrumbs`)
+- **Where:** `engine/router.php::router_buildBreadcrumbs`
+- **Symptom:** the function contained a "why are there two
+  attributes with the same value?" comment next to the
+  root crumb's `path` field, which was set to the public
+  URL prefix (`/handbook/6/`) instead of the internal
+  ltree-path-rooted identifier.
+- **Root cause:** when `router_buildBreadcrumbs` was
+  generalized to support multiple vhosts (handbook vhost
+  at `/handbook/<v>/`, teos vhost at `/teos/`), the root
+  crumb's `path` field was set to `$teosuri` (the public
+  URL prefix). The canonical reference for the internal
+  identifier is `blurb.php::buildbreadcrumbs` line 80,
+  which hardcodes `'path' => 'teos'`.
+- **Fix:** hardcoded `'path' => 'teos'` in
+  `router_buildBreadcrumbs`, matching the blurb.php
+  reference. The "two attributes with the same value"
+  comment is replaced with a paragraph explaining the
+  per-vhost `title` (TEOSLABEL env var) vs. the stable
+  internal `path` (ltree-rooted).
+- **Regression test:** `php/test_router.php` Tests 17/18
+  pin the root crumb's `path === 'teos'`.
+
+### Finding 7.5 — `router_handleMarkdown` did a dead `$uri . '.md'` extension probe
+
+- **Severity:** LOW (dead code; no functional impact)
+- **Where:** `engine/router.php::router_handleMarkdown`
+- **Symptom:** the markdown handler did a two-pass extension
+  probe (`$reluri . '.md'`, then bare `$reluri`) mirroring
+  the `.tmpl` probe in `router_handlePage`. The `.md`
+  branch was unreachable: the HTTP entry-point strips a
+  trailing `.md` once at the top of the script
+  (`preg_replace('/\.md$/', '', $path)`), so by the time the
+  dispatch loop walks handlers the URI never carries a `.md`
+  suffix. The probe was paying the cost of
+  `router_safe_path_web()` construction and string
+  concatenation on every markdown-handler invocation, then
+  immediately falling through.
+- **Root cause:** mirror reflex. The markdown handler was
+  written before the entry-point `.md`-strip existed. When
+  the strip was added, the markdown handler's `$uri . '.md'`
+  branch became dead code but stayed in place. The `.tmpl`
+  branch in `serve-tmpl.php` is still legitimate because
+  `.tmpl` is NOT stripped at the entry-point (htaccess
+  rewrites bare slugs like `/contact-us` into the router
+  with no extension, so the page handler has to append
+  `.tmpl` itself).
+- **Fix:** removed the `$reluri . '.md'` branch. Updated
+  `serve-tmpl.php`'s doc comments that previously
+  referenced "router_handleMarkdown's two-pass extension
+  probe" to describe the actual remaining two-pass handler
+  (page) and explain why the markdown handler dropped it.
+- **Regression tests** (`php/test_router.php`):
+  - `Test 6a` — handler body MUST NOT contain a
+    `'$uri . .md'` probe (regression guard against
+    re-introducing the dead branch).
+  - `Test 6b` — HTTP entry-point MUST strip trailing `.md`
+    before dispatch (the contract that makes the
+    dead-code removal safe).
+
+### Finding 7.6 — `router_handleIndex` referenced retired `ROUTER_STOP` after `include($indexfile)`
+
+- **Severity:** MEDIUM (PHP 7 returns literal string and
+  silently produces empty body; PHP 8 throws fatal
+  "Undefined constant" on every `/` request)
+- **Where:** `engine/router.php::router_handleIndex`,
+  after `include($indexfile)`.
+- **Symptom:** after the `ROUTER_STOP` retirement in the
+  same release (Finding 7.2), `router_handleIndex` still
+  returned `ROUTER_STOP`. In PHP 7 this returned the
+  literal string `"ROUTER_STOP"` which the HTTP entry-point
+  would echo (empty body, which renders as a WSOD on a
+  request that just `include()`'d a chrome-rendering file).
+  In PHP 8 it throws a fatal "Undefined constant" on every
+  `/` request that hits an `index.php`. The TEOS vhost ships
+  `TEOSDIR/index.php`; the handbook vhost ships `index.md`,
+  so production was one PHP version away from a 500.
+- **Root cause:** the C2 retirement of `ROUTER_STOP` was
+  driven by a global `define` removal but missed the call
+  site at `router_handleIndex`. The variable-function
+  dispatch loop's `return ROUTER_STOP` was an unreachable
+  shape (`ROUTER_STOP` was never actually handled in the
+  dispatcher), but the literal constant name in the source
+  was still valid syntax until C2 removed the `define`.
+- **Fix:** replaced with `ROUTER_RENDERED`. The included
+  `TEOSDIR/index.php` is expected to render to stdout
+  (either via `displaypage()` or direct `echo`); the
+  sentinel tells the dispatcher the body is already on
+  the wire and the HTTP entry-point should emit nothing
+  more.
+- **Regression test:** manual smoke (curl `/` on each
+  vhost after deploy) plus the existing Test 3e (dispatch
+  smoke) which now asserts the contract is honored
+  end-to-end. A static-analysis guard for "ROUTER_STOP
+  must not appear in `engine/` source" would be a
+  worthwhile follow-up; left as TODO for now.

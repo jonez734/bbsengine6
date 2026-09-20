@@ -178,7 +178,8 @@ The package lives at `py/src/bbsengine6/`.
 
 | File             | Role                                          |
 |------------------|-----------------------------------------------|
-| `router.php`     | Handler-registry router (`ROUTER_NEXT` / `ROUTER_STOP`) |
+| `router.php`     | Handler-registry router (`ROUTER_NEXT` / `ROUTER_RENDERED`; per-entry `pattern` attribute for URI-regex pre-filter) |
+| `serve-tmpl.php` | `bbsengine6\servepage\router_handlePage` — page-namespace handler (`/contact-us` → `DOCUMENTROOT/skin/tmpl/contact-us.tmpl`) |
 | `login.php`      | Member authentication                         |
 | `logout.php`     | Member logout (destroys session)              |
 | `join.php`       | Member registration                           |
