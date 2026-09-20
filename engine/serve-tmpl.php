@@ -27,6 +27,14 @@ require_once("/srv/www/bbsengine6/php/bootstrap.php");
 require_once("engine.php");
 require_once("session.php");
 
+// @since 2026-09-19 — ROUTER_RENDERED sentinel (see
+// engine/router.php for rationale). serve-tmpl.php is loaded
+// before router.php defines the constant, so define it here
+// too if missing. Same define-guard pattern router.php uses.
+if (!defined('ROUTER_RENDERED')) {
+  define('ROUTER_RENDERED', 'ROUTER_RENDERED');
+}
+
 /**
  * Render $relpath under $basedir as a Smarty .tmpl page.
  * Library form. Also called internally by router_handlePage().
@@ -82,7 +90,13 @@ function servePage(string $basedir, string $relpath): string|false
   // page-markdown.tmpl.
   $data = ["pagetemplate" => $basename];
   \bbsengine6\displaypage($data, $basename);
-  return "";
+  // @since 2026-09-19 — return ROUTER_RENDERED sentinel; see
+  // engine/router.php for the rationale (replaces implicit
+  // empty-string-as-success contract). Leading-backslash
+  // because servePage() is in `namespace bbsengine6\servepage;`,
+  // so a bare ROUTER_RENDERED would resolve to
+  // bbsengine6\servepage\ROUTER_RENDERED (which doesn't exist).
+  return \ROUTER_RENDERED;
 }
 
 /**

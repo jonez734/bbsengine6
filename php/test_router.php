@@ -29,12 +29,12 @@ if (defined("ROUTER_NEXT") && ROUTER_NEXT === "ROUTER_NEXT") {
     exit(1);
 }
 
-// Test 2: ROUTER_STOP constant exists
-echo "Test 2: ROUTER_STOP constant defined\n";
-if (defined("ROUTER_STOP") && ROUTER_STOP === "ROUTER_STOP") {
-    echo "  ✓ PASS: ROUTER_STOP = 'ROUTER_STOP'\n";
+// Test 2: ROUTER_RENDERED constant exists
+echo "Test 2: ROUTER_RENDERED constant defined (replaces the implicit empty-string-as-success contract)\n";
+if (defined("ROUTER_RENDERED") && ROUTER_RENDERED === "ROUTER_RENDERED") {
+    echo "  ✓ PASS: ROUTER_RENDERED = 'ROUTER_RENDERED'\n";
 } else {
-    echo "  ✗ FAIL: ROUTER_STOP not properly defined\n";
+    echo "  ✗ FAIL: ROUTER_RENDERED not properly defined\n";
     exit(1);
 }
 
@@ -139,7 +139,7 @@ if ($should_miss) {
 }
 echo "  ✓ PASS: page pattern matches 'contact-us', rejects 'rec/arts/star-trek'\n";
 
-// Test 3b: Dispatch smoke test. Actually invokes router() so the
+// Test 3e: Dispatch smoke test. Actually invokes router() so the
 // variable-function call inside the dispatch loop is exercised.
 // Catches the 2026-09-16 regression where router_gethandlers()
 // returned bare-name strings; bare names broke because PHP
@@ -149,14 +149,34 @@ echo "  ✓ PASS: page pattern matches 'contact-us', rejects 'rec/arts/star-trek
 //
 // FQCN call: test_router.php runs in the global namespace, so
 // an unqualified `router()` would itself be a lookup miss.
-echo "Test 3b: router() dispatches through full handler chain without 'undefined function' errors\n";
+//
+// Post-C1: 'error' is no longer in the registry, so on a miss
+// the dispatch loop falls through to router_handleError($uri).
+// The new contract (ROUTER_RENDERED) routes through page\error()
+// → displaypage(), which prints to stdout. The dispatch loop
+// returns ''. We accept either:
+//   - empty-string return with page\error chrome on stdout, OR
+//   - non-empty-string return with "Page Not Found" body (legacy
+//     shape, if displaypage throws).
+echo "Test 3e: router() dispatches through full handler chain without 'undefined function' errors\n";
+ob_start();
 $dispatch_result = \bbsengine6\router\router("nonexistent/xyz123");
-if (is_string($dispatch_result)
-    && strlen($dispatch_result) > 0
-    && strpos($dispatch_result, "Page Not Found") !== false) {
-    echo "  ✓ PASS: router() returned error body (length=" . strlen($dispatch_result) . ")\n";
+$dispatch_body = ob_get_clean();
+$ok = false;
+if ($dispatch_result === '' && $dispatch_body !== '') {
+    $ok = true; // ROUTER_RENDERED path: chrome on stdout, return ''
+} elseif (is_string($dispatch_result)
+          && strlen($dispatch_result) > 0
+          && strpos($dispatch_result, "Page Not Found") !== false) {
+    $ok = true; // legacy inline body path
+}
+if ($ok) {
+    echo "  ✓ PASS: router() dispatch complete (result=" . var_export($dispatch_result, true)
+         . ", body length=" . strlen($dispatch_body) . ")\n";
 } else {
-    echo "  ✗ FAIL: router() did not return error body: " . var_export($dispatch_result, true) . "\n";
+    echo "  ✗ FAIL: router() did not produce an error path: "
+         . "result=" . var_export($dispatch_result, true)
+         . ", body length=" . strlen($dispatch_body) . "\n";
     exit(1);
 }
 
@@ -234,15 +254,16 @@ if ($run_db) {
     echo "Test 9: Router handles non-existent content gracefully (no duplication)\n";
     // FQCN call: test_router.php runs in the global namespace, so
     // an unqualified router() is a lookup miss. Same shape as
-    // Test 3b (which runs unconditionally), but here we exercise
+    // Test 3e (which runs unconditionally), but here we exercise
     // the path through the database-aware blurb handler before
     // falling through to router_handleError.
     //
     // Production contract (post-fix):
     //   - page\error() prints the styled chrome via displaypage()
     //     and returns null.
-    //   - router_handleError then returns '' so the HTTP entry-
-    //     point's `echo $router_result` is a no-op.
+    //   - router_handleError then returns ROUTER_RENDERED.
+    //   - The dispatch loop maps ROUTER_RENDERED -> '' so the
+    //     HTTP entry-point's `echo $router_result` is a no-op.
     //   - The handler NEVER emits a trailing <html><title>404>
     //     fallback block in production; that would duplicate the
     //     already-printed styled chrome.

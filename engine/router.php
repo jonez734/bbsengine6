@@ -16,6 +16,9 @@ namespace bbsengine6\router;
  * bare URI (e.g. "/contact-us", not "/contact-us.md").
  *
  * ROUTER_NEXT instructs the loop to continue on to the next handler.
+ * ROUTER_RENDERED means "I rendered via displaypage(); the body is
+ * already on stdout" -- the dispatcher maps this to an empty
+ * return string so the HTTP entry-point emits nothing more.
  * Returning null or false continues to the next handler.
  * Returning a non-empty string short-circuits and emits the body.
  *
@@ -57,7 +60,13 @@ require_once("page.php");
 require_once("serve-tmpl.php");
 
 if (!defined('ROUTER_NEXT')) { define('ROUTER_NEXT', 'ROUTER_NEXT'); }
-if (!defined('ROUTER_STOP')) { define('ROUTER_STOP', 'ROUTER_STOP'); }
+// @since 2026-09-19 — explicit sentinel for "I rendered via
+// displaypage() and the body is already on stdout; the HTTP
+// entry-point should emit nothing more". Replaces the implicit
+// empty-string-as-success contract (an empty string used to
+// short-circuit the chain, which was a foot-gun for future
+// handlers that returned '' unintentionally).
+if (!defined('ROUTER_RENDERED')) { define('ROUTER_RENDERED', 'ROUTER_RENDERED'); }
 
 router_log("router.300: ".var_export(get_include_path(),true));
 
@@ -133,12 +142,18 @@ function router_buildBreadcrumbs(string $uri): array
   }
 
   $rootlabel = \bbsengine6\util\env("TEOSLABEL", "teos");
-  $teosuri = \bbsengine6\util\env("TEOSURI", "/teos");
-  // why are there two attributes with the same value?
+  // Root crumb: title is per-vhost via TEOSLABEL (default
+  // "teos", overridden to "bbsengine6 handbook" on the .org
+  // vhost by the HTTP entry-point's putenv); the internal path
+  // identifier stays "teos" to match blurb.php's
+  // buildbreadcrumbs() (line 80) -- both consumers of the
+  // breadcrumb list need a consistent ltree-path-rooted
+  // identifier so the DB-driven and filesystem-driven paths
+  // are interchangeable.
   array_unshift($autoCrumbs, [
     'title' => $rootlabel,
-    'path' => $teosuri, // 'teos',
-    'uri' => $teosurl . '/',
+    'path'  => 'teos',
+    'uri'   => $teosurl . '/',
   ]);
 
   return $autoCrumbs;
@@ -248,7 +263,12 @@ function router_handleBlurb(string $uri)
         // backslash; this display() call site was missed
         // by bfaca68.
         \bbsengine6\blurb\display($uri, null);
-        return '';
+        // @since 2026-09-19 — return ROUTER_RENDERED (the new
+        // sentinel) instead of ''. The dispatch loop emits
+        // nothing on this return, same effect, but the
+        // sentinel makes the contract explicit and removes
+        // the foot-gun of empty-string-short-circuit.
+        return ROUTER_RENDERED;
       } catch (\Throwable $e) {
         router_log('blurb display failed: ' . $e->getMessage(), 'error');
         return ROUTER_NEXT;
@@ -330,9 +350,9 @@ function router_handleMarkdown(string $uri)
   // ltrim so "specs/foo" (bare-relative) is appended rather
   // than "/specs/foo.md" (rejected as absolute).
   $reluri = ltrim($uri, '/');
-  $filepath = router_safe_path_web([$reluri . '.md'], ['base_dir' => $teospath]);
+  $filepath = router_safe_path_web([$reluri . '.md'], ['base_dir' => $teosdir]);
   if ($filepath === false || !file_exists($filepath)) {
-    $filepath = router_safe_path_web([$reluri], ['base_dir' => $teospath]);
+    $filepath = router_safe_path_web([$reluri], ['base_dir' => $teosdir]);
   }
   if ($filepath !== false && file_exists($filepath) && is_file($filepath)) {
     // @since 2026-09-10 — same graceful-degradation wrapper as
@@ -356,7 +376,12 @@ function router_handleError(string $uri)
 
   \bbsengine6\page\error($msg, 404);
   http_response_code(404);
-  return;
+  // @since 2026-09-19 — return ROUTER_RENDERED sentinel.
+  // page\error() already rendered via displaypage(), so the
+  // HTTP entry-point should emit nothing more. (Pre-2026-09-19
+  // the function returned null, which the HTTP entry-point
+  // translated to "Router Error (null)" with a 500.)
+  return ROUTER_RENDERED;
 }
 
 function router_displayMarkdownFile(string $filepath, string $uri): string
@@ -396,7 +421,9 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   ];
 
   \bbsengine6\displaypage($data, 'page-markdown.tmpl', false);
-  return '';
+  // @since 2026-09-19 — return ROUTER_RENDERED sentinel; see
+  // router_handleBlurb for the rationale.
+  return ROUTER_RENDERED;
 }
 
 function router_isIgnoredEntry(string $entry): bool
@@ -647,6 +674,11 @@ function router(string $uri): ?string
     $result = $fn($uri);
     router_log('handler ' . $name . ' returned ' . var_export($result, true));
     if ($result === ROUTER_NEXT) continue;
+    // ROUTER_RENDERED: handler rendered via displaypage() and
+    // the body is already on stdout. Emit nothing more and
+    // return '' so the HTTP entry-point's `echo $router_result`
+    // is a no-op.
+    if ($result === ROUTER_RENDERED) return '';
     if ($result === null || $result === false) continue;
     return $result;
   }

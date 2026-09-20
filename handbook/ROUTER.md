@@ -137,12 +137,21 @@ Handlers return either:
 
 - A non-empty string — emitted as the response body. The router
   stops walking handlers.
-- `ROUTER_NEXT` / `null` / `false` — the router continues to the
-  next handler.
+- `ROUTER_NEXT` — the router continues to the next handler.
+- `ROUTER_RENDERED` — the handler rendered via `displaypage()`
+  and the body is already on stdout; the dispatcher returns an
+  empty string so the HTTP entry-point emits nothing more.
+- `null` / `false` — the router continues to the next handler
+  (treated identically to `ROUTER_NEXT`; preserved for callers
+  that don't know about the sentinel).
 
 Returning `null` or `false` is treated as "try the next handler",
 not "stop and emit this empty body" (this is the post-fix
 contract; see "Recent fixes" below).
+
+`ROUTER_STOP` is no longer defined (no caller used it; the
+empty-string foot-gun that motivated its retirement is replaced
+by `ROUTER_RENDERED`).
 
 ## Directory listing
 
