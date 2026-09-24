@@ -32,6 +32,16 @@ define("SMARTYCOMPILEDTEMPLATESDIR", VHOSTDIR."templates_c");
 define("SMARTYPLUGINSDIR", [ 0 => VHOSTDIR."smarty/"]);
 define("SMARTYTEMPLATESDIR", [ 0 => DOCUMENTROOT."skin/tmpl/", 1 => ZOIDWEBDIR."skin/tmpl/", 2 => "/srv/www/bbsengine6/skin/tmpl/"]);
 
+// @since 2026-09-24 — namespaced aliases for the SMARTY* constants
+// above, so bbsengine6\getsmarty() (which reads via
+// defined('\config\SMARTYTEMPLATESDIR')) can find this vhost's
+// templates. Also load bbsengine6config.php to pick up any
+// bbsengine6-owned defaults the vhost hasn't overridden.
+define("config\SMARTYTEMPLATESDIR", SMARTYTEMPLATESDIR);
+define("config\SMARTYPLUGINSDIR", SMARTYPLUGINSDIR);
+define("config\SMARTYCOMPILEDTEMPLATESDIR", SMARTYCOMPILEDTEMPLATESDIR);
+require_once('bbsengine6config.php');
+
 // @see http://php.net/strftime
 define("DATEFORMAT", "%Y-%b-%d %I:%M %p %Z (%A)");
 

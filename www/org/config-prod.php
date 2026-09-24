@@ -40,6 +40,13 @@ define("config\SMARTYPLUGINSDIR", [ 0 => \config\VHOSTDIR."smarty/"]);
 //define("SMARTYTEMPLATESDIR", [ 0 => DOCUMENTROOT."skin/tmpl/", 1 => ZOIDWEBDIR."skin/tmpl/", 2 => $bbsengine_root."/skin/tmpl/"]);
 define("config\SMARTYTEMPLATESDIR", [ 0 => \config\DOCUMENTROOT."skin/tmpl/", 1 => $bbsengine_root."/skin/tmpl/", 2 => $teos_dir."skin/tmpl"]);
 
+// @since 2026-09-24 — load bbsengine6config.php after defining the
+// namespaced config\SMARTY* constants so its `if (!defined(...))`
+// defaults don't override vhost values. bbsengine6config.php also
+// installs the zoid6 hook shim when zoid6 is loaded (which this
+// vhost does not, but the shim check is harmless).
+require_once('bbsengine6config.php');
+
 // @see http://php.net/strftime
 define("DATEFORMAT", "%Y-%b-%d %I:%M %p %Z (%A)");
 

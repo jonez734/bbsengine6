@@ -8,8 +8,8 @@
 
 namespace bbsengine6\blurb {
 
-require_once(__DIR__ . "/../../zoid6/php/bootstrap.php");
-\zoid6\bootstrap();
+require_once("engine.php");
+// require_once("database.php");
 
 /**
  * Get the display label for the top-level "root" breadcrumb.
@@ -33,12 +33,6 @@ function getlabel(): string
     }
     return 'teos';
 }
-
-require_once("zoid6config.php");
-require_once("zoid6.php");
-
-require_once("engine.php");
-// require_once("database.php");
 
 /**
  * Build breadcrumbs from a sig path
@@ -335,7 +329,11 @@ function display($uri, $filepath)
     \bbsengine6\util\logentry("bbsengine6.blurb.100: data.title=".var_export($data["title"], true));
 
     $choices = [];
-    $data["choices"] = \zoid6\buildchoices($choices);
+    // @since 2026-09-24 — use the canonical bbsengine6 menu extension
+    // point. Vhosts that load zoid6 get its cross-site menu via
+    // bbsengine6config.php's zoid6 hook shim; vhosts that don't get
+    // an empty menu (topbar-choices.tmpl hides empty sections).
+    $data["choices"] = \bbsengine6\menu\buildchoices($choices);
 
     return \bbsengine6\displaypage($data, "page-markdown-sections.tmpl", false);
 }

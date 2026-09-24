@@ -117,7 +117,7 @@ function getTopLevelFolders(): array
         $stmt = $pdo->query($sql);
         return $stmt->fetchAll();
     } catch (\Throwable $e) {
-        \bbsengine6\util\echo_traceback("gettoplevelfolders.100")
+        \bbsengine6\util\echo_traceback("gettoplevelfolders.100");
         return [];
     }
 }

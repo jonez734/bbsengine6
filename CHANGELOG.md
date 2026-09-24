@@ -1,5 +1,119 @@
 ## [Unreleased]
 
+### fix(bbsengine6): bbsengine6config.php + menu extension point + drop zoid6 hard-require
+
+Three compounding fixes that unblock the `errormessage.tmpl`
+regression on vhosts whose `config.php` was no longer loaded by
+the router entry-point, and decouple bbsengine6 from a hard
+zoid6 dependency:
+
+1. **Self-owned config defaults (`php/bbsengine6config.php`)**.
+   `engine/router.php -> page\error() -> displaypage() -> getsmarty()`
+   could not find `errormessage.tmpl` because
+   `\config\SMARTYTEMPLATESDIR` was undefined on vhosts whose
+   `config.php` was not on the include path when the router
+   dispatched.
+
+   **Regression timeline.** `engine/router.php` previously did
+   `require_once('config.php')` to load the vhost config. That
+   require was commented out in commit `45b0b71`
+   (`chore(bbsengine6): router/util/htaccess-prod tweaks`,
+   2026-09-11) along with several other requires; commit
+   `27435ea` (`fix(engine/router): fix strlower typo, ...`,
+   2026-09-14) re-enabled `markdown.php`, `blurb.php`,
+   `engine.php` but **forgot to re-enable `config.php`**.
+   `php/page.php`'s `require_once("config.php")` was
+   independently removed in commit `26ca33e` (2026-09-16,
+   "drop dead config.php require in page.php") on the
+   rationale that it referenced no live `\config\*` constants.
+   After that, no bbsengine6 source file loaded the vhost
+   config — so the namespaced `config\SMARTY*` constants
+   relied entirely on `engine.php`'s `getsmarty()` fallback to
+   `[]` when undefined. The teos vhost lost its templates.
+   The wwworg vhost was unaffected because its deployed
+   `engine/router.php` was an older copy that still had
+   `require_once("config.php");` on line 51.
+
+   **The fix.** `php/bbsengine6config.php` (NEW file) ships
+   bbsengine6-owned defaults for `config\SMARTYTEMPLATESDIR`
+   (`/srv/www/bbsengine6/skin/tmpl/`), `config\SMARTYPLUGINSDIR`,
+   `config\SMARTYCOMPILEDTEMPLATESDIR`, plus shared URL/path
+   constants (`ENGINEURL`, `ENGINESKINURL`, `SHAREDSKINURL`,
+   `STATICSKINURL`), `config\SYSTEMDSN`, and `config\LOGENTRYPREFIX`.
+   All use the `if (!defined(...))` pattern so vhost
+   `config.php` values win when defined first. The file
+   attempts `require_once("config.php")` via include_path at
+   the top, so vhosts whose include_path includes the vhost
+   docroot (set up via `VHOSTDOCROOT` SetEnv + `bbsengine6\bootstrap()`)
+   get their namespaced constants loaded automatically.
+
+   Loaded transitively from `php/engine.php`. Vhost config-prod.php
+   files (`www/org/`, `www/com/`) and the deployed teos/wwworg
+   `config.php` files updated to `require_once('bbsengine6config.php')`
+   after defining their namespaced constants, for symmetry.
+
+2. **Menu extension point (`bbsengine6\menu\buildchoices()`)**.
+   `engine/router.php` and `php/blurb.php` previously called
+   `\zoid6\buildchoices($choices)` directly (or via
+   `function_exists` guards). bbsengine6 now exposes a canonical
+   menu-building function in the `bbsengine6\menu` namespace.
+   Default implementation returns `$choices` unchanged (no menu).
+   Vhosts that want a cross-site menu define their own
+   `bbsengine6\menu\hook_buildchoices()` function (which the
+   canonical `buildchoices()` delegates to via `function_exists`
+   lookup).
+
+3. **bbsengine6 no longer hard-requires zoid6.** Removed
+   `require_once(zoid6/php/bootstrap.php)`,
+   `require_once("zoid6config.php")`, `require_once("zoid6.php")`
+   from `php/blurb.php`. The `function_exists('\zoid6\buildchoices')`
+   guards in `engine/router.php` (lines 434, 613 pre-fix) are
+   replaced with direct extension-point calls. `bbsengine6config.php`
+   installs a zoid6 `hook_buildchoices` shim when zoid6 happens to
+   be loaded — preserving the cross-site menu on vhosts that
+   already use zoid6 without making bbsengine6 aware of zoid6
+   at the call sites.
+
+   **Verification of "no zoid6 references in bbsengine6 source".**
+   After this commit:
+   ```
+   $ grep -rn "zoid6" bbsengine6/{php,engine,smarty,skin} \
+       | grep -v "\.git/" | grep -v "/py/" | grep -v "/handbook/" \
+       | grep -v "\.md:"
+   bbsengine6/php/bbsengine6config.php:   (one reference inside
+                                            the zoid6 hook shim block)
+   ```
+   The shim is opt-in: if zoid6 isn't loaded, the hook function
+   isn't installed and the menu is empty. bbsengine6 source code
+   at `php/engine.php`, `php/blurb.php`, `engine/router.php`,
+   `php/page.php`, `php/session.php`, `php/folder.php`, and all
+   of `php/smarty/` has zero `zoid6` references.
+
+   Also cleaned up the dead `/// require_once('config.php')`
+   comment in `php/session.php`, and the unrelated missing
+   semicolon in `php/folder.php::getTopLevelFolders()`.
+
+**Deploy.** The fix requires updating deployed paths via the
+new `deploy_bbsengine6config_fix.sh` script (in the meta-repo
+root). Sandbox can't write to `/srv/www/bbsengine6/` or
+`/srv/www/vhosts/...` directly; run the script as the `jam`
+user (or whoever owns those paths) to land:
+- `/srv/www/bbsengine6/php/{bbsengine6config.php,engine.php,blurb.php,session.php,folder.php}`
+- `/srv/www/vhosts/zoidtechnologies.com/html/engine/router.php`
+- `/srv/www/vhosts/www.bbsengine.org/html/engine/router.php`
+- in-place `require_once('bbsengine6config.php')` insertion in
+  `/srv/www/vhosts/zoidtechnologies.com/html/teos/config.php`
+  and `/srv/www/vhosts/www.bbsengine.org/html/config.php`
+
+The script is idempotent — re-running is safe.
+
+**Verification.** Regression tests at
+`/tmp/test_regression.php` (vhost scenario with zoid6) and
+`/tmp/test_nozoid6.php` (no-zoid6 scenario) both PASS. The
+key assertion: `$s->templateExists("errormessage.tmpl") === true`
+in both cases. (These test scripts are in `/tmp/` and not
+checked in; they were scratch tests run during development.)
+
 ### feat(engine/router): 'pattern' attribute on handler registry
 
 `router_gethandlers()` entries may now carry an optional

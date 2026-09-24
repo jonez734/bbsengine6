@@ -28,6 +28,8 @@ require_once("util.php");
 
 namespace bbsengine6 {
 
+require_once("bbsengine6config.php");
+
 /**
  * getDSN() moved to database.php in bbsengine6\database namespace
  * @deprecated Use \bbsengine6\database\getDSN() instead

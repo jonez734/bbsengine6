@@ -43,6 +43,13 @@ namespace bbsengine6\router;
  * Handlers that depend on teos-only helpers (bbsengine6\blurb\*,
  * bbsengine6\folder\*) no-op to ROUTER_NEXT when those helpers are absent.
  *
+ * Menu choices are populated via the canonical bbsengine6 menu
+ * extension point \bbsengine6\menu\buildchoices() (defined in
+ * php/bbsengine6config.php, loaded transitively via php/engine.php).
+ * bbsengine6 source code stays zoid6-agnostic; vhosts that want a
+ * cross-site menu define their own bbsengine6\menu\hook_buildchoices()
+ * function or load zoid6 themselves before this router runs.
+ *
  * @since 2026
  */
 
@@ -430,13 +437,15 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   array_pop($uri_parts);
   $breadcrumbs = router_buildBreadcrumbs(implode("/", $uri_parts));
 
+  // @since 2026-09-24 — use the canonical bbsengine6 menu extension
+  // point. bbsengine6config.php's zoid6 hook shim installs a
+  // bbsengine6\menu\hook_buildchoices() when zoid6 is loaded, so
+  // existing teos-vhost cross-site menu items continue to appear.
   $choices = [];
-  if (function_exists('\zoid6\buildchoices')) {
-    try {
-      $choices = \zoid6\buildchoices($choices);
-    } catch (\Throwable $e) {
-      router_log('zoid6\buildchoices failed: ' . $e->getMessage(), 'warning');
-    }
+  try {
+    $choices = \bbsengine6\menu\buildchoices($choices);
+  } catch (\Throwable $e) {
+    router_log('bbsengine6\menu\buildchoices failed: ' . $e->getMessage(), 'warning');
   }
 
   $data = [
@@ -610,19 +619,15 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
     ];
 
     $choices = [];
-    if (function_exists('\zoid6\buildchoices')) {
-      // @since 2026-09-10 — same graceful-degradation wrapper
-      // as the rest of the handler chain. buildchoices() calls
-      // into bbsengine6\engine\buildchoices() ->
-      // member\lib\checkflag() which can throw if the engine
-      // schema is missing or the database is unavailable.
-      // Treat that as "no menu items" rather than 500ing the
-      // whole listing.
-      try {
-        $choices = \zoid6\buildchoices($choices);
-      } catch (\Throwable $e) {
-        router_log('zoid6\buildchoices failed: ' . $e->getMessage(), 'warning');
-      }
+    // @since 2026-09-24 — use the canonical bbsengine6 menu
+    // extension point. bbsengine6config.php's zoid6 hook shim
+    // installs a bbsengine6\menu\hook_buildchoices() when zoid6
+    // is loaded, so existing teos-vhost cross-site menu items
+    // continue to appear.
+    try {
+      $choices = \bbsengine6\menu\buildchoices($choices);
+    } catch (\Throwable $e) {
+      router_log('bbsengine6\menu\buildchoices failed: ' . $e->getMessage(), 'warning');
     }
 
     // @since 2026-09-07 — graceful degradation when the
