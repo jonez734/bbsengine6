@@ -41,7 +41,8 @@ function getFolderMeta(string $uri): ?array
         $result = $stmt->fetch();
         return $result ?: null;
     } catch (\Throwable $e) {
-        return null;
+        \bbsengine6\util\echo_traceback("getfoldermeta.100");
+        return [];
     }
 }
 
@@ -68,6 +69,7 @@ function getFolderSigs(string $uri): array
         $stmt->execute(["pattern" => $pattern]);
         return $stmt->fetchAll();
     } catch (\Throwable $e) {
+        \bbsengine6\util\echo_traceback("getfoldersigs.100");
         return [];
     }
 }
@@ -94,7 +96,7 @@ function getFolderBreadcrumbs(string $uri): array
         $stmt->execute(["sigpath" => $path]);
         return $stmt->fetchAll();
     } catch (\Throwable $e) {
-        return [];
+        \bbsengine6\util\echo_traceback("getfolderbreadcrumbs.100: uri=".var_export($uri, true));
     }
 }
 
@@ -115,6 +117,7 @@ function getTopLevelFolders(): array
         $stmt = $pdo->query($sql);
         return $stmt->fetchAll();
     } catch (\Throwable $e) {
+        \bbsengine6\util\echo_traceback("gettoplevelfolders.100")
         return [];
     }
 }
@@ -124,10 +127,10 @@ function getTopLevelFolders(): array
  *
  * @return string The filesystem path to teos content
  */
-function getteospath(): string
-{
-    return defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
-}
+//function getteospath(): string
+//{
+//    return defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
+//}
 
 /**
  * Check if a URI corresponds to an existing directory
@@ -137,8 +140,8 @@ function getteospath(): string
  */
 function isFolder($uri)
 {
-    $teospath = getteospath();
-    $filepath = \bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath, 'must_exist' => false]);
+    $teosdir = \bbsengine6\util\env("TEOSDIR");
+    $filepath = \bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teosdir, 'must_exist' => false]);
     if ($filepath === false) {
         return false;
     }
@@ -171,8 +174,8 @@ function isFolderVisible(string $uri): bool
     }
 
     // Fallback: check .folder.json in filesystem
-    $teospath = getteospath();
-    $folderJsonPath = \bbsengine6\util\safe_path_web([$uri, '.folder.json'], ['base_dir' => $teospath]);
+    $teosdir = \bbsengine6\util\env("TEOSDIR");
+    $folderJsonPath = \bbsengine6\util\safe_path_web([$uri, '.folder.json'], ['base_dir' => $teosdir]);
     if ($folderJsonPath !== false && file_exists($folderJsonPath)) {
         $json = json_decode(file_get_contents($folderJsonPath), true);
         if (isset($json['visible'])) {
@@ -228,17 +231,7 @@ function getDirectoryItems(string $dirpath, string $uri): array
 
         $items[] = [
             'title' => $displayTitle,
-            // @since 2026-09-17 — use the env-first teos_url()
-            // helper instead of the bare \TEOSURL constant. The
-            // bare constant is defined by zoid6/php/zoid6config.php
-            // to "/teos/" regardless of which vhost is serving,
-            // which made handbook/6/specs/ render href="/teos/specs/..."
-            // on www.bbsengine.org. router.php putenv()s the right
-            // prefix per request, and teos_url() honors that env
-            // var, so the directory listing now follows the same
-            // vhost-polymorphic prefix as router_buildBreadcrumbs.
-            'uri' => \bbsengine6\util\teos_url() . $fileuri,
-            'filename' => $filename,
+            'uri' => \bbsengine6\util\env("TEOSURI"). $fileuri, 'filename' => $filename, //\bbsengine6\util\teos_url() . $fileuri,
         ];
     }
 
@@ -290,14 +283,14 @@ function getDirectoryTitle(string $uri): string
  */
 function display($uri)
 {
-    $teospath = getteospath();
+    $teospath = \bbsengine6\util\env("TEOSDIR", "NEEDINFO:display"); //getteospath()
     $filepath = \bbsengine6\util\safe_path_web([$uri], ['base_dir' => $teospath, 'must_exist' => false]);
     if ($filepath === false || !is_dir($filepath)) {
-        return null;
+        return [];
     }
 
     if (!isFolderVisible($uri) && !isSysop()) {
-        return null;
+        return [];
     }
 
     $items = getDirectoryItems($filepath, $uri);

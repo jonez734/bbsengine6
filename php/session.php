@@ -9,7 +9,7 @@ namespace bbsengine6\session;
 
 require_once("/srv/www/bbsengine6/php/bootstrap.php");
 
-require_once("config.php");
+/// require_once("config.php");
 require_once("engine.php");
 require_once("database.php");
 require_once("libmember.php");
@@ -104,7 +104,7 @@ function get($sessionid)
   return $session;
 }
 
-/** 
+/**
  * custom session handler open function
  *
  * @since 20111228
@@ -116,7 +116,7 @@ function open($path, $name)
   return true;
 }
 
-/** 
+/**
  * custom session handler close function.
  *
  * @since 20111228
@@ -128,7 +128,7 @@ function close()
   return true;
 }
 
-/** 
+/**
  * custom session handler read function.
  *
  * @since 20111228
