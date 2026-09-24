@@ -231,7 +231,7 @@ function getDirectoryItems(string $dirpath, string $uri): array
 
         $items[] = [
             'title' => $displayTitle,
-            'uri' => \bbsengine6\util\env("TEOSURI"). $fileuri, 'filename' => $filename, //\bbsengine6\util\teos_url() . $fileuri,
+            'uri' => \bbsengine6\util\env("TEOSURL"). $fileuri, 'filename' => $filename, //\bbsengine6\util\teos_url() . $fileuri,
         ];
     }
 

@@ -4,7 +4,7 @@
 
 SetEnv TEOSLABEL bbsengine
 SetEnv TEOSDIR /srv/www/vhosts/www.bbsengine.org/html/handbook/6/
-SetEnv TEOSURI /handbook/
+SetEnv TEOSURL /handbook/
 
 # @since 2026-09-16 — publish vhost document root so bbsengine6\bootstrap()
 # can prepend it to include_path. Bare require_once("config.php") in

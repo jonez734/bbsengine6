@@ -53,6 +53,8 @@ require_once('markdown.php');
 require_once('blurb.php');
 require_once('engine.php');
 require_once("page.php");
+require_once("folder.php");
+
 // @since 2026-09-16 — hands page-namespace URIs
 // (e.g. /contact-us -> DOCUMENTROOT/skin/tmpl/contact-us.tmpl)
 // to bbsengine6\servepage\router_handlePage via the
@@ -124,7 +126,7 @@ function router_buildBreadcrumbs(string $uri): array
     return [];
   }
 
-  $teosurl = rtrim(\bbsengine6\util\env("TEOSURI", "NEEDINFO:teosurl"));
+  $teosurl = rtrim(\bbsengine6\util\env("TEOSURL", "NEEDINFO:teosurl"));
 
 
   // Build breadcrumbs from URI segments
@@ -422,7 +424,7 @@ function router_displayMarkdownFile(string $filepath, string $uri): string
   $doc['title'] = isset($doc['title']) ? htmlspecialchars($doc['title']) : basename($filepath, '.md');
   $doc['date']  = isset($doc['date'])  ? htmlspecialchars($doc['date'])  : '';
 
-  \bbsengine6\setcurrentpage(rtrim(\bbsengine6\util\env("TEOSURI", "NEEDINFO:displaymd:teosurl"), '/') . $uri);
+  \bbsengine6\setcurrentpage(rtrim(\bbsengine6\util\env("TEOSURL", "NEEDINFO:displaymd:teosurl"), '/') . $uri);
 
   $uri_parts = explode("/", $uri);
   array_pop($uri_parts);
@@ -486,7 +488,7 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
     return [];
   }
 
-  $teosurl = rtrim(\bbsengine6\util\env("TEOSURI", "NEEDINFO:collect:teosurl"), '/');
+  $teosurl = rtrim(\bbsengine6\util\env("TEOSURL", "NEEDINFO:collect:teosurl"), '/');
   $items = [];
 
   foreach ($entries as $entry) {
@@ -578,7 +580,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   $items = router_dedupeItems($items);
 
   $title = basename($uri) ?: $uri;
-  $teosurl = rtrim(\bbsengine6\util\env("TEOSURI", "NEEDINFO:displaydir:teosurl"), '/');
+  $teosurl = rtrim(\bbsengine6\util\env("TEOSURL", "NEEDINFO:displaydir:teosurl"), '/');
 
   \bbsengine6\setcurrentpage($teosurl.$uri);
 
