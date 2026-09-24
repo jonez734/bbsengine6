@@ -206,7 +206,7 @@ sign:
 
 wheel-release: build rename-sdist sign
 
-.PHONY: handbook handbook-prod handbook-deploy-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod engine-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui
+.PHONY: handbook handbook-prod handbook-deploy-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod engine-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui deploy-engine-stage deploy-engine-prod
 .PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
 
@@ -239,6 +239,12 @@ markdown-deploy-prod: parsedown-deploy
 deploy-wwworg: wwworg
 
 deploy-wwwcom: wwwcom
+
+deploy-engine-stage:
+	$(MAKE) -C engine stage
+
+deploy-engine-prod:
+	$(MAKE) engine-deploy-prod
 
 handbook-prod:
 	$(MAKE) -C handbook stage VERSION=$(VERSION)
