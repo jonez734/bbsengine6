@@ -114,9 +114,6 @@ function router_log(string $message, string $level = "info"): void
  */
 function router_safe_path_web(array $components, array $opts = []): string|false
 {
-  if (!function_exists('\bbsengine6\util\safe_path_web')) {
-    return false;
-  }
   return \bbsengine6\util\safe_path_web($components, $opts);
 }
 
@@ -144,7 +141,7 @@ function router_buildBreadcrumbs(string $uri): array
     ];
   }
 
-  $rootlabel = \bbsengine6\util\env("TEOSLABEL", "teos");
+  $rootlabel = \bbsengine6\util\env("TEOSLABEL", "NEEDINFO:buildbreadcrumbs.100");
   // Root crumb: title is per-vhost via TEOSLABEL (default
   // "teos", overridden to "bbsengine6 handbook" on the .org
   // vhost by the HTTP entry-point's putenv); the internal path

@@ -17,6 +17,7 @@ function bootstrap(array $paths = []): bool
         "/srv/www/markdown/",
         "/srv/www/smarty/",
         "/usr/share/pear/",
+        "/srv/www/bbsengine6/php/",
     ];
 
     $current = array_filter(
