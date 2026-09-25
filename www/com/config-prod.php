@@ -28,19 +28,25 @@ define("DOCUMENTROOT", VHOSTDIR . "html/");
 
 define("ZOIDWEBDIR", "/srv/www/zoid6/");
 
-define("SMARTYCOMPILEDTEMPLATESDIR", VHOSTDIR."templates_c");
-define("SMARTYPLUGINSDIR", [ 0 => VHOSTDIR."smarty/"]);
-define("SMARTYTEMPLATESDIR", [ 0 => DOCUMENTROOT."skin/tmpl/", 1 => ZOIDWEBDIR."skin/tmpl/", 2 => "/srv/www/bbsengine6/skin/tmpl/"]);
-
-// @since 2026-09-24 — namespaced aliases for the SMARTY* constants
-// above, so bbsengine6\getsmarty() (which reads via
-// defined('\config\SMARTYTEMPLATESDIR')) can find this vhost's
-// templates. Also load bbsengine6config.php to pick up any
-// bbsengine6-owned defaults the vhost hasn't overridden.
-define("config\SMARTYTEMPLATESDIR", SMARTYTEMPLATESDIR);
-define("config\SMARTYPLUGINSDIR", SMARTYPLUGINSDIR);
-define("config\SMARTYCOMPILEDTEMPLATESDIR", SMARTYCOMPILEDTEMPLATESDIR);
+// @since 2026-09-24 — load bbsengine6config.php FIRST to pick up
+// config\SHAREDTMPLDIR (single source of truth for the cross-app
+// shared tmpl path) before the SMARTY* defines that reference it.
 require_once('bbsengine6config.php');
+
+// @since 2026-09-24 — simplified: 2 entries (bbsengine6/skin/tmpl/
+// is auto-appended by bbsengine6config.php as the engine fallback).
+define("config\SMARTYTEMPLATESDIR", [
+    0 => DOCUMENTROOT . "skin/tmpl/",
+    1 => \config\SHAREDTMPLDIR,
+]);
+define("config\SMARTYPLUGINSDIR", [ 0 => VHOSTDIR . "smarty/" ]);
+define("config\SMARTYCOMPILEDTEMPLATESDIR", VHOSTDIR . "templates_c");
+
+// Global aliases for templates that use {$smarty.const.SMARTYTEMPLATESDIR}
+// without the namespaced prefix. Set post-normalization.
+if (!defined("SMARTYTEMPLATESDIR")) define("SMARTYTEMPLATESDIR", \config\SMARTYTEMPLATESDIR);
+if (!defined("SMARTYPLUGINSDIR")) define("SMARTYPLUGINSDIR", \config\SMARTYPLUGINSDIR);
+if (!defined("SMARTYCOMPILEDTEMPLATESDIR")) define("SMARTYCOMPILEDTEMPLATESDIR", \config\SMARTYCOMPILEDTEMPLATESDIR);
 
 // @see http://php.net/strftime
 define("DATEFORMAT", "%Y-%b-%d %I:%M %p %Z (%A)");
