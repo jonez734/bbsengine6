@@ -1,5 +1,147 @@
 ## [Unreleased]
 
+### refactor(bbsengine6): SMARTYTEMPLATESDIR normalization, templatedirs hook, _getsmarty cleanup
+
+A consolidated change set that centralizes Smarty template-dir
+handling in `bbsengine6config.php`, removes dead code, fixes
+two pre-existing bugs, and aligns the handbook vhost with the
+convention used by every other zoid6 consumer.
+
+**`getsmarty()` simplification (`php/engine.php`).**
+Replaces the 50-line option-defaulting + array-key-exists
+cascade with a small block of `??=` defaults plus a 12-line
+input validator. `getsmarty()` now reads the vhost-supplied
+`\config\SMARTYTEMPLATESDIR` and calls
+`\bbsengine6\templatedirs\normalize()` to materialize the
+final flat numeric-keyed list (engine fallback appended last).
+The plugin-dir auto-append of `/srv/www/bbsengine6/smarty/`
+moves into `getsmarty()` itself (was hardcoded inline). All
+this is consistent with the existing `bbsengine6\menu\buildchoices`
+pattern.
+
+**Deferred validation.** If a vhost's `config.php` doesn't define
+`config\SMARTYTEMPLATESDIR`, the first call to `getsmarty()`
+throws `\RuntimeException` with a clear message ("SMARTYTEMPLATESDIR
+is not configured. Define config\\SMARTYTEMPLATESDIR in your
+vhost config.php..."). Previously this manifested as Smarty's
+"Unable to load template `page.tmpl`" 500 error at render time.
+`bbsengine6config.php` load itself is **non-fatal** (CLI scripts
+that only need a constant still work).
+
+**`templatedirs\normalize()` (`php/bbsengine6config.php`).**
+New public function in the `bbsengine6\templatedirs` namespace.
+Accepts the raw `\config\SMARTYTEMPLATESDIR` value (array or
+scalar string), flattens accidental array-of-array wrapping
+(legacy `array(SMARTYTEMPLATESDIR)` bug), validates each entry
+is a string (throws on int/null/array entries), enforces
+trailing `/` on each entry, dedups (case-sensitive — assumes
+Linux ext4), appends the templatedirs hook's extra dirs (if
+`hook_extra_dirs()` is defined), then appends the engine
+fallback `bbsengine6/skin/tmpl/` as the last entry.
+
+**`templatedirs\extra_dirs()` extension point.** Mirrors the
+existing `bbsengine6\menu\buildchoices()` pattern. Default
+returns `[]`. Consumer apps (e.g. teos) define
+`\bbsengine6\templatedirs\hook_extra_dirs()` in their config.php
+to contribute extra dirs (e.g. teos' `<TEOSDIR>/skin/tmpl/` for
+the handbook vhost). A zoid6 hook shim is installed when zoid6
+is loaded, parallel to the menu hook shim. The handbook vhost
+currently doesn't load teos, so the hook gracefully no-ops
+(the `is_dir()` check returns false for `<TEOSDIR>/skin/tmpl/`
+when TEOSDIR points at the handbook's markdown root).
+
+**`config\SHAREDTMPLDIR` constant.** New namespaced constant
+defaulting to `/srv/www/vhosts/zoidtechnologies.com/html/shared/skin/tmpl/`.
+Single source of truth for the cross-app shared tmpl path.
+vhosts that want a different shared-dir layout override before
+requiring `bbsengine6config.php`. Five vhost configs (bbsengine6
+www/org, bbsengine6 www/com, teos, achilles, asimov, murdermotel,
+zoid6 sites) now reference `\config\SHAREDTMPLDIR` instead of
+hardcoding the path. Duplicate `/srv/www/zoid6/shared/skin/tmpl/`
+entries in the zoid6 www config are deduped by `normalize()`.
+
+**`_getsmarty()` and `bbsenginedotorg.php::getsmarty()` deleted.**
+Both were near-duplicates of `\bbsengine6\getsmarty()` with a
+buggy `array(SMARTYTEMPLATESDIR)` wrap (array-of-array) that
+silently dropped template resolution on teos and other vhosts.
+The bbsengine4.php fallback `getsmarty()` is also gone (was
+reachable only when no other wrapper existed, but always did).
+All 19 callers in `post.php` / `login.php` / `register.php` /
+`archive.php` / `bbsengine4.php` updated to
+`\bbsengine6\getsmarty()` directly.
+
+**`\zoid6\getsmarty()` wrapper deleted (`zoid6/php/zoid6.php`).**
+It had zero callers in the codebase and referenced `_getsmarty`,
+a function not defined in zoid6 (broken in isolation). The dead
+commented-out `getsmarty()` block in
+`zoid6/sites/www/php/lib.php` is also removed.
+
+**Handbook vhost (`bbsengine6/www/org/config-prod.php`).**
+Two pre-existing bugs fixed as side-effects of the refactor:
+
+1. The handbook's `htaccess-prod:6` sets `TEOSDIR` (no
+   underscore) but `config-prod.php:12` (pre-refactor) read
+   `TEOS_DIR` (with underscore). The env var name is now
+   read correctly (`TEOSDIR` first, `TEOS_DIR` as legacy
+   fallback).
+2. `config\SMARTYTEMPLATESDIR` index 1 is now
+   `\config\SHAREDTMPLDIR` instead of `$bbsengine_root."/skin/tmpl/"`.
+   The trailing `bbsengine6/skin/tmpl/` entry is removed
+   (auto-appended by `bbsengine6config.php`). The teos-dir
+   entry is removed from this vhost (now supplied by the
+   teos hook when teos is loaded). **Semantic change:**
+   index 1 shifts from `bbsengine6/skin/tmpl/` to the
+   shared dir. This aligns the handbook with the convention
+   used by every other zoid6 consumer (bbsengine6 www/com,
+   teos, achilles, asimov, murdermotel, zoid6 www/engine).
+   `test_smarty_paths.sh` confirms common templates
+   (`pageheader.tmpl`, `blurb.tmpl`, `breadcrumbs.tmpl`)
+   still resolve in both the teos and handbook vhosts.
+
+**New test (`php/test_smarty_templatedirs.php`).**
+16 cases covering: namespaced-array normalization, scalar-string
+coercion, array-of-array flattening, dedup, slash-normalization,
+bare-vs-namespaced constant recognition, hook consultation,
+engine-fallback-last guarantee, deferred validation (throw at
+getsmarty, no throw at config-load), non-array/non-string/relative
+input rejection, SHAREDTMPLDIR default, and a `_getsmarty()`
+cleanup audit (grep ensures no live references remain after
+the C4/C5 deletions).
+
+**Files modified.**
+
+| Repo | File | Change |
+|---|---|---|
+| bbsengine6 | `php/bbsengine6config.php` | SHAREDTMPLDIR default; templatedirs\normalize() + extra_dirs() + hook dispatcher; SMARTYTEMPLATESDIR/PLUGINSDIR normalization moved to runtime |
+| bbsengine6 | `php/engine.php` | getsmarty() simplified; deferred validation; type/absoluteness input checks; engine plugin-dir auto-append |
+| bbsengine6 | `php/test_smarty_templatedirs.php` | New file (16 test cases) |
+| bbsengine6 | `www/org/php/bbsengine4.php` | Delete _getsmarty() (113-192) + fallback getsmarty() (194-209); 9 callsite updates |
+| bbsengine6 | `www/org/php/bbsenginedotorg.php` | Delete legacy getsmarty() wrapper (lines 263-277) |
+| bbsengine6 | `www/org/php/{post,login,register,archive}.php` | 10 callsites: `getsmarty()` -> `\bbsengine6\getsmarty()` |
+| bbsengine6 | `www/org/config-prod.php` | TEOSDIR env var fix; simplified SMARTYTEMPLATESDIR (2 entries + engine auto-append); use SHAREDTMPLDIR |
+| bbsengine6 | `www/com/config-prod.php` | Simplified SMARTYTEMPLATESDIR (2 entries); use SHAREDTMPLDIR; drop redundant global-alias defines |
+| bbsengine6 | `CHANGELOG.md` | This entry |
+| teos | `www/config-prod.php` | New hook: `\bbsengine6\templatedirs\hook_extra_dirs()`; simplified SMARTYTEMPLATESDIR (2 entries + engine auto-append); use SHAREDTMPLDIR |
+| achilles | `www/config-prod.php` | Simplified SMARTYTEMPLATESDIR; use SHAREDTMPLDIR |
+| asimov | `www/config-prod.php` | Simplified SMARTYTEMPLATESDIR (dedup'd duplicate shared entry); use SHAREDTMPLDIR |
+| murdermotel | `www/config-prod.php` | Simplified SMARTYTEMPLATESDIR (dedup'd duplicate shared entry); use SHAREDTMPLDIR |
+| zoid6 | `sites/www/config-prod.php` | Simplified SMARTYTEMPLATESDIR (dedup'd duplicate shared entry); use SHAREDTMPLDIR; removed duplicate ENGINEURL/etc block |
+| zoid6 | `sites/www/config.php` | Same as config-prod.php |
+| zoid6 | `sites/www/config-dev.php` | Same as config-prod.php |
+| zoid6 | `sites/engine/config-prod.php` | Simplified SMARTYTEMPLATESDIR; use SHAREDTMPLDIR; add bbsengine6config.php require |
+| zoid6 | `sites/engine/html/config.php` | Same as config-prod.php |
+| zoid6 | `php/zoid6.php` | Delete `\zoid6\getsmarty()` wrapper (unused) |
+| zoid6 | `sites/www/php/lib.php` | Delete dead commented-out getsmarty() block |
+
+**Deploy.** Sandbox can't write to `/srv/www/...` directly. The
+deploy script (`scripts/deploy_bbsengine6config_fix.sh` in the
+meta-repo) needs to land the modified files on merlin. Sandbox
+verification ran `test_smarty_templatedirs.php` (16/16 pass),
+`test_smarty_pluginsdir.php` (8/8 pass), `test_checkflag_graceful.sh`
+(10/10 pass), and `test_smarty_paths.sh` against deployed vhost
+configs (13/13 pass). Live HTTP tests against bbsengine.org
+require the deploy and were not run from the sandbox.
+
 ### fix(bbsengine6): bbsengine6config.php + menu extension point + drop zoid6 hard-require
 
 Three compounding fixes that unblock the `errormessage.tmpl`
