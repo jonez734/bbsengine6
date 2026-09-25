@@ -261,20 +261,15 @@ function accessfile($op, $file=null, $uid=null)
 }
 
 /** 
- * local version of getsmarty() that sets up plugin dirs, template dirs, etc
- *
- * @since 20140710
+ * @since 20140710 — legacy local getsmarty() wrapper removed when
+ * bbsengine6\getsmarty() became canonical. The wrapper did
+ *   $options["templatedir"] = array(SMARTYTEMPLATESDIR);
+ * which wrapped an already-array constant inside another array
+ * (array-of-array). Smarty's setTemplateDir() flattened that to
+ * a single-entry list whose only entry was itself an array of
+ * paths, silently dropping template resolution. Callers updated
+ * to \bbsengine6\getsmarty() directly.
  */
-function getsmarty($options=null)
-{
-  $options = array();
-  $options["pluginsdir"] = array(SMARTYPLUGINSDIR); //, "/srv/www/zoidweb2/smarty/");
-  $options["templatedir"] = array(SMARTYTEMPLATESDIR); // , "/srv/www/zoidweb2/skin/tmpl/");
-  $options["compiledir"] = SMARTYCOMPILEDTEMPLATESDIR;
-  $options["compileid"] = LOGENTRYPREFIX;
-//  logentry("getsmarty.100: options=".var_export($options, True));
-  return _getsmarty($options);
-}
 
 function buildsidebarmenu()
 {
