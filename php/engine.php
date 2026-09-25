@@ -368,22 +368,85 @@ function accessfortune($op, $data=null, $memberid=null)
 function getsmarty($options=null)
 {
   $options = $options ?? [];
-  $options["pluginsdir"] = $options["pluginsdir"] ?? (defined('\config\SMARTYPLUGINSDIR') ? \config\SMARTYPLUGINSDIR : []);
-  $bbsengine6smarty = "/srv/www/bbsengine6/smarty/";
-  if (is_array($options["pluginsdir"]) && !in_array($bbsengine6smarty, $options["pluginsdir"])) {
-      $options["pluginsdir"][] = $bbsengine6smarty;
+
+  // Templatedir resolution: caller override wins; otherwise
+  // normalize \config\SMARTYTEMPLATESDIR (which is vhost-supplied).
+  if (!isset($options["templatedir"])) {
+    if (!defined('\config\SMARTYTEMPLATESDIR')) {
+      throw new \RuntimeException(
+        "bbsengine6\\getsmarty(): SMARTYTEMPLATESDIR is not configured. "
+        . "Define config\\SMARTYTEMPLATESDIR (array of template dirs) "
+        . "in your vhost config.php before requiring bbsengine6config.php, "
+        . "or pass templatedir explicitly via \$options."
+      );
+    }
+    $normalizedTmpl = \bbsengine6\templatedirs\normalize(\config\SMARTYTEMPLATESDIR);
+    if (count($normalizedTmpl) === 0) {
+      throw new \RuntimeException(
+        "bbsengine6\\getsmarty(): SMARTYTEMPLATESDIR is empty after normalization."
+      );
+    }
+    $options["templatedir"] = $normalizedTmpl;
   }
-  $options["templatedir"] = $options["templatedir"] ?? (defined('\config\SMARTYTEMPLATESDIR') ? \config\SMARTYTEMPLATESDIR : []);
-  $options["compiledir"] = $options["compiledir"] ?? (defined('\config\SMARTYCOMPILEDTEMPLATESDIR') ? \config\SMARTYCOMPILEDTEMPLATESDIR : null);
-  $options["escapehtml"] = $options["escapehtml"] ?? true;
-  $baseCompileId = $options["compileid"] ?? (defined('\config\LOGENTRYPREFIX') ? \config\LOGENTRYPREFIX : 'bbsengine6');
-  $options["compileid"] = $baseCompileId . ($options["escapehtml"] ? '' : '-noescape');
+
+  $options["pluginsdir"]  ??= \config\SMARTYPLUGINSDIR;
+  // Auto-append engine plugin dir (bbsengine6/smarty/) if not
+  // present, so vhosts don't need to repeat the path.
+  if (is_array($options["pluginsdir"])) {
+      $enginePlug = dirname(__DIR__) === '/srv/www/bbsengine6/php'
+          ? '/srv/www/bbsengine6/smarty/'
+          : rtrim(dirname(__DIR__), '/') . '/smarty/';
+      if (!in_array($enginePlug, $options["pluginsdir"], true)) {
+          $options["pluginsdir"][] = $enginePlug;
+      }
+  }
+  $options["compiledir"]  ??= \config\SMARTYCOMPILEDTEMPLATESDIR;
+  $options["escapehtml"]  ??= true;
+  $options["compileid"]   ??= \config\LOGENTRYPREFIX
+                            . ($options["escapehtml"] ? '' : '-noescape');
+
+  // Input validation: type + absoluteness checks before
+  // Smarty's setTemplateDir/addPluginsDir silently accepts
+  // garbage (Smarty itself doesn't validate these).
+  foreach (["templatedir", "pluginsdir"] as $key) {
+    if (!is_array($options[$key])) {
+      throw new \RuntimeException(
+        "bbsengine6\\getsmarty(): " . ucfirst($key)
+        . " must be an array of strings; got "
+        . gettype($options[$key]) . "."
+      );
+    }
+    foreach ($options[$key] as $i => $p) {
+      if (!is_string($p)) {
+        throw new \RuntimeException(
+          "bbsengine6\\getsmarty(): " . ucfirst($key) . "[$i] "
+          . "must be a string; got " . gettype($p) . "."
+        );
+      }
+      if ($p !== "" && $p[0] !== "/") {
+        throw new \RuntimeException(
+          "bbsengine6\\getsmarty(): " . ucfirst($key) . "[$i] "
+          . "must be an absolute path (got '$p')."
+        );
+      }
+    }
+  }
 
   util\logentry("getsmarty.100: options=".var_export($options, true));
 
   $s = new \Smarty();
   umask(0002);
   $s->setEscapeHtml($options["escapehtml"]);
+  $s->setTemplateDir($options["templatedir"]);
+  $s->addPluginsDir($options["pluginsdir"]);
+  $s->setCompileDir($options["compiledir"]);
+  $s->compile_id = $options["compileid"];
+
+  if (isset($options["vars"]) && is_array($options["vars"])) {
+    foreach ($options["vars"] as $k => $v) {
+      $s->assign($k, $v);
+    }
+  }
 
 /*
   $currentcart = [];
@@ -391,34 +454,6 @@ function getsmarty($options=null)
   $currentcart["itemcount"] = 0;
 */
 //  $s->assign("currentcart", $currentcart); // getcurrentcart());
-
-  if (is_array($options))
-  {
-    if (array_key_exists("templatedir", $options) === true)
-    {
-      $s->setTemplateDir($options["templatedir"]);
-    }
-    if (array_key_exists("pluginsdir", $options) === true)
-    {
-      // \bbsengine6\logentry("pluginsdir=".var_export($options["pluginsdir"]));
-      $s->addPluginsDir($options["pluginsdir"]);
-    }
-    if (array_key_exists("compiledir", $options) === true)
-    {
-      $s->setCompileDir($options["compiledir"]);
-    }
-    if (array_key_exists("compileid", $options) === true)
-    {
-      $s->compile_id = $options["compileid"];
-    }
-    if (array_key_exists("vars", $options) === true)
-    {
-      foreach ($options["vars"] as $k => $v)
-      {
-        $s->assign($k, $v);
-      }
-    }
-  }
 
   $currentmoniker = member\lib\getcurrentmoniker();
   $currentmemberid = member\lib\getcurrentid();
