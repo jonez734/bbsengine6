@@ -106,108 +106,11 @@ function getquickformrenderer($options=null)
 }
 
 /**
- * return a smarty3 template object, configured for the website
- * @param dictionary options an array of options: templatedir, pluginsdir, compiledir, compileid
- * @since 20140710
+ * @since 20140710 — legacy getsmarty/_getsmarty shims. Both were
+ * removed when bbsengine6\getsmarty() became canonical. Callers
+ * in this file updated to use \bbsengine6\getsmarty() directly
+ * (commit refactor: bare getsmarty -> \bbsengine6\getsmarty).
  */
-function _getsmarty($options=null)
-{
-//    logentry("_getsmarty.100: options=".var_export($options, True));
-    
-    $s = new Smarty();
-
-    if (defined("USESHOPPINGCART") && USESHOPPINGCART === true)
-    {
-      $s->assign("currentcart", getcurrentcart());
-    }
-
-    if (is_array($options))
-    {
-      if (array_key_exists("templatedir", $options) === true)
-      {
-        $s->setTemplateDir($options["templatedir"]);
-      }
-      if (array_key_exists("pluginsdir", $options) === true)
-      {
-        $s->addPluginsDir($options["pluginsdir"]);
-      }
-      if (array_key_exists("compiledir", $options) === true)
-      {
-        $s->compile_dir = $options["compiledir"];
-      }
-      if (array_key_exists("compileid", $options) === true)
-      {
-        $s->compile_id = $options["compileid"];
-      }
-      if (array_key_exists("vars", $options) === true)
-      {
-        foreach ($options["vars"] as $k => $v)
-        {
-          $s->assign($k, $v);
-        }
-      }
-    }
-    
-    $currentmemberid = getcurrentmemberid();
-    
-    if ($currentmemberid > 0)
-    {
-      $currentmember = getcurrentmember();
-      if (PEAR::isError($currentmember))
-      {
-        logentry("getsmarty.10: " . $currentmember->toString());
-        return PEAR::raiseError($currentmember);
-      }
-    }
-    else
-    {
-      $currentmember = [];
-      $currentmember["id"] = null;
-    }
-    $flags = getflags($currentmemberid);
-    if (PEAR::isError($flags))
-    {
-      logentry("getsmarty.42: " . $flags->toString());
-      return PEAR::raiseError($flags);
-    }
-
-    $currentmember["flags"] = $flags;
-
-    $s->assign("currentpage", getcurrentpage());
-    $s->assignByRef("currentmemberid", $currentmemberid);
-    $s->assignByRef("currentmember", $currentmember);
-    $s->assign("currentaction", getcurrentaction());
-    $s->assign("currentsite", getcurrentsite());
-    $s->assign("currentpageprotocol", getpageprotocol());
-    $s->assign("currenturi", getcurrenturi());
-    $s->assign("currentpath", getcurrentpath());
-    $s->assign("currentsig", getcurrentsig());
-    $s->assign("sitevars", getsitevars());
-
-//    logentry("getsmarty.43: currentsite=".var_export(getcurrentsite(), True));
-
-    
-//    logentry("getsmarty.44: gettemplatedir=".var_export($s->getTemplateDir(), True));
-    return $s;
-}
-
-if (function_exists("getsmarty") === False)
-{
-  /**
-   * define getsmarty() in case an upper layer did not define it
-   *
-   * @since 20140710
-   */
-  function getsmarty($options=null)
-  {
-    $options = array();
-    $options["pluginsdir"] = array(SMARTYPLUGINSDIR);
-    $options["templatedir"] = array(SMARTYTEMPLATESDIR);
-    $options["compiledir"] = SMARTYCOMPILEDTEMPLATESDIR;
-    $options["compileid"] = LOGENTRYPREFIX;
-    return _getsmarty($options);
-  }
-}
 
 /** 
  * return a configured html_page2 instance using the 'message' and 'url'
@@ -300,7 +203,7 @@ function fetcherrorpage($message)
   $page->addStyleSheet(SKINURL . "css/errormessage.css");
   $page->addBodyContent(fetchpageheader("Error"));
 
-  $s = getsmarty();
+  $s = \bbsengine6\getsmarty();
   $s->assign("message", $message);
   $page->addBodyContent($s->fetch("errormessage.tmpl"));
 
@@ -324,7 +227,7 @@ function displayerrorpage($message, $statuscode=418, $title="error", $template="
   logentry("displayerrorpage.100: message=".var_export($message, true)." statuscode=".var_export($statuscode, true));
   
 /*
-  $tmpl = getsmarty();
+  $tmpl = \bbsengine6\getsmarty();
   $tmpl->assign("message", $message);
   $tmpl->assign("statuscode", $statuscode);
   $tmpl->assign("title", $title);
@@ -360,7 +263,7 @@ function displayerrorpage($message, $statuscode=418, $title="error", $template="
 */
 function _fetchpagefooter($options=null)
 {
-  $tmpl = getsmarty();
+  $tmpl = \bbsengine6\getsmarty();
   return $tmpl->fetch("pagefooter.tmpl");
 }
 
@@ -1053,7 +956,7 @@ SQL;
  */
 function fetchmaturecontentwarning()
 {
-  $tmpl = getsmarty();
+  $tmpl = \bbsengine6\getsmarty();
   return $tmpl->fetch("maturecontentwarning.tmpl");
 }
 
@@ -1169,7 +1072,7 @@ function displaydeleteconfirmation($message, $yesuri, $yestxt, $nouri, $notxt, $
   $page = getpage($title);
   $page->addStyleSheet(SKINURL . "css/deleteconfirmation.css");
   $page->addBodyContent(fetchpageheader($title));
-  $tmpl = getsmarty();
+  $tmpl = \bbsengine6\getsmarty();
   $tmpl->assign("message", $message);
   $tmpl->assign("yesuri", $yesuri);
   $tmpl->assign("yestxt", $yestxt);
@@ -2729,7 +2632,7 @@ function handleform($form, $callback)
   $form->render($renderer);
   $rendered = $renderer->toArray();
 
-  $tmpl = getsmarty();
+  $tmpl = \bbsengine6\getsmarty();
   $tmpl->assign("form", $rendered);
 
   $bodycontent = array();
@@ -2809,7 +2712,7 @@ function setcurrentmembercredits($credits)
  */
 function _displaypage($page=null, $data=[])
 {
-  $tmpl = getsmarty();
+  $tmpl = \bbsengine6\getsmarty();
 //  $data["pagefooter"]["mantra"] = getrandommantra();
   $tmpl->assign("data", $data);
   $pagetemplate = isset($data["pagetemplate"]) ? $data["pagetemplate"] : "page.tmpl";
@@ -2909,7 +2812,7 @@ if (function_exists("displaypage") === False)
     {
       $template = isset($pagedata["template"]) ? $pagedata["template"] : "page.tmpl";
       logentry("bbsengine4.displaypage.110: using pagedata");
-      $tmpl = getsmarty();
+      $tmpl = \bbsengine6\getsmarty();
       foreach ($pagedata as $key => $value)
       {
         $tmpl->assign($key, $value);
@@ -2947,7 +2850,7 @@ function displayform($renderer, $title, $data=[])
     }
   }
 */  
-//  $tmpl = getsmarty();
+//  $tmpl = \bbsengine6\getsmarty();
 //  logentry("bbsengine4.displayform.120: assigning 'form' to template");
 //  $tmpl->assign("form", $renderer->toArray());
 
@@ -4289,7 +4192,7 @@ function _fetchsidebar($options=null)
   $sidebar = isset($options["sidebar"]) ? $options["sidebar"] : null;
   $template = isset($options["template"]) ? $options["template"] : "sidebar.tmpl";
 
-  $tmpl = getsmarty();
+  $tmpl = \bbsengine6\getsmarty();
   $tmpl->assign("sidebar", $sidebar);
   return $tmpl->fetch($template);
 }
