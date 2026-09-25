@@ -30,7 +30,7 @@ class register
         $page = getpage(SITETITLE . " - Thank you for registering");
         $page->addBodyContent(fetchheader());
 //        $page->addBodyContent(fetchsidebar());
-        $tmpl = getsmarty();
+        $tmpl = \bbsengine6\getsmarty();
         $page->addBodyContent($tmpl->fetch("thankyouforregistering.tmpl"));
         $page->addBodyContent(fetchfooter());
         $page->display();
@@ -97,7 +97,7 @@ class register
         $page->addStyleSheet(SKINURL . "css/form.css");
         $page->addBodyContent(fetchheader());
 //        $page->addBodyContent(fetchsidebar());
-        $tmpl = getsmarty();
+        $tmpl = \bbsengine6\getsmarty();
         $tmpl->assign("form", $renderer->toArray());
         $page->addBodyContent($tmpl->fetch("form.tmpl"));
         $page->display();

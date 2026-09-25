@@ -120,7 +120,7 @@ class post
 
     $page->addStyleSheet(SKINURL . "css/form.css");
     $page->addBodyContent(fetchheader());
-    $tmpl = getsmarty();
+    $tmpl = \bbsengine6\getsmarty();
     $tmpl->assign("form", $renderer->toArray());
     $page->addBodyContent($tmpl->fetch("form.tmpl"));
     $page->addBodyContent(fetchfooter());
@@ -230,7 +230,7 @@ class post
 
     $page->addStyleSheet(SKINURL . "css/form.css");
     $page->addBodyContent(fetchheader());
-    $tmpl = getsmarty();
+    $tmpl = \bbsengine6\getsmarty();
     $tmpl->assign("form", $renderer->toArray());
     $page->addBodyContent($tmpl->fetch("form.tmpl"));
     $page->addBodyContent(fetchfooter());
@@ -313,7 +313,7 @@ class post
 
     $page->addStyleSheet(SKINURL . "css/post.css");
     $page->addBodyContent(fetchheader());
-    $tmpl = getsmarty();
+    $tmpl = \bbsengine6\getsmarty();
     $tmpl->assign("post", $post);
     $page->addBodyContent($tmpl->fetch("post.tmpl"));
     $page->addBodyContent(fetchfooter());

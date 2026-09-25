@@ -62,7 +62,7 @@ SQL;
     $page->addBodyContent(fetchpageheader());
 
     $months = $year->fetchAll();
-    $tmpl = getsmarty();
+    $tmpl = \bbsengine6\getsmarty();
     $tmpl->assign("months", $res);
     $tmpl->assign("year", $y);
     $page->addBodyContent($tmpl->fetch("archive-year.tmpl"));
@@ -144,7 +144,7 @@ SQL;
 /*
     $page = getpage("bbsengine3 release archive {$heading}");
     $page->addBodyContent(fetchpageheader());
-    $tmpl = getsmarty();
+    $tmpl = \bbsengine6\getsmarty();
     $tmpl->assign("heading", $heading);
     $tmpl->assign("days", $res);
     $tmpl->assign("cal", $cal);
@@ -197,7 +197,7 @@ SQL;
     $page = getpage("bbsengine3 release archive - {$foo}");
     $page->addStyleSheet(SKINURL . "css/actions.css");
     $page->addBodyContent(fetchpageheader());
-    $tmpl = getsmarty();
+    $tmpl = \bbsengine6\getsmarty();
     $tmpl->assign("day", $foo);
     $tmpl->assign("releases", $releases);
     $page->addBodyContent($tmpl->fetch("archive-day.tmpl"));
@@ -232,7 +232,7 @@ SQL;
 /*
     $page = getpage("bbsengine4 release archive");
     $page->addBodyContent(fetchpageheader("Release Archive"));
-    $tmpl = getsmarty();
+    $tmpl = \bbsengine6\getsmarty();
     $tmpl->assign("years", $res);
     $page->addBodyContent($tmpl->fetch("archive-display.tmpl"));
     $page->addBodyContent(fetchpagefooter());

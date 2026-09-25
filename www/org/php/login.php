@@ -123,7 +123,7 @@ class login
     $renderer = new HTML_QuickForm_Renderer_Array(True);
     $form->accept($renderer);
 
-    $tmpl = getsmarty();
+    $tmpl = \bbsengine6\getsmarty();
     $tmpl->assign("form", $renderer->toArray());
     
     $page = getpage("auth");
