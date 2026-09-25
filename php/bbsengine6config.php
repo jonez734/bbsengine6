@@ -32,33 +32,52 @@ if ($bbsengine6_vhostconfig !== false) {
     require_once($bbsengine6_vhostconfig);
 }
 
-// SMARTY* defaults — only used if vhost config.php didn't define them.
-if (!defined("\config\SMARTYTEMPLATESDIR")) {
-    define("config\SMARTYTEMPLATESDIR", [
-        "/srv/www/bbsengine6/skin/tmpl/",
-    ]);
+// @since 2026-09-24 — SMARTYTEMPLATESDIR defaults. We do NOT
+// define a default here: getsmarty() throws a clear
+// RuntimeException when the vhost didn't define it. Defining
+// a default would silently hide the misconfiguration.
+// Normalization (flattening, dedup, slash-normalization, hook
+// consultation, engine-fallback append) happens in
+// \bbsengine6\templatedirs\normalize() at first getsmarty() call.
+// Mirror bare -> namespaced for vhosts that defined the legacy
+// bare form.
+if (defined("SMARTYTEMPLATESDIR") && !defined("\config\SMARTYTEMPLATESDIR")) {
+    define("config\SMARTYTEMPLATESDIR", SMARTYTEMPLATESDIR);
 }
-if (!defined("\config\SMARTYPLUGINSDIR")) {
-    define("config\SMARTYPLUGINSDIR", [
-        "/srv/www/bbsengine6/smarty/",
-    ]);
+
+// @since 2026-09-24 — SMARTYPLUGINSDIR default. Unlike
+// SMARTYTEMPLATESDIR (which has no default and triggers a
+// getsmarty() RuntimeException), SMARTYPLUGINSDIR has an
+// engine-owned default: a single-element array pointing at
+// bbsengine6/smarty/. getsmarty() appends its own engine plugin
+// dir if not present, so vhosts that don't override get a
+// working {teos} plugin out of the box.
+if (!defined("\config\SMARTYPLUGINSDIR") && !defined("SMARTYPLUGINSDIR")) {
+    $enginePlugDir = rtrim(dirname(__DIR__), '/') . '/smarty/';
+    define("config\SMARTYPLUGINSDIR", [$enginePlugDir]);
+} elseif (defined("SMARTYPLUGINSDIR") && !defined("\config\SMARTYPLUGINSDIR")) {
+    define("config\SMARTYPLUGINSDIR", SMARTYPLUGINSDIR);
 }
+
 if (!defined("\config\SMARTYCOMPILEDTEMPLATESDIR")) {
     define("config\SMARTYCOMPILEDTEMPLATESDIR", "/srv/www/bbsengine6/templates_c/");
 }
-
-// Global aliases for vhost templates that use {$SMARTYTEMPLATESDIR}
-// etc. without the smarty.const. prefix. Mirrors zoid6config.php's
-// global-alias pattern.
-if (!defined("SMARTYTEMPLATESDIR")) define("SMARTYTEMPLATESDIR", \config\SMARTYTEMPLATESDIR);
-if (!defined("SMARTYPLUGINSDIR")) define("SMARTYPLUGINSDIR", \config\SMARTYPLUGINSDIR);
-if (!defined("SMARTYCOMPILEDTEMPLATESDIR")) define("SMARTYCOMPILEDTEMPLATESDIR", \config\SMARTYCOMPILEDTEMPLATESDIR);
 
 // Shared URL/path constants — same shape as zoid6config.php.
 if (!defined("ENGINEURL")) define("ENGINEURL", "/engine/");
 if (!defined("ENGINESKINURL")) define("ENGINESKINURL", "/engine/skin/");
 if (!defined("SHAREDSKINURL")) define("SHAREDSKINURL", "/shared/skin/");
 if (!defined("STATICSKINURL")) define("STATICSKINURL", SHAREDSKINURL);
+
+// @since 2026-09-24 — single source of truth for the cross-app
+// shared tmpl path. Mirrors config\SHAREDSKINURL (URL side) and
+// config\SKINDIR (per-vhost path) patterns. Default works for
+// the zoidtechnologies.com vhost layout; vhosts with a
+// different shared-dir layout override before requiring this file.
+if (!defined("\config\SHAREDTMPLDIR")) {
+    define("config\SHAREDTMPLDIR",
+        "/srv/www/vhosts/zoidtechnologies.com/html/shared/skin/tmpl/");
+}
 
 // Database/system defaults (vhost config can override).
 if (!defined("\config\SYSTEMDSN")) {
@@ -123,6 +142,111 @@ if (function_exists('\zoid6\buildchoices')) {
     {
         return \zoid6\buildchoices($choices);
     }
+}
+
+}
+
+namespace bbsengine6\templatedirs {
+
+/**
+ * @since 2026-09-24 — extension point for consumer apps that
+ * need to contribute extra template directories to the search
+ * path. Default: returns []. Consumer apps define
+ * \bbsengine6\templatedirs\hook_extra_dirs() in their config.php
+ * (or any file required before bbsengine6config.php runs).
+ *
+ * Mirrors the bbsengine6\menu\hook_buildchoices pattern above.
+ *
+ * @return array<int, string> Absolute template dirs ending in "/".
+ */
+function extra_dirs(): array {
+    if (function_exists('\bbsengine6\templatedirs\hook_extra_dirs')) {
+        return \bbsengine6\templatedirs\hook_extra_dirs();
+    }
+    return [];
+}
+
+// @since 2026-09-24 — zoid6 hook shim (parallel to the menu
+// shim at line 121-126 above). When zoid6 is loaded, it gets a
+// chance to add its template dir to the search path.
+if (function_exists('\zoid6\templatedirs_extra')) {
+    function hook_extra_dirs(): array {
+        return \zoid6\templatedirs_extra();
+    }
+}
+
+/**
+ * @since 2026-09-24 — normalize a SMARTYTEMPLATESDIR value:
+ *   - accept array or scalar string
+ *   - flatten accidental array-of-array wrapping (legacy bug:
+ *     array(SMARTYTEMPLATESDIR) in old shims)
+ *   - validate each entry is a string (throw otherwise)
+ *   - ensure trailing "/" on each entry
+ *   - dedup (case-sensitive, assumes Linux ext4)
+ *   - run hook_extra_dirs() if defined, append hook entries
+ *   - append engine fallback (bbsengine6/skin/tmpl/) last
+ *
+ * Called by \bbsengine6\getsmarty() on every invocation.
+ * Idempotent: calling on an already-normalized list is a no-op.
+ *
+ * @param mixed $raw  The raw SMARTYTEMPLATESDIR value (array or string).
+ * @return array<int, string> Flat numeric-keyed array of absolute paths ending in "/".
+ * @throws \RuntimeException on invalid input or hook errors.
+ */
+function normalize($raw): array {
+    if (!is_array($raw) && !is_string($raw)) {
+        throw new \RuntimeException(
+            "bbsengine6\\templatedirs\\normalize: SMARTYTEMPLATESDIR must be array or string; "
+          . "got " . gettype($raw) . "."
+        );
+    }
+
+    $flat = [];
+    foreach ((array) $raw as $d) {
+        foreach ((array) $d as $dd) $flat[] = $dd;
+    }
+
+    foreach ($flat as $i => $d) {
+        if (!is_string($d)) {
+            throw new \RuntimeException(
+                "bbsengine6\\templatedirs\\normalize: SMARTYTEMPLATESDIR[$i] must be a string; "
+              . "got " . gettype($d) . "."
+            );
+        }
+    }
+
+    // array_unique uses string comparison; case-sensitivity assumes
+    // a case-sensitive filesystem (Linux ext4 — true on all our
+    // deploys).
+    $flat = array_values(array_unique(array_map(
+        fn($d) => rtrim($d, "/") . "/", $flat)));
+
+    if (function_exists('\bbsengine6\templatedirs\hook_extra_dirs')) {
+        $extras = \bbsengine6\templatedirs\hook_extra_dirs();
+        if (!is_array($extras)) {
+            throw new \RuntimeException(
+                "bbsengine6\\templatedirs\\normalize: hook_extra_dirs() "
+              . "must return an array; got " . gettype($extras) . "."
+            );
+        }
+        foreach ($extras as $d) {
+            if (!is_string($d)) {
+                throw new \RuntimeException(
+                    "bbsengine6\\templatedirs\\normalize: hook_extra_dirs() returned a non-string."
+                );
+            }
+            $d = rtrim($d, "/") . "/";
+            if (!in_array($d, $flat, true)) $flat[] = $d;
+        }
+    }
+
+    // Engine fallback always last so vhost overrides win.
+    // bbsengine6config.php lives at <engine_root>/php/, so the
+    // engine's skin/tmpl/ is one level up.
+    $engineTmpl = dirname(__DIR__) . "/skin/tmpl/";
+    if (!in_array($engineTmpl, $flat, true)) $flat[] = $engineTmpl;
+
+    return $flat;
 }
 
 }
