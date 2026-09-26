@@ -391,7 +391,6 @@ function getsmarty($options=null)
   if (!isset($options["pluginsdir"])) {
     $options["pluginsdir"] = _smarty_resolved_pluginsdir(\config\SMARTYPLUGINSDIR);
   }
-  $options["compiledir"]  ??= \config\SMARTYCOMPILEDTEMPLATESDIR;
   $options["escapehtml"]  ??= true;
   $options["compileid"]   ??= \config\LOGENTRYPREFIX
                             . ($options["escapehtml"] ? '' : '-noescape');
@@ -421,6 +420,33 @@ function getsmarty($options=null)
         );
       }
     }
+  }
+
+  // Compiledir: caller override wins. Otherwise resolve via
+  // \config\SMARTYCOMPILEDTEMPLATESDIR, throwing if the vhost
+  // never set it. Mirrors the SMARTYTEMPLATESDIR branch above
+  // (lines 378-388): deferred validation at config-load (no
+  // throw), runtime throw at first getsmarty() call. The contract
+  // change in 2026-09-26 dropped the bbsengine6 default in
+  // bbsengine6config.php so vhost configs MUST set the constant
+  // — silently committing /srv/www/bbsengine6/templates_c/ would
+  // race any vhost that defined the constant after requiring
+  // bbsengine6config.php (PHP's re-define of an existing constant
+  // is an E_NOTICE no-op).
+  //
+  // Placed AFTER the templatedir/pluginsdir input validation above
+  // so callers passing garbage templatedir still get the more
+  // specific templatedir error first (T12/T13/T14) rather than
+  // this compiledir error masking it.
+  if (!isset($options["compiledir"])) {
+    if (!defined('\config\SMARTYCOMPILEDTEMPLATESDIR')) {
+      throw new \RuntimeException(
+        "bbsengine6\\getsmarty(): SMARTYCOMPILEDTEMPLATESDIR is not configured. "
+        . "Define config\\SMARTYCOMPILEDTEMPLATESDIR (absolute path) "
+        . "in your vhost config.php, or pass compiledir explicitly via \$options."
+      );
+    }
+    $options["compiledir"] = \config\SMARTYCOMPILEDTEMPLATESDIR;
   }
 
   util\logentry("getsmarty.100: options=".var_export($options, true));

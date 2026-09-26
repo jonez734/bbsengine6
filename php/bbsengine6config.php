@@ -80,9 +80,21 @@ if (!defined("\config\SMARTYPLUGINSDIR") && !defined("SMARTYPLUGINSDIR")) {
     define("config\SMARTYPLUGINSDIR", SMARTYPLUGINSDIR);
 }
 
-if (!defined("\config\SMARTYCOMPILEDTEMPLATESDIR")) {
-    define("config\SMARTYCOMPILEDTEMPLATESDIR", "/srv/www/bbsengine6/templates_c/");
-}
+// @since 2026-09-26 — no default for SMARTYCOMPILEDTEMPLATESDIR.
+// Mirrors the no-default policy for SMARTYTEMPLATESDIR (above):
+// getsmarty() throws a clear RuntimeException when the vhost
+// didn't define it. A default here would silently commit a path
+// the web user may not be able to write to, AND would race any
+// vhost that defines the constant after requiring this file —
+// PHP's re-define of an existing constant emits E_NOTICE without
+// changing the value, so the vhost's later define would be
+// dropped on the floor. The teos/www/config-prod.php incident
+// on 2026-09-26 was exactly that: an explicit require of this
+// file (added for SHAREDTMPLDIR) ran before the vhost's own
+// SMARTYCOMPILEDTEMPLATESDIR define, and the default took over.
+// Removing the default closes the trap; vhost configs must now
+// set the constant (either before or after requiring this file;
+// both orders are safe because this file no longer touches it).
 
 // Shared URL/path constants — same shape as zoid6config.php.
 if (!defined("ENGINEURL")) define("ENGINEURL", "/engine/");
