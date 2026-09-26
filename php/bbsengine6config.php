@@ -19,6 +19,27 @@
 
 namespace bbsengine6 {
 
+// @since 2026-09-26 — moved \\config\\SHAREDTMPLDIR default
+// above the vhost auto-load below. The previous order (default
+// defined at line 77+ *after* the auto-load at line 30-33) meant
+// any vhost config.php that referenced \\config\\SHAREDTMPLDIR
+// during its own SMARTYTEMPLATESDIR define (e.g. teos/www/config
+// -prod.php:67, handbook vhost config.php:51) hit an "Undefined
+// constant" fatal — the constant was being defined AFTER the
+// vhost config had already tried to read it.
+//
+// Defining SHAREDTMPLDIR first also makes the auto-load below
+// work for vhosts that don't explicitly require bbsengine6
+// config.php (e.g. CLI test harnesses, partial deploys).
+//
+// Vhosts with a different shared-dir layout still override
+// before requiring this file (the `if (!defined(...))` guard
+// below remains in place).
+if (!defined("\\config\\SHAREDTMPLDIR")) {
+    define("config\\SHAREDTMPLDIR",
+        "/srv/www/vhosts/zoidtechnologies.com/html/shared/skin/tmpl/");
+}
+
 // Vhost-specific overrides win. Bare-name resolution via include_path
 // matches the convention used by php/blurb.php's old
 // `require_once("zoid6config.php")` and the older
@@ -68,16 +89,6 @@ if (!defined("ENGINEURL")) define("ENGINEURL", "/engine/");
 if (!defined("ENGINESKINURL")) define("ENGINESKINURL", "/engine/skin/");
 if (!defined("SHAREDSKINURL")) define("SHAREDSKINURL", "/shared/skin/");
 if (!defined("STATICSKINURL")) define("STATICSKINURL", SHAREDSKINURL);
-
-// @since 2026-09-24 — single source of truth for the cross-app
-// shared tmpl path. Mirrors config\SHAREDSKINURL (URL side) and
-// config\SKINDIR (per-vhost path) patterns. Default works for
-// the zoidtechnologies.com vhost layout; vhosts with a
-// different shared-dir layout override before requiring this file.
-if (!defined("\config\SHAREDTMPLDIR")) {
-    define("config\SHAREDTMPLDIR",
-        "/srv/www/vhosts/zoidtechnologies.com/html/shared/skin/tmpl/");
-}
 
 // Database/system defaults (vhost config can override).
 if (!defined("\config\SYSTEMDSN")) {
