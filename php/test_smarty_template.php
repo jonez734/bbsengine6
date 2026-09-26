@@ -358,6 +358,7 @@ $raw = run_probe(<<<'PHP'
 error_reporting(E_ALL & ~E_DEPRECATED);
 ini_set('display_errors', '0');
 define("config\\SMARTYTEMPLATESDIR", ["/tmp/"]);
+define("config\\SMARTYCOMPILEDTEMPLATESDIR", "/tmp/test_compile_cache/");
 require_once('/home/opencode/data/work/bbsengine6/php/engine.php');
 $s = \bbsengine6\getsmarty();
 echo get_class($s);
@@ -699,6 +700,7 @@ function hook_extra_dirs(): array { return ["/from-hook/"]; }
 }
 namespace {
 define("config\\SMARTYTEMPLATESDIR", ["/vhost/"]);
+define("config\\SMARTYCOMPILEDTEMPLATESDIR", "/tmp/test_compile_cache/");
 require_once('/home/opencode/data/work/bbsengine6/php/engine.php');
 // Caller override should NOT include the hook's /from-hook/ entry.
 $result = \bbsengine6\getsmarty(["templatedir" => ["/explicit-only/"]]);
@@ -936,6 +938,72 @@ $expected = [
 if ($decoded !== $expected)
     test_fail("T39", "resolution order wrong: got=" . json_encode($decoded) . " expected=" . json_encode($expected));
 test_pass("zoid6 + teos both auto-wired at APP_INTEGRATION, in load order");
+
+// =============================================================================
+// SMARTYCOMPILEDTEMPLATESDIR MISSING-CONFIG GUARD (T40-T42)
+// =============================================================================
+// Pinned 2026-09-26 alongside the engine contract change that
+// dropped the bbsengine6 default for SMARTYCOMPILEDTEMPLATESDIR
+// and added the getsmarty() RuntimeException branch. Without
+// these tests, the original trap (vhost config defines the
+// constant AFTER require_once('bbsengine6config.php'), PHP's
+// re-define is an E_NOTICE no-op, and the vhost's path is
+// silently dropped) could regress without anyone noticing.
+
+echo "\n--- SMARTYCOMPILEDTEMPLATESDIR Missing-Config Guard ---\n\n";
+
+echo "Test 40: deferred validation (no SMARTYCOMPILEDTEMPLATESDIR, no getsmarty call)\n";
+$raw = run_probe(<<<'PHP'
+<?php
+error_reporting(E_ALL & ~E_DEPRECATED);
+ini_set('display_errors', '0');
+require_once('/home/opencode/data/work/bbsengine6/php/bbsengine6config.php');
+echo "OK_NO_THROW";
+PHP);
+if (strpos($raw, "OK_NO_THROW") === false)
+    test_fail("T40", "expected no throw on load, got: " . substr($raw, 0, 200));
+test_pass("deferred validation: no throw at config-load when SMARTYCOMPILEDTEMPLATESDIR unset");
+
+echo "Test 41: getsmarty() throws RuntimeException when SMARTYCOMPILEDTEMPLATESDIR unset\n";
+$raw = run_probe(<<<'PHP'
+<?php
+error_reporting(E_ALL & ~E_DEPRECATED);
+ini_set('display_errors', '0');
+require_once('/home/opencode/data/work/bbsengine6/php/engine.php');
+try {
+    \bbsengine6\getsmarty([
+        'templatedir' => ['/vhost/tmpl/'],
+    ]);
+    echo "NO_THROW";
+} catch (\RuntimeException $e) {
+    echo "THREW: " . $e->getMessage();
+}
+PHP);
+if (strpos($raw, "THREW") === false) test_fail("T41", "expected throw, got: " . substr($raw, 0, 200));
+if (strpos($raw, "SMARTYCOMPILEDTEMPLATESDIR is not configured") === false)
+    test_fail("T41", "error message wrong: " . substr($raw, 0, 200));
+test_pass("getsmarty() throws RuntimeException with helpful message when SMARTYCOMPILEDTEMPLATESDIR unset");
+
+echo "Test 42: vhost define wins regardless of require order (no silent override)\n";
+$raw = run_probe(<<<'PHP'
+<?php
+error_reporting(E_ALL & ~E_DEPRECATED);
+ini_set('display_errors', '0');
+define("config\\SMARTYTEMPLATESDIR", ["/vhost/tmpl/"]);
+define("config\\SMARTYCOMPILEDTEMPLATESDIR", "/srv/www/vhosts/test/templates_c/");
+require_once('/home/opencode/data/work/bbsengine6/php/engine.php');
+// No 'compiledir' in options: getsmarty must resolve from
+// \config\SMARTYCOMPILEDTEMPLATESDIR and not from any engine
+// default. The Smarty object's getCompileDir() returns the
+// resolved path; assert it matches the vhost value.
+$s = \bbsengine6\getsmarty([
+    'templatedir' => ['/vhost/tmpl/'],
+]);
+echo $s->getCompileDir();
+PHP);
+if (trim($raw) !== "/srv/www/vhosts/test/templates_c/")
+    test_fail("T42", "compiledir was not the vhost value; got: " . trim($raw));
+test_pass("vhost define wins; no silent override from engine defaults");
 
 echo "\n=== Results ===\n";
 echo "Passed: $passed\n";
