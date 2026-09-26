@@ -23,7 +23,7 @@ org:
 	# the same fix in www/org/Makefile's prod target so both
 	# entry points (`make -C www org` and `make -C www/org prod`)
 	# leave templates_c/ correctly chmod'd.
-	ssh $(ORGHOST) install -d -m 2775 -g www -o jam $(ORGSTAGE)templates_c
+	ssh $(ORGHOST) install -d -m 2775 -g www $(ORGSTAGE)templates_c
 
 remove-legacy-handbook:
 	ssh $(ORGHOST) 'cd /srv/www/vhosts/www.bbsengine.org/html/handbook/ && \

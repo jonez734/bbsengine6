@@ -25,6 +25,6 @@ prod: stage
 	# mode/group already match. Without this step the web user
 	# (cyrus, not in group www) cannot write compiled templates
 	# here and Smarty fatals with 'unable to create directory'.
-	ssh $(ORGHOST) install -d -m 2775 -g www -o jam $(ORGSTAGE)templates_c
+	ssh $(ORGHOST) install -d -m 2775 -g www $(ORGSTAGE)templates_c
 
 .PHONY: stage
