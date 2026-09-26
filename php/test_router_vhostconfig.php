@@ -8,7 +8,7 @@
  *      vhost subdirs (config.php, teos/, org/, com/, bbsengine.org/).
  *   3. Nothing resolvable -> return false; caller emits a warning.
  *
- * Style mirrors test_smarty_templatedirs.php: CLI-driven, exits 1
+ * Style mirrors test_smarty_template.php: CLI-driven, exits 1
  * on first failure. Tests run in child PHP processes so we can probe
  * different env/SCRIPT_FILENAME setups without polluting the parent.
  *

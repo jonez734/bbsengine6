@@ -1,5 +1,94 @@
 ## [Unreleased]
 
+### refactor(bbsengine6): template/plugin registries with priority enum
+
+Introduces the `\bbsengine6\template` and
+`\bbsengine6\template\plugin` namespaces (replacing the
+single-purpose `\bbsengine6\templatedirs` namespace) and a
+priority-enum registry for cross-app template/plugin-dir
+contributions. `\zoid6\template` mirrors the same shape so
+zoid6 fits cleanly into the registry when loaded.
+
+**New namespaces.** Each exposes the same shape:
+
+```
+\bbsengine6\template            \bbsengine6\template\plugin
+├── PRIORITY_APP                 ├── PRIORITY_APP
+├── PRIORITY_APP_INTEGRATION     ├── PRIORITY_APP_INTEGRATION
+├── PRIORITY_ENGINE              ├── PRIORITY_ENGINE
+├── _registry() (private)        ├── _registry() (private)
+├── register(priority, hook)     ├── register(priority, hook)
+├── extra()                      ├── extra()
+└── normalize(raw, registry,     └── normalize(raw)  [wrapper]
+    engineFallback, nsLabel)
+```
+
+The 4-arg `normalize` is the canonical body. The plugin
+namespace's `normalize` and zoid6's `\zoid6\template\normalize`
+are thin wrappers that delegate to the canonical with their
+own registry and engine-fallback path.
+
+**Resolved search order.**
+
+1. `PRIORITY_APP` — vhost's `SMARTYTEMPLATESDIR` (or
+   `SMARTYPLUGINSDIR`) array.
+2. `PRIORITY_APP_INTEGRATION` — `\zoid6\template\extra`
+   (auto-registered when zoid6 is loaded) plus any legacy
+   `\bbsengine6\template\hook_extra_dirs()` v0 hook the
+   vhost defined directly.
+3. `PRIORITY_ENGINE` — `\bbsengine6\template\extra()` returns
+   `<bbsengine6>/skin/tmpl/` for templates;
+   `\bbsengine6\template\plugin\extra()` returns
+   `<bbsengine6>/smarty/` for plugins. Self-registered.
+
+**bbsengine6 has no hard dependency on zoid6.** The
+`function_exists('\zoid6\template\extra')` check at
+`bbsengine6config.php` load time is a no-op when zoid6 is
+absent. Same opt-in pattern as the existing
+`\bbsengine6\menu\buildchoices` shim.
+
+**getsmarty() helper extraction.** The plugin-dir
+auto-append (formerly inlined in `getsmarty()` at lines
+392–402) moves into `\bbsengine6\template\plugin\normalize`
+via the `extra()` canonical. The templatedir normalize call
+moves into `_smarty_resolved_templatedir()` and
+`_smarty_resolved_pluginsdir()` helpers that memoize the
+resolved path keyed on the serialized input array. Caller
+overrides still bypass the registry walk (existing semantic
+preserved).
+
+**Tests.** `php/test_smarty_templatedirs.php` renamed to
+`php/test_smarty_template.php` (37 cases). Coverage:
+
+- T1–T14: backward-compat (rename + namespace migration).
+- T15–T16: cleanup audit (no `_getsmarty` references;
+  `getsmarty()` returns a `Smarty` instance).
+- T17–T22: priority-enum registry mechanics.
+- T23–T28: engine fallback + wrapper symmetry.
+- T29–T31: cache behavior + caller-override bypass.
+- T32–T34: API surface symmetry across the three namespaces.
+- T35–T37: error-message namespace labels.
+
+`php/test_smarty_pluginsdir.php` updated to verify the new
+registry-based plugin-dir resolution (5 cases). All 8
+pluginsdir tests + 37 template tests pass.
+
+**Files modified.**
+
+| File | Change |
+|---|---|
+| `php/bbsengine6config.php` | Replace `\bbsengine6\templatedirs` with `\bbsengine6\template` + `\bbsengine6\template\plugin` namespaces; canonical 4-arg `normalize()`; auto-wiring for v0 hook + zoid6 hook |
+| `php/engine.php` | Extract `_smarty_resolved_templatedir` and `_smarty_resolved_pluginsdir` cache helpers; inline plugin-dir enrichment removed |
+| `php/test_smarty_templatedirs.php` → `php/test_smarty_template.php` | Renamed; namespace references updated; T17–T37 added |
+| `php/test_smarty_pluginsdir.php` | Header updated; T4–T5 assertions updated to verify the new registry path |
+| `php/test_router_vhostconfig.php` | Comment reference updated |
+| `www/org/config-prod.php` | Comment updated to reference new namespace |
+| `CHANGELOG.md` | This entry |
+
+The companion change in the zoid6 submodule (adding the
+`\zoid6\template` namespace and `\zoid6\plugin_extra()`)
+lives in `zoid6/CHANGELOG.md` and is a separate commit.
+
 ### refactor(bbsengine6): SMARTYTEMPLATESDIR normalization, templatedirs hook, _getsmarty cleanup
 
 A consolidated change set that centralizes Smarty template-dir

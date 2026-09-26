@@ -1,10 +1,17 @@
 <?php
 /**
- * test_smarty_pluginsdir.php - Verifies bbsengine6/smarty/ is in SMARTYPLUGINSDIR
+ * test_smarty_pluginsdir.php — Verifies the bbsengine6/smarty/
+ * plugin-dir fallback is wired through the
+ * \bbsengine6\template\plugin registry.
  *
- * The {teos} Smarty plugin (function.teos.php) lives in bbsengine6/smarty/.
- * All sites must be able to find it via SMARTYPLUGINSDIR. This is ensured
- * centrally by zoid6config.php and bbsengine6/engine.php::getsmarty().
+ * The {teos} Smarty plugin (function.teos.php) lives in
+ * bbsengine6/smarty/. All sites must be able to find it via
+ * SMARTYPLUGINSDIR. The engine's canonical plugin-dir
+ * contribution is exposed by \bbsengine6\template\plugin\extra()
+ * (in php/bbsengine6config.php) and auto-registered at
+ * PRIORITY_ENGINE. engine.php::getsmarty() delegates to
+ * \bbsengine6\template\plugin\normalize() to materialize the
+ * final path.
  *
  * Usage:
  *   php test_smarty_pluginsdir.php
@@ -71,20 +78,24 @@ echo "\n";
 
 echo "--- engine.php Tests ---\n\n";
 
-// Test: engine.php getsmarty() ensures bbsengine6/smarty/
-echo "Test 4: engine.php getsmarty() adds bbsengine6/smarty/\n";
-$engine_src = file_get_contents("/home/opencode/data/work/bbsengine6/php/engine.php");
-if (strpos($engine_src, 'bbsengine6/smarty/') === false) {
-    test_fail("engine.php does not reference bbsengine6/smarty/");
+// Test: bbsengine6config.php exposes bbsengine6/smarty/ as the
+// engine plugin-dir fallback (formerly inlined in engine.php's
+// getsmarty(); moved into \bbsengine6\template\plugin\extra()
+// as part of the registry refactor).
+echo "Test 4: bbsengine6config.php exposes bbsengine6/smarty/ as engine plugin fallback\n";
+$config_src = file_get_contents("/home/opencode/data/work/bbsengine6/php/bbsengine6config.php");
+if (strpos($config_src, 'bbsengine6/smarty/') === false) {
+    test_fail("bbsengine6config.php does not reference bbsengine6/smarty/");
 }
-test_pass("engine.php references bbsengine6/smarty/");
+test_pass("bbsengine6config.php references bbsengine6/smarty/ as plugin fallback");
 
-// Test: engine.php does it via in_array check
-echo "Test 5: engine.php uses in_array dedup check\n";
-if (strpos($engine_src, 'in_array') === false) {
-    test_fail("engine.php does not use in_array for dedup");
+// Test: engine.php delegates plugin-dir resolution to the registry
+echo "Test 5: engine.php delegates plugin-dir resolution to registry\n";
+$engine_src = file_get_contents("/home/opencode/data/work/bbsengine6/php/engine.php");
+if (strpos($engine_src, 'bbsengine6\\template\\plugin\\normalize') === false) {
+    test_fail("engine.php does not delegate to \\bbsengine6\\template\\plugin\\normalize");
 }
-test_pass("in_array dedup check present in engine.php");
+test_pass("engine.php delegates to \\bbsengine6\\template\\plugin\\normalize");
 
 echo "\n";
 

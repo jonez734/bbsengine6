@@ -42,10 +42,11 @@ define("config\SMARTYCOMPILEDTEMPLATESDIR", \config\VHOSTDIR."templates_c");
 define("config\SMARTYPLUGINSDIR", [ 0 => \config\VHOSTDIR."smarty/"]);
 // @since 2026-09-24 — simplified: use SHAREDTMPLDIR (single
 // source of truth in bbsengine6config.php), drop trailing
-// bbsengine6/skin/tmpl/ (auto-appended by bbsengine6config.php),
-// drop the teos-dir index (now supplied by the bbsengine6
-// templatedirs hook in teos/www/config-prod.php; this vhost
-// doesn't load teos, so the hook gracefully no-ops).
+// bbsengine6/skin/tmpl/ (auto-appended as the engine fallback
+// by \bbsengine6\template\normalize), drop the teos-dir index
+// (now supplied by \bbsengine6\template\hook_extra_dirs in
+// teos/www/config-prod.php; this vhost doesn't load teos, so
+// the hook gracefully no-ops).
 define("config\SMARTYTEMPLATESDIR", [
     0 => \config\DOCUMENTROOT . "skin/tmpl/",
     1 => \config\SHAREDTMPLDIR,

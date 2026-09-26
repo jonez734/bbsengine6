@@ -370,7 +370,11 @@ function getsmarty($options=null)
   $options = $options ?? [];
 
   // Templatedir resolution: caller override wins; otherwise
-  // normalize \config\SMARTYTEMPLATESDIR (which is vhost-supplied).
+  // resolve via \bbsengine6\template\normalize, which walks the
+  // registry (vhost dirs, app-integration hooks like zoid6's
+  // template_extra, engine fallback). Caller override skips
+  // the registry walk: the override is treated as the final,
+  // complete template path. (Existing semantic preserved.)
   if (!isset($options["templatedir"])) {
     if (!defined('\config\SMARTYTEMPLATESDIR')) {
       throw new \RuntimeException(
@@ -380,25 +384,12 @@ function getsmarty($options=null)
         . "or pass templatedir explicitly via \$options."
       );
     }
-    $normalizedTmpl = \bbsengine6\templatedirs\normalize(\config\SMARTYTEMPLATESDIR);
-    if (count($normalizedTmpl) === 0) {
-      throw new \RuntimeException(
-        "bbsengine6\\getsmarty(): SMARTYTEMPLATESDIR is empty after normalization."
-      );
-    }
-    $options["templatedir"] = $normalizedTmpl;
+    $options["templatedir"] = _smarty_resolved_templatedir(\config\SMARTYTEMPLATESDIR);
   }
 
-  $options["pluginsdir"]  ??= \config\SMARTYPLUGINSDIR;
-  // Auto-append engine plugin dir (bbsengine6/smarty/) if not
-  // present, so vhosts don't need to repeat the path.
-  if (is_array($options["pluginsdir"])) {
-      $enginePlug = dirname(__DIR__) === '/srv/www/bbsengine6/php'
-          ? '/srv/www/bbsengine6/smarty/'
-          : rtrim(dirname(__DIR__), '/') . '/smarty/';
-      if (!in_array($enginePlug, $options["pluginsdir"], true)) {
-          $options["pluginsdir"][] = $enginePlug;
-      }
+  // Pluginsdir: same pattern. Caller override bypasses registry.
+  if (!isset($options["pluginsdir"])) {
+    $options["pluginsdir"] = _smarty_resolved_pluginsdir(\config\SMARTYPLUGINSDIR);
   }
   $options["compiledir"]  ??= \config\SMARTYCOMPILEDTEMPLATESDIR;
   $options["escapehtml"]  ??= true;
@@ -1513,6 +1504,44 @@ function handleform($form, $callback)
     return $page;
   }
 
+
+/**
+ * _smarty_resolved_templatedir — cache wrapper around
+ * \bbsengine6\template\normalize. The cache is request-scoped
+ * (static) and keyed on the raw input array. First call with a
+ * given input walks the registry; subsequent calls with the same
+ * input return the cached resolved list.
+ *
+ * Used by getsmarty() when the caller does not pass an explicit
+ * templatedir override.
+ */
+function _smarty_resolved_templatedir(array $raw): array {
+  static $cache = [];
+  $key = serialize($raw);
+  if (!isset($cache[$key])) {
+    $cache[$key] = \bbsengine6\template\normalize(
+      $raw,
+      \bbsengine6\template\_registry(),
+      \bbsengine6\template\extra()[0],
+      "bbsengine6\\template"
+    );
+  }
+  return $cache[$key];
+}
+
+/**
+ * _smarty_resolved_pluginsdir — symmetric cache wrapper for the
+ * plugin-dir search path. Used by getsmarty() when the caller
+ * does not pass an explicit pluginsdir override.
+ */
+function _smarty_resolved_pluginsdir(array $raw): array {
+  static $cache = [];
+  $key = serialize($raw);
+  if (!isset($cache[$key])) {
+    $cache[$key] = \bbsengine6\template\plugin\normalize($raw);
+  }
+  return $cache[$key];
+}
 
 } /* bbsengine6 namespace */
 ?>

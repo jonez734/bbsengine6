@@ -146,57 +146,107 @@ if (function_exists('\zoid6\buildchoices')) {
 
 }
 
-namespace bbsengine6\templatedirs {
-
 /**
- * @since 2026-09-24 — extension point for consumer apps that
- * need to contribute extra template directories to the search
- * path. Default: returns []. Consumer apps define
- * \bbsengine6\templatedirs\hook_extra_dirs() in their config.php
- * (or any file required before bbsengine6config.php runs).
+ * \bbsengine6\template — canonical template-dir registry and resolver.
  *
- * Mirrors the bbsengine6\menu\hook_buildchoices pattern above.
+ * Public API:
+ *   - PRIORITY_APP / PRIORITY_APP_INTEGRATION / PRIORITY_ENGINE
+ *       priority tags for register().
+ *   - register(string $priority, callable $hook): void
+ *       hook is called by normalize() in priority order; must return
+ *       an array of absolute paths ending in "/". Idempotent.
+ *       Throws RuntimeException on unknown priority (typo guard).
+ *   - extra(): array
+ *       canonical engine-level contribution:
+ *       [<bbsengine6 root>/skin/tmpl/]. Self-registered at
+ *       PRIORITY_ENGINE below.
+ *   - normalize(mixed $raw, array $registry, string $engineFallback,
+ *               string $nsLabel): array
+ *       canonical normalize. Two public wrappers (plugin\normalize,
+ *       zoid6\template\normalize) delegate here with their own
+ *       registry and engine-fallback path.
  *
- * @return array<int, string> Absolute template dirs ending in "/".
+ * Auto-wiring (in this file, below the namespace):
+ *   - \bbsengine6\template\extra is self-registered at
+ *     PRIORITY_ENGINE.
+ *   - \bbsengine6\template\hook_extra_dirs (legacy v0 single-slot
+ *     hook) is auto-registered at PRIORITY_APP_INTEGRATION if it
+ *     exists.
+ *   - \zoid6\template\extra is auto-registered at
+ *     PRIORITY_APP_INTEGRATION if it exists. zoid6 must be loaded
+ *     BEFORE this file for that hook to fire. There is no hard
+ *     dependency: bbsengine6 stays zoid6-agnostic.
+ *
+ * PRIORITY_ENGINE is reserved for the engine's own canonical
+ * extra(). Apps and vhosts register at APP or APP_INTEGRATION.
  */
-function extra_dirs(): array {
-    if (function_exists('\bbsengine6\templatedirs\hook_extra_dirs')) {
-        return \bbsengine6\templatedirs\hook_extra_dirs();
+namespace bbsengine6\template {
+
+const PRIORITY_APP             = 'app';
+const PRIORITY_APP_INTEGRATION = 'app-integration';
+const PRIORITY_ENGINE          = 'engine';
+
+static $_template_registry = null;
+function _registry(): array {
+    global $_template_registry;
+    if ($_template_registry === null) {
+        $_template_registry = [
+            PRIORITY_APP             => [],
+            PRIORITY_APP_INTEGRATION => [],
+            PRIORITY_ENGINE          => [],
+        ];
     }
-    return [];
+    return $_template_registry;
 }
 
-// @since 2026-09-24 — zoid6 hook shim (parallel to the menu
-// shim at line 121-126 above). When zoid6 is loaded, it gets a
-// chance to add its template dir to the search path.
-if (function_exists('\zoid6\templatedirs_extra')) {
-    function hook_extra_dirs(): array {
-        return \zoid6\templatedirs_extra();
+/**
+ * Register a hook at the given priority. The hook is a callable
+ * with no required arguments that returns an array of absolute
+ * paths ending in "/". Idempotent against duplicate registration
+ * of the same callable (=== comparison). Throws RuntimeException
+ * on unknown priority.
+ */
+function register(string $priority, callable $hook): void {
+    _registry();
+    global $_template_registry;
+    if (!isset($_template_registry[$priority])) {
+        throw new \RuntimeException(
+            "bbsengine6\\template\\register: unknown priority '$priority'. "
+          . "Valid: app, app-integration, engine."
+        );
+    }
+    if (!in_array($hook, $_template_registry[$priority], true)) {
+        $_template_registry[$priority][] = $hook;
     }
 }
 
 /**
- * @since 2026-09-24 — normalize a SMARTYTEMPLATESDIR value:
- *   - accept array or scalar string
- *   - flatten accidental array-of-array wrapping (legacy bug:
- *     array(SMARTYTEMPLATESDIR) in old shims)
- *   - validate each entry is a string (throw otherwise)
- *   - ensure trailing "/" on each entry
- *   - dedup (case-sensitive, assumes Linux ext4)
- *   - run hook_extra_dirs() if defined, append hook entries
- *   - append engine fallback (bbsengine6/skin/tmpl/) last
- *
- * Called by \bbsengine6\getsmarty() on every invocation.
- * Idempotent: calling on an already-normalized list is a no-op.
- *
- * @param mixed $raw  The raw SMARTYTEMPLATESDIR value (array or string).
- * @return array<int, string> Flat numeric-keyed array of absolute paths ending in "/".
- * @throws \RuntimeException on invalid input or hook errors.
+ * Canonical engine-level template-dir contribution.
+ * Self-registered at PRIORITY_ENGINE in this file.
  */
-function normalize($raw): array {
+function extra(): array {
+    return [dirname(__DIR__) . "/skin/tmpl/"];
+}
+
+/**
+ * Canonical normalize body. The 4-arg signature is internal; the
+ * public-facing wrappers (\bbsengine6\template\plugin\normalize,
+ * \zoid6\template\normalize) call this with their own registry
+ * and engine-fallback path.
+ *
+ * Resolution order:
+ *   1. Flatten + dedup + slash-normalize $raw.
+ *   2. Iterate registry by priority [APP, APP_INTEGRATION, ENGINE].
+ *      Each hook's returned dirs are validated, deduped, and
+ *      appended.
+ *   3. The supplied $engineFallback is injected as a synthetic
+ *      hook at PRIORITY_ENGINE if not already present, so the
+ *      engine fallback always appears last.
+ */
+function normalize(mixed $raw, array $registry, string $engineFallback, string $nsLabel): array {
     if (!is_array($raw) && !is_string($raw)) {
         throw new \RuntimeException(
-            "bbsengine6\\templatedirs\\normalize: SMARTYTEMPLATESDIR must be array or string; "
+            "$nsLabel\\normalize: input must be array or string; "
           . "got " . gettype($raw) . "."
         );
     }
@@ -209,45 +259,150 @@ function normalize($raw): array {
     foreach ($flat as $i => $d) {
         if (!is_string($d)) {
             throw new \RuntimeException(
-                "bbsengine6\\templatedirs\\normalize: SMARTYTEMPLATESDIR[$i] must be a string; "
+                "$nsLabel\\normalize: input[$i] must be a string; "
               . "got " . gettype($d) . "."
             );
         }
     }
 
-    // array_unique uses string comparison; case-sensitivity assumes
-    // a case-sensitive filesystem (Linux ext4 — true on all our
-    // deploys).
     $flat = array_values(array_unique(array_map(
         fn($d) => rtrim($d, "/") . "/", $flat)));
 
-    if (function_exists('\bbsengine6\templatedirs\hook_extra_dirs')) {
-        $extras = \bbsengine6\templatedirs\hook_extra_dirs();
-        if (!is_array($extras)) {
-            throw new \RuntimeException(
-                "bbsengine6\\templatedirs\\normalize: hook_extra_dirs() "
-              . "must return an array; got " . gettype($extras) . "."
-            );
-        }
-        foreach ($extras as $d) {
-            if (!is_string($d)) {
-                throw new \RuntimeException(
-                    "bbsengine6\\templatedirs\\normalize: hook_extra_dirs() returned a non-string."
-                );
-            }
-            $d = rtrim($d, "/") . "/";
-            if (!in_array($d, $flat, true)) $flat[] = $d;
-        }
+    $effective = $registry;
+    $engineHook = fn() => [$engineFallback];
+    if (!isset($effective[PRIORITY_ENGINE])) {
+        $effective[PRIORITY_ENGINE] = [];
+    }
+    if (!in_array($engineHook, $effective[PRIORITY_ENGINE], true)) {
+        $effective[PRIORITY_ENGINE][] = $engineHook;
     }
 
-    // Engine fallback always last so vhost overrides win.
-    // bbsengine6config.php lives at <engine_root>/php/, so the
-    // engine's skin/tmpl/ is one level up.
-    $engineTmpl = dirname(__DIR__) . "/skin/tmpl/";
-    if (!in_array($engineTmpl, $flat, true)) $flat[] = $engineTmpl;
+    foreach ([PRIORITY_APP, PRIORITY_APP_INTEGRATION, PRIORITY_ENGINE] as $priority) {
+        foreach ($effective[$priority] ?? [] as $hook) {
+            $r = $hook();
+            if (!is_array($r)) {
+                throw new \RuntimeException(
+                    "$nsLabel\\normalize: hook returned non-array."
+                );
+            }
+            foreach ($r as $j => $d) {
+                if (!is_string($d)) {
+                    throw new \RuntimeException(
+                        "$nsLabel\\normalize: hook returned non-string entry[$j]."
+                    );
+                }
+                $d = rtrim($d, "/") . "/";
+                if (!in_array($d, $flat, true)) $flat[] = $d;
+            }
+        }
+    }
 
     return $flat;
 }
 
+// Self-bootstrap: engine registers its own canonical contribution.
+\bbsengine6\template\register(
+    \bbsengine6\template\PRIORITY_ENGINE,
+    '\bbsengine6\template\extra'
+);
+
+// v0 back-compat: auto-register the legacy single-slot hook if a
+// vhost defined it directly in this namespace. (e.g. teos/www/
+// config-prod.php originally defined
+// \bbsengine6\templatedirs\hook_extra_dirs(); after the rename to
+// \bbsengine6\template, that definition still works.)
+if (function_exists('\bbsengine6\template\hook_extra_dirs')) {
+    \bbsengine6\template\register(
+        \bbsengine6\template\PRIORITY_APP_INTEGRATION,
+        '\bbsengine6\template\hook_extra_dirs'
+    );
 }
+
+// Cross-app: auto-register zoid6's contribution if zoid6 is loaded.
+// bbsengine6 itself does NOT require zoid6; the function_exists
+// check is a no-op when zoid6 is absent.
+if (function_exists('\zoid6\template\extra')) {
+    \bbsengine6\template\register(
+        \bbsengine6\template\PRIORITY_APP_INTEGRATION,
+        '\zoid6\template\extra'
+    );
+}
+
+} // namespace bbsengine6\template
+
+/**
+ * \bbsengine6\template\plugin — Smarty plugin-dir registry and
+ * resolver. Mirrors \bbsengine6\template's shape; the namespace
+ * nesting reflects that plugins and templates are different
+ * things with different engine paths and different cross-app
+ * contributions, but the resolution mechanics are identical.
+ *
+ * \zoid6\plugin_extra() (in the root \zoid6 namespace) is
+ * auto-registered at PRIORITY_APP_INTEGRATION. \bbsengine6\
+ * template\plugin\extra() is the canonical engine plugin
+ * contribution, self-registered at PRIORITY_ENGINE.
+ */
+namespace bbsengine6\template\plugin {
+
+const PRIORITY_APP             = 'app';
+const PRIORITY_APP_INTEGRATION = 'app-integration';
+const PRIORITY_ENGINE          = 'engine';
+
+static $_plugin_registry = null;
+function _registry(): array {
+    global $_plugin_registry;
+    if ($_plugin_registry === null) {
+        $_plugin_registry = [
+            PRIORITY_APP             => [],
+            PRIORITY_APP_INTEGRATION => [],
+            PRIORITY_ENGINE          => [],
+        ];
+    }
+    return $_plugin_registry;
+}
+
+function register(string $priority, callable $hook): void {
+    _registry();
+    global $_plugin_registry;
+    if (!isset($_plugin_registry[$priority])) {
+        throw new \RuntimeException(
+            "bbsengine6\\template\\plugin\\register: unknown priority '$priority'. "
+          . "Valid: app, app-integration, engine."
+        );
+    }
+    if (!in_array($hook, $_plugin_registry[$priority], true)) {
+        $_plugin_registry[$priority][] = $hook;
+    }
+}
+
+function extra(): array {
+    return [dirname(__DIR__) . "/smarty/"];
+}
+
+/**
+ * Public wrapper. Delegates to \bbsengine6\template\normalize
+ * with this namespace's registry and engine-fallback path.
+ */
+function normalize(mixed $raw): array {
+    return \bbsengine6\template\normalize(
+        $raw,
+        \bbsengine6\template\plugin\_registry(),
+        \bbsengine6\template\plugin\extra()[0],
+        "bbsengine6\\template\\plugin"
+    );
+}
+
+\bbsengine6\template\plugin\register(
+    \bbsengine6\template\plugin\PRIORITY_ENGINE,
+    '\bbsengine6\template\plugin\extra'
+);
+
+if (function_exists('\zoid6\plugin_extra')) {
+    \bbsengine6\template\plugin\register(
+        \bbsengine6\template\plugin\PRIORITY_APP_INTEGRATION,
+        '\zoid6\plugin_extra'
+    );
+}
+
+} // namespace bbsengine6\template\plugin
 ?>
