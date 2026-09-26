@@ -863,6 +863,80 @@ if (strpos($raw, "unknown priority") === false)
     test_fail("T37", "error message should mention 'unknown priority', got: " . substr($raw, 0, 200));
 test_pass("zoid6 register() typo-guards on unknown priority");
 
+// =============================================================================
+// TEOS APP INTEGRATION (T38-T39)
+// =============================================================================
+
+echo "\n--- Teos App Integration ---\n\n";
+
+echo "Test 38: \\bbsengine6\\template auto-registers \\teos\\template\\extra at APP_INTEGRATION\n";
+// Define a stub \teos\template\extra BEFORE requiring
+// bbsengine6config.php so the auto-registration fires. In the
+// real deploy, teos/www/php/teos_template.php provides this
+// function and is loaded by teos's www/config-prod.php after
+// zoid6config.php. The stub here returns a fixed path so we can
+// assert its position in the resolved array.
+$raw = run_probe(<<<'PHP'
+<?php
+declare(strict_types=1);
+namespace teos\template {
+function extra(): array { return ["/srv/www/vhosts/zoidtechnologies.com/html/teos/skin/tmpl/"]; }
+}
+namespace {
+define("config\\SMARTYTEMPLATESDIR", ["/vhost/"]);
+require_once('/home/opencode/data/work/bbsengine6/php/bbsengine6config.php');
+$result = \bbsengine6\template\normalize(
+    \config\SMARTYTEMPLATESDIR,
+    \bbsengine6\template\_registry(),
+    \bbsengine6\template\extra()[0],
+    "bbsengine6\\template"
+);
+echo json_encode($result);
+}
+PHP);
+$decoded = json_decode($raw, true);
+if (!is_array($decoded)) test_fail("T38", "subtest invalid: " . substr($raw, 0, 200));
+$found = false;
+foreach ($decoded as $d) {
+    if ($d === "/srv/www/vhosts/zoidtechnologies.com/html/teos/skin/tmpl/") $found = true;
+}
+if (!$found) test_fail("T38", "teos template_extra not in resolved path: " . json_encode($decoded));
+test_pass("teos template_extra() auto-registered at APP_INTEGRATION");
+
+echo "Test 39: zoid6 and teos both auto-wired, resolution order is APP -> APP_INTEGRATION (zoid6, then teos) -> ENGINE\n";
+$raw = run_probe(<<<'PHP'
+<?php
+declare(strict_types=1);
+namespace zoid6\template {
+function extra(): array { return ["/srv/www/zoid6/shared/skin/tmpl/"]; }
+}
+namespace teos\template {
+function extra(): array { return ["/srv/www/vhosts/zoidtechnologies.com/html/teos/skin/tmpl/"]; }
+}
+namespace {
+define("config\\SMARTYTEMPLATESDIR", ["/vhost/skin/tmpl/"]);
+require_once('/home/opencode/data/work/bbsengine6/php/bbsengine6config.php');
+$result = \bbsengine6\template\normalize(
+    \config\SMARTYTEMPLATESDIR,
+    \bbsengine6\template\_registry(),
+    \bbsengine6\template\extra()[0],
+    "bbsengine6\\template"
+);
+echo json_encode($result);
+}
+PHP);
+$decoded = json_decode($raw, true);
+if (!is_array($decoded)) test_fail("T39", "subtest invalid: " . substr($raw, 0, 200));
+$expected = [
+    "/vhost/skin/tmpl/",
+    "/srv/www/zoid6/shared/skin/tmpl/",
+    "/srv/www/vhosts/zoidtechnologies.com/html/teos/skin/tmpl/",
+    "/home/opencode/data/work/bbsengine6/skin/tmpl/",
+];
+if ($decoded !== $expected)
+    test_fail("T39", "resolution order wrong: got=" . json_encode($decoded) . " expected=" . json_encode($expected));
+test_pass("zoid6 + teos both auto-wired at APP_INTEGRATION, in load order");
+
 echo "\n=== Results ===\n";
 echo "Passed: $passed\n";
 echo "Failed: $failed\n";
