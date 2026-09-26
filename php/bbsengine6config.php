@@ -328,6 +328,22 @@ if (function_exists('\zoid6\template\extra')) {
     );
 }
 
+// Cross-app: auto-register teos's contribution if teos is loaded.
+// bbsengine6 itself does NOT require teos; the function_exists
+// check is a no-op when teos is absent. teos's www/config-prod.php
+// loads www/php/teos_template.php (which defines \teos\template\extra)
+// after zoid6config.php, so this block fires whenever the teos
+// vhost config is on the load path. The hook gracefully returns []
+// when TEOSDIR is unset or when <TEOSDIR>/skin/tmpl/ doesn't exist
+// (e.g. the handbook vhost at www.bbsengine.org sets TEOSDIR to a
+// markdown root with no skin/tmpl/ subdir).
+if (function_exists('\teos\template\extra')) {
+    \bbsengine6\template\register(
+        \bbsengine6\template\PRIORITY_APP_INTEGRATION,
+        '\teos\template\extra'
+    );
+}
+
 } // namespace bbsengine6\template
 
 /**
