@@ -28,6 +28,17 @@ define("DOCUMENTROOT", VHOSTDIR . "html/");
 
 define("ZOIDWEBDIR", "/srv/www/zoid6/");
 
+// @since 2026-09-26 — define SMARTYCOMPILEDTEMPLATESDIR BEFORE
+// requiring bbsengine6config.php. As of the 2026-09-26 engine
+// contract change, bbsengine6config.php no longer defines a
+// default for \\config\\SMARTYCOMPILEDTEMPLATESDIR — getsmarty()
+// throws RuntimeException when it's unset. Defining here ensures
+// the vhost's path wins regardless of any require order. (The
+// bare-name alias at the bottom of this file also still works
+// correctly because \\config\\SMARTYCOMPILEDTEMPLATESDIR is
+// defined by the time the alias runs.)
+define("config\SMARTYCOMPILEDTEMPLATESDIR", VHOSTDIR . "templates_c");
+
 // @since 2026-09-24 — load bbsengine6config.php FIRST to pick up
 // config\SHAREDTMPLDIR (single source of truth for the cross-app
 // shared tmpl path) before the SMARTY* defines that reference it.
@@ -40,7 +51,6 @@ define("config\SMARTYTEMPLATESDIR", [
     1 => \config\SHAREDTMPLDIR,
 ]);
 define("config\SMARTYPLUGINSDIR", [ 0 => VHOSTDIR . "smarty/" ]);
-define("config\SMARTYCOMPILEDTEMPLATESDIR", VHOSTDIR . "templates_c");
 
 // Global aliases for templates that use {$smarty.const.SMARTYTEMPLATESDIR}
 // without the namespaced prefix. Set post-normalization.
