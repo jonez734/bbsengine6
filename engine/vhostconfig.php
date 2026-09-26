@@ -31,6 +31,8 @@
 
 namespace bbsengine6\router;
 
+require_once("util.php");
+
 /**
  * Resolve and require the vhost's config.php.
  *
@@ -40,7 +42,10 @@ namespace bbsengine6\router;
 function router_resolve_vhost_config(): string|false
 {
     // 1. VHOSTCONFIG env var (preferred; set by htaccess-prod).
-    $envConfig = getenv('VHOSTCONFIG');
+    $envConfig = \bbsengine6\util\env('VHOSTCONFIG', "NEEDINFO.VHOSTCONFIG.router_resolve_vhost_config");
+
+    \bbsengine6\util\logentry("engine.router.router_resolve_vhost_config.100: envconfig=".var_export($envconfig, true));
+
     if (is_string($envConfig) && $envConfig !== '' && is_file($envConfig)) {
         require_once($envConfig);
         return $envConfig;

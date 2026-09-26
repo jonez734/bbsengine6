@@ -72,6 +72,8 @@ namespace bbsengine6\router;
 
 require_once("/srv/www/bbsengine6/php/bootstrap.php");
 
+require_once('util.php');
+
 /**
  * @since 2026-09-24 — VHOSTCONFIG resolution lives in its own file
  * (engine/vhostconfig.php) so tests can require it in isolation.
@@ -80,21 +82,9 @@ require_once("/srv/www/bbsengine6/php/bootstrap.php");
 require_once(__DIR__ . "/vhostconfig.php");
 $bbsengine6_vhostconfig_resolved = \bbsengine6\router\router_resolve_vhost_config();
 if ($bbsengine6_vhostconfig_resolved === false) {
-    // Emit a warning to stderr (visible in the apache error log)
-    // before util\logentry is available. router_log() can't be used
-    // here because it depends on util.php, which is required below.
-    @file_put_contents(
-        'php://stderr',
-        "[bbsengine6 router] WARNING: no vhost config.php resolvable. "
-      . "Set VHOSTCONFIG in htaccess-prod or ensure SCRIPT_FILENAME "
-      . "points under a vhost html/ root with config.php in a known "
-      . "subdir (config.php, teos/, org/, com/). getsmarty() will "
-      . "throw a RuntimeException on first call.\n",
-        FILE_APPEND
-    );
+    \bbsengine6\util\logentry("router.200: bbsengine6_vhostconfig_resolved=".var_export($bbsengine6_vhostconfig_resolved, true));
 }
 
-require_once('util.php');
 require_once('markdown.php');
 require_once('blurb.php');
 require_once('engine.php');
