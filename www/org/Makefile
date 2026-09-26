@@ -9,8 +9,6 @@ stage:
 	$(MAKE) -C smarty stage
 	$(MAKE) -C js stage
 
-	mkdir -p $(ORGSTAGE)templates_c/
-	touch $(ORGSTAGE)templates_c/.gitkeep
 	$(RSYNC) config-prod.php $(ORGSTAGEDOCROOT)config.php
 	-$(RSYNC) htpasswd-prod $(ORGSTAGEDOCROOT).htpasswd
 	$(RSYNC) htaccess-prod $(ORGSTAGEDOCROOT).htaccess
