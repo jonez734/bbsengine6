@@ -16,6 +16,19 @@ export RSYNC = rsync --chmod=Dg=rwxs,Fgu=rw,Fo=r --verbose \
 	--delete-after --mkpath \
 	--exclude 'captchas'
 
+# Safety: --delete-after sweeps anything on the destination that isn't in the
+# source. If the source tree is incomplete (e.g. a stray .php outside php/
+# that someone hand-dropped on the remote), this can wipe legit files.
+# RSYNC_MAX_DELETE aborts the rsync if more than N files would be deleted.
+# Default 5 catches the "stray file" case without false-positiving on
+# routine cleanup. Override on the make command line for known-bulk deletes.
+RSYNC_MAX_DELETE ?= 5
+RSYNC_CHECK_DELETE = rsync --dry-run --recursive --rsh=ssh \
+	--exclude '*~' --exclude 'captchas' \
+	--delete-after --chmod=Dg=rwxs,Fgu=rw,Fo=r \
+	--human-readable
+RSYNC_CHECK_DELETE_COUNT = grep -c '^deleting '
+
 export VERSION ?= 6
 
 # Per-vhost engine install path. Each vhost's caller overrides this.
@@ -265,7 +278,14 @@ deploy:
 	$(MAKE) php-deploy
 	mkdir -p $(ENGINESTAGE)smarty/
 	$(RSYNC) smarty/*.php $(ENGINESTAGE)smarty/
-	$(RSYNC) --no-delete-after $(ENGINESTAGE) $(ENGINEPROD)
+	@echo "Precheck: counting files --delete-after would remove at $(ENGINEPROD)..."
+	@delcnt=`$(RSYNC_CHECK_DELETE) $(ENGINESTAGE) $(ENGINEPROD) 2>&1 | $(RSYNC_CHECK_DELETE_COUNT) || true`; \
+	if [ -n "$$delcnt" ] && [ "$$delcnt" -gt $(RSYNC_MAX_DELETE) ]; then \
+		echo "ERROR: rsync --delete-after would remove $$delcnt files at $(ENGINEPROD) (limit: $(RSYNC_MAX_DELETE))." >&2; \
+		echo "Re-run with RSYNC_MAX_DELETE=$$delcnt to proceed, or audit $(ENGINESTAGE) vs $(ENGINEPROD)." >&2; \
+		exit 2; \
+	fi
+	$(RSYNC) $(ENGINESTAGE) $(ENGINEPROD)
 
 deploy-tui: build
 	$(MAKE) -C py/src deploy-tui DEPLOY_EDITABLE=$(DEPLOY_EDITABLE) DEPLOY_UPGRADE=$(DEPLOY_UPGRADE) VERSION=$(PY_VERSION) VERSION_PREFIX=$(VERSION_PREFIX)
