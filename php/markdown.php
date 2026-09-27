@@ -25,16 +25,27 @@ require_once("ParsedownExtra.php");
  *
  * Returns [$metadata, $body] where $metadata is an array of (key => string)
  * pairs and $body is the post-frontmatter content.
+ *
+ * @since 2026-09-27 — closing delimiter accepts trailing
+ * whitespace + EOF as well as whitespace + newline. Prior regex
+ * (`\n---\s*\n`) required a literal newline after the closing
+ * `---`, which rejected files where the frontmatter block ends
+ * the file without a trailing newline (`---\ntitle: foo\n---`).
+ * The new alternation `(?:\s*\n|\s*$)` accepts that case while
+ * remaining backwards-compatible with every input the previous
+ * regex accepted. Also strip `\r` from per-line values so CRLF
+ * input (`---\r\ntitle: foo\r\n---\r\nbody`) does not leak a
+ * trailing carriage return into rendered titles.
  */
 function splitFrontmatter(string $markdown): array
 {
     $metadata = [];
     $body = $markdown;
 
-    if (preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $markdown, $m)) {
+    if (preg_match('/^---\s*\n(.*?)\n---(?:\s*\n|\s*$)/s', $markdown, $m)) {
         foreach (explode("\n", $m[1]) as $line) {
             if (preg_match('/^(\w+):\s*(.*)$/', $line, $kv)) {
-                $metadata[trim($kv[1])] = trim($kv[2], "\"' ");
+                $metadata[trim($kv[1])] = trim($kv[2], "\"' \r");
             }
         }
         $body = substr($markdown, strlen($m[0]));
