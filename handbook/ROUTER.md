@@ -5,7 +5,7 @@
 The `/engine/router.php` entry point is the front door for the
 public website (`zoidtechnologies.com`, `bbsengine.org`). It maps
 clean URLs to handler functions and falls through to the
-`browse.tmpl` template.
+`folder.tmpl` template.
 
 ## Overview
 
@@ -187,7 +187,7 @@ on-disk contents with `scandir()` and turns each entry into an item
 record. The result is sorted by filename (case-insensitive) and
 then passed through `router_dedupeItems()` to collapse any
 remaining case-variant duplicates before the data is handed to the
-`browse.tmpl` template.
+`folder.tmpl` template.
 
 ### Skipping backup and junk files
 
@@ -451,7 +451,8 @@ collapses. Regression test in
       is the live file (post-deploy).
 - [ ] `TEOSFILEPATH` points at the directory that holds the on-disk
       blurbs (`/srv/www/zoid6/teos/` by default).
-- [ ] Smarty can find the `browse.tmpl` template.
+- [ ] Smarty can find the `folder.tmpl` template (ships with
+      bbsengine6/skin/tmpl/ since 2026-09-17).
 - [ ] Regression tests pass: `php test_zoidtechnologies_comp.php` (in the `teos` repo) and the manual smoke list below.
 
 ## Manual smoke test

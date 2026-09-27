@@ -1,5 +1,57 @@
 ## [Unreleased]
 
+### feat(router): use folder.tmpl for directory listings; escape yaml titles
+
+`router_displayDirectoryListing` in `engine/router.php` switched
+from `browse.tmpl` (which lived only in the zoid6/teos docroot)
+to `folder.tmpl` (which now ships in `bbsengine6/skin/tmpl/`).
+The 36-line `try`/`catch` + inline-HTML fallback that existed to
+gracefully degrade when `browse.tmpl` was missing has been
+deleted, since `folder.tmpl` is in the engine tree. The
+`$sigs`/`$currentsig` projection that fed the currentsig-shaped
+`browse.tmpl` is removed; `folder.tmpl` reads `$data.items`
+directly. If `\bbsengine6\displaypage()` is unavailable the
+function now returns a 500 via `router_handleError` rather than
+emitting bare HTML.
+
+In `router_collectDirectoryItems`, YAML-derived titles are now
+`htmlspecialchars`-escaped (with an empty/whitespace-title
+fallback to the filename). `folder.tmpl` prints
+`{$item.title}` raw, so an unescaped YAML `title:` was a stored
+XSS vector. Mirror of the existing escape in
+`php/folder.php:228` and the live blurb path at
+`php/markdown.php::splitFrontmatter` callers.
+
+### fix(markdown): splitFrontmatter accepts ---<EOF>; strip CRLF from values
+
+Loosen `\bbsengine6\markdown\splitFrontmatter`'s
+closing-delimiter regex from `\n---\s*\n` to
+`\n---(?:\s*\n|\s*$)`. Files whose frontmatter block ends at
+EOF without a trailing newline (`---\ntitle: foo\n---`) are no
+longer treated as body-only. Backwards-compatible: every input
+the previous regex accepted is still accepted.
+
+Also extend the per-line value `trim()` from `"\"' "` to
+`"\"' \r"` so CRLF input
+(`---\r\ntitle: foo\r\n---\r\nbody`) does not leak a trailing
+carriage return into rendered titles.
+
+### test(frontmatter+router): pin edge cases for splitFrontmatter and yaml title escape
+
+New `php/test_frontmatter.php` (20 cases) covers the
+splitFrontmatter regex and value handling: embedded ` ---` and
+trailing ` ----` in titles, quoted titles containing `---`,
+CRLF input, multi-line-title limitation, multi-block input,
+empty / comment-only / no-frontmatter edges, and the explicit
+rejection cases (non-whitespace garbage after closing `---`,
+leading whitespace before opening `---`, missing whitespace
+between `---` and the first key).
+
+`php/test_router.php` gains 5 cases pinning
+`router_collectDirectoryItems`' XSS-escape contract: HTML
+tags, ampersands, and quote chars are escaped; empty and
+whitespace-only titles fall back to the filename.
+
 ### refactor(bbsengine6): template/plugin registries with priority enum
 
 Introduces the `\bbsengine6\template` and
