@@ -317,7 +317,7 @@ if [ "$fail" -gt 0 ]; then
   echo "       sudo systemctl reload php-fpm   # on merlin"
   echo
   echo "  if the HTTP probe is 500 with 'Unable to load template':"
-  echo "    -- the skin/ template (e.g. browse.tmpl) is missing on"
+  echo "    -- the skin/ template (e.g. folder.tmpl) is missing on"
   echo "       merlin. Run: make skin-prod"
   echo
   echo "  if a legacy handbook artifact check (3b) returns 200:"

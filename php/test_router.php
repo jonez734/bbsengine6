@@ -478,6 +478,107 @@ if (count($crumbs_trail) === 3) {
     exit(1);
 }
 
+// =============================================================================
+// router_collectDirectoryItems — YAML frontmatter title handling (2026-09-27)
+// =============================================================================
+// folder.tmpl prints {$item.title} raw, so router_collectDirectoryItems must
+// htmlspecialchars-escape YAML-derived titles. These tests pin that contract
+// and the empty/whitespace-title fallback to the filename.
+
+function _rcfi_setup_tmpdir(): string {
+    $tmp = sys_get_temp_dir() . "/rcfi_test_" . bin2hex(random_bytes(4));
+    mkdir($tmp);
+    return $tmp;
+}
+
+function _rcdi_helper(array $files, string $uri): array {
+    $dir = _rcfi_setup_tmpdir();
+    foreach ($files as $name => $content) {
+        file_put_contents($dir . "/" . $name, $content);
+    }
+    $items = \bbsengine6\router\router_collectDirectoryItems($dir, $uri);
+    foreach ($files as $name => $_) {
+        @unlink($dir . "/" . $name);
+    }
+    @rmdir($dir);
+    return $items;
+}
+
+echo "Test 21: router_collectDirectoryItems escapes HTML in YAML title (XSS)\n";
+$items = _rcdi_helper(
+    ["xss.md" => "---\ntitle: <b>oops</b>\n---\nbody"],
+    "test"
+);
+$byFile = [];
+foreach ($items as $it) { $byFile[$it['filename']] = $it; }
+if (isset($byFile['xss.md']) && $byFile['xss.md']['title'] === '&lt;b&gt;oops&lt;/b&gt;') {
+    echo "  ✓ PASS: HTML tags in title escaped\n";
+} else {
+    echo "  ✗ FAIL: expected '&lt;b&gt;oops&lt;/b&gt;', got " .
+        var_export($byFile['xss.md']['title'] ?? '(missing)', true) . "\n";
+    exit(1);
+}
+
+echo "Test 22: router_collectDirectoryItems falls back to filename on empty title\n";
+$items = _rcdi_helper(
+    ["empty-title.md" => "---\ntitle:\n---\nbody"],
+    "test"
+);
+$byFile = [];
+foreach ($items as $it) { $byFile[$it['filename']] = $it; }
+if (isset($byFile['empty-title.md']) && $byFile['empty-title.md']['title'] === 'empty-title') {
+    echo "  ✓ PASS: empty title falls back to filename\n";
+} else {
+    echo "  ✗ FAIL: expected 'empty-title', got " .
+        var_export($byFile['empty-title.md']['title'] ?? '(missing)', true) . "\n";
+    exit(1);
+}
+
+echo "Test 23: router_collectDirectoryItems falls back to filename on whitespace-only title\n";
+$items = _rcdi_helper(
+    ["ws-title.md" => "---\ntitle:    \n---\nbody"],
+    "test"
+);
+$byFile = [];
+foreach ($items as $it) { $byFile[$it['filename']] = $it; }
+if (isset($byFile['ws-title.md']) && $byFile['ws-title.md']['title'] === 'ws-title') {
+    echo "  ✓ PASS: whitespace-only title falls back to filename\n";
+} else {
+    echo "  ✗ FAIL: expected 'ws-title', got " .
+        var_export($byFile['ws-title.md']['title'] ?? '(missing)', true) . "\n";
+    exit(1);
+}
+
+echo "Test 24: router_collectDirectoryItems escapes ampersands in YAML title\n";
+$items = _rcdi_helper(
+    ["amp.md" => "---\ntitle: real & stuff\n---\nbody"],
+    "test"
+);
+$byFile = [];
+foreach ($items as $it) { $byFile[$it['filename']] = $it; }
+if (isset($byFile['amp.md']) && $byFile['amp.md']['title'] === 'real &amp; stuff') {
+    echo "  ✓ PASS: ampersand escaped to &amp;\n";
+} else {
+    echo "  ✗ FAIL: expected 'real &amp; stuff', got " .
+        var_export($byFile['amp.md']['title'] ?? '(missing)', true) . "\n";
+    exit(1);
+}
+
+echo "Test 25: router_collectDirectoryItems strips literal quotes from YAML title\n";
+$items = _rcdi_helper(
+    ["quoted.md" => "---\ntitle: \"quoted\"\n---\nbody"],
+    "test"
+);
+$byFile = [];
+foreach ($items as $it) { $byFile[$it['filename']] = $it; }
+if (isset($byFile['quoted.md']) && $byFile['quoted.md']['title'] === 'quoted') {
+    echo "  ✓ PASS: literal quotes stripped\n";
+} else {
+    echo "  ✗ FAIL: expected 'quoted', got " .
+        var_export($byFile['quoted.md']['title'] ?? '(missing)', true) . "\n";
+    exit(1);
+}
+
 echo "\n";
 
 echo "=== All tests passed! ===\n";

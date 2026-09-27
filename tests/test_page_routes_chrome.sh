@@ -370,19 +370,20 @@ if [ "$bytes" -gt 0 ] && [ -s "$BODY_SPECS" ]; then
   else
     ok "/handbook/6/specs/ body does not contain 'Error: folder visibility check failed' (router_handleFolder completed without throwing)"
   fi
-  # Inline-list signature: the router's catch fall-through
-  # path emits '<title>specs</title>' followed by a bare
-  # '<ul><li>...</li></ul></body></html>' (no <header
-  # id="pageheader"> chrome). The styled listing uses
-  # browse.tmpl or the catch's inline fallback, but in both
-  # cases a real failure-mode marks the body with one of
-  # these markers.
+  # Inline-list signature: this was emitted by the
+  # router_displayDirectoryListing fallback path that lived
+  # until 2026-09-27. That fallback has been removed; the
+  # listing now renders through folder.tmpl via displaypage()
+  # unconditionally. The grep below is preserved as a
+  # defensive canary: if the inline-list signature ever
+  # reappears in the response body, something has reintroduced
+  # a bare-HTML fallback path.
   pageheader_count=$(grep -c -F '<header id="pageheader">' "$BODY_SPECS" 2>/dev/null | head -1)
   if [ "$pageheader_count" -ge 1 ]; then
     ok "/handbook/6/specs/ body has the pageheader chrome (not the inline-list fallback)"
   else
     if grep -qE '<html><head><title>specs</title></head><body><h1>specs</h1><ul><li><a href="[^"]*\.md">' "$BODY_SPECS" 2>/dev/null; then
-      bad "/handbook/6/specs/ body matches the inline-list-fallback signature -- catch in router_displayDirectoryListing fell through because browse.tmpl render failed; check that the leading-backslash prefix on bbsengine6\\\\displaypage() in router.php is in place, and that the page.tmpl / browse.tmpl templates are in merlin's compiled-templates cache"
+      bad "/handbook/6/specs/ body matches the inline-list-fallback signature -- the bare-HTML fallback in router_displayDirectoryListing was reintroduced; remove it and ensure folder.tmpl is in the vhost's SMARTYTEMPLATESDIR path"
     else
       bad "/handbook/6/specs/ body has no pageheader chrome but does not match the inline-list signature either -- inspect manually"
     fi
@@ -471,7 +472,7 @@ else
   #   bbsengine6\folder\isFolderVisible($uri)
   #   bbsengine6\folder\isSysop()
   #   bbsengine6\blurb\display($uri, null)
-  #   bbsengine6\displaypage([...], 'browse.tmpl')
+  #   bbsengine6\displaypage([...], 'folder.tmpl')
   missing_calls=()
   for call in 'bbsengine6\\folder\\isFolderVisible' 'bbsengine6\\folder\\isSysop' 'bbsengine6\\blurb\\display' 'bbsengine6\\displaypage\\[' 'bbsengine6\\util\\echo_traceback'; do
     # grep for the literal call (preceded by whitespace, NOT preceded by a backslash).
