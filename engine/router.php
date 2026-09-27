@@ -404,20 +404,27 @@ function router_handleMarkdown(string $uri)
   // @since 2026-09-07 — see router_handleFolder for the
   // leading-slash rationale.
   //
-  // @since 2026-09-19 — the previous version did a two-pass
-  // probe ($reluri . '.md', then bare $reluri) mirroring the
-  // .tmpl probe in router_handlePage. The .md branch was
-  // dead code: the HTTP entry-point strips a trailing ".md"
-  // once at the top of the script (preg_replace('/\.md$/',
-  // '', $path)), so by the time the dispatch loop walks
-  // handlers the URI never carries a .md suffix. Only the
-  // bare $reluri probe can match. The .tmpl branch in
-  // serve-tmpl.php is still legitimate because ".tmpl" is
-  // NOT stripped at the entry-point — htaccess rewrites
-  // bare slugs (e.g. /contact-us) into the router with no
-  // extension, so the handler has to append ".tmpl" itself.
+  // @since 2026-09-26 — restore the `.md` append on the
+  // filesystem probe. The HTTP entry-point strips a trailing
+  // ".md" from the URI once at the top of this script
+  // (preg_replace('/\.md$/', '', $path)) so the dispatch loop
+  // walks handlers with bare segments. The handler must
+  // re-append ".md" for the filesystem probe: every teos doc
+  // on disk is named `<slug>.md`, never `<slug>`. There is no
+  // extensionless-doc layout in this tree.
+  //
+  // A 2026-09-19 refactor previously dropped the `.md` append
+  // after misreading the entry-point strip as a probe strip.
+  // That commit was latent (no test pinned it; see
+  // php/test_router.php which only covers the breadcrumb
+  // helper) and only surfaced after the September TEOSDIR
+  // audit landed the correct vhost path. Mirrors
+  // engine/serve-tmpl.php's `.tmpl` probe for the page-
+  // namespace URIs, where bare slugs (e.g. /contact-us) come
+  // out of htaccess without any extension and the handler
+  // has to re-attach it before the filesystem probe.
   $reluri = ltrim($uri, '/');
-  $filepath = router_safe_path_web([$reluri], ['base_dir' => $teosdir]);
+  $filepath = router_safe_path_web([$reluri . '.md'], ['base_dir' => $teosdir]);
   if ($filepath !== false && file_exists($filepath) && is_file($filepath)) {
     // @since 2026-09-10 — same graceful-degradation wrapper as
     // router_handleBlurb / router_handleFolder: a DB failure
