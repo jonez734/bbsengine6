@@ -337,7 +337,7 @@ function router_handleBlurb(string $uri)
 function router_handleFolder(string $uri)
 {
   router_log('handleFolder: ' . $uri);
-  $teosdir = \bbsengine6\util\env("TEOSDIR", "NEEDINFO:router_handlefolder");
+  $teosdir = \bbsengine6\util\env("TEOSDIR", "NEEDINFO:router_handlefolder:teosdir");
   if ($teosdir === '') {
     router_log('TEOSDIR not configured, skipping folder handler');
     return ROUTER_NEXT;
@@ -346,12 +346,12 @@ function router_handleFolder(string $uri)
   $reluri = ltrim($uri, '/');
   $filepath = router_safe_path_web([$reluri], ['base_dir' => $teosdir]);
   if ($filepath === false) {
-    router_log('path validation failed', 'warning');
+    router_log('router_handleFolder.120: path validation failed', 'warning');
     return ROUTER_NEXT;
   }
 
   if (!is_dir($filepath)) {
-    router_log('no directory found');
+    router_log('router_handleFolder.100: no directory found');
     return ROUTER_NEXT;
   }
 
@@ -569,8 +569,17 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
       $filecontent = file_get_contents($fullpath);
       if ($filecontent !== false && strncmp($filecontent, '---', 3) === 0) {
         [$metadata, ] = \bbsengine6\markdown\splitFrontmatter($filecontent);
-        if (isset($metadata['title'])) {
-          $displayTitle = $metadata['title'];
+        // @since 2026-09-27 — escape the YAML-derived title.
+        // folder.tmpl prints {$item.title} raw, so an unescaped
+        // YAML `title: <script>...</script>` would be a stored
+        // XSS. Mirror of php/folder.php:228 and the live blurb
+        // path at php/markdown.php::splitFrontmatter callers.
+        // Trim first so an empty or whitespace-only title
+        // (`title:` / `title:   `) falls back to the filename
+        // instead of rendering a blank link.
+        $rawTitle = isset($metadata['title']) ? trim($metadata['title']) : '';
+        if ($rawTitle !== '') {
+          $displayTitle = htmlspecialchars($rawTitle, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         }
       }
       $filename = $name;
@@ -630,92 +639,47 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
 
   \bbsengine6\setcurrentpage($teosurl.$uri);
 
-  if (function_exists('\bbsengine6\displaypage')) {
-    $breadcrumbs = router_buildBreadcrumbs($uri);
-
-    $sigs = [];
-    $teosbase = rtrim($teosurl, '/');
-    foreach ($items as $item) {
-      $reluri = ltrim(substr($item['uri'], strlen($teosbase)), '/');
-      $sigs[] = [
-        'title' => $item['title'],
-        'uri' => $reluri,
-        'icon' => isset($item['is_dir']) && $item['is_dir'] ? 'fa-folder' : 'fa-file-alt',
-        'intro' => null,
-        'actions' => [],
-      ];
-    }
-
-    $currentsig = [
-      'title' => $title,
-      'uri' => $uri,
-      'intro' => null,
-      'sigs' => $sigs,
-      'links' => [],
-      'actions' => [],
-    ];
-
-    $choices = [];
-    // @since 2026-09-24 — use the canonical bbsengine6 menu
-    // extension point. bbsengine6config.php's zoid6 hook shim
-    // installs a bbsengine6\menu\hook_buildchoices() when zoid6
-    // is loaded, so existing teos-vhost cross-site menu items
-    // continue to appear.
-    try {
-      $choices = \bbsengine6\menu\buildchoices($choices);
-    } catch (\Throwable $e) {
-      router_log('bbsengine6\menu\buildchoices failed: ' . $e->getMessage(), 'warning');
-    }
-
-    // @since 2026-09-07 — graceful degradation when the
-    // `browse.tmpl` template is not available on the calling
-    // vhost. The bbsengine6/skin/tmpl/ tree ships
-    // page-markdown.tmpl (used by handleMarkdown) but not
-    // browse.tmpl -- that template lives in the zoid6/teos
-    // docroot and is not part of bbsengine6's deploy chain. On
-    // vhosts that don't share teos's template tree, Smarty
-    // raises "Unable to load template 'file:browse.tmpl'" and
-    // the directory listing fails. Catch the throwable, log
-    // it, and fall through to the inline HTML renderer
-    // (lines below) so the URL still returns 200 with a
-    // usable (un-styled) list. A future commit can ship a
-    // bbsengine6/skin/tmpl/browse.tmpl and remove the
-    // try-catch.
-    try {
-      // @since 2026-09-17 — leading-backslash namespace lookup;
-      // router.php is in `namespace bbsengine6\router;` so bare
-      // `bbsengine6\displaypage()` would resolve to the
-      // non-existent `bbsengine6\router\bbsengine6\displaypage()`.
-      // The two other displaypage() call sites in this file
-      // (router_displayMarkdownFile and the route() return)
-      // already use the leading-backslash form; this one was
-      // missed in bfaca68.
-      \bbsengine6\displaypage([
-        'title' => $title,
-        'items' => $items,
-        'uri' => $uri,
-        'hidden' => $hidden,
-        'currentsig' => $currentsig,
-        'breadcrumbs' => $breadcrumbs,
-        'choices' => $choices,
-      ], 'browse.tmpl');
-      return '';
-    } catch (\Throwable $e) {
-      router_log('browse.tmpl render failed, falling back to inline list: ' . $e->getMessage(), 'warning');
-      // fall through
-    }
+  if (!function_exists('\bbsengine6\displaypage')) {
+    router_log('displaypage unavailable; cannot render directory listing', 'error');
+    return router_handleError($uri);
   }
 
-  http_response_code(200);
-  $lock = $hidden ? ' [hidden]' : '';
-  $html = "<html><head><title>$title</title></head><body><h1>$title$lock</h1><ul>";
-  foreach ($items as $i) {
-    $s = isset($i['is_dir']) && $i['is_dir'] ? '/' : '';
-    $html .= '<li><a href="' . htmlspecialchars($i['uri']) . '">' . htmlspecialchars($i['title']) . '</a>' . $s . '</li>';
+  $breadcrumbs = router_buildBreadcrumbs($uri);
+
+  // @since 2026-09-24 — use the canonical bbsengine6 menu
+  // extension point. bbsengine6config.php's zoid6 hook shim
+  // installs a bbsengine6\menu\hook_buildchoices() when zoid6
+  // is loaded, so existing teos-vhost cross-site menu items
+  // continue to appear.
+  $choices = [];
+  try {
+    $choices = \bbsengine6\menu\buildchoices($choices);
+  } catch (\Throwable $e) {
+    router_log('bbsengine6\menu\buildchoices failed: ' . $e->getMessage(), 'warning');
   }
-  $html .= '</ul></body></html>';
-  return $html;
-  // return '<html><body><h1>' . $title . '</h1><ul>' . implode('', array_map(fn($i) => '<li>' . $i['title'] . '</li>', $items)) . '</ul></body></html>';
+
+  // @since 2026-09-27 — render the directory listing through
+  // bbsengine6/skin/tmpl/folder.tmpl (the canonical chrome'd
+  // template that ships with the engine). Prior to this commit
+  // the template name was 'browse.tmpl', which lived only in
+  // the zoid6/teos docroot and forced a try/catch + inline-HTML
+  // fallback. folder.tmpl now exists in bbsengine6's own
+  // skin/tmpl/ tree (added 2026-09-17 alongside
+  // php/folder.php::display()), so the fallback path is
+  // obsolete and has been deleted. The data shape is now the
+  // simple {title, items, uri, hidden, breadcrumbs, choices}
+  // that folder.tmpl reads directly; the previous
+  // $currentsig/$sigs projection (which existed only to feed
+  // the currentsig-shaped browse.tmpl) has been removed.
+  \bbsengine6\displaypage([
+    'title' => $title,
+    'items' => $items,
+    'uri' => $uri,
+    'hidden' => $hidden,
+    'breadcrumbs' => $breadcrumbs,
+    'choices' => $choices,
+  ], 'folder.tmpl');
+  return '';
 }
 
 function router(string $uri): ?string
