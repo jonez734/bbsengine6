@@ -787,10 +787,11 @@ function safe_path_web(array $components, array $opts = [])
         }
         // Fall back to TEOSDIR (env first, then constant) for
         // backward compat with existing vhost configs that only
-        // set TEOSDIR. The handbook/6 router entry point putenv()s
-        // TEOSDIR for the handbook tree, so any caller reaching
-        // here from /handbook/<v>/... should still see the
-        // handbook path.
+        // set TEOSDIR. The handbook vhost declares TEOSDIR via
+        // its htaccess-prod SetEnv, so any caller reaching here
+        // from /handbook/<v>/... sees the handbook path through
+        // the same getenv() chain as teos callers do -- no
+        // per-request override, no putenv() in the engine.
         $env = getenv('TEOSDIR');
         if (is_string($env) && $env !== '') {
             return rtrim($env, '/') . '/';
@@ -807,13 +808,18 @@ function safe_path_web(array $components, array $opts = [])
     /**
      * canonical vhost-polymorphic content root
      *
-     * TEOSDIR is intentionally polymorphic: router.php:577-585
-     * putenv()s it to the handbook tree root (/srv/www/vhosts/
-     * www.bbsengine.org/html/handbook/<v>/) for /handbook/<v>/
-     * requests, and leaves it at the teos docroot for /teos/
-     * requests. Callers that read files (blurb.php, folder.php,
-     * engine.php) used to repeat `defined('TEOSDIR') ? TEOSDIR :
-     * '/srv/.../zoid...'`. This helper centralizes that pattern.
+     * TEOSDIR is polymorphic across vhosts, but the polymorphism
+     * is declared at the vhost boundary -- each vhost's htaccess-
+     * prod sets TEOSDIR via SetEnv to its own content tree root
+     * (/srv/www/vhosts/zoidtechnologies.com/html/teos/ for the
+     * teos vhost, /srv/www/vhosts/www.bbsengine.org/html/handbook/
+     * <v>/ for the handbook vhost). The engine is site-agnostic:
+     * it reads TEOSDIR via \bbsengine6\util\env() and never
+     * overrides it per-request. Callers that read files
+     * (blurb.php, folder.php, engine.php) used to repeat
+     * `defined('TEOSDIR') ? TEOSDIR : '/srv/.../zoid...'`. This
+     * helper centralizes that pattern and is the canonical read
+     * for new callers.
      *
      * @since 2026-09-09
      * @return string absolute filesystem path, with trailing slash
@@ -835,11 +841,13 @@ function safe_path_web(array $components, array $opts = [])
     /**
      * canonical vhost-polymorphic content URL prefix
      *
-     * Mirror of teos_dir() for the URL prefix (TEOSURL). router.php
-     * putenv()s TEOSURL to '/handbook/<v>/' for handbook requests
-     * and '/teos/' for teos requests. engine.php's bare \TEOSURL
-     * callers used to read the constant directly, returning an
-     * empty string with a PHP notice if undefined.
+     * Mirror of teos_dir() for the URL prefix (TEOSURL). Each
+     * vhost's htaccess-prod declares its own TEOSURL via SetEnv
+     * ('/handbook/<v>/' on the handbook vhost, '/teos/' on the
+     * teos vhost). The engine reads it via \bbsengine6\util\env()
+     * and never overrides it per-request. engine.php's bare
+     * \TEOSURL callers used to read the constant directly,
+     * returning an empty string with a PHP notice if undefined.
      *
      * The default is '' (matching the bare-constant behavior) so
      * that callers which previously relied on \TEOSURL returning
@@ -873,12 +881,11 @@ function safe_path_web(array $components, array $opts = [])
      * keep the DB-driven and filesystem-driven breadcrumb paths
      * in lockstep. Default is "teos" so existing /teos/ callers
      * (and any environment that neither defines nor exports the
-     * constant) see no change. The bbsengine.org /handbook/<v>/
-     * dispatch block in engine/router.php putenv()s
-     * TEOS_LABEL="bbsengine6 handbook" for handbook requests,
-     * mirroring the pattern used for TEOSDIR/TEOSURL and the
-     * original export in the (now-deleted) www/org/php/handbook.php
-     * (commit c40c79a).
+     * constant) see no change. Each vhost's htaccess-prod
+     * declares its own TEOSLABEL via SetEnv (the .org handbook
+     * vhost sets "bbsengine6 handbook"), mirroring the pattern
+     * used for TEOSDIR/TEOSURL and the original export in the
+     * (now-deleted) www/org/php/handbook.php (commit c40c79a).
      *
      * Promoted from bbsengine6\blurb\getlabel (php/blurb.php)
      * to util so that callers outside the blurb namespace

@@ -16,9 +16,9 @@ require_once("engine.php");
  *
  * Defaults to "teos" so existing callers (and any environment that
  * neither defines nor exports the constant) see no change. The
- * handbook vhost entry point sets TEOS_LABEL="bbsengine6 handbook"
- * via putenv() before invoking the router, mirroring how TEOSURL
- * and TEOSDIR are already exported.
+ * handbook vhost declares TEOS_LABEL="bbsengine6 handbook" via
+ * its htaccess-prod SetEnv, mirroring how TEOSURL and TEOSDIR
+ * are already declared by each vhost.
  *
  * @return string The label to render for the top breadcrumb.
  */

@@ -304,9 +304,10 @@ function display($uri)
         // made handbook/<v>/<dir>/ breadcrumbs render the wrong
         // path on www.bbsengine.org (e.g. "teos/specs/auth-bank"
         // instead of "handbook/6/specs/auth-bank"). teos_url()
-        // honors the per-vhost TEOSURL env var putenv()d by
-        // engine/router.php:683/696 for /handbook/<v>/ requests,
-        // matching the directory-item URI fix on line 240.
+        // honors the per-vhost TEOSURL env var that each vhost
+        // declares in its htaccess-prod (SetEnv TEOSURL /handbook/
+        // <v>/ on .org, /teos/ on .com), matching the directory-
+        // item URI fix on line 240.
         \bbsengine6\setcurrentpage(\bbsengine6\util\teos_url() . $uri);
     }
 

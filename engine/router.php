@@ -36,10 +36,11 @@ namespace bbsengine6\router;
  *
  * Shared by both the teos/www vhost (TEOSURL=/teos/) and the handbook
  * vhost at bbsengine.org (TEOSURL=/handbook/<v>/). Each vhost's
- * htaccess-prod rewrites its URIs to /engine/router.php?uri=<rel>;
- * the HTTP entry-point at the bottom of this file detects a
- * /handbook/<v>/... URI prefix and exports TEOSURL/TEOSDIR via
- * putenv() for that vhost, then dispatches to the handlers below.
+ * htaccess-prod rewrites its URIs to /engine/router.php?uri=<rel>
+ * AND publishes TEOSURL/TEOSDIR/TEOSLABEL via SetEnv. The engine
+ * is site-agnostic: it reads those env vars via
+ * \bbsengine6\util\env() (which prefers getenv() over the constant
+ * over the empty default) and never overrides them per-request.
  * Handlers that depend on teos-only helpers (bbsengine6\blurb\*,
  * bbsengine6\folder\*) no-op to ROUTER_NEXT when those helpers are absent.
  *
@@ -183,8 +184,8 @@ function router_buildBreadcrumbs(string $uri): array
   $rootlabel = \bbsengine6\util\env("TEOSLABEL", "NEEDINFO:buildbreadcrumbs.100");
   // Root crumb: title is per-vhost via TEOSLABEL (default
   // "teos", overridden to "bbsengine6 handbook" on the .org
-  // vhost by the HTTP entry-point's putenv); the internal path
-  // identifier stays "teos" to match blurb.php's
+  // vhost by that vhost's htaccess-prod SetEnv TEOSLABEL); the
+  // internal path identifier stays "teos" to match blurb.php's
   // buildbreadcrumbs() (line 80) -- both consumers of the
   // breadcrumb list need a consistent ltree-path-rooted
   // identifier so the DB-driven and filesystem-driven paths
@@ -399,6 +400,7 @@ function router_handleMarkdown(string $uri)
 {
   router_log('handleMarkdown: ' . $uri);
   $teosdir = \bbsengine6\util\env("TEOSDIR", "NEEDINFO:router_handlemarkdown");
+  \bbsengine6\util\logentry("router_handleMarkdown.100: teosdir=".var_export($teosdir, true));
   if ($teosdir === '') return ROUTER_NEXT;
 
   // @since 2026-09-07 — see router_handleFolder for the
