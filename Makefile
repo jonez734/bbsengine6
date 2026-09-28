@@ -31,8 +31,20 @@ RSYNC_CHECK_DELETE_COUNT = grep -c '^deleting '
 
 export VERSION ?= 6
 
-# Per-vhost engine install path. Each vhost's caller overrides this.
-export ENGINESTAGEDOCROOT ?= /srv/www/vhosts/zoidtechnologies.com/html/engine/
+# Per-vhost /engine/ install path (defense in depth: matched at the parent
+# layer AND at bbsengine6/engine/Makefile:2-3 so any recipe that consumes
+# $(ENGINESTAGEDOCROOT) at this layer inherits the env-var override without
+# each call site needing its own plumbing). Caller can override three ways:
+#   1. inline (existing, used by the wwworg recipe at line 135-136):
+#        make engine-deploy-prod ENGINESTAGEDOCROOT=/srv/www/.../html/engine/
+#   2. env var (new): ENGINE_DOCROOT=/srv/www/.../html/engine/ make ...
+#                     (deploytool plumbs ENGINE_DOCROOT, see
+#                      src/deploytool/lib.py:run_make_deploy)
+#   3. file default: ENGINESTAGEDOCROOT ?= $(ENGINE_DOCROOT) (line above),
+#                    which falls through to zoidtechnologies.com if neither
+#                    inline nor env var was provided.
+export ENGINE_DOCROOT     ?= /srv/www/vhosts/zoidtechnologies.com/html/engine/
+export ENGINESTAGEDOCROOT ?= $(ENGINE_DOCROOT)
 export ENGINEPRODDOCROOT  = $(ENGINEHOST):$(ENGINESTAGEDOCROOT)
 
 PY_VERSION := $(shell date +%Y%m%d%H%M%S)

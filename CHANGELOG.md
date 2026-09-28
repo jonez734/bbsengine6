@@ -1,5 +1,50 @@
 ## [Unreleased]
 
+### feat(engine): per-vhost /engine/ install via ENGINE_DOCROOT env var
+
+`bbsengine6/engine/Makefile` and `bbsengine6/Makefile` (parent) now
+honor a `ENGINE_DOCROOT` env var so operators can stage and prod-push
+the engine entry-point PHP install onto a non-default vhost without
+patching the Makefile:
+
+```sh
+ENGINE_DOCROOT=/srv/www/vhosts/<vhost>/html/engine/ \
+  deploy bbsengine6.engine-stage
+ENGINE_DOCROOT=/srv/www/vhosts/<vhost>/html/engine/ \
+  deploy bbsengine6.engine-prod
+```
+
+When `ENGINE_DOCROOT` is unset, the existing zoidtechnologies.com
+default is preserved -- no behavior change for current callers.
+
+**Defense in depth.** `ENGINE_DOCROOT` is read by `?=` defaults at
+two layers:
+
+  - `bbsengine6/Makefile:34-40` (parent, `export`ed to sub-makes
+    so any recipe that consumes `$(ENGINESTAGEDOCROOT)` at this
+    layer -- `wwworg:`, `prod:`, the bare `deploy:` umbrella --
+    inherits the env-var override automatically).
+  - `bbsengine6/engine/Makefile:2-9` (sub-make; the engine
+    `stage:` and `deploy:` rules).
+
+Each layer chains `ENGINESTAGEDOCROOT ?= $(ENGINE_DOCROOT)` so a
+single env var flips both the local rsync destination
+(`$(ENGINESTAGEDOCROOT)`) and the merlin push destination
+(`$(ENGINEPRODDOCROOT)` = `$(ENGINEHOST):$(ENGINESTAGEDOCROOT)`).
+
+**Inline overrides still win.** Make's command-line > environment >
+file precedence is preserved, so the existing
+`bbsengine6/Makefile:135-136` `wwworg` recipe (which sets
+`ENGINESTAGEDOCROOT=/srv/www/vhosts/www.bbsengine.org/html/engine/`
+inline) keeps pointing the engine sub-make at the bbsengine.org
+vhost -- the env var only takes effect when no inline override is
+present.
+
+**Plumbing on the deploytool side** lives in
+`src/deploytool/lib.py:run_make_deploy` (set/strip block, mirroring
+the existing `DEPLOY_EDITABLE` / `DEPLOY_WITH_DEPS` / `DEPLOY_UPGRADE`
+contract). No CLI flag; env var only.
+
 ### feat(router): use folder.tmpl for directory listings; escape yaml titles
 
 `router_displayDirectoryListing` in `engine/router.php` switched
