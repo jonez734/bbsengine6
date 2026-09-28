@@ -262,8 +262,17 @@ function isBlurb($uri)
     }
 
     // 2. Fallback: check if .md file exists on disk
-    $teospath = defined('TEOSDIR') ? TEOSDIR : '/srv/www/vhosts/zoidtechnologies.com/html/teos/';
-    $mdfile = $teospath . str_replace(".", "/", $blurbid) . '.md';
+    // @since 2026-09-28 — route TEOSDIR through \bbsengine6\util\env()
+    // so the per-vhost htaccess SetEnv (or any putenv override) wins
+    // over the constant, and so we have no implicit prod-path fallback
+    // when neither is set. When TEOSDIR is unconfigured the helper
+    // returns false and the dispatch loop falls through to the next
+    // handler, matching router_handleFolder / router_handleMarkdown.
+    $teospath = \bbsengine6\util\env('TEOSDIR');
+    if (!is_string($teospath) || $teospath === '') {
+        return false;
+    }
+    $mdfile = rtrim($teospath, '/') . '/' . str_replace(".", "/", $blurbid) . '.md';
     return file_exists($mdfile);
 }
 
@@ -280,8 +289,18 @@ function display($uri, $filepath)
     $uri = preg_replace('/^teos\//', '', $uri);
     $blurbid = str_replace("/", ".", $uri);
 
-    $blurbdir = defined('TEOSDIR') ? TEOSDIR : "/srv/www/vhosts/zoidtechnologies.com/html/teos/";
-    $blurbfile = $blurbdir . $uri . ".md";
+    // @since 2026-09-28 — same env() canonicalization as isBlurb().
+    // When TEOSDIR is unconfigured we render a 404 via page\error()
+    // (rather than silently returning ROUTER_NEXT, because the
+    // router already determined isBlurb() found something and we're
+    // committed to the blurb branch now). router_handleBlurb's
+    // \Throwable catch wraps this so a render failure here still
+    // falls through gracefully.
+    $blurbdir = \bbsengine6\util\env('TEOSDIR');
+    if (!is_string($blurbdir) || $blurbdir === '') {
+        return \bbsengine6\page\error("Blurb not found: " . htmlspecialchars($uri), 404);
+    }
+    $blurbfile = rtrim($blurbdir, '/') . '/' . $uri . ".md";
 
     if (!file_exists($blurbfile)) {
         return \bbsengine6\page\error("Blurb not found: " . htmlspecialchars($blurbfile), 404);
