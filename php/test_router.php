@@ -253,6 +253,138 @@ if (!preg_match('/preg_replace\s*\(\s*[\'"]\/\\\\\.md\\\$\/[\'"]/', $router_src)
 }
 echo "  ✓ PASS: HTTP entry-point strips trailing .md before dispatch\n";
 
+// Test 6c: isBlurb() reads TEOSDIR via \bbsengine6\util\env(),
+// not via the legacy `defined('TEOSDIR') ? TEOSDIR : <hardcoded
+// fallback>` pattern. Regression guard for the 2026-09-28
+// blurb.php canonicalization (commit 03b665d).
+//
+// Pre-fix, isBlurb() read TEOSDIR via the constant-with-fallback
+// pattern, so a getenv()-only override (a vhost whose htaccess
+// set TEOSDIR via SetEnv but whose zoid6config.php wasn't loaded)
+// was silently ignored and the helper probed the hardcoded prod
+// path. Post-fix, the helper calls \bbsengine6\util\env() which
+// honors getenv() first, then the constant, then the empty
+// default — matching router_handleFolder / router_handleMarkdown.
+//
+// Source-level assertion (vs runtime): the test environment can't
+// load engine.php's PEAR/Smarty/QuickForm2 deps without a full
+// prod-like setup, so we assert against the source code instead.
+// Test 6a/6b use the same source-reading technique. A future
+// runtime test can replace this once the test env is sorted.
+echo "Test 6c: isBlurb() reads TEOSDIR via \\\\bbsengine6\\\\util\\\\env() (not via the legacy constant-with-hardcoded-fallback pattern)\n";
+$blurb_src = file_get_contents(__DIR__ . "/blurb.php");
+if (preg_match('/function\s+isBlurb\s*\([^)]*\)\s*\{(.*?)^\}/sm', $blurb_src, $m)) {
+    $body = $m[1];
+    if (!preg_match('/\\\\bbsengine6\\\\util\\\\env\s*\(\s*[\'"]TEOSDIR[\'"]\s*\)/', $body)) {
+        echo "  ✗ FAIL: isBlurb() does not call \\\\bbsengine6\\\\util\\\\env('TEOSDIR'); " .
+             "the constant-with-fallback pattern would silently miss vhost-level SetEnv overrides.\n";
+        exit(1);
+    }
+    if (preg_match('/defined\s*\(\s*[\'"]TEOSDIR[\'"]\s*\)/', $body)) {
+        echo "  ✗ FAIL: isBlurb() still uses the legacy `defined('TEOSDIR')` pattern; " .
+             "route through env() instead.\n";
+        exit(1);
+    }
+    // The hardcoded prod-path fallback is the foot-gun we're guarding
+    // against. It used to be: '/srv/www/vhosts/zoidtechnologies.com/html/teos/'
+    // If it ever sneaks back in, this assertion catches it.
+    if (preg_match('#/srv/www/vhosts/zoidtechnologies\.com/html/teos/#', $body)) {
+        echo "  ✗ FAIL: isBlurb() still hardcodes the prod teos path; " .
+             "use \\\\bbsengine6\\\\util\\\\env() with an empty default instead.\n";
+        exit(1);
+    }
+    echo "  ✓ PASS: isBlurb() routes TEOSDIR through env() with no constant-with-fallback pattern\n";
+} else {
+    echo "  ✗ FAIL: could not extract isBlurb() body\n";
+    exit(1);
+}
+
+// Test 6d: display() (the blurb renderer) reads TEOSDIR the same
+// way isBlurb() does. Symmetry guard: if either function drifts
+// back to the legacy pattern, the other still works but the
+// mismatch is a foot-gun for future callers.
+echo "Test 6d: display() reads TEOSDIR via \\\\bbsengine6\\\\util\\\\env() (symmetric with isBlurb)\n";
+if (preg_match('/function\s+display\s*\([^)]*\)\s*\{(.*?)^\}/sm', $blurb_src, $m)) {
+    $body = $m[1];
+    if (!preg_match('/\\\\bbsengine6\\\\util\\\\env\s*\(\s*[\'"]TEOSDIR[\'"]\s*\)/', $body)) {
+        echo "  ✗ FAIL: display() does not call \\\\bbsengine6\\\\util\\\\env('TEOSDIR'); " .
+             "the renderer would silently miss vhost-level SetEnv overrides.\n";
+        exit(1);
+    }
+    if (preg_match('/defined\s*\(\s*[\'"]TEOSDIR[\'"]\s*\)/', $body)) {
+        echo "  ✗ FAIL: display() still uses the legacy `defined('TEOSDIR')` pattern.\n";
+        exit(1);
+    }
+    if (preg_match('#/srv/www/vhosts/zoidtechnologies\.com/html/teos/#', $body)) {
+        echo "  ✗ FAIL: display() still hardcodes the prod teos path.\n";
+        exit(1);
+    }
+    echo "  ✓ PASS: display() routes TEOSDIR through env() with no constant-with-fallback pattern\n";
+} else {
+    echo "  ✗ FAIL: could not extract display() body\n";
+    exit(1);
+}
+
+// Test 6e: \bbsengine6\util\env() precedence. Asserts the helper
+// returns getenv() first, then the constant, then the default.
+// This is the contract every handler now relies on; pinning it
+// here so a future refactor of util.php can't silently break
+// the rest of the chain.
+//
+// We can't extract the env() function body with a simple regex
+// because the body contains nested braces that defeat lazy
+// matching. Instead, extract the body via brace counting (the
+// same shape util.php uses internally to find function ranges
+// for docblock cleanup, etc.). Then assert getenv() comes
+// before defined() in that body.
+echo "Test 6e: \\\\bbsengine6\\\\util\\\\env() precedence is getenv() > constant > default\n";
+$env_helper_src = file_get_contents(__DIR__ . "/util.php");
+$fn_pos = strpos($env_helper_src, "function env(string");
+if ($fn_pos === false) {
+    echo "  ✗ FAIL: could not find function env() in util.php\n";
+    exit(1);
+}
+$open = strpos($env_helper_src, "{", $fn_pos);
+if ($open === false) {
+    echo "  ✗ FAIL: could not find opening brace of env() in util.php\n";
+    exit(1);
+}
+// Brace-counted extraction: walk forward from the opening
+// brace, decrementing depth on `}` and incrementing on `{`,
+// stopping when depth hits 0. Skips `}` and `{` inside strings
+// by using a simple character-class match — adequate for
+// util.php's code style (no embedded `}` or `{` in string
+// literals inside env()).
+$depth = 1;
+$i = $open + 1;
+while ($i < strlen($env_helper_src) && $depth > 0) {
+    $c = $env_helper_src[$i];
+    if ($c === "{") $depth++;
+    elseif ($c === "}") $depth--;
+    $i++;
+}
+if ($depth !== 0) {
+    echo "  ✗ FAIL: brace counting did not balance inside env() body\n";
+    exit(1);
+}
+$env_body = substr($env_helper_src, $open + 1, $i - $open - 2);
+
+$getenv_pos = strpos($env_body, "getenv(\$key)");
+$defined_pos = strpos($env_body, "defined(\$key)");
+if ($getenv_pos === false) {
+    echo "  ✗ FAIL: env() does not call getenv(\$key); the vhost htaccess SetEnv contract would not be honored.\n";
+    exit(1);
+}
+if ($defined_pos === false) {
+    echo "  ✗ FAIL: env() does not fall back to defined(\$key); tests / partial-deploys would have no TEOSDIR.\n";
+    exit(1);
+}
+if ($getenv_pos > $defined_pos) {
+    echo "  ✗ FAIL: env() reads the constant before getenv(); the vhost htaccess SetEnv contract would not be honored.\n";
+    exit(1);
+}
+echo "  ✓ PASS: env() reads getenv() before defined() (env wins, then constant, then default)\n";
+
 echo "\n";
 
 // =============================================================================
