@@ -345,6 +345,15 @@ The message domain has its own layered package — see
 - `smarty/` — ~13 plugins (functions `apidocs`, `fa`, `repo`,
   `teos`; modifiers `ago`, `datestamp`, `filesize`, `fromnow`,
   `linkurl`, `markdown`, `parsedown`, `summarize`, `wpprop`).
+  `function.teos.php` is config-less: it loads
+  `BBSENGINEROOT/php/bootstrap.php` then bare-name
+  `require_once('util.php')`, mirroring `engine/router.php`'s
+  load order so the plugin works on any vhost that publishes
+  `BBSENGINEROOT` (see `bbsengine6/ROBUSTNESS_REVIEW.md`
+  Phase 8 for the full rationale). Other smarty plugins still
+  rely on the vhost's `config.php`/`engine.php`/`database.php`
+  on `include_path`; their config-less refactor is out of
+  scope.
 - `skin/` — SCSS partials + Smarty templates.
 - `js/` — `bbsengine6.js` singleton, vendored `jquery.smoothState.js`,
   per-widget init scripts.

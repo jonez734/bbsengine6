@@ -948,3 +948,85 @@ and the cause of double-chrome 404s.
   end-to-end. A static-analysis guard for "ROUTER_STOP
   must not appear in `engine/` source" would be a
   worthwhile follow-up; left as TODO for now.
+
+---
+
+## Phase 8 — Smarty plugin config-less load
+
+### Finding 8.1 — `smarty/function.teos.php` bare-required `config.php` via include_path
+
+- **Severity:** MEDIUM (production warning on every `{teos}`
+  call where VHOSTDOCROOT / VHOSTCONFIG did not propagate to
+  FPM; previously masked by router_handleBlurb's `try`/`catch`
+  swallowing the throwable as a 404)
+- **Where:** `smarty/function.teos.php:43` (was)
+- **Symptom:** `PHP Warning: require_once(config.php): Failed
+  to open stream: No such file or directory` in syslog for
+  handbook vhost URLs containing `{teos}` (e.g. `/handbook/<v>/`)
+  and for any teos vhost URL rendering the breadcrumb chain.
+  The throwable was caught downstream and the request 404'd
+  silently via `router_handleError`.
+- **Root cause:** the four bbsengine6 smarty plugins
+  (`function.teos.php`, `function.apidocs.php`,
+  `function.repo.php`, `modifier.datestamp.php`) start with
+  bare `require_once("config.php")` / `require_once("engine.php")`
+  / `require_once("database.php")`. Those resolve via cwd +
+  include_path. When Smarty lazy-loads a plugin during
+  template compile, the FPM worker's include_path does not
+  necessarily have `VHOSTDOCROOT` on it — the journal for
+  failing `/rec/...` requests showed
+  `include_path='.:/usr/share/pear:/usr/share/php:/srv/www/bbsengine6/php:...'`
+  without any `/srv/www/vhosts/zoidtechnologies.com/html`
+  entry, even though the vhost's `config-prod.php` ran
+  `add_include_paths()` earlier. The previous fix (a9957a5)
+  was a defensive `include_path` re-establishment that kept
+  the underlying vhost-config dependency in place.
+- **Fix (49b5b70 + fixup):**
+  - New env var `BBSENGINEROOT` (set in vhost htaccess-prod
+    via `SetEnv BBSENGINEROOT /srv/www/bbsengine6`). Published
+    by both the teos vhost (`teos/www/htaccess-prod`) and the
+    handbook vhost (`bbsengine6/www/org/htaccess-prod`).
+  - `smarty/function.teos.php` resolves util.php via the
+    established include_path convention: first load
+    `BBSENGINEROOT/php/bootstrap.php`, then bare-name
+    `require_once('util.php')`. `bootstrap.php` already adds
+    `/srv/www/bbsengine6/php/` (and `/usr/share/pear/` for
+    `Log.php`) to include_path. This mirrors the load order
+    in `engine/router.php` and matches the include_path
+    convention `php/bootstrap.php:14-21` already uses for
+    itself.
+  - `{teos}` re-uses the parent Smarty instance
+    (`$template->smarty`) instead of constructing a fresh
+    one via `\bbsengine6\getsmarty()`. The parent was already
+    created by the upstream caller (engine/router.php or a
+    legacy teos entry point) with all per-vhost `SMARTY*`
+    dirs wired up, so re-using it means this plugin needs no
+    engine-state at all.
+  - `TEOSURL` is exposed as a PHP constant lazily inside the
+    render path so the template's `{$smarty.const.TEOSURL}`
+    syntax reads it. The default is the NEEDINFO marker
+    `NEEDINFO:function.teos.100:TEOSURL` (not empty string)
+    so missing config surfaces visibly in rendered HTML and
+    is greppable in production logs. A `defined()` guard
+    respects any value the vhost already defined (legacy
+    teos `config-prod.php` uses
+    `define("TEOSURL", \config\TEOSURL)`).
+- **Regression test:** new
+  `bbsengine6/php/test_teos_plugin_configless.php` (11
+  assertions) renders `{teos}` without `config.php` /
+  `database.php` / `engine.php` on include_path and pins:
+  - smarty_function_teos defined after require_once
+  - `\bbsengine6\util\env` loaded lazily after first render
+  - rendered href / data-contenturl use TEOSURL from env
+  - missing TEOSURL surfaces the NEEDINFO marker
+  - missing BBSENGINEROOT raises a caught RuntimeException
+  - static guards: no bare `require_once("config.php")`,
+    no bare `require_once("engine.php")`, plugin loads
+    `bootstrap.php` + bare-name `util.php`
+- **Out of scope:** the same defensive-block pattern in
+  `smarty/function.repo.php`, `smarty/function.apidocs.php`,
+  and `smarty/modifier.datestamp.php` is intentionally left
+  untouched. Those plugins need `database.php`, `session.php`,
+  or `DATEFORMAT` (the latter is a vhost `define()`, not an
+  env var). Their config-less refactor is a separate ticket
+  if/when their deps get env-var-ified.

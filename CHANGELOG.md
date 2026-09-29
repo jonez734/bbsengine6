@@ -1,5 +1,84 @@
 ## [Unreleased]
 
+### fix(smarty/function.teos): config-less load via BBSENGINEROOT + bootstrap
+
+Closes the 2026-09-29 journal entry
+`PHP Warning: require_once(config.php): Failed to open stream
+in /srv/www/bbsengine6/smarty/function.teos.php on line 43`,
+which surfaced under mod_env + mod_rewrite + mod_proxy_fcgi
+combos where VHOSTDOCROOT / VHOSTCONFIG did not propagate to
+FPM. The previous workaround (a9957a5) was a defensive
+include_path re-establishment that kept the underlying
+vhost-config dependency in place; this set of changes drops
+that dependency entirely so `{teos}` works on any vhost that
+publishes `BBSENGINEROOT`.
+
+**Three changes** (committed as 49b5b70 + a fixup):
+
+  1. `BBSENGINEROOT` (env, set in vhost htaccess) names the
+     bbsengine6 install directory. The handbook vhost
+     (`bbsengine6/www/org/htaccess-prod`) and the teos vhost
+     (`teos/www/htaccess-prod`) both publish it.
+
+  2. `smarty/function.teos.php` resolves util.php via the
+     established include_path convention: first load
+     `BBSENGINEROOT/php/bootstrap.php`, then bare-name
+     `require_once('util.php')`. bootstrap.php already adds
+     `/srv/www/bbsengine6/php/` (and `/usr/share/pear/` for
+     `Log.php`) to include_path. This mirrors the load order
+     in `engine/router.php`.
+
+  3. `{teos}` re-uses the parent Smarty instance
+     (`$template->smarty`) instead of constructing a fresh
+     one via `\bbsengine6\getsmarty()`. The parent was already
+     created by the upstream caller (engine/router.php or a
+     legacy teos entry point) with all per-vhost `SMARTY*`
+     dirs wired up, so re-using it means this plugin needs no
+     engine-state at all.
+
+`TEOSURL` is exposed as a PHP constant lazily inside the
+render path so the template's `{$smarty.const.TEOSURL}`
+syntax reads it. The default is the NEEDINFO marker
+`NEEDINFO:function.teos.100:TEOSURL` rather than an empty
+string so missing config surfaces visibly in the rendered
+HTML and is greppable in production logs. A `defined()` guard
+respects any value the vhost already defined (legacy teos
+`config-prod.php` uses `define("TEOSURL", \config\TEOSURL)`).
+
+**Test coverage.** New `php/test_teos_plugin_configless.php`
+(11 assertions) renders `{teos}` without config.php /
+database.php / engine.php on include_path and pins:
+  - smarty_function_teos is defined after require_once
+  - `\bbsengine6\util\env` is loaded lazily after first render
+  - rendered href / data-contenturl use TEOSURL from env
+  - missing TEOSURL surfaces the NEEDINFO marker
+  - missing BBSENGINEROOT raises a caught RuntimeException
+    (not an uncaught fatal at file-scope)
+  - static guards: no bare `require_once("config.php")`,
+    no bare `require_once("engine.php")`, plugin loads
+    `bootstrap.php` + bare-name `util.php` (Option C pattern).
+
+**Why bootstrap.php.** The plugin's fixup commit refined
+49b5b70 to load util.php through `BBSENGINEROOT/php/bootstrap.php`
+rather than via a direct path concat. This matches the
+include_path convention `php/bootstrap.php:14-21` already
+uses for itself (adding `/srv/www/bbsengine6/php/` and
+`/usr/share/pear/` to include_path) and is the same
+load pattern `engine/router.php` uses. The
+`BBSENGINEROOT` env var still names the engine root (not
+the php dir) — consistent with how `VHOSTDOCROOT` names the
+vhost docroot — and the plugin concats `/php/bootstrap.php`
+the same way bootstrap.php itself concats `/Log.php`
+implicitly.
+
+**Out of scope.** The same defensive-block pattern in
+`smarty/function.repo.php`, `smarty/function.apidocs.php`,
+and `smarty/modifier.datestamp.php` is intentionally left
+untouched: those plugins need `database.php`, `session.php`,
+or `DATEFORMAT` (the latter is a vhost `define()`, not an
+env var). Their config-less refactor is a separate ticket
+if/when their deps get env-var-ified.
+
 ### feat(engine): per-vhost /engine/ install via ENGINE_DOCROOT env var
 
 `bbsengine6/engine/Makefile` and `bbsengine6/Makefile` (parent) now
