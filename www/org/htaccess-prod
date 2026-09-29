@@ -26,6 +26,14 @@ SetEnv VHOSTDOCROOT /srv/www/vhosts/www.bbsengine.org/html
 # fallback (probes html/{config.php, teos/, org/, com/}).
 SetEnv VHOSTCONFIG /srv/www/vhosts/www.bbsengine.org/html/config.php
 
+# @since 2026-09-29 — publish the bbsengine6 install location so
+# smarty/function.teos.php can require util.php absolutely without
+# hardcoding "/srv/www/bbsengine6". Mirrors VHOSTDOCROOT/ENGINE_DOCROOT
+# naming. Used by bbsengine6/smarty/* plugins that load with no
+# vhost config.php on include_path (regression from the 2026-09-26
+# include_path propagation bug).
+SetEnv BBSENGINEROOT /srv/www/bbsengine6
+
 RewriteEngine On
 RewriteBase /
 
