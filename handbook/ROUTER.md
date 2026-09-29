@@ -430,6 +430,69 @@ files" above) and `router_dedupeItems()` for case-variant
 collapses. Regression test in
 `/home/opencode/data/work/teos/www/php/test_www_mash_no_duplicates.php`.
 
+### Raw `.md` URL dispatch was a dead code path (2026-09-29)
+
+`zoidtechnologies.com/teos/ec/<slug>.md` returned
+`text/plain "File not found"` (rendered as a black-page plain-text
+response by the browser). Two independent breaks compounded:
+
+1. The teos htaccess (line 54) rewrote every `.md` URL to
+   `engine/serve-md.php`, which since commit eecce7c (2026-09-16,
+   "switch rewrite contract to ?path= query string") only handles
+   `/handbook/<v>/...` URLs. The teos-side `.md` rewrite had been
+   silently 404'ing for every URL since that commit.
+2. Even with the rewrite re-targeted, the engine router's HTTP
+   entry-point stripped a trailing `.md` from the URI before the
+   dispatch loop (line 759). A `.md` URL would be coerced to its
+   bare form, the dispatch loop would never see `.md` URIs, and
+   the user would get the chrome-rendered blurb page instead of
+   raw text/plain.
+
+**Fix.** Three coordinated changes:
+
+  1. `engine/router.php` HTTP entry-point no longer strips `.md`.
+     The dispatch loop sees the full URI (with extension).
+  2. New handler `router_handleRawMarkdown` is registered at the
+     end of `router_gethandlers()` with pattern `/\.md$/`. It
+     reads `TEOSDIR` via `\bbsengine6\util\env("TEOSDIR")` and
+     reuses the canonical library
+     `\bbsengine6\serveRawMarkdown()` (defined at
+     `php/serve-md.php`), which enforces realpath-based
+     containment under the supplied base dir, `.md`-only
+     extension, and file-only checks. On a hit the handler
+     returns `ROUTER_RENDERED`; on a miss it returns
+     `ROUTER_NEXT` and the chain falls through to
+     `router_handleError` for the styled `errormessage.tmpl` 404.
+  3. The `markdown` handler's pattern is tightened by removing
+     `.` from the URI character class. The `$` end-anchor
+     naturally restricts matches to URIs that don't contain a
+     dot, so `.md$` URIs no longer reach the chrome-rendered
+     branch. No negative lookahead required.
+     `router_handleMarkdown` adds a defensive
+     `preg_replace('/\.md$/', '', $reluri)` before its filesystem
+     probe as belt-and-suspenders.
+
+The handbook vhost keeps its dedicated `engine/serve-md.php`
+entry-point with the stricter `handbook_resolve()` containment via
+`BBSENGINE6_HANDBOOK_HOME`. The teos vhost's htaccess is updated
+to route `.md` URLs to `engine/router.php` so the new
+router-side handler can fire.
+
+**Regression tests:**
+
+  - `php/test_router.php` Tests 6f / 6g / 6h — pin the tightened
+    `markdown` pattern, the `rawmarkdown` registry entry, and the
+    handler body shape (env("TEOSDIR"), serveRawMarkdown(),
+    ROUTER_RENDERED).
+  - `php/test_router_handleraemarkdown.php` (new) — pins the
+    canonical library in isolation (hit/miss/traversal/.md-only/
+    file-only/nested).
+
+**Engine stays site-agnostic.** `bbsengine6\util\env("TEOSDIR")`
+is the canonical polymorphic read for the per-vhost content root;
+the new handler introduces no teos-specific branch. See
+`AGENTS.md` "TEOSDIR resolution contract".
+
 ## History
 
 | Date | Change |

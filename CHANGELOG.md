@@ -1,5 +1,77 @@
 ## [Unreleased]
 
+### fix(engine/router): raw text/plain dispatcher for `.md` URLs across all vhosts
+
+Closes the 2026-09-29 incident on `zoidtechnologies.com/teos/ec/<slug>.md`
+which 404'd with a plain `text/plain "File not found"` body. Root cause:
+the teos htaccess (line 54) rewrote every `.md` URL to `engine/serve-md.php`,
+which since commit eecce7c (2026-09-16, "switch rewrite contract to ?path=
+query string") only handles `/handbook/<v>/...` URLs. Meanwhile, the engine
+router's HTTP entry-point stripped a trailing `.md` from the URI before
+the dispatch loop, so even if the rewrite had targeted `engine/router.php`
+the raw text/plain dispatch contract was unreachable: `.md` URIs were
+coerced to bare URIs and routed through the chrome-rendered handlers.
+
+**Five changes** (committed as a single fix; see commit message for the
+split into router.php + tests + CHANGELOG/handbook/docs):
+
+  1. `engine/router.php` HTTP entry-point no longer strips `.md` from
+     the URI. The dispatch loop passes the full URI (with extension)
+     to every handler; handlers that don't care about extensions
+     pattern-gate or strip them themselves.
+
+  2. New handler `router_handleRawMarkdown` (registered at the end of
+     `router_gethandlers()` with pattern `/\.md$/`) dispatches `.md$-suffixed`
+     URIs to `Content-Type: text/plain; charset=utf-8`. It reads
+     `TEOSDIR` via `\bbsengine6\util\env("TEOSDIR")` (the canonical
+     polymorphic read used by every other TEOSDIR consumer in
+     `bbsengine6/`) and reuses the canonical library
+     `\bbsengine6\serveRawMarkdown()` (defined in `php/serve-md.php`),
+     which enforces realpath-based containment, `.md`-only extension,
+     and file-only checks. On a hit the handler returns `ROUTER_RENDERED`;
+     on a miss it returns `ROUTER_NEXT` so the chain falls through to
+     the styled engine 404 via `router_handleError` / `page\error` /
+     `errormessage.tmpl`.
+
+  3. The `markdown` handler's pattern in `router_gethandlers()` is
+     tightened by removing `.` from the URI character class. The
+     `$` end-anchor naturally restricts matches to URIs that don't
+     contain a dot, so `.md$` URIs no longer reach the chrome-rendered
+     branch. No negative lookahead required. `router_handleMarkdown`'s
+     body adds a defensive `preg_replace('/\.md$/', '', $reluri)`
+     before its filesystem probe as belt-and-suspenders against
+     future registry regressions.
+
+  4. The handbook vhost still routes `.md` URLs to its dedicated
+     `engine/serve-md.php` entry-point (which uses the stricter
+     `handbook_resolve()` containment via `BBSENGINE6_HANDBOOK_HOME`).
+     The teos vhost's htaccess is updated to route `.md` URLs to
+     `engine/router.php` so the new router-side handler can fire.
+
+  5. `bbsengine6\util\env()` is the canonical TEOSDIR read across
+     `bbsengine6/`; the new handler does NOT hardcode any vhost path
+     and does NOT introduce a teos-specific branch. The engine stays
+     site-agnostic per the AGENTS.md "TEOSDIR resolution contract".
+
+**Test coverage.**
+
+  - `php/test_router.php` Tests 6f, 6g, 6h: pin the tightened
+    `markdown` pattern (rejects `ec/foo.md`, accepts `ec/foo`),
+    the `rawmarkdown` registry entry (pattern matches `\.md$`,
+    handler FQCN is callable), and the handler body shape
+    (calls `env("TEOSDIR")`, calls `serveRawMarkdown()`, returns
+    `ROUTER_RENDERED`).
+  - `php/test_router_handleraemarkdown.php` (new): pins the canonical
+    library in isolation — hit/miss, traversal containment, .md-only
+    extension, file-only (rejects directories), nonexistent basedir,
+    nested subdirectory depth.
+  - `php/test_router.php` Test 3 (handler order) and Test 6b
+    (entry-point strip) are updated to reflect the new contract.
+
+**Out of scope.** `engine/serve-md.php` (handbook-only entry-point),
+`php/serve-md.php` (the canonical library reused by the new handler),
+and `www/org/htaccess-prod` (handbook htaccess) are all unchanged.
+
 ### fix(smarty/function.teos): config-less load via BBSENGINEROOT + bootstrap
 
 Closes the 2026-09-29 journal entry
