@@ -44,7 +44,7 @@ function router_resolve_vhost_config(): string|false
     // 1. VHOSTCONFIG env var (preferred; set by htaccess-prod).
     $envConfig = \bbsengine6\util\env('VHOSTCONFIG', "NEEDINFO.VHOSTCONFIG.router_resolve_vhost_config");
 
-    \bbsengine6\util\logentry("engine.router.router_resolve_vhost_config.100: envconfig=".var_export($envconfig, true));
+    \bbsengine6\util\logentry("engine.router.router_resolve_vhost_config.100: envconfig=".var_export($envConfig, true));
 
     if (is_string($envConfig) && $envConfig !== '' && is_file($envConfig)) {
         require_once($envConfig);

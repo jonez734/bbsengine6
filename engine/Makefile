@@ -7,6 +7,20 @@
 # Inline always wins (make: command line > environment > file). When neither
 # is set, falls through to the zoidtechnologies.com default -- the historical
 # behavior for engine-stage / engine-prod.
+#
+# Engine entry-points are staged via $(wildcard *.php). Any *.php file
+# dropped into this directory is automatically picked up by `stage:`
+# and pushed to $(ENGINESTAGEDOCROOT) on $(ENGINEHOST). There is no
+# allow-list to update when adding a new engine helper -- just add the
+# .php file. Files using other extensions (.inc, no extension, etc.)
+# are NOT staged. If you need a non-.php engine file, either rename
+# it or add an explicit entry to ENGINE_PHP below the wildcard.
+#
+# Engine entry-points currently in this directory (verified by
+# deploytool/tests/test_deploy_bbsengine6_engine.py:
+# test_engine_makefile_wildcard_includes_vhostconfig):
+#   router.php, serve-tmpl.php, serve-md.php, join.php, login.php,
+#   logout.php, direct.php, standalone.php, vhostconfig.php.
 ENGINE_DOCROOT     ?= /srv/www/vhosts/zoidtechnologies.com/html/engine/
 ENGINESTAGEDOCROOT ?= $(ENGINE_DOCROOT)
 ENGINEPRODDOCROOT  ?= $(ENGINEHOST):$(ENGINESTAGEDOCROOT)
