@@ -60,12 +60,22 @@ function buildpluginfilepath($smarty, $name)
 
 function smarty_function_teos($options, Smarty_Internal_Template $template)
 {
-  // Resolve util.php lazily so missing BBSENGINEROOT surfaces as a
-  // caught RuntimeException inside the template-render path (and is
-  // visible in the calling handler's try/catch) instead of as an
-  // uncaught fatal at plugin-load time.
+  // Resolve util.php via the established bbsengine6 include_path
+  // pattern (mirrors engine/router.php's load order). Loading
+  // php/bootstrap.php first puts /srv/www/bbsengine6/php/ on
+  // include_path, so the bare-name require_once('util.php') below
+  // resolves. This is the same convention bootstrap.php itself uses
+  // to resolve Log.php (line 59) and Markdown/Parsedown elsewhere in
+  // the engine.
+  //
+  // Resolving lazily inside the function (not at file scope) means
+  // missing BBSENGINEROOT surfaces as a caught RuntimeException
+  // inside the template-render path -- visible to the calling
+  // handler's try/catch -- instead of an uncaught fatal at
+  // plugin-load time.
   $bbsengine6_root = bbsengine6_teos_resolve_root();
-  require_once($bbsengine6_root . '/php/util.php');
+  require_once($bbsengine6_root . '/php/bootstrap.php');
+  require_once('util.php');
 
   require_once(buildpluginfilepath($template->smarty, "modifier.escape.php"));
   require_once(buildpluginfilepath($template->smarty, "modifier.wpprop.php"));

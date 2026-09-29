@@ -5,12 +5,21 @@
  *
  * Regression test for the 2026-09-29 journal entry
  *   PHP Warning: require_once(config.php): Failed to open stream
+ *   in /srv/www/bbsengine6/smarty/function.teos.php on line 43
  * which surfaced under mod_env + mod_rewrite + mod_proxy_fcgi
  * combos where VHOSTDOCROOT / VHOSTCONFIG did not propagate to
  * FPM. The previous fix (a9957a5 "fix(smarty/*): re-establish
  * vhost docroot on include_path at plugin load") was a defensive
  * workaround; this test pins the contract that the plugin no
  * longer relies on include_path for config.php at all.
+ *
+ * Loading strategy (bbsengine6 49b5b70 + fixup): the plugin
+ * resolves util.php via the established include_path convention
+ * by first loading BBSENGINEROOT/php/bootstrap.php, which
+ * puts /srv/www/bbsengine6/php/ on include_path. The plugin's
+ * bare-name require_once('util.php') then resolves via that
+ * path. Same shape as engine/router.php's bootstrap-then-bare-
+ * name load order.
  *
  * Usage:
  *   php test_teos_plugin_configless.php
@@ -285,6 +294,31 @@ if (preg_match('/require_once\s*\(\s*["\']engine\.php["\']\s*\)/', $src)) {
     test_fail("function.teos.php still contains require_once(\"engine.php\")");
 }
 test_pass("function.teos.php has no bare require_once(\"engine.php\")");
+
+// -----------------------------------------------------------------------------
+// Test 8: Static guard -- the plugin must load util.php via
+// bootstrap.php (the established include_path convention), not via
+// a direct require_once($bbsengine6_root . '/php/util.php'). The
+// fixup commit refined 49b5b70 to follow bootstrap.php's own
+// include_path pattern, mirroring engine/router.php.
+// -----------------------------------------------------------------------------
+echo "Test 8: function.teos.php loads util.php via bootstrap.php\n";
+
+if (!preg_match('/require_once\s*\(\s*\$bbsengine6_root\s*\.\s*[\'"]\/php\/bootstrap\.php[\'"]\s*\)/', $src)) {
+    test_fail(
+        "function.teos.php does not require_once \$bbsengine6_root . '/php/bootstrap.php'",
+        "plugin should follow the bootstrap.php include_path convention"
+    );
+}
+test_pass("function.teos.php loads bootstrap.php");
+
+if (!preg_match('/require_once\s*\(\s*[\'"]util\.php[\'"]\s*\)/', $src)) {
+    test_fail(
+        "function.teos.php does not bare-require 'util.php'",
+        "plugin should require_once('util.php') after loading bootstrap"
+    );
+}
+test_pass("function.teos.php bare-requires util.php via bootstrap's include_path");
 
 // -----------------------------------------------------------------------------
 // Cleanup
