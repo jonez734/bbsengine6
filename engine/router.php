@@ -11,15 +11,23 @@ namespace bbsengine6\router;
  * The dispatch loop matches the URI against the pattern; on miss
  * the handler is skipped without invocation, avoiding filesystem
  * and DB probes for obviously non-matching URIs. A null/absent
- * pattern means "always try". The HTTP entry point strips any
- * trailing ".md" before pattern matching, so patterns match the
- * bare URI (e.g. "/contact-us", not "/contact-us.md").
+ * pattern means "always try".
+ *
+ * As of 2026-09-29 the HTTP entry point no longer strips a trailing
+ * ".md" before pattern matching. Handlers that don't care about the
+ * .md suffix must pattern-gate or strip it themselves; the
+ * dispatch loop passes the full URI (with extension) to every
+ * handler. The new router_handleRawMarkdown handler covers
+ * raw text/plain .md URLs (previously a dead code path on every
+ * vhost except /handbook/<v>/, which has its own entry-point in
+ * engine/serve-md.php).
  *
  * ROUTER_NEXT instructs the loop to continue on to the next handler.
- * ROUTER_RENDERED means "I rendered via displaypage(); the body is
- * already on stdout" -- the dispatcher maps this to an empty
- * return string so the HTTP entry-point emits nothing more.
- * Returning null or false continues to the next handler.
+ * ROUTER_RENDERED means "I rendered via displaypage() (or otherwise
+ * emitted headers + body myself, as router_handleRawMarkdown does);
+ * the body is already on stdout" -- the dispatcher maps this to
+ * an empty return string so the HTTP entry-point emits nothing
+ * more. Returning null or false continues to the next handler.
  * Returning a non-empty string short-circuits and emits the body.
  *
  * `error` is intentionally NOT in the registry: the dispatch loop
@@ -241,23 +249,39 @@ function router_gethandlers(): array
     ],
     'markdown' => [
       'fn'      => 'bbsengine6\\router\\router_handleMarkdown',
-      // No '.md' here on purpose: the HTTP entry-point strips
-      // a trailing '.md' once at the top of the script
-      // (preg_replace('/\.md$/', '', $path)), so by the time
-      // the dispatch loop preg_match()es this pattern the URI
-      // never carries a '.md' suffix. The handler then probes
-      // the filesystem for the bare <reluri> under TEOSDIR
-      // (no extension appended) -- see router_handleMarkdown
-      // below. Compare to the 'page' handler, which keeps a
-      // two-pass probe because '.tmpl' is NOT stripped at the
-      // entry-point (htaccess rewrites bare slugs into the
-      // router with no extension).
-      'pattern' => '#^/?[A-Za-z0-9_][A-Za-z0-9_./-]*$#',
+      // No '.md' (or any '.') in the character class on purpose:
+      // the HTTP entry-point no longer strips a trailing '.md'
+      // (since 2026-09-29), so the dispatch loop preg_match()es
+      // the raw URI including any extension. Dot-containing
+      // URIs (e.g. "/ec/foo.md") are routed to router_handleRawMarkdown
+      // below via its /\.md$/ pattern, not this handler. URIs
+      // with bare dots elsewhere (e.g. "ec/v2.0/foo") are also
+      // excluded here — no legitimate catalog URI carries a dot,
+      // since blurb IDs use dots as separators (blurb.php's
+      // str_replace("/", ".", ...)) rather than URI paths. The
+      // handler then probes the filesystem for the bare <reluri>
+      // under TEOSDIR with a '.md' appended — see
+      // router_handleMarkdown below.
+      'pattern' => '#^/?[A-Za-z0-9_][A-Za-z0-9_/-]*$#',
     ],
     'page' => [
       'fn'      => 'bbsengine6\\servepage\\router_handlePage',
       // narrowest: bare lowercase slug (e.g. /contact-us)
       'pattern' => '#^/?[a-z][a-z0-9-]*/?$#',
+    ],
+    'rawmarkdown' => [
+      'fn'      => 'bbsengine6\\router\\router_handleRawMarkdown',
+      // /<uri>.md URLs across all vhosts (handbook + non-handbook).
+      // The handbook vhost still has its own /engine/serve-md.php
+      // entry-point for raw .md (see www/org/htaccess-prod), but
+      // this handler is the universal fallback when a vhost's
+      // htaccess rewrites .md into engine/router.php (the teos
+      // vhost does this since 2026-09-29). The $ end-anchor
+      // naturally restricts the match to URIs ending in '.md';
+      // no negative lookahead is required to exclude dot-bearing
+      // URIs from the other handlers (see the markdown pattern
+      // comment above for the inverse gate).
+      'pattern' => '/\.md$/',
     ],
   ];
 }
@@ -415,6 +439,16 @@ function router_handleMarkdown(string $uri)
   // on disk is named `<slug>.md`, never `<slug>`. There is no
   // extensionless-doc layout in this tree.
   //
+  // @since 2026-09-29 — the entry-point strip is removed
+  // (see top-of-file docblock). This handler's pattern in
+  // router_gethandlers() no longer admits '.md' (or any '.')
+  // in the URI character class, so the dispatch loop should
+  // never deliver a '.md$'-suffixed URI here. The defensive
+  // preg_replace below is belt-and-suspenders: if a future
+  // registry change reintroduces dot-containing URIs to this
+  // handler, the probe still resolves correctly rather than
+  // double-appending to `<slug>.md.md`.
+  //
   // A 2026-09-19 refactor previously dropped the `.md` append
   // after misreading the entry-point strip as a probe strip.
   // That commit was latent (no test pinned it; see
@@ -426,6 +460,7 @@ function router_handleMarkdown(string $uri)
   // out of htaccess without any extension and the handler
   // has to re-attach it before the filesystem probe.
   $reluri = ltrim($uri, '/');
+  $reluri = preg_replace('/\.md$/', '', $reluri);
   $filepath = router_safe_path_web([$reluri . '.md'], ['base_dir' => $teosdir]);
   if ($filepath !== false && file_exists($filepath) && is_file($filepath)) {
     // @since 2026-09-10 — same graceful-degradation wrapper as
@@ -438,6 +473,37 @@ function router_handleMarkdown(string $uri)
       router_log('markdown render failed: ' . $e->getMessage(), 'error');
       return ROUTER_NEXT;
     }
+  }
+  return ROUTER_NEXT;
+}
+
+function router_handleRawMarkdown(string $uri)
+{
+  router_log('handleRawMarkdown: ' . $uri);
+  $teosdir = \bbsengine6\util\env("TEOSDIR");
+  if ($teosdir === '') return ROUTER_NEXT;
+
+  // @since 2026-09-29 — raw text/plain dispatcher for .md URLs.
+  // Reuses the canonical library bbsengine6\serveRawMarkdown() at
+  // php/serve-md.php which enforces realpath-based containment
+  // under the supplied base dir, .md-only extension, and file-only
+  // (rejects directories). On a hit the library emits
+  // `Content-Type: text/plain; charset=utf-8` itself and reads
+  // the body to stdout; we return ROUTER_RENDERED so the
+  // HTTP entry-point emits nothing more. On a miss (or any
+  // validation failure) the library returns false and we fall
+  // through to ROUTER_NEXT so the dispatch chain reaches
+  // router_handleError for the styled 404 — same shape as a
+  // chrome-rendered URI miss.
+  //
+  // The handler's pattern in router_gethandlers() is /\.md$/ so
+  // this branch only fires for .md-suffixed URIs. Per-vhost htaccess
+  // rewrites are responsible for routing .md URLs here (or, on the
+  // handbook vhost, to the separate engine/serve-md.php entry-point
+  // which has its own handbook-home containment via handbook_resolve()).
+  $reluri = ltrim($uri, '/');
+  if (\bbsengine6\serveRawMarkdown($teosdir, $reluri)) {
+    return ROUTER_RENDERED;
   }
   return ROUTER_NEXT;
 }
@@ -756,19 +822,25 @@ if (php_sapi_name() !== 'cli') {
 
 
   $path = $_GET['path'] ?? $_GET['uri'] ?? '';
-  $path = preg_replace('/\.md$/', '', $path);
+  // @since 2026-09-29 — the previous version stripped a trailing
+  // '.md' from the URI before passing it to the dispatch loop.
+  // That kept the existing chrome-rendered handlers (markdown,
+  // blurb) simple but silently killed the raw text/plain .md
+  // dispatch contract: a /<uri>.md URL would be coerced to
+  // /<uri>, the .md handler would never fire, and the user
+  // got the rendered blurb page instead of the raw source. The
+  // strip is removed; handlers that don't care about extensions
+  // must pattern-gate or strip them themselves. See
+  // router_gethandlers() and router_handleMarkdown /
+  // router_handleRawMarkdown for the new contract.
+  //
+  // (Legacy note, kept for git-blame continuity: 2026-09-07 — the
+  // previous version gated router() on `!empty($path)`, which
+  // silently 200'd with an empty body for bare-version URLs.
+  // Always call router() -- an empty $path triggers handleIndex
+  // which renders TEOSDIR/index.md when present.)
 
   router_log("router.450: path=$path");
-
-  // @since 2026-09-07 — the previous version gated router()
-  // on `!empty($path)`, which silently 200'd with an empty
-  // body for bare-version URLs (e.g. /handbook/6/ where the
-  // htaccess sent ?uri=). That was the source of the 'silent
-  // 200 with empty body' behavior the test caught. Always
-  // call router() -- an empty $path triggers handleIndex
-  // (which renders TEOSDIR/index.md when present), so /handbook/
-  // <v>/ now returns a proper 200 with a rendered body instead
-  // of an empty 200.
   try {
     $router_result = router($path);
     if ($router_result === null || $router_result === false) {
