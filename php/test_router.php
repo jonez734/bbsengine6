@@ -39,8 +39,13 @@ if (defined("ROUTER_RENDERED") && ROUTER_RENDERED === "ROUTER_RENDERED") {
 }
 
 // Test 3: Handler order is correct
-echo "Test 3: Handler order (index → blurb → folder → markdown → page)\n";
-$expectedOrder = ['index', 'blurb', 'folder', 'markdown', 'page'];
+echo "Test 3: Handler order (index → blurb → folder → markdown → page → rawmarkdown)\n";
+// @since 2026-09-29 — rawmarkdown appended at the end of the registry.
+// Its pattern (\.md$) is non-overlapping with the other handlers (the
+// 'markdown' handler's pattern no longer admits '.'), so position is
+// cosmetic, but placing it last keeps the chrome-rendering handlers
+// grouped together at the front of the chain.
+$expectedOrder = ['index', 'blurb', 'folder', 'markdown', 'page', 'rawmarkdown'];
 $handlers = router_gethandlers();
 $actualOrder = array_keys($handlers);
 if ($actualOrder === $expectedOrder) {
@@ -216,42 +221,53 @@ if ($filepath === '/srv/www/vhosts/zoidtechnologies.com/html/teos/ec/john-edward
     exit(1);
 }
 
-// Test 6a: router_handleMarkdown source does NOT probe
-// "$uri . '.md'". The HTTP entry-point strips a trailing
-// ".md" once at the top of the script (router.php:
-// preg_replace('/\.md$/', '', $path)), so by the time the
-// dispatch loop walks handlers the URI never carries a
-// .md suffix. A "$uri . '.md'" probe in the markdown
-// handler is dead code. Pins the 2026-09-19 cleanup that
-// removed the dead branch.
-echo "Test 6a: router_handleMarkdown does not probe for '\$uri . .md' (dead-code regression guard)\n";
+// Test 6a: router_handleMarkdown source pre-strips ".md" before
+// the filesystem probe. Pre-2026-09-29 the HTTP entry-point
+// stripped a trailing ".md" from the URI, so the markdown
+// handler's filesystem probe of "<reluri>.md" was a clean
+// <slug>.md match. After 2026-09-29 the entry-point no longer
+// strips, so the handler must defensively preg_replace('/\.md$/',
+// '', $reluri) before the probe to avoid double-appending to
+// "<slug>.md.md". Pins the defensive-strip-then-append shape.
+echo "Test 6a: router_handleMarkdown defensively strips '.md' before filesystem probe (post 2026-09-29 entry-point-strip removal)\n";
 $router_src = file_get_contents(__DIR__ . "/../engine/router.php");
 if (preg_match('/function\s+router_handleMarkdown\s*\([^)]*\)\s*\{(.*?)^\}/sm', $router_src, $m)) {
     $handler_body = $m[1];
-    // The dead probe looks like: $reluri . '.md' or $uri . '.md'
-    // inside the handler body.
-    if (preg_match('/\$\w+\s*\.\s*[\'"]\.md[\'"]/', $handler_body)) {
-        echo "  ✗ FAIL: router_handleMarkdown still has a '\$uri . .md' probe; " .
-             "the dead-code branch should have been removed when the HTTP entry-point " .
-             "started stripping .md at line ~724.\n";
+    // Required shape: preg_replace('/\.md$/', '', $reluri) appears
+    // BEFORE the safe_path_web(... '.md') call. The literal probe
+    // alone (without the strip) would double-append when called
+    // with a dot-bearing URI.
+    $strip_pos = strpos($handler_body, "preg_replace('/\\\\.md\\$/', '', ");
+    $probe_pos = strpos($handler_body, "router_safe_path_web([");
+    if ($strip_pos === false) {
+        echo "  ✗ FAIL: router_handleMarkdown missing the defensive preg_replace('/\\\\.md\\$/', '', ...) strip; " .
+             "a future regression that delivers a '.md'-suffixed URI here would double-append and miss.\n";
         exit(1);
     }
-    echo "  ✓ PASS: no dead-code '\$uri . .md' probe in router_handleMarkdown\n";
+    if ($probe_pos === false || $strip_pos > $probe_pos) {
+        echo "  ✗ FAIL: defensive .md strip must appear BEFORE the filesystem probe; " .
+             "found strip at $strip_pos, probe at $probe_pos.\n";
+        exit(1);
+    }
+    echo "  ✓ PASS: router_handleMarkdown defensively preg_replace()s '.md' before safe_path_web() probe\n";
 } else {
     echo "  ✗ FAIL: could not extract router_handleMarkdown body\n";
     exit(1);
 }
 
-// Test 6b: HTTP entry-point strips a trailing ".md" from
-// the URI before passing it to router(). Pins the contract
-// that makes the dead-code removal safe.
-echo "Test 6b: HTTP entry-point strips trailing .md from URI\n";
-if (!preg_match('/preg_replace\s*\(\s*[\'"]\/\\\\\.md\\\$\/[\'"]/', $router_src)) {
-    echo "  ✗ FAIL: HTTP entry-point no longer strips .md; " .
-         "the dead-code removal in router_handleMarkdown is unsafe.\n";
+// Test 6b: HTTP entry-point no longer strips a trailing ".md"
+// from the URI before passing it to router(). The strip was
+// removed on 2026-09-29 to enable raw text/plain dispatch on
+// /<uri>.md URLs (see router_handleRawMarkdown in
+// engine/router.php and the file-header docblock). Handlers
+// that don't care about extensions now pattern-gate or strip
+// them themselves.
+echo "Test 6b: HTTP entry-point does NOT strip trailing .md from URI\n";
+if (preg_match('/preg_replace\s*\(\s*[\'"]\/\\\\\.md\\\$\/[\'"]/', $router_src)) {
+    echo "  ✗ FAIL: HTTP entry-point still strips .md; raw markdown handler will not fire.\n";
     exit(1);
 }
-echo "  ✓ PASS: HTTP entry-point strips trailing .md before dispatch\n";
+echo "  ✓ PASS: HTTP entry-point preserves .md suffix in URI\n";
 
 // Test 6c: isBlurb() reads TEOSDIR via \bbsengine6\util\env(),
 // not via the legacy `defined('TEOSDIR') ? TEOSDIR : <hardcoded
@@ -384,6 +400,94 @@ if ($getenv_pos > $defined_pos) {
     exit(1);
 }
 echo "  ✓ PASS: env() reads getenv() before defined() (env wins, then constant, then default)\n";
+
+// Test 6f: 'markdown' handler's pattern no longer admits '.md' (or
+// any '.') in the URI. The entry-point strip was removed on
+// 2026-09-29 to enable raw .md dispatch via router_handleRawMarkdown,
+// so the markdown handler's pattern must naturally reject dot-bearing
+// URIs at the registry level (otherwise they'd be coerced through the
+// chrome-rendered branch instead of the raw branch). Pins both:
+//   - a dot-bearing URI like 'ec/foo.md' is rejected by the
+//     pattern (preg_match returns 0); and
+//   - a bare URI like 'ec/foo' is still accepted (preg_match returns 1).
+echo "Test 6f: 'markdown' handler pattern excludes dot-bearing URIs (post 2026-09-29 .md-strip removal)\n";
+$md_entry = $handlers['markdown'];
+$md_pattern = is_array($md_entry) ? ($md_entry['pattern'] ?? null) : null;
+if ($md_pattern === null) {
+    echo "  ✗ FAIL: markdown handler has no pattern\n";
+    exit(1);
+}
+if (@preg_match($md_pattern, 'ec/foo.md') === 1) {
+    echo "  ✗ FAIL: markdown pattern matched 'ec/foo.md'; .md URIs would be chrome-rendered instead of dispatched to router_handleRawMarkdown\n";
+    exit(1);
+}
+if (@preg_match($md_pattern, 'ec/foo') !== 1) {
+    echo "  ✗ FAIL: markdown pattern did NOT match bare 'ec/foo'; chrome-rendered dispatch is broken\n";
+    exit(1);
+}
+echo "  ✓ PASS: markdown pattern rejects dot-bearing URIs and accepts bare URIs\n";
+
+// Test 6g: 'rawmarkdown' handler is registered with a pattern that
+// matches '.md$' URIs and nothing else. Pins the registry shape so
+// a future refactor that renames the handler or changes the pattern
+// can't silently break the raw text/plain dispatch contract.
+echo "Test 6g: 'rawmarkdown' handler is registered with pattern matching '.md$' URIs\n";
+if (!array_key_exists('rawmarkdown', $handlers)) {
+    echo "  ✗ FAIL: 'rawmarkdown' handler not in registry; /<uri>.md URLs will fall through to the styled 404\n";
+    exit(1);
+}
+$rm_entry = $handlers['rawmarkdown'];
+$rm_pattern = is_array($rm_entry) ? ($rm_entry['pattern'] ?? null) : null;
+if ($rm_pattern === null) {
+    echo "  ✗ FAIL: rawmarkdown handler has no pattern\n";
+    exit(1);
+}
+if (@preg_match($rm_pattern, 'ec/foo.md') !== 1) {
+    echo "  ✗ FAIL: rawmarkdown pattern did NOT match 'ec/foo.md'\n";
+    exit(1);
+}
+if (@preg_match($rm_pattern, 'ec/foo') === 1) {
+    echo "  ✗ FAIL: rawmarkdown pattern matched bare 'ec/foo'; bare URIs would be dispatched as raw text/plain\n";
+    exit(1);
+}
+// Also assert the handler's FQCN is callable (regression guard for
+// the variable-function dispatch loop).
+$rm_fqcn = is_array($rm_entry) ? ($rm_entry['fn'] ?? null) : $rm_entry;
+if (!is_string($rm_fqcn) || !function_exists($rm_fqcn)) {
+    echo "  ✗ FAIL: rawmarkdown handler FQCN not callable: " . var_export($rm_fqcn, true) . "\n";
+    exit(1);
+}
+echo "  ✓ PASS: rawmarkdown handler registered with .md$ pattern and callable FQCN\n";
+
+// Test 6h: router_handleRawMarkdown reads TEOSDIR via env() (not the
+// legacy constant-with-hardcoded-fallback pattern) and delegates to
+// bbsengine6\serveRawMarkdown(). Source-level assertion: same shape
+// as Test 6c/6d/6e.
+echo "Test 6h: router_handleRawMarkdown reads TEOSDIR via env() and uses serveRawMarkdown()\n";
+$rm_body = '';
+if (preg_match('/function\s+router_handleRawMarkdown\s*\([^)]*\)\s*\{(.*?)^\}/sm', $router_src, $m)) {
+    $rm_body = $m[1];
+}
+if ($rm_body === '') {
+    echo "  ✗ FAIL: could not extract router_handleRawMarkdown body\n";
+    exit(1);
+}
+if (strpos($rm_body, 'env("TEOSDIR")') === false) {
+    echo "  ✗ FAIL: router_handleRawMarkdown does not call env(\"TEOSDIR\"); " .
+         "the vhost htaccess SetEnv contract would not be honored.\n";
+    exit(1);
+}
+if (strpos($rm_body, 'serveRawMarkdown(') === false) {
+    echo "  ✗ FAIL: router_handleRawMarkdown does not call bbsengine6\\serveRawMarkdown(); " .
+         "the canonical library would not be reused.\n";
+    exit(1);
+}
+if (strpos($rm_body, 'ROUTER_RENDERED') === false) {
+    echo "  ✗ FAIL: router_handleRawMarkdown never returns ROUTER_RENDERED; " .
+         "the HTTP entry-point would double-emit (echo '' on top of the body).\n";
+    exit(1);
+}
+echo "  ✓ PASS: router_handleRawMarkdown uses env(\"TEOSDIR\") + serveRawMarkdown() + ROUTER_RENDERED\n";
 
 echo "\n";
 

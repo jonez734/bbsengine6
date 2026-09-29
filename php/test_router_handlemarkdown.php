@@ -5,16 +5,24 @@
  *
  * Pins the filesystem-probe behavior in isolation: the probe
  * must append ".md" to the bare slug it receives from the
- * dispatch loop, because the HTTP entry-point has already
- * stripped ".md" from the URI once at the top of the script.
+ * dispatch loop. As of 2026-09-29 the HTTP entry-point no
+ * longer strips a trailing ".md" from the URI; the dispatch
+ * loop is expected to pattern-gate the markdown handler so
+ * only dot-free URIs reach it. router_handleMarkdown itself
+ * defensively preg_replace()s any trailing ".md" before the
+ * filesystem probe, so a future registry change that
+ * accidentally reintroduces dot-bearing URIs to this handler
+ * still resolves correctly rather than double-appending to
+ * `<slug>.md.md`. This test pins that defensive strip and
+ * the probe shape.
  *
  * Scope: this test ONLY covers the probe (safe_path_web with
- * <slug>.md) plus negative cases. It deliberately does NOT
- * invoke router_handleMarkdown() as a whole, because that
- * pulls in router_displayMarkdownFile() -> displaypage() ->
- * Smarty compile (with side-effects that depend on the
- * vhost's plugin/skin search paths being healthy), which is
- * orthogonal to the .md-strip regression.
+ * <slug>.md after the defensive strip) plus negative cases.
+ * It deliberately does NOT invoke router_handleMarkdown() as
+ * a whole, because that pulls in router_displayMarkdownFile()
+ * -> displaypage() -> Smarty compile (with side-effects that
+ * depend on the vhost's plugin/skin search paths being
+ * healthy), which is orthogonal to the .md-strip regression.
  *
  * Usage:
  *   php test_router_handlemarkdown.php
