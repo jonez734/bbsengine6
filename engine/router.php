@@ -100,22 +100,6 @@ require_once('engine.php');
 require_once("page.php");
 require_once("folder.php");
 
-// @since 2026-09-29 — load the raw-markdown library so the
-// router_handleRawMarkdown handler (registered in
-// router_gethandlers() below) can call \bbsengine6\serveRawMarkdown().
-// The handler emits Content-Type: text/plain; charset=utf-8 and
-// streams the file body via readfile(). Without this require_once
-// the function is undefined on every vhost that loads
-// engine/router.php, and /<uri>.md URLs either 500 (handler
-// throws "undefined function") or fall through to the chrome-
-// rendered markdown branch (where the .md gets stripped from
-// the URI and the .md file on disk is rendered as HTML).
-//
-// Mirrors the placement at the next require_once (serve-tmpl.php):
-// both are "stream a file as-is with the right Content-Type"
-// helpers (text/plain for .md, text/html for .tmpl).
-require_once("serve-md.php");
-
 // @since 2026-09-16 — hands page-namespace URIs
 // (e.g. /contact-us -> DOCUMENTROOT/skin/tmpl/contact-us.tmpl)
 // to bbsengine6\servepage\router_handlePage via the
