@@ -489,6 +489,104 @@ if (strpos($rm_body, 'ROUTER_RENDERED') === false) {
 }
 echo "  ✓ PASS: router_handleRawMarkdown uses env(\"TEOSDIR\") + serveRawMarkdown() + ROUTER_RENDERED\n";
 
+// Test 6i: end-to-end router() dispatch for /<uri>.md returns
+// text/plain raw markdown. This is the test that would have caught
+// the 2026-09-29 incident on zoidtechnologies.com/teos/ec/<slug>.md
+// returning text/html chrome instead of text/plain raw. The earlier
+// tests (6f/6g/6h) only pin the registry shape and source-level
+// function bodies; they don't exercise the full dispatch path. Test 6i
+// creates a temp fixture tree, sets TEOSDIR via putenv(), invokes
+// \bbsengine6\router\router() on a .md URI, and asserts three things:
+//   1. return value === '' (ROUTER_RENDERED sentinel, see router()
+//      line 782),
+//   2. body byte-equals the on-disk marker (proves raw markdown
+//      was streamed, not chrome HTML),
+//   3. headers_list() contains 'Content-Type: text/plain' (proves
+//      \bbsengine6\serveRawMarkdown() emitted the header — i.e. the
+//      function is actually defined and reachable). This is the
+//      assertion that catches the missing require_once('serve-md.php')
+//      regression: without it, the handler throws "undefined
+//      function" and the test fails at step 1.
+echo "Test 6i: end-to-end router() dispatch for /<uri>.md returns text/plain raw markdown\n";
+
+$fixtureRoot = sys_get_temp_dir() . "/bbsengine6_test_router_md_" . bin2hex(random_bytes(4));
+if (!mkdir($fixtureRoot . "/ec", 0777, true)) {
+    echo "  ✗ FAIL: could not create fixture root\n";
+    exit(1);
+}
+$marker = "# Investigated Psychics\n\nFraud content here.\n";
+$mdPath = $fixtureRoot . "/ec/investigated-psychics-fraud-pigasus.md";
+if (file_put_contents($mdPath, $marker) === false) {
+    echo "  ✗ FAIL: could not write fixture .md\n";
+    exit(1);
+}
+
+// Silence CLI E_WARNING on header() calls — the library emits a
+// header that's buffered into headers_list() but raises a Warning
+// under CLI SAPI. Same convention as test_router_handleraemarkdown.php:36.
+error_reporting(error_reporting() & ~E_WARNING);
+
+putenv("TEOSDIR=$fixtureRoot");
+
+try {
+    ob_start();
+    $result = \bbsengine6\router\router("ec/investigated-psychics-fraud-pigasus.md");
+    $body = ob_get_clean();
+
+    // Capture headers_list() after router() returns, before any
+    // output that would trigger headers_sent(). On CLI SAPI the
+    // header() call still registers into the internal header list
+    // (just with an E_WARNING we silenced); headers_list() returns
+    // the buffered list regardless of SAPI.
+    $headers = headers_list();
+    $contentType = '';
+    foreach ($headers as $h) {
+        if (stripos($h, 'Content-Type:') === 0) {
+            $contentType = trim(substr($h, strlen('Content-Type:')));
+            break;
+        }
+    }
+
+    // Assert 1: router() return === '' means the dispatch loop saw
+    // ROUTER_RENDERED and short-circuited (router.php:782). A
+    // chrome-rendered return would also be '', but only the body
+    // assertion below distinguishes the two.
+    if ($result !== '') {
+        echo "  ✗ FAIL: router() did not return ROUTER_RENDERED (got: "
+             . var_export($result, true) . ")\n";
+        exit(1);
+    }
+
+    // Assert 2: body byte-equals marker. Chrome-rendered output
+    // would be ~10KB+ of HTML; this catches the dispatch-order
+    // regression where markdown's handler consumes .md URIs.
+    if ($body !== $marker) {
+        echo "  ✗ FAIL: body did not match fixture marker (got "
+             . strlen($body) . " bytes; expected " . strlen($marker) . ")\n";
+        exit(1);
+    }
+
+    // Assert 3: Content-Type was emitted as text/plain. This is the
+    // assertion that catches the missing require_once('serve-md.php')
+    // bug: without the require_once, \bbsengine6\serveRawMarkdown()
+    // is undefined, the handler throws, and headers_list() won't
+    // contain the text/plain header.
+    if (stripos($contentType, 'text/plain') === false) {
+        echo "  ✗ FAIL: Content-Type was not text/plain (got: "
+             . var_export($contentType, true) . ")\n";
+        exit(1);
+    }
+
+    echo "  ✓ PASS: router() returned ROUTER_RENDERED, body matched fixture, "
+         . "Content-Type=text/plain\n";
+} finally {
+    // Cleanup regardless of pass/fail
+    putenv("TEOSDIR");
+    @unlink($mdPath);
+    @rmdir($fixtureRoot . "/ec");
+    @rmdir($fixtureRoot);
+}
+
 echo "\n";
 
 // =============================================================================
