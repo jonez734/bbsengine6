@@ -1,14 +1,15 @@
 <?php
 /**
  * test_router_handleraemarkdown.php - exercise
- * \bbsengine6\serveRawMarkdown() in isolation.
+ * \bbsengine6\markdown\serveRawMarkdown() in isolation.
  *
  * router_handleRawMarkdown (engine/router.php, registered since
  * 2026-09-29) is a thin wrapper around the canonical library at
- * php/serve-md.php. The library enforces realpath-based containment
- * under the supplied base dir, .md-only extension, and file-only
- * (rejects directories). It emits `Content-Type: text/plain;
- * charset=utf-8` and reads the body to stdout on success.
+ * php/markdown.php (merged from php/serve-md.php on 2026-10-XX).
+ * The library enforces realpath-based containment under the supplied
+ * base dir, .md-only extension, and file-only (rejects directories).
+ * It emits `Content-Type: text/plain; charset=utf-8` and reads the
+ * body to stdout on success.
  *
  * This test pins the library's probe shape in isolation so a
  * future refactor of router_handleRawMarkdown that accidentally
@@ -26,7 +27,7 @@
  */
 
 require_once __DIR__ . "/bootstrap.php";
-require_once("serve-md.php");
+require_once("markdown.php");
 
 // @since 2026-09-29 — the library's hit path calls header()
 // (sets Content-Type: text/plain) which is a no-op on the CLI
@@ -35,7 +36,7 @@ require_once("serve-md.php");
 // assert on the return value (true/false) and the body buffer.
 error_reporting(error_reporting() & ~E_WARNING);
 
-echo "=== Testing \\bbsengine6\\serveRawMarkdown library shape ===\n\n";
+echo "=== Testing \\bbsengine6\\markdown\\serveRawMarkdown library shape ===\n\n";
 
 // --- helpers --------------------------------------------------------------
 
@@ -66,7 +67,7 @@ if (file_put_contents($markdownPath, $marker) === false) {
 
 echo "Test 1: hit resolves and reads file body to stdout\n";
 ob_start();
-$hit = \bbsengine6\serveRawMarkdown($fixtureRoot, "ec/investigated-psychics-fraud-pigasus.md");
+$hit = \bbsengine6\markdown\serveRawMarkdown($fixtureRoot, "ec/investigated-psychics-fraud-pigasus.md");
 $body = ob_get_clean();
 if ($hit !== true) {
     test_fail("hit returned non-true", "got " . var_export($hit, true));
@@ -83,7 +84,7 @@ test_pass("hit returned true and body byte-equals the on-disk fixture");
 
 echo "Test 2: nonexistent .md returns false\n";
 ob_start();
-$miss = \bbsengine6\serveRawMarkdown($fixtureRoot, "ec/does-not-exist.md");
+$miss = \bbsengine6\markdown\serveRawMarkdown($fixtureRoot, "ec/does-not-exist.md");
 $body = ob_get_clean();
 if ($miss !== false) {
     test_fail("miss returned non-false", "got " . var_export($miss, true));
@@ -97,7 +98,7 @@ test_pass("miss returned false with empty stdout (caller emits 404)");
 
 echo "Test 3: '../etc/passwd.md' returns false (realpath containment)\n";
 ob_start();
-$escape = \bbsengine6\serveRawMarkdown($fixtureRoot, "../etc/passwd.md");
+$escape = \bbsengine6\markdown\serveRawMarkdown($fixtureRoot, "../etc/passwd.md");
 $body = ob_get_clean();
 if ($escape !== false) {
     test_fail("escape attempt returned non-false", "got " . var_export($escape, true));
@@ -112,7 +113,7 @@ test_pass("traversal neutralized; no body emitted");
 echo "Test 4: non-.md extension returns false (.txt extension check)\n";
 file_put_contents($fixtureRoot . "/ec/notes.txt", "this is not markdown");
 ob_start();
-$txt = \bbsengine6\serveRawMarkdown($fixtureRoot, "ec/notes.txt");
+$txt = \bbsengine6\markdown\serveRawMarkdown($fixtureRoot, "ec/notes.txt");
 $body = ob_get_clean();
 if ($txt !== false) {
     test_fail(".txt returned non-false", "got " . var_export($txt, true));
@@ -126,7 +127,7 @@ test_pass(".txt extension rejected by pathinfo check");
 
 echo "Test 5: directory probe returns false (is_file guard)\n";
 ob_start();
-$dir = \bbsengine6\serveRawMarkdown($fixtureRoot, "ec");
+$dir = \bbsengine6\markdown\serveRawMarkdown($fixtureRoot, "ec");
 $body = ob_get_clean();
 if ($dir !== false) {
     test_fail("directory returned non-false", "got " . var_export($dir, true));
@@ -140,7 +141,7 @@ test_pass("directory probe rejected by is_file check");
 
 echo "Test 6: nonexistent basedir returns false (realpath on base fails)\n";
 ob_start();
-$nobase = \bbsengine6\serveRawMarkdown("/nonexistent/directory/xyz", "foo.md");
+$nobase = \bbsengine6\markdown\serveRawMarkdown("/nonexistent/directory/xyz", "foo.md");
 $body = ob_get_clean();
 if ($nobase !== false) {
     test_fail("nonexistent basedir returned non-false", "got " . var_export($nobase, true));
@@ -158,7 +159,7 @@ if (!mkdir($fixtureRoot . "/ec/sub", 0777, true)) {
 }
 file_put_contents($fixtureRoot . "/ec/sub/deep.md", "# deep fixture\n");
 ob_start();
-$deep = \bbsengine6\serveRawMarkdown($fixtureRoot, "ec/sub/deep.md");
+$deep = \bbsengine6\markdown\serveRawMarkdown($fixtureRoot, "ec/sub/deep.md");
 $body = ob_get_clean();
 if ($deep !== true) {
     test_fail("deep hit returned non-true", "got " . var_export($deep, true));

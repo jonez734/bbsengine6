@@ -17,7 +17,7 @@
 # text/plain raw. Complements php/test_router.php Test 6i
 # (in-process dispatch on a fixture) by exercising the full
 # production stack: Apache -> htaccess rewrite ->
-# engine/router.php -> \bbsengine6\serveRawMarkdown() ->
+# engine/router.php -> \bbsengine6\markdown\serveRawMarkdown() ->
 # Content-Type header + body.
 
 set -u

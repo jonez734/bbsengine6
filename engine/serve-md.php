@@ -1,36 +1,18 @@
 <?php
-
-require_once("/srv/www/bbsengine6/php/bootstrap.php");
-require_once("util.php");
-
-\bbsengine6\util\logentry("serve-md.100: start");
-
-$uri = $_GET['path'] ?? '';
-
-if ($uri === '' || $uri[0] !== '/') {
-    $uri = '/' . $uri;
-}
-
-$relpath = ltrim($uri, '/');
-
-if ($relpath === '' || !preg_match('#^/handbook/(\d+)/#', $_SERVER['REQUEST_URI'] ?? '', $m)) {
-    \bbsengine6\util\logentry("serve-md.210: validate failed relpath=" . var_export($relpath, true) . " request_uri=" . var_export($_SERVER['REQUEST_URI'] ?? '', true));
-    http_response_code(404);
-    header('Content-Type: text/plain; charset=utf-8');
-    echo 'engine.serve-md.validate-handbook-prefix.220: File not found';
-    exit;
-}
-
-$prefix = 'handbook/' . $m[1];
-$file = \bbsengine6\util\handbook_resolve($prefix, $relpath);
-
-if ($file === false) {
-    \bbsengine6\util\logentry("serve-md.200: resolve failed for prefix=$prefix path=$relpath");
-    http_response_code(404);
-    header('Content-Type: text/plain; charset=utf-8');
-    echo 'engine.serve-md.resolve-handbook-md.240: File not found';
-    exit;
-}
-
-header('Content-Type: text/plain; charset=utf-8');
-readfile($file);
+/**
+ * engine/serve-md.php - Handbook vhost entry-point (thin wrapper).
+ *
+ * htaccess-prod (www/org/htaccess-prod:78) rewrites
+ *   /handbook/<v>/<uri>.md -> /engine/serve-md.php?path=$2
+ * The substantive code (entry-point function + library) lives at
+ * php/markdown.php under namespace \bbsengine6\markdown and is loaded
+ * via require_once below. The merged file's namespace {} entry-point
+ * guard fires once on direct invocation, calls serveRawMarkdownForHandbook()
+ * which exits on every path. See php/markdown.php's file header for the
+ * full charter and 404 body IDs.
+ *
+ * Staged by engine/Makefile's ENGINE_PHP wildcard
+ * ($(wildcard *.php)) to $(ENGINESTAGEDOCROOT) on $(ENGINEHOST).
+ */
+require_once __DIR__ . '/../php/markdown.php';
+\bbsengine6\markdown\serveRawMarkdownForHandbook();

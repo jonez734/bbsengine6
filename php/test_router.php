@@ -461,8 +461,8 @@ echo "  ✓ PASS: rawmarkdown handler registered with .md$ pattern and callable 
 
 // Test 6h: router_handleRawMarkdown reads TEOSDIR via env() (not the
 // legacy constant-with-hardcoded-fallback pattern) and delegates to
-// bbsengine6\serveRawMarkdown(). Source-level assertion: same shape
-// as Test 6c/6d/6e.
+// bbsengine6\markdown\serveRawMarkdown(). Source-level assertion: same
+// shape as Test 6c/6d/6e.
 echo "Test 6h: router_handleRawMarkdown reads TEOSDIR via env() and uses serveRawMarkdown()\n";
 $rm_body = '';
 if (preg_match('/function\s+router_handleRawMarkdown\s*\([^)]*\)\s*\{(.*?)^\}/sm', $router_src, $m)) {
@@ -478,7 +478,7 @@ if (strpos($rm_body, 'env("TEOSDIR")') === false) {
     exit(1);
 }
 if (strpos($rm_body, 'serveRawMarkdown(') === false) {
-    echo "  ✗ FAIL: router_handleRawMarkdown does not call bbsengine6\\serveRawMarkdown(); " .
+    echo "  ✗ FAIL: router_handleRawMarkdown does not call bbsengine6\\markdown\\serveRawMarkdown(); " .
          "the canonical library would not be reused.\n";
     exit(1);
 }
@@ -502,9 +502,9 @@ echo "  ✓ PASS: router_handleRawMarkdown uses env(\"TEOSDIR\") + serveRawMarkd
 //   2. body byte-equals the on-disk marker (proves raw markdown
 //      was streamed, not chrome HTML),
 //   3. headers_list() contains 'Content-Type: text/plain' (proves
-//      \bbsengine6\serveRawMarkdown() emitted the header — i.e. the
-//      function is actually defined and reachable). This is the
-//      assertion that catches the missing require_once('serve-md.php')
+//      \bbsengine6\markdown\serveRawMarkdown() emitted the header —
+//      i.e. the function is actually defined and reachable). This is
+//      the assertion that catches the missing require_once('markdown.php')
 //      regression: without it, the handler throws "undefined
 //      function" and the test fails at step 1.
 echo "Test 6i: end-to-end router() dispatch for /<uri>.md returns text/plain raw markdown\n";
@@ -567,8 +567,8 @@ try {
     }
 
     // Assert 3: Content-Type was emitted as text/plain. This is the
-    // assertion that catches the missing require_once('serve-md.php')
-    // bug: without the require_once, \bbsengine6\serveRawMarkdown()
+    // assertion that catches the missing require_once('markdown.php')
+    // bug: without the require_once, \bbsengine6\markdown\serveRawMarkdown()
     // is undefined, the handler throws, and headers_list() won't
     // contain the text/plain header.
     if (stripos($contentType, 'text/plain') === false) {

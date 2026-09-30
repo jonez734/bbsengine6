@@ -22,6 +22,9 @@ namespace bbsengine6\router;
  * vhost except /handbook/<v>/, which has its own entry-point in
  * engine/serve-md.php).
  *
+ * As of 2026-10-XX the raw-markdown library (\bbsengine6\markdown\serveRawMarkdown)
+ * lives in php/markdown.php; engine/serve-md.php is now a 4-line wrapper.
+ *
  * ROUTER_NEXT instructs the loop to continue on to the next handler.
  * ROUTER_RENDERED means "I rendered via displaypage() (or otherwise
  * emitted headers + body myself, as router_handleRawMarkdown does);
@@ -81,22 +84,6 @@ require_once('blurb.php');
 require_once('engine.php');
 require_once("page.php");
 require_once("folder.php");
-
-// @since 2026-09-29 — load the raw-markdown library so the
-// router_handleRawMarkdown handler (registered in
-// router_gethandlers() below) can call \bbsengine6\serveRawMarkdown().
-// The library (php/serve-md.php) is side-effect free: it defines
-// the function and nothing else. The handler emits Content-Type:
-// text/plain; charset=utf-8 and streams the file body via
-// readfile(). Without this require_once the function is undefined
-// on every vhost that loads engine/router.php, and /<uri>.md URLs
-// 500 with 'Call to undefined function
-// bbsengine6\\serveRawMarkdown()'.
-//
-// Placed between folder.php and serve-tmpl.php to keep "stream a
-// file as-is with the right Content-Type" helpers (text/plain for
-// .md, text/html for .tmpl) adjacent.
-require_once("serve-md.php");
 
 // @since 2026-09-16 — hands page-namespace URIs
 // (e.g. /contact-us -> DOCUMENTROOT/skin/tmpl/contact-us.tmpl)
@@ -481,12 +468,12 @@ function router_handleRawMarkdown(string $uri)
   if ($teosdir === '') return ROUTER_NEXT;
 
   // @since 2026-09-29 — raw text/plain dispatcher for .md URLs.
-  // Reuses the canonical library bbsengine6\serveRawMarkdown() at
-  // php/serve-md.php which enforces realpath-based containment
-  // under the supplied base dir, .md-only extension, and file-only
-  // (rejects directories). On a hit the library emits
-  // `Content-Type: text/plain; charset=utf-8` itself and reads
-  // the body to stdout; we return ROUTER_RENDERED so the
+  // Reuses the canonical library \bbsengine6\markdown\serveRawMarkdown()
+  // at php/markdown.php (merged from php/serve-md.php on 2026-10-XX)
+  // which enforces realpath-based containment under the supplied
+  // base dir, .md-only extension, and file-only (rejects directories).
+  // On a hit the library emits `Content-Type: text/plain; charset=utf-8`
+  // itself and reads the body to stdout; we return ROUTER_RENDERED so the
   // HTTP entry-point emits nothing more. On a miss (or any
   // validation failure) the library returns false and we fall
   // through to ROUTER_NEXT so the dispatch chain reaches
@@ -499,7 +486,7 @@ function router_handleRawMarkdown(string $uri)
   // handbook vhost, to the separate engine/serve-md.php entry-point
   // which has its own handbook-home containment via handbook_resolve()).
   $reluri = ltrim($uri, '/');
-  if (\bbsengine6\serveRawMarkdown($teosdir, $reluri)) {
+  if (\bbsengine6\markdown\serveRawMarkdown($teosdir, $reluri)) {
     return ROUTER_RENDERED;
   }
   return ROUTER_NEXT;
