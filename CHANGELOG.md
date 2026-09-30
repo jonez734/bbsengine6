@@ -1,5 +1,89 @@
 ## [Unreleased]
 
+### refactor(engine): restore VHOSTCONFIG resolver as FPM-env-propagation safety net
+
+The Sep 29 commit `02eebac` removed `engine/vhostconfig.php` on the
+rationale that `VHOSTDOCROOT + include_path` was sufficient for resolving
+the vhost's `config.php`. In production on merlin (mod_proxy_fcgi + FPM
+with `clear_env = yes`, the PHP 7+ default), Apache's `SetEnv`
+directives do not propagate to the FPM worker:
+
+  - `bootstrap.php:50-57` reads `getenv('VHOSTDOCROOT')` — empty in FPM.
+    The vhost root is not prepended to `include_path`.
+  - `bbsengine6config.php:51` calls `stream_resolve_include_path("config.php")`
+    — without the vhost root on the path, returns false. The vhost's
+    `config.php` is never loaded.
+  - `\config\SMARTYTEMPLATESDIR` (and friends) is never defined.
+  - On any request that falls through `router_handleError` (e.g. a `.md`
+    URL whose `rawmarkdown` handler missed because TEOSDIR was also
+    stripped), `getsmarty()` throws its
+    `RuntimeException "SMARTYTEMPLATESDIR is not configured"`, which
+    `engine/router.php:846`'s outer catch re-emits as
+    `router.http.100:<message>`.
+
+The fix restores `engine/vhostconfig.php` as a robust fallback that
+**does not depend on FPM env propagation**:
+
+  1. `VHOSTCONFIG` env var (preferred) — set by every htaccess-prod in
+     the repo as `SetEnv VHOSTCONFIG <abs-path>` (already present in
+     teos/www/htaccess-prod:30 and bbsengine6/www/org/htaccess-prod:30
+     but unused by current code). Honors Apache `mod_env` +
+     `AllowOverride FileInfo` prerequisites.
+  2. `SCRIPT_FILENAME` fallback — walks up from
+     `<docroot>/engine/<script>.php` to `<docroot>/` and probes known
+     vhost subdirs (`config.php`, `teos/config.php`, `org/config.php`,
+     `com/config.php`, `bbsengine.org/config.php`). Works without any
+     env vars; uses `is_file()` which is filesystem-only.
+  3. Both fail — return false. `bbsengine6config.php:51`'s
+     `stream_resolve_include_path` chain still runs as a tertiary
+     fallback (CLI tests, partial deploys). If that also misses,
+     `getsmarty()` throws the existing "not configured" exception
+     (the pre-2026-09-24 failure mode, which is the correct behavior
+     for genuinely misconfigured vhosts).
+
+The resolver lives at `engine/vhostconfig.php` and is required from
+`engine/router.php` immediately after `util.php` (before the engine,
+blurb, page, folder, and serve-tmpl requires). It uses
+`\bbsengine6\util\env('VHOSTCONFIG', 'NEEDINFO...')` so the read
+follows the canonical `getenv() -> defined() -> default` precedence
+(AGENTS.md "TEOSDIR resolution contract") and the
+`NEEDINFO.VHOSTCONFIG.router_resolve_vhost_config` logentry sentinel
+matches the pre-removal shape — any log probes that grep for
+`NEEDINFO.VHOSTCONFIG` keep working.
+
+**Files touched:**
+
+  - `engine/vhostconfig.php` (restored)
+  - `engine/router.php` (docblock + `require_once("vhostconfig.php")`
+    + resolver call after util.php load)
+  - `engine/Makefile` (canonical entry-points comment updated)
+  - `Makefile:283` (deploy-handbook banner now lists `vhostconfig`)
+  - `deploytool/tests/test_deploy_bbsengine6_engine.py`
+    (`test_engine_vhostconfig_php_does_not_exist` inverted to
+    `test_engine_vhostconfig_php_exists_with_resolver`; the
+    regression-guard intent — prevent accidental removal of the
+    safety net — is preserved under a new name)
+  - `CHANGELOG.md` (this entry)
+
+**Deploy impact:**
+
+  - The `ENGINE_PHP = $(wildcard *.php)` wildcard in `engine/Makefile:33`
+    auto-picks up `vhostconfig.php` and stages it alongside the other
+    entry-points. No Makefile recipe changes.
+  - The next `deploy --with-deps teos.prod` will rsync the new file to
+    `/srv/www/vhosts/zoidtechnologies.com/html/engine/vhostconfig.php`
+    (and the equivalent handbook path). FPM will pick it up on the
+    next request; no reload strictly required, but `sudo systemctl
+    reload php-fpm` is the standard post-deploy hygiene.
+
+**Regression intent:** the new deploytool test
+`test_engine_vhostconfig_php_exists_with_resolver` replaces the
+`02eebac`-era `test_engine_vhostconfig_php_does_not_exist` test. Both
+tests pin a single thing — but the new test pins the safety net
+exists, while the old test pinned its absence. The 2026-09-29
+removal turned out to be premature on merlin's specific FPM plumbing;
+the restored file is the canonical fix.
+
 ### refactor(php/markdown): merge php/serve-md.php into php/markdown.php under \bbsengine6\markdown
 
 `.md` handling now lives in one file under one namespace. The library at

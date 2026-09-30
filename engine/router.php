@@ -77,11 +77,23 @@ namespace bbsengine6\router;
  * If VHOSTDOCROOT is unset on FPM, getsmarty() throws its existing
  * "SMARTYTEMPLATESDIR is not configured" RuntimeException (the
  * pre-2026-09-24 failure mode).
+ * @since 2026-10-XX — VHOSTCONFIG resolver restored. The 02eebac
+ * removal turned out to be premature: on merlin's mod_proxy_fcgi +
+ * FPM pool, Apache's SetEnv directives (VHOSTDOCROOT, TEOSDIR) do not
+ * propagate to the FPM worker, so the include_path-only chain at
+ * bbsengine6config.php:51 misses the vhost config and \config\SMARTYTEMPLATESDIR
+ * is undefined. The fix is engine/vhostconfig.php, which loads the
+ * vhost's config.php via VHOSTCONFIG env (absolute path; set by every
+ * htaccess-prod in the repo) with a SCRIPT_FILENAME probe fallback for
+ * deployments where Apache's env vars don't reach FPM at all.
+ * Both code paths work without depending on FPM env propagation.
  */
 
 require_once("/srv/www/bbsengine6/php/bootstrap.php");
 
 require_once('util.php');
+require_once("vhostconfig.php");
+\bbsengine6\router\router_resolve_vhost_config();
 
 require_once('markdown.php');
 require_once('blurb.php');
