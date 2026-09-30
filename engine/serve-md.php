@@ -14,6 +14,7 @@ if ($uri === '' || $uri[0] !== '/') {
 $relpath = ltrim($uri, '/');
 
 if ($relpath === '' || !preg_match('#^/handbook/(\d+)/#', $_SERVER['REQUEST_URI'] ?? '', $m)) {
+    \bbsengine6\util\logentry("serve-md.210: validate failed relpath=" . var_export($relpath, true) . " request_uri=" . var_export($_SERVER['REQUEST_URI'] ?? '', true));
     http_response_code(404);
     header('Content-Type: text/plain; charset=utf-8');
     echo 'engine.serve-md.validate-handbook-prefix.220: File not found';
