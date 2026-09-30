@@ -317,6 +317,21 @@ function display($uri)
     $data["uri"] = $uri;
     $data["hidden"] = !isFolderVisible($uri) && isSysop();
 
+    // @since 2026-09-30 — populate $data["breadcrumbs"] so folder.tmpl's
+    // youarehere include has a trail to render. Mirrors the blurb.php
+    // pattern (blurb.php::display): the filesystem-fallback
+    // router_buildBreadcrumbs() builds the root + folder chain, and
+    // the trailing segment (the current folder itself) is rendered as
+    // plain text by youarehere.tmpl because folder.tmpl passes
+    // linklast=true. Without this assignment folder.tmpl's youarehere
+    // include sees an undefined $breadcrumbs variable and renders
+    // nothing after "You are here: ".
+    if (function_exists('router_buildBreadcrumbs')) {
+        $data["breadcrumbs"] = router_buildBreadcrumbs($uri);
+    } else {
+        $data["breadcrumbs"] = [];
+    }
+
     if (function_exists('\bbsengine6\displaypage')) {
         return \bbsengine6\displaypage($data, "folder.tmpl");
     }
