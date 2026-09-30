@@ -138,6 +138,55 @@ if (strpos($page_md_src, 'youarehere.tmpl') === false) {
 }
 test_pass("page-markdown.tmpl uses youarehere.tmpl");
 
+// @since 2026-09-30 — folder.tmpl was missing the youarehere include
+// entirely. Production /teos/<dir>/ pages rendered no "You are here"
+// trail at all. Pin the include so a future template rewrite doesn't
+// silently drop it again.
+echo "Test 7a: folder.tmpl uses youarehere.tmpl\n";
+$folder_tmpl = "/home/opencode/data/work/bbsengine6/skin/tmpl/folder.tmpl";
+$folder_tmpl_src = file_get_contents($folder_tmpl);
+if (strpos($folder_tmpl_src, 'youarehere.tmpl') === false) {
+    test_fail("folder.tmpl does not include youarehere.tmpl");
+}
+test_pass("folder.tmpl uses youarehere.tmpl");
+
+// @since 2026-09-30 — folder.php::display() must populate
+// $data["breadcrumbs"] for the template include to render. Pin
+// the assignment so a future display() refactor doesn't silently
+// drop the breadcrumbs field again.
+echo "Test 7b: folder.php::display() populates \$data[\"breadcrumbs\"]\n";
+$folder_php_src = file_get_contents("/home/opencode/data/work/bbsengine6/php/folder.php");
+if (preg_match('/function\s+display\s*\(\s*\$uri\s*\)\s*\{(.*?)^\}/sm', $folder_php_src, $m)) {
+    $display_body = $m[1];
+    if (strpos($display_body, '$data["breadcrumbs"]') === false
+        && strpos($display_body, "\$data['breadcrumbs']") === false) {
+        test_fail("folder.php::display() does not assign \$data['breadcrumbs']");
+    }
+} else {
+    test_fail("could not locate folder.php::display() function body");
+}
+test_pass("folder.php::display() assigns \$data['breadcrumbs']");
+
+// @since 2026-09-30 — blurb.php's "You are here" was rendering empty
+// because buildbreadcrumbs() / router_buildBreadcrumbs() build parent-
+// folder chains only, never the current blurb itself. The fix appends
+// a final crumb from $parsed["title"] so the trail ends at the
+// current page. Pin the append so a future refactor doesn't lose it.
+echo "Test 7c: blurb.php appends a current-page crumb in the fallback path\n";
+$blurb_php_src = file_get_contents("/home/opencode/data/work/bbsengine6/php/blurb.php");
+if (preg_match('/function\s+display\s*\(\s*\$uri\s*,\s*\$filepath\s*\)\s*\{(.*?)^\}/sm', $blurb_php_src, $m)) {
+    $blurb_body = $m[1];
+    if (strpos($blurb_body, '$parsed["title"]') === false) {
+        test_fail("blurb.php::display() does not reference \$parsed[\"title\"]");
+    }
+    if (strpos($blurb_body, 'breadcrumbs[]') === false) {
+        test_fail("blurb.php::display() does not append to \$breadcrumbs[]");
+    }
+} else {
+    test_fail("could not locate blurb.php::display() function body");
+}
+test_pass("blurb.php::display() appends current-page crumb from parsed title");
+
 echo "\n";
 
 // =============================================================================
