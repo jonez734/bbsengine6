@@ -16,7 +16,7 @@ $relpath = ltrim($uri, '/');
 if ($relpath === '' || !preg_match('#^/handbook/(\d+)/#', $_SERVER['REQUEST_URI'] ?? '', $m)) {
     http_response_code(404);
     header('Content-Type: text/plain; charset=utf-8');
-    echo 'File not found';
+    echo 'engine.serve-md.validate-handbook-prefix.220: File not found';
     exit;
 }
 
@@ -27,7 +27,7 @@ if ($file === false) {
     \bbsengine6\util\logentry("serve-md.200: resolve failed for prefix=$prefix path=$relpath");
     http_response_code(404);
     header('Content-Type: text/plain; charset=utf-8');
-    echo 'File not found';
+    echo 'engine.serve-md.resolve-handbook-md.240: File not found';
     exit;
 }
 
