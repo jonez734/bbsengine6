@@ -20,39 +20,38 @@
  *                             `Content-Type: text/plain; charset=utf-8`
  *                             and readfile()s the body on hit. Used by
  *                             router_handleRawMarkdown (engine/router.php)
- *                             for non-handbook vhosts via env("TEOSDIR").
- *     - serveRawMarkdownForHandbook(): void
- *                             HTTP entry-point. Reads $_GET['path'] +
- *                             $_SERVER['REQUEST_URI'], derives handbook
- *                             version, delegates to stricter
- *                             \bbsengine6\util\handbook_resolve()
- *                             (handbook-home containment via
- *                             BBSENGINE6_HANDBOOK_HOME). 404 body IDs:
- *                               engine.serve-md.validate-handbook-prefix.220
- *                               engine.serve-md.resolve-handbook-md.240
+ *                             for all vhosts (handbook and non-handbook)
+ *                             via env("TEOSDIR"). On the handbook vhost
+ *                             htaccess-prod's SetEnv TEOSDIR points at
+ *                             /srv/www/vhosts/www.bbsengine.org/html/handbook/<v>/
+ *                             so <TEOSDIR>/<uri>.md resolves to the right
+ *                             file; the htaccess RewriteRule forwards
+ *                             /handbook/<v>/<uri>.md to engine/router.php
+ *                             which dispatches via the rawmarkdown handler
+ *                             matching /\.md$/.
  *
  * Previously these were split across:
  *   - php/markdown.php       (render half)
- *   - php/serve-md.php       (stream half; library-only since 2026-09-29)
- *   - engine/serve-md.php    (handbook-vhost entry-point)
+ *   - php/serve-md.php       (stream half; library-only since 2026-09-29;
+ *                             merged here on 2026-10-XX)
+ *   - engine/serve-md.php    (handbook-vhost entry-point wrapper; deleted
+ *                             when the htaccess rewrite target moved to
+ *                             engine/router.php, since the router's
+ *                             rawmarkdown handler is vhost-agnostic and
+ *                             covers the handbook case via TEOSDIR)
  *
- * Merged here on 2026-10-XX so .md handling has one canonical namespace
- * (\bbsengine6\markdown) and one canonical file. The handbook-vhost
- * entry-point now lives in engine/serve-md.php as a 4-line wrapper that
- * require_once's this file and calls serveRawMarkdownForHandbook().
- *
- * Side-effect-free on require_once: the entry-point guard at the bottom
- * fires only when SCRIPT_NAME === /engine/serve-md.php (the htaccess
- * rewrite target on the handbook vhost). When required from router.php
- * or a test harness under a different SCRIPT_NAME, the entry-point stays
- * dormant.
+ * Side-effect-free on require_once: no namespace {} entry-point guard.
+ * The merged refactor on 2026-10-XX dropped the engine/serve-md.php
+ * shim, so there is no SCRIPT_NAME-driven entry-point to guard against;
+ * callers explicitly invoke \bbsengine6\markdown\serveRawMarkdown()
+ * (e.g. router_handleRawMarkdown in engine/router.php).
  */
 
 namespace bbsengine6\markdown {
 
 // Parsedown / ParsedownExtra are lazy-loaded inside renderHtml() so
-// require_once'ing this file from the entry-point guard (where
-// include_path may not yet be primed for vendor/) does not fatal.
+// require_once'ing this file from contexts where include_path may
+// not yet be primed for vendor/ does not fatal.
 
 /**
  * Parse YAML frontmatter ("---\nkey: value\n---\n") at the start of a
@@ -205,84 +204,6 @@ function serveRawMarkdown(string $basedir, string $relpath): bool
     header('Content-Type: text/plain; charset=utf-8');
     readfile($realfile);
     return true;
-}
-
-/**
- * HTTP entry-point for the handbook vhost's /handbook/<v>/<uri>.md URLs.
- *
- * Reads $_GET['path'] and $_SERVER['REQUEST_URI'], derives the handbook
- * version, delegates to \bbsengine6\util\handbook_resolve() (stricter
- * handbook-home containment via BBSENGINE6_HANDBOOK_HOME), emits body
- * or 404 + stable error body ID. Exits on every path.
- *
- * Stable 404 body IDs (pinned by tests/test_serve_md_entry_point.sh):
- *   engine.serve-md.validate-handbook-prefix.220 -- REQUEST_URI does
- *     not carry /handbook/<v>/, or $_GET['path'] is empty.
- *   engine.serve-md.resolve-handbook-md.240 -- handbook_resolve()
- *     returned false (missing file, traversal, wrong extension, etc.).
- *
- * Logentry codes (pinned by the same test):
- *   serve-md.100 -- start
- *   serve-md.200 -- resolve failed
- *   serve-md.210 -- validate failed (REQUEST_URI / ?path= shape)
- */
-function serveRawMarkdownForHandbook(): void
-{
-    \bbsengine6\util\logentry("serve-md.100: start");
-
-    $uri = $_GET['path'] ?? '';
-
-    if ($uri === '' || $uri[0] !== '/') {
-        $uri = '/' . $uri;
-    }
-
-    $relpath = ltrim($uri, '/');
-
-    if ($relpath === '' || !preg_match('#^/handbook/(\d+)/#', $_SERVER['REQUEST_URI'] ?? '', $m)) {
-        \bbsengine6\util\logentry("serve-md.210: validate failed relpath=" . var_export($relpath, true) . " request_uri=" . var_export($_SERVER['REQUEST_URI'] ?? '', true));
-        http_response_code(404);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'engine.serve-md.validate-handbook-prefix.220: File not found';
-        exit;
-    }
-
-    $prefix = 'handbook/' . $m[1];
-    $file = \bbsengine6\util\handbook_resolve($prefix, $relpath);
-
-    if ($file === false) {
-        \bbsengine6\util\logentry("serve-md.200: resolve failed for prefix=$prefix path=$relpath");
-        http_response_code(404);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'engine.serve-md.resolve-handbook-md.240: File not found';
-        exit;
-    }
-
-    header('Content-Type: text/plain; charset=utf-8');
-    readfile($file);
-}
-
-}
-
-namespace {
-
-// Side-effect-free guard: fire serveRawMarkdownForHandbook() only when
-// this file is invoked directly as /engine/serve-md.php (the htaccess
-// rewrite target on the handbook vhost). When required from router.php
-// or a test harness under a different SCRIPT_NAME, the entry-point
-// stays dormant. The require_once from engine/serve-md.php (the vhost
-// entry-point shim) sees SCRIPT_NAME === /engine/serve-md.php so the
-// guard opens; the function calls exit; on every path, so the require
-// call inside the shim never reaches the second pass.
-
-if ((($_SERVER['SCRIPT_NAME'] ?? '') === '/engine/serve-md.php'
-     || ($_SERVER['PHP_SELF'] ?? '') === '/engine/serve-md.php')
-    && !defined('BBSENGINE6_MD_LIBRARY_ONLY')) {
-    if (!function_exists('bbsengine6\\bootstrap')) {
-        require_once '/srv/www/bbsengine6/php/bootstrap.php';
-    }
-    bbsengine6\bootstrap();
-    require_once 'util.php';
-    bbsengine6\markdown\serveRawMarkdownForHandbook();
 }
 
 }

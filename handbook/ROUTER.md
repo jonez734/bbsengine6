@@ -473,13 +473,19 @@ response by the browser). Two independent breaks compounded:
      `preg_replace('/\.md$/', '', $reluri)` before its filesystem
      probe as belt-and-suspenders.
 
-The handbook vhost keeps its dedicated `engine/serve-md.php`
-entry-point (now a 4-line wrapper around `php/markdown.php`'s
-`\bbsengine6\markdown\serveRawMarkdownForHandbook()`) with the
-stricter `handbook_resolve()` containment via
-`BBSENGINE6_HANDBOOK_HOME`. The teos vhost's htaccess is updated
-to route `.md` URLs to `engine/router.php` so the new
-router-side handler can fire.
+The handbook vhost's `.md` URLs are now served by the same path
+the teos vhost uses: htaccess-prod's `.md` branch forwards
+`/handbook/<v>/<uri>.md` to `/engine/router.php?uri=$2`, and the
+router's `rawmarkdown` handler (registered with pattern `/\.md$/`)
+dispatches via `\bbsengine6\markdown\serveRawMarkdown($teosdir,
+$reluri)`. The vhost's `SetEnv TEOSDIR` (`/srv/www/vhosts/
+www.bbsengine.org/html/handbook/<v>/`) makes the resolver probe
+the right file under the handbook home — no separate entry-point
+shim needed. The legacy `engine/serve-md.php` shim and its
+`handbook_resolve()` containment are gone; the deployable file
+inventory now drops to `router.php, serve-tmpl.php, join.php,
+login.php, logout.php, direct.php, standalone.php` (see
+`engine/Makefile`'s canonical-entry-points comment).
 
 **Regression tests:**
 

@@ -15,7 +15,8 @@
  * probes .md.
  *
  * Path-traversal guard: realpath() containment + is_file() +
- * .tmpl extension check, same defense as engine/serve-md.php.
+ * .tmpl extension check, same defense as
+ * \bbsengine6\markdown\serveRawMarkdown() at php/markdown.php.
  *
  * @since 2026-09-16
  */

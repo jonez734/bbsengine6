@@ -3,14 +3,27 @@
 # Verifies bbsengine6\util\handbook_home() and
 # bbsengine6\util\handbook_resolve() in php/util.php.
 #
-# These helpers are the single source of truth for
+# These helpers were the single source of truth for
 # resolving /handbook/<v>/<uri>.md URLs to absolute
-# filesystem paths. They were added to fix the bug
-# where engine/serve-md.php hardcoded a TEOSDIR
+# filesystem paths in the legacy engine/serve-md.php
+# entry-point. After the 2026-10-XX htaccess migration,
+# the .md route goes through engine/router.php's
+# rawmarkdown handler which calls
+# \bbsengine6\markdown\serveRawMarkdown($teosdir, $reluri)
+# (realpath containment against the basedir, not the
+# stricter handbook-home containment). handbook_resolve()
+# is still tested here because (a) handbook_home() is
+# still the canonical handbook-tree root, used by the
+# deploy chain and the catalog_content dispatch, and
+# (b) the 2026-09-09 bug-fix regression guard is
+# historical and worth keeping live.
+#
+# (Historical context: handbook_resolve was added to fix
+# the bug where engine/serve-md.php hardcoded a TEOSDIR
 # fallback that pointed at the wrong docroot, causing
 # live /handbook/6/specs/auth-bank.md requests to 404
-# with "File not found" (see engine/serve-md.php prior
-# to the 2026-09-09 fix).
+# with "File not found". The book-keeping helper is
+# preserved.)
 #
 # What this test checks:
 #   [1] handbook_home() returns the canonical handbook
@@ -126,7 +139,7 @@ echo
 echo "[2] handbook_resolve() happy path"
 # The build-host tree may not have a versioned handbook/6/ subdir
 # (the canonical tree lives on merlin). Create a temp versioned
-# tree that mirrors the layout serve-md.php resolves against.
+# tree that mirrors the layout handbook_resolve() probes.
 hp_dir=$(mktemp -d)
 mkdir -p "$hp_dir/handbook/6/specs"
 echo "# test content" > "$hp_dir/handbook/6/specs/auth-bank.md"

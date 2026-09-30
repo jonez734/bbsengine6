@@ -87,8 +87,9 @@ at request time by `engine/router.php` via the shared
 the `.md` tree to `WWWSTAGE/handbook/<v>/`, where Apache +
 `mod_php` + the rewrite in `www/org/htaccess-prod` route every
 `/handbook/<v>/...` request to `/engine/router.php` for read-time
-rendering (raw `.md` URLs go through `/engine/serve-md.php`,
-which streams the file as `text/plain`). The router detects the
+rendering (raw `.md` URLs go through `/engine/router.php`'s
+`rawmarkdown` handler, which streams the file as `text/plain` via
+`\bbsengine6\markdown\serveRawMarkdown()` against TEOSDIR). The router detects the
 `/handbook/<v>/` URI prefix, sets `TEOSDIR` to the matching
 version tree, and dispatches `handleMarkdown` for chapters,
 `handleFolder` for directories, and `handleIndex` for the bare

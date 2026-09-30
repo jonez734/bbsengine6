@@ -17,13 +17,17 @@ namespace bbsengine6\router;
  * ".md" before pattern matching. Handlers that don't care about the
  * .md suffix must pattern-gate or strip it themselves; the
  * dispatch loop passes the full URI (with extension) to every
- * handler. The new router_handleRawMarkdown handler covers
- * raw text/plain .md URLs (previously a dead code path on every
- * vhost except /handbook/<v>/, which has its own entry-point in
- * engine/serve-md.php).
+ * handler. The router_handleRawMarkdown handler covers
+ * raw text/plain .md URLs on every vhost (handbook and non-handbook):
+ * htaccess-prod's SetEnv TEOSDIR points the resolver at the right
+ * basedir for the active vhost (handbook vhost: /handbook/<v>/,
+ * teos vhost: /teos/) and the rawmarkdown handler dispatches via
+ * \bbsengine6\markdown\serveRawMarkdown().
  *
  * As of 2026-10-XX the raw-markdown library (\bbsengine6\markdown\serveRawMarkdown)
- * lives in php/markdown.php; engine/serve-md.php is now a 4-line wrapper.
+ * lives in php/markdown.php; engine/serve-md.php is gone — the
+ * handbook vhost's htaccess-prod rewrites /handbook/<v>/<uri>.md
+ * directly to /engine/router.php?uri=$2, no per-vhost shim needed.
  *
  * ROUTER_NEXT instructs the loop to continue on to the next handler.
  * ROUTER_RENDERED means "I rendered via displaypage() (or otherwise
@@ -256,15 +260,18 @@ function router_gethandlers(): array
     'rawmarkdown' => [
       'fn'      => 'bbsengine6\\router\\router_handleRawMarkdown',
       // /<uri>.md URLs across all vhosts (handbook + non-handbook).
-      // The handbook vhost still has its own /engine/serve-md.php
-      // entry-point for raw .md (see www/org/htaccess-prod), but
-      // this handler is the universal fallback when a vhost's
-      // htaccess rewrites .md into engine/router.php (the teos
-      // vhost does this since 2026-09-29). The $ end-anchor
-      // naturally restricts the match to URIs ending in '.md';
-      // no negative lookahead is required to exclude dot-bearing
-      // URIs from the other handlers (see the markdown pattern
-      // comment above for the inverse gate).
+      // The handbook vhost's htaccess-prod rewrites .md URLs to
+      // /engine/router.php?uri=$2 (the same target the teos vhost
+      // uses), so this handler is the single dispatch path for
+      // raw .md across the entire codebase. The active vhost's
+      // SetEnv TEOSDIR is the basedir against which
+      // \bbsengine6\markdown\serveRawMarkdown() resolves the file;
+      // htaccess-prod's per-vhost SetEnv drives the right basedir
+      // automatically (handbook: /handbook/<v>/, teos: /).
+      // The $ end-anchor naturally restricts the match to URIs
+      // ending in '.md'; no negative lookahead is required to
+      // exclude dot-bearing URIs from the other handlers (see
+      // the markdown pattern comment above for the inverse gate).
       'pattern' => '/\.md$/',
     ],
   ];
@@ -482,9 +489,12 @@ function router_handleRawMarkdown(string $uri)
   //
   // The handler's pattern in router_gethandlers() is /\.md$/ so
   // this branch only fires for .md-suffixed URIs. Per-vhost htaccess
-  // rewrites are responsible for routing .md URLs here (or, on the
-  // handbook vhost, to the separate engine/serve-md.php entry-point
-  // which has its own handbook-home containment via handbook_resolve()).
+  // rewrites are responsible for routing .md URLs here. The handbook
+  // vhost's htaccess-prod rewrites /handbook/<v>/<uri>.md to
+  // /engine/router.php?uri=$2 (same target as the teos vhost), and
+  // the vhost's SetEnv TEOSDIR = /srv/www/vhosts/www.bbsengine.org/
+  // html/handbook/<v>/ makes the resolver probe the right file under
+  // the handbook home — no separate entry-point shim needed.
   $reluri = ltrim($uri, '/');
   if (\bbsengine6\markdown\serveRawMarkdown($teosdir, $reluri)) {
     return ROUTER_RENDERED;

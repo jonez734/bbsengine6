@@ -10,18 +10,21 @@
 # Why byte-level equality is the right assertion:
 #
 #   The /handbook/<v>/<uri>.md route is handled by
-#   engine/serve-md.php, whose terminal action is
-#       readfile($filepath);
-#   (see engine/serve-md.php:43). The handler sets
-#   Content-Type: text/plain; charset=utf-8 and emits
-#   the raw file bytes with no transformation. So a
-#   200 response from this URL is, by construction,
+#   engine/router.php's router_handleRawMarkdown, whose
+#   terminal action is
+#       \bbsengine6\markdown\serveRawMarkdown($teosdir, $reluri)
+#   which calls readfile($filepath) on success
+#   (see engine/router.php:475 and php/markdown.php:186).
+#   The handler sets Content-Type: text/plain; charset=utf-8
+#   and emits the raw file bytes with no transformation.
+#   So a 200 response from this URL is, by construction,
 #   the .md source. Any byte drift between the live
 #   response and the local working tree is a real
 #   "prod is out of sync" condition, and any
-#   non-text/plain response means serve-md.php did
-#   not run (likely a router/htaccess regression or
-#   a 500/404 fallback). The test asserts both.
+#   non-text/plain response means router.php's
+#   rawmarkdown handler did not run (likely a
+#   router/htaccess regression or a 500/404 fallback).
+#   The test asserts both.
 #
 # What the test does NOT do (and why):
 #
@@ -61,11 +64,13 @@
 #        happens to be plain text).
 #   [6]  Build-host plumbing invariant: the
 #        htaccess-prod rewrite rule that routes
-#        /handbook/<v>/<uri>.md to /serve-md.php
-#        is present and targets the .org vhost's
-#        html/engine/ install (/engine/serve-md.php).
-#        Without this rule, the test's URL would
-#        not reach serve-md.php at all.
+#        /handbook/<v>/<uri>.md to /engine/router.php
+#        (the rawmarkdown handler then dispatches via
+#        \bbsengine6\markdown\serveRawMarkdown against
+#        TEOSDIR) is present and targets the .org vhost's
+#        html/engine/ install. Without this rule, the
+#        test's URL would not reach the rawmarkdown
+#        handler at all.
 #
 # Each check's "bad" message points at the specific
 # failure mode and the operator action that resolves
@@ -108,21 +113,22 @@ fi
 echo
 
 # --- 2. Content-Type is text/plain --------------------------------------
-# serve-md.php emits text/plain; charset=utf-8. If the
-# response is text/html, the router served an HTML page
-# (a 200 masquerading as content) and the byte-match
-# check below would be meaningless. Fail this check first
-# so the diagnosis is actionable.
+# router.php's rawmarkdown handler (via
+# \bbsengine6\markdown\serveRawMarkdown) emits text/plain;
+# charset=utf-8. If the response is text/html, the router
+# served an HTML page (a 200 masquerading as content) and
+# the byte-match check below would be meaningless. Fail
+# this check first so the diagnosis is actionable.
 echo "[2] Content-Type check"
 probe_headers "$URL" /tmp/auth-bank.headers
 ct=$(grep -i -E '^content-type:' /tmp/auth-bank.headers 2>/dev/null | head -1 | tr -d '\r' || true)
 echo "    $ct"
 if [ -z "$ct" ]; then
-  bad "no Content-Type header in response -- serve-md.php did not run (or the .md route fell through to a different handler)"
+  bad "no Content-Type header in response -- the rawmarkdown handler did not run (or the .md route fell through to a different handler)"
 elif echo "$ct" | grep -qi '^content-type: *text/plain'; then
-  ok "Content-Type is text/plain (serve-md.php ran and readfile()'d the source)"
+  ok "Content-Type is text/plain (rawmarkdown handler ran and readfile()'d the source)"
 else
-  bad "Content-Type is not text/plain: '$ct' -- serve-md.php did not run; the router served an HTML error page or a different handler. Likely htaccess-prod is missing the /serve-md.php .md rewrite, or the engine install did not land at /srv/www/vhosts/www.bbsengine.org/html/engine/"
+  bad "Content-Type is not text/plain: '$ct' -- the rawmarkdown handler did not run; the router served an HTML error page or a different handler. Likely htaccess-prod is missing the /engine/router.php .md rewrite, or the engine install did not land at /srv/www/vhosts/www.bbsengine.org/html/engine/"
 fi
 echo
 
@@ -184,25 +190,25 @@ echo
 
 # --- 6. build-host plumbing invariant -----------------------------------
 # The /handbook/<v>/<uri>.md rewrite in
-# www/org/htaccess-prod must target /engine/serve-md.php
+# www/org/htaccess-prod must target /engine/router.php
 # (the .org vhost's per-vhost /engine/ install) and must be present.
 # If this rule is missing, the test's URL would
-# not reach serve-md.php at all and [1] would
-# fail with a 404/500. We check it explicitly
+# not reach the rawmarkdown handler at all and [1]
+# would fail with a 404/500. We check it explicitly
 # so a missing rule is diagnosed as "plumbing",
 # not as a content-sync issue.
-echo "[6] build-host plumbing invariant (htaccess-prod /engine/serve-md.php .md rule)"
+echo "[6] build-host plumbing invariant (htaccess-prod /engine/router.php .md rule)"
 if [ ! -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
   bad "local www/org/htaccess-prod missing"
 else
   md_rule_ok=false
-  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/serve-md.php'; then
+  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/[0-9]+/[^\ ]+\.md[[:space:]]' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/router.php?uri='; then
     md_rule_ok=true
   fi
   if $md_rule_ok; then
-    ok "local www/org/htaccess-prod routes /handbook/<v>/<uri>.md to /engine/serve-md.php (the .org vhost's per-vhost /engine/ install)"
+    ok "local www/org/htaccess-prod routes /handbook/<v>/<uri>.md to /engine/router.php?uri= (the .org vhost's per-vhost /engine/ install); router's rawmarkdown handler dispatches against TEOSDIR"
   else
-    bad "local www/org/htaccess-prod does NOT route /handbook/<v>/<uri>.md to /engine/serve-md.php -- the .org vhost's per-vhost /engine/ install must be the rewrite target"
+    bad "local www/org/htaccess-prod does NOT route /handbook/<v>/<uri>.md to /engine/router.php -- the .org vhost's per-vhost /engine/ install must be the rewrite target"
   fi
 fi
 echo
@@ -220,18 +226,20 @@ if [ "$fail" -gt 0 ]; then
   echo
   echo "  if [1] returns 404:"
   echo "    -- the /handbook/<v>/<uri>.md route is not reaching"
-  echo "       /engine/serve-md.php. Check htaccess-prod has the active"
-  echo "       RewriteRule for ^handbook/ ... /engine/serve-md.php,"
-  echo "       and that engine/serve-md.php landed at"
+  echo "       /engine/router.php's rawmarkdown handler. Check"
+  echo "       htaccess-prod has the active RewriteRule for"
+  echo "       ^handbook/<v>/<uri>.md ... /engine/router.php?uri=,"
+  echo "       and that engine/router.php landed at"
   echo "       /srv/www/vhosts/www.bbsengine.org/html/engine/ on"
   echo "       merlin (run 'make engine-deploy-prod' on the build"
   echo "       host; the .org vhost path is passed automatically"
   echo "       via 'make wwworg')."
   echo
   echo "  if [1] returns 200 but [2] is not text/plain:"
-  echo "    -- serve-md.php did not run. The router served an"
-  echo "       HTML error page (or a different handler) with a"
-  echo "       200 status. Same plumbing check as the 404 case."
+  echo "    -- the rawmarkdown handler did not run. The router"
+  echo "       served an HTML error page (or a different handler)"
+  echo "       with a 200 status. Same plumbing check as the 404"
+  echo "       case."
   echo
   echo "  if [1] returns 200, [2] is text/plain, but [4] fails:"
   echo "    -- merlin's prod tree at /srv/www/vhosts/"
@@ -242,8 +250,8 @@ if [ "$fail" -gt 0 ]; then
   echo
   echo "  if [6] fails:"
   echo "    -- the local www/org/htaccess-prod is missing the"
-  echo "       /engine/serve-md.php rewrite. Restore the rule before"
-  echo "       running this test -- without it, the test is"
+  echo "       /engine/router.php .md rewrite. Restore the rule"
+  echo "       before running this test -- without it, the test is"
   echo "       meaningless."
   echo
   echo "to re-run: $0"

@@ -6,10 +6,12 @@
 # returns Content-Type: text/plain with body byte-equal to the
 # on-disk TEOSDIR source.
 #
-# Parallel to test_serve_md_entry_point.sh, which covers the
-# handbook vhost's engine/serve-md.php path. The teos vhost
-# uses the universal engine/router.php path through
-# router_handleRawMarkdown instead.
+# The teos vhost uses the universal engine/router.php path through
+# router_handleRawMarkdown. Since 2026-10-XX the handbook vhost
+# uses the same path (the prior engine/serve-md.php shim was
+# dropped when the htaccess-prod .md branch moved to
+# /engine/router.php?uri=$2), so this test effectively covers
+# the handbook vhost's .md route too -- only the URL differs.
 #
 # Regression guard for the 2026-09-29 incident on
 # https://zoidtechnologies.com/teos/ec/investigated-psychics-

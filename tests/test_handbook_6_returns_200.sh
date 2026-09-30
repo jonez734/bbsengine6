@@ -89,7 +89,7 @@ echo
 # --- 3. additional probes verify per-mode dispatch ----------------------
 echo "[3] additional probes (new handbook content)"
 extra_probes=(
-  "$URL_BASE/index.md|200 (raw .md via engine/serve-md.php)"
+  "$URL_BASE/index.md|200 (raw .md via engine/router.php?uri=)"
   "$URL_BASE/specs/|200 (subdirectory listing)"
   "$URL_BASE/specs/architecture.md|200 (subdirectory chapter)"
 )
@@ -150,10 +150,10 @@ echo
 
 # --- 3b. legacy Flask / gunicorn / mod_wsgi artifacts must be gone -----
 # These paths served dead weight from the retired Flask stack. The
-# current request-time PHP handbook (engine/router.php +
-# engine/serve-md.php, both shipped via engine-deploy-prod)
-# does not reference any of them. `make -C www remove-legacy-handbook`
-# ssh-deletes them on merlin; the test verifies they are gone.
+# current request-time PHP handbook (engine/router.php shipped via
+# engine-deploy-prod) does not reference any of them. `make -C www
+# remove-legacy-handbook` ssh-deletes them on merlin; the test verifies
+# they are gone.
 echo "[3b] legacy handbook artifacts (should be 404 after remove-legacy-handbook)"
 legacy_paths=(
   "https://www.bbsengine.org/handbook/bbsengine-handbook.conf"
@@ -177,9 +177,9 @@ echo
 echo "[4] build-host source invariants"
 
 if [ ! -f "$LOCAL_BBSENGINE6/www/org/php/handbook.php" ]; then
-  ok "local www/org/php/handbook.php is absent (eradicated; /router.php + /serve-md.php are the .org handbook handlers)"
+  ok "local www/org/php/handbook.php is absent (eradicated; /router.php is the .org handbook handler)"
 else
-  bad "local www/org/php/handbook.php exists -- the handler is supposed to be eradicated; /router.php + /serve-md.php are the .org handbook handlers"
+  bad "local www/org/php/handbook.php exists -- the handler is supposed to be eradicated; /router.php is the .org handbook handler"
 fi
 
 if [ -f "$LOCAL_BBSENGINE6/php/bootstrap.php" ]; then
@@ -237,27 +237,31 @@ else
 fi
 
 if [ -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
-  # Each vhost's htaccess must route the five engine entry points
+  # Each vhost's htaccess must route the four engine entry points
   # to the vhost's own html/engine/ install. The /engine/ URL
   # prefix is correct in the per-vhost-rsync model (the install
-  # is at html/engine/, not at the docroot root).
+  # is at html/engine/, not at the docroot root). /serve-md.php
+  # is gone (the per-file handbook .md shim was eliminated when
+  # the htaccess rewrite target moved to /engine/router.php).
   rewrite_targets_ok=true
-  for target in '/engine/router.php' '/engine/serve-md.php' '/engine/join.php' '/engine/login.php' '/engine/logout.php'; do
+  for target in '/engine/router.php' '/engine/join.php' '/engine/login.php' '/engine/logout.php'; do
     if ! grep -E '^[[:space:]]*RewriteRule' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF "$target"; then
       rewrite_targets_ok=false
       bad "local htaccess-prod has no active RewriteRule targeting $target -- engine entry-point routing missing"
     fi
   done
   if $rewrite_targets_ok; then
-    ok "local htaccess-prod routes the five engine entry points (/router.php, /serve-md.php, /join.php, /login.php, /logout.php) to the .org vhost's html/engine/ install"
+    ok "local htaccess-prod routes the four engine entry points (/router.php, /join.php, /login.php, /logout.php) to the .org vhost's html/engine/ install"
   fi
-  # /handbook/<v>/<chapter> and /handbook/<v>/<uri>.md must route
-  # through /router.php and /serve-md.php respectively (the
-  # router detects the /handbook/<v>/ URI prefix and dispatches).
-  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/serve-md.php'; then
-    ok "local htaccess-prod routes /handbook/<v>/<uri>.md to /engine/serve-md.php"
+  # /handbook/<v>/<chapter> and /handbook/<v>/<uri>.md both route
+  # through /engine/router.php (the router detects the /handbook/<v>/
+  # URI prefix and dispatches: chrome-rendered paths go to the page
+  # handler, .md paths go to the rawmarkdown handler which calls
+  # \bbsengine6\markdown\serveRawMarkdown() against TEOSDIR).
+  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/[0-9]+/[^\ ]+\.md' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/router.php?uri='; then
+    ok "local htaccess-prod routes /handbook/<v>/<uri>.md to /engine/router.php"
   else
-    bad "local htaccess-prod does NOT route /handbook/<v>/<uri>.md to /engine/serve-md.php -- the .org vhost's per-vhost /engine/ install must be the rewrite target"
+    bad "local htaccess-prod does NOT route /handbook/<v>/<uri>.md to /engine/router.php -- the .org vhost's per-vhost /engine/ install must be the rewrite target"
   fi
   if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/router.php?uri='; then
     ok "local htaccess-prod routes /handbook/<v>/<chapter> to /engine/router.php"

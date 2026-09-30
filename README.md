@@ -152,18 +152,14 @@ bbsengine6/
 │   │                               splitFrontmatter/renderHtml/
 │   │                               splitHtmlSections/parseDocument
 │   │                               plus stream-half
-│   │                               serveRawMarkdown/
-│   │                               serveRawMarkdownForHandbook)
+│   │                               serveRawMarkdown)
 │   ├── Form/                    HTML_QuickForm2 clone + captcha + rules
 │   └── test_*.php               Ad-hoc PHP smoke tests
 │
 ├── engine/                      Web-facing PHP entry points
 │   ├── router.php               Handler-registry router
 │   ├── login.php  logout.php  join.php  direct.php  simple.php
-│   └── standalone.php  test.php  test2.php  serve-md.php
-│                                  (4-line wrapper that require_once's
-│                                   php/markdown.php and calls the
-│                                   handbook entry-point function)
+│   └── standalone.php  test.php  test2.php  serve-tmpl.php
 │
 ├── js/                          Browser-side scripts
 │   ├── bbsengine6.js            Singleton (AJAX, CSRF, sanitization)

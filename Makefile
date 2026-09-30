@@ -280,7 +280,7 @@ handbook-deploy-prod: handbook-prod
 deploy-handbook: handbook-prod
 
 deploy-handbook-prod: php-deploy-prod wwworg handbook-deploy-prod
-	@echo "Handbook stack deployed: /srv/www/vhosts/www.bbsengine.org/html/engine/{router,serve-md,join,login,logout}.php + /srv/www/bbsengine6/php/markdown.php + html/{config.php,index.php,page.php,robots.txt,seo.php,sitemap.xml,.htaccess} + html/handbook/$(VERSION)/"
+	@echo "Handbook stack deployed: /srv/www/vhosts/www.bbsengine.org/html/engine/{router,join,login,logout,serve-tmpl,direct,standalone}.php + /srv/www/bbsengine6/php/markdown.php + html/{config.php,index.php,page.php,robots.txt,seo.php,sitemap.xml,.htaccess} + html/handbook/$(VERSION)/"
 	@echo "Reminder on merlin: sudo systemctl reload php-fpm"
 
 deploy:

@@ -11,10 +11,11 @@
 # This is the HTML-render sibling of
 # test_handbook_auth_bank_content.sh, which covers the
 # .md raw-byte path (/handbook/6/specs/auth-bank.md served
-# by engine/serve-md.php as text/plain). Both URLs resolve
-# the same source spec, but the render path goes through
-# the markdown parser and the page template, so the
-# assertions are different.
+# by engine/router.php's rawmarkdown handler as text/plain,
+# via \bbsengine6\markdown\serveRawMarkdown() against TEOSDIR).
+# Both URLs resolve the same source spec, but the render
+# path goes through the markdown parser and the page
+# template, so the assertions are different.
 #
 # @since 2026-09-09
 #
@@ -168,7 +169,8 @@ ok "local source $LOCAL_SRC exists and is non-empty ($src_bytes bytes)"
 # calling \bbsengine6\util\handbook_home(). If a future
 # refactor moves the call site but forgets to move the
 # require_once, the entire no-.md render path returns 500
-# (the .md raw path through serve-md.php is unaffected and
+# (the .md raw path through router.php's rawmarkdown handler
+# is unaffected and
 # the regression hides behind a partially-working handbook).
 # The check is a precondition because a working [0] plus a
 # broken [0.5] would cause [1] to fail in a way that looks
@@ -286,8 +288,8 @@ echo
 # --- 2. Content-Type is text/html ---------------------------------------
 # router_handleMarkdown wraps the parsed doc in page-markdown.tmpl
 # and emits it as text/html. If Content-Type is text/plain the
-# response is serve-md.php's raw .md output (the wrong handler
-# ran) and the structural / sentinel checks below would be
+# response is the rawmarkdown handler's raw .md output (the wrong
+# handler ran) and the structural / sentinel checks below would be
 # meaningless. Fail this check first so the diagnosis points
 # at the routing layer.
 echo "[2] Content-Type check"
@@ -671,8 +673,8 @@ echo
 #   - "Unable to load template" : Smarty's failure message
 #     when page-markdown.tmpl is missing on merlin.
 #   - "Failed opening required" : PHP's fatal error when an
-#     engine include (router.php, serve-md.php, php/markdown.php)
-#     is missing from the prod tree.
+#     engine include (router.php, php/markdown.php) is missing
+#     from the prod tree.
 # Any one of these in a 200 + text/html body means the
 # response is *not* a clean render of the spec.
 echo "[5] anti-error sentinels (live body must not contain error markers)"
@@ -718,8 +720,10 @@ if [ ! -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
 else
   # The no-.md chapter rule:
   #   RewriteRule ^handbook/(\d+)/(.*)$ /router.php?uri=$2 [last,qsappend]
-  # (as distinct from the .md raw rule which targets /serve-md.php
-  # and which has a `\.md$` in the second capture group).
+  # (as distinct from the .md raw rule which targets
+  # /engine/router.php?uri= and which has a `\.md$` in the
+  # second capture group; both now hit router.php since the
+  # 2026-10-XX htaccess migration).
   #
   # The first version of this check used BRE-escaped parens
   # (`\(\\\\d\+\)`) inside a grep -E pattern; that mismatched
@@ -909,7 +913,7 @@ if [ "$fail" -gt 0 ]; then
   echo
   echo "  if [1] returns 200 but [2] is not text/html:"
   echo "    -- the wrong handler ran. If Content-Type is"
-  echo "       text/plain, serve-md.php handled the request"
+  echo "       text/plain, the rawmarkdown handler ran"
   echo "       (the .md route matched the no-.md URL --"
   echo "       likely a rewrite-ordering issue in"
   echo "       htaccess-prod). If Content-Type is something"
@@ -945,7 +949,7 @@ if [ "$fail" -gt 0 ]; then
   echo "                                       missing on merlin -- run"
   echo "                                       'make skin-prod'"
   echo "         'Failed opening required'  : an engine/ include"
-  echo "                                       (router.php, serve-md.php,"
+  echo "                                       (router.php,"
   echo "                                       php/markdown.php) is missing"
   echo "                                       on merlin -- run"
   echo "                                       'make engine-deploy-prod'"

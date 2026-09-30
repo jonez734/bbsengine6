@@ -115,16 +115,18 @@ fi
 echo
 
 # --- [5] Raw .md companion URL still serves the file unchanged ------------
-# /handbook/<v>/<uri>.md routes through engine/serve-md.php (separate
-# rewrite rule in www/org/htaccess-prod); this is unaffected by the
-# router.php fix but is pinned here so a future deploy doesn't break it.
+# /handbook/<v>/<uri>.md routes through engine/router.php's
+# rawmarkdown handler (the htaccess-prod rule at the .md branch
+# forwards to /engine/router.php?uri=$2 since 2026-10-XX, before
+# that to engine/serve-md.php). Pinned here so a future deploy
+# doesn't break the .md raw contract.
 echo "[5] raw .md companion URL serves the local source unchanged"
 raw_code=$(probe_with_headers "$RAW_URL" /tmp/handbook_member.headers /tmp/handbook_member.raw)
 echo "    $RAW_URL -> $raw_code"
 if [ "$raw_code" = "200" ]; then
   ok "raw .md URL returned 200"
 else
-  bad "raw .md URL returned $raw_code (expected 200) -- engine/serve-md.php may be broken or the rewrite rule regressed"
+  bad "raw .md URL returned $raw_code (expected 200) -- the router's rawmarkdown handler may be broken or the rewrite rule regressed"
 fi
 if [ -s /tmp/handbook_member.headers ] && grep -q -i '^content-type:[[:space:]]*text/plain' /tmp/handbook_member.headers 2>/dev/null; then
   ok "raw .md response Content-Type is text/plain"
@@ -133,9 +135,9 @@ else
 fi
 if [ -f "$LOCAL_MD" ]; then
   if diff -q /tmp/handbook_member.raw "$LOCAL_MD" >/dev/null 2>&1; then
-    ok "raw .md response byte-equals local source $LOCAL_MD (serve-md.php is serving the right file unchanged)"
+    ok "raw .md response byte-equals local source $LOCAL_MD (rawmarkdown handler is serving the right file unchanged)"
   else
-    bad "raw .md response differs from local source $LOCAL_MD -- serve-md.php is rewriting or serving the wrong file. Diff (first 5 lines): $(diff /tmp/handbook_member.raw $LOCAL_MD 2>/dev/null | head -5)"
+    bad "raw .md response differs from local source $LOCAL_MD -- rawmarkdown handler is rewriting or serving the wrong file. Diff (first 5 lines): $(diff /tmp/handbook_member.raw $LOCAL_MD 2>/dev/null | head -5)"
   fi
 else
   bad "$LOCAL_MD missing -- cannot compare raw response to local source"
@@ -206,10 +208,12 @@ if [ "$fail" -gt 0 ]; then
   echo "       specs/member.md. Run: make handbook-deploy-prod"
   echo
   echo "  if [5] fails (raw .md companion returns non-200 or wrong body):"
-  echo "    -- engine/serve-md.php or the .htaccess-prod rule"
-  echo "       for /handbook/<v>/<uri>.md is broken. Inspect"
-  echo "       engine/serve-md.php and the second-handbook rewrite"
-  echo "       rule in www/org/htaccess-prod."
+  echo "    -- the router's rawmarkdown handler or the"
+  echo "       .htaccess-prod rule for /handbook/<v>/<uri>.md"
+  echo "       is broken. Inspect engine/router.php's"
+  echo "       router_handleRawMarkdown and the .md branch of"
+  echo "       www/org/htaccess-prod (which since 2026-10-XX"
+  echo "       forwards to /engine/router.php?uri= directly)."
   echo
   echo "  if [6] fails (build-host invariant):"
   echo "    -- the regression has been reintroduced in the working"

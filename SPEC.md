@@ -168,7 +168,7 @@ The package lives at `py/src/bbsengine6/`.
 | `blurb.php`           | Blurb handler functions                       |
 | `libmember.php`       | `bbsengine6\libmember` helpers (checkflag, …) |
 | `page.php`            | Page rendering helpers (permission-denied, markdown serve) |
-| `markdown.php`        | Render-half (`splitFrontmatter`, `renderHtml`, `splitHtmlSections`, `parseDocument`) + stream-half (`serveRawMarkdown`, `serveRawMarkdownForHandbook`) under `\bbsengine6\markdown` |
+| `markdown.php`        | Render-half (`splitFrontmatter`, `renderHtml`, `splitHtmlSections`, `parseDocument`) + stream-half (`serveRawMarkdown`) under `\bbsengine6\markdown` |
 | `session.php`         | `bbsengine6\session` namespace                |
 | `util.php`            | `bbsengine6\util\logentry`                    |
 | `InputDate.php` `InputDateTime.php` `InputEmail.php` `InputUrl.php` | HTML_QuickForm2 `<input>` elements |
@@ -183,7 +183,7 @@ The package lives at `py/src/bbsengine6/`.
 | `login.php`      | Member authentication                         |
 | `logout.php`     | Member logout (destroys session)              |
 | `join.php`       | Member registration                           |
-| `direct.php` `simple.php` `standalone.php` `test.php` `test2.php` `serve-md.php` | Smaller entry points / smoke probes |
+| `direct.php` `simple.php` `standalone.php` `test.php` `test2.php` | Smaller entry points / smoke probes |
 
 ### 4.3 Smarty plugins (`smarty/`)
 
