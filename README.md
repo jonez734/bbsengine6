@@ -147,7 +147,13 @@ bbsengine6/
 ├── php/                         PHP web library
 │   ├── bootstrap.php            include-path setup
 │   ├── database.php  engine.php  folder.php  page.php
-│   ├── session.php  util.php  libmember.php  blurb.php  serve-md.php
+│   ├── session.php  util.php  libmember.php  blurb.php  markdown.php
+│   │                              (markdown.php owns render-half
+│   │                               splitFrontmatter/renderHtml/
+│   │                               splitHtmlSections/parseDocument
+│   │                               plus stream-half
+│   │                               serveRawMarkdown/
+│   │                               serveRawMarkdownForHandbook)
 │   ├── Form/                    HTML_QuickForm2 clone + captcha + rules
 │   └── test_*.php               Ad-hoc PHP smoke tests
 │
@@ -155,6 +161,9 @@ bbsengine6/
 │   ├── router.php               Handler-registry router
 │   ├── login.php  logout.php  join.php  direct.php  simple.php
 │   └── standalone.php  test.php  test2.php  serve-md.php
+│                                  (4-line wrapper that require_once's
+│                                   php/markdown.php and calls the
+│                                   handbook entry-point function)
 │
 ├── js/                          Browser-side scripts
 │   ├── bbsengine6.js            Singleton (AJAX, CSRF, sanitization)

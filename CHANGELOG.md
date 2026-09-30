@@ -1,5 +1,65 @@
 ## [Unreleased]
 
+### refactor(php/markdown): merge php/serve-md.php into php/markdown.php under \bbsengine6\markdown
+
+`.md` handling now lives in one file under one namespace. The library at
+`php/serve-md.php` (which had been library-only since the 2026-09-29
+`98c3edc` refactor) and the handbook-vhost entry-point at
+`engine/serve-md.php` are folded into `php/markdown.php` as
+`\bbsengine6\markdown\serveRawMarkdown()` (generic raw-stream library
+for `router_handleRawMarkdown`) and
+`\bbsengine6\markdown\serveRawMarkdownForHandbook()` (HTTP entry-point
+for the handbook vhost).
+
+`php/serve-md.php` is **deleted**. `engine/serve-md.php` is now a 4-line
+wrapper that `require_once`s `php/markdown.php` and calls
+`serveRawMarkdownForHandbook()`. The handbook vhost's htaccess-prod
+rewrite target (`www/org/htaccess-prod:78`,
+`/handbook/<v>/<uri>.md -> /engine/serve-md.php?path=$2`) is unchanged,
+as are the 404 body IDs (`engine.serve-md.validate-handbook-prefix.220`,
+`engine.serve-md.resolve-handbook-md.240`) and the `serve-md.100/200/210`
+logentry codes.
+
+Side-effect-free on `require_once`: the merged `php/markdown.php`'s
+`namespace {}` block has a `SCRIPT_NAME === '/engine/serve-md.php'` +
+`PHP_SAPI !== 'cli'` guard that fires the entry-point only when the
+file is invoked directly as the vhost entry-point shim. When required
+from `engine/router.php`, `php/test_router_handleraemarkdown.php`, or
+any other context, the entry-point stays dormant (the 2026-09-29
+invariant pinned by `php/test_router.php` Test 6i).
+
+**Two reasons for the merge:**
+
+  1. Two libraries for one theme (`.md` files) is the kind of drift the
+     2026-09-29 refactor was cleaning up. Both halves serve `.md` files;
+     one renders them to HTML, the other streams them as raw bytes.
+  2. The two libraries sat in different namespaces (`\bbsengine6` for
+     the stream half, `\bbsengine6\markdown` for the render half).
+     Folding the stream half into `\bbsengine6\markdown` makes one
+     canonical home for all `.md` primitives.
+
+**Lazy Parsedown load.** `Parsedown.php` / `ParsedownExtra.php` were
+eagerly required at the top of `namespace bbsengine6\markdown {}`; the
+merge moves them into `renderHtml()`'s first-call path so a direct
+invocation of the entry-point (where `include_path` may not yet be
+primed for vendor/) does not fatal on Parsedown. The stream-half
+entry-point does not use Parsedown, so the eager require was load-bearing
+only for the render half.
+
+**Caller updates:**
+
+  - `engine/router.php:99` `require_once("serve-md.php")` deleted (router
+    already requires `markdown.php` at line 79, which now carries the
+    library).
+  - `engine/router.php:489` call site renamed to
+    `\bbsengine6\markdown\serveRawMarkdown()`.
+  - `php/test_router_handleraemarkdown.php:29` now requires
+    `markdown.php`; all seven call sites and the doc header use the
+    new FQCN.
+  - `php/test_router.php` Test 6h / 6i FAIL messages and comments
+    use the new FQCN.
+  - `tests/test_teos_md_url_text_plain.sh:20` comment uses the new FQCN.
+
 ### fix(engine/router): raw text/plain dispatcher for `.md` URLs across all vhosts
 
 Closes the 2026-09-29 incident on `zoidtechnologies.com/teos/ec/<slug>.md`

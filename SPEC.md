@@ -168,7 +168,7 @@ The package lives at `py/src/bbsengine6/`.
 | `blurb.php`           | Blurb handler functions                       |
 | `libmember.php`       | `bbsengine6\libmember` helpers (checkflag, …) |
 | `page.php`            | Page rendering helpers (permission-denied, markdown serve) |
-| `serve-md.php`        | Serve .md files as plain text                 |
+| `markdown.php`        | Render-half (`splitFrontmatter`, `renderHtml`, `splitHtmlSections`, `parseDocument`) + stream-half (`serveRawMarkdown`, `serveRawMarkdownForHandbook`) under `\bbsengine6\markdown` |
 | `session.php`         | `bbsengine6\session` namespace                |
 | `util.php`            | `bbsengine6\util\logentry`                    |
 | `InputDate.php` `InputDateTime.php` `InputEmail.php` `InputUrl.php` | HTML_QuickForm2 `<input>` elements |

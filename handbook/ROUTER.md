@@ -456,13 +456,14 @@ response by the browser). Two independent breaks compounded:
      end of `router_gethandlers()` with pattern `/\.md$/`. It
      reads `TEOSDIR` via `\bbsengine6\util\env("TEOSDIR")` and
      reuses the canonical library
-     `\bbsengine6\serveRawMarkdown()` (defined at
-     `php/serve-md.php`), which enforces realpath-based
-     containment under the supplied base dir, `.md`-only
-     extension, and file-only checks. On a hit the handler
-     returns `ROUTER_RENDERED`; on a miss it returns
-     `ROUTER_NEXT` and the chain falls through to
-     `router_handleError` for the styled `errormessage.tmpl` 404.
+     `\bbsengine6\markdown\serveRawMarkdown()` (defined at
+     `php/markdown.php`, merged from `php/serve-md.php` on
+     2026-10-XX), which enforces realpath-based containment
+     under the supplied base dir, `.md`-only extension, and
+     file-only checks. On a hit the handler returns
+     `ROUTER_RENDERED`; on a miss it returns `ROUTER_NEXT` and
+     the chain falls through to `router_handleError` for the
+     styled `errormessage.tmpl` 404.
   3. The `markdown` handler's pattern is tightened by removing
      `.` from the URI character class. The `$` end-anchor
      naturally restricts matches to URIs that don't contain a
@@ -473,7 +474,9 @@ response by the browser). Two independent breaks compounded:
      probe as belt-and-suspenders.
 
 The handbook vhost keeps its dedicated `engine/serve-md.php`
-entry-point with the stricter `handbook_resolve()` containment via
+entry-point (now a 4-line wrapper around `php/markdown.php`'s
+`\bbsengine6\markdown\serveRawMarkdownForHandbook()`) with the
+stricter `handbook_resolve()` containment via
 `BBSENGINE6_HANDBOOK_HOME`. The teos vhost's htaccess is updated
 to route `.md` URLs to `engine/router.php` so the new
 router-side handler can fire.
