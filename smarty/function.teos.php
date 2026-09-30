@@ -4,12 +4,11 @@
 //
 // Previous behavior required config.php / database.php / engine.php
 // via include_path, which broke silently under mod_env +
-// mod_rewrite + mod_proxy_fcgi combos where VHOSTDOCROOT /
-// VHOSTCONFIG did not propagate to FPM. The journal for the
-// failing /rec/... requests showed include_path without any
-// /srv/www/vhosts/.../html entry, and the bare require_once()
-// surfaced as `Failed to open stream: No such file or directory`
-// in /var/log.
+// mod_rewrite + mod_proxy_fcgi combos where VHOSTDOCROOT did not
+// propagate to FPM. The journal for the failing /rec/... requests
+// showed include_path without any /srv/www/vhosts/.../html entry,
+// and the bare require_once() surfaced as `Failed to open stream:
+// No such file or directory` in /var/log.
 //
 // Two changes fix it:
 //

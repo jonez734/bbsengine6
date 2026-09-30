@@ -18,9 +18,10 @@
 #
 # Engine entry-points currently in this directory (verified by
 # deploytool/tests/test_deploy_bbsengine6_engine.py:
-# test_engine_makefile_wildcard_includes_vhostconfig):
+# test_engine_vhostconfig_php_does_not_exist + the wildcard
+# dry-run layer of test_engine_makefile_wildcard_includes_vhostconfig):
 #   router.php, serve-tmpl.php, serve-md.php, join.php, login.php,
-#   logout.php, direct.php, standalone.php, vhostconfig.php.
+#   logout.php, direct.php, standalone.php.
 ENGINE_DOCROOT     ?= /srv/www/vhosts/zoidtechnologies.com/html/engine/
 ENGINESTAGEDOCROOT ?= $(ENGINE_DOCROOT)
 ENGINEPRODDOCROOT  ?= $(ENGINEHOST):$(ENGINESTAGEDOCROOT)

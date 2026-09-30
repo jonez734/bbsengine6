@@ -14,18 +14,6 @@ SetEnv TEOSURL /handbook/
 # mod_env loaded. See ROBUSTNESS_REVIEW.md for full rationale.
 SetEnv VHOSTDOCROOT /srv/www/vhosts/www.bbsengine.org/html
 
-# @since 2026-09-24 — publish absolute path to the vhost's
-# config.php so bbsengine6/engine/router.php's VHOSTCONFIG
-# resolver (engine/vhostconfig.php) can require_once it before
-# loading engine.php. Without this, getsmarty() throws
-# "SMARTYTEMPLATESDIR is not configured" on the first render.
-# VHOSTDOCROOT + include_path was unreliable across mod_env +
-# mod_rewrite combos; VHOSTCONFIG names the file directly. Same
-# mod_env + AllowOverride FileInfo prerequisites as VHOSTDOCROOT
-# above. Resolution order is: VHOSTCONFIG env, then SCRIPT_FILENAME
-# fallback (probes html/{config.php, teos/, org/, com/}).
-SetEnv VHOSTCONFIG /srv/www/vhosts/www.bbsengine.org/html/config.php
-
 # @since 2026-09-29 — publish the bbsengine6 install location so
 # smarty/function.teos.php can require util.php absolutely without
 # hardcoding "/srv/www/bbsengine6". Mirrors VHOSTDOCROOT/ENGINE_DOCROOT

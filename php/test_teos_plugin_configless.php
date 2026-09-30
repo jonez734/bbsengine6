@@ -7,11 +7,11 @@
  *   PHP Warning: require_once(config.php): Failed to open stream
  *   in /srv/www/bbsengine6/smarty/function.teos.php on line 43
  * which surfaced under mod_env + mod_rewrite + mod_proxy_fcgi
- * combos where VHOSTDOCROOT / VHOSTCONFIG did not propagate to
- * FPM. The previous fix (a9957a5 "fix(smarty/*): re-establish
- * vhost docroot on include_path at plugin load") was a defensive
- * workaround; this test pins the contract that the plugin no
- * longer relies on include_path for config.php at all.
+ * combos where VHOSTDOCROOT did not propagate to FPM. The previous
+ * fix (a9957a5 "fix(smarty/*): re-establish vhost docroot on
+ * include_path at plugin load") was a defensive workaround; this
+ * test pins the contract that the plugin no longer relies on
+ * include_path for config.php at all.
  *
  * Loading strategy (bbsengine6 49b5b70 + fixup): the plugin
  * resolves util.php via the established include_path convention

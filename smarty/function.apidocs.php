@@ -1,29 +1,11 @@
 <?php
 
-// @since 2026-09-26 — defensive include_path set-up.
-//
-// Smarty lazy-loads plugins from its pluginsdir; when this
-// file is reached, the FPM worker's include_path does not
-// necessarily have VHOSTDOCROOT on it, even when the vhost's
-// config.php ran add_include_paths() earlier (VHOSTDOCROOT
-// may not propagate to FPM under some mod_env + mod_rewrite
-// + mod_proxy_fcgi combos). The bare require_once("config.php")
-// below then fails with 'Failed to open stream: No such
-// file or directory' and the rendering handler swallows
-// the throwable.
-//
-// Fix: re-establish the vhost docroot on include_path right
-// now, by reading VHOSTDOCROOT (preferred) or VHOSTCONFIG
-// (fallback) and appending the paths the vhost's
-// config-prod.php registers. file_exists() / function_exists()
-// guards keep dev/test paths from breaking.
+// @since 2026-09-29 — VHOSTCONFIG fallback removed. The plugin now
+// relies on VHOSTDOCROOT alone for include_path setup. If VHOSTDOCROOT
+// is unset on FPM, the bare require_once()s below will fail and the
+// rendering handler will swallow the throwable (same pre-2026-09-26
+// failure mode).
 $vhostroot = getenv('VHOSTDOCROOT');
-if (!is_string($vhostroot) || $vhostroot === '' || !is_dir($vhostroot)) {
-    $vhostconfig = getenv('VHOSTCONFIG');
-    if (is_string($vhostconfig) && $vhostconfig !== '' && is_file($vhostconfig)) {
-        $vhostroot = dirname($vhostconfig);
-    }
-}
 if (is_string($vhostroot) && $vhostroot !== '' && is_dir($vhostroot)) {
     if (function_exists('bbsengine6\\bootstrap')) {
         bbsengine6\bootstrap([$vhostroot]);

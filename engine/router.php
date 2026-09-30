@@ -60,39 +60,21 @@ namespace bbsengine6\router;
  * function or load zoid6 themselves before this router runs.
  *
  * @since 2026
- * @since 2026-09-24 — VHOSTCONFIG resolution. The router is the HTTP
- * entry point for every vhost (teos + handbook + future). It loads
+ * @since 2026-09-29 — VHOSTCONFIG resolver removed. The router is the
+ * HTTP entry point for every vhost (teos + handbook + future). It loads
  * engine.php, which loads bbsengine6config.php, which expects
  * \config\SMARTYTEMPLATESDIR (and friends) to already be defined by
- * the vhost's config.php. Without that require, getsmarty() throws
- * "SMARTYTEMPLATESDIR is not configured" on the first render.
- *
- * Resolution contract (in order):
- *   1. VHOSTCONFIG env var (absolute path) — recommended; set by
- *      each vhost's htaccess-prod via `SetEnv VHOSTCONFIG <abs-path>`.
- *   2. SCRIPT_FILENAME fallback — walk up from the handler's location
- *      (.../html/engine/router.php) to .../html/<vhost>/ and probe
- *      for config.php in known vhost subdirs. Useful for setups that
- *      can't or don't export VHOSTCONFIG (CLI tests, partial deploys).
- *   3. Nothing resolvable — log a warning via router_log() and let
- *      the existing getsmarty() RuntimeException fire. No regression;
- *      the failure mode remains the same as before this change.
+ * the vhost's config.php. bbsengine6config.php resolves config.php via
+ * stream_resolve_include_path("config.php"), which depends on
+ * bbsengine6\bootstrap() having prepended VHOSTDOCROOT to include_path.
+ * If VHOSTDOCROOT is unset on FPM, getsmarty() throws its existing
+ * "SMARTYTEMPLATESDIR is not configured" RuntimeException (the
+ * pre-2026-09-24 failure mode).
  */
 
 require_once("/srv/www/bbsengine6/php/bootstrap.php");
 
 require_once('util.php');
-
-/**
- * @since 2026-09-24 — VHOSTCONFIG resolution lives in its own file
- * (engine/vhostconfig.php) so tests can require it in isolation.
- * See vhostconfig.php's docblock for the resolution contract.
- */
-require_once(__DIR__ . "/vhostconfig.php");
-$bbsengine6_vhostconfig_resolved = \bbsengine6\router\router_resolve_vhost_config();
-if ($bbsengine6_vhostconfig_resolved === false) {
-    \bbsengine6\util\logentry("router.200: bbsengine6_vhostconfig_resolved=".var_export($bbsengine6_vhostconfig_resolved, true));
-}
 
 require_once('markdown.php');
 require_once('blurb.php');
@@ -132,7 +114,6 @@ if (!defined('ROUTER_NEXT')) { define('ROUTER_NEXT', 'ROUTER_NEXT'); }
 if (!defined('ROUTER_RENDERED')) { define('ROUTER_RENDERED', 'ROUTER_RENDERED'); }
 
 router_log("router.300: ".var_export(get_include_path(),true));
-router_log("router.301: vhostconfig=".var_export($bbsengine6_vhostconfig_resolved, true));
 
 function router_log(string $message, string $level = "info"): void
 {
