@@ -334,13 +334,43 @@ function display($uri, $filepath)
 
     \bbsengine6\setcurrentpage("teos/" . $uri);
 
+    $parsed = parseMarkdownSections($content);
+
+    // @since 2026-09-30 — append the current blurb as the trailing
+    // (unlinked, linklast=true) "you are here" crumb. The DB-driven
+    // buildbreadcrumbs() and the filesystem-fallback
+    // router_buildBreadcrumbs() both build parent-folder chains only;
+    // neither includes the blurb itself. Without this append,
+    // page-markdown-sections.tmpl renders "You are here: teos » ec"
+    // for /teos/ec/<slug>/, with no entry for the slug — i.e. the
+    // trail shows the folder but not where the user actually is.
+    // Title is taken from the parsed markdown H1 so the trail
+    // agrees with the visible <h1> on the page (option A from the
+    // design discussion). When breadcrumbs is already non-empty
+    // from the DB path, only append if the last entry isn't the
+    // current blurb (defensive: DB-driven chains may already
+    // include it).
+    $currentTitle = $parsed["title"];
+    $needsAppend = true;
+    if (!empty($breadcrumbs)) {
+        $last = end($breadcrumbs);
+        if (is_array($last) && isset($last['path']) && $last['path'] === $blurbid) {
+            $needsAppend = false;
+        }
+    }
+    if ($needsAppend) {
+        $breadcrumbs[] = [
+            'title' => $currentTitle,
+            'path'  => $blurbid,
+            'uri'   => 'teos/' . $uri,
+        ];
+    }
+
     $data = [];
     $data["content"] = $content;
     $data["blurb"] = $blurb ?? [];
     $data["breadcrumbs"] = $breadcrumbs ?? [];
     $data["uri"] = $uri;
-
-    $parsed = parseMarkdownSections($content);
 
     $data["title"] = $parsed["title"];
     $data["sections"] = $parsed["sections"];
