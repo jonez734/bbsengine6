@@ -1,5 +1,81 @@
 ## [Unreleased]
 
+### docs(changelog): regression-recovery commit pin
+
+Pins the three commits that comprise the live 2026-10-XX fix for
+the `/rec/arts/tv/wiz-kids`-class `SMARTYTEMPLATESDIR is not
+configured` failure mode on the teos vhost, so a future operator
+who hits the same symptom can `git checkout` straight to a known-good
+state without piecing together history.
+
+**Pin these commits if rolling back:**
+
+| Repo             | SHA       | Subject                                                                              |
+|------------------|-----------|--------------------------------------------------------------------------------------|
+| inner bbsengine6 | `9678aad` | refactor(engine): restore VHOSTCONFIG resolver as FPM-env-propagation safety net      |
+| inner deploytool | `fce3ed0` | test(deploytool): invert vhostconfig.php contract pin; assert existence with resolver  |
+| meta-repo        | `229eb53b` | chore(meta): mirror inner bbsengine6 VHOSTCONFIG resolver restore                   |
+
+All three must land together; deploytool's pytest will fail against
+the new bbsengine6 source (or vice versa) if any one is missing.
+
+**Regression symptoms that map back to this pin:**
+
+  - URL `/rec/arts/tv/wiz-kids` (or any engine-rendered teos URL)
+    returns `Error: router.http.100:bbsengine6\getsmarty():
+    SMARTYTEMPLATESDIR is not configured. ... Router Error`
+    with HTTP 500 instead of the chrome-rendered page.
+
+  - URL `/<slug>.md` (e.g., `/rec/arts/tv/wiz-kids.md`,
+    `/ec/investigated-psychics-fraud-pigasus.md`) returns the same
+    SMARTYTEMPLATESDIR error wrapped in HTML chrome instead of
+    `Content-Type: text/plain` raw markdown bytes.
+
+  - `ssh merlin journalctl -u php-fpm --since "5 min ago" | grep NEEDINFO`
+    shows the legacy `NEEDINFO.VHOSTCONFIG.router_resolve_vhost_config`
+    sentinel as the env value (instead of `envconfig='<real-path>'`),
+    indicating the VHOSTCONFIG resolver didn't find the vhost config.
+
+**Root cause for both symptoms:** the inner commit `02eebac`
+(2026-09-29 20:37) removed `engine/vhostconfig.php`, which was
+the load-bearing fallback for vhost config resolution on merlin's
+`mod_proxy_fcgi + FPM clear_env=yes` plumbing (Apache's `SetEnv`
+directives don't propagate to the FPM worker, so
+`VHOSTDOCROOT + include_path` was insufficient and
+`bbsengine6config.php:51`'s `stream_resolve_include_path("config.php")`
+missed the vhost's `config.php`).
+
+**The fix** restores `engine/vhostconfig.php` with two resolution
+paths that don't depend on FPM env propagation: (1) `VHOSTCONFIG`
+env var (absolute path; set by every htaccess-prod in the repo
+but unused by current code), (2) `SCRIPT_FILENAME` fallback that
+walks up from `<docroot>/engine/<script>.php` to `<docroot>/` and
+probes known vhost subdirs. Both work without FPM env propagation.
+
+**Rollback procedure (if a future change reintroduces the bug):**
+
+  1. `cd bbsengine6 && git checkout 9678aad -- engine/vhostconfig.php engine/router.php`
+     (in the inner repo; replaces any accidental deletion).
+  2. `cd bbsengine6 && git commit -m "fix(engine): restore VHOSTCONFIG resolver"`
+  3. `cd deploytool && git checkout fce3ed0 -- tests/test_deploy_bbsengine6_engine.py`
+  4. `cd deploytool && git commit -m "fix(deploytool): invert vhostconfig.php contract pin"`
+  5. In the meta-repo: re-run `scripts/bump-submodule-pointers.sh` (or
+     manually `git add -A bbsengine6/ && git commit -m "chore(meta):
+     mirror inner bbsengine6 VHOSTCONFIG resolver restore"`), then
+     `git push github main`.
+  6. `deploy --with-deps teos.prod` on minotaur.
+
+**Verification after rollback:**
+
+  - `curl -sI https://zoidtechnologies.com/teos/ec/investigated-psychics-fraud-pigasus.md`
+    expect: `HTTP/1.1 200 OK`, `Content-Type: text/plain; charset=utf-8`
+  - `curl -sI https://zoidtechnologies.com/teos/ec/investigated-psychics-fraud-pigasus`
+    expect: `HTTP/1.1 200 OK`, `Content-Type: text/html; charset=utf-8`
+  - `ssh merlin journalctl -u php-fpm --since "5 min ago" | grep NEEDINFO.VHOSTCONFIG`
+    expect: log lines showing `envconfig='<real-path>'` (e.g.,
+    `/srv/www/vhosts/zoidtechnologies.com/html/teos/config.php`), NOT
+    the `NEEDINFO.VHOSTCONFIG...` sentinel.
+
 ### refactor(engine): restore VHOSTCONFIG resolver as FPM-env-propagation safety net
 
 The Sep 29 commit `02eebac` removed `engine/vhostconfig.php` on the
