@@ -879,12 +879,16 @@ function safe_path_web(array $components, array $opts = [])
      * Used by both router_buildBreadcrumbs (engine/router.php)
      * and bbsengine6\blurb\buildbreadcrumbs (php/blurb.php) to
      * keep the DB-driven and filesystem-driven breadcrumb paths
-     * in lockstep. Default is "teos" so existing /teos/ callers
-     * (and any environment that neither defines nor exports the
-     * constant) see no change. Each vhost's htaccess-prod
+     * in lockstep. When the env var or constant is unset, the
+     * helper returns 'NEEDINFO:vhost_label' as a greppable
+     * sentinel rather than a hardcoded "teos" default, mirroring
+     * the NEEDINFO sentinels used by engine/router.php:192
+     * ("NEEDINFO:buildbreadcrumbs.100") and
+     * bbsengine6\blurb\getlabel (php/blurb.php:46,
+     * "NEEDINFO:getlabel.100"). Each vhost's htaccess-prod
      * declares its own TEOSLABEL via SetEnv (the .org handbook
-     * vhost sets "bbsengine6 handbook"), mirroring the pattern
-     * used for TEOSDIR/TEOSURL and the original export in the
+     * vhost sets "bbsengine"), mirroring the pattern used for
+     * TEOSDIR/TEOSURL and the original export in the
      * (now-deleted) www/org/php/handbook.php (commit c40c79a).
      *
      * Promoted from bbsengine6\blurb\getlabel (php/blurb.php)
@@ -896,16 +900,30 @@ function safe_path_web(array $components, array $opts = [])
      * delegates to this helper.
      *
      * @since 2026-09-10
+     * @since 2026-10-01 — read TEOSLABEL (canonical, no
+     *   underscore) instead of the legacy VHOST_LABEL name. The
+     *   underscore form was a leftover from before the
+     *   TEOSLABEL rename (commit 45b0b71); every live
+     *   htaccess-prod publishes SetEnv TEOSLABEL ... and
+     *   engine/router.php:192 already reads it via
+     *   \bbsengine6\util\env('TEOSLABEL', ...). Reading
+     *   VHOST_LABEL here made this helper silently fall through
+     *   to the NEEDINFO sentinel in production, even when
+     *   TEOSLABEL was correctly set, which is the bug the
+     *   caller (engine/router.php or blurb.php) was surfacing
+     *   as 'NEEDINFO:buildbreadcrumbs.100' on the rendered
+     *   teos root crumb. Now both readers route through the
+     *   same env var.
      * @return string The label to render for the top breadcrumb.
      */
     function vhost_label(): string
     {
-        $env = getenv('VHOST_LABEL');
+        $env = getenv('TEOSLABEL');
         if (is_string($env) && $env !== '') {
             return $env;
         }
-        if (defined('VHOST_LABEL')) {
-            $c = constant('VHOST_LABEL');
+        if (defined('TEOSLABEL')) {
+            $c = constant('TEOSLABEL');
             if (is_string($c) && $c !== '') {
                 return $c;
             }

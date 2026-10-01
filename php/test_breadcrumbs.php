@@ -255,16 +255,25 @@ test_pass("blurb.php::display() appends current-page crumb from parsed title");
 // breadcrumb rendered as the literal "teos" on blurb pages. Pin the
 // source-level fix (env() call) and the absence of the legacy name so
 // a future refactor doesn't silently reintroduce the divergence.
-echo "Test 7d: blurb.php::getlabel() reads TEOSLABEL via env() (not the legacy TEOS_LABEL)\n";
+//
+// @since 2026-10-01 — relaxed the env() source pin to also accept a
+// delegation to \bbsengine6\util\vhost_label(). The canonical reader
+// is vhost_label() (defined in php/util.php) after it was fixed to
+// read TEOSLABEL (no underscore) instead of the stale VHOST_LABEL
+// name; the delegation is asserted by Test 7h below so a future
+// refactor can't silently regress to the inline env-read.
+echo "Test 7d: blurb.php::getlabel() reads TEOSLABEL (via env() or via vhost_label() delegation)\n";
 $blurb_src_for_label = file_get_contents("/home/opencode/data/work/bbsengine6/php/blurb.php");
-if (!preg_match('/bbsengine6\\\\util\\\\env\s*\(\s*[\'"]TEOSLABEL[\'"]/', $blurb_src_for_label)) {
-    test_fail("blurb.php does not call \\bbsengine6\\util\\env('TEOSLABEL') from getlabel()");
+$reads_via_env = (bool)preg_match('/bbsengine6\\\\util\\\\env\s*\(\s*[\'"]TEOSLABEL[\'"]/', $blurb_src_for_label);
+$reads_via_helper = strpos($blurb_src_for_label, 'bbsengine6\\util\\vhost_label()') !== false;
+if (!$reads_via_env && !$reads_via_helper) {
+    test_fail("blurb.php does not read TEOSLABEL via env() or delegate to \\bbsengine6\\util\\vhost_label()");
 }
 if (strpos($blurb_src_for_label, "'TEOS_LABEL'") !== false
     || strpos($blurb_src_for_label, '"TEOS_LABEL"') !== false) {
     test_fail("blurb.php still references the legacy 'TEOS_LABEL' (underscore) env name in code; route through env('TEOSLABEL') instead");
 }
-test_pass("getlabel() routes through env('TEOSLABEL') and has no legacy TEOS_LABEL code reference");
+test_pass("getlabel() routes through TEOSLABEL and has no legacy TEOS_LABEL code reference");
 
 // @since 2026-09-30 — runtime pin: when TEOSLABEL is exported (e.g.
 // via SetEnv in the vhost htaccess-prod), getlabel() must return
@@ -294,6 +303,103 @@ if (defined('TEOSLABEL')) {
     }
     test_pass("getlabel() returns TEOSLABEL env value");
 }
+
+// @since 2026-10-01 — bbsengine6\util\vhost_label() was reading
+// the legacy VHOST_LABEL (underscore) env name while every live
+// htaccess-prod publishes TEOSLABEL (no underscore). Result:
+// callers of vhost_label() (notably the new
+// bbsengine6\blurb\getlabel() delegation in Test 7h) silently
+// fell through to the 'NEEDINFO:vhost_label' sentinel even when
+// TEOSLABEL was correctly set, which is the bug surfaced as
+// 'NEEDINFO:buildbreadcrumbs.100' on the rendered teos root crumb.
+// Pin the source-level fix (env var name TEOSLABEL) and the
+// absence of the legacy underscore form so a future refactor
+// doesn't silently reintroduce the divergence.
+echo "Test 7f: bbsengine6\\util\\vhost_label() reads TEOSLABEL (not the legacy VHOST_LABEL)\n";
+$util_src = file_get_contents("/home/opencode/data/work/bbsengine6/php/util.php");
+// vhost_label() must exist
+if (!preg_match('/function\s+vhost_label\s*\(/', $util_src)) {
+    test_fail("php/util.php does not define vhost_label()");
+}
+// Extract vhost_label() function body by walking the source and
+// counting braces — a regex match would stop at the first inner
+// `}` (the function body contains nested if/else blocks).
+$vhost_label_body = '';
+$vl_pos = strpos($util_src, 'function vhost_label');
+if ($vl_pos !== false) {
+    $vl_open = strpos($util_src, '{', $vl_pos);
+    if ($vl_open !== false) {
+        $vl_depth = 0;
+        $vl_end = $vl_open;
+        $vl_len = strlen($util_src);
+        for ($vl_i = $vl_open; $vl_i < $vl_len; $vl_i++) {
+            $vl_ch = $util_src[$vl_i];
+            if ($vl_ch === '{') {
+                $vl_depth++;
+            } elseif ($vl_ch === '}') {
+                $vl_depth--;
+                if ($vl_depth === 0) {
+                    $vl_end = $vl_i;
+                    break;
+                }
+            }
+        }
+        $vhost_label_body = substr($util_src, $vl_open + 1, $vl_end - $vl_open - 1);
+    }
+}
+// vhost_label() must read TEOSLABEL via getenv()
+if (strpos($vhost_label_body, "getenv('TEOSLABEL')") === false) {
+    test_fail("vhost_label() does not call getenv('TEOSLABEL')");
+}
+// vhost_label() must check the TEOSLABEL constant
+if (strpos($vhost_label_body, "defined('TEOSLABEL')") === false) {
+    test_fail("vhost_label() does not check the TEOSLABEL constant");
+}
+// the legacy VHOST_LABEL (underscore) name must not appear anywhere in util.php
+if (strpos($util_src, "'VHOST_LABEL'") !== false
+    || strpos($util_src, '"VHOST_LABEL"') !== false) {
+    test_fail("php/util.php still references the legacy 'VHOST_LABEL' (underscore) env name; read TEOSLABEL instead");
+}
+test_pass("vhost_label() routes through TEOSLABEL and has no legacy VHOST_LABEL code reference");
+
+// @since 2026-10-01 — runtime pin for vhost_label(). Mirrors Test 7e
+// for the new helper. Skip if a TEOSLABEL constant is defined (a
+// defined constant would short-circuit the env path under putenv() in
+// some FPM setups); the env-then-constant precedence is exercised by
+// the source pin in Test 7f.
+echo "Test 7g: bbsengine6\\util\\vhost_label() returns the TEOSLABEL env value when set\n";
+if (defined('TEOSLABEL')) {
+    test_pass("TEOSLABEL constant is defined; env precedence covered by Test 7f");
+} else {
+    $prev = getenv('TEOSLABEL');
+    putenv('TEOSLABEL=testlabel-7g');
+    try {
+        $got = \bbsengine6\util\vhost_label();
+        if ($got !== 'testlabel-7g') {
+            test_fail("vhost_label() did not return TEOSLABEL env value", "got '$got'");
+        }
+    } finally {
+        if ($prev === false) {
+            putenv('TEOSLABEL');
+        } else {
+            putenv('TEOSLABEL=' . $prev);
+        }
+    }
+    test_pass("vhost_label() returns TEOSLABEL env value");
+}
+
+// @since 2026-10-01 — pin the delegation in bbsengine6\blurb\getlabel()
+// to \bbsengine6\util\vhost_label(). The delegation was first added
+// in commit c11acff, reverted in 22bd02ba, and restored here so the
+// blurb.php code path and engine/router.php::router_buildBreadcrumbs
+// route through the same env var with the same NEEDINFO sentinel.
+// A future refactor that reverts to an inline env() read (or worse,
+// reintroduces the legacy TEOS_LABEL underscore name) breaks this pin.
+echo "Test 7h: blurb.php::getlabel() delegates to \\bbsengine6\\util\\vhost_label()\n";
+if (strpos($blurb_src_for_label, 'bbsengine6\\util\\vhost_label()') === false) {
+    test_fail("blurb.php::getlabel() does not delegate to \\bbsengine6\\util\\vhost_label(); inline env() reads duplicate the canonical helper and can drift");
+}
+test_pass("blurb.php::getlabel() delegates to vhost_label()");
 
 // @since 2026-09-30 — fix for the root crumb rendering as /teos/teos/
 // instead of /teos/ on zoidtechnologies.com teos folder pages. The

@@ -31,23 +31,19 @@ require_once("engine.php");
  * filesystem-fallback path was correct; only the DB-driven path
  * through bbsengine6\blurb\buildbreadcrumbs() (line 73) was broken.
  *
- * Resolution is now routed through \bbsengine6\util\env() with
- * the same NEEDINFO sentinel default used by engine/router.php
- * and bbsengine6\util\vhost_label(), so a missing env var is
- * greppable in production logs instead of silently rendering
- * the literal "teos". Each vhost's htaccess-prod declares its
- * own TEOSLABEL via SetEnv (the .org handbook vhost sets
- * "bbsengine"), mirroring the TEOSDIR/TEOSURL pattern.
+ * @since 2026-10-01 — restored delegation to
+ * \bbsengine6\util\vhost_label() after that helper was fixed to
+ * read TEOSLABEL (no underscore) instead of the stale VHOST_LABEL
+ * name. Now both \bbsengine6\blurb\getlabel() and
+ * engine/router.php::router_buildBreadcrumbs route through the
+ * same env var with the same NEEDINFO sentinel, so a missing env
+ * var fails loud and identically in either code path.
  *
  * @return string The label to render for the top breadcrumb.
  */
 function getlabel(): string
 {
-    $v = \bbsengine6\util\env('TEOSLABEL', 'NEEDINFO:getlabel.100');
-    if (is_string($v) && $v !== '') {
-        return $v;
-    }
-    return 'NEEDINFO:getlabel.100';
+    return \bbsengine6\util\vhost_label();
 }
 
 /**
