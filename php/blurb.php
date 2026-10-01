@@ -344,9 +344,21 @@ function display($uri, $filepath)
         ? \bbsengine6\blurb\buildbreadcrumbs($sigpath)
         : [];
 
-    // Fall back to router's path-segment breadcrumbs if DB returned empty
-    if (empty($breadcrumbs) && function_exists('router_buildBreadcrumbs')) {
-        $breadcrumbs = router_buildBreadcrumbs(str_replace(".", "/", $sigpath));
+    // Fall back to router's path-segment breadcrumbs if DB returned empty.
+    // @since 2026-10-01 — qualify the function_exists() lookup with the
+    // fully-qualified name (\bbsengine6\router\router_buildBreadcrumbs).
+    // The previous bare-name check `function_exists('router_buildBreadcrumbs')`
+    // resolved against the call-site namespace (\bbsengine6\blurb) and
+    // always returned false, silently skipping the fallback. The visible
+    // symptom was a blurb "You are here" trail that rendered only the
+    // trailing crumb appended at line ~378 — e.g. /teos/sci/archaeology/
+    // archeoastronomy.md showed "You are here: archeoastronomy" with no
+    // parent chain. Folder pages were unaffected because their render
+    // path goes through router_displayDirectoryListing() in
+    // \bbsengine6\router\, where the bare name resolves against the
+    // router namespace.
+    if (empty($breadcrumbs) && function_exists('bbsengine6\\router\\router_buildBreadcrumbs')) {
+        $breadcrumbs = \bbsengine6\router\router_buildBreadcrumbs(str_replace(".", "/", $sigpath));
     }
 
     \bbsengine6\setcurrentpage("teos/" . $uri);

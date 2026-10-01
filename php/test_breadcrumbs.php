@@ -167,6 +167,68 @@ if (preg_match('/function\s+display\s*\(\s*\$uri\s*\)\s*\{(.*?)^\}/sm', $folder_
 }
 test_pass("folder.php::display() assigns \$data['breadcrumbs']");
 
+// @since 2026-10-01 — the blurb page rendered only the trailing "you
+// are here" crumb (e.g. /teos/sci/archaeology/archeoastronomy.md showed
+// "You are here: archeoastronomy" with no parent chain) because
+// blurb.php::display() used a bare-name function_exists() check
+// (`function_exists('router_buildBreadcrumbs')`) that resolves against
+// the call-site namespace (\bbsengine6\blurb) and always returned
+// false. The fallback to \bbsengine6\router\router_buildBreadcrumbs()
+// was therefore silently skipped, leaving $breadcrumbs empty before
+// the trailing-crumb append at line ~378 ran. Pin both the FQN in
+// the function_exists() lookup and the leading-backslash on the call
+// site so a future refactor doesn't reintroduce the bare-name bug.
+echo "Test 7f: blurb.php::display() uses FQN for function_exists() and the router_buildBreadcrumbs() call\n";
+$blurb_php_src_for_fqn = file_get_contents("/home/opencode/data/work/bbsengine6/php/blurb.php");
+if (preg_match('/function\s+display\s*\(\s*\$uri\s*,\s*\$filepath\s*\)\s*\{(.*?)^\}/sm', $blurb_php_src_for_fqn, $m)) {
+    $blurb_body_for_fqn = $m[1];
+    if (strpos($blurb_body_for_fqn, "function_exists('bbsengine6\\\\router\\\\router_buildBreadcrumbs')") === false
+        && strpos($blurb_body_for_fqn, 'function_exists("bbsengine6\\\\router\\\\router_buildBreadcrumbs")') === false) {
+        test_fail("blurb.php::display() does not use FQN for the router_buildBreadcrumbs function_exists() check; the fallback silently skips under namespace resolution");
+    }
+    if (strpos($blurb_body_for_fqn, '\\bbsengine6\\router\\router_buildBreadcrumbs(') === false) {
+        test_fail("blurb.php::display() does not call \\bbsengine6\\router\\router_buildBreadcrumbs() with a leading backslash; bare-name call would fail at runtime");
+    }
+    // And the legacy bare-name must be gone — the bug was a bare-name
+    // check returning false; pinning its absence is a stronger guard
+    // than pinning just the presence of the FQN. Strip /* ... */ and
+    // // line comments first so the historical bare-name (referenced
+    // in the @since 2026-10-01 explanatory comment) doesn't false-
+    // positive the check.
+    $blurb_body_no_comments = preg_replace('#/\*.*?\*/#s', '', $blurb_body_for_fqn);
+    $blurb_body_no_comments = preg_replace('/\/\/[^\n]*/', '', $blurb_body_no_comments);
+    if (strpos($blurb_body_no_comments, "function_exists('router_buildBreadcrumbs')") !== false
+        || strpos($blurb_body_no_comments, 'function_exists("router_buildBreadcrumbs")') !== false) {
+        test_fail("blurb.php::display() still uses the bare-name function_exists('router_buildBreadcrumbs') check that silently returned false under namespace resolution");
+    }
+} else {
+    test_fail("could not locate blurb.php::display() function body for FQN pin");
+}
+test_pass("blurb.php::display() uses FQN for the router_buildBreadcrumbs function_exists() check and call site");
+
+// @since 2026-10-01 — folder.php::display() has the same latent
+// function_exists() bug as blurb.php::display() did. Today's chrome
+// render path doesn't go through folder.php::display() (it goes
+// through router_displayDirectoryListing() in the router namespace,
+// where the bare name resolves correctly), but any future caller of
+// folder.php::display() would render an empty breadcrumb chain. Pin
+// the FQN fix here too so the dormant bug doesn't go live silently.
+echo "Test 7g: folder.php::display() uses FQN for the router_buildBreadcrumbs() call\n";
+$folder_php_src_for_fqn = file_get_contents("/home/opencode/data/work/bbsengine6/php/folder.php");
+if (preg_match('/function\s+display\s*\(\s*\$uri\s*\)\s*\{(.*?)^\}/sm', $folder_php_src_for_fqn, $m)) {
+    $folder_body_for_fqn = $m[1];
+    if (strpos($folder_body_for_fqn, "function_exists('bbsengine6\\\\router\\\\router_buildBreadcrumbs')") === false
+        && strpos($folder_body_for_fqn, 'function_exists("bbsengine6\\\\router\\\\router_buildBreadcrumbs")') === false) {
+        test_fail("folder.php::display() does not use FQN for the router_buildBreadcrumbs function_exists() check");
+    }
+    if (strpos($folder_body_for_fqn, '\\bbsengine6\\router\\router_buildBreadcrumbs(') === false) {
+        test_fail("folder.php::display() does not call \\bbsengine6\\router\\router_buildBreadcrumbs() with a leading backslash");
+    }
+} else {
+    test_fail("could not locate folder.php::display() function body for FQN pin");
+}
+test_pass("folder.php::display() uses FQN for the router_buildBreadcrumbs() function_exists() check and call site");
+
 // @since 2026-09-30 — blurb.php's "You are here" was rendering empty
 // because buildbreadcrumbs() / router_buildBreadcrumbs() build parent-
 // folder chains only, never the current blurb itself. The fix appends

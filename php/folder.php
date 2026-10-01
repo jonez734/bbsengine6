@@ -326,8 +326,18 @@ function display($uri)
     // linklast=true. Without this assignment folder.tmpl's youarehere
     // include sees an undefined $breadcrumbs variable and renders
     // nothing after "You are here: ".
-    if (function_exists('router_buildBreadcrumbs')) {
-        $data["breadcrumbs"] = router_buildBreadcrumbs($uri);
+    //
+    // @since 2026-10-01 — qualify the function_exists() lookup with the
+    // fully-qualified name. The bare-name check resolved against the
+    // call-site namespace (\bbsengine6\folder) and returned false,
+    // skipping the breadcrumb assignment. Folder pages hit this code
+    // path only via legacy/standalone callers today (the live chrome
+    // path goes through router_displayDirectoryListing() in
+    // \bbsengine6\router\, where bare-name resolution works), but any
+    // future caller of folder.php::display() would have rendered an
+    // empty breadcrumb chain for the same reason the blurb page did.
+    if (function_exists('bbsengine6\\router\\router_buildBreadcrumbs')) {
+        $data["breadcrumbs"] = \bbsengine6\router\router_buildBreadcrumbs($uri);
     } else {
         $data["breadcrumbs"] = [];
     }
