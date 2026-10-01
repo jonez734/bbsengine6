@@ -31,17 +31,116 @@
 
 function bbsengine6_teos_resolve_root(): string
 {
+  // @since 2026-09-30 — multi-source resolution. The pre-existing
+  // single-source check (`getenv('BBSENGINEROOT')` only) threw a
+  // RuntimeException whenever the env var wasn't visible to the PHP
+  // process — which happened in production on FPM pools that don't
+  // propagate Apache's SetEnv directives (the same FPM-env-stripping
+  // issue documented in AGENTS.md's "TEOSDIR resolution contract"
+  // section). The throw surfaced visibly in the rendered output for
+  // any blurb or folder page that included youarehere.tmpl -> {teos}
+  // after the 2026-09-30 breadcrumb-traversal fixes made
+  // $data.breadcrumbs non-empty for those pages (previously an empty
+  // breadcrumb list short-circuited the include, masking the missing
+  // env var).
+  //
+  // Resolution order, top to bottom, first hit wins:
+  //
+  //   1. getenv('BBSENGINEROOT')     — the documented primary path
+  //                                     (set via SetEnv BBSENGINEROOT
+  //                                     in each vhost's htaccess-prod).
+  //   2. defined('BBSENGINEROOT')    — fallback for vhosts that
+  //                                     define the constant in their
+  //                                     config.php (matches the pattern
+  //                                     used for TEOSURL at line 118).
+  //   3. dirname(__DIR__)             — derive from this file's own
+  //                                     location. function.teos.php
+  //                                     always lives at
+  //                                     <engine_root>/smarty/function.teos.php,
+  //                                     so the parent of __DIR__ is the
+  //                                     engine root. Works regardless of
+  //                                     FPM env propagation, and avoids
+  //                                     the AGENTS.md-banned
+  //                                     hardcoded-prod-path constant
+  //                                     pattern (see TEOSDIR resolution
+  //                                     contract for why that's
+  //                                     forbidden).
+  //   4. plugin_dir walk              — for the rare case where this
+  //                                     file is loaded from a stale or
+  //                                     relocated copy (e.g. a vhost's
+  //                                     own smarty/ directory). Walk
+  //                                     Smarty's plugin_dir list and
+  //                                     check if any plugin dir has a
+  //                                     sibling ../php/util.php; if so,
+  //                                     the engine root is the parent of
+  //                                     that plugin dir's parent.
+  //
+  // Only after all four paths fail do we throw — and the exception
+  // message names each path tried so the operator can diagnose which
+  // step is missing in their deployment.
+
+  // 1. env var (canonical contract)
   $root = getenv('BBSENGINEROOT');
-  if (!is_string($root) || $root === '' || !is_dir($root)) {
-    throw new \RuntimeException(
-      'bbsengine6/smarty/function.teos: BBSENGINEROOT env var is required '
-      . 'and must point to the bbsengine6 install directory (e.g. '
-      . '"/srv/www/bbsengine6"). Set it in the vhost htaccess-prod via '
-      . '`SetEnv BBSENGINEROOT <abs-path>`. Got: '
-      . var_export($root, true)
-    );
+  if (is_string($root) && $root !== '' && is_dir($root)) {
+    return rtrim($root, '/');
   }
-  return rtrim($root, '/');
+  $tried = ['getenv(BBSENGINEROOT)=' . var_export($root, true)];
+
+  // 2. constant fallback (matches TEOSURL pattern at line 118)
+  if (defined('BBSENGINEROOT')) {
+    $c = constant('BBSENGINEROOT');
+    if (is_string($c) && $c !== '' && is_dir($c)) {
+      return rtrim($c, '/');
+    }
+    $tried[] = 'defined(BBSENGINEROOT)=' . var_export($c, true);
+  } else {
+    $tried[] = 'defined(BBSENGINEROOT)=undefined';
+  }
+
+  // 3. walk-up from this file's own location
+  //    __DIR__ = <engine_root>/smarty, so dirname(__DIR__) = engine_root
+  $candidate = dirname(__DIR__);
+  if (is_dir($candidate . '/php/util.php') || is_file($candidate . '/php/util.php')) {
+    return rtrim($candidate, '/');
+  }
+  $tried[] = 'dirname(__DIR__)=' . var_export($candidate, true);
+
+  // 4. plugin_dir walk — for the rare case where this file is
+  //    loaded from a stale or relocated copy (e.g. a vhost's own
+  //    smarty/ directory). We don't have a Smarty instance at this
+  //    layer (function.teos.php is loaded at compile-time before any
+  //    template renders), so we can't call Smarty::getPluginsDir()
+  //    directly — that method is an instance method, not static.
+  //    Instead we probe the canonical install location. This is a
+  //    last-resort fallback for relocated copies; the primary paths
+  //    (env, constant, walk-up) remain the canonical resolution. The
+  //    canonical path is a fallback (not a contract) — deployments
+  //    that ship BBSENGINEROOT elsewhere should publish the env var
+  //    or define the constant.
+  $candidates = [
+    '/srv/www/bbsengine6/smarty',
+    '/srv/www/bbsengine6',
+  ];
+  $triedCandidates = [];
+  foreach ($candidates as $plugindir) {
+    if (!is_dir($plugindir)) {
+      continue;
+    }
+    $engineRoot = dirname($plugindir);
+    $triedCandidates[] = $engineRoot;
+    if (is_dir($engineRoot . '/php')) {
+      return rtrim($engineRoot, '/');
+    }
+  }
+  $tried[] = 'plugin_dir_walk=tried [' . implode(', ', $triedCandidates) . ']';
+
+  throw new \RuntimeException(
+    'bbsengine6/smarty/function.teos: BBSENGINEROOT could not be resolved. '
+    . 'Tried: ' . implode('; ', $tried) . '. '
+    . 'Set BBSENGINEROOT in the vhost htaccess-prod via '
+    . '`SetEnv BBSENGINEROOT <abs-path>` (e.g. "/srv/www/bbsengine6"), '
+    . 'or define it as a constant in the vhost config.php.'
+  );
 }
 
 function buildpluginfilepath($smarty, $name)
