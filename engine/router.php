@@ -189,7 +189,7 @@ function router_buildBreadcrumbs(string $uri): array
     ];
   }
 
-  $rootlabel = \bbsengine6\util\env("TEOSLABEL", "NEEDINFO:buildbreadcrumbs.100");
+  $rootlabel = \bbsengine6\util\env("TEOSLABEL", "NEEDINFO:TEOSLABEL.buildbreadcrumbs.100");
   // Root crumb: title is per-vhost via TEOSLABEL (default
   // "teos", overridden to "bbsengine6 handbook" on the .org
   // vhost by that vhost's htaccess-prod SetEnv TEOSLABEL); the
