@@ -522,6 +522,77 @@ if (!preg_match('/require_once\s*\(\s*[\'"]util\.php[\'"]\s*\)/', $src)) {
 test_pass("function.teos.php bare-requires util.php via bootstrap's include_path");
 
 // -----------------------------------------------------------------------------
+// Test 9: {teos path="..." nolink=true} renders a <span> (the "you
+// are here" marker) instead of an <a> element. Static check: the
+// nolink branch in function.teos.tmpl must be present and reachable.
+// -----------------------------------------------------------------------------
+echo "Test 9: {teos nolink=true} renders <span> (no <a>) for 'you are here' marker\n";
+
+file_put_contents(
+    "$tmpdir/templates/caller.tmpl",
+    '{teos path="rec.arts.tv.the-a-team" title="the a team" nolink=true}' . "\n"
+);
+
+// Wipe any prior compiled template so the new caller is recompiled.
+$caller_compiled = "$tmpdir/templates_c/caller.tmpl.php";
+if (file_exists($caller_compiled)) {
+    @unlink($caller_compiled);
+}
+
+$nolink_render = $smarty->fetch("caller.tmpl");
+
+if (strpos($nolink_render, '<a ') !== false || strpos($nolink_render, '<a>') !== false) {
+    test_fail(
+        "{teos nolink=true} must not emit an <a> element",
+        "got: " . $nolink_render
+    );
+}
+if (strpos($nolink_render, '<span') === false) {
+    test_fail(
+        "{teos nolink=true} must emit a <span> element",
+        "got: " . $nolink_render
+    );
+}
+if (strpos($nolink_render, 'the a team') === false) {
+    test_fail(
+        "{teos nolink=true} must include the title text",
+        "got: " . $nolink_render
+    );
+}
+// Sanity: the title should NOT be wrapped in href markup.
+if (strpos($nolink_render, 'href=') !== false) {
+    test_fail(
+        "{teos nolink=true} must not emit an href attribute",
+        "got: " . $nolink_render
+    );
+}
+test_pass("{teos nolink=true} renders <span>title</span> with no <a> and no href");
+
+// Negative control: the same caller without nolink=true still emits
+// the linked <a> crumb, so we know the test above isn't passing by
+// accident (e.g. template unconditionally nolinking). This guards
+// against a future refactor that hardcodes the nolink path.
+file_put_contents(
+    "$tmpdir/templates/caller.tmpl",
+    '{teos path="rec.arts.tv.the-a-team" title="the a team"}' . "\n"
+);
+@unlink($caller_compiled);
+$linked_render = $smarty->fetch("caller.tmpl");
+if (strpos($linked_render, '<a ') === false) {
+    test_fail(
+        "{teos} without nolink must still emit an <a> (negative control)",
+        "got: " . $linked_render
+    );
+}
+if (strpos($linked_render, 'href="/test-teos/rec/arts/tv/the-a-team/"') === false) {
+    test_fail(
+        "{teos} without nolink must emit the expected href (negative control)",
+        "got: " . $linked_render
+    );
+}
+test_pass("{teos} without nolink still emits a linked <a> crumb (negative control)");
+
+// -----------------------------------------------------------------------------
 // Cleanup
 // -----------------------------------------------------------------------------
 @unlink("$tmpdir/templates/caller.tmpl");

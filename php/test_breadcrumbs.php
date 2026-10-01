@@ -260,6 +260,79 @@ if (strpos($crumbs_tmpl, 'title=$b.title') === false) {
 }
 test_pass("teos-breadcrumbs.tmpl passes is_root and title to {teos} plugin");
 
+// @since 2026-09-30 — youarehere.tmpl plumbs linklast through to
+// teos-breadcrumbs.tmpl as the "you are here" trailing-crumb flag, but
+// teos-breadcrumbs.tmpl must actually consume it. Before the fix, the
+// flag was accepted at the include boundary and silently ignored,
+// causing every blurb and folder page to render its current page as
+// a self-link instead of the conventional unlinked "you are here"
+// marker. Pin both the reference and the conditional call.
+echo "Test 8h: teos-breadcrumbs.tmpl references \$linklast (no-op flag regression guard)\n";
+if (strpos($crumbs_tmpl, '$linklast') === false) {
+    test_fail("teos-breadcrumbs.tmpl does not reference \$linklast; the youarehere.tmpl->linklast=true flag would be silently ignored");
+}
+test_pass("teos-breadcrumbs.tmpl references \$linklast");
+
+echo "Test 8i: teos-breadcrumbs.tmpl passes nolink=true to {teos} when linklast=true\n";
+// Require both halves in proximity: the \$b@last branch must wrap its
+// {teos} call with `if $linklast|default:false ... nolink=true ...`.
+$last_branch_pattern = '/\\{\\s*if\\s+\\$b@last\\s*==\\s*false\\s*\\}\\s*.*?\\{\\s*else\\s*\\}(.*?)\\{\\s*\\/if\\s*\\}/s';
+if (!preg_match($last_branch_pattern, $crumbs_tmpl, $m)) {
+    test_fail("could not locate the \$b@last branch in teos-breadcrumbs.tmpl");
+}
+$last_branch = $m[1];
+if (strpos($last_branch, '$linklast') === false) {
+    test_fail("the \$b@last branch in teos-breadcrumbs.tmpl does not gate on \$linklast");
+}
+if (strpos($last_branch, 'nolink=true') === false) {
+    test_fail("the \$b@last branch in teos-breadcrumbs.tmpl does not pass nolink=true to {teos}");
+}
+// And the non-linklast branch must remain a plain linked {teos} so
+// that any non-youarehere consumer of this template keeps the
+// historical always-linked trailing crumb.
+$linked_crumb_call = preg_match('/\\{\\s*else\\s*\\}\\s*\\{\\s*teos[^}]*\\}/s', $last_branch, $m2);
+if (!$linked_crumb_call || strpos($m2[0], 'nolink') !== false) {
+    test_fail("the linklast=false branch in teos-breadcrumbs.tmpl must remain a plain linked {teos} (no nolink)");
+}
+test_pass("the \$b@last branch emits nolink=true when linklast=true and a linked {teos} otherwise");
+
+// @since 2026-09-30 — function.teos.tmpl must render a <span> (no
+// <a>) when nolink=true so the "you are here" marker is plain text.
+// Without this, the linklast plumbing above would have no visible
+// effect — the trailing crumb would still be a tooltip-styled anchor.
+echo "Test 8j: function.teos.tmpl has a nolink branch that emits <span> and no <a>\n";
+$plugin_tmpl_src = file_get_contents("/home/opencode/data/work/bbsengine6/skin/tmpl/function.teos.tmpl");
+if (strpos($plugin_tmpl_src, '$nolink') === false) {
+    test_fail("function.teos.tmpl does not reference \$nolink; the linklast fix would not change rendered HTML");
+}
+$plugin_no_comments = preg_replace('/\{\*.*?\*\}/s', '', $plugin_tmpl_src);
+// Locate the nolink branch and assert it has a <span> and no <a>.
+$nolink_branch_pattern = '/\\{\\s*if\\s+\\$nolink[\\|][^\\}]*\\}\\s*(.*?)\\{\\s*\\/if\\s*\\}/s';
+if (!preg_match($nolink_branch_pattern, $plugin_no_comments, $m)) {
+    test_fail("could not locate a {if \$nolink} branch in function.teos.tmpl");
+}
+$nolink_branch = $m[1];
+if (strpos($nolink_branch, '<span') === false) {
+    test_fail("the \$nolink branch in function.teos.tmpl does not emit a <span>");
+}
+if (strpos($nolink_branch, '<a ') !== false || strpos($nolink_branch, '<a>') !== false) {
+    test_fail("the \$nolink branch in function.teos.tmpl must not emit an <a> element");
+}
+test_pass("function.teos.tmpl nolink branch emits <span> with no <a>");
+
+// @since 2026-09-30 — function.teos.php must accept the nolink
+// option and forward it to the template as a Smarty variable.
+// Without this, function.teos.tmpl's \$nolink check would always
+// be false and the linklast fix would render no differently.
+echo "Test 8k: function.teos.php reads \$options[\"nolink\"] and assigns \$nolink to the template\n";
+if (strpos($plugin_src, '$options["nolink"]') === false) {
+    test_fail('function.teos.php does not read $options["nolink"]');
+}
+if (!preg_match('/\\$tmpl->assign\\(\\s*["\']nolink["\']/', $plugin_src)) {
+    test_fail('function.teos.php does not assign "nolink" to the Smarty template');
+}
+test_pass("function.teos.php accepts nolink option and forwards it to the template");
+
 echo "\n";
 
 // =============================================================================
