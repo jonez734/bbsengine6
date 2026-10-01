@@ -9,7 +9,18 @@
                 {teos path=$b.path title=$b.title itemprop=true} <i class="fas fa-angle-double-right"></i>
             {/if}
         {else}
-            {teos path=$b.path title=$b.title itemprop=true}
+            {* @since 2026-09-30 — honor linklast so the trailing crumb
+               renders as a plain-text "you are here" marker instead of
+               a self-link. linklast is plumbed in from youarehere.tmpl
+               (folder.tmpl and page-markdown*.tmpl both pass
+               linklast=true). When linklast is unset/false, fall back
+               to the historical always-linked trailing crumb so any
+               non-youarehere consumer of this template is unaffected. *}
+            {if $linklast|default:false}
+                {teos path=$b.path title=$b.title itemprop=true nolink=true}
+            {else}
+                {teos path=$b.path title=$b.title itemprop=true}
+            {/if}
         {/if}
         </li>
     {/foreach}
