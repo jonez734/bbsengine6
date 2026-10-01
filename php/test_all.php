@@ -105,6 +105,23 @@ if ($return === 0) {
     $failed++;
 }
 
+// @since 2026-09-30 — pin the {teos} plugin's BBSENGINEROOT
+// multi-source resolution contract (fix c6e1eb1). Mock-only; no
+// DB involvement.
+echo "--- Teos Plugin Config-Less Tests ---\n";
+echo "Running tests...\n";
+$output = [];
+$return = 0;
+exec("php " . __DIR__ . "/test_teos_plugin_configless.php 2>&1", $output, $return);
+if ($return === 0) {
+    echo "  ✓ test_teos_plugin_configless.php PASSED\n";
+    $passed++;
+} else {
+    echo "  ✗ test_teos_plugin_configless.php FAILED\n";
+    echo "    " . implode("\n    ", array_slice($output, 0, 20)) . "\n";
+    $failed++;
+}
+
 echo "\n";
 
 // Run folder tests
