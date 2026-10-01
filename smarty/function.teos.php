@@ -181,6 +181,12 @@ function smarty_function_teos($options, Smarty_Internal_Template $template)
   $path = isset($options["path"]) ? $options["path"] : null;
   $title = isset($options["title"]) ? $options["title"] : null;
   $itemprop = isset($options["itemprop"]) ? $options["itemprop"] : false;
+  // @since 2026-09-30 — nolink=true renders the crumb title as plain
+  // text (a "you are here" marker) instead of an <a> link. Used by
+  // teos-breadcrumbs.tmpl's $b@last branch when the caller passed
+  // linklast=true via youarehere.tmpl. Default false preserves the
+  // historical always-linked behavior for every existing caller.
+  $nolink = !empty($options["nolink"]);
   // @since 2026-09-30 — when the caller marks the crumb as the
   // root (e.g. teos-breadcrumbs.tmpl's $b@first branch), suppress
   // the path-segment uri synthesis and let TEOSURL stand alone.
@@ -236,6 +242,7 @@ function smarty_function_teos($options, Smarty_Internal_Template $template)
   $tmpl->assign("uri", $uri);
   $tmpl->assign("title", $title);
   $tmpl->assign("itemprop", $itemprop);
+  $tmpl->assign("nolink", $nolink);
 
   return $tmpl->fetch("function.teos.tmpl");
 }
