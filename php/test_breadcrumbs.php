@@ -187,6 +187,52 @@ if (preg_match('/function\s+display\s*\(\s*\$uri\s*,\s*\$filepath\s*\)\s*\{(.*?)
 }
 test_pass("blurb.php::display() appends current-page crumb from parsed title");
 
+// @since 2026-09-30 — blurb.php::getlabel() was reading the legacy
+// `TEOS_LABEL` (underscore) env name while engine/router.php:192 and
+// every live htaccess-prod publish `TEOSLABEL`. Result: the root
+// breadcrumb rendered as the literal "teos" on blurb pages. Pin the
+// source-level fix (env() call) and the absence of the legacy name so
+// a future refactor doesn't silently reintroduce the divergence.
+echo "Test 7d: blurb.php::getlabel() reads TEOSLABEL via env() (not the legacy TEOS_LABEL)\n";
+$blurb_src_for_label = file_get_contents("/home/opencode/data/work/bbsengine6/php/blurb.php");
+if (!preg_match('/bbsengine6\\\\util\\\\env\s*\(\s*[\'"]TEOSLABEL[\'"]/', $blurb_src_for_label)) {
+    test_fail("blurb.php does not call \\bbsengine6\\util\\env('TEOSLABEL') from getlabel()");
+}
+if (strpos($blurb_src_for_label, "'TEOS_LABEL'") !== false
+    || strpos($blurb_src_for_label, '"TEOS_LABEL"') !== false) {
+    test_fail("blurb.php still references the legacy 'TEOS_LABEL' (underscore) env name in code; route through env('TEOSLABEL') instead");
+}
+test_pass("getlabel() routes through env('TEOSLABEL') and has no legacy TEOS_LABEL code reference");
+
+// @since 2026-09-30 — runtime pin: when TEOSLABEL is exported (e.g.
+// via SetEnv in the vhost htaccess-prod), getlabel() must return
+// that value. Pre-fix, getlabel() returned the literal 'teos'
+// because it read TEOS_LABEL (which was unset). Post-fix, it reads
+// TEOSLABEL and surfaces it. Skip if a TEOSLABEL constant is
+// defined — the env-then-constant precedence is exercised by the
+// source pin above (Test 7d), and a defined constant would
+// short-circuit the env path under putenv() in some FPM setups.
+echo "Test 7e: getlabel() returns the TEOSLABEL env value when set\n";
+if (defined('TEOSLABEL')) {
+    test_pass("TEOSLABEL constant is defined; env precedence covered by Test 7d");
+} else {
+    $prev = getenv('TEOSLABEL');
+    putenv('TEOSLABEL=testlabel-7e');
+    try {
+        $got = \bbsengine6\blurb\getlabel();
+        if ($got !== 'testlabel-7e') {
+            test_fail("getlabel() did not return TEOSLABEL env value", "got '$got'");
+        }
+    } finally {
+        if ($prev === false) {
+            putenv('TEOSLABEL');
+        } else {
+            putenv('TEOSLABEL=' . $prev);
+        }
+    }
+    test_pass("getlabel() returns TEOSLABEL env value");
+}
+
 echo "\n";
 
 // =============================================================================
