@@ -181,12 +181,27 @@ function smarty_function_teos($options, Smarty_Internal_Template $template)
   $path = isset($options["path"]) ? $options["path"] : null;
   $title = isset($options["title"]) ? $options["title"] : null;
   $itemprop = isset($options["itemprop"]) ? $options["itemprop"] : false;
+  // @since 2026-09-30 — when the caller marks the crumb as the
+  // root (e.g. teos-breadcrumbs.tmpl's $b@first branch), suppress
+  // the path-segment uri synthesis and let TEOSURL stand alone.
+  // Without this, a root crumb with path='teros' renders href
+  // /teos/teros/ because the per-segment implode always emits
+  // 'teros/'. Used by the "you are here" trail where the root
+  // should land at TEOSURL + '/' regardless of its internal
+  // ltree identifier (per-vhost htaccess-prod may declare
+  // TEOSURL=/handbook/<v>/, in which case the root href is
+  // /handbook/<v>/, never /handbook/<v>/teros/).
+  $is_root = !empty($options["is_root"]);
 
   // Path is a dot-separated label: "rec.arts.tv.the-a-team"
   $segments = array_values(array_filter(explode(".", $path)));
   $uriSegments = array_map(function($s) { return str_replace("_", "-", $s); }, $segments);
 
-  $uri = implode("/", $uriSegments) . "/";
+  // Root crumb: emit a bare trailing slash so the template's
+  // {$smarty.const.TEOSURL}{$uri} produces TEOSURL + '/' (e.g.
+  // /teos/, not /teos/teros/). Non-root crumbs keep the
+  // path-segment synthesis.
+  $uri = $is_root ? "" : implode("/", $uriSegments) . "/";
 
   if ($title === null) {
     if (count($uriSegments) > 0) {
