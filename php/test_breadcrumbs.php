@@ -233,6 +233,33 @@ if (defined('TEOSLABEL')) {
     test_pass("getlabel() returns TEOSLABEL env value");
 }
 
+// @since 2026-09-30 — fix for the root crumb rendering as /teos/teos/
+// instead of /teos/ on zoidtechnologies.com teos folder pages. The
+// {teos} Smarty plugin (bbsengine6/smarty/function.teos.php) needs to
+// honor a new is_root option that bypasses the per-segment uri
+// synthesis, and teos-breadcrumbs.tmpl needs to pass that option (plus
+// title=$b.title so TEOSLABEL is honored). These source pins catch a
+// regression of the 33d3b1c fix.
+echo "Test 8f: function.teos.php honors is_root option (uri bypass)\n";
+$plugin_src = file_get_contents("/home/opencode/data/work/bbsengine6/smarty/function.teos.php");
+if (strpos($plugin_src, '$options["is_root"]') === false) {
+    test_fail('function.teos.php does not read $options["is_root"]; root crumb would still render /teos/teos/');
+}
+if (!preg_match('/\$uri\s*=\s*\$is_root\s*\?\s*""/', $plugin_src)) {
+    test_fail('function.teos.php does not implement $uri = $is_root ? "" : ...; root href would still be TEOSURL + path_segments + "/"');
+}
+test_pass("function.teos.php reads is_root option and bypasses uri synthesis when true");
+
+echo "Test 8g: teos-breadcrumbs.tmpl passes is_root=true on \$b@first and title=\$b.title\n";
+$crumbs_tmpl = file_get_contents("/home/opencode/data/work/bbsengine6/skin/tmpl/teos-breadcrumbs.tmpl");
+if (strpos($crumbs_tmpl, 'is_root=true') === false) {
+    test_fail("teos-breadcrumbs.tmpl does not pass is_root=true; root crumb uri suppression would not fire");
+}
+if (strpos($crumbs_tmpl, 'title=$b.title') === false) {
+    test_fail("teos-breadcrumbs.tmpl does not pass title=\$b.title; TEOSLABEL would be ignored by the plugin");
+}
+test_pass("teos-breadcrumbs.tmpl passes is_root and title to {teos} plugin");
+
 echo "\n";
 
 // =============================================================================
@@ -247,11 +274,16 @@ echo "--- Path Derivation Tests ---\n\n";
 // 3. Join segments with slashes for URI
 // 4. Title from last segment with hyphens/underscores replaced by spaces
 
-function derive_teos_crumb(string $path): array {
+function derive_teos_crumb(string $path, bool $is_root = false): array {
     $segments = array_values(array_filter(explode(".", $path)));
     $uriSegments = array_map(function($s) { return str_replace("_", "-", $s); }, $segments);
 
-    $uri = implode("/", $uriSegments) . "/";
+    // Mirror the post-33d3b1c plugin logic: when the caller marks the
+    // crumb as the root (is_root=true), suppress the per-segment uri
+    // synthesis so TEOSURL stands alone as the href. Non-root crumbs
+    // (including single-segment non-root paths like "politics") keep
+    // the path-segment synthesis so /teos/politics/ still resolves.
+    $uri = $is_root ? "" : implode("/", $uriSegments) . "/";
     if (count($uriSegments) > 0) {
         $title = end($uriSegments);
     } else {
@@ -309,6 +341,36 @@ if ($f['title'] !== 'the a team' || $f['uri'] !== 'rec/arts/tv/the-a-team/') {
     test_fail("unexpected result", print_r($f, true));
 }
 test_pass("rec.arts.tv.the-a-team → title='the a team', uri='rec/arts/tv/the-a-team/'");
+
+// @since 2026-09-30 — root-crumb is_root bypass regression pins.
+// These exercise the post-33d3b1c derive_teos_crumb helper which
+// mirrors bbsengine6/smarty/function.teos.php's $uri logic. The
+// first two mirror the rendered scenario on
+// zoidtechnologies.com/teos/sci/archaeology/: root crumb with
+// path='teros' must emit uri='' (so TEOSURL + '/' = /teos/ lands
+// correctly), and the single-segment non-root case (e.g.
+// maturecontentwarning.tmpl's path="politics") must keep its
+// per-segment uri synthesis so /teos/politics/ still resolves.
+echo "Test 16: root crumb with is_root=true bypasses uri synthesis\n";
+$f = derive_teos_crumb("teros", is_root: true);
+if ($f['uri'] !== '' || $f['title'] !== 'teros') {
+    test_fail("root crumb did not bypass uri synthesis", print_r($f, true));
+}
+test_pass("teros is_root=true → uri='' (so TEOSURL + '/' = /teos/ renders correctly)");
+
+echo "Test 17: single-segment non-root crumb is unchanged by is_root option\n";
+$f = derive_teos_crumb("politics", is_root: false);
+if ($f['uri'] !== 'politics/' || $f['title'] !== 'politics') {
+    test_fail("single-segment non-root crumb regressed", print_r($f, true));
+}
+test_pass("politics is_root=false → uri='politics/' (unchanged)");
+
+echo "Test 18: mid-path crumb (multi-segment non-root) is unchanged\n";
+$f = derive_teos_crumb("sci.archaeology", is_root: false);
+if ($f['uri'] !== 'sci/archaeology/' || $f['title'] !== 'archaeology') {
+    test_fail("mid-path crumb regressed", print_r($f, true));
+}
+test_pass("sci.archaeology is_root=false → uri='sci/archaeology/' (unchanged)");
 
 echo "\n";
 
