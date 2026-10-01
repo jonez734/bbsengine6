@@ -14,24 +14,40 @@ require_once("engine.php");
 /**
  * Get the display label for the top-level "root" breadcrumb.
  *
- * Defaults to "teos" so existing callers (and any environment that
- * neither defines nor exports the constant) see no change. The
- * handbook vhost declares TEOS_LABEL="bbsengine6 handbook" via
- * its htaccess-prod SetEnv, mirroring how TEOSURL and TEOSDIR
- * are already declared by each vhost.
+ * @since 2026-09-30 — switched from the legacy TEOS_LABEL
+ * (underscore) env name to the canonical TEOSLABEL env name.
+ * The two were renamed in commit 45b0b71 ("chore(bbsengine6):
+ * router/util/htaccess-prod tweaks") along with engine/router.php
+ * and bbsengine6\util\vhost_label(); blurb.php's getlabel() was
+ * missed in that rename and the vhost_label() delegation added
+ * by c11acff was later reverted in 22bd02ba. The result: blurb
+ * pages on the .org vhost rendered the literal "teos" for the
+ * root crumb because the live htaccess-prod publishes
+ * `SetEnv TEOSLABEL bbsengine` (bbsengine6/www/org/htaccess-prod:5)
+ * and `getenv(TEOS_LABEL)` returned false (note: the legacy name
+ * used an underscore; the canonical contract is the no-underscore
+ * form). engine/router.php already reads TEOSLABEL via
+ * \bbsengine6\util\env() (line 192), so the routers's
+ * filesystem-fallback path was correct; only the DB-driven path
+ * through bbsengine6\blurb\buildbreadcrumbs() (line 73) was broken.
+ *
+ * Resolution is now routed through \bbsengine6\util\env() with
+ * the same NEEDINFO sentinel default used by engine/router.php
+ * and bbsengine6\util\vhost_label(), so a missing env var is
+ * greppable in production logs instead of silently rendering
+ * the literal "teos". Each vhost's htaccess-prod declares its
+ * own TEOSLABEL via SetEnv (the .org handbook vhost sets
+ * "bbsengine"), mirroring the TEOSDIR/TEOSURL pattern.
  *
  * @return string The label to render for the top breadcrumb.
  */
 function getlabel(): string
 {
-    $v = getenv('TEOS_LABEL');
+    $v = \bbsengine6\util\env('TEOSLABEL', 'NEEDINFO:getlabel.100');
     if (is_string($v) && $v !== '') {
         return $v;
     }
-    if (defined('TEOS_LABEL')) {
-        return TEOS_LABEL;
-    }
-    return 'teos';
+    return 'NEEDINFO:getlabel.100';
 }
 
 /**
@@ -65,9 +81,10 @@ function buildbreadcrumbs($sigpath, $skiptop = true, $hidepath = null)
             $crumbs[] = $sig;
         }
 
-        // Prepend "root" crumb. Title is per-vhost via TEOS_LABEL;
-        // path stays "teos" as the internal identifier; uri follows
-        // TEOSURL so it points at the correct vhost root.
+        // Prepend "root" crumb. Title is per-vhost via TEOSLABEL
+        // (see getlabel() above); path stays "teos" as the internal
+        // identifier; uri follows TEOSURL so it points at the
+        // correct vhost root.
         $teosurl = defined('TEOSURL') ? TEOSURL : '';
         array_unshift($crumbs, [
             'title' => getlabel(),
