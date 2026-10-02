@@ -4,7 +4,18 @@
 
 SetEnv TEOSLABEL bbsengine
 SetEnv TEOSDIR /srv/www/vhosts/www.bbsengine.org/html/handbook/6/
-SetEnv TEOSURL /handbook/
+# @since 2026-10-02 — include the version segment so the engine's
+# URL emitters (router_collectDirectoryItems for folder listings,
+# router_buildBreadcrumbs / function.teos.tmpl for breadcrumbs)
+# produce canonical handbook URLs like `/handbook/6/specs/util`
+# instead of the versionless `/handbook/specs/util`. The versionless
+# form still 301-redirects to the versioned form (lines below)
+# for inbound legacy bookmarks and crawlers, but emitted hrefs
+# no longer rely on that redirect — which previously caused
+# trailing-slash-404s because the redirect rule appends `/` to
+# leaf paths, putting them on a path that no rewrite rule matches.
+# Mirrors the teos vhost's `SetEnv TEOSURL /teos/` shape.
+SetEnv TEOSURL /handbook/6/
 
 # @since 2026-09-16 — publish vhost document root so bbsengine6\bootstrap()
 # can prepend it to include_path. Bare require_once("config.php") in
@@ -54,8 +65,45 @@ RewriteRule ^(.*)$ https://www.bbsengine.org/$1 [L,R=301]
 # (bare-version-no-trailing-slash) with the same R=301.
 RewriteRule ^handbook[/]?$ /handbook/6/ [R=301,L]
 
-RewriteRule ^handbook/(?!(\d+)/)([^/]+(?:/[^/]+)*)$ /handbook/6/$2/ [R=301,L]
-RewriteRule ^handbook/(?!(\d+)/)(.+)/$ /handbook/6/$2 [R=301,L]
+# @since 2026-10-02 — split legacy /handbook/<rest> 301 redirect
+# into three rules that preserve the trailing-slash convention
+# (folder needs slash for DirectorySlash + directory listing;
+# file/leaf URLs must NOT have a trailing slash because the
+# `.md` rewrite below requires `\.md$` and the markdown /
+# folder handlers probe the filesystem for `<uri>` not
+# `<uri>/`). The pre-fix shape (single rule with `([^/]+(?:/[^/]+)*)$`
+# → `$2/`) appended `/` to every leaf path, putting leaf URLs
+# on a path that no rewrite rule matched — the 404 surfaced
+# by clicking the folder-listing links in /handbook/<v>/specs/.
+#
+# New shape (leaf to leaf, folder to folder):
+#   1. trailing-slash incoming path → preserve slash.
+#   2. multi-segment no-slash + is a directory → add slash.
+#   3. otherwise (single-segment no-slash OR multi-segment
+#      no-slash + not a directory) → leaf, no slash.
+#
+# The strict negative lookahead `(?!\d+(?:/|$))` rejects paths
+# starting with digits (the version segment) so `/handbook/6`
+# and `/handbook/6/specs/util` are not redirected — those are
+# already canonical and handled by the rules further down.
+# The loose form `(?!(\d+)/)` was insufficient: for `/handbook/6`
+# (no trailing slash) the lookahead `(?!(\d+)/)` succeeds because
+# `6` is not followed by `/`, so the rule captured `$2 = "6"` and
+# redirected to `/handbook/6/6/`. The `(/|$)` anchor fixes it.
+# The inner `(?:` makes the lookahead non-capturing so the outer
+# `(.*)` is always `$1`, not `$3` (Apache counts lookahead
+# captures toward $N).
+#
+# `%{REQUEST_FILENAME} -d` probes the filesystem against the
+# vhost document root; same idiom as the directory catch-all
+# rule below (line 146). The condition is required because
+# `/handbook/specs` (a folder, no slash) and `/handbook/specs/util`
+# (a leaf, no slash) are syntactically identical without it.
+
+RewriteRule ^handbook/(?!\d+(?:/|$))(.+)/$ /handbook/6/$1/ [R=301,L]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^handbook/(?!\d+(?:/|$))(.*[^/])$ /handbook/6/$1/ [R=301,L]
+RewriteRule ^handbook/(?!\d+(?:/|$))(.*)$ /handbook/6/$1 [R=301,L]
 
 RewriteRule ^handbook/(\d+)$ /handbook/$1/ [R=301,L]
 
