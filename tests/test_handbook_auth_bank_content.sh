@@ -202,7 +202,7 @@ if [ ! -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
   bad "local www/org/htaccess-prod missing"
 else
   md_rule_ok=false
-  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/[0-9]+/[^\ ]+\.md[[:space:]]' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/router.php?uri='; then
+  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/[^ ]+/[^ ]+\.md' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/router.php?uri='; then
     md_rule_ok=true
   fi
   if $md_rule_ok; then

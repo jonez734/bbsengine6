@@ -258,7 +258,7 @@ if [ -f "$LOCAL_BBSENGINE6/www/org/htaccess-prod" ]; then
   # URI prefix and dispatches: chrome-rendered paths go to the page
   # handler, .md paths go to the rawmarkdown handler which calls
   # \bbsengine6\markdown\serveRawMarkdown() against TEOSDIR).
-  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/[0-9]+/[^\ ]+\.md' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/router.php?uri='; then
+  if grep -E '^[[:space:]]*RewriteRule[[:space:]]+\^handbook/[^ ]+/[^ ]+\.md' "$LOCAL_BBSENGINE6/www/org/htaccess-prod" 2>/dev/null | grep -qF '/engine/router.php?uri='; then
     ok "local htaccess-prod routes /handbook/<v>/<uri>.md to /engine/router.php"
   else
     bad "local htaccess-prod does NOT route /handbook/<v>/<uri>.md to /engine/router.php -- the .org vhost's per-vhost /engine/ install must be the rewrite target"
