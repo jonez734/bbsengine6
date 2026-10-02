@@ -11,7 +11,12 @@ clean:
 org:
 	$(MAKE) -C org stage
 	$(MAKE) -C ../handbook stage VERSION=$(VERSION)
-	$(RSYNC) --chmod=Dg+rwxs $(ORGSTAGE) $(ORGPROD)
+	$(RSYNC) \
+		--exclude "html/handbook/bbsengine-handbook.conf" \
+		--exclude "html/handbook/handbook-wsgi.conf" \
+		--exclude "html/handbook/modules.adoc" \
+		--exclude "html/handbook/modules.html" \
+		--chmod=Dg+rwxs $(ORGSTAGE) $(ORGPROD)
 	# Force templates_c/ to mode 2775 on the receiver.
 	# rsync's --chmod (whether = or +) only applies when the dir
 	# is CREATED on the receiver; if it already existed, rsync's
