@@ -40,6 +40,20 @@ define("config\DOCUMENTROOT", \config\VHOSTDIR . "html/");
 
 define("config\SMARTYCOMPILEDTEMPLATESDIR", \config\VHOSTDIR."templates_c");
 define("config\SMARTYPLUGINSDIR", [ 0 => \config\VHOSTDIR."smarty/"]);
+
+// @since 2026-10-02 — require bbsengine6config.php FIRST so
+// \config\SHAREDTMPLDIR (defined at the top of bbsengine6config
+// .php as the shared tmpl single source of truth) is available
+// before SMARTYTEMPLATESDIR references it below. The previous
+// order put this require AFTER the SMARTYTEMPLATESDIR define,
+// so the \config\SHAREDTMPLDIR reference at line 52 hit an
+// "Undefined constant" fatal — visible on merlin after the
+// 2026-10-02 htaccess VHOSTCONFIG fix unblocked config.php
+// loading. Mirrors teos/www/config-prod.php:36, which has
+// always loaded bbsengine6config.php before its own
+// SMARTYTEMPLATESDIR define.
+require_once('bbsengine6config.php');
+
 // @since 2026-09-24 — simplified: use SHAREDTMPLDIR (single
 // source of truth in bbsengine6config.php), drop trailing
 // bbsengine6/skin/tmpl/ (auto-appended as the engine fallback
@@ -51,13 +65,6 @@ define("config\SMARTYTEMPLATESDIR", [
     0 => \config\DOCUMENTROOT . "skin/tmpl/",
     1 => \config\SHAREDTMPLDIR,
 ]);
-
-// @since 2026-09-24 — load bbsengine6config.php after defining the
-// namespaced config\SMARTY* constants so its `if (!defined(...))`
-// defaults don't override vhost values. bbsengine6config.php also
-// installs the zoid6 hook shim when zoid6 is loaded (which this
-// vhost does not, but the shim check is harmless).
-require_once('bbsengine6config.php');
 
 // @see http://php.net/strftime
 define("DATEFORMAT", "%Y-%b-%d %I:%M %p %Z (%A)");
