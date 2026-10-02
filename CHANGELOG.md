@@ -1,5 +1,47 @@
 ## [Unreleased]
 
+### fix(engine/router): handbook version root no longer 404s
+
+`https://bbsengine.org/handbook/6/` (and any
+`/handbook/<v>/` URL with no trailing path) returned a styled 404
+("Page not found: handbook/6/") with a literal `ROUTER_RENDERED`
+appended after `</html>`. Two interacting bugs:
+
+1. **engine/router.php HTTP entry-point** gated the handbook
+   prefix-strip on `!isset($_GET['uri'])`. htaccess's catch-all
+   rewrite (`bbsengine6/www/org/htaccess-prod:103`) pre-filled
+   `$_GET['uri']` to the full `/handbook/<v>/` URI, so the
+   dispatcher saw the prefixed URI, every handler pattern rejected
+   it, and the version root fell through to the styled 404.
+
+2. **engine/router.php dispatch loop** returned `router_handleError()`
+   directly when no handler matched. `router_handleError()`
+   returns `ROUTER_RENDERED` (a string), so the HTTP entry-point's
+   `else echo $router_result` echoed the literal `"ROUTER_RENDERED"`
+   after the styled chrome. Cosmetic but visible to anyone
+   inspecting response bodies.
+
+Fix:
+
+- `engine/router.php`: drop the `!isset($_GET['uri'])` gate on
+  the prefix-strip. REQUEST_URI is the canonical source for
+  "what the client asked for" on the handbook vhost.
+- `engine/router.php`: capture `router_handleError()` into
+  `$err_result` and map `=== ROUTER_RENDERED` to `''` so the
+  HTTP entry-point's `echo` is a no-op. Mirror of the existing
+  in-loop mapping at line ~796.
+- `www/org/htaccess-prod`: belt-and-suspenders explicit rule
+  `^handbook/(\d+)/?$ /engine/router.php?uri=` so the
+  version root reaches the router with `?uri=` empty even on
+  htaccess variants that don't pre-fill `$_GET['uri']`.
+
+Tests:
+
+- `php/test_router.php` Test 3f pins the prefix-strip is
+  unconditional (no `!isset($_GET['uri'])` gate in code).
+- `php/test_router.php` Test 3g pins the post-loop fallback
+  normalizes `ROUTER_RENDERED` to `''`.
+
 ### docs(changelog): regression-recovery commit pin
 
 Pins the three commits that comprise the live 2026-10-XX fix for
