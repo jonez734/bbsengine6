@@ -790,7 +790,16 @@ function router(string $uri): ?string
     return $result;
   }
 
-  return router_handleError($uri);
+  // @since 2026-10-02 — post-loop fallback to router_handleError().
+  // router_handleError() also returns ROUTER_RENDERED (after rendering
+  // via page\error() -> displaypage()); map that to '' here so the
+  // HTTP entry-point's `echo $router_result` is a no-op. The pre-fix
+  // shape returned router_handleError()'s value directly, which on
+  // miss URIs produced the literal string "ROUTER_RENDERED" appended
+  // to the response body after the styled 404 chrome.
+  $err_result = router_handleError($uri);
+  if ($err_result === ROUTER_RENDERED) return '';
+  return $err_result;
 }
 
 function route(string $uri): ?string
@@ -813,14 +822,21 @@ if (php_sapi_name() !== 'cli') {
 
 
   $requesturi = $_SERVER['REQUEST_URI'] ?? '';
+  // @since 2026-10-02 — always prefer REQUEST_URI for handbook
+  // URIs, regardless of whether htaccess pre-set $_GET['uri'].
+  // The previous `!isset($_GET['uri'])` guard let htaccess's
+  // catch-all rewrite (bbsengine6/www/org/htaccess-prod:103) defeat
+  // this block by filling $_GET['uri'] to the full `/handbook/<v>/`
+  // prefix. The dispatcher then ran against the prefixed URI,
+  // every pattern rejected it, and the version root 404'd.
+  // REQUEST_URI is the canonical source for "what the client
+  // asked for"; $_GET['uri'] is a rewrite artifact and may be
+  // pre-filled by htaccess. The handbook vhost shape is a
+  // well-known engine contract; the engine owns it.
   if (preg_match('#^/handbook/(\d+)/(.*)$#', $requesturi, $m)) {
-    if (!isset($_GET['uri']) && !isset($_GET['path'])) {
-      $_GET['uri'] = $m[2];
-    }
+    $_GET['uri'] = $m[2];
   } elseif (preg_match('#^/handbook/(\d+)/?$#', $requesturi, $m)) {
-    if (!isset($_GET['uri']) && !isset($_GET['path'])) {
-      $_GET['uri'] = '';
-    }
+    $_GET['uri'] = '';
   }
 
 ///  if (!defined('TEOSURL')) define('TEOSURL', '/teos/');
