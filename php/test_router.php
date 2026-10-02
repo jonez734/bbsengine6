@@ -179,11 +179,108 @@ if ($ok) {
     echo "  ✓ PASS: router() dispatch complete (result=" . var_export($dispatch_result, true)
          . ", body length=" . strlen($dispatch_body) . ")\n";
 } else {
-    echo "  ✗ FAIL: router() did not produce an error path: "
-         . "result=" . var_export($dispatch_result, true)
-         . ", body length=" . strlen($dispatch_body) . "\n";
+echo "  ✗ FAIL: router() did not produce an error path: "
+          . "result=" . var_export($dispatch_result, true)
+          . ", body length=" . strlen($dispatch_body) . "\n";
     exit(1);
 }
+
+// Test 3f: HTTP entry-point's handbook prefix-strip is idempotent.
+// Source-level check on engine/router.php: the entry-point block
+// that handles /handbook/<v>/... URIs MUST NOT be gated on
+// `!isset($_GET['uri'])` — htaccess's catch-all
+// (bbsengine6/www/org/htaccess-prod:103) pre-fills $_GET['uri']
+// to the full `/handbook/<v>/...` prefix, and the entry-point's
+// pre-fix shape skipped the strip in that case. Result: every
+// dispatch against the prefix-stripped URI missed all handlers
+// and the handbook version root 404'd. Pin the unconditional
+// assignment. Mirrors how Test 6a/6c/6d/6e use source-reading for
+// runtime-incompatible assertions.
+echo "Test 3f: handbook URI prefix-strip is unconditional (no !isset(\$_GET['uri']) gate in code)\n";
+// Extract the entry-point block as code only (strip line comments).
+// Lazy match the block from REQUEST_URI assignment through the end of
+// the elseif branch's closing `}`, then strip both `// ...` and
+// `/* ... */` comments before checking for the gate. This avoids false
+// positives from docstring text that mentions the historical
+// `!isset($_GET['uri'])` pattern.
+if (preg_match(
+    '/\$requesturi\s*=\s*\$_SERVER\[.REQUEST_URI.\]\s*\?\?\s*.+?\\}\s*\\}/s',
+    $router_src,
+    $entry_block_m)) {
+    $entry_block_src = $entry_block_m[0];
+    // Strip `//` line comments: anything from `//` to end-of-line.
+    $entry_block_code = preg_replace('/\/\/[^\n]*/', '', $entry_block_src);
+    // Strip `/* ... */` block comments (non-greedy, across lines).
+    $entry_block_code = preg_replace('/\/\*.*?\*\//s', '', $entry_block_code);
+    if (preg_match('/!\s*isset\s*\(\s*\$_GET\[.uri.\]\s*\)/', $entry_block_code)) {
+        echo "  ✗ FAIL: handbook prefix-strip still gated on !isset(\$_GET['uri']); " .
+             "htaccess's catch-all pre-fill defeats the strip and the handbook version root 404s.\n";
+        exit(1);
+    }
+    // Positive check: REQUEST_URI-derived values MUST be assigned.
+    // The two branches set `$_GET['uri'] = $m[2]` and `$_GET['uri'] = ''`.
+    if (!preg_match('/\$_GET\[.uri.\]\s*=\s*\$m\[2\]/', $entry_block_code)) {
+        echo "  ✗ FAIL: handbook branch 1 missing `\$_GET['uri'] = \$m[2]` assignment\n";
+        exit(1);
+    }
+    if (!preg_match('/\$_GET\[.uri.\]\s*=\s*[\'"\'][\'"\']/', $entry_block_code)) {
+        echo "  ✗ FAIL: handbook branch 2 missing `\$_GET['uri'] = ''` assignment\n";
+        exit(1);
+    }
+    echo "  ✓ PASS: handbook prefix-strip is unconditional (REQUEST_URI wins, both branches assign)\n";
+} else {
+    echo "  ✗ FAIL: could not extract HTTP entry-point's handbook prefix-strip block from router.php\n";
+    exit(1);
+}
+
+// Test 3g: post-loop fallback maps router_handleError()'s
+// ROUTER_RENDERED return to '' so the HTTP entry-point's
+// `echo $router_result` is a no-op. The pre-fix shape returned
+// router_handleError()'s value directly; on a miss URI the body
+// rendered the styled 404 chrome AND then the literal string
+// "ROUTER_RENDERED" appended (because the entry-point's else
+// branch echoed the string). Regression guard for the
+// 2026-10-02 cosmetic fix.
+echo "Test 3g: dispatch loop post-loop fallback maps ROUTER_RENDERED to '' (no literal echoed)\n";
+// Find the foreach(router_gethandlers()) start and capture from there
+// to the end of the router() function (next "  }" at line start that
+// closes router(), not the foreach). The simplest approach is to
+// grab a fixed-size window after the foreach start, which is enough
+// to cover the post-loop fallback (typically ~50 lines after the
+// foreach close). Source-reading shape mirrors Test 3f.
+$foreach_pos = strpos($router_src, "foreach (router_gethandlers()");
+if ($foreach_pos === false) {
+    echo "  ✗ FAIL: could not find foreach(router_gethandlers()) in router.php\n";
+    exit(1);
+}
+// Window: 2000 chars from foreach start. The foreach body + post-loop
+// fallback + function close comfortably fits within that. The actual
+// assertions below only care about the code-only block.
+$post_block = substr($router_src, $foreach_pos, 2000);
+// Strip comments for the assertion checks.
+$post_block_code = preg_replace('/\/\/[^\n]*/', '', $post_block);
+$post_block_code = preg_replace('/\/\*.*?\*\//s', '', $post_block_code);
+
+// Pre-fix shape: function ends with `return router_handleError($uri);`
+// directly (no normalization). Reject that.
+if (preg_match('/return\s+router_handleError\s*\(\s*\$uri\s*\)\s*;\s*\}/m', $post_block_code)
+    && !preg_match('/\$err_result\s*=\s*router_handleError/', $post_block_code)) {
+    echo "  ✗ FAIL: post-loop fallback still ends with `return router_handleError(\$uri);` — " .
+         "missing the ROUTER_RENDERED -> '' mapping. router_handleError()'s ROUTER_RENDERED " .
+         "return will be echoed verbatim by the HTTP entry-point.\n";
+    exit(1);
+}
+// Post-fix shape: `$err_result = router_handleError($uri);` then
+// normalize and return.
+if (!preg_match('/\$err_result\s*=\s*router_handleError\s*\(\s*\$uri\s*\)\s*;/', $post_block_code)) {
+    echo "  ✗ FAIL: post-loop block missing `\$err_result = router_handleError(\$uri);` capture\n";
+    exit(1);
+}
+if (!preg_match('/if\s*\(\s*\$err_result\s*===\s*ROUTER_RENDERED\s*\)\s*return\s*.+;/', $post_block_code)) {
+    echo "  ✗ FAIL: post-loop block missing the ROUTER_RENDERED -> '' mapping\n";
+    exit(1);
+}
+echo "  ✓ PASS: dispatch loop post-loop fallback normalizes ROUTER_RENDERED to ''\n";
 
 // Test 4: URI to blurbID conversion
 echo "Test 4: URI to blurbID conversion (used by blurb handler)\n";
