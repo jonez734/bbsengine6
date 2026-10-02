@@ -502,10 +502,75 @@ is the canonical polymorphic read for the per-vhost content root;
 the new handler introduces no teos-specific branch. See
 `AGENTS.md` "TEOSDIR resolution contract".
 
+### Handbook version root 404 + literal `ROUTER_RENDERED` echo (2026-10-02)
+
+**Symptom.** `https://bbsengine.org/handbook/6/` (and any
+`/handbook/<v>/` with no trailing path) returned the styled 404
+chrome (`<h1>Error</h1>` with "Page not found: handbook/6/") AND
+the literal string `ROUTER_RENDERED` appended after `</html>`.
+Direct investigation: see `CHANGELOG.md` "[Unreleased]" entry
+`fix(engine/router): handbook version root no longer 404s`.
+
+**Two interacting root causes:**
+
+1. **HTTP entry-point's handbook prefix-strip** was gated on
+   `!isset($_GET['uri'])`. htaccess's catch-all rewrite
+   (`www/org/htaccess-prod` line 103) pre-fills `$_GET['uri']` to
+   the full `/handbook/<v>/...` URI for any directory-shaped
+   request, so the gate was FALSE for every handbook-version-root
+   URL. The strip was skipped, `$path` carried the
+   `/handbook/<v>/` prefix, every handler pattern rejected it,
+   and the dispatch fell through to the styled 404.
+
+2. **Dispatch loop post-loop fallback** returned
+   `router_handleError()`'s value directly. `router_handleError()`
+   calls `\bbsengine6\page\error()` (which echoes via
+   `displaypage()`) and returns `ROUTER_RENDERED`. The HTTP
+   entry-point's `else echo $router_result` then echoed the
+   literal string `"ROUTER_RENDERED"` after the chrome. The
+   in-loop mapping (`if ($result === ROUTER_RENDERED) return '';`)
+   was correct — the post-loop fallback simply never applied it.
+
+**Fix.**
+
+1. `engine/router.php` HTTP entry-point: drop the
+   `!isset($_GET['uri'])` gate on the handbook prefix-strip.
+   `$_SERVER['REQUEST_URI']` is the canonical source for
+   "what the client asked for"; `$_GET['uri']` is a rewrite
+   artifact that htaccess may or may not pre-fill. The
+   handbook vhost shape is a well-known engine contract;
+   the engine owns it.
+
+2. `engine/router.php` dispatch loop: capture
+   `router_handleError()` into `$err_result` and normalize
+   `=== ROUTER_RENDERED` to `''` (mirror of the in-loop
+   mapping at line ~796).
+
+3. `www/org/htaccess-prod`: explicit
+   `^handbook/(\d+)/?$ /engine/router.php?uri=` rule BEFORE
+   the catch-all. Routes the bare version root with empty
+   `?uri=` regardless of htaccess pre-fill behavior.
+   Belt-and-suspenders alongside the engine fix.
+
+**Regression tests** (`php/test_router.php`):
+
+- `Test 3f` — handbook URI prefix-strip is unconditional
+  (no `!isset($_GET['uri'])` gate in code).
+- `Test 3g` — dispatch loop post-loop fallback normalizes
+  `ROUTER_RENDERED` to `''`.
+
+**Commits:**
+
+- `793e2ec` — `fix(engine/router): handbook version root 404 + literal ROUTER_RENDERED echo`
+- `2389d04` — `test(router): pin handbook prefix-strip + ROUTER_RENDERED normalization`
+- `7d12ff5` — `fix(www/org/htaccess-prod): explicit bare-handbook-version rule`
+- `33dba63` — `docs(changelog): capture 2026-10-02 handbook/6/ fix in Unreleased`
+
 ## History
 
 | Date | Change |
 |---|---|
+| 2026-10-02 | HTTP entry-point's handbook prefix-strip is now unconditional (REQUEST_URI is canonical; `$_GET['uri']` no longer gates the strip). Dispatch loop post-loop fallback normalizes `ROUTER_RENDERED` to `''` (mirror of the in-loop mapping). `www/org/htaccess-prod` adds an explicit `^handbook/(\d+)/?$` rule before the catch-all. Fixes `/handbook/<v>/` 404 and the literal `ROUTER_RENDERED` echo after styled 404 chrome. See "Recent fixes" above. |
 | 2026-09-19 | `pattern` attribute on handler registry entries (skip handler on URI regex miss); drop `error` from registry (single source of truth via post-loop fallback); `ROUTER_RENDERED` sentinel replaces the implicit empty-string-as-success contract; `ROUTER_STOP` retired; `teospath` → `$teosdir` typo fix in `router_handleMarkdown`; breadcrumb root `path` hardcoded to `'teos'` (matches `blurb.php::buildbreadcrumbs`); `router_safe_path_web()` wrapper extracted; `engine/serve-tmpl.php::servePage()` returns the new sentinel. |
 | 2026-09-19 | Dead `$reluri . '.md'` probe dropped from `router_handleMarkdown` (HTTP entry-point strips `.md` once at the top of the script, so the branch was unreachable); `router_handleIndex` returns `ROUTER_RENDERED` after `include($indexfile)` instead of the retired `ROUTER_STOP`; `php/test_router.php` Tests 6a/6b pin the new contract. |
 | 2026-07-29 | Directory listing skips editor backup / junk files (`router_isIgnoredEntry`) and dedupes case-variant filenames (`router_dedupeItems`). Fixes the `/rec/arts/tv/mash/` regression. |
@@ -542,6 +607,10 @@ curl -sS -o /dev/null -w '%{http_code}\n' \
 
 # Static site prefix is NOT routed to engine/router.php
 curl -fsSL https://zoidtechnologies.com/achilles/ | head
+
+# Handbook version root renders index.md (not 404, no literal ROUTER_RENDERED)
+curl -sS -w '%{http_code}\n' -o /tmp/hb6.html https://bbsengine.org/handbook/6/
+grep -q ROUTER_RENDERED /tmp/hb6.html && echo 'FAIL: literal ROUTER_RENDERED in body' || echo 'ok: no literal'
 ```
 
 If any of these return empty bodies, the router is regressed —
