@@ -14,6 +14,16 @@ SetEnv TEOSURL /handbook/
 # mod_env loaded. See ROBUSTNESS_REVIEW.md for full rationale.
 SetEnv VHOSTDOCROOT /srv/www/vhosts/www.bbsengine.org/html
 
+# @since 2026-10-02 — match teos/www/htaccess-prod:30 so engine/vhostconfig.php
+# can require_once the vhost's config.php before getsmarty() fires.
+# VHOSTDOCROOT above is stripped by FPM's clear_env=yes on mod_proxy_fcgi
+# (merlin), so the include_path-only chain at bbsengine6config.php:51 misses
+# the vhost config and \config\SMARTYTEMPLATESDIR is undefined; getsmarty()
+# then throws on the first render and the catch-all 500s every URL.
+# VHOSTCONFIG names the file absolutely and is what
+# engine/vhostconfig.php:66-76 reads first.
+SetEnv VHOSTCONFIG /srv/www/vhosts/www.bbsengine.org/html/config.php
+
 # @since 2026-09-29 — publish the bbsengine6 install location so
 # smarty/function.teos.php can require util.php absolutely without
 # hardcoding "/srv/www/bbsengine6". Mirrors VHOSTDOCROOT/ENGINE_DOCROOT
