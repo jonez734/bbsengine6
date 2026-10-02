@@ -949,6 +949,67 @@ and the cause of double-chrome 404s.
   must not appear in `engine/` source" would be a
   worthwhile follow-up; left as TODO for now.
 
+### Finding 7.7 — Handbook vhost version root 404 + literal `ROUTER_RENDERED` echo (2026-10-02)
+
+- **Severity:** HIGH (every `/handbook/<v>/` bare-version
+  request returned 404; cosmetic literal `ROUTER_RENDERED`
+  appended to every 404 body on every vhost that fell through
+  the dispatch chain).
+- **Where:** `engine/router.php` HTTP entry-point (lines
+  ~824-840) and dispatch loop post-loop fallback (lines
+  ~793-803); `www/org/htaccess-prod` (new line 69).
+- **Symptom:** `https://bbsengine.org/handbook/6/` (and any
+  `/handbook/<v>/` URL with no trailing path) returned the
+  styled 404 chrome AND the literal string
+  `"ROUTER_RENDERED"` appended after `</html>`. Sub-paths
+  (`/handbook/6/specs/`, `/handbook/6/specs/foo.md`) were
+  unaffected.
+- **Root cause:** two interacting defects:
+    1. **HTTP entry-point's handbook prefix-strip was gated on
+       `!isset($_GET['uri'])`.** `www/org/htaccess-prod:103`'s
+       catch-all pre-fills `$_GET['uri']` to the full
+       `/handbook/<v>/` URI on any directory-shaped request, so
+       the gate was FALSE for every bare-version URL. The
+       prefix-strip was skipped, `$path` carried the prefix, and
+       every handler pattern rejected it.
+    2. **Dispatch loop post-loop fallback returned
+       `router_handleError()`'s value directly.** The in-loop
+       mapping (`if ($result === ROUTER_RENDERED) return '';`)
+       was correct; the post-loop fallback at
+       `return router_handleError($uri);` simply never applied
+       the mapping. The HTTP entry-point's `else echo
+       $router_result` then echoed the literal
+       `"ROUTER_RENDERED"` after the styled chrome.
+- **Fix:**
+    1. **`engine/router.php` HTTP entry-point:** drop the
+       `!isset($_GET['uri'])` gate on the handbook
+       prefix-strip. `$_SERVER['REQUEST_URI']` is the canonical
+       source for "what the client asked for" on the handbook
+       vhost; `$_GET['uri']` is a rewrite artifact that htaccess
+       may or may not pre-fill. The handbook vhost shape is a
+       well-known engine contract; the engine owns it.
+    2. **`engine/router.php` dispatch loop post-loop fallback:**
+       capture `router_handleError()` into `$err_result` and
+       normalize `=== ROUTER_RENDERED` to `''` (mirror of the
+       in-loop mapping). Single source of truth for the
+       sentinel-to-empty-string contract.
+    3. **`www/org/htaccess-prod`:** explicit
+       `^handbook/(\d+)/?$ /engine/router.php?uri=` rule BEFORE
+       the catch-all (line 69). Belt-and-suspenders at the
+       URL-routing layer so the bare-version URL reaches the
+       router with empty `?uri=` regardless of htaccess
+       pre-fill behavior.
+- **Regression tests** (`php/test_router.php`):
+    - **Test 3f** pins the handbook URI prefix-strip is
+      unconditional (no `!isset($_GET['uri'])` gate in code).
+    - **Test 3g** pins the dispatch loop post-loop fallback
+      normalizes `ROUTER_RENDERED` to `''`.
+- **Related docs:**
+    - [`handbook/ROUTER.md` §"Handbook version root 404"](handbook/ROUTER.md)
+    - [`CHANGELOG.md` Unreleased entry](CHANGELOG.md)
+    - [`handbook/specs/architecture.md` §3.8](handbook/specs/architecture.md)
+    - [`SPEC.md` §4.2](SPEC.md)
+
 ---
 
 ## Phase 8 — Smarty plugin config-less load
