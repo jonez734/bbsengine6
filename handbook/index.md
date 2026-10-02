@@ -90,10 +90,14 @@ the `.md` tree to `WWWSTAGE/handbook/<v>/`, where Apache +
 rendering (raw `.md` URLs go through `/engine/router.php`'s
 `rawmarkdown` handler, which streams the file as `text/plain` via
 `\bbsengine6\markdown\serveRawMarkdown()` against TEOSDIR). The router detects the
-`/handbook/<v>/` URI prefix, sets `TEOSDIR` to the matching
-version tree, and dispatches `handleMarkdown` for chapters,
-`handleFolder` for directories, and `handleIndex` for the bare
-version URL. The `make convert-tmpl` developer helper converts
+`/handbook/<v>/` URI prefix (canonicalized from `$_SERVER['REQUEST_URI']`,
+unconditional since 2026-10-02 — see [`ROUTER.md`](ROUTER.md#recent-fixes)),
+sets `TEOSDIR` to the matching version tree, and dispatches
+`handleMarkdown` for chapters, `handleFolder` for directories, and
+`handleIndex` for the bare version URL. The bare version URL
+(`/handbook/<v>/`) is matched by an explicit htaccess rule that forwards
+it to the router with empty `?uri=` so `handleIndex` probes the
+`index.md` chapter. The `make convert-tmpl` developer helper converts
 chapters into Smarty `.tmpl` snippets for embedding inside
 other templates (e.g. chapter summaries on the org-site
 front page).

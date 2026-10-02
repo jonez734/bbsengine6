@@ -178,7 +178,7 @@ The package lives at `py/src/bbsengine6/`.
 
 | File             | Role                                          |
 |------------------|-----------------------------------------------|
-| `router.php`     | Handler-registry router (`ROUTER_NEXT` / `ROUTER_RENDERED`; per-entry `pattern` attribute for URI-regex pre-filter) |
+| `router.php`     | Handler-registry router (`ROUTER_NEXT` / `ROUTER_RENDERED`; per-entry `pattern` attribute for URI-regex pre-filter; HTTP entry-point derives `$_GET['uri']` from `$_SERVER['REQUEST_URI']` for handbook URIs — REQUEST_URI wins over htaccess pre-fill, see `handbook/ROUTER.md` 2026-10-02 fix) |
 | `serve-tmpl.php` | `bbsengine6\servepage\router_handlePage` — page-namespace handler (`/contact-us` → `DOCUMENTROOT/skin/tmpl/contact-us.tmpl`) |
 | `login.php`      | Member authentication                         |
 | `logout.php`     | Member logout (destroys session)              |

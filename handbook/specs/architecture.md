@@ -339,6 +339,14 @@ The message domain has its own layered package — see
 - `engine/*.php` — request entry points (`router.php`, `login.php`,
   `logout.php`, `join.php`, `direct.php`, `simple.php`,
   `standalone.php`, `test.php`, `test2.php`, `serve-tmpl.php`).
+- `engine/router.php` HTTP entry-point canonicalizes the
+  handbook vhost's URI by deriving `$_GET['uri']` from
+  `$_SERVER['REQUEST_URI']` (unconditional since 2026-10-02),
+  so `/handbook/<v>/<reluri>` reaches the dispatch loop as
+  `<reluri>`. `$_GET['uri']` is treated as a rewrite artifact
+  that htaccess may or may not pre-fill. See
+  [`../ROUTER.md`](../ROUTER.md#handler-return-value-contract)
+  and the 2026-10-02 fix entry.
 - `php/` — library (`engine.php`, `database.php`, `session.php`,
   `libmember.php`, `blurb.php`, `page.php`, `util.php`, the
   `bbsengine6\\password` namespace, the `Form/` clone).
