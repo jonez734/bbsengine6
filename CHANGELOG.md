@@ -42,6 +42,23 @@ Tests:
 - `php/test_router.php` Test 3g pins the post-loop fallback
   normalizes `ROUTER_RENDERED` to `''`.
 
+Docs:
+
+- `handbook/ROUTER.md` — new "Recent fixes" subsection with
+  full symptom / root-cause / fix / tests / commits
+  breakdown for this incident.
+- `handbook/specs/architecture.md` §3.8 — entry-point bullet
+  noting REQUEST_URI canonicalization contract.
+- `SPEC.md` §4.2 — `router.php` row updated to mention
+  REQUEST_URI wins over htaccess pre-fill.
+- `handbook/index.md` — handbook vhost rewrite contract
+  mentions the canonicalization and the bare-version
+  htaccess rule.
+- `ROBUSTNESS_REVIEW.md` §7.7 — new Finding entry
+  (HIGH severity) describing the same root causes from a
+  robustness-review lens; cross-references the handbook
+  docs above.
+
 ### docs(changelog): regression-recovery commit pin
 
 Pins the three commits that comprise the live 2026-10-XX fix for
