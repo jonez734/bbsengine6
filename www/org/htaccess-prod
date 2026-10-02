@@ -59,6 +59,15 @@ RewriteRule ^handbook/(?!(\d+)/)(.+)/$ /handbook/6/$2 [R=301,L]
 
 RewriteRule ^handbook/(\d+)$ /handbook/$1/ [R=301,L]
 
+# @since 2026-10-02 — bare-version handbook URL must reach the
+# router with empty `?uri=` (not `?uri=/handbook/<v>/`), so the
+# router's index handler renders <TEOSDIR>/index.md. Without this,
+# the catch-all at line 103 pre-fills $_GET['uri'] to the full
+# prefix, defeating engine/router.php's prefix-strip and404-ing
+# the handbook version root. Belt-and-suspenders alongside the
+# engine-side fix that always prefers REQUEST_URI.
+RewriteRule ^handbook/(\d+)/?$ /engine/router.php?uri= [last,qsappend]
+
 RewriteRule ^join[/]?$ /engine/join.php [last]
 
 RewriteRule ^login[/]?$ /engine/login.php [last]
