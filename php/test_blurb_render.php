@@ -165,12 +165,12 @@ run_test("buggy handler renders page.tmpl once but returns null", function() {
     assert_null($result, "buggy handler returns null (the bug)");
 });
 
-run_test("fixed handler renders page.tmpl and returns empty string", function() {
+run_test("fixed handler renders page.tmpl and returns sentinel", function() {
     test_reset();
     $result = fake_handleBlurb_fixed("comp/lang/python/intro");
     assert_equal(1, $GLOBALS["__displaypage_calls"], "should have called display() once");
     assert_not_null($result, "fixed handler must not return null");
-    assert_equal("", $result, "fixed handler returns '' sentinel");
+    assert_equal(ROUTER_RENDERED, $result, "fixed handler returns ROUTER_RENDERED sentinel");
 });
 
 run_test("buggy chain: blurb + folder both render (the bug)", function() {
@@ -199,7 +199,7 @@ run_test("fixed chain: only blurb renders, no fallthrough", function() {
     assert_equal(1, $GLOBALS["__displaypage_calls"], "page.tmpl renders exactly once (fixed)");
     $count = substr_count($output, "<!DOCTYPE html>");
     assert_equal(1, $count, "output contains one <!DOCTYPE html> (fixed)");
-    assert_equal("", $result, "router returns '' from blurb handler");
+    assert_equal("", $result, "router maps ROUTER_RENDERED -> '' from blurb handler");
 });
 
 // ====================================================================
@@ -242,10 +242,10 @@ run_test("production router_handleBlurb returns non-null sentinel", function() u
         throw new Exception("could not extract router_handleBlurb body");
     }
 
-    if (!preg_match('/bbsengine6\\\\blurb\\\\display\s*\([^)]*\)\s*;\s*return\s+/', $body)) {
+    if (!preg_match('/bbsengine6\\\\blurb\\\\display\s*\([^)]*\)\s*;[\s\S]*?return\s+ROUTER_RENDERED\b/', $body)) {
         throw new Exception(
-            "router_handleBlurb should call display() and then return a sentinel. " .
-            "Expected: 'display(...); return ...;' but got:\n$body"
+            "router_handleBlurb should call display() and then return ROUTER_RENDERED. " .
+            "Expected: 'display(...); ... return ROUTER_RENDERED;' but got:\n$body"
         );
     }
 
