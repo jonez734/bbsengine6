@@ -15,7 +15,7 @@
 <li>{fa ico="level-up-alt" fixed=1 rspace=1} <a href=".."> previous folder</a></li>
 {/if}
 {foreach $data.items as $item}
-<li>{if $item.ext == "md" || $item.ext == "txt"}{fa ico="file" fixed=1 rspace=1}{else}{fa ico="folder" fixed=1 rspace=1}{/if}<a href="{$item.uri}">{$item.title}</a>{if $item.ext} <span>({$item.ext})</span>{/if}</li>
+<li>{if $item.ext == "md" || $item.ext == "txt"}{fa ico="file" fixed=1 rspace=1}{else}{fa ico="folder" fixed=1 rspace=1}{/if}<a href="{$item.uri}">{$item.title}</a>{if $item.ext} {*<span>({$item.ext})</span>*}{/if}</li>
 {/foreach}
 </ul>
 </div>
