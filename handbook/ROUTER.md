@@ -566,10 +566,92 @@ Direct investigation: see `CHANGELOG.md` "[Unreleased]" entry
 - `7d12ff5` — `fix(www/org/htaccess-prod): explicit bare-handbook-version rule`
 - `33dba63` — `docs(changelog): capture 2026-10-02 handbook/6/ fix in Unreleased`
 
+### "You are here" breadcrumb root label rendered `NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` on every teos rewritten URL (2026-10-03)
+
+**Symptom.** Every `<vhost>/<uri>/` page rendered a "You are here"
+breadcrumb whose root crumb was the literal string
+`NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` instead of the vhost's
+`TEOSLABEL` (e.g. `teos`). Visible on every URL hitting
+`engine/router.php` via the teos htaccess rewrites (clean-URL,
+directory, `.md`). The handbook vhost (`bbsengine.org`) never showed
+the bug. The middle crumbs rendered correctly; only the root label
+was wrong. See `CHANGELOG.md` "[Unreleased]" entry
+`fix(php/util): env() walks REDIRECT_<key> so vhost .htaccess SetEnv
+survives the /engine/ rewrite` for the full root-cause breakdown and
+`ROBUSTNESS_REVIEW.md` Phase 9 / Finding 9.1 for the
+robustness-review angle.
+
+**Root cause.** mod_rewrite's internal redirect from `/<uri>` to
+`/engine/router.php?uri=<uri>` re-evaluates per-directory config
+for `/engine/`. The teos vhost's `html/teos/.htaccess` (where
+`SetEnv TEOSLABEL teos` lives) is **not** in scope at `/engine/`,
+and `/engine/.htaccess` does not exist on merlin. The original
+`TEOSLABEL=teos` survives only as `REDIRECT_TEOSLABEL=teos` (Apache
+adds a `REDIRECT_<var>` copy of each request env var on every
+internal redirect). `\bbsengine6\util\env()` previously called
+`getenv()` directly and saw `false` for `TEOSLABEL`, then fell
+through to its tier-2 constant / default tier. The
+`NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` sentinel was the default
+land. `TEOSURL` and `TEOSDIR` rendered correctly only because
+`zoid6/php/zoid6config.php` defines `\config\TEOSURL` and
+`\config\TEOSDIR` constants as the tier-2 fallback; `TEOSLABEL`
+had no constant fallback, so it landed on the sentinel. The
+handbook vhost never showed the bug because
+`bbsengine6/www/org/htaccess-prod` sits at the docroot with
+`RewriteBase /`, so it governs `/engine/` too — both `TEOSLABEL`
+and `REDIRECT_TEOSLABEL` arrive in the worker's env.
+
+**Fix.**
+
+1. `php/util.php`: new
+   `\bbsengine6\util\getenv_redirect(string $key, int $maxhops = 3)`
+   helper walks `getenv($key)` -> `getenv('REDIRECT_'.$key)` ->
+   `getenv('REDIRECT_REDIRECT_'.$key)` up to `$maxhops` hops,
+   treating empty strings as missing. `env()` now calls
+   `getenv_redirect($key)` instead of `getenv($key)`. Order
+   unchanged: env -> constant -> default.
+2. `php/util.php`: `vhost_label()` now delegates its env tier to
+   `env('TEOSLABEL')` (one line) so the
+   `bbsengine6\blurb\getlabel()` path and `router_buildBreadcrumbs()`
+   read the same var through the same REDIRECT_ walk. This keeps
+   the two breadcrumb paths in lockstep on every vhost.
+3. `AGENTS.md` TEOSDIR resolution contract: new "SetEnv and the
+   rewrite boundary" sub-section documents the contract.
+   `bbsengine6/php/test_router.php` Test 6e pins the new `env()`
+   body shape; new Test 6e.1 pins the `getenv_redirect()` helper.
+
+**Out of scope** (intentionally not updated in this commit):
+`teos_dir()`, `teos_url()`, `catalog_root()`, `handbook_home()`,
+`bootstrap()`'s `VHOSTDOCROOT` read, and
+`smarty/function.teos.php`'s `BBSENGINEROOT` read each have their
+own independent fallback paths (`zoid6config.php` constants,
+`SCRIPT_FILENAME` probe in `vhostconfig.php`, `dirname(__DIR__)`
+walk) and were not visibly broken on prod. If any of those starts
+surfacing a NEEDINFO on a rewritten request, route its reader
+through `getenv_redirect()` in a follow-up.
+
+**Regression guard.** `teos/www/test_htaccess_setenv_reaches_php.sh`
+spins up a mock httpd on 127.0.0.1, copies the production htaccess
+files verbatim, and exercises the rewrite chain into
+`/engine/router.php` for both vhosts. Asserts
+`\bbsengine6\util\env()` returns the htaccess value on every
+rewritten request. SAPI auto-detect: mod_php -> php-fpm +
+mod_proxy_fcgi -> mod_cgi with a `#!/usr/bin/php-cgi` shebang
+(matches prod's mod_fcgid env pass-through semantics; the harness
+adds no spurious REDIRECT_ layer of its own). Before the fix the
+harness reports `env(TEOSLABEL) = ''` on every teos rewritten
+request; after, 42/42 pass.
+
+**Commits:**
+- `638c4ec` — `fix(php/util): env() walks REDIRECT_<key> so vhost .htaccess SetEnv survives the /engine/ rewrite`
+- (mirrored at meta `e541c93e`)
+- (regression guard at `25dd374` in the teos submodule)
+
 ## History
 
 | Date | Change |
 |---|---|
+| 2026-10-03 | New `\bbsengine6\util\getenv_redirect(string $key, int $maxhops = 3)` walks `getenv($key)` -> `getenv('REDIRECT_'.$key)` -> `getenv('REDIRECT_REDIRECT_'.$key)` up to 3 hops, treating empty strings as missing. `\bbsengine6\util\env()` calls `getenv_redirect($key)` instead of `getenv($key)` so vhost .htaccess `SetEnv` values survive mod_rewrite's internal redirect from `/<uri>` to `/engine/router.php?uri=<uri>` (per-directory config is re-evaluated for `/engine/` and the vhost htaccess may not be in scope there). `\bbsengine6\util\vhost_label()` delegates its env tier to `env('TEOSLABEL')` so `bbsengine6\blurb\getlabel()` and `router_buildBreadcrumbs()` route through the same REDIRECT_ walk. Fixes the `NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` root crumb on the teos vhost. Regression guard: `teos/www/test_htaccess_setenv_reaches_php.sh`. See "Recent fixes" above. |
 | 2026-10-02 | HTTP entry-point's handbook prefix-strip is now unconditional (REQUEST_URI is canonical; `$_GET['uri']` no longer gates the strip). Dispatch loop post-loop fallback normalizes `ROUTER_RENDERED` to `''` (mirror of the in-loop mapping). `www/org/htaccess-prod` adds an explicit `^handbook/(\d+)/?$` rule before the catch-all. Fixes `/handbook/<v>/` 404 and the literal `ROUTER_RENDERED` echo after styled 404 chrome. See "Recent fixes" above. |
 | 2026-09-19 | `pattern` attribute on handler registry entries (skip handler on URI regex miss); drop `error` from registry (single source of truth via post-loop fallback); `ROUTER_RENDERED` sentinel replaces the implicit empty-string-as-success contract; `ROUTER_STOP` retired; `teospath` → `$teosdir` typo fix in `router_handleMarkdown`; breadcrumb root `path` hardcoded to `'teos'` (matches `blurb.php::buildbreadcrumbs`); `router_safe_path_web()` wrapper extracted; `engine/serve-tmpl.php::servePage()` returns the new sentinel. |
 | 2026-09-19 | Dead `$reluri . '.md'` probe dropped from `router_handleMarkdown` (HTTP entry-point strips `.md` once at the top of the script, so the branch was unreachable); `router_handleIndex` returns `ROUTER_RENDERED` after `include($indexfile)` instead of the retired `ROUTER_STOP`; `php/test_router.php` Tests 6a/6b pin the new contract. |

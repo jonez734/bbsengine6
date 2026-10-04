@@ -347,6 +347,20 @@ The message domain has its own layered package — see
   that htaccess may or may not pre-fill. See
   [`../ROUTER.md`](../ROUTER.md#handler-return-value-contract)
   and the 2026-10-02 fix entry.
+- Vhost-published env vars (`TEOSLABEL`, `TEOSDIR`, `TEOSURL`,
+  `VHOSTCONFIG`, `VHOSTDOCROOT`, `BBSENGINEROOT`, etc.) are
+  read by the engine through `\bbsengine6\util\env()`, which
+  walks `getenv_redirect($key)` -> `getenv('REDIRECT_'.$key)` ->
+  `getenv('REDIRECT_REDIRECT_'.$key)` up to 3 hops
+  (`php/util.php`). The REDIRECT_<key> walk is required because
+  mod_rewrite's internal redirect from `/<uri>` to
+  `/engine/router.php?uri=<uri>` re-evaluates per-directory
+  config for `/engine/`, where the vhost's `SetEnv`-bearing
+  htaccess may not be in scope; the value survives only as
+  `REDIRECT_<var>` on the redirected request. Added 2026-10-03
+  to fix the `NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` root
+  crumb on the teos vhost. See `ROBUSTNESS_REVIEW.md` Phase 9 /
+  Finding 9.1 and `AGENTS.md` TEOSDIR resolution contract.
 - `php/` — library (`engine.php`, `database.php`, `session.php`,
   `libmember.php`, `blurb.php`, `page.php`, `util.php`, the
   `bbsengine6\\password` namespace, the `Form/` clone).

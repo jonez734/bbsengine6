@@ -1091,3 +1091,117 @@ and the cause of double-chrome 404s.
   or `DATEFORMAT` (the latter is a vhost `define()`, not an
   env var). Their config-less refactor is a separate ticket
   if/when their deps get env-var-ified.
+
+## Phase 9 — `SetEnv` value lost across the `/engine/` rewrite boundary
+
+2026-10-03 fix. The "You are here" breadcrumb on every
+`/<vhost>/<uri>/` page rendered
+`NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` as the root crumb on the
+teos vhost (`https://zoidtechnologies.com/teos/<uri>/`), even
+though `teos/www/htaccess-prod` declares `SetEnv TEOSLABEL teos`
+and `engine/router.php` reads it via
+`\bbsengine6\util\env('TEOSLABEL', ...)`. `TEOSURL` and `TEOSDIR`
+rendered correctly only because `zoid6/php/zoid6config.php`
+defines `\config\TEOSURL` / `\config\TEOSDIR` constants as the
+tier-2 fallback for `env()`; `TEOSLABEL` had no constant
+fallback, so `env()` landed on the `NEEDINFO` sentinel. On the
+handbook vhost the bug never surfaced: `bbsengine6/www/org/htaccess-prod`
+sits at the docroot (`RewriteBase /`) so it governs `engine/` too,
+and both `TEOSLABEL` and `REDIRECT_TEOSLABEL` arrived in the
+PHP worker's env.
+
+### Finding 9.1 — `\bbsengine6\util\env()` reads the unprefixed env name; `SetEnv` from a non-docroot `.htaccess` survives an internal redirect only as `REDIRECT_<key>`
+
+- **Severity:** MEDIUM (production-bug surface on every vhost
+  whose `SetEnv`-bearing `.htaccess` is not at the docroot;
+  cosmetic from the user's POV — the breadcrumb still renders —
+  but the NEEDINFO sentinel is greppable noise that masks any
+  real config drift on the same code path).
+- **Where:** `engine/router.php::router_buildBreadcrumbs` (the
+  filesystem-fallback path; reads `\bbsengine6\util\env('TEOSLABEL')`
+  at line 192), `bbsengine6\blurb\getlabel()` (the DB-driven
+  breadcrumb path; reads `\bbsengine6\util\vhost_label()`), and
+  every other `engine/*.php` that goes through
+  `\bbsengine6\util\env()`.
+- **Symptom:** rendered breadcrumb root label is
+  `NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` on every
+  `<vhost>/<uri>/` page. The user's URL works; the breadcrumb
+  still shows up; only the root label is wrong.
+- **Root cause:** mod_rewrite's internal redirect from
+  `/<uri>` to `/engine/router.php?uri=<uri>` re-evaluates
+  per-directory config for `/engine/`. The teos vhost's
+  `html/teos/.htaccess` is **not** in scope at `/engine/` (the
+  vhost has no `html/engine/.htaccess` at all), so the
+  `SetEnv TEOSLABEL teos` directive never reaches the engine's
+  request scope. Apache's documented behavior is to add a
+  `REDIRECT_<var>` copy of each request env var on every
+  internal redirect; the value survives in PHP's env only as
+  `REDIRECT_TEOSLABEL`, not as the unprefixed `TEOSLABEL`.
+  `\bbsengine6\util\env()` previously called `getenv()` directly
+  and saw `false`, then fell through to the tier-2 constant /
+  default tier.
+- **This is not a php-fpm / `clear_env` issue.** The legacy
+  narrative in the docblock of `engine/vhostconfig.php` and
+  the AGENTS.md TEOSDIR contract had `php-fpm` clearing Apache's
+  env as the explanation. merlin's prod actually uses mod_fcgid
+  (`FCGIWrapper /srv/www/fcgid-php-wrapper` → `exec /usr/bin/php-cgi`)
+  per `zoidlan/merlin/jammy/apache2/sites-available/zoidtechnologiesdotcom.conf`,
+  which propagates both unprefixed and `REDIRECT_*` env vars to
+  the worker. The bug is purely on the engine reader.
+- **Fix (`638c4ec`):**
+  - `php/util.php`: new
+    `getenv_redirect(string $key, int $maxhops = 3): string|false`
+    helper walks `getenv($key)` -> `getenv('REDIRECT_' . $key)` ->
+    `getenv('REDIRECT_REDIRECT_' . $key)` -> ... up to `$maxhops`
+    hops, treating empty strings as missing. `env()` calls
+    `getenv_redirect($key)` instead of `getenv($key)`. Order
+    unchanged: env -> constant -> default.
+  - `php/util.php`: `vhost_label()` now delegates its env tier
+    to `env('TEOSLABEL')` (one line) so the
+    `bbsengine6\blurb\getlabel()` path and the
+    `engine/router.php::router_buildBreadcrumbs` path read the
+    same var through the same REDIRECT_ walk.
+  - Sibling helpers `teos_dir()`, `teos_url()`, `catalog_root()`,
+    `handbook_home()`, `bootstrap()`'s `VHOSTDOCROOT` read, and
+    `smarty/function.teos.php`'s `BBSENGINEROOT` read were
+    intentionally NOT updated in this commit: each has its own
+    independent fallback path (zoid6config.php constants,
+    SCRIPT_FILENAME probe in `vhostconfig.php`, `dirname(__DIR__)`
+    walk in `function.teos.php`) and they were not visibly broken
+    on prod. If any of those starts surfacing a NEEDINFO on a
+    rewritten request, route its reader through `getenv_redirect()`
+    in a follow-up.
+- **Tests:**
+  - `php/test_env.php`: 11 new cases for `getenv_redirect()` and
+    REDIRECT_<key> handling (plain env wins; REDIRECT_<key> reached
+    when unprefixed unset; empty REDIRECT_<key> falls through;
+    REDIRECT_REDIRECT_<key> reached; nothing set -> default;
+    `maxhops` bounds; REDIRECT_<key> in the `vhost_label()` path).
+    45/45 pass.
+  - `php/test_router.php` Test 6e: pinned the `env()` body to
+    call `getenv_redirect($key)` before `defined($key)` instead
+    of the literal `getenv($key)`. New Test 6e.1 pins the
+    existence of `getenv_redirect()` and its use of `REDIRECT_`
+    and `getenv()`.
+  - `php/test_breadcrumbs.php` Test 7f: pinned `vhost_label()` to
+    call `env('TEOSLABEL')` rather than `getenv('TEOSLABEL')`
+    directly. New Test 7i runtime pins `vhost_label()` returning
+    REDIRECT_TEOSLABEL when TEOSLABEL is unset.
+- **Regression guard:** `teos/www/test_htaccess_setenv_reaches_php.sh`
+  spins up a mock httpd on 127.0.0.1, copies `zoid6/sites/www/htaccess-prod`,
+  `bbsengine6/www/org/htaccess-prod`, and `teos/www/htaccess-prod`
+  verbatim into the harness docroot, and exercises the rewrite
+  chain that ends at `/engine/router.php` for both the teos and
+  handbook vhosts. Asserts `\bbsengine6\util\env()` returns the
+  htaccess value on every rewritten request. SAPI auto-detect:
+  mod_php -> php-fpm + mod_proxy_fcgi -> mod_cgi with a
+  `#!/usr/bin/php-cgi` shebang (no spurious REDIRECT_ layer
+  added by the harness; matches prod's mod_fcgid semantics).
+  Before the fix the harness reports
+  `env(TEOSLABEL) = ''` on every teos rewritten request;
+  after, 42/42 pass.
+- **Operator docs:** `AGENTS.md` TEOSDIR resolution contract
+  updated with the new tier 1 (getenv_redirect walks up to 3
+  REDIRECT_<key> layers) and a new "SetEnv and the rewrite
+  boundary" sub-section explaining why this is engine-side and
+  not php-fpm-side.
