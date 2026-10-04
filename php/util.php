@@ -918,7 +918,7 @@ function safe_path_web(array $components, array $opts = [])
      */
     function vhost_label(): string
     {
-        $env = getenv('TEOSLABEL');
+        $env = env('TEOSLABEL');
         if (is_string($env) && $env !== '') {
             return $env;
         }
@@ -932,11 +932,63 @@ function safe_path_web(array $components, array $opts = [])
     }
 
 /**
+ * Read an environment value, falling back through one or more
+ * REDIRECT_<key> layers.
+ *
+ * Apache adds REDIRECT_<var> for each internal redirect that
+ * mod_rewrite (or mod_alias ErrorDocument) applies to the
+ * request. When a vhost's .htaccess declares
+ *     SetEnv TEOSLABEL teos
+ * and the teos htaccess then does an internal redirect from
+ *     /<uri>
+ *  -> /engine/router.php?uri=<uri>
+ * the value survives only as REDIRECT_TEOSLABEL in the env passed
+ * to /engine/router.php's PHP handler, because per-directory config
+ * is re-evaluated for /engine/ and the teos htaccess is no longer
+ * in scope. For the handbook vhost at bbsengine.org the docroot
+ * .htaccess governs /engine/ too, so its TEOSLABEL is in scope at
+ * /engine/ as well as REDIRECT_TEOSLABEL; this helper still
+ * returns the unprefixed name because the loop checks $key first.
+ *
+ * Resolution order:
+ *   1. getenv($key)               -- unprefixed (direct hit, or
+ *                                     docroot-htaccess in scope)
+ *   2. getenv('REDIRECT_' . $key) -- one redirect hop
+ *   3. getenv('REDIRECT_REDIRECT_' . $key) -- two hops
+ *   ... up to $maxhops hops ...
+ *
+ * Empty-string values are treated as missing (consistent with
+ * env() and the vhost_label/teos_dir/teos_url/handbook_home
+ * pattern in this file). Returns false when no tier yields a
+ * non-empty string -- same contract as PHP's getenv().
+ *
+ * @since 20261003
+ * @param string $key
+ * @param int    $maxhops number of REDIRECT_ layers to walk
+ * @return string|false
+ */
+function getenv_redirect(string $key, int $maxhops = 3): string|false
+{
+    $cur = $key;
+    for ($i = 0; $i <= $maxhops; $i++) {
+        $v = getenv($cur);
+        if (is_string($v) && $v !== '') {
+            return $v;
+        }
+        $cur = 'REDIRECT_' . $cur;
+    }
+    return false;
+}
+
+/**
  * Read a configuration value from the environment with a 3-tier
  * fallback chain.
  *
  * Resolution order:
- *   1. getenv($key)              -- operator / shell / .htaccess override
+ *   1. getenv_redirect($key)      -- operator / shell / .htaccess override
+ *                                     (also walks REDIRECT_<key> layers so
+ *                                     vhost-published values survive the
+ *                                     /engine/ rewrite -- see getenv_redirect)
  *   2. defined($key) constant    -- PHP-side override (e.g. config.php)
  *   3. $default                  -- caller-supplied fallback
  *
@@ -952,7 +1004,8 @@ function safe_path_web(array $components, array $opts = [])
  */
 function env(string $key, mixed $default = false): mixed
 {
-    $env = getenv($key);
+    $env = getenv_redirect($key);
+    logentry("bbsengine6.util.env.100: key=".var_export($key, true). " default=".var_export($default, true)." env=".var_export($env, true));
     if (is_string($env) && $env !== '') {
         return $env;
     }

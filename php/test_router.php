@@ -439,18 +439,21 @@ if (preg_match('/function\s+display\s*\([^)]*\)\s*\{(.*?)^\}/sm', $blurb_src, $m
 }
 
 // Test 6e: \bbsengine6\util\env() precedence. Asserts the helper
-// returns getenv() first, then the constant, then the default.
-// This is the contract every handler now relies on; pinning it
-// here so a future refactor of util.php can't silently break
-// the rest of the chain.
+// reads the unprefixed env var first, then falls back to the
+// constant, then to the default. Since 2026-10-03 the env tier
+// walks REDIRECT_<key> layers via getenv_redirect(), so vhost
+// .htaccess SetEnv values survive a mod_rewrite internal redirect
+// to /engine/router.php. This is the contract every handler now
+// relies on; pinning it here so a future refactor of util.php
+// can't silently break the rest of the chain.
 //
 // We can't extract the env() function body with a simple regex
 // because the body contains nested braces that defeat lazy
 // matching. Instead, extract the body via brace counting (the
 // same shape util.php uses internally to find function ranges
-// for docblock cleanup, etc.). Then assert getenv() comes
+// for docblock cleanup, etc.). Then assert getenv_redirect() comes
 // before defined() in that body.
-echo "Test 6e: \\\\bbsengine6\\\\util\\\\env() precedence is getenv() > constant > default\n";
+echo "Test 6e: \\\\bbsengine6\\\\util\\\\env() precedence is env (incl. REDIRECT_*) > constant > default\n";
 $env_helper_src = file_get_contents(__DIR__ . "/util.php");
 $fn_pos = strpos($env_helper_src, "function env(string");
 if ($fn_pos === false) {
@@ -482,21 +485,64 @@ if ($depth !== 0) {
 }
 $env_body = substr($env_helper_src, $open + 1, $i - $open - 2);
 
-$getenv_pos = strpos($env_body, "getenv(\$key)");
-$defined_pos = strpos($env_body, "defined(\$key)");
-if ($getenv_pos === false) {
-    echo "  ✗ FAIL: env() does not call getenv(\$key); the vhost htaccess SetEnv contract would not be honored.\n";
+// env() must call getenv_redirect (which itself walks REDIRECT_<key>
+// layers); it must NOT call getenv($key) directly, because then
+// the unprefixed name would never be seen after a mod_rewrite
+// internal redirect.
+$gr_pos = strpos($env_body, "getenv_redirect(\$key)");
+if ($gr_pos === false) {
+    echo "  ✗ FAIL: env() does not call getenv_redirect(\$key); the vhost htaccess SetEnv contract would not survive the /engine/ rewrite.\n";
     exit(1);
 }
+$defined_pos = strpos($env_body, "defined(\$key)");
 if ($defined_pos === false) {
     echo "  ✗ FAIL: env() does not fall back to defined(\$key); tests / partial-deploys would have no TEOSDIR.\n";
     exit(1);
 }
-if ($getenv_pos > $defined_pos) {
-    echo "  ✗ FAIL: env() reads the constant before getenv(); the vhost htaccess SetEnv contract would not be honored.\n";
+if ($gr_pos > $defined_pos) {
+    echo "  ✗ FAIL: env() reads the constant before getenv_redirect(); the vhost htaccess SetEnv contract would not be honored.\n";
     exit(1);
 }
-echo "  ✓ PASS: env() reads getenv() before defined() (env wins, then constant, then default)\n";
+echo "  ✓ PASS: env() reads getenv_redirect() before defined() (env wins, then constant, then default)\n";
+
+// Test 6e.1: getenv_redirect() exists and walks REDIRECT_ layers.
+// Pins the helper so a future refactor that drops the REDIRECT_
+// fallback (and re-introduces the breadcrumb NEEDINFO bug) breaks
+// the test.
+$gr_fn_pos = strpos($env_helper_src, "function getenv_redirect(string");
+if ($gr_fn_pos === false) {
+    echo "  ✗ FAIL: getenv_redirect() helper not defined in util.php\n";
+    exit(1);
+}
+// Body of getenv_redirect() must reference 'REDIRECT_' at least once
+// (the layer-prepend) and call getenv().
+$gr_open = strpos($env_helper_src, "{", $gr_fn_pos);
+if ($gr_open === false) {
+    echo "  ✗ FAIL: could not find opening brace of getenv_redirect()\n";
+    exit(1);
+}
+$gr_depth = 1;
+$gr_i = $gr_open + 1;
+while ($gr_i < strlen($env_helper_src) && $gr_depth > 0) {
+    $c = $env_helper_src[$gr_i];
+    if ($c === "{") $gr_depth++;
+    elseif ($c === "}") $gr_depth--;
+    $gr_i++;
+}
+if ($gr_depth !== 0) {
+    echo "  ✗ FAIL: brace counting did not balance inside getenv_redirect() body\n";
+    exit(1);
+}
+$gr_body = substr($env_helper_src, $gr_open + 1, $gr_i - $gr_open - 2);
+if (strpos($gr_body, "REDIRECT_") === false) {
+    echo "  ✗ FAIL: getenv_redirect() body does not reference 'REDIRECT_' (would not walk the redirect layer)\n";
+    exit(1);
+}
+if (strpos($gr_body, "getenv(") === false) {
+    echo "  ✗ FAIL: getenv_redirect() body does not call getenv()\n";
+    exit(1);
+}
+echo "  ✓ PASS: getenv_redirect() walks REDIRECT_ layers (the breadcrumb-rewrite fix)\n";
 
 // Test 6f: 'markdown' handler's pattern no longer admits '.md' (or
 // any '.') in the URI. The entry-point strip was removed on

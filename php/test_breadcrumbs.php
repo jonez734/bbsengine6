@@ -312,10 +312,15 @@ if (defined('TEOSLABEL')) {
 // fell through to the 'NEEDINFO:vhost_label' sentinel even when
 // TEOSLABEL was correctly set, which is the bug surfaced as
 // 'NEEDINFO:buildbreadcrumbs.100' on the rendered teos root crumb.
-// Pin the source-level fix (env var name TEOSLABEL) and the
-// absence of the legacy underscore form so a future refactor
-// doesn't silently reintroduce the divergence.
-echo "Test 7f: bbsengine6\\util\\vhost_label() reads TEOSLABEL (not the legacy VHOST_LABEL)\n";
+// @since 2026-10-03 — vhost_label() now delegates its env tier to
+// \bbsengine6\util\env('TEOSLABEL') so the REDIRECT_<key> walk
+// inside env() covers vhost .htaccess SetEnv values that survive a
+// mod_rewrite internal redirect only as REDIRECT_TEOSLABEL.
+// Pin the source-level fix (env var name TEOSLABEL), the
+// absence of the legacy underscore form, and the env-helper
+// delegation so a future refactor doesn't silently reintroduce
+// the divergence.
+echo "Test 7f: bbsengine6\\util\\vhost_label() reads TEOSLABEL via env() (not the legacy VHOST_LABEL)\n";
 $util_src = file_get_contents("/home/opencode/data/work/bbsengine6/php/util.php");
 // vhost_label() must exist
 if (!preg_match('/function\s+vhost_label\s*\(/', $util_src)) {
@@ -347,9 +352,16 @@ if ($vl_pos !== false) {
         $vhost_label_body = substr($util_src, $vl_open + 1, $vl_end - $vl_open - 1);
     }
 }
-// vhost_label() must read TEOSLABEL via getenv()
-if (strpos($vhost_label_body, "getenv('TEOSLABEL')") === false) {
-    test_fail("vhost_label() does not call getenv('TEOSLABEL')");
+// vhost_label() must read TEOSLABEL through the env() helper so the
+// REDIRECT_<key> walk inside env() reaches values that survived a
+// mod_rewrite internal redirect. Direct getenv('TEOSLABEL') is not
+// enough on its own -- that's the bug the 2026-10-03 fix closes.
+$uses_env_helper = (strpos($vhost_label_body, "env('TEOSLABEL')") !== false)
+                 || (strpos($vhost_label_body, 'env(\'TEOSLABEL\')') !== false)
+                 || (strpos($vhost_label_body, "env(\"TEOSLABEL\")") !== false)
+                 || (strpos($vhost_label_body, 'env("TEOSLABEL")') !== false);
+if (!$uses_env_helper) {
+    test_fail("vhost_label() does not read TEOSLABEL via env(); REDIRECT_<key> carry-over from the /engine/ rewrite would not be honored.");
 }
 // vhost_label() must check the TEOSLABEL constant
 if (strpos($vhost_label_body, "defined('TEOSLABEL')") === false) {
@@ -360,7 +372,7 @@ if (strpos($util_src, "'VHOST_LABEL'") !== false
     || strpos($util_src, '"VHOST_LABEL"') !== false) {
     test_fail("php/util.php still references the legacy 'VHOST_LABEL' (underscore) env name; read TEOSLABEL instead");
 }
-test_pass("vhost_label() routes through TEOSLABEL and has no legacy VHOST_LABEL code reference");
+test_pass("vhost_label() reads TEOSLABEL via env() and has no legacy VHOST_LABEL code reference");
 
 // @since 2026-10-01 — runtime pin for vhost_label(). Mirrors Test 7e
 // for the new helper. Skip if a TEOSLABEL constant is defined (a
@@ -400,6 +412,37 @@ if (strpos($blurb_src_for_label, 'bbsengine6\\util\\vhost_label()') === false) {
     test_fail("blurb.php::getlabel() does not delegate to \\bbsengine6\\util\\vhost_label(); inline env() reads duplicate the canonical helper and can drift");
 }
 test_pass("blurb.php::getlabel() delegates to vhost_label()");
+
+// @since 2026-10-03 — runtime pin for the REDIRECT_<key> walk
+// inside \bbsengine6\util\env() / vhost_label(). When a vhost
+// .htaccess declares `SetEnv TEOSLABEL teos` and then internally
+// redirects to /engine/router.php, the value survives in the PHP
+// handler's env only as REDIRECT_TEOSLABEL. This test mirrors
+// that prod situation by setting REDIRECT_TEOSLABEL without the
+// unprefixed key, and asserts vhost_label() still returns it.
+// Skipped when a TEOSLABEL constant is defined (constant would
+// short-circuit the env path, same caveat as Test 7g).
+echo "Test 7i: bbsengine6\\util\\vhost_label() returns REDIRECT_TEOSLABEL when TEOSLABEL is unset\n";
+if (defined('TEOSLABEL')) {
+    test_pass("TEOSLABEL constant is defined; REDIRECT_<key> walk covered by test_env.php");
+} else {
+    $prev_label = getenv('TEOSLABEL');
+    $prev_redir = getenv('REDIRECT_TEOSLABEL');
+    putenv('TEOSLABEL');
+    putenv('REDIRECT_TEOSLABEL=testlabel-7i');
+    try {
+        $got = \bbsengine6\util\vhost_label();
+        if ($got !== 'testlabel-7i') {
+            test_fail("vhost_label() did not return REDIRECT_TEOSLABEL value", "got '$got'");
+        }
+    } finally {
+        if ($prev_label === false) putenv('TEOSLABEL');
+        else putenv('TEOSLABEL=' . $prev_label);
+        if ($prev_redir === false) putenv('REDIRECT_TEOSLABEL');
+        else putenv('REDIRECT_TEOSLABEL=' . $prev_redir);
+    }
+    test_pass("vhost_label() returns REDIRECT_TEOSLABEL when TEOSLABEL is unset");
+}
 
 // @since 2026-09-30 — fix for the root crumb rendering as /teos/teos/
 // instead of /teos/ on zoidtechnologies.com teos folder pages. The

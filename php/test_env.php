@@ -16,6 +16,8 @@ use function bbsengine6\util\env;
 use function bbsengine6\util\env_string;
 use function bbsengine6\util\env_int;
 use function bbsengine6\util\env_bool;
+use function bbsengine6\util\getenv_redirect;
+use function bbsengine6\util\vhost_label;
 
 $failures = 0;
 $total = 0;
@@ -143,6 +145,108 @@ check("env_bool: int default 1 => true",
     env_bool("BBSENGINE6_TEST_BOOL", 1) === true);
 check("env_bool: int default 0 => false",
     env_bool("BBSENGINE6_TEST_BOOL", 0) === false);
+
+// --- REDIRECT_<key> chain (Apache internal-redirect carry-over) ----------
+//
+// When a vhost's .htaccess declares `SetEnv TEOSLABEL teos` and the
+// htaccess also does an internal redirect from /<uri> to
+// /engine/router.php?uri=<uri>, the value survives only as
+// REDIRECT_TEOSLABEL in the env passed to /engine/router.php's PHP
+// handler (per-directory config is re-evaluated for /engine/ and the
+// teos htaccess is no longer in scope). bbsengine6\util\env() walks
+// one or more REDIRECT_ layers so callers can keep using env().
+
+// clean slate
+foreach (["BBSENGINE6_TEST_KEY",
+          "REDIRECT_BBSENGINE6_TEST_KEY",
+          "REDIRECT_REDIRECT_BBSENGINE6_TEST_KEY"] as $k) {
+    putenv($k);
+}
+
+// plain env beats REDIRECT_*
+putenv("BBSENGINE6_TEST_KEY=plain");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY=redirected");
+check('env: getenv($key) wins over REDIRECT_<key>',
+    env("BBSENGINE6_TEST_KEY") === "plain");
+
+// only REDIRECT_<key> set -> returned
+putenv("BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY=redirected");
+check('env: falls through to REDIRECT_<key> when $key unset',
+    env("BBSENGINE6_TEST_KEY") === "redirected");
+
+// REDIRECT_<key> empty -> falls further (does not return empty)
+putenv("BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY=");
+putenv("REDIRECT_REDIRECT_BBSENGINE6_TEST_KEY=two_hops");
+check("env: empty REDIRECT_<key> falls through to REDIRECT_REDIRECT_<key>",
+    env("BBSENGINE6_TEST_KEY") === "two_hops");
+
+// two-hop fallthrough
+putenv("BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_REDIRECT_BBSENGINE6_TEST_KEY=two_hops");
+check("env: REDIRECT_REDIRECT_<key> reached when no unprefixed key",
+    env("BBSENGINE6_TEST_KEY") === "two_hops");
+
+// nothing set -> default
+putenv("BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_REDIRECT_BBSENGINE6_TEST_KEY");
+check("env: nothing set returns default",
+    env("BBSENGINE6_TEST_KEY", "def") === "def");
+
+// --- getenv_redirect() -----------------------------------------------------
+
+putenv("BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_REDIRECT_BBSENGINE6_TEST_KEY");
+check("getenv_redirect: nothing set returns false",
+    getenv_redirect("BBSENGINE6_TEST_KEY") === false);
+
+putenv("BBSENGINE6_TEST_KEY=plain");
+check("getenv_redirect: returns unprefixed",
+    getenv_redirect("BBSENGINE6_TEST_KEY") === "plain");
+
+putenv("BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY=red");
+check("getenv_redirect: returns REDIRECT_ when unprefixed unset",
+    getenv_redirect("BBSENGINE6_TEST_KEY") === "red");
+
+putenv("BBSENGINE6_TEST_KEY=plain");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY=red");
+check("getenv_redirect: unprefixed wins",
+    getenv_redirect("BBSENGINE6_TEST_KEY") === "plain");
+
+putenv("BBSENGINE6_TEST_KEY=plain");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY=red");
+check("getenv_redirect: maxhops=0 stops at unprefixed",
+    getenv_redirect("BBSENGINE6_TEST_KEY", 0) === "plain");
+
+putenv("BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY=red");
+check("getenv_redirect: maxhops=1 reaches REDIRECT_",
+    getenv_redirect("BBSENGINE6_TEST_KEY", 1) === "red");
+
+putenv("BBSENGINE6_TEST_KEY");
+putenv("REDIRECT_BBSENGINE6_TEST_KEY=red");
+check("getenv_redirect: maxhops=0 cannot reach REDIRECT_",
+    getenv_redirect("BBSENGINE6_TEST_KEY", 0) === false);
+
+// --- vhost_label() with REDIRECT_<key> ------------------------------------
+
+foreach (["TEOSLABEL",
+          "REDIRECT_TEOSLABEL",
+          "REDIRECT_REDIRECT_TEOSLABEL"] as $k) {
+    putenv($k);
+}
+putenv("REDIRECT_TEOSLABEL=te_redirect");
+check("vhost_label: returns REDIRECT_TEOSLABEL when TEOSLABEL unset",
+    vhost_label() === "te_redirect");
+
+putenv("TEOSLABEL=plain_label");
+check("vhost_label: TEOSLABEL wins over REDIRECT_TEOSLABEL",
+    vhost_label() === "plain_label");
 
 // --- summary ---------------------------------------------------------------
 

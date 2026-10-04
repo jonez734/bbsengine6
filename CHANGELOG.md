@@ -1,5 +1,83 @@
 ## [Unreleased]
 
+### fix(php/util): env() walks REDIRECT_<key> so vhost .htaccess SetEnv survives the /engine/ rewrite
+
+The "You are here" breadcrumb on `/<vhost>/<uri>/` pages rendered
+`NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` as the root crumb label
+on the teos vhost (zoidtechnologies.com), even though
+`teos/www/htaccess-prod` declares `SetEnv TEOSLABEL teos` and
+`engine/router.php` reads it via
+`\bbsengine6\util\env('TEOSLABEL', ...)`. `TEOSURL` and
+`TEOSDIR` rendered correctly only because `zoid6/php/zoid6config.php`
+defines `\config\TEOSURL` and `\config\TEOSDIR` constants as
+fallbacks for tier 2 of `env()`'s `getenv()` -> `defined()` ->
+`default` chain. `TEOSLABEL` had no constant fallback, so
+`env()` landed on its sentinel.
+
+Root cause: mod_rewrite's internal redirect from `/<uri>` to
+`/engine/router.php?uri=<uri>` causes per-directory config to be
+re-evaluated for `/engine/`. The teos vhost's
+`html/teos/.htaccess` is no longer in scope at `/engine/`, and
+`/engine/.htaccess` does not exist on merlin. The original
+`TEOSLABEL=teos` survives only as `REDIRECT_TEOSLABEL=teos`
+(Apache adds a `REDIRECT_<var>` copy of each request env var on
+every internal redirect). `env()` previously called `getenv()`
+directly, so it saw `false` for `TEOSLABEL` and fell through to
+the default sentinel.
+
+Fix:
+
+- `php/util.php`: new
+  `getenv_redirect(string $key, int $maxhops = 3): string|false`
+  helper that walks `getenv($key)` -> `getenv('REDIRECT_'.$key)`
+  -> `getenv('REDIRECT_REDIRECT_'.$key)` -> ... up to `$maxhops`
+  hops, treating empty strings as missing. `env()` now calls
+  `getenv_redirect($key)` instead of `getenv($key)`. Order is
+  unchanged: env -> constant -> default.
+- `php/util.php`: `vhost_label()` now delegates its env tier to
+  `env('TEOSLABEL')` (one line) so the `bbsengine6\blurb\getlabel()`
+  path and the `engine/router.php::router_buildBreadcrumbs` path
+  read the same var through the same REDIRECT_ walk.
+
+Tests:
+
+- `php/test_env.php`: 11 new cases for `getenv_redirect()` and
+  REDIRECT_<key> handling (plain env wins, REDIRECT_<key> reached
+  when unprefixed unset, empty REDIRECT_<key> falls through,
+  two-hop REDIRECT_REDIRECT_<key>, nothing-set -> default,
+  REDIRECT_<key> in the vhost_label path).
+- `php/test_router.php` Test 6e: pinned the `env()` body to call
+  `getenv_redirect($key)` before `defined($key)` instead of the
+  literal `getenv($key)`. New Test 6e.1 pins the existence of
+  `getenv_redirect()` and its use of `REDIRECT_` and `getenv()`.
+- `php/test_breadcrumbs.php` Test 7f: pinned vhost_label() to
+  call `env('TEOSLABEL')` rather than `getenv('TEOSLABEL')` directly.
+  New Test 7i runtime pins vhost_label() returning
+  REDIRECT_TEOSLABEL when TEOSLABEL is unset.
+
+Docs:
+
+- AGENTS.md "TEOSDIR resolution contract": new "SetEnv and the
+  rewrite boundary" sub-section explaining why env() must walk
+  REDIRECT_<key> and pointing at the regression guard harness.
+
+Regression guard:
+
+- `teos/www/test_htaccess_setenv_reaches_php.sh`: spins up a
+  mock Apache on 127.0.0.1, copies `zoid6/sites/www/htaccess-prod`,
+  `bbsengine6/www/org/htaccess-prod`, and `teos/www/htaccess-prod`
+  verbatim into the harness docroot, and exercises the rewrite
+  chain that ends at `/engine/router.php` for both the teos and
+  handbook vhosts. Asserts that `\bbsengine6\util\env()` returns
+  the htaccess value on every rewritten request (this is the
+  regression guard for this bug; before the fix, every teos
+  rewritten request reported `env(TEOSLABEL) = ''`). The harness
+  exercises the production mod_cgi/mod_fcgid env pass-through
+  semantics; it uses `AddHandler cgi-script .php` + a
+  `#!/usr/bin/php-cgi` shebang so no spurious `REDIRECT_`
+  sub-request layer is added by the harness itself. Fails before
+  this fix; passes after.
+
 ### fix(engine/router): handbook version root no longer 404s
 
 `https://bbsengine.org/handbook/6/` (and any
