@@ -9,7 +9,7 @@ require_once("/srv/www/bbsengine6/php/bootstrap.php");
  */
 
 /**
- * application config file 
+ * application config file
  */
 require_once("config.php");
 //require_once("bbsenginedotorg.php");
@@ -25,7 +25,7 @@ require_once("session.php");
 class index
 {
   var $dbh = null;
-  
+
   function _latestrelease()
   {
     $sql = "select releaseid from repo.latestrelease where projectname=:projectname";
@@ -56,13 +56,13 @@ class index
       {
         $file = $rec;
         $file["name"] = basename($rec["filepath"]);
-        
+
         $files[] = $file;
       }
-      
+
       $release["files"] = $files;
     }
-    
+
     return $release;
   }
 
@@ -84,23 +84,23 @@ class index
     $this->dbh = \bbsengine6\database\connect(\config\SYSTEMDSN);
 
     \bbsengine6\session\start();
-    
+
     \bbsengine6\setcurrentsite("bbsenginedotorg");
     \bbsengine6\setcurrentpage("index");
     \bbsengine6\setreturnto(\bbsengine6\getcurrenturi());
-    
+
     $latestrelease = null;
 
     $tmpl = \bbsengine6\getsmarty();
 
     $docs = [];
     $docs[] = ["title" => "handbook", "url" => \config\HANDBOOKURI, "updatedepoch" => filemtime(\config\HANDBOOKDIR)];
-    $docs[] = ["title" => "API documentation", "url" => \config\APIDOCSURI, "updatedepoch" => filemtime(\config\APIDOCSDIR)];
+{*    $docs[] = ["title" => "API documentation", "url" => \config\APIDOCSURI, "updatedepoch" => filemtime(\config\APIDOCSDIR)]; *}
     $docs[] = ["title" => "changelog", "url" => \config\CURRENTHANDBOOKURI . "CHANGELOG.txt", "updatedepoch" => filemtime(\config\CHANGELOG)];
     $docs[] = ["title" => "readme", "url" => \config\CURRENTHANDBOOKURI . "README.md", "updatedepoch" => filemtime(\config\README)];
-    $docs[] = ["title" => "install", "url" => \config\CURRENTHANDBOOKURI. "INSTALL.md", "updatedepoch" => filemtime(\config\INSTALL)];
+{*    $docs[] = ["title" => "install", "url" => \config\CURRENTHANDBOOKURI. "INSTALL.md", "updatedepoch" => filemtime(\config\INSTALL)]; *}
     $docs[] = ["title" => "releasenotes", "url" => \config\CURRENTHANDBOOKURI. "/current/RELEASENOTES.md", "updatedepoch" => filemtime(\config\RELEASENOTES)];
-    
+
     usort($docs, [$this, "docsort"]);
 
     $data = [];
