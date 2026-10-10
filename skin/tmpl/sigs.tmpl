@@ -10,7 +10,7 @@
       {if count($sigs) > 0}
         {foreach from=$sigs item=sig}
       	  <li>
-      	   <span class="fa fa-folder fa-fw"></span>
+       	   {fa ico="folder" fixed=1 rspace=1}
       	   {teos path=$sig.path}
       	   {if count($sig.actions) > 0}
       	     {include file="actions.tmpl" actions=$sig.actions}

@@ -444,7 +444,78 @@ if (defined('TEOSLABEL')) {
     test_pass("vhost_label() returns REDIRECT_TEOSLABEL when TEOSLABEL is unset");
 }
 
-// @since 2026-09-30 — fix for the root crumb rendering as /teos/teos/
+// @since 2026-10-10 — teos/www/skin/tmpl/browse.tmpl omitted the
+// linklast=true flag on its youarehere.tmpl include, so the trailing
+// crumb rendered as a self-link instead of the conventional unlinked
+// "you are here" marker that folder.tmpl, page-markdown.tmpl, and
+// page-markdown-sections.tmpl all use. Pin the flag so a future
+// browse.tmpl refactor doesn't silently regress the trailing crumb
+// to a self-link on the teos vhost.
+echo "Test 7j: teos/www/skin/tmpl/browse.tmpl passes linklast=true to youarehere.tmpl\n";
+$browse_tmpl = "/home/opencode/data/work/teos/www/skin/tmpl/browse.tmpl";
+if (!file_exists($browse_tmpl)) {
+    test_fail("browse.tmpl missing on disk", $browse_tmpl);
+} else {
+    $browse_src = file_get_contents($browse_tmpl);
+    if (strpos($browse_src, 'youarehere.tmpl') === false) {
+        test_fail("browse.tmpl does not include youarehere.tmpl");
+    } elseif (!preg_match('/\{include\s+file\s*=\s*"youarehere\.tmpl"[^}]*linklast\s*=\s*true/s', $browse_src)) {
+        test_fail("browse.tmpl does not pass linklast=true to youarehere.tmpl; trailing crumb will render as a self-link instead of an unlinked 'you are here' marker");
+    }
+}
+test_pass("browse.tmpl passes linklast=true to youarehere.tmpl");
+
+// @since 2026-10-10 — three *~ backup files were committed into the
+// template deploy source dirs:
+//   bbsengine6/skin/tmpl/youarehere.tmpl~
+//   bbsengine6/skin/tmpl/folder.tmpl~
+//   bbsengine6/www/org/skin/tmpl/index.tmpl~   (version drift: 20261004 vs 20260916)
+// bbsengine6/www/org/skin/tmpl/Makefile rsyncs from
+// bbsengine6/skin/tmpl/ to the staged docroot, so any of these
+// surviving files could ship stale bytes on the next `make stage`.
+// The Makefile has a `clean: -rm *~` target but it has to be run
+// manually; pin the absence so a future regression is caught at
+// test time.
+echo "Test 7k: no *.tmpl~ backup files in template deploy source dirs\n";
+$deploy_dirs = [
+    "/home/opencode/data/work/bbsengine6/skin/tmpl",
+    "/home/opencode/data/work/bbsengine6/www/org/skin/tmpl",
+    "/home/opencode/data/work/teos/www/skin/tmpl",
+];
+$found_backups = [];
+foreach ($deploy_dirs as $d) {
+    if (!is_dir($d)) continue;
+    foreach (glob($d . "/*.tmpl~") as $backup) {
+        $found_backups[] = $backup;
+    }
+}
+if (!empty($found_backups)) {
+    test_fail("found *.tmpl~ backup files in deploy source dirs (rsync hazard)", implode(", ", $found_backups));
+}
+test_pass("no *.tmpl~ backup files in template deploy source dirs");
+
+// @since 2026-10-10 — sigs.tmpl diverged between the shared engine
+// template (used the raw FA class) and the teos vhost override
+// (used the {fa} Smarty function). The teos override was deleted so
+// both vhosts fall through to the shared one, which now also uses
+// {fa}. Pin the absence of any vhost-local sigs.tmpl so a future
+// vhost setup that copies the old override doesn't reintroduce the
+// divergence.
+echo "Test 7l: no vhost-local sigs.tmpl (must fall through to shared)\n";
+$local_sigs = [
+    "/home/opencode/data/work/bbsengine6/www/org/skin/tmpl/sigs.tmpl",
+    "/home/opencode/data/work/teos/www/skin/tmpl/sigs.tmpl",
+];
+$found_local = [];
+foreach ($local_sigs as $f) {
+    if (file_exists($f)) $found_local[] = $f;
+}
+if (!empty($found_local)) {
+    test_fail("found vhost-local sigs.tmpl files; both vhosts must fall through to the shared template", implode(", ", $found_local));
+}
+test_pass("no vhost-local sigs.tmpl; both vhosts use the shared template");
+
+// @since 2026-10-10 — fix for the root crumb rendering as /teos/teos/
 // instead of /teos/ on zoidtechnologies.com teos folder pages. The
 // {teos} Smarty plugin (bbsengine6/smarty/function.teos.php) needs to
 // honor a new is_root option that bypasses the per-segment uri
