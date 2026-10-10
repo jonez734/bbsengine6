@@ -3,6 +3,14 @@
 Replace the `bbsengine6.notify` / `bbsengine6.message_delivery` system with
 `bbsengine6.message`. Both currently coexist with separate DB tables.
 
+> **Status [2026-10-09]:** All Phase 1-11 work complete. The notify package
+> was deleted [2026-07-22]; the `bbsengine6/message/` package layered
+> extraction landed [2026-09-01]. The 12 items previously marked `[ ]`
+> under "Migrate or rewrite notify test files" (lines below) were
+> closed as part of this cleanup; the actual work landed in the
+> per-phase commits referenced inline. See `SPEC.md` §11 and
+> `CHANGELOG.md` for the canonical record.
+
 > **Phase 11 note (2026-09-01):** Throughout this document,
 > `bbsengine6/message.py` / `message.py` is shorthand for the
 > `bbsengine6/message/` package. After Phase 11 (DAL extraction,
@@ -164,24 +172,24 @@ Remove the try-message/fall-back-to-notify pattern. **STATUS: COMPLETE**
 
 - [x] **`tests/conftest.py`** — added `_get_message_sql_files()` helper,
       `schema_init` now loads message tables. `_get_notify_sql_files()` is
-      retained for tests that need the legacy schema.
-- [ ] **Migrate or rewrite notify test files** — the following 17+ test files
-      import from `bbsengine6.notify` and test against `__notify*` tables.
-      These will be removed in Phase 7 (notify package deletion):
-  - [ ] `test_notify.py` → drop in Phase 7
-  - [ ] `test_notify_lib.py` → drop in Phase 7
-  - [ ] `test_notify_mac.py` → drop in Phase 7 (HMAC is not in message.py)
-  - [ ] `test_notify_mark_read.py` → drop in Phase 7
-  - [ ] `test_notify_send_receive.py` → drop in Phase 7
-  - [ ] `test_notify_integration.py` → drop in Phase 7
-  - [ ] `test_notify_first_load_api.py` → drop in Phase 7
-  - [ ] `test_notify_tui.py` → drop in Phase 7 (no TUI in message.py)
-  - [ ] `test_notify_daemon.py` → drop in Phase 7
-  - [ ] `test_notify_schema_columns.py` → drop in Phase 7
-  - [ ] `test_notify_message_demo*.py` → drop in Phase 7
-  - [ ] `test_notify_message_f2_*.py` → drop in Phase 7
+      retained for tests that need the legacy schema. [2026-07-22]
+- [x] **Migrate or rewrite notify test files** — the following 12+ test files
+      imported from `bbsengine6.notify` and tested against `__notify*` tables.
+      All dropped in Phase 7 (notify package deletion [2026-07-22]):
+  - [x] `test_notify.py` → dropped in Phase 7 [2026-07-22]
+  - [x] `test_notify_lib.py` → dropped in Phase 7 [2026-07-22]
+  - [x] `test_notify_mac.py` → dropped in Phase 7 (HMAC is not in message.py) [2026-07-22]
+  - [x] `test_notify_mark_read.py` → dropped in Phase 7 [2026-07-22]
+  - [x] `test_notify_send_receive.py` → dropped in Phase 7 [2026-07-22]
+  - [x] `test_notify_integration.py` → dropped in Phase 7 [2026-07-22]
+  - [x] `test_notify_first_load_api.py` → dropped in Phase 7 [2026-07-22]
+  - [x] `test_notify_tui.py` → dropped in Phase 7 (no TUI in message.py) [2026-07-22]
+  - [x] `test_notify_daemon.py` → dropped in Phase 7 [2026-07-22]
+  - [x] `test_notify_schema_columns.py` → dropped in Phase 7 [2026-07-22]
+  - [x] `test_notify_message_demo*.py` → dropped in Phase 7 [2026-07-22]
+  - [x] `test_notify_message_f2_*.py` → dropped in Phase 7 [2026-07-22]
 - [x] **Existing message.py tests remain** — `test_message_lib.py`,
-      `test_message_channel.py` are the source of truth going forward.
+      `test_message_channel.py` are the source of truth going forward. [2026-07-22]
 - [x] **`test_message_phase1_gaps.py`** — covers all 10 Phase 1
       gap-fills (`remove_from_group`, `get_blocked`, `get_urgent`,
       `expunge`, `get_queue`, `resolve_recipients`, `set_rate_limit`,
