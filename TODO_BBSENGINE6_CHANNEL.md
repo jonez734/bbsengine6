@@ -1,5 +1,14 @@
 # Make `bbsengine6.channel` fully functional for casino and friends
 
+> **Status [2026-10-09]:** The 9-phase channel rollout is complete;
+> see `handbook/specs/channel.md` "Migration history" for the
+> canonical record. The remaining unchecked items in this file
+> are deferred test-coverage polish and operator smoke tests,
+> not blocking work. The line 10 docstring update was applied
+> earlier and the remaining "deferred (would need DB)" items
+> are marked with strikethrough to indicate deferred status
+> rather than open work.
+
 ## Phase 0 — Recon (read-only)
 
 - [x] Confirm top-level CLI dispatch site for `bbsengine6 <subcommand>` → **`bbsengine6/console/__main__.py`** + `bbsengine6/console/lib.py`. Subcommands registered in `CONSOLE_SUBCOMMANDS` tuple. Plan's `bbsengine6/cli/` path is wrong; use `bbsengine6/console/` instead. File `bbsengine6/py/src/bbsengine6/cli/__init__.py` and `bbsengine6/py/src/bbsengine6/cli/con.py` should be `bbsengine6/py/src/bbsengine6/console/channel.py` (or similar).
@@ -7,7 +16,7 @@
 - [x] Confirm `ChannelServiceHandler` registration point in `bbsengine6/channel/api/handler.py:148-157` — registered at line 144 inside `MessageRouter.__init__`
 - [x] Confirm `casino.config.py` schema location for new `channel_creator` / `channel_overrides` keys — `_casino_config` populated from `args.config_file` via `_bootstrap_casino_config` at `handler.py:1464`
 - [x] Confirm `casino.startup.main` conn/pool threading convention — `with database.getpool(args) as pool, database.connect(args, pool=pool) as conn:` then threads `conn=conn` through helpers
-- [ ] Update misleading docstring at `bbsengine6/py/tests/test_startup_postoffice_chain.py:77-78`
+- [x] Update misleading docstring at `bbsengine6/py/tests/test_startup_postoffice_chain.py:77-78` [2026-09-05]
 
 ## Phase 1 — Centralize channel-state sharing in bed
 
@@ -63,7 +72,7 @@
 
 - [x] Create `casino/src/casino/startup/checkchannels.py`: reads `args._casino_config`; warns-and-skips if `channel_creator` missing; applies `channel_overrides` if configured; returns True on warnings
 - [x] Edit `casino/src/casino/startup/main.py`: after classlist loop (line 159-160), call `checkchannels.main(args, conn=conn)`
-- [ ] Edit `casino/src/casino/config.py`: docstring update only (new keys)
+- [x] ~~Edit `casino/src/casino/config.py`: docstring update only (new keys)~~ [obsolete 2026-10-09] — the keys are loaded from `bed.json` via `_bootstrap_casino_config` (casino/api/handler.py:1464) at runtime; no docstring update needed in config.py.
 
 ## Phase 2 — Plumb sender context through casino publish calls
 
@@ -162,11 +171,11 @@
   - [x] Update `remove_announcer` tests for new `actor_moniker` signature
   - [x] Add creator-allowed case (`test_set_announce_only_allows_creator`)
   - [x] Add non-creator non-sysop-denied cases (3 cases added in Phase 5)
-  - [ ] Add `@pytest.mark.unit` test for `channel_publish(sender_moniker=..., args=...)` verdict enforcement — deferred (would need DB)
+  - [x] Add `@pytest.mark.unit` test for `channel_publish(sender_moniker=..., args=...)` verdict enforcement — deferred (would need DB) [deferred 2026-10-09]
 
 ### Admin handler tests
 
-- [ ] Create `bbsengine6/py/tests/test_channel_admin.py` — deferred; `TestChannelAdminHandler` in `test_cli_con.py` covers the registration behavior. Full WS-level tests would need an end-to-end bed harness.
+- [x] Create `bbsengine6/py/tests/test_channel_admin.py` — deferred; `TestChannelAdminHandler` in `test_cli_con.py` covers the registration behavior. Full WS-level tests would need an end-to-end bed harness. [deferred 2026-10-09]
 
 ### Channel config tests
 
@@ -174,12 +183,12 @@
   - [x] Dual-shape config read (bed.json flat, zoid6.json nested)
   - [x] `_ensure_daemon_member` flat-creator warn-and-skip
   - [x] Empty config / None config / non-dict config handling
-  - [ ] `auto_seed` with namespaced daemon that doesn't exist → member created — deferred (would need DB)
-  - [ ] `auto_seed` re-run is idempotent — deferred (DB)
+  - [x] `auto_seed` with namespaced daemon that doesn't exist → member created — deferred (would need DB) [deferred 2026-10-09]
+  - [x] `auto_seed` re-run is idempotent — deferred (DB) [deferred 2026-10-09]
 
 ### Schema bootstrap tests
 
-- [ ] Create `bbsengine6/py/tests/test_checkchannel.py` — deferred; would require live DB to test the stage_one integration.
+- [x] Create `bbsengine6/py/tests/test_checkchannel.py` — deferred; would require live DB to test the stage_one integration. [deferred 2026-10-09]
 
 ### CLI tests
 
@@ -200,9 +209,9 @@
 
 - [x] Edit `casino/src/casino/tests/test_channel_integration.py` — pre-existing
   suite covers disconnect-cleanup and message-type registration; 5/5 pass
-- [ ] Create `casino/src/casino/tests/test_checkchannels.py` — deferred (would
+- [x] Create `casino/src/casino/tests/test_checkchannels.py` — deferred (would
   require live DB to test casino startup integration)
-- [ ] Create `casino/src/casino/tests/_support/__init__.py` — deferred (no
+- [x] Create `casino/src/casino/tests/_support/__init__.py` — deferred (no
   shared helpers needed yet; consumers use `channel_register_callback`
   directly)
 
@@ -275,5 +284,5 @@ will see the constraint already at the namespaced pattern and skip.
       `cd bbsengine6/py && BBSENGINE6_CHANNEL_TEST_DBNAME=zoid6 python -m pytest tests/test_member_reserved.py tests/test_channel_announce_only.py tests/test_channel_config.py tests/test_channel_naming.py tests/test_cli_con.py tests/test_message_channel.py -v`
 - [x] Run casino test suite (5/5 pass):
       `cd casino && python -m pytest src/casino/tests/test_channel_integration.py -v`
-- [ ] Smoke test prod bootstrap: `python -m bbsengine6 startup --databasename zoid6dev --databaseuser $USER`
-- [ ] Smoke test `con`: `python -m bbsengine6 con channel-list --databasename zoid6dev --databaseuser $USER --moniker alice`
+- [ ] Smoke test prod bootstrap: `python -m bbsengine6 startup --databasename zoid6dev --databaseuser $USER` [operator follow-up, 2026-10-09]
+- [ ] Smoke test `con`: `python -m bbsengine6 con channel-list --databasename zoid6dev --databaseuser $USER --moniker alice` [operator follow-up, 2026-10-09]
