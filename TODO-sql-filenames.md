@@ -5,6 +5,13 @@ multi-word names use `_` (underscore) as the word separator
 consistently across the directory. Update the backend modules that
 load these files to match.
 
+> **Status [2026-10-09]:** The notify package deletion (Phase 7,
+> 2026-07-22) removed the `notifyview.sql` and `notifyd.sql`
+> files referenced in this plan. The remaining 12 cosmetic
+> renames are still in scope and the plan below is still
+> accurate. No source code change has occurred since
+> 2026-07-12; this is a deferred refactor, not a closed one.
+
 ## The inconsistency today
 
 The `sql/` directory mixes two patterns:
@@ -82,17 +89,10 @@ The renames below assume the target convention is "underscore
 separates words." A rename script or manual `git mv` will be
 needed.
 
-- [ ] `notifyview.sql` → `notify_view.sql`
+- [x] ~~`notifyview.sql` → `notify_view.sql`~~ [obsolete 2026-07-22] — `notifyview.sql` was deleted in Phase 7
 - [ ] `createrol.sql` → `create_rol.sql`
 - [ ] `memberinet.sql` → `member_inet.sql`
-- [ ] `notifyd.sql` → `notify_d.sql` (debatable — this is a
-      daemon schema file; the `d` suffix is a long-standing
-      convention. Decision needed: rename to
-      `notify_daemon.sql` for clarity, or keep as
-      `notify_d.sql` for backwards-blame-readability, or
-      leave as-is since `notifyd` is the established
-      shortform. **Recommendation: rename to
-      `notify_daemon.sql`** for full descriptiveness.)
+- [x] ~~`notifyd.sql` → `notify_d.sql`~~ [obsolete 2026-07-22] — `notifyd.sql` was deleted in Phase 7
 - [ ] `blurbview.sql` → `blurb_view.sql`
 - [ ] `memberview.sql` → `member_view.sql`
 - [ ] `folderview.sql` → `folder_view.sql`
@@ -109,8 +109,8 @@ needed.
       `get_sub_blurbs.sql` for full word separation. Decision
       needed.)
 - [ ] `flagdata.sql` → `flag_data.sql`
-- [ ] `member_flag.sql` (already underscored — unchanged)
-- [ ] All other underscored files — unchanged.
+- [x] `member_flag.sql` (already underscored — unchanged) [no-op]
+- [x] All other underscored files — unchanged [no-op]
 
 ### Backend updates required
 
