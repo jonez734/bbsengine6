@@ -1,3 +1,22 @@
+# bbsengine6 TODO
+
+> **Status [2026-10-09]:** This file is the historical / cross-cutting
+> TODO list. Per-topic work has moved to dedicated files:
+>
+> | Topic | File |
+> |---|---|
+> | Notify→message migration | `TODO-message-migration.md` (Phases 1-11 complete [2026-09-01]) |
+> | bbsengine6.channel rollout | `TODO_BBSENGINE6_CHANNEL.md` (9-phase rollout complete [2026-09-05]) |
+> | Bottombar wire push | `TODO-BOTTOMBAR.md` (Phase 5a in flight) |
+> | Row-level security | `TODO_RLS.md` (deferred; per `handbook/specs/pg-ident-auth.md` "Deferred work") |
+> | zoid6 schema ownership | `TODO_zoid6_role.md` |
+> | Blurb replies | `TODO_BLURBS.md` (pre-implementation design) |
+> | SQL filename cosmetic renames | `TODO-sql-filenames.md` (next-quarter refactor) |
+>
+> Cross-cutting items that don't fit any of those stay here. The
+> "Replace Notify System" section below is closed; the work is
+> canonical in `TODO-message-migration.md` Phase 7-11.
+
 [x] upgrade bbsengine.org to use bootstrap.php (to fix Smarty.class.php include error) - DONE
    - Problem: engine.php:14 requires Smarty.class.php directly but can't find it
    - Solution: Add `require_once("/srv/www/bbsengine6/php/bootstrap.php");` at top of each PHP file
@@ -266,9 +285,9 @@ system:shout                  # global chat (all connected users)
 system:announcements         # sysop broadcasts only (reserved)
 ```
 
-**Relationship with notify system:**
-- Message system replaces and absorbs notify (persistence, groups, rate limiting, blocking)
-- The old notify system becomes delivery mechanisms (email daemon, SMS) that subscribe to message channels
+**Relationship with notify system:** [resolved — see `TODO-message-migration.md` Phase 7 [2026-07-22]]
+- Message system replaces and absorbs notify (persistence, groups, rate limiting, blocking) ✓
+- The old notify system becomes delivery mechanisms (email daemon, SMS) that subscribe to message channels — superseded; the notify package was deleted in Phase 7; BED (`bbsengine6.net`) is the only daemon and it dispatches via `bbsengine6.message`
 
 - [x] **Phase 11 -- Extract `bbsengine6.message.dal` subpackage**
       -- see `TODO-message-migration.md` Phase 11. Split the
@@ -341,9 +360,9 @@ originally `bbsengine6/message.py`):**
 
 ---
 
-### Phase 1C: Groups, Blocking, Rate Limiting ✓ DONE
+### Phase 1C: Groups, Blocking, Rate Limiting ✓ DONE [2026-07-22]
 
-Add notify-like features directly into message system.
+Add notify-like features directly into message system. [resolved — see `TODO-message-migration.md` Phase 1]
 
 **Database tables (sql/message_groups.sql):**
 - `engine.__message_group` - distribution lists
@@ -367,15 +386,15 @@ originally `bbsengine6/message.py`):**
 
 ---
 
-### Phase 1D: Multi-Channel Delivery ✓ DONE
+### Phase 1D: Multi-Channel Delivery ✓ DONE [2026-07-22]
 
-Add delivery mechanisms that subscribe to message channels.
+Add delivery mechanisms that subscribe to message channels. [resolved — see `TODO-message-migration.md` Phase 7-10]
 
 **Delivery handlers (message_delivery.py):**
-- `DeliveryManager` - coordinates handlers
-- `InMemoryQueueHandler` - delivers to connected users via WebSocket
-- `EmailDeliveryHandler` - sends via SMTP (optional)
-- `SMSDeliveryHandler` - sends via SMS gateway (optional)
+- ~~`DeliveryManager` - coordinates handlers~~ [module deleted in Phase 7]
+- ~~`InMemoryQueueHandler` - delivers to connected users via WebSocket~~ [module deleted in Phase 7]
+- ~~`EmailDeliveryHandler` - sends via SMTP (optional)~~ [module deleted in Phase 7]
+- ~~`SMSDeliveryHandler` - sends via SMS gateway (optional)~~ [module deleted in Phase 7]
 
 **F2/Client integration:**
 - `io/getch.py:_check_notifications()` - uses message system, falls back to notify
@@ -636,6 +655,13 @@ Keep existing `broadcast()` and path-based messaging for backward compatibility.
 > this banner is now a layered package (DAL + service +
 > templates + cache); `lib.py` is a facade. Public API
 > unchanged. See `TODO-message-migration.md` Phase 11.
+>
+> **STATUS [2026-10-09]: This section is closed.** All the
+> items below ("Replace Notify System" + "Client changes" +
+> "Database" + "What notify module becomes" + "Client
+> integration points") are completed. The canonical record
+> is `TODO-message-migration.md` Phase 7-11. The plan items
+> below are kept as historical breadcrumbs.
 
 When message system is complete, it replaces notify entirely:
 
@@ -866,10 +892,13 @@ Create MemberServices for the BBS Engine Daemon (BED), leveraging bbsengine6's m
 > `lastloginfrom`, `loginid`, `ui`, `tz`, `attrs`, `refcode`.**
 >
 > The GPG key work is also entangled with the now-moot
-> `TODO-notify-encryption.md` plan; the per-row encryption
-> work there was scoped against the deleted `__notify` table
-> and will need to be reworked against `__message` before the
-> message-signing side of this work can land.
+> `TODO-notify-encryption.md` plan (file deleted in Phase 7);
+> the per-row encryption work there was scoped against the
+> deleted `__notify` table and will need to be reworked
+> against `__message` before the message-signing side of
+> this work can land. [2026-10-09: TODO-notify-encryption.md
+> cross-ref removed; the GPG work in this section is the
+> authoritative tracker.]
 
 Add columns to support GPG keys for signing messages.
 
@@ -1979,8 +2008,8 @@ importing `session`, `util`, `io`, `database`, `member` directly from
   its own pool via `database.getpool(args)` if `conn=` / `pool=` are
   not supplied. Running before `stage_zero` ensures the `member`
   role, the `engine` and `bank` schemas, and the core
-  `engine.__notify*` / `engine.__member*` / `engine.pgrole` /
-  `engine.__refcode` classes exist before
+   `engine.__message*` / `engine.__member*` / `engine.pgrole` /
+   `engine.__refcode` classes exist before
   `checkroles` / `checksuperuser` / `checkfunctions` inspect them.
 
 ### Edit 2 — `bbsengine6/py/src/bbsengine6/startup.py`
