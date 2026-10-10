@@ -80,8 +80,10 @@ python -m bbsengine6.console checkbank
 python -m bbsengine6.console checkwebserverrole
 python -m bbsengine6.console checkloginid
 python -m bbsengine6.console checksuperuser
-python -m bbsengine6.console checknotify        # legacy, see Incomplete features
-python -m bbsengine6.console checknotifyd       # legacy, see Incomplete features
+# checknotify / checknotifyd removed from CONSOLE_SUBCOMMANDS list
+# in [2026-10-09] cleanup; they were registered but not implemented
+# (would fail at runtime with 'no such command'). Use the message
+# CLI for messaging operations.
 ```
 
 `python -m bbsengine6.startup` is the recommended entry point for
@@ -132,8 +134,10 @@ BACKEND_SUBCOMMANDS = {
     "checkmemberflag",
     "checkfunctions",
     "checkloginid",
-    "checknotify",        # legacy shim
-    "checknotifyd",       # legacy shim
+    # "checknotify" / "checknotifyd" removed in [2026-10-09] cleanup;
+    # they were in CONSOLE_SUBCOMMANDS but no checknotify*() function
+    # was ever defined, so they would fail at runtime. The notify
+    # package was deleted 2026-07-22; there is nothing to check.
     "checkroles",
     "checksuperuser",
     "checkwebserverrole",
@@ -288,8 +292,9 @@ subcommand — see `handbook/specs/messaging.md` §CLI.
 `bbsengine6.console.checknotify` / `checknotifyd` shims were part
 of the legacy notify-based console flow. The notify package was
 deleted 2026-07-22 (Phase 7 of `bbsengine6/TODO-message-migration.md`).
-The shim modules still exist for backward compatibility (so
-`python -m bbsengine6.console checknotify` does not raise
-`ModuleNotFoundError`), but they are no-ops that return success
-without checking anything. Use the message CLI for messaging
-operations.
+As of [2026-10-09], the `checknotify` and `checknotifyd` strings
+were removed from `CONSOLE_SUBCOMMANDS` in
+`py/src/bbsengine6/console/lib.py` — no `checknotify*()` function
+was ever defined, so the previous registration was a runtime
+no-op that would fail with "no such command". Use the message
+CLI for messaging operations.

@@ -23,8 +23,6 @@ BACKEND_SUBCOMMANDS = {
     "checkmemberflag",
     "checkfunctions",
     "checkloginid",
-    "checknotify",
-    "checknotifyd",
     "checkroles",
     "checksuperuser",
     "checkwebserverrole",

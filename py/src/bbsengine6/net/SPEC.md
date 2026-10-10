@@ -2,9 +2,9 @@
 
 ## Overview
 
-Network layer for BBSEngine6: SMTP-like addressing, packet system, WebSocket transport, and notification integration.
+Network layer for BBSEngine6: SMTP-like addressing, packet system, WebSocket transport, and channel pub/sub transport infrastructure.
 
-**Note**: Frame/video transmission code has been moved to asimov.net. This module focuses on notification infrastructure.
+**Note**: Frame/video transmission code has been moved to asimov.net. This module focuses on channel pub/sub transport infrastructure (the pre-Phase-7 "notification integration" was the SMTP-like `NotifyIntegration` helper; as of Phase 7-10 [2026-07-22 to 2026-09-01], it was renamed to `MessageIntegration` and now wraps `bbsengine6.message`).
 
 ## Architecture
 
@@ -13,12 +13,12 @@ Network layer for BBSEngine6: SMTP-like addressing, packet system, WebSocket tra
 │           Application Layer             │
 └─────────────────────────────────────────┘
                     │
-    ┌───────────────┴───────────────┐
-    │                               │
-    ▼                               ▼
+     ┌───────────────┴───────────────┐
+     │                               │
+     ▼                               ▼
 ┌─────────────────────┐   ┌─────────────────────┐
-│ Notification System │   │  Frame Transmission │
-│ (SMTP-like)         │   │  (asimov.net)       │
+│ Channel Pub/Sub     │   │  Frame Transmission │
+│ (bbsengine6.message)│   │  (asimov.net)       │
 └─────────────────────┘   └─────────────────────┘
     │
     ├─→ AddressParser

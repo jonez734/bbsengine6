@@ -152,7 +152,7 @@ The package lives at `py/src/bbsengine6/`.
 | `session/`                    | Generic `SessionManager` (consumed by bed)         |
 | `sql/`                        | ~50 schema files (schema, views, enums, SECURITY DEFINER functions owned by the dedicated `zoid6` role — see §5) |
 | `startup/`                    | `lib`, `main`, `__main__`, `message_subscription`  |
-| `examples/`                   | Demos + sample handlers (`message_demo.py`, `notify_handler.py`) |
+| `examples/`                   | Demos + sample handlers (`message_demo.py`) — `notify_handler.py` was deleted in Phase 7 [2026-07-22] |
 | `tests/`                      | net-layer integration tests                        |
 
 ## 4. PHP web layer
@@ -359,10 +359,12 @@ In addition to the Phase 0-5 audit, the recent work includes:
   (`TODO-message-migration.md`, commit `a689c89`). The `notify`
   messaging subsystem was deleted; only three functions survive
   (`member.moniker_exists`, `member.group_exists`,
-  `member.get_group_members`). See
-  `CHANGELOG_NOTIFY_MESSAGING.md` for the historical changelog (now
-  marked HISTORICAL — most of it is stale; only the surviving
-  functions remain relevant).
+  `member.get_group_members`). The historical changelog
+  `CHANGELOG_NOTIFY_MESSAGING.md` was removed from the canonical
+  tree on 2026-09-04 alongside the BBSENGINE6_NOTIFYD_*.md specs;
+  see `handbook/specs/messaging.md` for the live message system
+  and `handbook/specs/decisions.md` Decision 15 for the migration
+  record.
 - The `member.py` → `member/` package refactor (commit `ca3d680`).
 - The generic `SessionManager` extraction into `session/`
   (commit `e281806`).

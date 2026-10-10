@@ -272,6 +272,11 @@ a write see the new value.
 
 **Send (client → server):**
 
+> **Pre-Phase-7 legacy wire shape [2026-07-22].** The `{"type": "notify"}`
+> example below shows the pre-Phase-7 wire format. Current messages
+> flow over the channel system; see `handbook/specs/channel.md`
+> for the live wire protocol. Kept here for reference.
+
 ```json
 {
     "type": "notify",

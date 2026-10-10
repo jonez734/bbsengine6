@@ -181,7 +181,7 @@ verified against `ls py/src/bbsengine6/`.
 | `sql/` | ~50 schema files. Helpers are `SECURITY DEFINER` and owned by the dedicated `zoid6` role — see [`../../SPEC.md`](../../SPEC.md#5-sql-schema). |
 | `startup/` | DB bring-up: `lib`, `main`, `__main__`, `message_subscription`. The `check*` modules here are thin shims over `backend/`. |
 | `tests/` | Net-layer integration tests (`test_net_frames/`, plus `test_database_create.py`, `test_message_*.py`, `test_router_send_notification.py`, …). |
-| `examples/` | Demos + sample handlers (`message_demo.py`, `notify_handler.py`). |
+| `examples/` | Demos + sample handlers (`message_demo.py`) — `notify_handler.py` was deleted in Phase 7 [2026-07-22]. |
 
 ### 2.3 Cross-package entry point
 

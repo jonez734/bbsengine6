@@ -26,7 +26,7 @@ the full historical context.
 | `engine.map_member_flag` | Member-to-flag mapping |
 | `engine.checkflag(membermoniker, flag)` | SQL helper: check one flag |
 | `engine.getflags(membermoniker)` | SQL helper: all flags for a member |
-| `engine.__notify_group` | Group definitions for recipient expansion |
+| `engine.__message_group` | Group definitions for recipient expansion (was `engine.__notify_group`; renamed in Phase 7 [2026-07-22]) |
 
 ## Core architecture
 
@@ -197,7 +197,8 @@ group_exists(args, group_name: str, **kwargs) -> bool | None
 ```
 
 Validate group name format and check existence in
-`engine.__notify_group`. Same rules as `moniker_exists` but with a
+`engine.__message_group` (renamed from `engine.__notify_group` in
+Phase 7 [2026-07-22]). Same rules as `moniker_exists` but with a
 100-character limit instead of 50.
 
 ```python
@@ -227,8 +228,9 @@ members = member.get_group_members(args, "all", pool=pool)
 # Returns: flattened unique list of every member under those groups
 ```
 
-See `handbook/specs/NOTIFY_MESSAGING.md` (the original messaging-system
-spec) for the historical context; the live API surface is what is
+See `handbook/specs/messaging.md` (the post-Phase 7 messaging
+spec, replacing the deleted `NOTIFY_MESSAGING.md`) for the
+historical context; the live API surface is what is
 documented here.
 
 ### Security notes
@@ -314,12 +316,13 @@ code lives in `bed/` and is outside this repo.
 
 ## Tests
 
-The historical notify-era recipient-validation tests live under
-`py/tests/`; the relevant files are:
+Recipient-validation and group-resolution tests live under
+`py/tests/`; the relevant files are the post-Phase 7 message
+tests (the notify-era files were deleted in Phase 7 [2026-07-22]):
 
 ```bash
-pytest bbsengine6/py/tests/test_notify_message_demo_recipient_validation.py -v
-pytest bbsengine6/py/tests/test_group_recipient_resolution.py -v
+pytest bbsengine6/py/tests/test_message_phase1_gaps.py -v   # remove_from_group, get_blocked, get_urgent, expunge, etc.
+pytest bbsengine6/py/tests/test_message_channel.py -v       # group resolution, @group/@everyone expansion
 ```
 
 These cover moniker and group validation, recursive expansion,
