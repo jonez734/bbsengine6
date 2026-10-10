@@ -1,5 +1,21 @@
 # bbsengine6.io Specification
 
+> **Pre-Phase-7/11 snapshot [2026-06-04].** This file is the
+> in-package SPEC for `bbsengine6.io` as of 2026-06-04, before
+> the Phase 7 notify deletion, the Phase 11 layered message
+> package extraction, and the 2026-09 router rewrite. The
+> current-day references are:
+> - `handbook/specs/util.md` (the consolidated util spec)
+> - The 2026-09-04 to 2026-09-06 io sink refactor (the live
+>   `bbsengine6.io.sink` protocol, `set_io_sink`/`reset_io_sink`
+>   contextvar API, `bbsengine6.io.echo_render` and
+>   `mci.parse`/`mci.render`).
+> - `TODO-BOTTOMBAR.md` for the in-flight `echo{stream:"bottombar"}`
+>   wire-push work.
+>
+> This file is preserved as a historical reference for the
+> pre-Phase-7 module layout.
+
 ## Overview
 
 `bbsengine6.io` is the terminal I/O module for bbsengine6. It provides rich terminal output with ANSI escape codes, input handling, color palettes, and terminal utilities.

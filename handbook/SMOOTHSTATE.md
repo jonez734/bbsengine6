@@ -1,5 +1,18 @@
 # Smoothstate: AJAX Page Transitions
 
+> **Pre-router-rewrite snapshot [2026-04-02].** This file is a
+> 2026-Q2 smoothstate integration design. The handbook routing
+> has been rewritten twice since (2026-09-07 `handbook.php`
+> eradication, 2026-09-16 `serve-md` move to
+> `engine/serve-md.php`, 2026-10-02 router canonicalization
+> fix, 2026-10-03 `env()` REDIRECT_<key> walk). The live
+> handbook router is in `handbook/ROUTER.md`; this file is
+> preserved as a historical record of the 2026-Q2
+> smoothstate integration.
+>
+> The "✅ Currently working in asimov" status note in
+> `handbook/index.md` is sufficient for current state.
+
 ## Overview
 
 Smoothstate.js is a jQuery plugin that creates smooth CSS-based page transitions. Instead of hard page reloads with white flashes, users experience fade-in/fade-out animations while content loads via AJAX.

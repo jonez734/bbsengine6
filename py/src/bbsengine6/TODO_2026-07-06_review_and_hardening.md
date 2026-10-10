@@ -1,5 +1,12 @@
 # bbsengine6 robustness and transactional hardening (2026-07-06)
 
+> **Closed audit [2026-07-07].** This file is the audit record for the
+> 2026-07-06 robustness review. The work it describes landed; this
+> document is preserved as a historical record. Superseded by
+> `ROBUSTNESS_REVIEW.md` (the larger Phase 0-5 audit) and the live
+> test suite. Future robustness work should add new files, not amend
+> this one.
+
 ## Status: COMPLETE (both passes)
 
 This TODO consolidates two review passes on the bbsengine6 codebase

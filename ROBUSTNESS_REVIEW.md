@@ -1,5 +1,17 @@
 # bbsengine6 Robustness Review
 
+> **Closed audit [2026-08-02].** This file is the audit record for the
+> 2026 Phase 0-5 robustness pass. The work it describes landed; this
+> document is preserved as a historical record. Superseded for active
+> planning by:
+> - `TODO-message-migration.md` (Phases 7-11 complete [2026-09-01])
+> - `TODO_BBSENGINE6_CHANNEL.md` (9-phase rollout complete [2026-09-05])
+> - `TODO_zoid6_role.md` (active follow-ups)
+> - `TODO_RLS.md` (deferred RLS work)
+> - The live test suite (120/120 pass as of 2026-08-02).
+>
+> Future audits should add new files, not amend this one.
+
 This document captures the robustness audit and remediation of `bbsengine6/`,
 the Python + PHP BBS engine that powers `bbsengine.org`. The audit and the
 fixes were split into five phases (plus a regression-test phase), with
