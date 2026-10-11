@@ -27,7 +27,7 @@ material:
 
 The live path under
 `/srv/www/vhosts/zoidtechnologies.com/html/engine/` is the **current
-canonical path** — the WSOD fix, the directory-listing hardening,
+canonical path** -- the WSOD fix, the directory-listing hardening,
 and the `make engine` deploy target all serve from there. The other
 path is the historical location; both are documented here for
 operators digging through older issues.
@@ -60,10 +60,10 @@ cd /home/opencode/data/work/zoid6/sites/www && make prod
 
 The `engine` target chains three steps:
 
-1. `stage` — copies `php/`, `skin/`, `js/`, `smarty/` into the
+1. `stage` -- copies `php/`, `skin/`, `js/`, `smarty/` into the
    staging directory `/srv/www/bbsengine6/`.
-2. `deploy` — rsyncs staging to production.
-3. `deploy-router` — copies `engine/router.php` to the web-accessible
+2. `deploy` -- rsyncs staging to production.
+3. `deploy-router` -- copies `engine/router.php` to the web-accessible
    `/engine/` directory under the live docroot.
 
 ## URL structure
@@ -73,15 +73,15 @@ https://zoidtechnologies.com/
 ├── engine/ (web-accessible PHP from bbsengine6)
 │   ├── router.php              (router entry point)
 │   ├── login.php  logout.php  join.php
-├── achilles/                   (static site — has own code)
-├── empyre/                     (static site — has own code)
-├── murdermotel/                (static site — has own code)
+├── achilles/                   (static site -- has own code)
+├── empyre/                     (static site -- has own code)
+├── murdermotel/                (static site -- has own code)
 └── [clean URLs]                → /engine/router.php
 ```
 
 The static-site prefixes (`/achilles/`, `/empyre/`,
 `/murdermotel/`) must be matched by their own directories and
-**processed before** the router rewrite — they have their own code
+**processed before** the router rewrite -- they have their own code
 and should never reach the router.
 
 ## htaccess rules (in `www/.htaccess`)
@@ -96,7 +96,7 @@ RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^([a-zA-Z0-9_/-]+)$ /engine/router.php?mode=browse&uri=$1 [last,qsappend]
 
-# Teos routes (legacy — still works for /teos/ URLs)
+# Teos routes (legacy -- still works for /teos/ URLs)
 RewriteRule ^teos/(.+)$ php/teos.php?path=$1 [last,QSA]
 ```
 
@@ -109,14 +109,14 @@ Apache from re-routing real files and directories.
 1. Apache checks if the request matches a static file or directory.
 2. If not, it routes to `/engine/router.php?mode=browse&uri=…`.
 3. The router walks handlers in order:
-   - **index** — root `/` or empty URI (renders `TEOSDIR/index.php`
+   - **index** -- root `/` or empty URI (renders `TEOSDIR/index.php`
      or `TEOSDIR/index.md`); pattern `^/?$`.
-   - **blurb** — `engine.__blurb` table (database-backed content);
+   - **blurb** -- `engine.__blurb` table (database-backed content);
      pattern `[A-Za-z0-9_][A-Za-z0-9_./-]*` (hierarchical
      dot-path shape).
-   - **folder** — `TEOSDIR` (default `/srv/www/zoid6/teos/`) for
+   - **folder** -- `TEOSDIR` (default `/srv/www/zoid6/teos/`) for
      directories; no pattern (filesystem probe decides).
-   - **markdown** — `TEOSDIR` for `.md` files; pattern
+   - **markdown** -- `TEOSDIR` for `.md` files; pattern
      `[A-Za-z0-9_][A-Za-z0-9_./-]*` (same shape as blurb, no
      trailing slash). Single-pass probe: the HTTP entry-point
      strips a trailing `.md` once at the top of the script
@@ -124,14 +124,14 @@ Apache from re-routing real files and directories.
      only needs the bare `$reluri` probe; the previous
      `$reluri . '.md'` branch was dead code. The pattern
      deliberately has no `.md` suffix because the URI is
-     already post-strip when the dispatch loop matches it —
+     already post-strip when the dispatch loop matches it --
      see the inline comment at `router_gethandlers()`
      (engine/router.php) for the contrast with the `page`
      handler.
-   - **page** — Smarty `.tmpl` under `DOCUMENTROOT/skin/tmpl/`
+   - **page** -- Smarty `.tmpl` under `DOCUMENTROOT/skin/tmpl/`
      (e.g. `/contact-us` → `contact-us.tmpl`); two-pass probe
      (`<slug>.tmpl` then `<slug>` as-is); pattern
-     `[a-z][a-z0-9-]*` (narrowest — bare lowercase slug).
+     `[a-z][a-z0-9-]*` (narrowest -- bare lowercase slug).
      Two-pass is required here because `.tmpl` is NOT
      stripped at the entry-point (htaccess rewrites bare
      slugs into the router with no extension, so the
@@ -151,7 +151,7 @@ Apache from re-routing real files and directories.
    `\bbsengine6\page\error($msg, 404)` (which renders styled
    chrome via `displaypage()`), sets `http_response_code(404)`,
    and returns `ROUTER_RENDERED`. `error` is intentionally NOT
-   in the registry — registering it would fire it twice on a
+   in the registry -- registering it would fire it twice on a
    miss. The post-loop fallback is the single point of truth
    for 404s.
 
@@ -159,13 +159,13 @@ Apache from re-routing real files and directories.
 
 Handlers return either:
 
-- A non-empty string — emitted as the response body. The router
+- A non-empty string -- emitted as the response body. The router
   stops walking handlers.
-- `ROUTER_NEXT` — the router continues to the next handler.
-- `ROUTER_RENDERED` — the handler rendered via `displaypage()`
+- `ROUTER_NEXT` -- the router continues to the next handler.
+- `ROUTER_RENDERED` -- the handler rendered via `displaypage()`
   and the body is already on stdout; the dispatcher returns an
   empty string so the HTTP entry-point emits nothing more.
-- `null` / `false` — the router continues to the next handler
+- `null` / `false` -- the router continues to the next handler
   (treated identically to `ROUTER_NEXT`; preserved for callers
   that don't know about the sentinel).
 
@@ -228,16 +228,16 @@ redirect helper (replaces the deprecated bare `header()` redirect).
 
 ### Security (post Phase 3)
 
-- **Path traversal prevention** — the router validates all
+- **Path traversal prevention** -- the router validates all
   user-supplied paths through `router_safe_path_web()` (a
   thin wrapper around `\bbsengine6\util\safe_path_web()` that
   no-ops to `false` if the helper isn't loaded) before
   filesystem access. A traversal attempt returns 404.
-- **Cookie domain** — uses `\config\SESSIONCOOKIEDOMAIN` instead of
+- **Cookie domain** -- uses `\config\SESSIONCOOKIEDOMAIN` instead of
   hardcoded values.
-- **Credits validation** — non-SYSOP users cannot set the credits
+- **Credits validation** -- non-SYSOP users cannot set the credits
   field; it always defaults to 42.
-- **Session safety** — null checks on session variables in logout;
+- **Session safety** -- null checks on session variables in logout;
   logout requires a CSRF token and calls `session_destroy()`
   (Phase 3 finding 3.11).
 
@@ -251,7 +251,7 @@ fixes.
 ### WSOD on `/teos/rec/` (and similar)
 
 **Symptom.** `https://zoidtechnologies.com/teos/rec/` returned a
-WSOD (white screen of death — empty response body). Other paths
+WSOD (white screen of death -- empty response body). Other paths
 (`/teos/rec/rec/arts/`) also returned empty bodies.
 
 **Root causes.** Five independent bugs:
@@ -259,7 +259,7 @@ WSOD (white screen of death — empty response body). Other paths
 1. `router_displayDirectoryListing` skipped subdirectories
    (`continue`d on `is_file($fullpath)`). The `rec/` directory
    contains only `arts/` (a subdirectory), so the listing was empty
-   — and an empty string in the response body is a WSOD.
+   -- and an empty string in the response body is a WSOD.
 2. `router_displayDirectoryListing` called `safe_path_web()` with
    an absolute path. `safe_path_web()` rejects absolute paths in
    components (a security feature). The first call inside
@@ -268,7 +268,7 @@ WSOD (white screen of death — empty response body). Other paths
    `false`, the directory listing returned `null`, and the router
    emitted an empty string.
 3. `router_handleError()` returned `null` when no handler matched.
-   The HTTP layer echoed nothing — a 404 must be returned instead.
+   The HTTP layer echoed nothing -- a 404 must be returned instead.
 4. `TEOSURL` was defined early as `""` at the top of `router.php`,
    before the HTTP block tried to redefine it to `"/teos"`. The
    `if (!defined)` guard made the override a no-op. Directory
@@ -307,12 +307,12 @@ WSOD (white screen of death — empty response body). Other paths
 
 **Regression tests** (`test_zoidtechnologies_comp.py`):
 
-- `test_rec_index`, `test_rec_arts`, `test_rec_arts_magic` — rec
+- `test_rec_index`, `test_rec_arts`, `test_rec_arts_magic` -- rec
   blurb directory pages are non-empty (not WSOD).
-- `test_nonexistent_404` — bogus paths (`rec/rec/arts`,
+- `test_nonexistent_404` -- bogus paths (`rec/rec/arts`,
   `rec/arts/void`, `top/banana`, `rec/rec/rec`) return a non-empty
   response body.
-- `test_rec_all_pages_nonempty` — every rec blurb subdirectory
+- `test_rec_all_pages_nonempty` -- every rec blurb subdirectory
   renders content.
 
 ### `router_handleError` double-body and the `ROUTER_RENDERED` sentinel (2026-09-19)
@@ -348,14 +348,14 @@ was implicit and easy to break.
 Handlers that render via `displaypage()` now return
 `ROUTER_RENDERED`; the dispatch loop maps it to `''` and
 short-circuits the chain. Removed `ROUTER_STOP` (no caller
-returned it). Removed `error` from the registry — the
+returned it). Removed `error` from the registry -- the
 post-loop fallback is the single source of truth for 404s.
 
 **Regression tests** (`php/test_router.php`):
 
-- `Test 2` — `ROUTER_RENDERED` constant is defined.
-- `Test 3b` — `error` is not in the registry.
-- `Test 9` — `router()` returns `''` for a non-existent URI;
+- `Test 2` -- `ROUTER_RENDERED` constant is defined.
+- `Test 3b` -- `error` is not in the registry.
+- `Test 9` -- `router()` returns `''` for a non-existent URI;
   stdout contains exactly one styled error (one `<title>`
   tag), not the pre-fix double-chrome shape.
 
@@ -387,10 +387,10 @@ handler dropped it.
 
 **Regression tests** (`php/test_router.php`):
 
-- `Test 6a` — handler body MUST NOT contain a `'$uri . .md'`
+- `Test 6a` -- handler body MUST NOT contain a `'$uri . .md'`
   probe (regression guard against re-introducing the dead
   branch).
-- `Test 6b` — HTTP entry-point MUST strip trailing `.md`
+- `Test 6b` -- HTTP entry-point MUST strip trailing `.md`
   before dispatch (the contract that makes the dead-code
   removal safe).
 
@@ -479,7 +479,7 @@ router's `rawmarkdown` handler (registered with pattern `/\.md$/`)
 dispatches via `\bbsengine6\markdown\serveRawMarkdown($teosdir,
 $reluri)`. The vhost's `SetEnv TEOSDIR` (`/srv/www/vhosts/
 www.bbsengine.org/html/handbook/<v>/`) makes the resolver probe
-the right file under the handbook home — no separate entry-point
+the right file under the handbook home -- no separate entry-point
 shim needed. The legacy `engine/serve-md.php` shim and its
 `handbook_resolve()` containment are gone; the deployable file
 inventory now drops to `router.php, serve-tmpl.php, vhostconfig.php,
@@ -488,11 +488,11 @@ join.php, login.php, logout.php, direct.php, standalone.php` (see
 
 **Regression tests:**
 
-  - `php/test_router.php` Tests 6f / 6g / 6h — pin the tightened
+  - `php/test_router.php` Tests 6f / 6g / 6h -- pin the tightened
     `markdown` pattern, the `rawmarkdown` registry entry, and the
     handler body shape (env("TEOSDIR"), serveRawMarkdown(),
     ROUTER_RENDERED).
-  - `php/test_router_handleraemarkdown.php` (new) — pins the
+  - `php/test_router_handleraemarkdown.php` (new) -- pins the
     canonical library in isolation (hit/miss/traversal/.md-only/
     file-only/nested).
 
@@ -528,7 +528,7 @@ Direct investigation: see `CHANGELOG.md` "[Unreleased]" entry
    entry-point's `else echo $router_result` then echoed the
    literal string `"ROUTER_RENDERED"` after the chrome. The
    in-loop mapping (`if ($result === ROUTER_RENDERED) return '';`)
-   was correct — the post-loop fallback simply never applied it.
+   was correct -- the post-loop fallback simply never applied it.
 
 **Fix.**
 
@@ -553,17 +553,17 @@ Direct investigation: see `CHANGELOG.md` "[Unreleased]" entry
 
 **Regression tests** (`php/test_router.php`):
 
-- `Test 3f` — handbook URI prefix-strip is unconditional
+- `Test 3f` -- handbook URI prefix-strip is unconditional
   (no `!isset($_GET['uri'])` gate in code).
-- `Test 3g` — dispatch loop post-loop fallback normalizes
+- `Test 3g` -- dispatch loop post-loop fallback normalizes
   `ROUTER_RENDERED` to `''`.
 
 **Commits:**
 
-- `793e2ec` — `fix(engine/router): handbook version root 404 + literal ROUTER_RENDERED echo`
-- `2389d04` — `test(router): pin handbook prefix-strip + ROUTER_RENDERED normalization`
-- `7d12ff5` — `fix(www/org/htaccess-prod): explicit bare-handbook-version rule`
-- `33dba63` — `docs(changelog): capture 2026-10-02 handbook/6/ fix in Unreleased`
+- `793e2ec` -- `fix(engine/router): handbook version root 404 + literal ROUTER_RENDERED echo`
+- `2389d04` -- `test(router): pin handbook prefix-strip + ROUTER_RENDERED normalization`
+- `7d12ff5` -- `fix(www/org/htaccess-prod): explicit bare-handbook-version rule`
+- `33dba63` -- `docs(changelog): capture 2026-10-02 handbook/6/ fix in Unreleased`
 
 ### "You are here" breadcrumb root label rendered `NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` on every teos rewritten URL (2026-10-03)
 
@@ -597,7 +597,7 @@ land. `TEOSURL` and `TEOSDIR` rendered correctly only because
 had no constant fallback, so it landed on the sentinel. The
 handbook vhost never showed the bug because
 `bbsengine6/www/org/htaccess-prod` sits at the docroot with
-`RewriteBase /`, so it governs `/engine/` too — both `TEOSLABEL`
+`RewriteBase /`, so it governs `/engine/` too -- both `TEOSLABEL`
 and `REDIRECT_TEOSLABEL` arrive in the worker's env.
 
 **Fix.**
@@ -642,7 +642,7 @@ harness reports `env(TEOSLABEL) = ''` on every teos rewritten
 request; after, 42/42 pass.
 
 **Commits:**
-- `638c4ec` — `fix(php/util): env() walks REDIRECT_<key> so vhost .htaccess SetEnv survives the /engine/ rewrite`
+- `638c4ec` -- `fix(php/util): env() walks REDIRECT_<key> so vhost .htaccess SetEnv survives the /engine/ rewrite`
 - (mirrored at meta `e541c93e`)
 - (regression guard at `25dd374` in the teos submodule)
 
@@ -692,15 +692,15 @@ curl -sS -w '%{http_code}\n' -o /tmp/hb6.html https://bbsengine.org/handbook/6/
 grep -q ROUTER_RENDERED /tmp/hb6.html && echo 'FAIL: literal ROUTER_RENDERED in body' || echo 'ok: no literal'
 ```
 
-If any of these return empty bodies, the router is regressed —
+If any of these return empty bodies, the router is regressed --
 re-run the regression tests in `test_zoidtechnologies_comp.py`
 (meta-repo root).
 
 ## See also
 
-- [`../ROBUSTNESS_REVIEW.md`](../ROBUSTNESS_REVIEW.md) — Phase 3
+- [`../ROBUSTNESS_REVIEW.md`](../ROBUSTNESS_REVIEW.md) -- Phase 3
   covers PHP web layer hardening (cookie attributes, CSRF, safe
   paths, log redaction). Phase 5 has the regression test list.
-- [`../SPEC.md`](../SPEC.md#4-php-web-layer) — engine/router.php's
+- [`../SPEC.md`](../SPEC.md#4-php-web-layer) -- engine/router.php's
   place in the PHP web layer.
-- [./SECURITY.md](./SECURITY.md) — security overview.
+- [./SECURITY.md](./SECURITY.md) -- security overview.
