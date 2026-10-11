@@ -95,10 +95,10 @@ class index
 
     $docs = [];
     $docs[] = ["title" => "handbook", "url" => \config\HANDBOOKURI, "updatedepoch" => filemtime(\config\HANDBOOKDIR)];
-{*    $docs[] = ["title" => "API documentation", "url" => \config\APIDOCSURI, "updatedepoch" => filemtime(\config\APIDOCSDIR)]; *}
+/*    $docs[] = ["title" => "API documentation", "url" => \config\APIDOCSURI, "updatedepoch" => filemtime(\config\APIDOCSDIR)]; */
     $docs[] = ["title" => "changelog", "url" => \config\CURRENTHANDBOOKURI . "CHANGELOG.txt", "updatedepoch" => filemtime(\config\CHANGELOG)];
     $docs[] = ["title" => "readme", "url" => \config\CURRENTHANDBOOKURI . "README.md", "updatedepoch" => filemtime(\config\README)];
-{*    $docs[] = ["title" => "install", "url" => \config\CURRENTHANDBOOKURI. "INSTALL.md", "updatedepoch" => filemtime(\config\INSTALL)]; *}
+/*    $docs[] = ["title" => "install", "url" => \config\CURRENTHANDBOOKURI. "INSTALL.md", "updatedepoch" => filemtime(\config\INSTALL)]; */
     $docs[] = ["title" => "releasenotes", "url" => \config\CURRENTHANDBOOKURI. "/current/RELEASENOTES.md", "updatedepoch" => filemtime(\config\RELEASENOTES)];
 
     usort($docs, [$this, "docsort"]);
