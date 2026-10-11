@@ -281,3 +281,201 @@ def test_read_only_transaction_blocks_writes(db_args, member_factory, now):
             cur.execute("ROLLBACK")
     finally:
         pool.putconn(conn)
+
+
+# ---- Dovecot checkpassword entry-point tests --------------------------------
+#
+# These tests exercise bbsengine6.auth.dovecot.main() directly, with
+# monkeypatched env (AUTH_USER) and stdin (the checkpassword protocol
+# byte stream). They do NOT need a DB for the protocol-level tests
+# (missing-user / missing-password / db-error); the success / wrong-
+# password tests require the DB and a fixture member.
+
+
+def _run_dovecot_with_input(monkeypatch, auth_user: str, stdin_bytes: bytes):
+    """Invoke bbsengine6.auth.dovecot.main() with controlled env + stdin.
+
+    Returns (exit_code, captured_stdout).
+    """
+    import io
+    from bbsengine6.auth import dovecot
+
+    if auth_user:
+        monkeypatch.setenv("AUTH_USER", auth_user)
+    else:
+        monkeypatch.delenv("AUTH_USER", raising=False)
+    # Build a stdin that has both a .read() (for sys.stdin.read used by
+    # the Python text wrapper) and a .buffer.read() (used by cli._read_checkpassword_stdin).
+    fake_stdin = io.TextIOWrapper(io.BytesIO(stdin_bytes), encoding="utf-8")
+    monkeypatch.setattr(sys, "stdin", fake_stdin)
+    stdout = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", stdout)
+    rc = dovecot.main([])
+    return rc, stdout.getvalue()
+
+
+def test_dovecot_missing_auth_user_returns_1(monkeypatch):
+    rc, _ = _run_dovecot_with_input(monkeypatch, auth_user="",
+                                    stdin_bytes=b"pw\0user\0\n")
+    assert rc == 1
+
+
+def test_dovecot_missing_password_returns_1(monkeypatch):
+    rc, _ = _run_dovecot_with_input(monkeypatch, auth_user="alice",
+                                    stdin_bytes=b"")
+    assert rc == 1
+
+
+def test_dovecot_wrong_password_returns_1(monkeypatch):
+    """Stub the verifier so we don't need a real pool here."""
+    from unittest.mock import patch
+    with patch("bbsengine6.auth.dovecot.verify_member") as mock_verify:
+        mock_verify.return_value = (False, "wrong-password")
+        rc, stdout = _run_dovecot_with_input(
+            monkeypatch, auth_user="alice",
+            stdin_bytes=b"wrong-pw\0alice\0\n",
+        )
+    assert rc == 1
+    assert stdout == ""
+
+
+def test_dovecot_success_prints_userdb_lines(monkeypatch):
+    from unittest.mock import patch
+    with patch("bbsengine6.auth.dovecot.verify_member") as mock_verify:
+        mock_verify.return_value = (True, "ok")
+        rc, stdout = _run_dovecot_with_input(
+            monkeypatch, auth_user="alice",
+            stdin_bytes=b"correct-pw\0alice\0\n",
+        )
+    assert rc == 0
+    # Userdb lines should be present (defaults).
+    assert "home=" in stdout
+    assert "mail=" in stdout
+    assert "userdb_home=" in stdout
+    assert "userdb_mail=" in stdout
+
+
+def test_dovecot_uses_auth_user_not_stdin(monkeypatch):
+    """The userinfo field in stdin is ignored; the username comes from
+    AUTH_USER. A malicious caller cannot substitute a different user
+    by tampering with stdin.
+    """
+    from unittest.mock import patch
+    with patch("bbsengine6.auth.dovecot.verify_member") as mock_verify:
+        mock_verify.return_value = (False, "wrong-password")
+        # stdin says 'pw\0mallory\0' (pretending to be mallory), but
+        # AUTH_USER=alice. The verifier must be called with 'alice'.
+        _run_dovecot_with_input(
+            monkeypatch, auth_user="alice",
+            stdin_bytes=b"pw\0mallory\0\n",
+        )
+    # verify_member was called with user=alice, NOT mallory.
+    args, kwargs = mock_verify.call_args
+    assert args[0] == "alice"
+
+
+# ---- PAM helper entry-point tests -------------------------------------------
+
+
+def _run_pam_with_env(monkeypatch, env: dict, stdin_bytes: bytes = b""):
+    """Invoke bbsengine6.auth.pam.main() with controlled env + stdin."""
+    import io
+    from bbsengine6.auth import pam
+
+    # Wipe all PAM_ and AUTH_ vars first so monkeypatch can set cleanly.
+    for key in list(os.environ):
+        if key.startswith("PAM_") or key.startswith("AUTH_"):
+            monkeypatch.delenv(key, raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    if stdin_bytes:
+        monkeypatch.setattr(sys, "stdin", io.BytesIO(stdin_bytes))
+    rc = pam.main([])
+    return rc
+
+
+def test_pam_account_type_passes_through(monkeypatch):
+    """PAM_TYPE=account: exit 0 with no DB call."""
+    from unittest.mock import patch
+    with patch("bbsengine6.auth.pam.verify_member") as mock_verify:
+        rc = _run_pam_with_env(monkeypatch, env={"PAM_TYPE": "account",
+                                                  "PAM_USER": "alice"})
+    assert rc == 0
+    mock_verify.assert_not_called()
+
+
+def test_pam_missing_user_returns_1(monkeypatch):
+    rc = _run_pam_with_env(monkeypatch, env={"PAM_TYPE": "auth"})
+    assert rc == 1
+
+
+def test_pam_missing_authtok_returns_1(monkeypatch):
+    rc = _run_pam_with_env(monkeypatch,
+                            env={"PAM_TYPE": "auth", "PAM_USER": "alice"})
+    assert rc == 1
+
+
+def test_pam_scrubs_pam_authtok_from_env(monkeypatch):
+    """After main() returns, PAM_AUTHTOK must be gone from os.environ."""
+    from unittest.mock import patch
+    with patch("bbsengine6.auth.pam.verify_member") as mock_verify:
+        mock_verify.return_value = (True, "ok")
+        rc = _run_pam_with_env(
+            monkeypatch,
+            env={"PAM_TYPE": "auth", "PAM_USER": "alice",
+                 "PAM_AUTHTOK": "secret-xyz-12345"},
+        )
+    assert rc == 0
+    assert "PAM_AUTHTOK" not in os.environ
+
+
+def test_pam_never_logs_password(monkeypatch, caplog):
+    """caplog captures stderr; assert the password never appears."""
+    import logging
+    from unittest.mock import patch
+    with patch("bbsengine6.auth.pam.verify_member") as mock_verify:
+        mock_verify.return_value = (True, "ok")
+        with caplog.at_level(logging.INFO, logger="bbsengine6.auth.pam"):
+            _run_pam_with_env(
+                monkeypatch,
+                env={"PAM_TYPE": "auth", "PAM_USER": "alice",
+                     "PAM_AUTHTOK": "supersecret-pw-do-not-log"},
+            )
+    captured = caplog.text
+    assert "supersecret-pw-do-not-log" not in captured
+
+
+def test_pam_ok_returns_0(monkeypatch):
+    from unittest.mock import patch
+    with patch("bbsengine6.auth.pam.verify_member") as mock_verify:
+        mock_verify.return_value = (True, "ok")
+        rc = _run_pam_with_env(
+            monkeypatch,
+            env={"PAM_TYPE": "auth", "PAM_USER": "alice",
+                 "PAM_AUTHTOK": "pw"},
+        )
+    assert rc == 0
+
+
+def test_pam_wrong_password_returns_1(monkeypatch):
+    from unittest.mock import patch
+    with patch("bbsengine6.auth.pam.verify_member") as mock_verify:
+        mock_verify.return_value = (False, "wrong-password")
+        rc = _run_pam_with_env(
+            monkeypatch,
+            env={"PAM_TYPE": "auth", "PAM_USER": "alice",
+                 "PAM_AUTHTOK": "wrong"},
+        )
+    assert rc == 1
+
+
+def test_pam_db_error_returns_2(monkeypatch):
+    from unittest.mock import patch
+    with patch("bbsengine6.auth.pam.verify_member") as mock_verify:
+        mock_verify.side_effect = RuntimeError("simulated db failure")
+        rc = _run_pam_with_env(
+            monkeypatch,
+            env={"PAM_TYPE": "auth", "PAM_USER": "alice",
+                 "PAM_AUTHTOK": "pw"},
+        )
+    assert rc == 2
