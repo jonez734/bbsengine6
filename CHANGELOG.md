@@ -1,5 +1,54 @@
 ## [Unreleased]
 
+### feat(auth): BBS auth backend for IMAP and PAM (Dovecot on merlin, Cyrus on falcon)
+
+Adds the canonical BBS auth backend at `bbsengine6.auth`:
+
+- `bbsengine6.auth.verify.verify_member(username, password)` —
+  read-only BBS auth gate. Dispatches on `@` in the username:
+  per-user path (`engine.__member.password`, bcrypt) or
+  per-mailbox path (`postoffice.mailbox_password`, bcrypt).
+  Both paths check `engine.__member.approved = true` and
+  `engine.__member.accountexpires IS NULL OR > now()`.
+  Wraps the read in `BEGIN READ ONLY` so a future bug cannot
+  accidentally write.
+- `bbsengine6-auth-checkpassword` — the Dovecot checkpassword
+  protocol entry point. Reads stdin (Dovecot checkpassword
+  format) and `AUTH_USER` env; prints the userdb lines on success.
+- `bbsengine6-auth-pam` — the `pam_exec.so` helper. Reads
+  `PAM_USER` + `PAM_AUTHTOK`, scrubs the env var immediately,
+  delegates to `verify_member`. Documents the env-var exposure
+  model in the README.
+
+Schema:
+- `sql/008_add_member_accountexpires.sql` — adds the
+  `engine.__member.accountexpires TIMESTAMPTZ NULL` column with
+  a partial index on the non-NULL tail.
+- `bbsengine6/py/src/bbsengine6/sql/member.sql` — mirrored into
+  the canonical schema for fresh builds.
+
+Deploy:
+- `bbsengine6/Makefile` adds `install-bbsengine6-auth-helper`,
+  `install-pam-bbsengine6-on-merlin`, and the
+  `install-bbsengine6-everything` umbrella. The new
+  `$(CYRUSHOST) = falcon` variable is the Cyrus counterpart to
+  the existing `$(ENGINEHOST) = merlin`. The install lands the
+  bbsengine6 wheel into `/opt/bbsengine6-auth-venv/` on both
+  hosts and symlinks the two entry points to `/usr/local/bin/`.
+
+Cross-references:
+- `bbsengine6/py/src/bbsengine6/auth/README.md` — developer
+  reference (dispatch, gate, security model, threat analysis).
+- `bbsengine6/handbook/specs/auth.md` — operator reference
+  (topology, install, env vars, auth flow, smoke tests, rollback).
+- `specs/MCFEELY_CYRUS_IMAP.md` — full design doc, all three
+  modes (auxprop-pam default + saslauthd Mode B + auxprop-sql Mode C).
+- `specs/MCFEELY_DOVECOT.md` — merlin-side auth path.
+- `specs/PLAN_IMAP_DATABASE_AUTH.md` — status note added 2026-10-11.
+- `config/CYRUS_SETUP.md`, `config/QUICK_DEPLOY.txt`,
+  `config/INSTALLATION_SUMMARY.txt` — operator-facing
+  cross-references added.
+
 ### fix(php/util): env() walks REDIRECT_<key> so vhost .htaccess SetEnv survives the /engine/ rewrite
 
 The "You are here" breadcrumb on `/<vhost>/<uri>/` pages rendered
