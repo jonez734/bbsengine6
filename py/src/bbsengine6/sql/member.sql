@@ -32,6 +32,18 @@
 --     (called by ``checkpassword`` on every login attempt)
 --   * Constraint: ``chk_member_password_bcrypt`` in
 --     ``manage_password_format.sql`` (rejects non-bcrypt writes)
+--
+-- engine.__member.accountexpires column (added 2026-10-11 with the
+-- BBS auth integration): an optional account-level expiry. NULL =
+-- never expires. Consulted by every BBS auth path:
+--   * bbsengine6.auth.verify_member (Dovecot checkpassword, per-user
+--     and per-mailbox dispatch)
+--   * bbsengine6.auth.pam (Cyrus auxprop-pam, SSH, sudo, future)
+--   * postoffice.sasl_password and postoffice.mailbox_password gates
+--     via JOIN (the mcfeely_authd saslauthd path)
+-- Partial index ``engine_member_accountexpires_idx`` keeps the
+-- now() > accountexpires check cheap as the table grows. Migration
+-- path for existing DBs: ``sql/008_add_member_accountexpires.sql``.
 
 
 create table if not exists engine.__member (
@@ -59,8 +71,16 @@ create table if not exists engine.__member (
   "ui" citext,
   "tz" citext,
   "attrs" jsonb,
-  "refcode" citext
+  "refcode" citext,
+  "accountexpires" timestamptz
 );
+
+comment on column engine.__member.accountexpires is
+  'Optional account-level expiry. NULL = never expires. Consulted by every BBS auth path: bbsengine6.auth.verify_member (Dovecot checkpassword), bbsengine6.auth.pam (Cyrus auxprop-pam, SSH, sudo, future), and indirectly by postoffice.sasl_password and postoffice.mailbox_password gates via JOIN.';
+
+create index if not exists engine_member_accountexpires_idx
+  on engine.__member (accountexpires)
+  where accountexpires is not null;
 
 grant select, update on engine.__member to web, term;
 grant all on engine.__member to sysop;
