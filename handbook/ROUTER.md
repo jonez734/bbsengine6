@@ -15,8 +15,6 @@ clean URLs to handler functions and falls through to the
 | **Current live path** | `/srv/www/vhosts/zoidtechnologies.com/html/engine/router.php` |
 | Legacy path (now incorrect) | `/srv/www/bbsengine6/php/router.php` |
 | Router URL (web) | `https://zoidtechnologies.com/engine/router.php` |
-| `TEOSFILEPATH` | `/srv/www/zoid6/teos/` (named constant; set to `""` to disable the `top.` ltree prefix) |
-| `TEOSLABELPREFIX` | `top` (named constant) |
 | `DOCROOT` | `/srv/www/vhosts/zoidtechnologies.com/html/` |
 
 **Note on deployment paths.** Two paths appear in the source
@@ -669,8 +667,6 @@ request; after, 42/42 pass.
 - [ ] Apache modules `mod_rewrite` and `mod_php` are enabled.
 - [ ] `/srv/www/vhosts/zoidtechnologies.com/html/engine/router.php`
       is the live file (post-deploy).
-- [ ] `TEOSFILEPATH` points at the directory that holds the on-disk
-      blurbs (`/srv/www/zoid6/teos/` by default).
 - [ ] Smarty can find the `folder.tmpl` template (ships with
       bbsengine6/skin/tmpl/ since 2026-09-17).
 - [ ] Regression tests pass: `pytest test_zoidtechnologies_comp.py` (lives at the meta-repo root) and the manual smoke list below.
