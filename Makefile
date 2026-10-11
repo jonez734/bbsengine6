@@ -301,3 +301,110 @@ deploy:
 
 deploy-tui: build
 	$(MAKE) -C py/src deploy-tui DEPLOY_EDITABLE=$(DEPLOY_EDITABLE) DEPLOY_UPGRADE=$(DEPLOY_UPGRADE) VERSION=$(PY_VERSION) VERSION_PREFIX=$(VERSION_PREFIX)
+
+###############################################################################
+# BBS auth install (Dovecot on merlin, Cyrus on falcon)
+#
+# Adds:
+#   - build-auth-wheel: build the bbsengine6 wheel into dist/ (the same
+#     wheel the deploy-tui path uses; auth-helper just installs it to a
+#     different location)
+#   - install-bbsengine6-auth-helper: rsync the wheel to $(ENGINEHOST)
+#     and $(CYRUSHOST), create /opt/bbsengine6-auth-venv/, pip install
+#     the wheel, symlink the two entry points to /usr/local/bin/
+#   - install-pam-bbsengine6-on-merlin: land /etc/pam.d/bbsengine6 on
+#     merlin (Dovecot's auth-system.conf.ext passdb consumes it)
+#   - install-bbsengine6-everything: umbrella that runs the above
+#
+# Hosts: $(ENGINEHOST) = merlin (Dovecot, default), $(CYRUSHOST) =
+# falcon (Cyrus, where the etc-postoffice bundle goes — see
+# install-bbsengine6-cyrus-on-falcon, which lives in the meta-repo
+# deploy chain, not here). Override on the command line:
+#   make install-bbsengine6-auth-helper CYRUSHOST=staging-cyrus
+###############################################################################
+
+# Cyrus lives on a different host than the Dovecot / BBS host. Used by
+# install-bbsengine6-auth-helper and install-bbsengine6-everything
+# to push the bbsengine6-auth-venv + symlinks to both.
+CYRUSHOST ?= falcon
+
+# Local wheel output directory for the auth-helper install. Reuses
+# $(OUTDIR) if set, else a per-PID temp dir to avoid clobbering the
+# operator's existing dist/ from a regular deploy-tui run.
+BBSENGINE6_AUTH_WHEEL_DIR ?= /tmp/bbsengine6-auth-$$
+BBSENGINE6_PY_DIR = $(CURDIR)/py
+PYTHON ?= python3
+
+# Build the bbsengine6 wheel into BBSENGINE6_AUTH_WHEEL_DIR. The
+# wheel is the same one the deploy-tui path produces; this target
+# just isolates the auth-helper install from a possibly-running
+# operator-venv deploy.
+build-auth-wheel:
+	@mkdir -p $(BBSENGINE6_AUTH_WHEEL_DIR)
+	@rm -f $(BBSENGINE6_AUTH_WHEEL_DIR)/*.whl
+	$(PYTHON) -m build --no-isolation --wheel --outdir $(BBSENGINE6_AUTH_WHEEL_DIR) $(BBSENGINE6_PY_DIR)
+	@echo "bbsengine6 wheel built into $(BBSENGINE6_AUTH_WHEEL_DIR)"
+
+# Per-host install of the bbsengine6-auth-venv. $(1) is the host
+# (merlin or falcon). The venv is created once with system-site-
+# packages off (so the venv is self-contained), the wheel is rsynced
+# to /tmp on the host, and pip install --upgrade runs from the
+# wheel. The two entry points (bbsengine6-auth-checkpassword,
+# bbsengine6-auth-pam) are symlinked into /usr/local/bin/ where the
+# Dovecot checkpassword args= path and the /etc/pam.d/bbsengine6
+# pam_exec.so rules reference them.
+define install_auth_helper_on
+	$(RSYNC) $(BBSENGINE6_AUTH_WHEEL_DIR)/bbsengine6-*.whl $(1):/tmp/bbsengine6-auth.whl
+	ssh $(1) 'sudo install -d -m 0755 /opt/bbsengine6-auth-venv && \
+	          sudo python3 -m venv /opt/bbsengine6-auth-venv && \
+	          sudo /opt/bbsengine6-auth-venv/bin/pip install --quiet --no-cache-dir --upgrade /tmp/bbsengine6-auth.whl && \
+	          sudo ln -sf /opt/bbsengine6-auth-venv/bin/bbsengine6-auth-checkpassword /usr/local/bin/bbsengine6-auth-checkpassword && \
+	          sudo ln -sf /opt/bbsengine6-auth-venv/bin/bbsengine6-auth-pam /usr/local/bin/bbsengine6-auth-pam && \
+	          sudo /opt/bbsengine6-auth-venv/bin/python -c "import bbsengine6.auth.verify; print(\"bbsengine6.auth.verify loaded OK\")" && \
+	          rm -f /tmp/bbsengine6-auth.whl'
+endef
+
+install-bbsengine6-auth-helper: build-auth-wheel
+	$(call install_auth_helper_on,$(ENGINEHOST))
+	$(call install_auth_helper_on,$(CYRUSHOST))
+	@echo "bbsengine6-auth-checkpassword + bbsengine6-auth-pam installed on $(ENGINEHOST) and $(CYRUSHOST)"
+	@rm -rf $(BBSENGINE6_AUTH_WHEEL_DIR)
+
+uninstall-bbsengine6-auth-helper:
+	ssh $(ENGINEHOST) 'sudo rm -f /usr/local/bin/bbsengine6-auth-checkpassword /usr/local/bin/bbsengine6-auth-pam && \
+	                    sudo rm -rf /opt/bbsengine6-auth-venv'
+	ssh $(CYRUSHOST)  'sudo rm -f /usr/local/bin/bbsengine6-auth-checkpassword /usr/local/bin/bbsengine6-auth-pam && \
+	                    sudo rm -rf /opt/bbsengine6-auth-venv'
+	@echo "bbsengine6-auth-* removed from $(ENGINEHOST) and $(CYRUSHOST)"
+
+# Install /etc/pam.d/bbsengine6 on merlin. The file is staged in
+# the meta-repo at etc-postoffice/pam.d-bbsengine6 (committed in
+# the meta-repo, not in bbsengine6) and rsynced here.
+install-pam-bbsengine6-on-merlin:
+	@if [ ! -f etc-postoffice/pam.d-bbsengine6 ]; then \
+		echo "ERROR: etc-postoffice/pam.d-bbsengine6 not found; commit Phase 5 first." >&2; \
+		exit 1; \
+	fi
+	$(RSYNC) etc-postoffice/pam.d-bbsengine6 $(ENGINEHOST):/tmp/pam.d-bbsengine6
+	ssh $(ENGINEHOST) 'sudo install -d -m 0755 /etc/pam.d && \
+	                    sudo install -m 0644 /tmp/pam.d-bbsengine6 /etc/pam.d/bbsengine6 && \
+	                    rm -f /tmp/pam.d-bbsengine6'
+	@echo "/etc/pam.d/bbsengine6 installed on $(ENGINEHOST)"
+
+uninstall-pam-bbsengine6-on-merlin:
+	ssh $(ENGINEHOST) 'sudo rm -f /etc/pam.d/bbsengine6'
+	@echo "/etc/pam.d/bbsengine6 removed from $(ENGINEHOST)"
+
+# Umbrella. Order is: build the wheel, install the venv on both
+# hosts, land the PAM service file on merlin. (Cyrus-side install
+# lives in the meta-repo deploy chain at the install-bbsengine6-
+# cyrus-on-falcon target; not duplicated here.)
+install-bbsengine6-everything: install-bbsengine6-auth-helper install-pam-bbsengine6-on-merlin
+	@echo ""
+	@echo "BBS auth install complete on $(ENGINEHOST) and $(CYRUSHOST)."
+	@echo "Test on merlin:  PAM_USER=alice PAM_AUTHTOK=<pw> /usr/local/bin/bbsengine6-auth-pam; echo \$$?"
+	@echo "Test on falcon:  ssh $(CYRUSHOST) systemctl restart cyrus-imapd && testsaslauthd -u alice -p <pw> -s imap"
+
+.PHONY: build-auth-wheel install-bbsengine6-auth-helper uninstall-bbsengine6-auth-helper \
+        install-pam-bbsengine6-on-merlin uninstall-pam-bbsengine6-on-merlin \
+        install-bbsengine6-everything
