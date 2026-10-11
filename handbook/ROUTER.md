@@ -654,7 +654,7 @@ request; after, 42/42 pass.
 |---|---|
 | 2026-10-03 | New `\bbsengine6\util\getenv_redirect(string $key, int $maxhops = 3)` walks `getenv($key)` -> `getenv('REDIRECT_'.$key)` -> `getenv('REDIRECT_REDIRECT_'.$key)` up to 3 hops, treating empty strings as missing. `\bbsengine6\util\env()` calls `getenv_redirect($key)` instead of `getenv($key)` so vhost .htaccess `SetEnv` values survive mod_rewrite's internal redirect from `/<uri>` to `/engine/router.php?uri=<uri>` (per-directory config is re-evaluated for `/engine/` and the vhost htaccess may not be in scope there). `\bbsengine6\util\vhost_label()` delegates its env tier to `env('TEOSLABEL')` so `bbsengine6\blurb\getlabel()` and `router_buildBreadcrumbs()` route through the same REDIRECT_ walk. Fixes the `NEEDINFO:TEOSLABEL.buildbreadcrumbs.100` root crumb on the teos vhost. Regression guard: `teos/www/test_htaccess_setenv_reaches_php.sh`. See "Recent fixes" above. |
 | 2026-10-02 | HTTP entry-point's handbook prefix-strip is now unconditional (REQUEST_URI is canonical; `$_GET['uri']` no longer gates the strip). Dispatch loop post-loop fallback normalizes `ROUTER_RENDERED` to `''` (mirror of the in-loop mapping). `www/org/htaccess-prod` adds an explicit `^handbook/(\d+)/?$` rule before the catch-all. Fixes `/handbook/<v>/` 404 and the literal `ROUTER_RENDERED` echo after styled 404 chrome. See "Recent fixes" above. |
-| 2026-09-19 | `pattern` attribute on handler registry entries (skip handler on URI regex miss); drop `error` from registry (single source of truth via post-loop fallback); `ROUTER_RENDERED` sentinel replaces the implicit empty-string-as-success contract; `ROUTER_STOP` retired; `teospath` → `$teosdir` typo fix in `router_handleMarkdown`; breadcrumb root `path` hardcoded to `'teos'` (matches `blurb.php::buildbreadcrumbs`); `router_safe_path_web()` wrapper extracted; `engine/serve-tmpl.php::servePage()` returns the new sentinel. |
+| 2026-09-19 | `pattern` attribute on handler registry entries (skip handler on URI regex miss); drop `error` from registry (single source of truth via post-loop fallback); `ROUTER_RENDERED` sentinel replaces the implicit empty-string-as-success contract; `ROUTER_STOP` retired; breadcrumb root `path` hardcoded to `'teos'` (matches `blurb.php::buildbreadcrumbs`); `router_safe_path_web()` wrapper extracted; `engine/serve-tmpl.php::servePage()` returns the new sentinel. |
 | 2026-09-19 | Dead `$reluri . '.md'` probe dropped from `router_handleMarkdown` (HTTP entry-point strips `.md` once at the top of the script, so the branch was unreachable); `router_handleIndex` returns `ROUTER_RENDERED` after `include($indexfile)` instead of the retired `ROUTER_STOP`; `php/test_router.php` Tests 6a/6b pin the new contract. |
 | 2026-07-29 | Directory listing skips editor backup / junk files (`router_isIgnoredEntry`) and dedupes case-variant filenames (`router_dedupeItems`). Fixes the `/rec/arts/tv/mash/` regression. |
 | 2026-06-15 | Security fixes + modernization (path traversal, functional style, namespace imports, redirect helper). |
@@ -673,7 +673,7 @@ request; after, 42/42 pass.
       blurbs (`/srv/www/zoid6/teos/` by default).
 - [ ] Smarty can find the `folder.tmpl` template (ships with
       bbsengine6/skin/tmpl/ since 2026-09-17).
-- [ ] Regression tests pass: `php test_zoidtechnologies_comp.php` (in the `teos` repo) and the manual smoke list below.
+- [ ] Regression tests pass: `pytest test_zoidtechnologies_comp.py` (lives at the meta-repo root) and the manual smoke list below.
 
 ## Manual smoke test
 
@@ -697,7 +697,8 @@ grep -q ROUTER_RENDERED /tmp/hb6.html && echo 'FAIL: literal ROUTER_RENDERED in 
 ```
 
 If any of these return empty bodies, the router is regressed —
-re-run the regression tests in `test_zoidtechnologies_comp.py`.
+re-run the regression tests in `test_zoidtechnologies_comp.py`
+(meta-repo root).
 
 ## See also
 
