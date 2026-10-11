@@ -216,10 +216,11 @@ The `/engine/` directory holds web-accessible PHP modules:
 
 ```
 engine/
-├── router.php     # Handler-registry router
-├── login.php      # Member authentication
-├── logout.php     # Member logout
-└── join.php       # Member registration
+├── router.php       # Handler-registry router
+├── vhostconfig.php  # Vhost config resolver (loaded by router.php; resolves config.php under FPM)
+├── login.php        # Member authentication
+├── logout.php       # Member logout
+└── join.php         # Member registration
 ```
 
 All modules use the `*_run()` functional-style entry point pattern.
@@ -483,8 +484,8 @@ www.bbsengine.org/html/handbook/<v>/`) makes the resolver probe
 the right file under the handbook home — no separate entry-point
 shim needed. The legacy `engine/serve-md.php` shim and its
 `handbook_resolve()` containment are gone; the deployable file
-inventory now drops to `router.php, serve-tmpl.php, join.php,
-login.php, logout.php, direct.php, standalone.php` (see
+inventory now drops to `router.php, serve-tmpl.php, vhostconfig.php,
+join.php, login.php, logout.php, direct.php, standalone.php` (see
 `engine/Makefile`'s canonical-entry-points comment).
 
 **Regression tests:**
@@ -705,6 +706,4 @@ re-run the regression tests in `test_zoidtechnologies_comp.py`.
   paths, log redaction). Phase 5 has the regression test list.
 - [`../SPEC.md`](../SPEC.md#4-php-web-layer) — engine/router.php's
   place in the PHP web layer.
-- [./DEPLOYMENT.md](./DEPLOYMENT.md) — Apache deployment paths,
-  systemd units, log rotation.
 - [./SECURITY.md](./SECURITY.md) — security overview.
