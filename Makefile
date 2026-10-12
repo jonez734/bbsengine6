@@ -403,7 +403,8 @@ install-bbsengine6-everything: install-bbsengine6-auth-helper install-pam-bbseng
 	@echo ""
 	@echo "BBS auth install complete on $(ENGINEHOST) and $(CYRUSHOST)."
 	@echo "Test on merlin:  PAM_USER=alice PAM_AUTHTOK=<pw> /usr/local/bin/bbsengine6-auth-pam; echo \$$?"
-	@echo "Test on falcon:  ssh $(CYRUSHOST) systemctl restart cyrus-imapd && testsaslauthd -u alice -p <pw> -s imap"
+	@echo "Test on falcon:  ssh $(CYRUSHOST) 'PAM_USER=alice PAM_AUTHTOK=<pw> /usr/local/bin/bbsengine6-auth-pam; echo \$$?'"
+	@echo "(saslauthd is not used on falcon; testsaslauthd is the wrong test for the auxprop-pam chain.)"
 
 .PHONY: build-auth-wheel install-bbsengine6-auth-helper uninstall-bbsengine6-auth-helper \
         install-pam-bbsengine6-on-merlin uninstall-pam-bbsengine6-on-merlin \
