@@ -10,11 +10,38 @@ developer-facing reference for the verifier and entry points).
 | Host  | IMAP daemon | Auth backend                  | Deploy target         |
 |-------|-------------|-------------------------------|-----------------------|
 | merlin | Dovecot     | `bbsengine6-auth-checkpassword` (Dovecot `passdb checkpassword`) + `bbsengine6-auth-pam` (Dovecot `auth-system.conf.ext` → `/etc/pam.d/dovecot` → `/etc/pam.d/bbsengine6`) | `$(ENGINEHOST) = merlin` |
-| falcon | Cyrus       | `bbsengine6-auth-pam` (Cyrus `auxprop-pam` → `/etc/pam.d/imap` → `/etc/pam.d/bbsengine6`) + optional saslauthd + postoffice-authd | `$(CYRUSHOST) = falcon` |
+| falcon | Cyrus       | `bbsengine6-auth-pam` (Cyrus `auxprop-pam` → `/etc/pam.d/imap` → `/etc/pam.d/bbsengine6`) + postoffice-authd | `$(CYRUSHOST) = falcon` |
 
 Both hosts run the same `bbsengine6` Python package. The verifier
 function is the same; the entry points wrap different protocols
 (Dovecot checkpassword vs. `pam_exec.so`).
+
+## saslauthd: not used on falcon
+
+falcon's Cyrus IMAP does not use `saslauthd` (the Cyrus SASL
+authentication daemon). It uses the `auxprop-pam` Cyrus SASL
+mechanism, which reads from a PAM service that delegates to
+`bbsengine6.auth.verify` via `bbsengine6-auth-pam`. There is no
+`/etc/sasl2/Sendmail.conf` or `/etc/sasl2/smtpd.conf` on falcon
+pointing at a saslauthd socket, and the chain documented under
+"Auth flow" below does not pass through the `saslauthd` mechanism
+at any layer.
+
+| Path to credential verification | Uses `saslauthd`? |
+|---------------------------------|-------------------|
+| Cyrus IMAP → `sasl_auxprop_plugin = pam` → `/etc/pam.d/imap` → `bbsengine6-auth-pam` via `pam_exec.so` | **No** |
+
+A `testsaslauthd`-based smoke test (the historical default) is
+incorrect for this chain; see "Test commands (operator smoke test)"
+below for the corrected form. The optional-saslauthd fallback that
+earlier drafts of this spec mentioned was retired when
+`bbsengine6-auth-pam` landed; do not reintroduce it without an
+explicit decision to do so.
+
+**Regression guard:** `scripts/check-no-saslauthd.sh` in the
+meta-repo greps the `zoidlan/falcon/` tree and the bbsengine6
+`Makefile` for any saslauthd reference and fails on a hit. Pin
+this so a future change cannot quietly reintroduce the dependency.
 
 ## Install
 
@@ -139,8 +166,12 @@ On falcon (Cyrus, default auxprop-pam):
 ```sh
 # After the etc-postoffice install (Phase 5) lands
 ssh falcon sudo systemctl restart cyrus-imapd
-ssh falcon testsaslauthd -u alice -p <pw> -s imap
-# Expected: 0: OK "Success."
+# Direct smoke test of the bbsengine6-auth-pam helper on falcon.
+# This is the correct test for the auxprop-pam chain; the historical
+# `testsaslauthd` command was for a saslauthd-based fallback that
+# has been retired. See "saslauthd: not used on falcon" above.
+ssh falcon 'PAM_USER=alice PAM_AUTHTOK=<pw> /usr/local/bin/bbsengine6-auth-pam; echo $?'
+# Expected: 0 on success, 1 on wrong password, 2 on DB error
 
 # Full IMAP
 openssl s_client -connect falcon.zoidtechnologies.com:993 <<< $'a1 LOGIN alice <password>\na2 LIST "" "*"\na3 LOGOUT'
@@ -168,6 +199,25 @@ The Makefile's `uninstall-bbsengine6-auth-helper` is idempotent
 operators should snapshot `/etc/pam.d/bbsengine6` before uninstalling
 in production.
 
+## Regression guards
+
+The contract that "falcon does not use saslauthd" is pinned by
+`scripts/check-no-saslauthd.sh` in the meta-repo, runnable from CI:
+
+- `scripts/check-no-saslauthd.sh` — greps `zoidlan/falcon/` and
+  the bbsengine6 `Makefile` for any saslauthd reference and fails
+  on a hit. The historical `testsaslauthd` test command (now
+  retired) and the optional-saslauthd mention in the topology
+  table above are excluded by allow-listed line ranges; any new
+  reference outside those ranges fails the check. On the host,
+  the equivalent is `grep -r saslauthd /etc/sasl2/ /etc/imapd.conf
+  /etc/cyrus.conf 2>/dev/null` (which the operator can run
+  manually to verify the live config hasn't drifted).
+
+This is wired into the same pre-commit / CI flow as
+`scripts/check-submodule-sync.sh`; see `AGENTS.md` for the
+canonical tooling layout.
+
 ## Cross-references
 
 - `bbsengine6/py/src/bbsengine6/auth/README.md` — the verifier,
@@ -178,5 +228,9 @@ in production.
   auxprop-pam default.
 - `zoidlan/merlin/jammy/dovecot/conf.d/10-auth.conf` (Phase 6) —
   the Dovecot include that enables the new passdb.
-- `src/mcfeely_authd/auth_verify.py` (Phase 7) — the saslauthd-path
-  gate change to use `accountexpires`.
+- `src/mcfeely_authd/auth_verify.py` (Phase 7) — the verifier
+  gate change to use `accountexpires` (the historical
+  "saslauthd-path" label referred to the now-retired saslauthd
+  fallback; the underlying gate is the same).
+- `scripts/check-no-saslauthd.sh` (meta-repo) — regression guard
+  for the "no saslauthd" contract on falcon.
