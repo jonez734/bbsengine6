@@ -119,6 +119,14 @@ contain it. The user-supplied `userinfo` field in stdin is
 **ignored** — the username always comes from `AUTH_USER` which
 Dovecot sets.
 
+The full threat model and mitigations for the PAM entry point
+specifically also live in the module docstring of
+`bbsengine6/auth/pam.py` (and the env-var scrub contract is
+inline in the `_read_and_scrub_password` function). This
+README section is the canonical home for the topic; the
+docstring points here for the full mitigation list and the
+threat-model boundary.
+
 ## DSN resolution
 
 The verifier uses `bbsengine6.database.getpool()` to obtain a
