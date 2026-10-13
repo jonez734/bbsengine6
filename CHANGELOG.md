@@ -21,15 +21,31 @@ PHP modifier surface:
 - Format arg is optional; when omitted, reads the vhost's
   `DATEFORMAT` constant (unchanged behavior).
 - Per-user TZ offset is rendered by the new `%O` token: reads
-  `$_SESSION['localtimezoneoffset']` (integer minutes, set by
-  `ping.php`), outputs `±HH:MM` (e.g. `-04:00`, `+05:30`),
-  empty string when unset. achilles-specific opt-in — Python
-  `datestamp()` has no equivalent token.
+  `$_SESSION['localtimezoneoffset']` (integer minutes), outputs
+  `±HH:MM` (e.g. `-04:00`, `+05:30`), empty string when unset.
 
-Test coverage: `bbsengine6/php/test_datestamp_modifier.php` —
-40 tests covering every common-subset token, default-format
-fallback, `%O` opt-in (no session, zero, positive, negative,
-half-hour), edge cases, and the token-aware walker behavior.
+Python equivalent (`bbsengine6.util.datestamp`):
+
+- Signature unchanged: `datestamp(t=None, format=...)`.
+- New module-level state: `bbsengine6.util.set_user_tz_offset(minutes)`
+  and `bbsengine6.util.get_user_tz_offset()` (None or int).
+- The `%O` token renders the user-set offset identically to the
+  PHP modifier. Web frameworks populate this from the session
+  before rendering; CLI tools populate it from config or env.
+- The Python implementation walks the format string token-by-token
+  (mirroring the PHP walker) so bare letters are preserved.
+
+Test coverage:
+
+- `bbsengine6/php/test_datestamp_modifier.php` — 40 PHP tests
+  covering every common-subset token, default-format fallback,
+  `%O` opt-in (no session, zero, positive, negative, half-hour),
+  edge cases, and the token-aware walker behavior.
+- `py/tests/test_util_datestamp.py` — 38 Python tests covering
+  per-token strftime rendering, bare-letter preservation, the
+  `%O` opt-in (unset, zero, None, positive, negative, half-hour),
+  `set_user_tz_offset()` / `get_user_tz_offset()` semantics, and
+  edge cases. All pass via the project's venv at `.venv`.
 
 Spec: `bbsengine6/handbook/specs/datestamp.md` (new file) is the
 authoritative reference. `util.md` and `index.md` cross-reference

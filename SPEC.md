@@ -188,8 +188,8 @@ The package lives at `py/src/bbsengine6/`.
 ### 4.3 Smarty plugins (`smarty/`)
 
 Functions: `apidocs`, `fa`, `repo`, `teos`. Modifiers: `ago`,
-`datestamp` (full Python strftime vocabulary + `%O` achilles-specific
-per-user timezone opt-in — see `handbook/specs/datestamp.md`),
+`datestamp` (full Python strftime vocabulary + `%O` per-user
+timezone opt-in — see `handbook/specs/datestamp.md`),
 `filesize`, `fromnow`, `linkurl`, `markdown`,
 `parsedown`, `summarize`, `wpprop`.
 
