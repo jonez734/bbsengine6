@@ -253,10 +253,12 @@ def datestamp(
         AssertionError: If t is not a recognized type.
 
     Examples:
+        # Output is server-TZ dependent. These examples assume
+        # America/New_York (UTC-5 in winter, UTC-4 in summer).
         >>> datestamp()  # Current time
-        '2026-05-19 02:30PM EDT (Mon)'
+        '2026-05-19 02:30PM EDT (Tue)'
         >>> datestamp(0)  # Unix epoch
-        '1970-01-01 08:00PM EST (Thu)'
+        '1969-12-31 07:00PM EST (Wed)'
         >>> set_user_tz_offset(-240)
         >>> datestamp(format="%Y-%m-%d %H:%M %O")
         '2026-05-19 14:30 -04:00'
@@ -268,7 +270,7 @@ def datestamp(
     tzset()
 
     if isinstance(t, (int, float)):
-        t = datetime.fromtimestamp(t, tzinfo=tzlocal())  # type: ignore
+        t = datetime.fromtimestamp(t, tz=tzlocal())  # type: ignore
     elif t is None:
         t = datetime.now(tzlocal())
     elif isinstance(t, str):
