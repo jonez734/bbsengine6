@@ -26,6 +26,12 @@
 define("DATEFORMAT", "%Y-%m-%d %I:%M%P %Z (%a)");
 
 // Bootstrap the modifier function without its config.php require.
+// The modifier delegates to \bbsengine6\util\datestamp (the
+// canonical PHP date/time formatter), so we load util.php to make
+// that function available. The test then stubs the modifier's own
+// config.php require (which would otherwise require the vhost
+// config and define a different DATEFORMAT).
+require_once(__DIR__ . "/util.php");
 $source = file_get_contents("/home/opencode/data/work/bbsengine6/smarty/modifier.datestamp.php");
 $source = preg_replace('/require_once\("config\.php"\);/', '// stubbed', $source);
 eval("?>" . $source);

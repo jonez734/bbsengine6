@@ -61,6 +61,43 @@ minutes, set by `ping.php` from the client ping payload) for the
 <time datetime="{$timestamp|datestamp:"%Y-%m-%dT%H:%M:%S%:z"}">...</time>
 ```
 
+### PHP — `\bbsengine6\util\datestamp()`
+
+The canonical PHP date/time formatter, exposed alongside the
+Smarty modifier. Mirrors the Python `bbsengine6.util.datestamp`
+signature so the two surfaces produce identical output for the
+same input.
+
+```php
+use function bbsengine6\util\datestamp;
+
+datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $format = null): string
+```
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `$t` | `null \| int \| float \| string \| DateTimeInterface` | The value to format. `null` uses the current time. `int`/`float` are Unix epoch seconds. Numeric strings are interpreted as Unix epochs (the `@`-prefix convention used by PHP's `strtotime()` is applied internally). Other strings are parsed via `strtotime()`. `DateTimeInterface` is used as-is. Unparseable strings return `""`. |
+| `$format` | `string \| null` | strftime format string. `null`/empty falls back to `\config\DATEFORMAT` → bare `DATEFORMAT` → `"%Y-%m-%d %H:%M"`. |
+
+```php
+>>> datestamp()  // Current time
+'2026-10-13 14:30'
+>>> datestamp(0)  // Unix epoch
+'1970-01-01 00:00'
+>>> datestamp(time(), '%Y-%m-%d %I:%M%P %Z (%a)')
+'2026-10-13 02:30pm EDT (Tue)'
+```
+
+The function reads `$_SESSION['localtimezoneoffset']` (integer
+minutes, set by `ping.php` from the client ping payload) for the
+`%O` token, identical to the Smarty modifier.
+
+Both Smarty modifiers (`bbsengine6/smarty/modifier.datestamp.php`
+and `zoid6/smarty/modifier.datestamp.php`) are thin wrappers that
+call this function. There is one implementation of the walker;
+there are three callers (the helper itself, plus the two Smarty
+modifiers).
+
 ## Supported format tokens
 
 The PHP modifier and Python's `bbsengine6.util.datestamp` accept

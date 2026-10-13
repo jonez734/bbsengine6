@@ -1073,4 +1073,152 @@ function env_bool(string $key, bool $default = false): bool
     if (is_int($v)) return $v !== 0;
     return $default;
 }
+
+/**
+ * \bbsengine6\util\datestamp — canonical PHP date/time formatter.
+ *
+ * Mirrors bbsengine6.util.datestamp in the Python package: the
+ * same strftime vocabulary, the same default format, the same
+ * %O opt-in for per-user timezone offset. The Smarty
+ * `|datestamp` modifier (bbsengine6/smarty/modifier.datestamp.php
+ * and zoid6/smarty/modifier.datestamp.php) is a thin wrapper
+ * that calls this function.
+ *
+ * @since 2026-10-13
+ * @param int|float|string|\DateTimeInterface|null $t
+ *        The time value to format. Accepted types:
+ *        - null: current time (time())
+ *        - int|float: Unix epoch seconds
+ *        - string: parsed via strtotime() (false/unparseable → "")
+ *        - DateTimeInterface: used as-is (cloned, then read)
+ *        Non-numeric scalars other than strings return "".
+ * @param string|null $format
+ *        strftime format string. If null or empty, falls back to
+ *        the vhost's \config\DATEFORMAT (or bare DATEFORMAT)
+ *        constant, then to "%Y-%m-%d %H:%M". See
+ *        bbsengine6/handbook/specs/datestamp.md for the supported
+ *        token vocabulary.
+ * @return string Formatted datetime string, or "" on bad input.
+ */
+function datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $format = null): string
+{
+    // --- 1. Resolve $t to a Unix epoch (int). ---
+    if ($t === null) {
+        $timestamp = time();
+    } elseif (is_int($t) || is_float($t)) {
+        $timestamp = (int)$t;
+    } elseif (is_string($t)) {
+        // Numeric strings are Unix epochs (matches the Smarty
+        // modifier's `is_numeric` guard). PHP's strtotime() does
+        // NOT parse bare numeric strings as epochs — the leading
+        // `@` tells it "treat this as a Unix timestamp".
+        if (is_numeric($t)) {
+            $timestamp = (int)$t;
+        } else {
+            $parsed = strtotime($t);
+            if ($parsed === false) {
+                return '';
+            }
+            $timestamp = $parsed;
+        }
+    } elseif ($t instanceof \DateTimeInterface) {
+        $timestamp = $t->getTimestamp();
+    } else {
+        return '';
+    }
+
+    // --- 2. Resolve $format. ---
+    if ($format === null || $format === '') {
+        if (defined('\config\DATEFORMAT')) {
+            $format = \config\DATEFORMAT;
+        } elseif (defined('DATEFORMAT')) {
+            $format = DATEFORMAT;
+        } else {
+            $format = '%Y-%m-%d %H:%M';
+        }
+    }
+
+    // --- 3. Per-user TZ offset (opt-in via %O). Reads from the
+    //    PHP session, matching the Smarty modifier's behavior. ---
+    $offsetMinutes = isset($_SESSION['localtimezoneoffset'])
+        ? (int)$_SESSION['localtimezoneoffset']
+        : 0;
+    $localTs = $timestamp + ($offsetMinutes * 60);
+
+    $userOffsetValue = '';
+    if ($offsetMinutes !== 0) {
+        $sign = $offsetMinutes >= 0 ? '+' : '-';
+        $abs = abs($offsetMinutes);
+        $oh = str_pad((string)intdiv($abs, 60), 2, '0', STR_PAD_LEFT);
+        $om = str_pad((string)($abs % 60), 2, '0', STR_PAD_LEFT);
+        $userOffsetValue = sprintf('%s%02d:%02d', $sign, $oh, $om);
+    }
+
+    // --- 4. strftime-token → PHP date() format. Mirrors
+    //    bbsengine6/smarty/modifier.datestamp.php's table. Tokens
+    //    not in this map fall through to the "unknown token"
+    //    branch in the walker below. ---
+    $strftimeToDate = [
+        '%Y' => 'Y', '%y' => 'y',
+        '%m' => 'm', '%b' => 'M', '%B' => 'F',
+        '%d' => 'd',
+        '%H' => 'H', '%I' => 'h', '%l' => 'g',
+        '%M' => 'i', '%S' => 's',
+        '%p' => 'A', '%P' => 'a',
+        '%Z' => 'T',
+        '%z' => 'O',
+        '%:z' => 'P',
+        '%a' => 'D', '%A' => 'l',
+        '%%' => '%',
+    ];
+
+    // --- 5. Token-aware walker. See
+    //    bbsengine6/handbook/specs/datestamp.md for the design
+    //    rationale. ---
+    $knownTokens = array_keys($strftimeToDate);
+    $inlineTokens = ['%%', '%j', '%O'];
+
+    // Sort tokens by length descending so longer ones match first.
+    $allTokens = array_merge($inlineTokens, $knownTokens);
+    usort($allTokens, function ($a, $b) { return strlen($b) - strlen($a); });
+
+    $result = '';
+    $len = strlen($format);
+    for ($i = 0; $i < $len; $i++) {
+        $ch = $format[$i];
+        if ($ch === '%' && $i + 1 < $len) {
+            $matched = null;
+            foreach ($allTokens as $tok) {
+                if (substr($format, $i, strlen($tok)) === $tok) {
+                    $matched = $tok;
+                    break;
+                }
+            }
+            if ($matched !== null) {
+                $i += strlen($matched) - 1;
+                if ($matched === '%%') {
+                    $result .= '%';
+                } elseif ($matched === '%j') {
+                    $result .= (string)((int)date('z', $localTs) + 1);
+                } elseif ($matched === '%O') {
+                    $result .= $userOffsetValue;
+                } else {
+                    $result .= date($strftimeToDate[$matched], $localTs);
+                }
+                continue;
+            }
+            // Unknown %X token: pass through verbatim.
+            if ($i + 1 < $len && ctype_alpha($format[$i + 1])) {
+                $result .= '%' . $format[$i + 1];
+                $i++;
+            } else {
+                $result .= '%';
+            }
+            continue;
+        }
+        $result .= $ch;
+    }
+
+    return $result;
+}
 ?>
