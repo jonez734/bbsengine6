@@ -242,6 +242,9 @@ def datestamp(
            - str: parsed via input.getdate()
            - datetime: used as-is
         format: strftime format string (default: "%Y-%m-%d %I:%M%P %Z (%a)").
+           Supports the standard Python strftime tokens plus the
+           non-standard ``%O`` opt-in for per-user timezone offset
+           (see ``set_user_tz_offset`` / ``get_user_tz_offset``).
 
     Returns:
         Formatted datetime string.
@@ -254,6 +257,10 @@ def datestamp(
         '2026-05-19 02:30PM EDT (Mon)'
         >>> datestamp(0)  # Unix epoch
         '1970-01-01 08:00PM EST (Thu)'
+        >>> set_user_tz_offset(-240)
+        >>> datestamp(format="%Y-%m-%d %H:%M %O")
+        '2026-05-19 14:30 -04:00'
+        >>> set_user_tz_offset(None)  # clear
     """
     from dateutil.tz import tzlocal
     from time import tzset
@@ -270,7 +277,77 @@ def datestamp(
             return t
 
     assert isinstance(t, datetime), f"datestamp: unexpected type {type(t)} for t"
-    return t.strftime(format)
+
+    # %O is a non-standard opt-in token that Python's strftime does
+    # not natively support. Walk the format string token-by-token
+    # (mirroring bbsengine6/smarty/modifier.datestamp.php) so we can
+    # substitute the per-user offset string in place. Bare letters
+    # pass through to strftime literally.
+    if "%O" not in format:
+        return t.strftime(format)
+
+    user_offset = _user_tz_offset_minutes
+    if user_offset is None or user_offset == 0:
+        offset_str = ""
+    else:
+        sign = "+" if user_offset >= 0 else "-"
+        abs_min = abs(user_offset)
+        oh = f"{abs_min // 60:02d}"
+        om = f"{abs_min % 60:02d}"
+        offset_str = f"{sign}{oh}:{om}"
+
+    result = []
+    i = 0
+    while i < len(format):
+        ch = format[i]
+        if ch == "%" and i + 1 < len(format):
+            tok = format[i:i + 2]
+            if tok == "%O":
+                result.append(offset_str)
+                i += 2
+                continue
+            if tok == "%%":
+                result.append("%")
+                i += 2
+                continue
+            # Unknown %X or single-char token: pass to strftime
+            # one character at a time. Python strftime has no
+            # multi-char tokens except %:z-style, which it supports
+            # natively.
+            result.append(t.strftime(tok))
+            i += 2
+            continue
+        result.append(ch)
+        i += 1
+    return "".join(result)
+
+
+# @since 2026-10-13 — module-level state for the %O per-user
+# timezone offset opt-in. PHP reads $_SESSION['localtimezoneoffset']
+# from the request; Python doesn't have sessions. A module attribute
+# is the closest analog: the consumer (web framework, CLI tool,
+# daemon) calls set_user_tz_offset() once per request/thread.
+_user_tz_offset_minutes: Optional[int] = None
+
+
+def set_user_tz_offset(offset_minutes: Optional[int]) -> None:
+    """Set the per-user timezone offset used by ``%O`` in ``datestamp()``.
+
+    Args:
+        offset_minutes: Integer offset from UTC in minutes (e.g. ``-240``
+            for EDT, ``330`` for IST). Pass ``None`` or ``0`` to clear
+            (renders ``%O`` as the empty string).
+    """
+    global _user_tz_offset_minutes
+    if offset_minutes is None:
+        _user_tz_offset_minutes = None
+        return
+    _user_tz_offset_minutes = int(offset_minutes)
+
+
+def get_user_tz_offset() -> Optional[int]:
+    """Return the current per-user timezone offset, or ``None`` if unset."""
+    return _user_tz_offset_minutes
 
 
 def inputpassword(prompt: str = "password: ", mask: str = "X", **kwargs) -> str:
