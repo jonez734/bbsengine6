@@ -273,12 +273,12 @@ class TestDatestampEdgeCases:
     """Datetime argument parsing and edge cases."""
 
     def test_unix_epoch_int(self):
-        # @known-failure: pre-existing bug — datetime.fromtimestamp(0, tzinfo=...)
-        # uses the wrong keyword. Should be tz=, not tzinfo=. Tracked
-        # separately from this %O feature work.
-        import pytest
-        with pytest.raises(TypeError):
-            util.datestamp(0, "%Y")
+        # Unix epoch (0) is the canonical Unix timestamp. Server-local
+        # year depends on TZ: 1970 in UTC and most positive-offset TZs,
+        # 1969 in negative-offset TZs (e.g. America/New_York at -0500
+        # renders 1969-12-31 19:00 EST). Either year is acceptable.
+        result = util.datestamp(0, "%Y")
+        assert result in ("1969", "1970")
 
     def test_none_returns_current_time(self):
         result = util.datestamp(None, "%Y")
