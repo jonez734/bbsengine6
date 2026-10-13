@@ -13,9 +13,9 @@ It is exposed in two surfaces:
 
 Both surfaces accept the same strftime vocabulary and produce
 identical output for any common-subset token. The PHP modifier
-extends the vocabulary with one achilles-specific opt-in token,
-`%O`, which renders the per-user timezone offset (e.g. `-04:00`,
-`+05:30`) when the session has set one.
+extends the vocabulary with one opt-in token, `%O`, which
+renders the per-user timezone offset (e.g. `-04:00`, `+05:30`)
+when the session has set one.
 
 ## Public API
 
@@ -92,11 +92,11 @@ both languages render; PHP-specific extensions are marked.
 | `%A` | full day name | `Tuesday` |
 | `%%` | literal `%` | `%` |
 
-### PHP-only extensions
+### Common extensions
 
 | Token | Output | Notes |
 |-------|--------|-------|
-| `%O` | per-user TZ offset `±HH:MM` (or empty) | achilles-specific opt-in. Reads `$_SESSION['localtimezoneoffset']` (set by `ping.php`). Renders empty string when unset. Not supported by Python `datestamp()` — equivalent functionality requires `bbsengine6.util.formatlastmodified()` or manual offset computation. |
+| `%O` | per-user TZ offset `±HH:MM` (or empty) | Renders empty string when offset is unset or zero. **PHP** (`|datestamp`): reads `$_SESSION['localtimezoneoffset']` (integer minutes) per request. **Python** (`bbsengine6.util.datestamp`): reads the module-level `_user_tz_offset_minutes` set via `bbsengine6.util.set_user_tz_offset(minutes)`. Same output format on both surfaces. |
 
 ### Documented divergences
 
@@ -169,10 +169,21 @@ search-order distinction is invisible to consumers.
 
 ### Per-user timezone offset (`%O`)
 
-The `%O` opt-in token reads `$_SESSION['localtimezoneoffset']`,
-an integer number of minutes offset from UTC. achilles sets this
-from the client ping payload in `ping.php`. Other vhosts may set
-it from their own timezone-resolution logic.
+The `%O` opt-in token renders the per-user timezone offset as
+`±HH:MM` (or empty string when unset). Both surfaces support it
+identically.
+
+**PHP** (`|datestamp`): reads `$_SESSION['localtimezoneoffset']`
+(integer minutes) per request. The web framework sets this before
+rendering — for example, bbsengine6/achilles populates from the
+client ping payload in `ping.php`; other vhosts may use a
+different mechanism.
+
+**Python** (`bbsengine6.util.datestamp`): reads the module-level
+state set via `bbsengine6.util.set_user_tz_offset(minutes)`.
+Returns the integer offset via `bbsengine6.util.get_user_tz_offset()`.
+The consumer (CLI tool, daemon, web framework integration) sets
+this once per request/thread before calling `datestamp()`.
 
 Behavior:
 
@@ -246,7 +257,7 @@ then a single-letter `%X`, then a literal `%`.
 
 | strftime token | PHP equivalent | Notes |
 |----------------|----------------|-------|
-| `%O` | achilles session offset | Pre-computed; inserted inline. Not in PHP date() vocabulary. |
+| `%O` | `$_SESSION['localtimezoneoffset']` (per-user, default 0) | Pre-computed; inserted inline. Not in PHP date() vocabulary. |
 
 ### Backward compatibility
 
@@ -265,9 +276,10 @@ then a single-letter `%X`, then a literal `%`.
 
 - **2026-10-13** — New spec document. PHP modifier walker rewritten
   to support the full Python strftime vocabulary; `%O` opt-in
-  added for achilles per-user timezone display. Eight previously-
-  unmapped tokens (`%a`, `%b`, `%B`, `%l`, `%P`, `%z`, `%:z`, `%j`)
-  now produce correct output. zoid6's modifier (previously a 3-line
+  added for per-user timezone display via
+  `$_SESSION['localtimezoneoffset']`. Eight previously-unmapped
+  tokens (`%a`, `%b`, `%B`, `%l`, `%P`, `%z`, `%:z`, `%j`) now
+  produce correct output. zoid6's modifier (previously a 3-line
   `date()` shim) extended to match.
 - **2026-09-29** — VHOSTCONFIG fallback removed from bbsengine6
   modifier's defensive block (see `ROBUSTNESS_REVIEW.md` Phase 8).
