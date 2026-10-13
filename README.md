@@ -177,6 +177,9 @@ bbsengine6/
 │   ├── function.{apidocs,fa,repo,teos}.php
 │   └── modifier.{ago,datestamp,filesize,fromnow,linkurl,markdown,
 │                 parsedown,summarize,wpprop}.php
+│   (datestamp supports the full Python strftime vocabulary plus
+│    the %O opt-in for per-user timezone offset; see
+│    handbook/specs/datestamp.md)
 │
 ├── handbook/                    User-facing manual
 │   ├── index.md                 Landing page (table of contents)

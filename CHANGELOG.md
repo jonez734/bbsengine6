@@ -1,5 +1,44 @@
 ## [Unreleased]
 
+### feat(smarty): extend |datestamp modifier with full Python strftime vocabulary + %O per-user TZ opt-in
+
+The `|datestamp` Smarty modifier now matches Python's
+`bbsengine6.util.datestamp()` token-for-token. Previously it
+supported only 11 of 19 common-subset tokens (`%Y`, `%m`, `%d`,
+`%H`, `%I`, `%M`, `%S`, `%p`, `%Z`, `%A`, `%%`); the other 8
+(`%a`, `%b`, `%B`, `%l`, `%P`, `%y`, `%z`, `%:z`, `%j`) rendered
+as literal characters because PHP `date()` interprets them
+differently than strftime.
+
+The implementation replaces the strftime→date translation table
+with a token-aware walker that only acts on `%X`-prefixed sequences
+and preserves bare letters literally. The walker tries the longest
+known token prefix first (so `%:z` matches before `%z`).
+
+PHP modifier surface:
+
+- Signature: `smarty_modifier_datestamp($timestamp, $format = null)`.
+- Format arg is optional; when omitted, reads the vhost's
+  `DATEFORMAT` constant (unchanged behavior).
+- Per-user TZ offset is rendered by the new `%O` token: reads
+  `$_SESSION['localtimezoneoffset']` (integer minutes, set by
+  `ping.php`), outputs `±HH:MM` (e.g. `-04:00`, `+05:30`),
+  empty string when unset. achilles-specific opt-in — Python
+  `datestamp()` has no equivalent token.
+
+Test coverage: `bbsengine6/php/test_datestamp_modifier.php` —
+40 tests covering every common-subset token, default-format
+fallback, `%O` opt-in (no session, zero, positive, negative,
+half-hour), edge cases, and the token-aware walker behavior.
+
+Spec: `bbsengine6/handbook/specs/datestamp.md` (new file) is the
+authoritative reference. `util.md` and `index.md` cross-reference
+it.
+
+Sibling change in zoid6: `zoid6/smarty/modifier.datestamp.php`
+was a 3-line `date(\config\DATEFORMAT, $string)` shim with no
+strftime translation. Extended to match bbsengine6's vocabulary.
+
 ### feat(auth): BBS auth backend for IMAP and PAM (Dovecot on merlin, Cyrus on falcon)
 
 Adds the canonical BBS auth backend at `bbsengine6.auth`:
