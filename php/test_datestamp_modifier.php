@@ -2,7 +2,7 @@
 /**
  * test_datestamp_modifier.php — Verifies the bbsengine6 `|datestamp`
  * Smarty modifier supports the full Python strftime vocabulary, plus
- * the achilles-specific %O opt-in (per-user timezone offset).
+ * the %O opt-in (per-user timezone offset).
  *
  * The modifier reads DATEFORMAT (a strftime format string) from the
  * vhost config when called without a format argument, or accepts an
@@ -113,7 +113,7 @@ $defaultResult = smarty_modifier_datestamp($ts);
 $expectedDefault = '2026-10-13 02:30pm ' . date('T', $ts) . ' (Tue)';
 check('reads DATEFORMAT', $expectedDefault, $defaultResult);
 
-echo "\n--- %O opt-in (achilles-specific per-user TZ) ---\n\n";
+echo "\n--- %O opt-in (per-user TZ) ---\n\n";
 
 // No session set: %O renders empty
 check('%O no session', '', smarty_modifier_datestamp($ts, '%O'));
