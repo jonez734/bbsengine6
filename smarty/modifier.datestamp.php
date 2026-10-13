@@ -28,8 +28,9 @@ require_once("/srv/www/bbsengine6/php/bootstrap.php");
 // vocabulary via a token-aware walker. Translates only %X-prefixed
 // strftime tokens to PHP date() tokens; bare letters and other
 // non-% characters pass through unchanged. Adds eight previously-
-// unmapped tokens (%a, %b, %B, %l, %P, %z, %:z, %j) and the
-// achilles-specific %O opt-in (per-user timezone offset).
+// unmapped tokens (%a, %b, %B, %l, %P, %z, %:z, %j) and the %O
+// opt-in for per-user timezone offset (reads
+// $_SESSION['localtimezoneoffset']; integer minutes, default 0).
 // See bbsengine6/handbook/specs/datestamp.md for the full spec.
 
 require_once("config.php");
