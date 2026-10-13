@@ -70,6 +70,13 @@ datestamp(t=None, format="%Y-%m-%d %I:%M%P %Z (%a)") -> str
 timedeltastr(delta) -> str
 ```
 
+The full `datestamp` specification — supported strftime tokens,
+the achilles-specific `%O` opt-in, the Smarty modifier surface
+(`{$timestamp|datestamp}`), per-user timezone handling, and the
+implementation notes — lives at
+[`datestamp.md`](./datestamp.md). This entry in `util.md` is the
+function-level index; `datestamp.md` is the authoritative spec.
+
 `timedeltastr` (formerly `timedelta_`) converts a `datetime.timedelta`
 to a compact duration string with only the non-zero units, zero-padded
 to two digits:

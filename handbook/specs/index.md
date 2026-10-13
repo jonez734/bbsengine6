@@ -29,6 +29,10 @@
   2.0 wrapper
 - [util.md](./util.md) — display, dates, logging, input, ranges,
   password hashing, ANSI stripping, at-rest encryption
+- [datestamp.md](./datestamp.md) — `datestamp` formatter: Python
+  (`bbsengine6.util.datestamp`) and Smarty (`|datestamp`) modifier.
+  Shared strftime vocabulary, achilles-specific `%O` opt-in for
+  per-user timezone offset.
 - [member.md](./member.md) — member subsystem + WebSocket handler,
   with notify-era recipient-validation retained
 - [bestpractices.md](./bestpractices.md) — `io.echo` f-string rule
