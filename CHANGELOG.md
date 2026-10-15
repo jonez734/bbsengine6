@@ -1,5 +1,52 @@
 ## [Unreleased]
 
+### refactor(smarty): extract |datestamp modifier body to bbsengine6/php/smarty_modifier_datestamp.php
+
+The `|datestamp` Smarty modifier function is now defined in
+exactly one place: `bbsengine6/php/smarty_modifier_datestamp.php`.
+Both `bbsengine6/smarty/modifier.datestamp.php` and
+`zoid6/smarty/modifier.datestamp.php` are 2-line stubs that
+require the canonical body via `__DIR__`-relative `require_once`.
+The previous arrangement (which I introduced in the
+2026-10-15 commit `bb4cb03` making the two files byte-identical)
+was correct but required any future change to be applied in
+lockstep. The new arrangement eliminates the "must be
+byte-identical" invariant by having both files require a
+single source of truth.
+
+The canonical body:
+
+```php
+function smarty_modifier_datestamp($string, $format = null)
+{
+    if (!is_numeric($string)) {
+        return '';
+    }
+    return \bbsengine6\util\datestamp((int)$string, $format);
+}
+```
+
+Each modifier file's body is now:
+
+```php
+\bbsengine6\util\smarty_plugin_bootstrap();
+require_once("config.php");
+require_once(__DIR__ . "/../php/smarty_modifier_datestamp.php");
+// (zoid6's modifier uses "/../../bbsengine6/php/..." instead)
+```
+
+The tests (`php/test_datestamp_modifier.php` in bbsengine6 and
+zoid6) also simplified: instead of `eval`-ing the modifier
+file with a `require_once("config.php")` stub, they now
+`require_once` the canonical body directly and call
+`smarty_modifier_datestamp()` as a regular function. The
+eval-with-stub trick was previously needed because the function
+body was inlined in the modifier; with the body in a separate
+file, a direct require is cleaner.
+
+Behavior is unchanged. All 164 PHP tests and 65 Python tests
+still pass.
+
 ### feat(skin/folder): trailing `/` only on directory items, not files
 
 `bbsengine6/skin/tmpl/folder.tmpl` was rendering every folder-list

@@ -14,8 +14,10 @@ It is exposed in three surfaces:
   for web templates. The Smarty modifier
   (`bbsengine6/smarty/modifier.datestamp.php` and
   `zoid6/smarty/modifier.datestamp.php`) is a thin wrapper around
-  `\bbsengine6\util\datestamp()`. The two modifier files are
-  byte-identical to guarantee no drift between them.
+  `\bbsengine6\util\datestamp()`. The function body is defined
+  in `bbsengine6/php/smarty_modifier_datestamp.php`; both
+  modifier files are 2-line stubs that require the canonical
+  body via a `__DIR__`-relative path.
 
 All three surfaces accept the same strftime vocabulary and produce
 **byte-exact** output for any common-subset token on a server with
@@ -380,6 +382,18 @@ then a single-letter `%X`, then a literal `%`.
 
 ## Historical
 
+- **2026-10-15** — Extracted the Smarty modifier body to a single
+  canonical source. The `|datestamp` modifier function is now
+  defined in `bbsengine6/php/smarty_modifier_datestamp.php` and
+  loaded by both `bbsengine6/smarty/modifier.datestamp.php` and
+  `zoid6/smarty/modifier.datestamp.php` via `__DIR__`-relative
+  `require_once`. Both modifier files are 2-line stubs (bootstrap
+  + body require); the function body is no longer duplicated
+  across the two plugins. Tests
+  (`bbsengine6/php/test_datestamp_modifier.php` and
+  `zoid6/php/test_datestamp_modifier.php`) now `require_once` the
+  canonical body directly instead of `eval`-ing the modifier
+  file with a `require_once("config.php")` stub.
 - **2026-10-15** — Byte-exact parity with Python's strftime. The
   PHP walker now pins `LC_TIME=C` at entry so day/month names
   match Python's C-locale output byte-for-byte. The `%l` token

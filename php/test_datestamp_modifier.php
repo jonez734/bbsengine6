@@ -18,23 +18,27 @@
  * (so multi-character tokens like %:z match before single-letter %z),
  * then a single-letter %X, then a literal %.
  *
+ * @since 2026-10-15 — The test no longer eval's the modifier file
+ * with a `require_once("config.php")` stub. The canonical modifier
+ * body now lives in
+ * bbsengine6/php/smarty_modifier_datestamp.php, and the test
+ * requires it directly. This is simpler and avoids the eval
+ * workaround (which had to deal with __DIR__ resolving to the
+ * test's CWD inside eval'd code).
+ *
  * Usage:
  *   php test_datestamp_modifier.php
  */
 
-// Stub config.php require inside the modifier.
+// Stub the vhost's config.php (which would set DATEFORMAT).
+// The modifier's own require_once("config.php") is bypassed
+// because we require the canonical body directly below.
 define("DATEFORMAT", "%Y-%m-%d %I:%M%P %Z (%a)");
 
-// Bootstrap the modifier function without its config.php require.
-// The modifier delegates to \bbsengine6\util\datestamp (the
-// canonical PHP date/time formatter), so we load util.php to make
-// that function available. The test then stubs the modifier's own
-// config.php require (which would otherwise require the vhost
-// config and define a different DATEFORMAT).
+// Load the canonical walker (defines \bbsengine6\util\datestamp)
+// and the canonical modifier body (defines smarty_modifier_datestamp).
 require_once(__DIR__ . "/util.php");
-$source = file_get_contents("/home/opencode/data/work/bbsengine6/smarty/modifier.datestamp.php");
-$source = preg_replace('/require_once\("config\.php"\);/', '// stubbed', $source);
-eval("?>" . $source);
+require_once(__DIR__ . "/smarty_modifier_datestamp.php");
 
 echo "=== |datestamp modifier Tests ===\n\n";
 
