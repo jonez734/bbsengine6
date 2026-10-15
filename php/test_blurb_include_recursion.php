@@ -107,13 +107,13 @@ function parseSections(string $markdown): array {
         if (preg_match('/<h1>(.*?)<\/h1>/i', $part, $m)) {
             $headerText = strip_tags($m[1]);
             if ($firstPart && $title === "") $title = $headerText;
-            $sections[] = ["header" => $headerText, "content" => ""];
+            $sections[] = ["header" => $firstPart ? "" : $headerText, "content" => ""];
             $firstPart = false;
         } elseif (!empty($part) && !empty($sections)) {
             $sections[count($sections) - 1]["content"] .= $part;
         }
     }
-    if (empty($sections)) $sections[] = ["header" => $title, "content" => $html];
+    if (empty($sections)) $sections[] = ["header" => "", "content" => $html];
     return ["title" => $title, "sections" => $sections];
 }
 

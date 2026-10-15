@@ -125,6 +125,19 @@ function renderHtml(string $body, bool $breaks = false): string
  * Split rendered HTML on <h1>...</h1> boundaries into sections.
  * Text before the first <h1> becomes its own section.
  *
+ * The first section's H1 is "promoted" to be the page title (returned in
+ * the 'title' key and surfaced as the blurb's $data.title). Its 'header'
+ * is therefore set to '' so the per-section <h2> loop in
+ * page-markdown-sections.tmpl does not render the same string a second
+ * time. The body content that follows the first H1 is preserved in
+ * sections[0]['content'] unchanged, so the rendered output drops the
+ * duplicate header while keeping the lead prose in place.
+ *
+ * @since 2026-10-15 — sections[0]['header'] is '' (was: the H1 text).
+ *                    Fixes the duplicate-title regression introduced by
+ *                    3e106ab3 (page-markdown-sections.tmpl page-level
+ *                    lastmodified refactor).
+ *
  * Returns ['title' => string, 'sections' => [['header','content'], ...]].
  */
 function splitHtmlSections(string $html, string $fallbackTitle = ""): array
@@ -141,7 +154,10 @@ function splitHtmlSections(string $html, string $fallbackTitle = ""): array
             if ($firstPart && $title === "") {
                 $title = $headerText;
             }
-            $sections[] = ["header" => $headerText, "content" => ""];
+            $sections[] = [
+                "header" => $firstPart ? "" : $headerText,
+                "content" => "",
+            ];
             $firstPart = false;
         } elseif (!empty($part) && !empty($sections)) {
             $sections[count($sections) - 1]["content"] .= $part;
@@ -149,7 +165,7 @@ function splitHtmlSections(string $html, string $fallbackTitle = ""): array
     }
 
     if (empty($sections)) {
-        $sections[] = ["header" => $title, "content" => $html];
+        $sections[] = ["header" => "", "content" => $html];
     }
 
     return ["title" => $title, "sections" => $sections];

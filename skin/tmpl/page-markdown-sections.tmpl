@@ -18,7 +18,9 @@
 {/if}
     {foreach $data.sections as $section}
     <div class="section">
+      {if $section.header !== null && $section.header !== ""}
       <div class="header"><h2>{$section.header}</h2></div>
+      {/if}
       <div class="body">
         {$section.content}
       </div>
