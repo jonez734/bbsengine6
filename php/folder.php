@@ -98,6 +98,7 @@ function getFolderBreadcrumbs(string $uri): array
     } catch (\Throwable $e) {
         \bbsengine6\util\echo_traceback("getfolderbreadcrumbs.100: uri=".var_export($uri, true));
     }
+    return [];
 }
 
 /**
@@ -232,6 +233,16 @@ function getDirectoryItems(string $dirpath, string $uri): array
         $items[] = [
             'title' => $displayTitle,
             'uri' => \bbsengine6\util\env("TEOSURL"). $fileuri, 'filename' => $filename, //\bbsengine6\util\teos_url() . $fileuri,
+            // @since 2026-10-15 — populate `is_folder` and `ext`
+            // for parity with engine/router.php::router_collectDirectoryItems().
+            // Legacy getDirectoryItems() only handles `.md` files
+            // (no subdirectories), so both fields are constants:
+            // `is_folder => false`, `ext => 'md'`. The presence of
+            // these fields lets folder.tmpl render a consistent
+            // shape regardless of which code path populated the
+            // listing (legacy direct call vs engine-routed call).
+            'is_folder' => false,
+            'ext' => 'md',
         ];
     }
 
@@ -316,6 +327,19 @@ function display($uri)
     $data["items"] = $items;
     $data["uri"] = $uri;
     $data["hidden"] = !isFolderVisible($uri) && isSysop();
+
+    // @since 2026-10-15 — populate $data["lastmodified"] for the
+    // page-level `.metadata` block in folder.tmpl (mirroring
+    // achilles/www/skin/tmpl/section.tmpl:3-7). Folders don't
+    // carry frontmatter, so the timestamp is the directory's own
+    // mtime. Falsy on any filesystem error so the template can
+    // suppress the block via `{if $data.lastmodified !== false}`.
+    // Mirrors the same field populated in
+    // bbsengine6/engine/router.php::router_displayDirectoryListing()
+    // for the engine-routed path; the legacy folder.php::display()
+    // path (called directly by some teos entry points and CLI
+    // tests) needs its own copy to stay consistent.
+    $data["lastmodified"] = is_dir($filepath) ? @filemtime($filepath) : false;
 
     // @since 2026-09-30 — populate $data["breadcrumbs"] so folder.tmpl's
     // youarehere include has a trail to render. Mirrors the blurb.php

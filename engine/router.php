@@ -625,7 +625,14 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
       $items[] = [
         'title' => $entry,
         'uri' => $href,
-        'is_dir' => true,
+        // @since 2026-10-15 — renamed from `is_dir` to `is_folder`
+        // for consistency with the Python teos browse shape
+        // (teos/tools/teos/browse.py uses `is_folder`) and to
+        // disambiguate from PHP's `is_dir()` builtin. Both
+        // engine and legacy code paths now set this field so
+        // folder.tmpl can render a trailing '/' on directory
+        // items and not on file items.
+        'is_folder' => true,
         'filename' => $entry,
         'modified' => filemtime($fullpath),
       ];
@@ -671,7 +678,10 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
     $items[] = [
       'title' => $displayTitle,
       'uri' => $file_href,
-      'is_dir' => false,
+      // Mirror the directory-item key above: `is_folder` instead
+      // of `is_dir`. See the directory-branch comment for the
+      // rename rationale.
+      'is_folder' => false,
       'filename' => $entry,
       'ext' => $ext,
       'size' => filesize($fullpath),
@@ -745,6 +755,16 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
   // that folder.tmpl reads directly; the previous
   // $currentsig/$sigs projection (which existed only to feed
   // the currentsig-shaped browse.tmpl) has been removed.
+  //
+  // @since 2026-10-15 — add `lastmodified` to the data shape so
+  // folder.tmpl can render a page-level `.metadata` block
+  // mirroring achilles/www/skin/tmpl/section.tmpl:3-7. Folders
+  // don't carry frontmatter, so the timestamp is the directory's
+  // own mtime (same as blurb.php's filemtime fallback). Falsy on
+  // any filesystem error so the template can suppress the block
+  // via `{if $data.lastmodified !== false}`.
+  $lastmodified = is_dir($safedir) ? @filemtime($safedir) : false;
+
   \bbsengine6\displaypage([
     'title' => $title,
     'items' => $items,
@@ -752,6 +772,7 @@ function router_displayDirectoryListing(string $dirpath, string $uri, bool $hidd
     'hidden' => $hidden,
     'breadcrumbs' => $breadcrumbs,
     'choices' => $choices,
+    'lastmodified' => $lastmodified,
   ], 'folder.tmpl');
   return '';
 }

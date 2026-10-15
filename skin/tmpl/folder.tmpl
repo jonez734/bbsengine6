@@ -9,6 +9,11 @@
 {/if}
 <div class="blurb vstretch">
 <div class="header"><h1>{$data.title}{if $data.hidden} [hidden]{/if}</h1></div>
+{if $data.lastmodified !== false && $data.lastmodified !== null}
+<div class="metadata">
+  <span class="lastmodified">{$data.lastmodified|datestamp}</span>
+</div>
+{/if}
 <div class="body">
 <ul class="nobullets">
 {if $data.uri !== null && $data.uri !== "" && $data.uri !== "/"}
@@ -16,7 +21,7 @@
 {/if}
 {foreach $data.items as $item}
 <li>{if $item.ext == "md" || $item.ext == "txt"}{fa ico="file" fixed=1 rspace=1}{else}{fa ico="folder" fixed=1 rspace=1}{/if}<a
-href="{$item.uri}">{$item.title}/</a>{if $item.ext} {*<span>({$item.ext})</span>*}{/if}</li>
+href="{$item.uri}">{$item.title}{if $item.is_folder}/{/if}</a>{if $item.ext} {*<span>({$item.ext})</span>*}{/if}</li>
 {/foreach}
 </ul>
 </div>
