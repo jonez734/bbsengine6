@@ -19,6 +19,12 @@ if (set_include_path($includepath) === false)
     error_log("include path fail");
 }
 
+// bbsengine.org does not require zoid6. The org vhost runs
+// zoid6-free; cross-site menu integration is opt-in per-vhost
+// and is wired through bbsengine6config.php's hook shim. The
+// require is preserved as a comment so a future vhost that
+// wants the full zoid6 menu can uncomment it. (Contrast
+// www/com/config-prod.php, which does require zoid6.)
 //require_once("zoid6.php");
 
 define("SITETITLE", "bbsengine6 official website");

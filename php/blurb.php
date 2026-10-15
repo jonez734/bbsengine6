@@ -400,6 +400,48 @@ function display($uri, $filepath)
     $data["title"] = $parsed["title"];
     $data["sections"] = $parsed["sections"];
 
+    // @since 2026-10-15 — populate $data["lastmodified"] for the
+    // page-level `.metadata` block in page-markdown-sections.tmpl
+    // (mirroring achilles/www/skin/tmpl/section.tmpl:3-7).
+    //
+    // Source priority:
+    //   1. Frontmatter `lastmodified:` (managed by blurbs/Makefile
+    //      on `make prod`; refreshed from the file's mtime on every
+    //      deploy).
+    //   2. `filemtime($blurbfile)` — fallback for blurbs that
+    //      haven't been through the new Makefile yet, or that
+    //      pre-date the frontmatter contract change. Matches
+    //      achilles's pattern (filemtime as ultimate fallback).
+    //
+    // The frontmatter `date:` / `createdate:` keys are the create
+    // date per the new contract; we do not use them as a
+    // lastmodified fallback (they intentionally differ from the
+    // mtime once a blurb is updated). `createdate` is read here for
+    // future contract work but not yet rendered.
+    //
+    // The frontmatter timestamp format is
+    // `YYYY-MM-DD HH:MM:SS GMT (HH:MM:NN TZ)`. The parenthetical
+    // TZ suffix is informational only (humans; the deploy uses
+    // the GMT half), so we strip everything from the first ` (`
+    // onward before handing the string to strtotime.
+    $frontmatter = $parsed["frontmatter"] ?? [];
+    $lastmodifiedStamp = isset($frontmatter["lastmodified"]) && is_string($frontmatter["lastmodified"])
+        ? $frontmatter["lastmodified"]
+        : null;
+    $lastmodifiedEpoch = false;
+    if (is_string($lastmodifiedStamp) && $lastmodifiedStamp !== "") {
+        $gmStamp = preg_replace('/\s*\(.*\)\s*$/', '', $lastmodifiedStamp);
+        $lastmodifiedEpoch = strtotime($gmStamp);
+    }
+    $filemtime = @filemtime($blurbfile);
+    if (is_int($lastmodifiedEpoch) && $lastmodifiedEpoch > 0) {
+        $data["lastmodified"] = $lastmodifiedEpoch;
+    } elseif (is_int($filemtime)) {
+        $data["lastmodified"] = $filemtime;
+    } else {
+        $data["lastmodified"] = false;
+    }
+
     \bbsengine6\util\logentry("bbsengine6.blurb.100: data.title=".var_export($data["title"], true));
 
     $choices = [];
@@ -407,6 +449,14 @@ function display($uri, $filepath)
     // point. Vhosts that load zoid6 get its cross-site menu via
     // bbsengine6config.php's zoid6 hook shim; vhosts that don't get
     // an empty menu (topbar-choices.tmpl hides empty sections).
+    //
+    // blurb.php does not `require_once` zoid6.php directly. The
+    // engine stays zoid6-free at the file level; zoid6 integration
+    // flows through the `\bbsengine6\menu` namespace and the
+    // bbsengine6config.php hook shim, which vhosts opt into by
+    // loading zoid6config.php. The same pattern is used by
+    // folder.php and any other engine library that wants the
+    // cross-site menu.
     $data["choices"] = \bbsengine6\menu\buildchoices($choices);
 
     return \bbsengine6\displaypage($data, "page-markdown-sections.tmpl", false);
@@ -414,7 +464,19 @@ function display($uri, $filepath)
 function parseMarkdownSections(string $markdown): array
 {
     require_once("markdown.php");
-    return \bbsengine6\markdown\parseDocument($markdown, split: true);
+    // @since 2026-10-15 — also surface the parsed frontmatter so
+    // blurb.php::display() can read the `lastmodified:` key
+    // (introduced with the frontmatter contract change) without
+    // re-parsing the markdown. The shape is now
+    // ['title' => string, 'sections' => [...], 'frontmatter' => [...]].
+    // Existing callers (smarty modifiers, tests) that only read
+    // `title` and `sections` are unaffected.
+    $doc = \bbsengine6\markdown\parseDocument($markdown, split: true);
+    return [
+        'title' => $doc['doc']['title'] ?? '',
+        'sections' => $doc['sections'] ?? [],
+        'frontmatter' => $doc['doc'] ?? [],
+    ];
 }
 
 }

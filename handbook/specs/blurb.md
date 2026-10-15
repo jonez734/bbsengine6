@@ -112,7 +112,7 @@ front-end renders. The `\bbsengine6\blurb` namespace exposes:
 | PHP function                                | Purpose                                                                        |
 |---------------------------------------------|--------------------------------------------------------------------------------|
 | `isBlurb(string $uri): bool`                | Check if a URI corresponds to a blurb in `engine.__blurb`                       |
-| `display(string $uri, ?string $filepath): void` | Render the blurb (Smarty template + markdown → HTML)                         |
+| `display(string $uri, ?string $filepath): void` | Render the blurb (Smarty template + markdown → HTML); populates `$data["lastmodified"]` from the frontmatter `lastmodified:` field (see [Lastmodified rendering](#lastmodified-rendering)) |
 | `buildbreadcrumbs(string $sigpath, bool $skiptop=true, ?string $hidepath=null): array` | Build breadcrumb trail from a sig path             |
 | `buildbreadcrumblist(int $blurbid): array`  | Build breadcrumbs for every SIG a blurb is posted to                            |
 | `getcontentdir(): string`                   | Returns the configured content dir                                               |
@@ -152,6 +152,8 @@ Markdown files with optional YAML frontmatter:
 title: John Edward Channeling
 author: Various Contributors
 category: mediumship
+folder-path: ec/, mediumship/
+lastmodified: 2026-10-15 04:05:15 GMT (00:05:15 NYC)
 ---
 
 # John Edward
@@ -164,6 +166,57 @@ Smarty on the PHP side and stored verbatim on the Python side
 The `title` field is the canonical blurb title; the PHP renderer
 falls back to the filename if absent. There is no case
 transformation — the user's data is authoritative.
+
+### Frontmatter keys
+
+| Key            | Required        | Purpose                                                                                |
+|----------------|-----------------|----------------------------------------------------------------------------------------|
+| `folder-path`  | yes (deploy)    | Comma-separated list of paths `blurbs/Makefile::copy-paths` mirrors this blurb to       |
+| `lastmodified` | yes (deploy)    | Wall-clock timestamp `YYYY-MM-DD HH:MM:SS GMT (HH:MM:NN TZ)`; refreshed from mtime on every `make prod` |
+| `createdate`   | no (preferred for new blurbs) | Wall-clock timestamp in the same format; set once when the blurb is first written |
+| `date`         | no (legacy)     | Legacy single-field timestamp; auto-migrated to `lastmodified` on next `make prod`      |
+| `title`        | no              | Override of the page H1 (filename is the fallback)                                       |
+| `author`       | no              | Per-section author; rendered inside the section's `.metadata` block                       |
+| `category`     | no              | Application-specific tag (e.g. `mediumship`); not rendered by the engine                 |
+
+The `folder-path` / `lastmodified` / `createdate` contract is the
+canonical contract enforced by `blurbs/Makefile`. See the meta-repo
+`AGENTS.md` §"Blurb frontmatter convention" for the full deploy
+contract and migration rules. The blurb handler in
+`php/blurb.php::display()` reads `lastmodified` from the parsed
+frontmatter to populate `$data["lastmodified"]`; the Smarty
+`page-markdown-sections.tmpl` template renders the page-level
+`.metadata` block from that field.
+
+## Lastmodified rendering
+
+`\bbsengine6\blurb\display()` populates `$data["lastmodified"]` with
+a Unix epoch (integer) so the Smarty `|datestamp` modifier can
+format it. Source priority:
+
+1. Frontmatter `lastmodified:` — parsed by
+   `\bbsengine6\markdown\splitFrontmatter()`, then handed to
+   `strtotime()` after stripping the parenthetical TZ suffix
+   (`strtotime()` cannot handle the ` (HH:MM:NN TZ)` form, so the
+   parenthetical is removed first).
+2. `filemtime($blurbfile)` — fallback for blurbs that pre-date the
+   frontmatter contract change or that pre-date the `lastmodified:`
+   key landing in the file (e.g. a freshly-deployed blurb that
+   hasn't been through `make prod` yet).
+
+The template at `bbsengine6/skin/tmpl/page-markdown-sections.tmpl`
+renders the timestamp as a `<span class="lastmodified">` inside a
+`<div class="metadata">` block at the page level, immediately below
+the page H1. The handbook vhost CSS at
+`bbsengine6/www/org/skin/css/blurb.css` provides a `.blurb > .metadata`
+rule that gives the block the same 0.75em / 0.75em-padding /
+#909090-gray styling as the per-section `.metadata` block.
+
+`parseMarkdownSections()` also surfaces the parsed frontmatter
+under a `frontmatter` key (in addition to the legacy `title` and
+`sections` keys) so callers can read frontmatter without
+re-parsing the markdown. Existing callers that only read
+`title`/`sections` are unaffected.
 
 ## Public API
 

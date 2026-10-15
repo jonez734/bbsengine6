@@ -1,6 +1,6 @@
 # bbsengine6 Specifications — Index
 
-> **Status:** canonical. Updated 2026-09-04.
+> **Status:** canonical. Updated 2026-10-15.
 > This directory is the single source of truth for subsystem
 > design specs. The 2026-02-23 baseline (`architecture.md`,
 > `decisions.md`, `dependencies.md`, `flows.md`) was rewritten
@@ -9,6 +9,11 @@
 > a single [`console.md`](./console.md). The 10
 > `BBSENGINE6_NOTIFYD_*.md` specs are HISTORICAL and were
 > superseded by [`messaging.md`](./messaging.md).
+>
+> The 2026-10-15 update added ADR 16 (blurb `lastmodified`
+> frontmatter contract) and updated [`blurb.md`](./blurb.md) and
+> [`folder.md`](./folder.md) to document the page-level
+> `.metadata` block rendered in the shared engine templates.
 
 ## Architecture and process
 
@@ -29,10 +34,6 @@
   2.0 wrapper
 - [util.md](./util.md) — display, dates, logging, input, ranges,
   password hashing, ANSI stripping, at-rest encryption
-- [datestamp.md](./datestamp.md) — `datestamp` formatter: Python
-  (`bbsengine6.util.datestamp`) and Smarty (`|datestamp`) modifier.
-  Shared strftime vocabulary, achilles-specific `%O` opt-in for
-  per-user timezone offset.
 - [member.md](./member.md) — member subsystem + WebSocket handler,
   with notify-era recipient-validation retained
 - [bestpractices.md](./bestpractices.md) — `io.echo` f-string rule

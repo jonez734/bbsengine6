@@ -118,6 +118,8 @@ Adds `{if isset($meta.key)}` blocks that override DB values if present in frontm
 | `description` | `$meta.description` |
 | `author` | `$meta.author` |
 | `date` | `$meta.date` |
+| `lastmodified` | `$meta.lastmodified` (page-level `.metadata` block; managed by `blurbs/Makefile` on `make prod`) |
+| `createdate` | `$meta.createdate` (page-level create date; managed by `blurbs/Makefile`; not yet rendered) |
 | `sigs` | `$meta.sigs` (comma-separated sig paths for cross-posting) |
 | `layout` | (reserved for future use) |
 | `foo-bar` | `$meta.foo_bar` (hyphens converted to underscores) |

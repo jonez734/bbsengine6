@@ -7,20 +7,28 @@
   {if $data.uri !== null && $data.uri !== "" && $data.uri !== "/"}
   {include file="youarehere.tmpl" breadcrumbs=$data.breadcrumbs linklast=true}
   {/if}
-  {foreach $data.sections as $section}
   <div class="blurb">
     <div class="header">
-      <h1>{$section.header}</h1>
+      <h1>{$data.title}</h1>
     </div>
-    <div class="body">
-      {$section.content}
-    </div>
-    {if is_array($section.date) || (isset($section.date) && $section.date !== "")}
+{if $data.lastmodified !== false && $data.lastmodified !== null}
     <div class="metadata">
-      {if isset($section.date)}<span class="date">{$section.date}</span>{/if}
-      {if isset($section.author)}<span class="author">{$section.author}</span>{/if}
+      <span class="lastmodified">{$data.lastmodified|datestamp}</span>
     </div>
-    {/if}
+{/if}
+    {foreach $data.sections as $section}
+    <div class="section">
+      <div class="header"><h2>{$section.header}</h2></div>
+      <div class="body">
+        {$section.content}
+      </div>
+      {if is_array($section.date) || (isset($section.date) && $section.date !== "")}
+      <div class="metadata">
+        {if isset($section.date)}<span class="date">{$section.date}</span>{/if}
+        {if isset($section.author)}<span class="author">{$section.author}</span>{/if}
+      </div>
+      {/if}
+    </div>
+    {/foreach}
   </div>
-  {/foreach}
 {/block}

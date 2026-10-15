@@ -92,22 +92,26 @@ to prevent ReDoS and path-traversal payloads.
 
 | PHP function                                | Purpose                                                                       |
 |---------------------------------------------|-------------------------------------------------------------------------------|
-| `getteospath(): string`                     | Base filesystem path to teos content                                          |
 | `isFolder(string $uri): bool`               | True iff the URI corresponds to an existing directory                          |
 | `getDirectoryItems(string $dirpath, string $uri): array` | List items with title, uri, filename                                |
 | `parseYamlFrontmatter(string $yaml): array` | Parse YAML frontmatter into assoc array                                       |
 | `getDirectoryTitle(string $uri): string`    | Title for a directory (from YAML or filename; never uppercased)               |
-| `display(string $uri): ?string`             | Render the directory listing HTML                                              |
+| `display(string $uri): ?string`             | Render the directory listing HTML; populates `$data["lastmodified"]` from `filemtime($filepath)` so `folder.tmpl` can render a page-level `.metadata` block |
 | `getFolderMeta(string $uri): ?array`        | Optional: folder metadata from `engine.folder`                                 |
 | `getFolderSigs(string $uri): array`         | Optional: child sigs of the folder                                              |
 | `getFolderBreadcrumbs(string $uri): array`  | Optional: breadcrumb trail from `engine.sig`                                    |
 | `getTopLevelFolders(): array`               | Optional: top-level sigs                                                       |
 
+> The historical `getteospath(): string` was removed in the
+> 2026-09-28 TEOSDIR contract change. Callers that need the
+> content tree root should use `\bbsengine6\util\env('TEOSDIR')`
+> directly (or `\bbsengine6\util\catalog_root()` for the helper).
+
 Configuration:
 
 | Constant                       | Default                          |
 |--------------------------------|----------------------------------|
-| `TEOSFILEPATH`                 | `/srv/www/zoid6/teos/`           |
+| `TEOSDIR` (env)                | `/srv/www/vhosts/zoidtechnologies.com/html/teos/` (set per-vhost in `htaccess-prod`; read via `\bbsengine6\util\env()`) |
 | `BBSENGINE6_BLURB_CONTENT_DIR` | `/var/bbsengine6/blurb_content`  |
 
 Router integration (in `engine/router.php`):

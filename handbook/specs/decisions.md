@@ -23,6 +23,7 @@
 13. [Dedicated `zoid6` Owner Role for SECURITY DEFINER Helpers](#decision-13-dedicated-zoid6-owner-role-for-security-definer-helpers)
 14. [Single-Source-of-Truth bcrypt in `bbsengine6.password`](#decision-14-single-source-of-truth-bcrypt-in-bbsengine6password)
 15. [`notify` Subsystem Deletion](#decision-15-notify-subsystem-deletion)
+16. [Blurb `lastmodified` Frontmatter Contract](#decision-16-blurb-lastmodified-frontmatter-contract)
 
 ---
 
@@ -609,6 +610,111 @@ from new docs (see [`../../SPEC.md`](../../SPEC.md#10-out-of-scope)).
 
 ---
 
+## Decision 16: Blurb `lastmodified` Frontmatter Contract
+
+### Decision
+
+The blurb frontmatter contract now carries three timestamp-related
+keys with distinct semantics:
+
+| Key            | Semantics                                                                 | Source of truth                          |
+|----------------|---------------------------------------------------------------------------|------------------------------------------|
+| `lastmodified` | The wall-clock time the blurb was last written. Refreshed on every `make prod` from the file's mtime. | `blurbs/Makefile` `prod` target          |
+| `createdate`   | The wall-clock time the blurb was first written. Set once.                | `blurbs/Makefile` `prod` target (one-time migration from `date:`) |
+| `date`         | Legacy single-field timestamp, operationally a last-modified date.         | Kept in place on migration as read fallback for `createdate` |
+
+The blurb handler reads `lastmodified` from the parsed frontmatter
+(via `\bbsengine6\markdown\splitFrontmatter()`), falls back to
+`filemtime($blurbfile)` when missing, and exposes the value as
+`$data["lastmodified"]` (a Unix epoch). The
+`page-markdown-sections.tmpl` template renders the timestamp as
+a `<span class="lastmodified">` inside a `<div class="metadata">`
+block at the page level, mirroring the per-section
+`lastmodified` display in `achilles/www/skin/tmpl/section.tmpl:3-7`.
+
+The folder handler reads `filemtime($dirpath)` directly; folders
+don't carry frontmatter, so the mtime is the only source. The
+`folder.tmpl` template renders the same `.metadata` block.
+
+### Rationale
+
+The legacy single `date:` field was operationally a last-modified
+date (the Makefile refreshed it from mtime on every `make prod`),
+so the visible timestamp silently drifted away from the create
+date on every update. Two distinct semantics — "when was this first
+written" vs "when was this last touched" — got collapsed into one
+field that tracked the latter, and there was no way to render the
+former.
+
+The split into `createdate` (write-once) and `lastmodified`
+(refreshed-on-deploy) mirrors how version-control systems track
+the same two facts (`git log` shows both, with the first commit
+being the create date and HEAD being the last-modified date). It
+also matches what the engine's user-visible metadata block
+actually wants to display: a reader cares about "when was this
+last updated" more than "when was this first written" for a blurb
+that's been edited twenty times.
+
+The achilles vhost already shipped this pattern
+(`achilles/www/skin/tmpl/section.tmpl:3-7`) using `filemtime()`
+on the `.tmpl` files as its source of truth. Mirroring the
+pattern in bbsengine6's shared templates means teos and handbook
+pick up the same visual without forking achilles — and adopting
+the frontmatter key gives blurb authors a way to set the
+timestamp explicitly (e.g. when a blurb's mtime was bumped by a
+non-content edit like a tag fix and the visible timestamp
+shouldn't change).
+
+The legacy `date:` key is retained as a read fallback for the
+create date (not the last-modified date) so existing blurbs
+continue to work without a forced rewrite. A future pass can
+drop `date:` once every blurb in the tree has both new keys.
+
+### Alternatives considered
+
+- **Use `filemtime()` directly, no frontmatter key.** Simplest
+  contract: the timestamp is always `mtime`, always right. The
+  achilles vhost works this way. Rejected: a blurb whose mtime
+  was bumped by a non-content edit (e.g. a permission change,
+  a deploy script) would show a misleading "last updated"
+  timestamp to readers. The frontmatter key gives the blurb
+  author explicit control.
+- **Use a single `lastmodified` key, no `createdate`.** Skip the
+  create date entirely. Rejected: a future pass will want to
+  render the create date in the metadata block (alongside
+  `lastmodified`), and the create date is the right input to
+  feed a "newest blurbs" widget. Capturing it at deploy time is
+  cheaper than reconstructing it from git history later.
+- **Use a `date` field with a separate `lastmodified` field that
+  has a different name (e.g. `mtime`).** Rejected: the blurb
+  author's mental model is "when was this written" and "when was
+  this last updated", not "what's the file's mtime". The keys
+  should read like English.
+
+### Outcome
+
+Adopted 2026-10-15. The contract is documented in the meta-repo
+`AGENTS.md` §"Blurb frontmatter convention" and in
+`handbook/specs/blurb.md` §"Frontmatter keys" / §"Lastmodified
+rendering". The `blurbs/Makefile` `prod` target migrates
+existing blurbs on the next `make prod`: legacy `date:` is
+copied into a new `createdate:` line, and `lastmodified:` is
+added (or refreshed) from the file's mtime. The legacy `date:`
+line is left in place as a read fallback for `createdate`.
+
+The blurb template at
+`bbsengine6/skin/tmpl/page-markdown-sections.tmpl` was
+restructured so a single page-level `<div class="blurb">`
+wraps the page H1 + `.metadata` block + the section loop.
+Per-section date/author rendering (for blurbs whose H1 sections
+have their own frontmatter) is preserved inside each section.
+
+The folder template at `bbsengine6/skin/tmpl/folder.tmpl` was
+extended with the same page-level `.metadata` block below the
+folder H1, sourced from the directory's mtime.
+
+---
+
 ## Summary
 
 | # | Decision | Choice |
@@ -628,6 +734,7 @@ from new docs (see [`../../SPEC.md`](../../SPEC.md#10-out-of-scope)).
 | 13 | SECURITY DEFINER ownership | Dedicated `zoid6` role |
 | 14 | Password hashing | Local verify + opportunistic rehash on each side |
 | 15 | `notify` subsystem | Deleted; replaced by `bbsengine6.message` |
+| 16 | Blurb frontmatter | `createdate` + `lastmodified`; legacy `date:` is read fallback |
 
 ---
 

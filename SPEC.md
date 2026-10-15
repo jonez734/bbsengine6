@@ -188,9 +188,7 @@ The package lives at `py/src/bbsengine6/`.
 ### 4.3 Smarty plugins (`smarty/`)
 
 Functions: `apidocs`, `fa`, `repo`, `teos`. Modifiers: `ago`,
-`datestamp` (full Python strftime vocabulary + `%O` per-user
-timezone opt-in — see `handbook/specs/datestamp.md`),
-`filesize`, `fromnow`, `linkurl`, `markdown`,
+`datestamp`, `filesize`, `fromnow`, `linkurl`, `markdown`,
 `parsedown`, `summarize`, `wpprop`.
 
 ### 4.4 Skin (`skin/`)
@@ -315,7 +313,6 @@ for each subsystem:
 | `index.md`                            | Spec index (TOC)                                  |
 | `database.md`                         | `bbsengine6.database` (pool, DSN, role plumbing) |
 | `util.md`                             | `bbsengine6.util`                                 |
-| `datestamp.md`                        | `datestamp` formatter (Python + Smarty)          |
 | `member.md`                           | `bbsengine6.member` (recipient validation, groups)|
 | `auth-bank.md`                        | WS auth → bank authorization flow                 |
 | `pg-ident-auth.md`                    | Per-member `l_<loginid>` / `m_<moniker>` roles    |

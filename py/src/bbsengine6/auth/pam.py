@@ -4,24 +4,51 @@ Invoked by pam_exec.so with ``expose_authtok`` on the PAM rule line:
     auth sufficient pam_exec.so quiet expose_authtok /usr/local/bin/bbsengine6-auth-pam
 
 Reads from the environment that pam_exec.so sets:
-  - PAM_USER       -- the username
+  - PAM_USER       -- the username (always)
   - PAM_SERVICE    -- the service name (e.g. 'imap' for Cyrus auxprop-pam,
-                      'dovecot' for the auth-system passdb)
-  - PAM_TYPE       -- 'auth' (this helper runs on the auth stack) or
-                      'account'/'session'/'password' (pass-through with
-                      exit 0; the BBS gate is enforced in 'auth')
-  - PAM_AUTHTOK    -- the plaintext password; only present when
-                      expose_authtok is on the rule line
+                      'dovecot' for Dovecot's auth-system passdb)
+  - PAM_TYPE       -- 'auth' or 'account' (or 'session', 'password')
+  - PAM_AUTHTOK    -- the plaintext password (only when expose_authtok is
+                      on the rule line; this is the load-bearing case)
 
-Calls ``bbsengine6.auth.verify.verify_member`` for the actual decision.
-The password env var is read and immediately scrubbed
-(os.environ.pop) before any other code can see it. See README.md
-"Security model" for the threat model and mitigations.
+Security model
+--------------
 
-Exit codes:
-  0 -- auth success (PAM_TYPE=auth) or pass-through (other types)
-  1 -- auth failure or missing PAM_USER/PAM_AUTHTOK
-  2 -- DB / setup error (treated as transient by the PAM stack)
+The plaintext password is in the ``PAM_AUTHTOK`` env var for the
+lifetime of this process. /proc/<pid>/environ is readable by root
+for the process's lifetime. Mitigations:
+
+1. This helper reads PAM_AUTHTOK and immediately calls
+   ``os.environ.pop("PAM_AUTHTOK")`` so subsequent code in this
+   process cannot see the value. The in-process exposure window is
+   microseconds (one Python statement).
+
+2. The helper runs as root (because pam_exec.so forks from the
+   privileged parent that ran the auth). /proc/<pid>/environ is
+   still readable to root, but the value is now empty.
+
+3. The helper does not log the password. The outcome line contains
+   the user and an outcome class (ok / wrong-password / etc.) but
+   never the password.
+
+4. The DB call is wrapped in a READ ONLY transaction (see
+   bbsengine6.auth.verify.verify_member). Even if an attacker could
+   influence the SQL, they cannot write to the BBS DB.
+
+Threat model
+------------
+
+Acceptable given the root-trust model on the host: an attacker who
+can read /proc/<pid>/environ of a root-owned process already has
+root on the host. The env-var exposure does not increase the
+attack surface meaningfully beyond "operator has root on merlin or
+falcon."
+
+If a future threat model requires keeping the password out of the
+helper's env entirely, the only correct path is a real Linux-PAM
+module in C (e.g. pam_bbsengine6.so, not in scope here). The pure-
+Python path is the trade for code reuse with bbsengine6.auth.verify
+and zero C build / no .so on the target.
 """
 from __future__ import annotations
 
@@ -36,7 +63,11 @@ _LOG = _make_logger("bbsengine6.auth.pam")
 
 
 def _read_and_scrub_password() -> str | None:
-    """Read PAM_AUTHTOK from the env and pop it. Returns None if unset."""
+    """Read the password from PAM_AUTHTOK and immediately scrub the env.
+
+    Returns None if PAM_AUTHTOK is not set (rule line missing
+    expose_authtok, or this is being called outside a PAM context).
+    """
     pw = os.environ.get("PAM_AUTHTOK")
     if pw is None:
         return None

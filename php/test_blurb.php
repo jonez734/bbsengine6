@@ -88,6 +88,112 @@ if ($blurbid === "about") {
 echo "\n";
 
 // =============================================================================
+// FRONTMATTER PARSING TESTS (added 2026-10-15)
+// =============================================================================
+
+echo "--- Frontmatter Parsing Tests ---\n\n";
+
+// @since 2026-10-15 — `parseMarkdownSections()` now returns the
+// parsed frontmatter under a `frontmatter` key (in addition to
+// the legacy `title` and `sections` keys). These tests pin that
+// contract: the new field is populated from a `---\n...\n---`
+// block, and missing/non-frontmatter inputs return an empty
+// array. The downstream `lastmodified` logic in
+// `bbsengine6\blurb\display()` reads from this `frontmatter`
+// key directly; if a future refactor drops the `frontmatter`
+// key, the blurb page will silently fall back to filemtime
+// instead of the deploy-managed timestamp.
+//
+// We exercise the contract via the lower-level
+// \bbsengine6\markdown\parseDocument() directly so these
+// mock-mode tests do not require the full engine.php include
+// chain (which has third-party HTML_QuickForm2 deps not present
+// in the test environment).
+
+// Test: parseDocument includes `doc` key with parsed
+// frontmatter key/value pairs captured. blurb.php's
+// parseMarkdownSections() wraps this and re-exports it under
+// the `frontmatter` key, so a contract break at either layer
+// surfaces in a downstream refactor.
+require_once("/home/opencode/data/work/bbsengine6/php/markdown.php");
+
+echo "Test 5a: parseDocument returns parsed frontmatter (markdown layer)\n";
+$markdown = "---\nfolder-path: rec/arts/sci-fi/\nlastmodified: 2026-10-15 04:05:15 GMT (00:05:15 NYC)\n---\n\n# Title\n\nBody.\n";
+$doc = \bbsengine6\markdown\parseDocument($markdown, split: true);
+if (is_array($doc) && isset($doc["doc"]) && is_array($doc["doc"])) {
+    if (($doc["doc"]["folder-path"] ?? null) === "rec/arts/sci-fi/" &&
+        ($doc["doc"]["lastmodified"] ?? null) === "2026-10-15 04:05:15 GMT (00:05:15 NYC)") {
+        echo "  ✓ PASS: frontmatter key/value pairs captured\n";
+    } else {
+        echo "  ✗ FAIL: frontmatter missing expected keys: " . var_export($doc["doc"], true) . "\n";
+        exit(1);
+    }
+} else {
+    echo "  ✗ FAIL: parseDocument did not return a 'doc' key\n";
+    exit(1);
+}
+
+echo "Test 5b: parseDocument returns doc array (possibly with title from split) for input without frontmatter\n";
+// When there's no `---\n...\n---` block, splitFrontmatter returns
+// an empty metadata array, then parseDocument in split=true mode
+// re-assigns $doc["title"] from the first H1 of the rendered
+// HTML. So the doc array is non-empty (just has a title) but
+// the original frontmatter keys (folder-path, lastmodified, etc.)
+// are absent. This is the contract blurb.php::display() relies
+// on for the `lastmodified` display fallback to filemtime.
+$doc = \bbsengine6\markdown\parseDocument("# Just a title\n\nNo frontmatter here.\n", split: true);
+if (is_array($doc) && isset($doc["doc"]) && is_array($doc["doc"])) {
+    if (!isset($doc["doc"]["folder-path"]) && !isset($doc["doc"]["lastmodified"])) {
+        echo "  ✓ PASS: no-frontmatter input has no lastmodified key (filemtime fallback will apply)\n";
+    } else {
+        echo "  ✗ FAIL: unexpected frontmatter keys: " . var_export($doc["doc"], true) . "\n";
+        exit(1);
+    }
+} else {
+    echo "  ✗ FAIL: parseDocument did not return a 'doc' key\n";
+    exit(1);
+}
+
+echo "Test 5c: parseDocument reads legacy `date:` key as create date\n";
+// The `date:` key is the legacy create-date field per the
+// 2026-10-15 frontmatter contract change. It should be surfaced
+// in the parsed frontmatter under the `date` key (the read
+// fallback is for the create date; the `lastmodified` display
+// does not use it).
+$doc = \bbsengine6\markdown\parseDocument("---\nfolder-path: rec/\ndate: 2026-10-15 03:00:00 GMT (23:00:00 NYC)\n---\n\n# Title\n", split: true);
+if (is_array($doc) && ($doc["doc"]["date"] ?? null) === "2026-10-15 03:00:00 GMT (23:00:00 NYC)") {
+    echo "  ✓ PASS: legacy `date:` key surfaces in frontmatter\n";
+} else {
+    echo "  ✗ FAIL: expected 'date' key, got " . var_export($doc["doc"] ?? null, true) . "\n";
+    exit(1);
+}
+
+echo "Test 5d: strtotime parses the new `lastmodified` format (after stripping parenthetical TZ)\n";
+// The frontmatter timestamp format is
+// `YYYY-MM-DD HH:MM:SS GMT (HH:MM:NN TZ)`. PHP's strtotime
+// cannot parse the parenthetical TZ suffix; blurb.php::display()
+// strips everything from the first ` (` onward before
+// handing the string to strtotime. This test pins that
+// strip-and-parse flow.
+$stamp = "2026-10-15 04:05:15 GMT (00:05:15 NYC)";
+$gmStamp = preg_replace('/\s*\(.*\)\s*$/', '', $stamp);
+$epoch = strtotime($gmStamp);
+if (is_int($epoch) && $epoch > 0) {
+    $expected = gmmktime(4, 5, 15, 10, 15, 2026);
+    if ($epoch === $expected) {
+        echo "  ✓ PASS: stripped '$stamp' to '$gmStamp' → epoch $epoch (= gmmktime 2026-10-15 04:05:15 UTC)\n";
+    } else {
+        echo "  ✗ FAIL: epoch $epoch != expected gmmktime $expected\n";
+        exit(1);
+    }
+} else {
+    echo "  ✗ FAIL: strtotime could not parse '$gmStamp'\n";
+    exit(1);
+}
+
+echo "\n";
+
+// =============================================================================
 // DATABASE INTEGRATION TESTS
 // =============================================================================
 

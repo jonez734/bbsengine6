@@ -78,7 +78,16 @@ function splitFrontmatter(string $markdown): array
 
     if (preg_match('/^---\s*\n(.*?)\n---(?:\s*\n|\s*$)/s', $markdown, $m)) {
         foreach (explode("\n", $m[1]) as $line) {
-            if (preg_match('/^(\w+):\s*(.*)$/', $line, $kv)) {
+            // @since 2026-10-15 — accept hyphens in keys. The
+            // previous `^(\w+):` regex silently dropped keys
+            // like `folder-path` (used by every blurb) because
+            // `\w` does not match `-`. The contract now includes
+            // hyphenated keys (`folder-path`), so expand the
+            // key charset to `[A-Za-z0-9_-]+`. Keys are still
+            // anchored to start-of-line and followed by `:`,
+            // so this is a strict superset of the previous
+            // accepted inputs.
+            if (preg_match('/^([A-Za-z0-9_-]+):\s*(.*)$/', $line, $kv)) {
                 $metadata[trim($kv[1])] = trim($kv[2], "\"' \r");
             }
         }
