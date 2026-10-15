@@ -1077,14 +1077,33 @@ function env_bool(string $key, bool $default = false): bool
 /**
  * \bbsengine6\util\datestamp — canonical PHP date/time formatter.
  *
- * Mirrors bbsengine6.util.datestamp in the Python package: the
+ * Mirrors `bbsengine6.util.datestamp` in the Python package: the
  * same strftime vocabulary, the same default format, the same
- * %O opt-in for per-user timezone offset. The Smarty
+ * `%O` opt-in for per-user timezone offset. The Smarty
  * `|datestamp` modifier (bbsengine6/smarty/modifier.datestamp.php
- * and zoid6/smarty/modifier.datestamp.php) is a thin wrapper
- * that calls this function.
+ * and zoid6/smarty/modifier.datestamp.php) is a thin wrapper that
+ * calls this function.
  *
  * @since 2026-10-13
+ * @since 2026-10-15 — byte-exact parity with Python's strftime for
+ *   `(int, str)` inputs. Two changes:
+ *     1. `setlocale(LC_TIME, 'C')` is called at entry so PHP
+ *        `date()` day/month names (`%a`, `%A`, `%b`, `%B`) match
+ *        Python's C-locale strftime output (`Tue`, `Tuesday`,
+ *        `Oct`, `October`). Without this pin, a non-English
+ *        server locale would produce locale-specific names that
+ *        diverge from Python. Pinned to C, not en_US, because
+ *        C is the canonical POSIX locale both languages resolve
+ *        to when no LC_TIME env var is set.
+ *     2. The `%l` (12-hour, unpadded/space-padded) token now
+ *        space-pads to width 2 so it matches Python's
+ *        `time.strftime("%l", t)` which returns `" 2"` (one
+ *        leading space) for hours 1-9. PHP's native
+ *        `date('g', $ts)` returns `"2"` (no padding); the
+ *        walker now does `str_pad(date('g', $ts), 2, ' ',
+ *        STR_PAD_LEFT)`. Python's spec calls this out
+ *        explicitly; the parity test pins the expected output.
+ *
  * @param int|float|string|\DateTimeInterface|null $t
  *        The time value to format. Accepted types:
  *        - null: current time (time())
@@ -1102,6 +1121,19 @@ function env_bool(string $key, bool $default = false): bool
  */
 function datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $format = null): string
 {
+    // Pin the C locale for time/date formatting so PHP date()
+    // emits the same day/month names as Python's strftime on the
+    // same epoch. PHP's date() reads LC_TIME for these names
+    // (D, l, M, F, A, a) since PHP 5.3; Python's strftime does
+    // the same. With both pinned to 'C', %a, %A, %b, %B, %p, %P
+    // produce byte-identical output.
+    //
+    // setlocale() returns false on failure (e.g., C locale not
+    // installed). We don't error out — fallback to whatever the
+    // system default is, which is usually C on Linux servers
+    // anyway. The parity test pins 'C' explicitly.
+    @setlocale(LC_TIME, 'C');
+
     // --- 1. Resolve $t to a Unix epoch (int). ---
     if ($t === null) {
         $timestamp = time();
@@ -1158,6 +1190,10 @@ function datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $
     //    bbsengine6/smarty/modifier.datestamp.php's table. Tokens
     //    not in this map fall through to the "unknown token"
     //    branch in the walker below. ---
+    //
+    //    %l → 'g' (PHP's date('g') returns unpadded 12-hour,
+    //    e.g. "2"; the walker space-pads below to match Python's
+    //    strftime %l which returns " 2"). See step 6.
     $strftimeToDate = [
         '%Y' => 'Y', '%y' => 'y',
         '%m' => 'm', '%b' => 'M', '%B' => 'F',
@@ -1172,9 +1208,7 @@ function datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $
         '%%' => '%',
     ];
 
-    // --- 5. Token-aware walker. See
-    //    bbsengine6/handbook/specs/datestamp.md for the design
-    //    rationale. ---
+    // --- 5. Token-aware walker. ---
     $knownTokens = array_keys($strftimeToDate);
     $inlineTokens = ['%%', '%j', '%O'];
 
@@ -1202,6 +1236,13 @@ function datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $
                     $result .= (string)((int)date('z', $localTs) + 1);
                 } elseif ($matched === '%O') {
                     $result .= $userOffsetValue;
+                } elseif ($matched === '%l') {
+                    // @since 2026-10-15 — byte-exact parity with
+                    // Python. PHP date('g') returns unpadded
+                    // ("2"); Python strftime %l returns
+                    // space-padded (" 2"). Pad to width 2 with
+                    // a leading space.
+                    $result .= str_pad((string)(int)date('g', $localTs), 2, ' ', STR_PAD_LEFT);
                 } else {
                     $result .= date($strftimeToDate[$matched], $localTs);
                 }
@@ -1220,5 +1261,51 @@ function datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $
     }
 
     return $result;
+}
+
+/**
+ * \bbsengine6\util\smarty_plugin_bootstrap — prime the Smarty
+ * plugin-load include_path so `bbsengine6config.php` is reachable
+ * when a plugin loads outside a fully-bootstrapped vhost.
+ *
+ * The bbsengine6 Smarty modifier (smarty/modifier.*.php) and the
+ * zoid6 Smarty modifier (zoid6/smarty/modifier.*.php) both call
+ * this at load time, before `require_once("config.php")`. The
+ * bootstrap is idempotent — calling it from multiple modifier
+ * files (e.g., once from the plugin loader and once from the
+ * engine) is safe; bbsengine6\bootstrap() and add_include_paths()
+ * are additive.
+ *
+ * Behavior:
+ *
+ * - If VHOSTDOCROOT is unset or points to a non-directory, this
+ *   is a no-op (the modifier's `require_once("config.php")` will
+ *   then fail or succeed based on the caller's include_path, same
+ *   as before this helper existed).
+ * - If VHOSTDOCROOT is set, this primes the include_path with
+ *   `$vhostroot` and `$vhostroot/teos/`, which is what
+ *   bbsengine6config.php (the canonical vhost config) lives under.
+ *
+ * @since 2026-10-15 — Extracted from the inline block in
+ *   bbsengine6/smarty/modifier.datestamp.php so the bbsengine6
+ *   and zoid6 modifier files can be byte-identical.
+ *
+ * @return void
+ */
+function smarty_plugin_bootstrap(): void
+{
+    $vhostroot = getenv('VHOSTDOCROOT');
+    if (!is_string($vhostroot) || $vhostroot === '' || !is_dir($vhostroot)) {
+        return;
+    }
+    if (function_exists('bbsengine6\\bootstrap')) {
+        bbsengine6\bootstrap([$vhostroot]);
+    }
+    if (function_exists('bbsengine6\\util\\add_include_paths')) {
+        bbsengine6\util\add_include_paths([
+            $vhostroot,
+            $vhostroot . 'teos/',
+        ]);
+    }
 }
 ?>

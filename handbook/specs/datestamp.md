@@ -1,18 +1,25 @@
 # datestamp Specification
 
-> Status: canonical. Updated 2026-10-13.
+> Status: canonical. Updated 2026-10-15.
 
 ## Summary
 
 `datestamp` is the canonical date/time formatter for bbsengine6.
-It is exposed in two surfaces:
+It is exposed in three surfaces:
 
 - **Python** — `bbsengine6.util.datestamp(t, format)` for TUI / CLI / scripts.
+- **PHP** — `\bbsengine6\util\datestamp($t, $format)` for any PHP code path
+  (CLI scripts, web request handlers, library code).
 - **Smarty** — `{$timestamp|datestamp}` (or `{$timestamp|datestamp:$format}`)
-  for web templates.
+  for web templates. The Smarty modifier
+  (`bbsengine6/smarty/modifier.datestamp.php` and
+  `zoid6/smarty/modifier.datestamp.php`) is a thin wrapper around
+  `\bbsengine6\util\datestamp()`. The two modifier files are
+  byte-identical to guarantee no drift between them.
 
-Both surfaces accept the same strftime vocabulary and produce
-identical output for any common-subset token. The PHP modifier
+All three surfaces accept the same strftime vocabulary and produce
+**byte-exact** output for any common-subset token on a server with
+`LC_TIME=C`. The PHP modifier
 extends the vocabulary with one opt-in token, `%O`, which
 renders the per-user timezone offset (e.g. `-04:00`, `+05:30`)
 when the session has set one.
@@ -135,16 +142,48 @@ both languages render; PHP-specific extensions are marked.
 |-------|--------|-------|
 | `%O` | per-user TZ offset `±HH:MM` (or empty) | Renders empty string when offset is unset or zero. **PHP** (`|datestamp`): reads `$_SESSION['localtimezoneoffset']` (integer minutes) per request. **Python** (`bbsengine6.util.datestamp`): reads the module-level `_user_tz_offset_minutes` set via `bbsengine6.util.set_user_tz_offset(minutes)`. Same output format on both surfaces. |
 
-### Documented divergences
+### Type-semantic differences (not byte-exact by design)
 
-- **`%l`**: Python `strftime %l` returns space-padded hour (e.g. `" 2"`).
-  PHP `date('g')` returns unpadded (e.g. `"2"`). Both languages
-  render the same numeric value; padding differs by one character.
-- **`%Z`**: Python and PHP both return the **server's** local TZ
-  abbreviation. If a vhost runs on a server whose TZ differs from
-  Python's `tzlocal()`, both languages agree (both use server-local).
-  Behavior diverges only if Python explicitly sets a non-local TZ
-  on the `datetime` object — uncommon.
+The byte-exact parity claim is for `(int|float $t, string $format)`
+inputs on a server with `LC_TIME=C`. The two surfaces diverge
+intentionally for non-int input types because each language's
+idiomatic type system differs:
+
+- **`$t` is a `string`**: PHP calls `strtotime()` (or treats a
+  numeric string as a Unix epoch). Python calls
+  `bbsengine6.io.input.getdate()`, a BBS-specific parser. The
+  same string input may produce different timestamps. Consumers
+  who need cross-language string parsing should pre-parse to an
+  epoch int and pass that instead.
+- **`$t` is a `datetime`/`DateTimeInterface`**: PHP uses the
+  `DateTimeInterface` instance's `getTimestamp()`. Python uses
+  the `datetime` instance's `utcoffset()` for `%z`/`%:z` and its
+  native `strftime()`. The two surfaces agree on the timestamp
+  interpretation but differ in the date object's type API.
+- **Default format string**: PHP reads `DATEFORMAT` (the vhost
+  constant) with a fallback chain. Python's `datestamp(t, format)`
+  has a hardcoded default of `"%Y-%m-%d %I:%M%P %Z (%a)"`. To
+  pin a specific default across both surfaces, callers should
+  pass the format string explicitly.
+- **Failure modes**: PHP returns `""` on unparseable input or
+  wrong type. Python raises `AssertionError` on wrong type and
+  returns the original string from `getdate()` on unparseable
+  string input.
+
+### Resolved divergences (pre-2026-10-15)
+
+- **`%l` (12-hour, unpadded/space-padded)**: Python's strftime
+  `time.strftime("%l", t)` returns space-padded (`" 2"` for
+  hours 1-9). PHP's `date('g', $ts)` returns unpadded (`"2"`).
+  Resolved: the PHP walker now pads to width 2 with a leading
+  space, so `%l` produces byte-exact output across both surfaces.
+- **Day/month name locale**: PHP's `date('D')` and Python's
+  strftime both read the C runtime's `LC_TIME`. Without a locale
+  pin, a non-English server locale would produce locale-specific
+  names. Resolved: the PHP walker calls `setlocale(LC_TIME, 'C')`
+  at entry, matching Python's default `C` locale. The Python
+  walker's `t.strftime()` already honors `LC_TIME`; with both
+  pinned to `C`, day/month names are byte-exact.
 
 ### Out of scope (not implemented)
 
@@ -232,11 +271,14 @@ Behavior:
 
 ## Behavior parity
 
-Given the same timestamp, format string, and server TZ, Python
-`bbsengine6.util.datestamp(t, format)` and Smarty `{$t|datestamp:$format}`
-produce identical output for every common-subset token.
+Given the same timestamp, format string, and server with
+`LC_TIME=C`, Python `bbsengine6.util.datestamp(t, format)` and
+`\bbsengine6\util\datestamp($t, $format)` (and the Smarty
+modifier that wraps it) produce **byte-exact** output for every
+common-subset token.
 
-Example (server TZ = UTC, ts = 1760400000 = 2025-10-13 14:30 UTC):
+Example (server TZ = UTC, LC_TIME = C, ts = 1760365800 = 2025-10-13
+14:30 UTC):
 
 | Format string | Python output | PHP output |
 |---------------|---------------|------------|
@@ -245,6 +287,14 @@ Example (server TZ = UTC, ts = 1760400000 = 2025-10-13 14:30 UTC):
 | `"%Y-%m-%d %H:%M:%S %Z"` | `2025-10-13 14:30:00 UTC` | `2025-10-13 14:30:00 UTC` |
 | `"%A, %B %d, %Y"` | `Monday, October 13, 2025` | `Monday, October 13, 2025` |
 | `"day %j of %Y"` | `day 286 of 2025` | `day 286 of 2025` |
+| `"%l"` (12-hour, padded) | ` 2` | ` 2` |
+| `"%:z"` (offset with colon) | `+00:00` | `+00:00` |
+
+The byte-exact contract is enforced by
+`bbsengine6/test_parity_php_python.json`, a shared JSON fixture
+read by both `bbsengine6/php/test_parity_php_python.php` and
+`bbsengine6/py/tests/test_parity_php_python.py`. Either test
+failing indicates the two surfaces have drifted.
 
 ## Test coverage
 
@@ -257,14 +307,33 @@ Regression coverage lives at:
   the token-aware walker behavior (bare letters preserved, multi-char
   tokens like `%:z` matched before `%z`, unknown tokens passed
   through verbatim).
+- `bbsengine6/php/test_util_datestamp.php` — 46 tests covering
+  `\bbsengine6\util\datestamp()` directly (type coercion, format
+  resolution, full token vocabulary, `%O` opt-in, walker edge
+  cases).
 - `zoid6/php/test_datestamp_modifier.php` — parallel coverage for
-  the zoid6 modifier.
+  the zoid6 modifier (38 tests).
+- `bbsengine6/test_parity_php_python.json` + the two cross-language
+  runners — 26 byte-exact parity cases (`test_parity_php_python.php`
+  and `test_parity_php_python.py` both consume the same JSON).
+- `py/tests/test_util_datestamp.py` — 38 tests covering
+  `bbsengine6.util.datestamp` (per-token, %O, default format, edge
+  cases).
+- `py/tests/test_parity_php_python.py` — 27 Python-side cases
+  pinned against the shared fixture.
 
 Run with:
 
 ```bash
+# PHP — modifier + util + parity
 php bbsengine6/php/test_datestamp_modifier.php
+php bbsengine6/php/test_util_datestamp.php
+php bbsengine6/php/test_parity_php_python.php
 php zoid6/php/test_datestamp_modifier.php
+
+# Python — util + parity
+cd bbsengine6/py
+python3 -m pytest tests/test_util_datestamp.py tests/test_parity_php_python.py
 ```
 
 ## Implementation notes
@@ -311,6 +380,22 @@ then a single-letter `%X`, then a literal `%`.
 
 ## Historical
 
+- **2026-10-15** — Byte-exact parity with Python's strftime. The
+  PHP walker now pins `LC_TIME=C` at entry so day/month names
+  match Python's C-locale output byte-for-byte. The `%l` token
+  is space-padded (`str_pad('g', 2, ' ', STR_PAD_LEFT)`) so it
+  matches Python's strftime `%l` (which returns `" 2"` for
+  hours 1-9). The Python walker explicitly handles `%:z` (which
+  Python's strftime does not support natively) so the two
+  surfaces agree on `+HH:MM` offset output. The bbsengine6 and
+  zoid6 Smarty modifier files are now byte-identical (the
+  VHOSTDOCROOT bootstrap moved to
+  `\bbsengine6\util\smarty_plugin_bootstrap()` so both
+  modifiers can share it). A shared JSON fixture
+  (`test_parity_php_python.json`) plus two cross-language test
+  runners (`test_parity_php_python.php` and
+  `test_parity_php_python.py`) enforce the byte-exact contract
+  on every CI run.
 - **2026-10-13** — New spec document. PHP modifier walker rewritten
   to support the full Python strftime vocabulary; `%O` opt-in
   added for per-user timezone display via

@@ -1,59 +1,72 @@
 ## [Unreleased]
 
-### feat(smarty): extend |datestamp modifier with full Python strftime vocabulary + %O per-user TZ opt-in
+### feat(skin/folder): trailing `/` only on directory items, not files
 
-The `|datestamp` Smarty modifier now matches Python's
-`bbsengine6.util.datestamp()` token-for-token. Previously it
-supported only 11 of 19 common-subset tokens (`%Y`, `%m`, `%d`,
-`%H`, `%I`, `%M`, `%S`, `%p`, `%Z`, `%A`, `%%`); the other 8
-(`%a`, `%b`, `%B`, `%l`, `%P`, `%y`, `%z`, `%:z`, `%j`) rendered
-as literal characters because PHP `date()` interprets them
-differently than strftime.
+`bbsengine6/skin/tmpl/folder.tmpl` was rendering every folder-list
+item with a hardcoded trailing `/`, so file items like
+`ai-in-sci-fi-tv/` and `automan/` rendered with the slash even
+though the icon (`fa-file` vs `fa-folder`) was correct. The
+trailing `/` now appears only on items where `$item.is_folder` is
+true, matching the icon convention.
 
-The implementation replaces the strftime→date translation table
-with a token-aware walker that only acts on `%X`-prefixed sequences
-and preserves bare letters literally. The walker tries the longest
-known token prefix first (so `%:z` matches before `%z`).
+Companion changes:
 
-PHP modifier surface:
+- `bbsengine6/engine/router.php::router_collectDirectoryItems()`
+  renames the data-shape key from `is_dir` to `is_folder` for
+  consistency with the Python teos browse shape
+  (`teos/tools/teos/browse.py:38, 214`) and to disambiguate from
+  PHP's `is_dir()` builtin. Both directory and file items get
+  the new key.
+- `bbsengine6/php/folder.php::getDirectoryItems()` populates
+  `is_folder => false` and `ext => 'md'` for consistency with
+  the engine-router shape. The legacy path only handles `.md`
+  files (no subdirectories), so both fields are constants.
 
-- Signature: `smarty_modifier_datestamp($timestamp, $format = null)`.
-- Format arg is optional; when omitted, reads the vhost's
-  `DATEFORMAT` constant (unchanged behavior).
-- Per-user TZ offset is rendered by the new `%O` token: reads
-  `$_SESSION['localtimezoneoffset']` (integer minutes), outputs
-  `±HH:MM` (e.g. `-04:00`, `+05:30`), empty string when unset.
+### feat(php): byte-exact parity with Python's strftime for `\bbsengine6\util\datestamp()`
 
-Python equivalent (`bbsengine6.util.datestamp`):
+The 2026-10-13 rewrite of the canonical walker covered the full
+strftime vocabulary but had two remaining divergences from
+Python's strftime:
 
-- Signature unchanged: `datestamp(t=None, format=...)`.
-- New module-level state: `bbsengine6.util.set_user_tz_offset(minutes)`
-  and `bbsengine6.util.get_user_tz_offset()` (None or int).
-- The `%O` token renders the user-set offset identically to the
-  PHP modifier. Web frameworks populate this from the session
-  before rendering; CLI tools populate it from config or env.
-- The Python implementation walks the format string token-by-token
-  (mirroring the PHP walker) so bare letters are preserved.
+- **`%l` (12-hour, padded)**: Python's strftime returns a
+  space-padded hour (`" 2"`); PHP's `date('g')` returns
+  unpadded (`"2"`). The PHP walker now space-pads to width 2
+  with a leading space, so `%l` produces byte-exact output
+  across both surfaces.
+- **Day/month name locale**: PHP's `date('D')` / `'l'` / `'M'` /
+  `'F'` and Python's strftime both read the C runtime's
+  `LC_TIME`. Without a locale pin, a non-English server locale
+  would produce locale-specific names that diverge between
+  the two languages. The PHP walker now calls
+  `setlocale(LC_TIME, 'C')` at entry, matching Python's
+  default `C` locale. With both pinned to `C`, day/month
+  names are byte-exact.
 
-Test coverage:
+Additionally, the Python walker now explicitly handles `%:z`
+(which Python's strftime does not support natively) so the two
+surfaces agree on `+HH:MM` offset output. The byte-exact
+contract is enforced by a new shared JSON fixture
+(`bbsengine6/test_parity_php_python.json`) read by both
+`bbsengine6/php/test_parity_php_python.php` and
+`bbsengine6/py/tests/test_parity_php_python.py`. Either test
+failing indicates the two surfaces have drifted.
 
-- `bbsengine6/php/test_datestamp_modifier.php` — 40 PHP tests
-  covering every common-subset token, default-format fallback,
-  `%O` opt-in (no session, zero, positive, negative, half-hour),
-  edge cases, and the token-aware walker behavior.
-- `py/tests/test_util_datestamp.py` — 38 Python tests covering
-  per-token strftime rendering, bare-letter preservation, the
-  `%O` opt-in (unset, zero, None, positive, negative, half-hour),
-  `set_user_tz_offset()` / `get_user_tz_offset()` semantics, and
-  edge cases. All pass via the project's venv at `.venv`.
+### refactor(smarty): bbsengine6 and zoid6 datestamp modifiers are now byte-identical
 
-Spec: `bbsengine6/handbook/specs/datestamp.md` (new file) is the
-authoritative reference. `util.md` and `index.md` cross-reference
-it.
+`bbsengine6/smarty/modifier.datestamp.php` and
+`zoid6/smarty/modifier.datestamp.php` are now byte-for-byte
+identical so any future divergence is impossible. The
+VHOSTDOCROOT bootstrap that used to live inline in the
+bbsengine6 modifier has been moved to
+`\bbsengine6\util\smarty_plugin_bootstrap()` in
+`bbsengine6/php/util.php`. The bootstrap is idempotent; the
+zoid6-using vhost case (which loads zoid6config.php first and
+already sets include_path) is a no-op, and the standalone
+bbsengine6 case primes the path for bbsengine6config.php.
 
-Sibling change in zoid6: `zoid6/smarty/modifier.datestamp.php`
-was a 3-line `date(\config\DATEFORMAT, $string)` shim with no
-strftime translation. Extended to match bbsengine6's vocabulary.
+Both modifiers are 3-line thin wrappers around
+`\bbsengine6\util\datestamp()`. Spec:
+`bbsengine6/handbook/specs/datestamp.md`.
 
 ### feat(auth): BBS auth backend for IMAP and PAM (Dovecot on merlin, Cyrus on falcon)
 

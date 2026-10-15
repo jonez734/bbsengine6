@@ -86,9 +86,11 @@ check('%d', '13',   smarty_modifier_datestamp($ts, '%d'));
 check('%j', '286',  smarty_modifier_datestamp($ts, '%j')); // day-of-year, 1-indexed
 check('%H', '14',   smarty_modifier_datestamp($ts, '%H'));
 check('%I', '02',   smarty_modifier_datestamp($ts, '%I'));
-// %l: PHP date('g') = no padding/no leading zero; Python strftime %l
-// is space-padded. Documented divergence in handbook/specs/datestamp.md.
-check('%l (PHP g)', '2', smarty_modifier_datestamp($ts, '%l'));
+// %l: PHP date('g') returns unpadded ('2'); Python strftime %l
+// returns space-padded (' 2'). The walker now space-pads to match
+// Python byte-exactly. See bbsengine6/handbook/specs/datestamp.md
+// "Byte-exact parity" section.
+check('%l (strftime-padded, byte-exact with Python)', ' 2', smarty_modifier_datestamp($ts, '%l'));
 check('%M', '30',   smarty_modifier_datestamp($ts, '%M'));
 check('%S', '00',   smarty_modifier_datestamp($ts, '%S'));
 check('%p', 'PM',   smarty_modifier_datestamp($ts, '%p'));

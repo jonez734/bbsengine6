@@ -1,0 +1,35 @@
+[
+  {
+    "_comment": "Epoch 1760365800 = 2025-10-13 14:30:00 UTC (a Monday). All expected values are TZ-independent (the format string does not contain %Z). For %z / %:z the timestamp's UTC offset (0) is hardcoded into the expected value. Run php/php/test_parity_php_python.php and py/tests/test_parity_php_python.py against this fixture to verify byte-exact parity between the PHP and Python surfaces.",
+    "epoch": 1760365800,
+    "tz": "UTC",
+    "cases": [
+      {"name": "year 4-digit",       "format": "%Y",                  "expected": "2025"},
+      {"name": "year 2-digit",       "format": "%y",                  "expected": "25"},
+      {"name": "month 2-digit",      "format": "%m",                  "expected": "10"},
+      {"name": "short month name",   "format": "%b",                  "expected": "Oct"},
+      {"name": "full month name",    "format": "%B",                  "expected": "October"},
+      {"name": "day 2-digit",        "format": "%d",                  "expected": "13"},
+      {"name": "hour 24",            "format": "%H",                  "expected": "14"},
+      {"name": "hour 12 padded",     "format": "%I",                  "expected": "02"},
+      {"name": "hour 12 unpadded",   "format": "%l",                  "expected": " 2"},
+      {"name": "minute",             "format": "%M",                  "expected": "30"},
+      {"name": "second",             "format": "%S",                  "expected": "00"},
+      {"name": "AM/PM upper",        "format": "%p",                  "expected": "PM"},
+      {"name": "am/pm lower",        "format": "%P",                  "expected": "pm"},
+      {"name": "day of year",        "format": "%j",                  "expected": "286"},
+      {"name": "short day name",     "format": "%a",                  "expected": "Mon"},
+      {"name": "full day name",      "format": "%A",                  "expected": "Monday"},
+      {"name": "literal %",          "format": "%%",                  "expected": "%"},
+      {"name": "ISO date",           "format": "%Y-%m-%d",            "expected": "2025-10-13"},
+      {"name": "ISO time",           "format": "%H:%M:%S",            "expected": "14:30:00"},
+      {"name": "ISO datetime",       "format": "%Y-%m-%d %H:%M:%S",   "expected": "2025-10-13 14:30:00"},
+      {"name": "long form",          "format": "%A, %B %d, %Y",       "expected": "Monday, October 13, 2025"},
+      {"name": "bare letter prefix", "format": "day %j of %Y",        "expected": "day 286 of 2025"},
+      {"name": "zoid6 DATEFORMAT",   "format": "%Y-%b-%d %l:%M%p",    "expected": "2025-Oct-13  2:30PM"},
+      {"name": "UTC offset no colon","format": "%z",                  "expected": "+0000"},
+      {"name": "UTC offset colon",   "format": "%:z",                 "expected": "+00:00"},
+      {"name": "bare hyphen",        "format": "day-of-year: %j",     "expected": "day-of-year: 286"}
+    ]
+  }
+]

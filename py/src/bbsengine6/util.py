@@ -280,14 +280,22 @@ def datestamp(
 
     assert isinstance(t, datetime), f"datestamp: unexpected type {type(t)} for t"
 
-    # %O is a non-standard opt-in token that Python's strftime does
-    # not natively support. Walk the format string token-by-token
-    # (mirroring bbsengine6/smarty/modifier.datestamp.php) so we can
-    # substitute the per-user offset string in place. Bare letters
-    # pass through to strftime literally.
-    if "%O" not in format:
+    # Fast path: if the format has no opt-in tokens (`%O`, `%%`,
+    # `%:z`) that Python's strftime does not handle natively or
+    # that we need to substitute, hand it straight to strftime.
+    #
+    # `@since 2026-10-15 — added `%:z` to the fast-path skip list.
+    # Python's strftime does not support `%:z` (it returns the
+    # literal string `%:z`); the walker below explicitly handles
+    # it so output is byte-exact with PHP's
+    # \bbsengine6\util\datestamp() which renders `%:z` as
+    # `+HH:MM`.
+    needs_walk = ("%O" in format) or (":z" in format)
+    if not needs_walk:
         return t.strftime(format)
 
+    # Per-user offset string for %O. Computed once and inlined
+    # where the walker encounters %O.
     user_offset = _user_tz_offset_minutes
     if user_offset is None or user_offset == 0:
         offset_str = ""
@@ -303,20 +311,41 @@ def datestamp(
     while i < len(format):
         ch = format[i]
         if ch == "%" and i + 1 < len(format):
-            tok = format[i:i + 2]
-            if tok == "%O":
+            # Check longest known token first so multi-char tokens
+            # (`%:z`) match before single-char prefixes (`%z`).
+            # tok3 covers 3-char tokens (`%:z`); tok2 covers 2-char
+            # tokens (`%Y`, `%%`, `%O`, etc.).
+            tok3 = format[i:i + 3]
+            if tok3 == "%:z":
+                # Python strftime does not natively support `%:z`;
+                # render as `+HH:MM` from the offset of `t`. Matches
+                # PHP date('P', $ts) byte-exactly.
+                offset = t.utcoffset()
+                if offset is None:
+                    offset_seconds = 0
+                else:
+                    offset_seconds = int(offset.total_seconds())
+                sign = "+" if offset_seconds >= 0 else "-"
+                abs_seconds = abs(offset_seconds)
+                oh = f"{abs_seconds // 3600:02d}"
+                om = f"{(abs_seconds % 3600) // 60:02d}"
+                result.append(f"{sign}{oh}:{om}")
+                i += 3
+                continue
+            tok2 = format[i:i + 2]
+            if tok2 == "%O":
                 result.append(offset_str)
                 i += 2
                 continue
-            if tok == "%%":
+            if tok2 == "%%":
                 result.append("%")
                 i += 2
                 continue
-            # Unknown %X or single-char token: pass to strftime
-            # one character at a time. Python strftime has no
-            # multi-char tokens except %:z-style, which it supports
-            # natively.
-            result.append(t.strftime(tok))
+            # Fall through to strftime for the 2-char token (covers
+            # %Y, %m, %d, %H, %M, %S, %z, %a, %A, %b, %B, %l, %I,
+            # %p, %P, %j). Bare letters (i.e. when the next char
+            # isn't %X) are passed through literally below.
+            result.append(t.strftime(tok2))
             i += 2
             continue
         result.append(ch)
