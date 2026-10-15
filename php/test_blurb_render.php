@@ -314,6 +314,82 @@ foreach ($templates_to_check as $path => $rules) {
 }
 
 // ====================================================================
+// Test Group 4: Unguarded <h2>{$section.header}</h2> regression
+// ====================================================================
+//
+// @since 2026-10-15 — pin the contract that the per-section <h2> in
+// page-markdown-sections.tmpl is wrapped in an {if $section.header}
+// guard. An unguarded `<h2>{$section.header}</h2>` reintroduces the
+// duplicate-title regression from commit 3e106ab3 (page-level
+// lastmodified refactor), because splitHtmlSections() promotes the
+// first H1 to $data.title and would otherwise surface the same
+// string in sections[0]['header'] for the per-section <h2> loop.
+//
+// The check is line-based: every line that contains the literal
+// `<h2>{$section.header}</h2>` must be preceded (within 5 lines
+// above) by an `{if ... $section.header` line. The 5-line window
+// tolerates `{foreach}` / `<div class="section">` / whitespace
+// between the conditional and the <h2>.
+
+echo "\nTest Group 4: page-markdown-sections.tmpl guards the per-section <h2>\n";
+
+$page_tmpl = "/home/opencode/data/work/bbsengine6/skin/tmpl/page-markdown-sections.tmpl";
+$h2_line_re = '/<h2>{\$section\.header}<\/h2>/';
+$h2_literal = '<h2>{$section.header}</h2>';
+$h1_literal = '<h1>{$data.title}</h1>';
+
+run_test('page-markdown-sections.tmpl: every ' . $h2_literal . ' is guarded by {if $section.header}', function() use ($page_tmpl, $h2_line_re, $h2_literal) {
+    if (!file_exists($page_tmpl)) {
+        throw new Exception("template not found: $page_tmpl");
+    }
+    $src = file_get_contents($page_tmpl);
+    $lines = explode("\n", $src);
+    $h2_lines = [];
+    foreach ($lines as $idx => $line) {
+        if (preg_match($h2_line_re, $line)) {
+            $h2_lines[] = $idx;
+        }
+    }
+    if (empty($h2_lines)) {
+        // No <h2>{$section.header}</h2> at all is fine only if no
+        // <h2> is rendered for any section. The current contract
+        // requires at least one (subsequent ## H2 sections do exist
+        // in real blurbs). Surface a failure if zero matches.
+        throw new Exception(
+            "no $h2_literal line found in $page_tmpl; " .
+            "the per-section H2 loop is gone. Did the section loop get " .
+            "removed entirely?"
+        );
+    }
+    foreach ($h2_lines as $idx) {
+        $window_start = max(0, $idx - 5);
+        $window = implode("\n", array_slice($lines, $window_start, $idx - $window_start));
+        if (!preg_match('/\{if\s+[^}]*\$section\.header/', $window)) {
+            throw new Exception(
+                "line $idx renders $h2_literal without an enclosing " .
+                "{if \$section.header ...} block within 5 lines above. " .
+                "Unguarded, this reintroduces the 2026-10-15 duplicate-title " .
+                "regression. Line $idx: " . trim($lines[$idx])
+            );
+        }
+    }
+});
+
+run_test("page-markdown-sections.tmpl: page-level <h1> is rendered from \$data.title (not section.header)", function() use ($page_tmpl, $h1_literal) {
+    if (!file_exists($page_tmpl)) {
+        throw new Exception("template not found: $page_tmpl");
+    }
+    $src = file_get_contents($page_tmpl);
+    if (strpos($src, $h1_literal) === false) {
+        throw new Exception(
+            "page-level H1 must be rendered from \$data.title; " .
+            "rendering it from \$section.header reintroduces the duplicate " .
+            "(sections[0].header is '' in the post-fix contract)."
+        );
+    }
+});
+
+// ====================================================================
 // Results
 // ====================================================================
 
