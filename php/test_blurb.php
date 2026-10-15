@@ -191,6 +191,77 @@ if (is_int($epoch) && $epoch > 0) {
     exit(1);
 }
 
+echo "Test 5e: parseDocument sets sections[0].header to '' (the H1 is promoted to title)\n";
+// The page-markdown-sections.tmpl page H1 is rendered from $data.title
+// (which equals the first H1's text). If splitHtmlSections() also
+// surfaced that same string in sections[0]['header'], the per-section
+// <h2> loop in the template would render the title a second time as
+// <h2>. Regression introduced by 3e106ab3 (2026-10-15 page-level
+// lastmodified refactor) and fixed in this commit. The contract:
+//
+//   * sections[0]['header'] === '' (the H1 was promoted to $data.title)
+//   * sections[0]['content']  === the rendered body following the H1
+//   * sections[1+]['header']  === the H1 text from that section
+//                                (preserved verbatim for the <h2> loop)
+//   * the empty-section-header fallback (no H1 at all) also has
+//     header === ''.
+//
+// splitHtmlSections() splits on <h1> boundaries, not <h2>. So a
+// multi-section test must use '# H1' headings in the source, not
+// '## H2'. If a future refactor reintroduces the duplicate, this test
+// fails.
+$md = "# My Title\n\nLead paragraph.\n\n# A Section\n\nSection body.\n\n# Another Section\n\nMore body.\n";
+$doc = \bbsengine6\markdown\parseDocument($md, split: true);
+$sections = $doc["sections"] ?? null;
+if (!is_array($sections) || count($sections) !== 3) {
+    echo "  ✗ FAIL: expected 3 sections, got " . count($sections ?? []) . " (" . var_export($sections, true) . ")\n";
+    exit(1);
+}
+if (($doc["doc"]["title"] ?? null) !== "My Title") {
+    echo "  ✗ FAIL: doc.doc.title expected 'My Title', got " . var_export($doc["doc"]["title"] ?? null, true) . "\n";
+    exit(1);
+}
+if (($sections[0]["header"] ?? "MISSING") !== "") {
+    echo "  ✗ FAIL: sections[0].header expected '' (promoted to title), got " . var_export($sections[0]["header"] ?? null, true) . "\n";
+    exit(1);
+}
+if (stripos($sections[0]["content"] ?? "", "Lead paragraph") === false) {
+    echo "  ✗ FAIL: sections[0].content lost the lead prose; got " . var_export($sections[0]["content"] ?? null, true) . "\n";
+    exit(1);
+}
+if (($sections[1]["header"] ?? "MISSING") !== "A Section") {
+    echo "  ✗ FAIL: sections[1].header expected 'A Section', got " . var_export($sections[1]["header"] ?? null, true) . "\n";
+    exit(1);
+}
+if (($sections[2]["header"] ?? "MISSING") !== "Another Section") {
+    echo "  ✗ FAIL: sections[2].header expected 'Another Section', got " . var_export($sections[2]["header"] ?? null, true) . "\n";
+    exit(1);
+}
+echo "  ✓ PASS: sections[0].header='' (H1 promoted), sections[1+].header preserved, lead prose intact\n";
+
+echo "Test 5f: parseDocument returns header='' for a single-section blurb (the common case)\n";
+// The real blurb corpus is a single '# Title' + '## H2 subhead'
+// structure, where the parser produces exactly 1 section (because it
+// splits on <h1> only). The single section's header must still be ''
+// so the page H1 is not duplicated. This is the regression-test
+// shape that matches the actual blurb markup.
+$md = "# Just a Title\n\nSome prose with a `## H2 subhead` in the body.\n";
+$doc = \bbsengine6\markdown\parseDocument($md, split: true);
+$sections = $doc["sections"] ?? null;
+if (!is_array($sections) || count($sections) !== 1) {
+    echo "  ✗ FAIL: expected 1 section, got " . count($sections ?? []) . "\n";
+    exit(1);
+}
+if (($doc["doc"]["title"] ?? null) !== "Just a Title") {
+    echo "  ✗ FAIL: doc.doc.title expected 'Just a Title', got " . var_export($doc["doc"]["title"] ?? null, true) . "\n";
+    exit(1);
+}
+if (($sections[0]["header"] ?? "MISSING") !== "") {
+    echo "  ✗ FAIL: single-section blurb must have header='' (not the page title), got " . var_export($sections[0]["header"] ?? null, true) . "\n";
+    exit(1);
+}
+echo "  ✓ PASS: single-section blurb returns header='' to prevent the duplicate-title regression\n";
+
 echo "\n";
 
 // =============================================================================
