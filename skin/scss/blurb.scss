@@ -87,3 +87,21 @@
   	flex: 1 0 auto;
   }
 }
+
+// @since 2026-10-15 — inline variant of the .metadata block
+// used by folder.tmpl's per-item datestamp (rendered next to
+// the item's <a> link inside a <ul class="nobullets">). The
+// existing `.blurb .metadata` rule above is block-level with
+// padding and a background fill, which would break the list
+// flow if reused here; this rule mirrors its font-size and
+// color (so the per-item stamp looks identical to the
+// page-level stamp on a blurb page) but drops the block
+// layout and forces inline. Scope is `ul.nobullets li` so the
+// rule does not bleed into other consumers of `.metadata`
+// that may rely on the block-level treatment.
+ul.nobullets li .metadata.lastmodified {
+  font-size: 0.75em;
+  color: $blurb-metadata-color;
+  margin-left: 0.5em;
+  display: inline;
+}
