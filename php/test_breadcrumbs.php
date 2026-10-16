@@ -9,6 +9,14 @@
  *   php test_breadcrumbs.php
  */
 
+// @since 2026-10-15 — load the /srv production copy of
+// bootstrap.php first (if present) so the bbsengine6\bootstrap
+// function is declared exactly once. See test_router.php for the
+// full rationale; the in-tree bootstrap.php has a
+// function_exists() guard, but the /srv copy does not, so the
+// load order has to put /srv first to make the in-tree guard
+// effective.
+@require_once("/srv/www/bbsengine6/php/bootstrap.php");
 require_once("/home/opencode/data/work/bbsengine6/php/bootstrap.php");
 require_once("/home/opencode/data/work/bbsengine6/engine/router.php");
 
@@ -514,7 +522,6 @@ if (!empty($found_local)) {
     test_fail("found vhost-local sigs.tmpl files; both vhosts must fall through to the shared template", implode(", ", $found_local));
 }
 test_pass("no vhost-local sigs.tmpl; both vhosts use the shared template");
-
 // @since 2026-10-10 — fix for the root crumb rendering as /teos/teos/
 // instead of /teos/ on zoidtechnologies.com teos folder pages. The
 // {teos} Smarty plugin (bbsengine6/smarty/function.teos.php) needs to

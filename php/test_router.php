@@ -7,6 +7,21 @@
  *   php test_router.php --db       # Run database integration tests
  */
 
+// @since 2026-10-15 — load the /srv production copy of
+// bootstrap.php first (if present) so the bbsengine6\bootstrap
+// function is declared exactly once. engine/router.php hardcodes
+// `/srv/www/bbsengine6/php/bootstrap.php` (line 92), and on this
+// machine that path is a byte-identical copy of the in-tree
+// php/bootstrap.php — but PHP's require_once dedup is by path, not
+// by content, so without a guard both copies would try to declare
+// the function and fatally error. The in-tree bootstrap.php was
+// updated to wrap its function declaration in `if (!function_exists
+// (...))`, but the /srv copy doesn't have the guard (it lives
+// outside the repo), so the order has to be: /srv declares, then
+// in-tree's guard makes in-tree a no-op. This require_once is
+// silent on machines where /srv doesn't have a bootstrap.php (CI
+// containers, fresh dev envs).
+@require_once("/srv/www/bbsengine6/php/bootstrap.php");
 require_once __DIR__ . "/bootstrap.php";
 require_once("engine/router.php");
 
@@ -1056,6 +1071,5 @@ if (isset($byFile['quoted.md']) && $byFile['quoted.md']['title'] === 'quoted') {
     exit(1);
 }
 
-echo "\n";
 
 echo "=== All tests passed! ===\n";
