@@ -221,12 +221,91 @@ function getDirectoryItems(string $dirpath, string $uri): array
 
         $metadata = [];
         $displayTitle = $filename;
+        $updated = false;
 
-        $filecontent = file_get_contents($filepath);
-        if (preg_match('/^---\s*\n(.*?)\n---/s', $filecontent, $matches)) {
-            $metadata = parseYamlFrontmatter($matches[1]);
-            if (isset($metadata['title'])) {
-                $displayTitle = htmlspecialchars($metadata['title']);
+        $filecontent = @file_get_contents($filepath);
+        if (is_string($filecontent) && $filecontent !== "") {
+            // Lazy-load markdown.php here (rather than at the
+            // top of folder.php) so the file's require graph
+            // stays narrow for callers that don't read .md
+            // content. splitFrontmatter() is the same call
+            // engine/router.php::router_collectDirectoryItems:652
+            // uses for its file-branch title/updated reads.
+            require_once("markdown.php");
+            // @since 2026-10-15 — switch the frontmatter read in
+            // getDirectoryItems() from parseYamlFrontmatter() to
+            // \bbsengine6\markdown\splitFrontmatter(). Reasons:
+            //   1. The engine path
+            //      (engine/router.php::router_collectDirectoryItems:652)
+            //      already uses splitFrontmatter() for the same
+            //      read, so the two paths now agree on the parser
+            //      (previously the legacy path used a private
+            //      regex-only parser that did not accept
+            //      hyphenated keys like `folder-path`).
+            //   2. We need `lastmodified:` and `date:` to compute
+            //      the new per-item `updated` field below; reading
+            //      them out of splitFrontmatter's metadata array
+            //      avoids a second frontmatter parse.
+            //   3. parseYamlFrontmatter() remains in this file as
+            //      a public API (used by php/test_folder.php
+            //      Tests 6-9 and documented in
+            //      handbook/specs/folder.md:97) — this swap is
+            //      about which function *getDirectoryItems()* uses
+            //      internally, not removing the API.
+            $split = \bbsengine6\markdown\splitFrontmatter($filecontent);
+            $metadata = $split[0] ?? [];
+            // Mirror the title-escape logic at
+            // engine/router.php:661-664: trim first so an empty
+            // or whitespace-only title falls back to the filename
+            // instead of rendering a blank link; htmlspecialchars
+            // to neutralize stored-XSS in the YAML-derived title
+            // (folder.tmpl prints {$item.title} raw).
+            $rawTitle = isset($metadata['title']) ? trim($metadata['title']) : '';
+            if ($rawTitle !== '') {
+                $displayTitle = htmlspecialchars($rawTitle, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            }
+
+            // Per-item `updated` field, sourced from the same
+            // frontmatter keys `blurb.php::display()` reads for
+            // the page-level `.metadata .lastmodified` block
+            // (php/blurb.php:427-443), so the per-item stamp in
+            // the listing matches the stamp shown on the blurb
+            // itself. Priority:
+            //   1. Frontmatter `lastmodified:` (managed by
+            //      blurbs/Makefile on `make prod`; refreshed from
+            //      the file's mtime on every deploy).
+            //   2. Frontmatter `date:` (legacy contract; the
+            //      pre-2026-10-15 single-field timestamp).
+            //   3. `filemtime($filepath)` — ultimate fallback
+            //      for blurbs without frontmatter, matching
+            //      achilles's pattern.
+            //   4. `false` if all three fail, so folder.tmpl
+            //      can suppress the stamp via
+            //      `{if $item.updated !== false}`.
+            //
+            // The frontmatter timestamp format is
+            // `YYYY-MM-DD HH:MM:SS GMT (HH:MM:NN TZ)`. The
+            // parenthetical TZ suffix is informational only; we
+            // strip it before strtotime (mirror of blurb.php:433).
+            $updated = false;
+            $stamp = null;
+            if (isset($metadata['lastmodified']) && is_string($metadata['lastmodified']) && $metadata['lastmodified'] !== "") {
+                $stamp = $metadata['lastmodified'];
+            } elseif (isset($metadata['date']) && is_string($metadata['date']) && $metadata['date'] !== "") {
+                $stamp = $metadata['date'];
+            }
+            if (is_string($stamp)) {
+                $gmStamp = preg_replace('/\s*\(.*\)\s*$/', '', $stamp);
+                $updated = strtotime($gmStamp);
+                if (!is_int($updated) || $updated <= 0) {
+                    $updated = false;
+                }
+            }
+            if ($updated === false) {
+                $fm = @filemtime($filepath);
+                if (is_int($fm) && $fm > 0) {
+                    $updated = $fm;
+                }
             }
         }
 
@@ -243,6 +322,22 @@ function getDirectoryItems(string $dirpath, string $uri): array
             // listing (legacy direct call vs engine-routed call).
             'is_folder' => false,
             'ext' => 'md',
+            // @since 2026-10-15 — per-item `updated` datestamp,
+            // rendered to the right of the blurb's title in
+            // folder.tmpl. Int (epoch) when a timestamp is
+            // resolvable from frontmatter or mtime, `false`
+            // otherwise. Mirrors the page-level `lastmodified`
+            // resolution in blurb.php::display() so the listing
+            // stamp agrees with the stamp on the blurb page.
+            // `modified` (raw filemtime) is intentionally NOT
+            // added here: the legacy listing path never carried
+            // a per-item timestamp before this commit, and the
+            // engine path (`engine/router.php`) is the canonical
+            // source of `modified`. Keeping the two paths'
+            // field sets distinct avoids spurious diffs if a
+            // consumer relies on field presence to identify
+            // which code path populated the listing.
+            'updated' => $updated,
         ];
     }
 
