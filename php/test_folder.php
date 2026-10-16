@@ -502,6 +502,145 @@ if (is_int($lastmodified_for_existing_dir) && $lastmodified_for_existing_dir > 0
 // Cleanup
 rmdir($tmpdir);
 
+// =============================================================================
+// PER-ITEM `updated` TESTS (added 2026-10-15)
+// =============================================================================
+//
+// @since 2026-10-15 — getDirectoryItems() now populates an `updated`
+// field on each item, sourced with the same priority chain blurb.php
+// uses for the page-level `.metadata .lastmodified` block:
+//   1. Frontmatter `lastmodified:`
+//   2. Frontmatter `date:`
+//   3. filemtime()
+//   4. `false` if all three fail
+//
+// These tests pin that contract on a real (temp) directory and
+// verify the `title` extraction is unchanged across the parser
+// swap (parseYamlFrontmatter → splitFrontmatter).
+//
+// Independent of `$run_db` so they run even when the DB is down —
+// they only touch the filesystem.
+
+echo "\n--- per-item `updated` Tests ---\n\n";
+
+$updatedTestDir = sys_get_temp_dir() . '/bbsengine6_updated_test_' . uniqid();
+mkdir($updatedTestDir, 0755, true);
+
+// Test L4: getDirectoryItems() populates `updated` from frontmatter
+// `lastmodified:` (highest priority source).
+echo "Test L4: updated sourced from frontmatter `lastmodified:`\n";
+$lmStamp = '2026-10-15 04:05:15 GMT (00:05:15 NYC)';
+file_put_contents($updatedTestDir . '/lm-frontmatter.md',
+    "---\ntitle: Has Lastmodified\nlastmodified: $lmStamp\n---\nBody");
+clearstatcache();
+$result = \bbsengine6\folder\getDirectoryItems($updatedTestDir, "test");
+$lmItem = $result[0];
+$lmExpected = strtotime(preg_replace('/\s*\(.*\)\s*$/', '', $lmStamp));
+if (is_int($lmItem['updated']) && $lmItem['updated'] === $lmExpected) {
+    echo "  ✓ PASS: updated = " . $lmItem['updated'] . " (from lastmodified:)\n";
+    $passed++;
+} else {
+    echo "  ✗ FAIL: expected int " . $lmExpected . ", got " . var_export($lmItem['updated'], true) . "\n";
+    $failed++;
+}
+
+// Test L5: falls back to frontmatter `date:` when `lastmodified:`
+// is absent.
+echo "Test L5: updated falls back to frontmatter `date:`\n";
+$dateStamp = '2025-06-01 12:00:00 GMT (08:00:00 NYC)';
+file_put_contents($updatedTestDir . '/date-only.md',
+    "---\ntitle: Has Date Only\ndate: $dateStamp\n---\nBody");
+clearstatcache();
+$result = \bbsengine6\folder\getDirectoryItems($updatedTestDir, "test");
+// Find the date-only item (alphabetical order: date-only, lm-frontmatter).
+$dateItem = null;
+foreach ($result as $item) {
+    if ($item['filename'] === 'date-only') { $dateItem = $item; break; }
+}
+$dateExpected = strtotime(preg_replace('/\s*\(.*\)\s*$/', '', $dateStamp));
+if ($dateItem !== null && is_int($dateItem['updated']) && $dateItem['updated'] === $dateExpected) {
+    echo "  ✓ PASS: updated = " . $dateItem['updated'] . " (from date: fallback)\n";
+    $passed++;
+} else {
+    echo "  ✗ FAIL: expected int " . $dateExpected . ", got " .
+         var_export($dateItem['updated'] ?? null, true) . "\n";
+    $failed++;
+}
+
+// Test L6: falls back to filemtime() when neither frontmatter key
+// is present.
+echo "Test L6: updated falls back to filemtime() when no frontmatter timestamp\n";
+file_put_contents($updatedTestDir . '/no-fm.md', "Just plain content, no frontmatter");
+clearstatcache(true, $updatedTestDir . '/no-fm.md');
+$expectedFm = @filemtime($updatedTestDir . '/no-fm.md');
+$result = \bbsengine6\folder\getDirectoryItems($updatedTestDir, "test");
+$noFmItem = null;
+foreach ($result as $item) {
+    if ($item['filename'] === 'no-fm') { $noFmItem = $item; break; }
+}
+if ($noFmItem !== null && is_int($noFmItem['updated']) && $noFmItem['updated'] === $expectedFm && $expectedFm > 0) {
+    echo "  ✓ PASS: updated = " . $noFmItem['updated'] . " (from filemtime fallback)\n";
+    $passed++;
+} else {
+    echo "  ✗ FAIL: expected int " . var_export($expectedFm, true) . ", got " .
+         var_export($noFmItem['updated'] ?? null, true) . "\n";
+    $failed++;
+}
+
+// Test L7: `updated` resolves to a positive int (any source) —
+// shape pin for the `{$item.updated !== false}` template guard.
+echo "Test L7: updated is int > 0 across all resolvable items\n";
+$result = \bbsengine6\folder\getDirectoryItems($updatedTestDir, "test");
+$allPositive = true;
+foreach ($result as $item) {
+    if (!is_int($item['updated']) || $item['updated'] <= 0) {
+        $allPositive = false;
+        echo "  ✗ FAIL: " . $item['filename'] . " has updated=" . var_export($item['updated'], true) . "\n";
+        $failed++;
+        break;
+    }
+}
+if ($allPositive) {
+    echo "  ✓ PASS: all " . count($result) . " items have int updated > 0\n";
+    $passed++;
+}
+
+// Test L8: regression pin for the parser swap — title extraction
+// must produce the same value across parseYamlFrontmatter() and
+// the new splitFrontmatter() read inside getDirectoryItems().
+// This test fails if the swap silently changed how the title is
+// rendered (e.g. dropped htmlspecialchars, or stopped falling
+// back to the filename on an empty title).
+echo "Test L8: title extraction unchanged across parser swap\n";
+file_put_contents($updatedTestDir . '/with-title.md',
+    "---\ntitle: My Title\n---\nBody");
+file_put_contents($updatedTestDir . '/empty-title.md',
+    "---\ntitle:   \n---\nBody");
+file_put_contents($updatedTestDir . '/no-title-key.md',
+    "---\nauthor: someone\n---\nBody");
+clearstatcache();
+$result = \bbsengine6\folder\getDirectoryItems($updatedTestDir, "test");
+$titles = [];
+foreach ($result as $item) {
+    $titles[$item['filename']] = $item['title'];
+}
+$titleOk = isset($titles['with-title']) && $titles['with-title'] === 'My Title'
+    && isset($titles['empty-title']) && $titles['empty-title'] === 'empty-title'
+    && isset($titles['no-title-key']) && $titles['no-title-key'] === 'no-title-key';
+if ($titleOk) {
+    echo "  ✓ PASS: with-title=My Title, empty-title falls back to filename, no-title-key falls back to filename\n";
+    $passed++;
+} else {
+    echo "  ✗ FAIL: " . var_export($titles, true) . "\n";
+    $failed++;
+}
+
+// Cleanup
+foreach (['lm-frontmatter.md', 'date-only.md', 'no-fm.md', 'with-title.md', 'empty-title.md', 'no-title-key.md'] as $f) {
+    @unlink($updatedTestDir . '/' . $f);
+}
+rmdir($updatedTestDir);
+
 echo "\n=== Test Results ===\n";
 echo "Passed: $passed\n";
 echo "Failed: $failed\n";

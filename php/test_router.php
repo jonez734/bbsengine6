@@ -1071,5 +1071,96 @@ if (isset($byFile['quoted.md']) && $byFile['quoted.md']['title'] === 'quoted') {
     exit(1);
 }
 
+// =============================================================================
+// router_collectDirectoryItems — per-item `updated` field (2026-10-15)
+// =============================================================================
+// @since 2026-10-15 — file-branch items now carry `updated` (frontmatter-aware)
+// alongside the existing `modified` (filemtime). Directory-branch items
+// intentionally do NOT carry `updated` per the 2026-10-15 design decision
+// (subfolders skipped; no DB read). These tests pin the file-branch shape
+// and the directory-branch omission.
+
+echo "Test 26: router_collectDirectoryItems file-branch populates both `modified` and `updated` from frontmatter lastmodified\n";
+$items = _rcdi_helper(
+    ["dated.md" => "---\ntitle: Dated\nlastmodified: 2026-10-15 04:05:15 GMT (00:05:15 NYC)\n---\nbody"],
+    "test"
+);
+$byFile = [];
+foreach ($items as $it) { $byFile[$it['filename']] = $it; }
+$datedExpected = strtotime('2026-10-15 04:05:15 GMT');
+$ok = isset($byFile['dated.md'])
+    && is_int($byFile['dated.md']['modified'])
+    && $byFile['dated.md']['modified'] > 0
+    && is_int($byFile['dated.md']['updated'])
+    && $byFile['dated.md']['updated'] === $datedExpected;
+if ($ok) {
+    echo "  ✓ PASS: modified=" . $byFile['dated.md']['modified'] . " (filemtime), updated=" . $byFile['dated.md']['updated'] . " (from lastmodified:)\n";
+} else {
+    echo "  ✗ FAIL: dated.md=" . var_export($byFile['dated.md'] ?? '(missing)', true) . "\n";
+    exit(1);
+}
+
+echo "Test 27: router_collectDirectoryItems file-branch `updated` falls back to `date:` when `lastmodified:` is absent\n";
+$items = _rcdi_helper(
+    ["legacy-date.md" => "---\ntitle: Legacy\ndate: 2025-06-01 12:00:00 GMT (08:00:00 NYC)\n---\nbody"],
+    "test"
+);
+$byFile = [];
+foreach ($items as $it) { $byFile[$it['filename']] = $it; }
+$legacyExpected = strtotime('2025-06-01 12:00:00 GMT');
+$ok = isset($byFile['legacy-date.md'])
+    && is_int($byFile['legacy-date.md']['updated'])
+    && $byFile['legacy-date.md']['updated'] === $legacyExpected;
+if ($ok) {
+    echo "  ✓ PASS: updated=" . $byFile['legacy-date.md']['updated'] . " (from date: fallback)\n";
+} else {
+    echo "  ✗ FAIL: legacy-date.md=" . var_export($byFile['legacy-date.md'] ?? '(missing)', true) . "\n";
+    exit(1);
+}
+
+echo "Test 28: router_collectDirectoryItems file-branch `updated` falls back to filemtime() when no frontmatter timestamp\n";
+$items = _rcdi_helper(
+    ["no-fm.md" => "no frontmatter at all"],
+    "test"
+);
+$byFile = [];
+foreach ($items as $it) { $byFile[$it['filename']] = $it; }
+$ok = isset($byFile['no-fm.md'])
+    && is_int($byFile['no-fm.md']['updated'])
+    && is_int($byFile['no-fm.md']['modified'])
+    && $byFile['no-fm.md']['updated'] === $byFile['no-fm.md']['modified']
+    && $byFile['no-fm.md']['updated'] > 0;
+if ($ok) {
+    echo "  ✓ PASS: updated=modified=filemtime=" . $byFile['no-fm.md']['updated'] . "\n";
+} else {
+    echo "  ✗ FAIL: no-fm.md=" . var_export($byFile['no-fm.md'] ?? '(missing)', true) . "\n";
+    exit(1);
+}
+
+echo "Test 29: router_collectDirectoryItems directory-branch items carry `modified` but NOT `updated` (subfolders skipped)\n";
+$dir = _rcfi_setup_tmpdir();
+mkdir($dir . '/subfolder', 0755, true);
+file_put_contents($dir . '/file.md', "no frontmatter");
+clearstatcache();
+$items = \bbsengine6\router\router_collectDirectoryItems($dir, "test");
+$byFile = [];
+foreach ($items as $it) { $byFile[$it['filename']] = $it; }
+$ok = isset($byFile['subfolder'])
+    && is_int($byFile['subfolder']['modified'])
+    && $byFile['subfolder']['modified'] > 0
+    && !array_key_exists('updated', $byFile['subfolder'])
+    && isset($byFile['file.md'])
+    && is_int($byFile['file.md']['updated']);
+@unlink($dir . '/file.md');
+@rmdir($dir . '/subfolder');
+@rmdir($dir);
+if ($ok) {
+    echo "  ✓ PASS: subfolder has modified, no `updated` key; file.md has both\n";
+} else {
+    echo "  ✗ FAIL: items=" . var_export($byFile, true) . "\n";
+    exit(1);
+}
+
+echo "\n";
 
 echo "=== All tests passed! ===\n";

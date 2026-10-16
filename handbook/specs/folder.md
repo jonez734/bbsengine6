@@ -93,7 +93,7 @@ to prevent ReDoS and path-traversal payloads.
 | PHP function                                | Purpose                                                                       |
 |---------------------------------------------|-------------------------------------------------------------------------------|
 | `isFolder(string $uri): bool`               | True iff the URI corresponds to an existing directory                          |
-| `getDirectoryItems(string $dirpath, string $uri): array` | List items with title, uri, filename                                |
+| `getDirectoryItems(string $dirpath, string $uri): array` | List items with title, uri, filename, is_folder, ext, and a per-item `updated` (frontmatter `lastmodified:` → `date:` → `filemtime()` → `false`) |
 | `parseYamlFrontmatter(string $yaml): array` | Parse YAML frontmatter into assoc array                                       |
 | `getDirectoryTitle(string $uri): string`    | Title for a directory (from YAML or filename; never uppercased)               |
 | `display(string $uri): ?string`             | Render the directory listing HTML; populates `$data["lastmodified"]` from `filemtime($filepath)` so `folder.tmpl` can render a page-level `.metadata` block |

@@ -522,6 +522,43 @@ if (!empty($found_local)) {
     test_fail("found vhost-local sigs.tmpl files; both vhosts must fall through to the shared template", implode(", ", $found_local));
 }
 test_pass("no vhost-local sigs.tmpl; both vhosts use the shared template");
+
+// @since 2026-10-15 — folder.tmpl now renders a per-item
+// `updated` datestamp to the right of each blurb's title. The
+// markup mirrors the blurb-page pattern
+// (page-markdown-sections.tmpl:14-18): a `<span
+// class="metadata lastmodified">` wrapping the `|datestamp`-
+// formatted value. Pin the template change so a future
+// refactor doesn't drop the guard, the inline span, or the
+// shared class names.
+echo "Test 7m: folder.tmpl renders per-item `updated` datestamp with the blurb-page metadata markup\n";
+$folder_tmpl = "/home/opencode/data/work/bbsengine6/skin/tmpl/folder.tmpl";
+if (!file_exists($folder_tmpl)) {
+    test_fail("folder.tmpl missing on disk", $folder_tmpl);
+} else {
+    $folder_src = file_get_contents($folder_tmpl);
+    // The stamp must be guarded by the same falsy check the
+    // page-level block uses (`!== false && !== null`) plus the
+    // `is_folder !== true` check that skips subfolders (the
+    // directory branch of router_collectDirectoryItems
+    // intentionally does not carry an `updated` field, per
+    // the 2026-10-15 design decision). The guard lives inside
+    // a Smarty `{if ...}` block, so the regex must accept
+    // arbitrary prefix text between the leading `{` and the
+    // first `$item.updated` (the prefix is `{if `).
+    if (!preg_match('/\{\s*if\s+\$item\.updated\s*!==\s*false\s*&&\s*\$item\.updated\s*!==\s*null\s*&&\s*\$item\.is_folder\s*!==\s*true\s*\}/s', $folder_src)) {
+        test_fail("folder.tmpl does not guard the per-item updated stamp with the falsy + is_folder check");
+    }
+    // The span must carry the blurb-page class pair:
+    // `class="metadata lastmodified"`. folder.tmpl already
+    // uses the same classes for the page-level block, so the
+    // per-item stamp is visually consistent.
+    if (!preg_match('/<span\s+class="metadata\s+lastmodified">[^<]*\{\$item\.updated\|datestamp\}/s', $folder_src)) {
+        test_fail('folder.tmpl does not render `<span class="metadata lastmodified">{$item.updated|datestamp}</span>`');
+    }
+}
+test_pass("folder.tmpl renders per-item updated datestamp with the blurb-page metadata markup");
+
 // @since 2026-10-10 — fix for the root crumb rendering as /teos/teos/
 // instead of /teos/ on zoidtechnologies.com teos folder pages. The
 // {teos} Smarty plugin (bbsengine6/smarty/function.teos.php) needs to

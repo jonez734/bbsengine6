@@ -1,5 +1,54 @@
 ## [Unreleased]
 
+### feat(folder): per-item `updated` datestamp in folder listings
+
+`folder.tmpl` now renders a datestamp to the right of each blurb's
+title, sourced from the same priority chain the blurb page's
+`.metadata .lastmodified` block uses (frontmatter `lastmodified:` →
+`date:` → `filemtime()`). The stamp uses the blurb-page markup
+(`<span class="metadata lastmodified">{$item.updated|datestamp}</span>`)
+so the per-item stamp is visually consistent with the page-level
+stamp on the blurb itself.
+
+Both listing code paths now populate `updated` on each item:
+
+- `php/folder.php::getDirectoryItems()` (legacy listing) — switched
+  the frontmatter read from the internal `parseYamlFrontmatter()` to
+  `\bbsengine6\markdown\splitFrontmatter()` (the same parser the
+  engine path uses) and added the per-item `updated` resolution.
+  `parseYamlFrontmatter()` remains as a public API (used by
+  `php/test_folder.php` Tests 6-9 and documented in
+  `handbook/specs/folder.md:97`); only the call site inside
+  `getDirectoryItems()` changed.
+- `engine/router.php::router_collectDirectoryItems()` (engine-routed
+  listing) — added `updated` to the file branch alongside the
+  existing `modified` (raw filemtime). Directory-branch items
+  intentionally do **not** carry an `updated` field per the
+  2026-10-15 design decision: the user asked for a per-blurb
+  datestamp and a parallel subfolder one but explicitly did not
+  want to tie the subfolder stamp to the filesystem. The blurb
+  frontmatter is the natural source for blurb `updated`;
+  subfolders have no analogous metadata source on disk, and
+  adding a DB read per subfolder (`engine.sig.attrs->updated`) was
+  deferred. `folder.tmpl`'s `is_folder !== true` guard on the
+  per-item stamp makes this omission a no-op for rendering today.
+
+New CSS rule in `skin/scss/blurb.scss`:
+`ul.nobullets li .metadata.lastmodified { display: inline; ... }`,
+which mirrors the existing `.blurb .metadata` block-level rule
+(font-size, color) but forces inline so the per-item stamp sits
+next to the item's link inside the `<ul class="nobullets">`.
+
+Tests added:
+
+- `php/test_folder.php` L4–L8 — pin the priority chain and the
+  `title` regression across the parser swap.
+- `php/test_router.php` 26–29 — pin file-branch `updated` from
+  frontmatter / fallback to filemtime, and the directory-branch
+  omission of `updated`.
+- `php/test_breadcrumbs.php` 7m — pin the `folder.tmpl` template
+  change (guard, class pair, `|datestamp` modifier).
+
 ### refactor(smarty): extract |datestamp modifier body to bbsengine6/php/smarty_modifier_datestamp.php
 
 The `|datestamp` Smarty modifier function is now defined in

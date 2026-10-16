@@ -187,6 +187,28 @@ then passed through `router_dedupeItems()` to collapse any
 remaining case-variant duplicates before the data is handed to the
 `folder.tmpl` template.
 
+### Item fields
+
+Each item record carries a stable shape that `folder.tmpl` reads
+directly:
+
+| Field        | Type        | Source                                         | Notes                                                                 |
+|--------------|-------------|------------------------------------------------|-----------------------------------------------------------------------|
+| `title`      | string      | YAML frontmatter `title:` (htmlspecialchars) or filename | Falls back to filename on empty/whitespace title.         |
+| `uri`        | string      | `$dirpath/$entry` or `$dirpath/$entry/`        | Trailing `/` for directories.                                          |
+| `is_folder`  | bool        | `is_dir($fullpath)`                            | Replaces the legacy `is_dir` field.                                    |
+| `filename`   | string      | basename of the entry                          | Used for sort and dedupe.                                              |
+| `ext`        | string      | `pathinfo(..., PATHINFO_EXTENSION)`            | Empty string for directories.                                          |
+| `size`       | int         | `filesize($fullpath)`                          | File branch only.                                                      |
+| `modified`   | int         | `filemtime($fullpath)`                         | Raw filemtime epoch. Both branches.                                    |
+| `updated`    | int\|false  | frontmatter `lastmodified:` → `date:` → `modified` → `false` | File branch only (added 2026-10-15). Subfolders intentionally do **not** carry an `updated` field per the 2026-10-15 design decision; folder.tmpl's `is_folder !== true` guard skips the stamp on directory items regardless. |
+
+`updated` is rendered to the right of the item's title via
+`<span class="metadata lastmodified">{$item.updated|datestamp}</span>`
+— same classes and modifier as the page-level
+`.metadata .lastmodified` block on a blurb page, so the per-item
+stamp is visually consistent with the blurb page itself.
+
 ### Skipping backup and junk files
 
 `scandir()` returns every visible filesystem entry, which includes
