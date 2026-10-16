@@ -632,6 +632,19 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
         // engine and legacy code paths now set this field so
         // folder.tmpl can render a trailing '/' on directory
         // items and not on file items.
+        //
+        // Subfolder `updated` is intentionally NOT populated
+        // here per the 2026-10-15 design decision: the user
+        // asked for a per-blurb datestamp and a parallel
+        // subfolder one but explicitly did not want to tie
+        // the subfolder stamp to the filesystem. The blurb
+        // frontmatter is the natural source for blurb
+        // `updated`; subfolders have no analogous metadata
+        // source on disk, and adding a DB read per
+        // subfolder (engine.sig.attrs->updated) was deferred.
+        // folder.tmpl's `is_folder !== true` guard on the
+        // per-item stamp makes this omission a no-op for
+        // rendering today.
         'is_folder' => true,
         'filename' => $entry,
         'modified' => filemtime($fullpath),
@@ -645,6 +658,26 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
     $displayTitle = $name;
     $filename = $entry;
     $modified = filemtime($fullpath);
+
+    // @since 2026-10-15 — per-item `updated` datestamp, rendered
+    // to the right of the item's title in folder.tmpl. Source
+    // priority mirrors the page-level `.metadata .lastmodified`
+    // block in blurb.php::display() and the legacy listing
+    // path in php/folder.php::getDirectoryItems(), so the
+    // per-item stamp in the listing matches the stamp shown
+    // on the blurb itself:
+    //   1. Frontmatter `lastmodified:` (managed by
+    //      blurbs/Makefile on `make prod`).
+    //   2. Frontmatter `date:` (legacy contract).
+    //   3. `filemtime()` ($modified above).
+    //   4. `false` if all three fail (so folder.tmpl can
+    //      suppress the stamp via `{if $item.updated !== false}`).
+    //
+    // Default to `false` for non-.md files: frontmatter is
+    // only meaningful for markdown blurbs, and a generic text
+    // or image file's "last updated" is the same as its
+    // filemtime, which we already carry on `modified`.
+    $updated = false;
 
     if ($ext === 'md') {
       $filecontent = file_get_contents($fullpath);
@@ -662,10 +695,33 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
         if ($rawTitle !== '') {
           $displayTitle = htmlspecialchars($rawTitle, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         }
+
+        // `updated` resolution — see the comment above for the
+        // priority chain. Frontmatter timestamp format is
+        // `YYYY-MM-DD HH:MM:SS GMT (HH:MM:NN TZ)`; the
+        // parenthetical TZ suffix is informational only,
+        // strip it before strtotime (mirror of blurb.php:433).
+        $stamp = null;
+        if (isset($metadata['lastmodified']) && is_string($metadata['lastmodified']) && $metadata['lastmodified'] !== "") {
+          $stamp = $metadata['lastmodified'];
+        } elseif (isset($metadata['date']) && is_string($metadata['date']) && $metadata['date'] !== "") {
+          $stamp = $metadata['date'];
+        }
+        if (is_string($stamp)) {
+          $gmStamp = preg_replace('/\s*\(.*\)\s*$/', '', $stamp);
+          $updated = strtotime($gmStamp);
+          if (!is_int($updated) || $updated <= 0) {
+            $updated = false;
+          }
+        }
       }
       $filename = $name;
     } else {
       $filename = $entry;
+    }
+
+    if ($updated === false && is_int($modified) && $modified > 0) {
+      $updated = $modified;
     }
 
     $file_href = rtrim($teosurl, '/') . '/' . trim($uri, '/');
@@ -685,7 +741,21 @@ function router_collectDirectoryItems(string $dirpath, string $uri): array
       'filename' => $entry,
       'ext' => $ext,
       'size' => filesize($fullpath),
+      // `modified` is the raw filemtime epoch (unchanged from
+      // the prior contract; pinning per the AGENTS.md style).
       'modified' => $modified,
+      // `updated` is the frontmatter-aware datestamp rendered
+      // to the right of the title in folder.tmpl. See the
+      // comment at the top of this branch for the priority
+      // chain. Falsy on any parse failure so the template
+      // guard `{if $item.updated !== false}` suppresses the
+      // stamp cleanly. `is_folder` items (the directory branch
+      // above) deliberately do NOT carry an `updated` field
+      // — subfolder last-modified is intentionally out of
+      // scope per the 2026-10-15 design decision, and the
+      // folder.tmpl guard `is_folder !== true` redundantly
+      // enforces this on the template side.
+      'updated' => $updated,
     ];
   }
 
