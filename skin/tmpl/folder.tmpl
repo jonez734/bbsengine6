@@ -11,7 +11,7 @@
 <div class="header"><h1>{$data.title}{if $data.hidden} [hidden]{/if}</h1></div>
 {if $data.lastmodified !== false && $data.lastmodified !== null}
 <div class="metadata">
-  <span class="lastmodified">{$data.lastmodified|datestamp}</span>
+  <span class="lastmodified">{$data.lastmodified|datestamp} ({$data.lastmodified|ago})</span>
 </div>
 {/if}
 <div class="body">
