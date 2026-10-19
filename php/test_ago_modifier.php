@@ -90,6 +90,37 @@ foreach ($exact as $c) {
 }
 
 // -----------------------------------------------------------------------------
+// 2b. Terse output (|ago:true)
+// -----------------------------------------------------------------------------
+echo "\nTest 2b: terse output for fixed offsets\n";
+$terseCases = [
+    ['label' => 'now (0s)',       'seconds' => 0,                     'expect' => 'now'],
+    ['label' => '1 second',       'seconds' => 1,                     'expect' => '1s'],
+    ['label' => '30 seconds',     'seconds' => 30,                    'expect' => '30s'],
+    ['label' => '1 minute',       'seconds' => 60,                    'expect' => '1m'],
+    ['label' => '1 hour',         'seconds' => 3600,                  'expect' => '1h'],
+    ['label' => '1 day',          'seconds' => 86400,                 'expect' => '1d'],
+    ['label' => '1d6h2m',         'seconds' => 86400 + 6*3600 + 2*60 + 30, 'expect' => '1d6h2m'],
+    ['label' => '29d23h59m',      'seconds' => 30*86400 - 60,         'expect' => '29d23h59m'],
+    ['label' => '3 months',       'seconds' => 3 * 30 * 86400,        'expect' => '3mo'],
+    ['label' => '359 days',       'seconds' => 359 * 86400,           'expect' => '1y'],
+    ['label' => '2 years',        'seconds' => 2 * 365 * 86400,       'expect' => '2y'],
+];
+foreach ($terseCases as $c) {
+    $actual = smarty_modifier_ago($now - $c['seconds'], true);
+    if ($actual !== $c['expect']) {
+        test_fail("terse {$c['label']}", "expected [{$c['expect']}] got [$actual]");
+    }
+    test_pass("terse {$c['label']}", "[$actual]");
+}
+// Default (long-form) output must be unaffected by the new parameter.
+$longDefault = smarty_modifier_ago($now - 86400);
+if ($longDefault !== '1 day' || smarty_modifier_ago($now - 86400, false) !== '1 day') {
+    test_fail("terse default", "long form changed: [$longDefault]");
+}
+test_pass("terse default", "long form unchanged");
+
+// -----------------------------------------------------------------------------
 // 3. Registry resolution for the org vhost
 // -----------------------------------------------------------------------------
 echo "\nTest 3: plugin registry includes org and engine smarty/ dirs\n";
@@ -128,7 +159,7 @@ $tmplDir = $workDir . '/tmpl';
 $compileDir = $workDir . '/compile';
 @mkdir($tmplDir, 0755, true);
 @mkdir($compileDir, 0755, true);
-file_put_contents($tmplDir . '/ago_probe.tmpl', "AGO[{\$ts|ago}]\n");
+file_put_contents($tmplDir . '/ago_probe.tmpl', "AGO[{\$ts|ago}]\nTERSE[{\$ts|ago:true}]\n");
 
 $probe = $workDir . '/probe.php';
 file_put_contents($probe, '<?php
@@ -166,6 +197,10 @@ $cleanup = function () use ($workDir) {
 if (!preg_match('/AGO\[(2 hours|1 hour)\]/', $out)) {
     $cleanup();
     test_fail("render", "expected AGO[2 hours] or AGO[1 hour]; output: " . substr($out, 0, 400));
+}
+if (!preg_match('/TERSE\[2h\]/', $out)) {
+    $cleanup();
+    test_fail("render terse", "expected TERSE[2h]; output: " . substr($out, 0, 400));
 }
 $cleanup();
 test_pass("render", "|ago rendered through getsmarty() with org plugin path");
