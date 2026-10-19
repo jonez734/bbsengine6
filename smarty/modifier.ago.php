@@ -21,10 +21,17 @@
  * 2012-aug-09: jam changed the coding style, renamed the modifier to be named 'ago' and changed timeStrings from .de to .us
  * shamelessly ripped from http://www.smarty.net/forums/viewtopic.php?p=61841
  *
+ * @param bool $terse  when true, return compact output such as "1d6h2m" or "3mo"
+ *                     instead of "1 day, 6 hours, 2 minutes" style phrases
+ *
  */
-function smarty_modifier_ago($unixtimestamp)
+function smarty_modifier_ago($unixtimestamp, $terse = false)
 {
        $seconds = time() - $unixtimestamp;
+
+       if ($terse) {
+             return smarty_modifier_ago_terse($seconds);
+       }
 
        $timeStrings = array("a few seconds",            // 0       <- now or future posts :-)
                         "second", "seconds",    // 1,1
@@ -68,6 +75,47 @@ function smarty_modifier_ago($unixtimestamp)
             $years = $weeks / 51;
             if ( floor($years+0.5) < 2) return floor($years+0.5)." ".$timeStrings[13];
             return floor($years+0.5)." ".$timeStrings[14];
+}
+
+
+/**
+ * Terse form of smarty_modifier_ago().
+ *
+ * Under 30 days: exact compound, largest unit first, down to minutes
+ * (seconds only when the span is under one minute), e.g. "1d6h2m".
+ * Truncates remainders. 30 days and up: one rounded unit, "3mo", "2y".
+ *
+ * Units: s, m (minutes), h, d, mo (30-day months), y (365-day years).
+ *
+ * @param int $seconds  elapsed seconds (may be negative for future times)
+ * @return string
+ */
+function smarty_modifier_ago_terse($seconds)
+{
+       if ($seconds < 1) return "now";
+
+       if ($seconds < 60) return (int)$seconds . "s";
+
+       $minute = 60;
+       $hour   = 60 * $minute;
+       $day    = 24 * $hour;
+       $month  = 30 * $day;
+       $year   = 365 * $day;
+
+       if ($seconds >= $month) {
+             $months = floor($seconds / $month + 0.5);
+             if ($months < 12) return $months . "mo";
+             return floor($seconds / $year + 0.5) . "y";
+       }
+
+       $parts = "";
+       $d = intdiv($seconds, $day);
+       $h = intdiv($seconds % $day, $hour);
+       $m = intdiv($seconds % $hour, $minute);
+       if ($d) $parts .= $d . "d";
+       if ($h) $parts .= $h . "h";
+       if ($m) $parts .= $m . "m";
+       return $parts;
 }
 
 
