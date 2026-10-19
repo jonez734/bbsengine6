@@ -124,12 +124,6 @@ release:
 handbook:
 	-$(MAKE) -C handbook stage
 
-prod:
-##	$(MAKE) wwworg
-	$(MAKE) engine
-##	$(MAKE) handbook-prod
-	$(MAKE) markdown
-
 sql:
 	tar zcvf $(PROJECT)-sql-$(datestamp).tar.gz sql/
 
@@ -231,7 +225,7 @@ sign:
 
 wheel-release: build rename-sdist sign
 
-.PHONY: handbook handbook-prod handbook-deploy-prod release sql prod www apidocs clean log engine prod skin-prod php-deploy php-deploy-prod engine-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui deploy-engine-stage deploy-engine-prod
+.PHONY: handbook handbook-prod handbook-deploy-prod release sql stage prod wwworg wwwcom apidocs clean log engine skin-prod php-deploy php-deploy-prod engine-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui deploy-engine-stage deploy-engine-prod
 .PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
 
@@ -283,13 +277,20 @@ deploy-handbook-prod: php-deploy-prod wwworg handbook-deploy-prod
 	@echo "Handbook stack deployed: /srv/www/vhosts/www.bbsengine.org/html/engine/{router,vhostconfig,join,login,logout,serve-tmpl,direct,standalone}.php + /srv/www/bbsengine6/php/markdown.php + html/{config.php,index.php,page.php,robots.txt,seo.php,sitemap.xml,.htaccess} + html/handbook/$(VERSION)/"
 	@echo "Reminder on merlin: sudo systemctl reload php-fpm"
 
-deploy:
+# stage: build the engine library locally under $(ENGINESTAGE) and the
+# vhost /engine/ entry points. Nothing is pushed to $(ENGINEHOST).
+stage:
 	$(MAKE) -C engine stage
-	$(MAKE) -C engine deploy-engine
 	$(MAKE) -C skin stage
 	$(MAKE) php-deploy
 	mkdir -p $(ENGINESTAGE)smarty/
 	$(RSYNC) smarty/*.php $(ENGINESTAGE)smarty/
+
+# prod: stage, push the vhost /engine/ entry points, then push the library.
+# The delete-count precheck runs before the library push so a stray local
+# tree cannot wipe the remote.
+prod: stage
+	$(MAKE) -C engine deploy-engine
 	@echo "Precheck: counting files --delete-after would remove at $(ENGINEPROD)..."
 	@delcnt=`$(RSYNC_CHECK_DELETE) $(ENGINESTAGE) $(ENGINEPROD) 2>&1 | $(RSYNC_CHECK_DELETE_COUNT) || true`; \
 	if [ -n "$$delcnt" ] && [ "$$delcnt" -gt $(RSYNC_MAX_DELETE) ]; then \
@@ -298,6 +299,10 @@ deploy:
 		exit 2; \
 	fi
 	$(RSYNC) $(ENGINESTAGE) $(ENGINEPROD)
+	$(MAKE) markdown
+
+# deploy is the name older docs and muscle memory use; same as prod.
+deploy: prod
 
 deploy-tui: build
 	$(MAKE) -C py/src deploy-tui DEPLOY_EDITABLE=$(DEPLOY_EDITABLE) DEPLOY_UPGRADE=$(DEPLOY_UPGRADE) VERSION=$(PY_VERSION) VERSION_PREFIX=$(VERSION_PREFIX)

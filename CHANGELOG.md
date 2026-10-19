@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+### refactor(make): `stage` / `prod` deploy shape
+
+`stage` builds the engine library, skin, php, and smarty trees locally.
+`prod` runs `stage`, pushes the vhost `/engine/` entry points, then
+pushes the library after the `RSYNC_MAX_DELETE` precheck, then runs
+`markdown`. `deploy` is now an alias to `prod`.
+
+The old `prod` target (engine + markdown) was removed; its markdown step
+now runs inside `prod`. The umbrella no longer runs `make -C engine stage`
+twice. Other subs (`wwworg`, `wwwcom`, `handbook*`, `engine-*`, auth,
+`deploy-tui`) are unchanged.
+
 ### feat(folder): per-item `updated` datestamp in folder listings
 
 `folder.tmpl` now renders a datestamp to the right of each blurb's
