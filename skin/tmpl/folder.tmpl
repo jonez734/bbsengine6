@@ -21,7 +21,8 @@
 {/if}
 {foreach $data.items as $item}
 <li>{if $item.ext == "md" || $item.ext == "txt"}{fa ico="file" fixed=1 rspace=1}{else}{fa ico="folder" fixed=1 rspace=1}{/if}<a
-href="{$item.uri}">{$item.title}{if $item.is_folder}/{/if}</a>{if $item.updated !== false && $item.updated !== null && $item.is_folder !== true} <span class="metadata lastmodified">{$item.updated|datestamp}</span>{/if}{if $item.ext} {*<span>({$item.ext})</span>*}{/if}</li>
+href="{$item.uri}">{$item.title}{if $item.is_folder}/{/if}</a>{if $item.updated !== false && $item.updated !== null && $item.is_folder !== true} <span class="metadata lastmodified">{$item.updated|datestamp}
+({$item.updated|ago:true} ago)</span>{/if}{if $item.ext} {*<span>({$item.ext})</span>*}{/if}</li>
 {/foreach}
 </ul>
 </div>
