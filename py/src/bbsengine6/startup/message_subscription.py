@@ -125,10 +125,30 @@ async def subscribe_to_bed(args: Any, moniker: str, **kwargs: Any) -> bool:
             owner=owner,
         )
         result = await client.subscribe(moniker)
-        return bool(result.get("ok"))
+        ok = bool(result.get("ok"))
+        _mark_subscribed(moniker, ok)
+        return ok
     except Exception:
         io.echo_traceback("bbsengine6.startup.message_subscription.subscribe_to_bed:")
         return False
+
+
+_subscribed_monikers: set = set()
+_subscribed_lock = threading.Lock()
+
+
+def is_subscribed(moniker: str) -> bool:
+    """True if a push subscription is active for ``moniker`` in this process."""
+    with _subscribed_lock:
+        return moniker in _subscribed_monikers
+
+
+def _mark_subscribed(moniker: str, active: bool) -> None:
+    with _subscribed_lock:
+        if active:
+            _subscribed_monikers.add(moniker)
+        else:
+            _subscribed_monikers.discard(moniker)
 
 
 _owner_loop: Optional[asyncio.AbstractEventLoop] = None
