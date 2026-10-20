@@ -49,6 +49,7 @@ with warnings.catch_warnings():
 
     from .getch import getch_str as getch
     from .getch import install_signal_handlers
+    from .getch import set_bell_window_seconds
 
     from .inputcompleter import inputcompleter
 
@@ -114,6 +115,7 @@ __all__ = [
     "inputchoice",
     "inputchar",
     "getch",
+    "set_bell_window_seconds",
     "getterminalwidth",
     "getterminalheight",
     "install_signal_handlers",
