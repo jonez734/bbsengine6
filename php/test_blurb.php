@@ -118,10 +118,10 @@ echo "--- Frontmatter Parsing Tests ---\n\n";
 require_once("/home/opencode/data/work/bbsengine6/php/markdown.php");
 
 echo "Test 5a: parseDocument returns parsed frontmatter (markdown layer)\n";
-$markdown = "---\nfolder-path: rec/arts/sci-fi/\nlastmodified: 2026-10-15 04:05:15 GMT (00:05:15 NYC)\n---\n\n# Title\n\nBody.\n";
+$markdown = "---\nfolder-path: rec.arts.sci_fi\nlastmodified: 2026-10-15 04:05:15 GMT (00:05:15 NYC)\n---\n\n# Title\n\nBody.\n";
 $doc = \bbsengine6\markdown\parseDocument($markdown, split: true);
 if (is_array($doc) && isset($doc["doc"]) && is_array($doc["doc"])) {
-    if (($doc["doc"]["folder-path"] ?? null) === "rec/arts/sci-fi/" &&
+    if (($doc["doc"]["folder-path"] ?? null) === "rec.arts.sci_fi" &&
         ($doc["doc"]["lastmodified"] ?? null) === "2026-10-15 04:05:15 GMT (00:05:15 NYC)") {
         echo "  ✓ PASS: frontmatter key/value pairs captured\n";
     } else {
