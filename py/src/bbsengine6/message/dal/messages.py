@@ -355,7 +355,12 @@ def count_unread_for_recipient(
     *,
     conn: Any = None,
 ) -> int:
-    """SELECT COUNT(*) of pending rows for a recipient.
+    """Count unread rows for a recipient.
+
+    Unread means ``pending`` or ``delivered``. ``delivered`` rows are
+    pushed on connect but not yet read, so they still count; ``read``
+    rows do not. This is the single definition used by the bottombar,
+    the push handler, and the cache.
 
     If ``conn`` is supplied, the probe + count run on the caller's
     cursor. Otherwise a fresh connection is opened. Returns 0 if
@@ -368,7 +373,8 @@ def count_unread_for_recipient(
             cur.execute(
                 """
                 SELECT COUNT(*) FROM engine.__message_recipient
-                WHERE recipient_moniker = %s AND status = 'pending'
+                WHERE recipient_moniker = %s
+                  AND status IN ('pending', 'delivered')
                 """,
                 (recipient_moniker,),
             )
