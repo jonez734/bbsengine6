@@ -66,6 +66,69 @@ def store_message_with_recipients(
         return message_id
 
 
+def list_pending_page(
+    args: Any,
+    recipient_moniker: str,
+    limit: int,
+    *,
+    before: Optional[tuple] = None,
+    max_age_days: int = 0,
+) -> List[Dict[str, Any]]:
+    """One page of pending+delivered rows, newest first, with a keyset cursor.
+
+    Ordered by ``(datestamp DESC, id DESC)``, which is a total order, so a
+    cursor taken from the last row of a page gives the next page with no gaps
+    or repeats. ``before`` is that cursor as ``(datestamp, id)``. When
+    ``max_age_days`` > 0, rows older than that are excluded (TTL). Zero means
+    no age limit.
+    """
+    clauses = ["r.recipient_moniker = %s", "r.status IN ('pending', 'delivered')"]
+    params: List[Any] = [recipient_moniker]
+    if max_age_days and max_age_days > 0:
+        clauses.append("m.datestamp >= now() - (%s || ' days')::interval")
+        params.append(str(int(max_age_days)))
+    if before is not None:
+        clauses.append("(m.datestamp, m.id) < (%s, %s)")
+        params.extend([before[0], before[1]])
+    where = " AND ".join(clauses)
+    params.append(limit)
+
+    with _connect_ctx(args, pool=None) as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+                SELECT
+                    m.id, m.channel, m.sender_moniker, m.content, m.data,
+                    m.urgency, m.template, m.template_vars, m.datestamp,
+                    r.status, r.datedelivered, r.dateread
+                FROM engine.__message m
+                JOIN engine.__message_recipient r ON r.message_id = m.id
+                WHERE {where}
+                ORDER BY m.datestamp DESC, m.id DESC
+                LIMIT %s
+                """,
+            tuple(params),
+        )
+        rows = cur.fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "channel": row[1],
+            "sender_moniker": row[2],
+            "content": row[3],
+            "data": row[4],
+            "urgency": row[5],
+            "template": row[6],
+            "template_vars": row[7],
+            "datestamp": row[8],
+            "status": row[9],
+            "datedelivered": row[10],
+            "dateread": row[11],
+        }
+        for row in rows
+    ]
+
+
 def list_undelivered_for_recipient(
     args: Any,
     recipient_moniker: str,

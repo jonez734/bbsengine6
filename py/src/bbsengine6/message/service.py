@@ -48,16 +48,31 @@ _message_enabled: bool = True
 # Default: sysops only.
 _everyone_allowed_roles: List[str] = ["sysop"]
 
+# Pending-message age limit in days for list_pending. 0 = no limit.
+_pending_max_age_days: int = 0
+# Hard cap on one page of list_pending, regardless of what a caller asks for.
+PENDING_PAGE_MAX: int = 100
 
-def configure(*, everyone_allowed_roles: Optional[List[str]] = None) -> None:
+
+def configure(
+    *,
+    everyone_allowed_roles: Optional[List[str]] = None,
+    pending_max_age_days: Optional[int] = None,
+) -> None:
     """Set message policy from the host application's config.
 
     ``everyone_allowed_roles`` lists the roles that may send to ``@everyone``.
-    Supported roles: ``"sysop"``. ``None`` leaves the current value unchanged.
+    Supported roles: ``"sysop"``. ``pending_max_age_days`` drops pending
+    messages older than that many days from list_pending (0 = keep all).
+    ``None`` leaves the current value unchanged.
     """
-    global _everyone_allowed_roles
+    global _everyone_allowed_roles, _pending_max_age_days
     if everyone_allowed_roles is not None:
         _everyone_allowed_roles = [str(r).strip().lower() for r in everyone_allowed_roles if str(r).strip()]
+    if pending_max_age_days is not None:
+        if int(pending_max_age_days) < 0:
+            raise ValueError("pending_max_age_days must be >= 0")
+        _pending_max_age_days = int(pending_max_age_days)
 
 
 def _sender_may_broadcast(sender_moniker: Optional[str], database_name: str) -> bool:
@@ -285,6 +300,32 @@ def store_message_with_checks(
         "recipients_blocked": diagnostics.get("recipients_blocked", []),
         "recipients_skipped": diagnostics.get("recipients_skipped", []),
     }
+
+
+def get_pending_page(
+    moniker: str,
+    limit: int = 50,
+    before: Optional[tuple] = None,
+    database: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """One page of pending messages for list_pending.
+
+    ``limit`` is clamped to ``1..PENDING_PAGE_MAX``. ``before`` is the
+    ``(datestamp, id)`` cursor from the last row of the previous page. Rows older
+    than the configured pending age limit are excluded.
+    """
+    if not _message_enabled:
+        return []
+    limit = max(1, min(int(limit), PENDING_PAGE_MAX))
+    database = _resolve_db(database)
+    args = _make_args(database)
+    return dal_messages.list_pending_page(
+        args,
+        moniker,
+        limit,
+        before=before,
+        max_age_days=_pending_max_age_days,
+    )
 
 
 def get_pending_messages(

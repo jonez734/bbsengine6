@@ -61,6 +61,7 @@ __all__ = [
     "get_types",
     "get_pending_messages",
     "get_pending_messages_prioritized",
+    "get_pending_page",
     "deliver_pending_on_connect",
     "get_unread_count",
     "mark_delivered",
