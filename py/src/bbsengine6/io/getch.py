@@ -129,6 +129,7 @@ except (OSError, ValueError):
     pass  # Signal not supported on this platform
 
 
+from ..message import cache as _msg_cache
 from .common import (
     _current_input_stream,
     _current_stream_lock,
@@ -150,8 +151,6 @@ except ImportError:
     _has_member_module = False
 
 # Track if bell has been emitted this session (emit only once)
-_notified_this_session = False
-_notified_this_session_lock = threading.Lock()
 
 # Track if bottom bar has been updated this session (update only once)
 _bottombar_updated_this_session = False
@@ -488,13 +487,63 @@ def _check_notifications(moniker: str, **kwargs) -> tuple[bool, int]:
     return False, 0
 
 
+class BellWindow:
+    """Ring once per window of ``window_seconds``, not once per session.
+
+    The first notification opens a window and rings. Notifications that arrive
+    while the window is open share that bell. The first one after it closes
+    opens a new window and rings again. ``now`` is injectable for tests.
+    """
+
+    def __init__(self, window_seconds: float = 5.0) -> None:
+        self.window_seconds = float(window_seconds)
+        self._opened_at: Optional[float] = None
+        self._lock = threading.Lock()
+
+    def should_ring(self, now: Optional[float] = None) -> bool:
+        t = time.monotonic() if now is None else now
+        with self._lock:
+            if self._opened_at is not None and (t - self._opened_at) < self.window_seconds:
+                return False
+            self._opened_at = t
+            return True
+
+
+_bell_window = BellWindow(5.0)
+
+
+def set_bell_window_seconds(seconds: float) -> None:
+    """Set the bell window (from bed.json ``notify.bell_window_seconds``)."""
+    if float(seconds) < 0:
+        raise ValueError("bell_window_seconds must be >= 0")
+    _bell_window.window_seconds = float(seconds)
+
+
+def _push_subscribed(moniker: Optional[str]) -> bool:
+    """True when a bed push subscription is active for ``moniker``.
+
+    Set by bbsengine6.startup.message_subscription on a successful
+    subscribe. Checked once per wait, so a subscription made mid-session is
+    picked up on the next keypress wait.
+    """
+    if not moniker:
+        return False
+    try:
+        from ..startup import message_subscription as _ms
+
+        return bool(_ms.is_subscribed(moniker))
+    except Exception:
+        return False
+
+
 def _emit_notification_bell_once() -> bool:
-    """Emit bell once per session when notifications exist."""
-    global _notified_this_session
-    with _notified_this_session_lock:
-        if _notified_this_session:
-            return False
-        _notified_this_session = True
+    """Ring the bell at most once per notification window.
+
+    Kept under its old name for callers. The latch is now a window: see
+    :class:`BellWindow`.
+    """
+    if not _bell_window.should_ring():
+        return False
     echo("{bel}", end="", flush=True)
     return True
 
@@ -792,8 +841,13 @@ def getch_str(
         # The pre-wait check above (before this loop) covers the
         # "first wait" case so a notification that arrived before the
         # user pressed any key still lights up the bottombar.
-        poll_interval = 2.0
         ready = []
+        wake_fd = _msg_cache.change_wake_fd()
+        # DB poll cadence, used only when no bed push is subscribed for this
+        # process (Step 0 fallback). With a push subscription the wait is
+        # fully event-driven and this does not apply.
+        poll_interval = 2.0
+        push_active = _push_subscribed(moniker)
 
         while True:
             # Calculate elapsed time and remaining timeout
@@ -811,21 +865,39 @@ def getch_str(
                 remaining = timeout - elapsed
                 select_timeout = remaining if remaining > 0 else 0
 
-            # Wait for input with calculated timeout (LOCK RELEASED HERE)
-            ready, _, _ = select.select([_current_input_stream], [], [], select_timeout)
+            # Wait on stdin and the message-cache wake pipe (LOCK RELEASED HERE).
+            # With a push subscription, a count change wakes us immediately.
+            # Without one, cap the wait at the DB poll cadence.
+            wait_for = select_timeout
+            if timeout is None and not push_active:
+                wait_for = min(select_timeout, poll_interval)
+            ready, _, _ = select.select(
+                [_current_input_stream, wake_fd], [], [], wait_for
+            )
 
-            if ready:
+            if _current_input_stream in ready:
                 break
 
-            # No input yet - check for notification updates during idle.
-            # Only relevant when timeout is None (infinite wait); the
-            # finite-timeout branch above returns before reaching here
-            # for any non-trivial timeout because select_timeout == the
-            # full remaining budget.
-            if timeout is None and check_notifications and moniker:
-                has_notifications, _ = _check_notifications(moniker, **kwargs)
-                if has_notifications:
+            if not ready:
+                # Nothing readable: either the finite timeout expired (the loop
+                # top returns), or the DB poll cadence elapsed with no bed push.
+                if timeout is None and not push_active and check_notifications and moniker:
+                    has_notifications, _ = _check_notifications(moniker, **kwargs)
+                    if has_notifications:
+                        _emit_notification_bell_once()
+                        _update_bottombar_on_notification()
+                continue
+
+            # The cache changed. Drain the wake, then react from the cache
+            # only (no DB query on the wake path). Bell at most once per
+            # window; refresh the bottombar.
+            _msg_cache.drain_change_wake()
+            if check_notifications and moniker:
+                count = _msg_cache.get_local_unread_count(moniker)
+                if count > 0:
+                    _emit_notification_bell_once()
                     _update_bottombar_on_notification()
+            continue
 
         # Input is available - acquire lock for reading and processing
         with _current_stream_lock:
