@@ -114,7 +114,16 @@ async def subscribe_to_bed(args: Any, moniker: str, **kwargs: Any) -> bool:
             )
             return False
 
-        client = get_message_client(conn)
+        # Ownership: the process that created the connection (the singleton
+        # path) owns it and may write rotated tokens. A handle supplied by
+        # a caller is owned by that caller, so this process does not write.
+        owner = kwargs.get("bed") is None
+        client = get_message_client(
+            conn,
+            token=token,
+            token_file=getattr(args, "token_file", None),
+            owner=owner,
+        )
         result = await client.subscribe(moniker)
         return bool(result.get("ok"))
     except Exception:
