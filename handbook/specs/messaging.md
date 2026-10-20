@@ -173,10 +173,10 @@ async counterpart under `bbsengine6.message.dal.aio/` would mirror
 
 ## Recipient resolution
 
-`resolve_recipients(recipients, database=None)` is the canonical
-recipient expansion path. It runs at the service boundary (in
-`store_message_with_checks`) so callers can pass `@group_name` or
-`@everyone` and get notify-style expansion transparently:
+`resolve_recipients(recipients, database=None, sender_moniker=None,
+source="member")` is the canonical recipient expansion path. It runs at the
+service boundary (in `store_message_with_checks`) so callers can pass
+`@group_name` or `@everyone` and get notify-style expansion transparently:
 
 ```
 @everyone   -> SELECT moniker FROM engine.__member WHERE approved = TRUE
@@ -190,6 +190,33 @@ Expansion is recursive (depth cap 10) so nested groups work; the
 `@everyone` token is case-insensitive (`@Everyone` works the same
 as `@everyone`). The returned list preserves the first-seen order
 with duplicates removed.
+
+### Message source
+
+Every message carries a `source` (the `engine.__message.source` column,
+default `member`):
+
+| Source | Meaning | Group rule |
+|---|---|---|
+| `member` | a logged-in sender (`sender_moniker` set) | unchanged: no source check |
+| `operator` | CLI or no identity | unchanged: no source check |
+| named, e.g. `casino.dealer:<table>`, `postoffice` | a system sender | may address only groups under a registered prefix; never `@everyone` |
+
+A named source is registered in `engine.__message_source`
+(`source`, `group_prefix`). A registration covers a group when the
+group name equals the prefix or starts with `prefix:`, so prefix
+`table` covers `table:jam`. An unregistered named source addresses
+nothing. A refused group raises `PermissionError`, which
+`store_message_with_checks` reports as `denied_reason`.
+
+`store_message`, `store_message_with_checks`, and `send` accept
+`source=`. Callers that do not pass it are tagged `member`.
+
+Schema note: `sql/message.sql` and `sql/message_groups.sql` are the
+source of truth. An existing installed database is not altered by
+these files; the `source` column and `engine.__message_source` must be
+created by hand (or the database recreated) on installs made before
+this change.
 
 The surviving `member.group_exists` and `member.get_group_members`
 functions in `py/src/bbsengine6/member/lib.py` cover member
