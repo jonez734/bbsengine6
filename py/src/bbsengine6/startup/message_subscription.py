@@ -131,18 +131,47 @@ async def subscribe_to_bed(args: Any, moniker: str, **kwargs: Any) -> bool:
         return False
 
 
-def subscribe_to_bed_sync(args: Any, moniker: str, **kwargs: Any) -> bool:
-    """Synchronous wrapper. Runs subscribe_to_bed on a fresh event loop.
+_owner_loop: Optional[asyncio.AbstractEventLoop] = None
+_owner_lock = threading.Lock()
 
-    The asyncio.run() wrapper this replaces closed the loop on return,
-    which stopped the connection's receive task and dropped pushes. The
-    connection owner keeps its own loop; this wrapper only performs the
-    initial handshake.
+
+def _owner_loop_get() -> asyncio.AbstractEventLoop:
+    """One long-lived event loop on a daemon thread for owned connections.
+
+    The connection's receive task lives on the loop that subscribed it. If
+    that loop is closed (asyncio.run does this on return), pushes stop. So the
+    owner keeps one loop running for the life of the process and schedules
+    work onto it.
+    """
+    global _owner_loop
+    with _owner_lock:
+        if _owner_loop is None or _owner_loop.is_closed():
+            loop = asyncio.new_event_loop()
+            threading.Thread(
+                target=loop.run_forever,
+                name="bbsengine6-bed-owner-loop",
+                daemon=True,
+            ).start()
+            _owner_loop = loop
+        return _owner_loop
+
+
+def subscribe_to_bed_sync(args: Any, moniker: str, **kwargs: Any) -> bool:
+    """Synchronous wrapper for subscribe_to_bed.
+
+    Runs the subscription on the process owner loop, which stays alive, so the
+    connection's receive task keeps running after this call returns. This is
+    the path for callers that do not hold a loop of their own. A caller that
+    supplies a ``bed`` handle and runs its own loop should await
+    :func:`subscribe_to_bed` on that loop directly instead.
     """
     if not moniker:
         return False
     try:
-        return asyncio.run(subscribe_to_bed(args, moniker, **kwargs))
+        fut = asyncio.run_coroutine_threadsafe(
+            subscribe_to_bed(args, moniker, **kwargs), _owner_loop_get()
+        )
+        return bool(fut.result(timeout=30))
     except Exception:
         io.echo_traceback(
             "bbsengine6.startup.message_subscription.subscribe_to_bed_sync:"
