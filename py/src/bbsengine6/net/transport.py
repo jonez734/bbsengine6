@@ -204,7 +204,10 @@ async def channel_publish(
         delivered_ws: Set[int] = set()
         for path, path_clients in list(server._clients.items()):
             failed_ws = []
-            for ws in path_clients:
+            # Snapshot the set: on_connect/finally mutate it while we await
+            # ws.send(), and iterating a live set across an await raises
+            # RuntimeError ("Set changed size during iteration").
+            for ws in list(path_clients):
                 if id(ws) in delivered_ws:
                     continue
                 ws_bbs_id = getattr(ws, "_bbsengine6_session_id", None)
@@ -1031,13 +1034,16 @@ class WebSocketServer:
             session_id = self._alloc_session_id()
             try:
                 websocket._bbsengine6_session_id = session_id
-            except Exception:
-                # Some websocket test doubles don't allow attribute set.
-                # Fall back to id() and log a warning.
-                logger.warning(
-                    "Could not set _bbsengine6_session_id on websocket; "
-                    "falling back to id(websocket)"
+            except Exception as e:
+                # Refuse the connection rather than fall back to id(websocket):
+                # CPython can reuse an id() after GC, which would route
+                # publishes to the wrong client.
+                logger.error(
+                    f"Cannot stamp session id on websocket ({e}); closing connection"
                 )
+                with contextlib.suppress(Exception):
+                    await websocket.close()
+                return
 
             if path not in self._clients:
                 self._clients[path] = set()
@@ -1350,7 +1356,7 @@ class WebSocketServer:
             # Send to specific path only
             if path in self._clients:
                 websockets_to_close = []
-                for ws in self._clients[path]:
+                for ws in list(self._clients[path]):
                     try:
                         await ws.send(msg_json)
                     except Exception:
@@ -1359,9 +1365,9 @@ class WebSocketServer:
                     self._clients[path].discard(ws)
         else:
             # Send to all paths
-            for path_clients in self._clients.values():
+            for path_clients in list(self._clients.values()):
                 websockets_to_close = []
-                for ws in path_clients:
+                for ws in list(path_clients):
                     try:
                         await ws.send(msg_json)
                     except Exception:

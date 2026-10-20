@@ -38,8 +38,17 @@ def send_with_length(conn: socket.socket, payload: bytes):
     conn.sendall(length_prefix + payload)
 
 
-def recv_with_length(conn: socket.socket) -> bytes:
-    """Receive a length-prefixed payload."""
+def recv_with_length(conn: socket.socket, max_len: Optional[int] = None) -> bytes:
+    """Receive a length-prefixed payload.
+
+    ``max_len`` caps the payload size before any allocation happens. The
+    default ``None`` keeps the original unbounded behavior so existing
+    callers (asimov) are unchanged; pass a limit for untrusted peers.
+
+    Raises:
+        EOFError: connection closed before the full payload arrived.
+        ValueError: the declared length exceeds ``max_len``.
+    """
 
     def recv_exactly(n: int) -> bytes:
         buf = b""
@@ -52,6 +61,8 @@ def recv_with_length(conn: socket.socket) -> bytes:
 
     length_bytes = recv_exactly(4)
     (length,) = struct.unpack("!I", length_bytes)
+    if max_len is not None and length > max_len:
+        raise ValueError(f"Payload length {length} exceeds max_len {max_len}")
     return recv_exactly(length)
 
 

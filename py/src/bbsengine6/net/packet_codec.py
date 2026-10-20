@@ -221,6 +221,27 @@ def encode_file_packet(
     return packet_data
 
 
+def _verify_trailing_hmac(data: bytes, crypto: Optional["CryptoHash"], label: str) -> None:
+    """Authenticate the packet before any field is parsed.
+
+    The encoder appends the HMAC tag as the final field, so the tag is the
+    last HMAC_HEX_LEN bytes and it covers everything before it. Checking
+    this first means no length or count field from an unauthenticated
+    packet is trusted. Raises PacketAuthError on a missing or bad tag.
+    """
+    if not crypto:
+        return
+    from .crypto import CryptoHash as _CH
+    from .crypto import PacketAuthError
+
+    n = _CH.HMAC_HEX_LEN
+    if len(data) < n:
+        raise PacketAuthError(f"{label} truncated: missing HMAC")
+    mac_hex = data[-n:].decode("ascii", errors="replace")
+    if not crypto.verify(data[:-n], mac_hex):
+        raise PacketAuthError(f"{label} HMAC mismatch")
+
+
 def decode_file_packet(
     data: bytes, crypto: Optional["CryptoHash"] = None
 ) -> FilePacket:
@@ -242,6 +263,8 @@ def decode_file_packet(
         PacketAuthError: If HMAC verification fails
     """
     from .crypto import CryptoHash, PacketAuthError
+
+    _verify_trailing_hmac(data, crypto, "FilePacket")
 
     if len(data) < FILEPACKET_HEADER_SIZE:
         raise PacketDecodeError(
@@ -460,6 +483,8 @@ def decode_message_packet(
         PacketAuthError: If HMAC verification fails
     """
     from .crypto import CryptoHash, PacketAuthError
+
+    _verify_trailing_hmac(data, crypto, "MessagePacket")
 
     if len(data) < MESSAGEPACKET_HEADER_SIZE:
         raise PacketDecodeError(
