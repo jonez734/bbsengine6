@@ -383,14 +383,15 @@ uninstall-bbsengine6-auth-helper:
 	@echo "bbsengine6-auth-* removed from $(ENGINEHOST) and $(CYRUSHOST)"
 
 # Install /etc/pam.d/bbsengine6 on merlin. The file is staged in
-# the meta-repo at etc-postoffice/pam.d-bbsengine6 (committed in
-# the meta-repo, not in bbsengine6) and rsynced here.
+# mistermcfeely/etc-postoffice/pam.d-bbsengine6 (committed in the
+# mistermcfeely repo) and rsynced here.
+PAM_BBSENGINE6_SRC := ../mistermcfeely/etc-postoffice/pam.d-bbsengine6
 install-pam-bbsengine6-on-merlin:
-	@if [ ! -f etc-postoffice/pam.d-bbsengine6 ]; then \
-		echo "ERROR: etc-postoffice/pam.d-bbsengine6 not found; commit Phase 5 first." >&2; \
+	@if [ ! -f $(PAM_BBSENGINE6_SRC) ]; then \
+		echo "ERROR: $(PAM_BBSENGINE6_SRC) not found; commit Phase 5 first." >&2; \
 		exit 1; \
 	fi
-	$(RSYNC) etc-postoffice/pam.d-bbsengine6 $(ENGINEHOST):/tmp/pam.d-bbsengine6
+	$(RSYNC) $(PAM_BBSENGINE6_SRC) $(ENGINEHOST):/tmp/pam.d-bbsengine6
 	ssh $(ENGINEHOST) 'sudo install -d -m 0755 /etc/pam.d && \
 	                    sudo install -m 0644 /tmp/pam.d-bbsengine6 /etc/pam.d/bbsengine6 && \
 	                    rm -f /tmp/pam.d-bbsengine6'
