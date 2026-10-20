@@ -49,14 +49,15 @@ class TestNoOrphanOnAllBlocked(unittest.TestCase):
         self.assertEqual(result["recipients_stored"], [])
         self.assertEqual(result["recipients_blocked"], ["bob"])
 
-    @patch("bbsengine6.message.service.record_message_sent")
+    @patch("bbsengine6.message.service.dal_ratelimit")
     @patch("bbsengine6.message.service._make_args", return_value=MagicMock())
     @patch("bbsengine6.message.service.dal_messages")
     @patch("bbsengine6.message.service._check_blocking_and_ratelimit")
     @patch("bbsengine6.message.service.resolve_recipients", side_effect=lambda r, **k: r)
     def test_some_allowed_still_inserts(
-        self, _resolve, mock_check, mock_dal, _args, _rec
+        self, _resolve, mock_check, mock_dal, _args, mock_rl
     ):
+        mock_rl.try_reserve.return_value = (True, 9)
         mock_check.return_value = (
             ["carol"],
             True,

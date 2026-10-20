@@ -84,14 +84,6 @@ def _check_blocking_and_ratelimit(
         "recipients_skipped": [],
     }
 
-    if sender_moniker is not None:
-        allowed, _remaining = check_rate_limit(
-            sender_moniker, channel, database=database
-        )
-        if not allowed:
-            diagnostics["rate_limit_ok"] = False
-            return None, False, diagnostics
-
     allowed_recipients: Optional[List[str]] = None
     if recipient_monikers:
         allowed_recipients = []
@@ -206,22 +198,42 @@ def store_message_with_checks(
 
     args = _make_args(database)
 
-    message_id = dal_messages.store_message_with_recipients(
-        args,
-        channel,
-        sender_moniker,
-        content,
-        data,
-        urgency,
-        template,
-        template_vars,
-        allowed_recipients,
-    )
+    # Reserve a rate slot only for a message that will actually be stored.
+    # Early returns above never consume one. If the insert fails, release.
+    reserved = False
+    if sender_moniker is not None:
+        ok, _remaining = dal_ratelimit.try_reserve(args, sender_moniker, channel)
+        if not ok:
+            return {
+                "message_id": 0,
+                "rate_limit_ok": False,
+                "recipients_stored": [],
+                "recipients_blocked": diagnostics.get("recipients_blocked", []),
+                "recipients_skipped": diagnostics.get("recipients_skipped", []),
+            }
+        reserved = True
+
+    try:
+        message_id = dal_messages.store_message_with_recipients(
+            args,
+            channel,
+            sender_moniker,
+            content,
+            data,
+            urgency,
+            template,
+            template_vars,
+            allowed_recipients,
+        )
+    except Exception:
+        if reserved:
+            dal_ratelimit.release(args, sender_moniker, channel)
+        raise
 
     stored: List[str] = list(allowed_recipients) if allowed_recipients else []
 
-    if sender_moniker is not None:
-        record_message_sent(sender_moniker, channel, database=database)
+    # The rate slot was reserved atomically in _check_blocking_and_ratelimit,
+    # so it is not recorded again here.
 
     return {
         "message_id": message_id,
@@ -600,6 +612,9 @@ def resolve_recipients(
     pending = list(recipients)
     depth = 0
     MAX_DEPTH = 10
+    # Group names already expanded. A group that (directly or through other
+    # groups) contains itself is expanded once, so a cycle terminates.
+    expanded_groups: Set[str] = set()
 
     while pending and depth < MAX_DEPTH:
         depth += 1
@@ -616,18 +631,25 @@ def resolve_recipients(
                 if token.lower() == "everyone":
                     for m in dal_recipients.list_all_approved_member_monikers(args):
                         _add(m)
-                else:
-                    group_id = dal_recipients.get_group_id_by_name(args, token)
-                    if group_id >= 0:
-                        members = get_message_group_members(
-                            group_id, database=database_name
-                        )
-                        for m in members:
+                    continue
+                key = token.lower()
+                if key in expanded_groups:
+                    continue
+                expanded_groups.add(key)
+                group_id = dal_recipients.get_group_id_by_name(args, token)
+                if group_id >= 0:
+                    for m in get_message_group_members(
+                        group_id, database=database_name
+                    ):
+                        # A member written as "@group" is a nested reference
+                        # and is expanded on the next pass; a plain moniker is
+                        # added directly.
+                        if m and m.startswith("@"):
+                            next_pending.append(m)
+                        else:
                             _add(m)
             else:
                 _add(r)
-        if not next_pending:
-            break
         pending = next_pending
 
     return expanded
@@ -689,7 +711,19 @@ def send(
 
     Thin shim over :func:`store_message` that accepts the legacy
     ``message_delivery.send`` kwarg names.
+
+    ``should_persist=False`` means "do not store": the call returns 0 and
+    nothing is written. Previously the flag was accepted and ignored, so a
+    caller expecting a transient notification would silently create a row.
+
+    Unknown keyword arguments raise TypeError. Previously they were swallowed,
+    so a misspelled option (``recipent=``) did nothing and gave no error.
     """
+    if kwargs:
+        raise TypeError(
+            f"send() got unexpected keyword argument(s): {sorted(kwargs)}"
+        )
+
     if not _message_enabled:
         return 0
 
@@ -699,6 +733,9 @@ def send(
         raise ValueError("recipients must be a non-empty list")
     if not isinstance(template, str):
         raise ValueError("template must be a string")
+
+    if not should_persist:
+        return 0
 
     rendered = templates.render_template(template, template_vars or {})
     db = _db_from_args(args)

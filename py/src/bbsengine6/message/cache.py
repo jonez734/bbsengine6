@@ -19,13 +19,12 @@ from typing import Dict, Optional
 
 
 _local_unread: Dict[str, int] = {}
-_local_lock: Optional[Lock] = None
+# Created at import time. A lazily created lock is itself racy: two threads
+# can each see None and each create a different Lock.
+_local_lock: Lock = Lock()
 
 
 def _ensure_lock() -> Lock:
-    global _local_lock
-    if _local_lock is None:
-        _local_lock = Lock()
     return _local_lock
 
 
