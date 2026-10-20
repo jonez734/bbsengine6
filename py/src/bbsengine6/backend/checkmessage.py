@@ -37,6 +37,7 @@ classlist = (
     ("engine.__message_group", "message_groups.sql"),
     ("engine.__message_group_member", "message_groups.sql"),
     ("engine.__message_block", "message_groups.sql"),
+    ("engine.__message_source", "message_groups.sql"),
     ("engine.__message_type", "message_groups.sql"),
     ("engine.__message_rate_limit", "message_groups.sql"),
     ("engine.message", "messageview.sql"),

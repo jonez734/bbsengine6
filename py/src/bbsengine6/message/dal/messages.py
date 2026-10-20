@@ -22,6 +22,7 @@ def store_message_with_recipients(
     template: Optional[str],
     template_vars: Optional[Dict[str, Any]],
     allowed_recipients: Optional[List[str]],
+    source: str = "member",
 ) -> int:
     """INSERT a row into ``engine.__message`` and one row per
     allowed recipient into ``engine.__message_recipient``.
@@ -35,8 +36,8 @@ def store_message_with_recipients(
         cur.execute(
             """
             INSERT INTO engine.__message
-            (channel, sender_moniker, content, data, urgency, template, template_vars)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            (channel, sender_moniker, content, data, urgency, template, template_vars, source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (

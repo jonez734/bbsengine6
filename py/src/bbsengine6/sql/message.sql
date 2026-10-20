@@ -11,12 +11,18 @@ create table engine.__message (
     "urgency" engine.notify_urgency_enum default 'ROUTINE'::engine.notify_urgency_enum,
     "template" text,
     "template_vars" jsonb,
-    "datestamp" timestamptz default now()
+    "datestamp" timestamptz default now(),
+    -- Where the message came from. 'member' (sender_moniker is set),
+    -- 'operator' (CLI / no identity), or a registered named source such
+    -- as 'casino.dealer:<table>' or 'postoffice'. A named source may only
+    -- address the groups it is registered for (engine.__message_source).
+    "source" text not null default 'member'
 );
 
 -- Indexes for __message
 create index idx_engine_message_channel on engine.__message(channel);
 create index idx_engine_message_sender on engine.__message(sender_moniker);
+create index idx_engine_message_source on engine.__message(source);
 create index idx_engine_message_datestamp on engine.__message(datestamp desc);
 create index idx_engine_message_data on engine.__message using gin(data);
 

@@ -75,6 +75,26 @@ def configure(
         _pending_max_age_days = int(pending_max_age_days)
 
 
+_RESERVED_SOURCES = ("member", "operator")
+
+
+def _source_may_address_group(
+    source: str, group_name: str, database_name: str
+) -> bool:
+    """Named sources are limited to the group prefixes they are registered for.
+
+    ``member`` and ``operator`` senders are governed by their own rules and
+    are not checked here. Any other source must hold a registration in
+    ``engine.__message_source`` that covers ``group_name``.
+    """
+    if source in _RESERVED_SOURCES:
+        return True
+    args = _make_args(database_name)
+    return bool(
+        dal_recipients.source_may_address_group(args, source, group_name)
+    )
+
+
 def _sender_may_broadcast(sender_moniker: Optional[str], database_name: str) -> bool:
     """True if the sender may address ``@everyone`` under the configured roles.
 
@@ -159,6 +179,7 @@ def store_message(
     template: Optional[str] = None,
     template_vars: Optional[Dict[str, Any]] = None,
     database: Optional[str] = None,
+    source: str = "member",
 ) -> int:
     """Store a message in the database and create recipients.
 
@@ -175,6 +196,7 @@ def store_message(
         template=template,
         template_vars=template_vars,
         database=database,
+        source=source,
     )
     return result.get("message_id", 0)
 
@@ -189,6 +211,7 @@ def store_message_with_checks(
     template: Optional[str] = None,
     template_vars: Optional[Dict[str, Any]] = None,
     database: Optional[str] = None,
+    source: str = "member",
 ) -> Dict[str, Any]:
     """Store a message and return full per-recipient diagnostics.
 
@@ -218,7 +241,10 @@ def store_message_with_checks(
     if recipient_monikers:
         try:
             expanded = resolve_recipients(
-                recipient_monikers, database=database, sender_moniker=sender_moniker
+                recipient_monikers,
+                database=database,
+                sender_moniker=sender_moniker,
+                source=source,
             )
         except PermissionError as e:
             # Denied broadcast: nothing is stored, and the reason is reported
@@ -282,6 +308,7 @@ def store_message_with_checks(
             template,
             template_vars,
             allowed_recipients,
+            source=source,
         )
     except Exception:
         if reserved:
@@ -676,6 +703,7 @@ def resolve_recipients(
     recipients: List[str],
     database: Optional[str] = None,
     sender_moniker: Optional[str] = None,
+    source: str = "member",
 ) -> List[str]:
     """Expand ``@group_name`` and ``@everyone`` references.
 
@@ -714,6 +742,10 @@ def resolve_recipients(
                 database_name = _resolve_db(database)
                 args = _make_args(database_name)
                 if token.lower() == "everyone":
+                    if source not in _RESERVED_SOURCES:
+                        raise PermissionError(
+                            f"source {source!r} may not address @everyone"
+                        )
                     if not _sender_may_broadcast(sender_moniker, database_name):
                         raise PermissionError(
                             "only sysops may address @everyone"
@@ -724,6 +756,10 @@ def resolve_recipients(
                 key = token.lower()
                 if key in expanded_groups:
                     continue
+                if not _source_may_address_group(source, token, database_name):
+                    raise PermissionError(
+                        f"source {source!r} is not registered for group {token!r}"
+                    )
                 expanded_groups.add(key)
                 group_id = dal_recipients.get_group_id_by_name(args, token)
                 if group_id >= 0:
@@ -794,9 +830,14 @@ def send(
     urgency: Any = None,
     should_persist: bool = True,
     args: Optional[Any] = None,
+    source: str = "member",
     **kwargs: Any,
 ) -> int:
     """Send a notification through the unified message system.
+
+    ``source`` tags where the message came from (``member``, ``operator``,
+    or a registered named source). A named source may address only the
+    groups it is registered for in ``engine.__message_source``.
 
     Thin shim over :func:`store_message` that accepts the legacy
     ``message_delivery.send`` kwarg names.
@@ -839,6 +880,7 @@ def send(
         template=template,
         template_vars=template_vars,
         database=db,
+        source=source,
     )
 
 
