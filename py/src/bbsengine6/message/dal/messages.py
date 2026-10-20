@@ -66,6 +66,60 @@ def store_message_with_recipients(
         return message_id
 
 
+def list_undelivered_for_recipient(
+    args: Any,
+    recipient_moniker: str,
+    limit: int,
+    *,
+    prioritized: bool = True,
+) -> List[Dict[str, Any]]:
+    """SELECT only never-delivered (status='pending') messages.
+
+    Used for on-connect delivery. Rows already delivered are not returned
+    again, so a message is pushed to a member once, not on every login.
+    """
+    order_clause = (
+        "ORDER BY CASE m.urgency WHEN 'CRITICAL' THEN 0 WHEN 'URGENT' THEN 1 "
+        "WHEN 'IMPORTANT' THEN 2 ELSE 3 END, m.datestamp DESC"
+        if prioritized
+        else "ORDER BY m.datestamp DESC"
+    )
+    with _connect_ctx(args, pool=None) as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+                SELECT
+                    m.id, m.channel, m.sender_moniker, m.content, m.data,
+                    m.urgency, m.template, m.template_vars, m.datestamp,
+                    r.status, r.datedelivered, r.dateread
+                FROM engine.__message m
+                JOIN engine.__message_recipient r ON r.message_id = m.id
+                WHERE r.recipient_moniker = %s AND r.status = 'pending'
+                {order_clause}
+                LIMIT %s
+                """,
+            (recipient_moniker, limit),
+        )
+        rows = cur.fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "channel": row[1],
+            "sender_moniker": row[2],
+            "content": row[3],
+            "data": row[4],
+            "urgency": row[5],
+            "template": row[6],
+            "template_vars": row[7],
+            "datestamp": row[8],
+            "status": row[9],
+            "datedelivered": row[10],
+            "dateread": row[11],
+        }
+        for row in rows
+    ]
+
+
 def list_pending_for_recipient(
     args: Any,
     recipient_moniker: str,
@@ -194,6 +248,26 @@ def mark_delivered(args: Any, message_id: int, recipient_moniker: str) -> None:
                 WHERE message_id = %s AND recipient_moniker = %s
                 """,
             (message_id, recipient_moniker),
+        )
+        conn.commit()
+
+
+def mark_delivered_batch(
+    args: Any, message_ids: List[int], recipient_moniker: str
+) -> None:
+    """Mark several messages delivered in one UPDATE (one round trip)."""
+    if not message_ids:
+        return
+    with _connect_ctx(args, pool=None) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+                UPDATE engine.__message_recipient
+                SET status = 'delivered', datedelivered = now()
+                WHERE recipient_moniker = %s
+                  AND message_id = ANY(%s)
+                  AND status = 'pending'
+                """,
+            (recipient_moniker, list(message_ids)),
         )
         conn.commit()
 

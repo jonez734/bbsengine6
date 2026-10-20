@@ -165,13 +165,12 @@ class TestMessageLib:
 
         assert count == 5
 
-    @patch("bbsengine6.message.lib.get_pending_messages_prioritized")
-    @patch("bbsengine6.message.lib.mark_delivered")
-    def test_deliver_pending_on_connect(self, mock_mark_delivered, mock_get_pending):
-        """Deliver pending messages on connect."""
+    @patch("bbsengine6.message.service.dal_messages")
+    def test_deliver_pending_on_connect(self, mock_dal):
+        """Deliver only never-delivered messages on connect, in one batch."""
         from bbsengine6 import message
 
-        mock_get_pending.return_value = [
+        mock_dal.list_undelivered_for_recipient.return_value = [
             {"id": 1, "channel": "test", "content": "msg1"},
             {"id": 2, "channel": "test2", "content": "msg2"},
         ]
@@ -179,7 +178,21 @@ class TestMessageLib:
         messages = message.deliver_pending_on_connect("bob")
 
         assert len(messages) == 2
-        assert mock_mark_delivered.call_count == 2
+        mock_dal.list_undelivered_for_recipient.assert_called_once()
+        mock_dal.mark_delivered_batch.assert_called_once()
+        call_args = mock_dal.mark_delivered_batch.call_args[0]
+        assert call_args[1] == [1, 2]
+        assert call_args[2] == "bob"
+
+    @patch("bbsengine6.message.service.dal_messages")
+    def test_deliver_pending_on_connect_skips_batch_when_empty(self, mock_dal):
+        """No pending rows means no UPDATE round trip."""
+        from bbsengine6 import message
+
+        mock_dal.list_undelivered_for_recipient.return_value = []
+
+        assert message.deliver_pending_on_connect("bob") == []
+        mock_dal.mark_delivered_batch.assert_not_called()
 
     def test_disabled_message_system_returns_empty(self):
         """When disabled, message functions return empty/default values."""

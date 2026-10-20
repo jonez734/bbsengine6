@@ -192,6 +192,18 @@ def store_message_with_checks(
             "recipients_skipped": diagnostics.get("recipients_skipped", []),
         }
 
+    # Recipients were requested but every one was blocked or skipped. Storing
+    # the row would leave an orphan message with no recipients and return a
+    # live message_id to the caller. Report it as not stored instead.
+    if recipient_monikers and not allowed_recipients:
+        return {
+            "message_id": 0,
+            "rate_limit_ok": True,
+            "recipients_stored": [],
+            "recipients_blocked": diagnostics.get("recipients_blocked", []),
+            "recipients_skipped": diagnostics.get("recipients_skipped", []),
+        }
+
     args = _make_args(database)
 
     message_id = dal_messages.store_message_with_recipients(
@@ -369,10 +381,19 @@ def deliver_pending_on_connect(
     if not _message_enabled:
         return []
 
-    messages = get_pending_messages_prioritized(moniker, database=database)
+    database = _resolve_db(database)
+    args = _make_args(database)
+    # Only never-delivered rows. A row already marked delivered is not
+    # pushed again, so unread-but-delivered messages do not crowd out
+    # ROUTINE traffic on every login.
+    messages = dal_messages.list_undelivered_for_recipient(
+        args, moniker, 50, prioritized=True
+    )
 
-    for msg in messages:
-        mark_delivered(msg["id"], moniker, database=database)
+    if messages:
+        dal_messages.mark_delivered_batch(
+            args, [msg["id"] for msg in messages], moniker
+        )
 
     return messages
 
