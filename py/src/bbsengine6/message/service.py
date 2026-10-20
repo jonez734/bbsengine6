@@ -43,6 +43,39 @@ class MessageUrgency(Enum):
 
 _message_enabled: bool = True
 
+# Roles allowed to address ``@everyone``. Set by the host application from its
+# own config (bed reads ``message.everyone_allowed_roles`` from bed.json).
+# Default: sysops only.
+_everyone_allowed_roles: List[str] = ["sysop"]
+
+
+def configure(*, everyone_allowed_roles: Optional[List[str]] = None) -> None:
+    """Set message policy from the host application's config.
+
+    ``everyone_allowed_roles`` lists the roles that may send to ``@everyone``.
+    Supported roles: ``"sysop"``. ``None`` leaves the current value unchanged.
+    """
+    global _everyone_allowed_roles
+    if everyone_allowed_roles is not None:
+        _everyone_allowed_roles = [str(r).strip().lower() for r in everyone_allowed_roles if str(r).strip()]
+
+
+def _sender_may_broadcast(sender_moniker: Optional[str], database_name: str) -> bool:
+    """True if the sender may address ``@everyone`` under the configured roles.
+
+    ``sender_moniker=None`` means an operator/CLI call with no member identity,
+    which is allowed. Otherwise the sender must hold one of the configured roles.
+    """
+    if sender_moniker is None:
+        return True
+    from bbsengine6.member import lib as member_lib
+
+    args = _make_args(database_name)
+    for role in _everyone_allowed_roles:
+        if role == "sysop" and member_lib.issysop(args, moniker=sender_moniker) is True:
+            return True
+    return False
+
 
 def is_enabled() -> bool:
     return _message_enabled
@@ -168,7 +201,17 @@ def store_message_with_checks(
     database = _resolve_db(database)
 
     if recipient_monikers:
-        expanded = resolve_recipients(recipient_monikers, database=database)
+        try:
+            expanded = resolve_recipients(
+                recipient_monikers, database=database, sender_moniker=sender_moniker
+            )
+        except PermissionError as e:
+            # Denied broadcast: nothing is stored, and the reason is reported
+            # rather than surfacing as a database error.
+            return {
+                **empty,
+                "denied_reason": str(e),
+            }
         recipient_monikers = expanded
 
     allowed_recipients, rate_limit_ok, diagnostics = _check_blocking_and_ratelimit(
@@ -591,6 +634,7 @@ def get_queue(
 def resolve_recipients(
     recipients: List[str],
     database: Optional[str] = None,
+    sender_moniker: Optional[str] = None,
 ) -> List[str]:
     """Expand ``@group_name`` and ``@everyone`` references.
 
@@ -629,6 +673,10 @@ def resolve_recipients(
                 database_name = _resolve_db(database)
                 args = _make_args(database_name)
                 if token.lower() == "everyone":
+                    if not _sender_may_broadcast(sender_moniker, database_name):
+                        raise PermissionError(
+                            "only sysops may address @everyone"
+                        )
                     for m in dal_recipients.list_all_approved_member_monikers(args):
                         _add(m)
                     continue
