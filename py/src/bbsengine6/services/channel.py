@@ -335,6 +335,19 @@ class ChannelService:
         Returns:
             Dict with ``allowed`` (bool) and ``reason`` (str).
         """
+        # Per-member DM channels (``member:<moniker>``) are not rows in the
+        # channel table. They exist by name. Only the member the channel is
+        # named for may publish to it, including sysops: a sysop must not be
+        # able to write a DM channel as someone else.
+        if channel_name.startswith("member:"):
+            owner = channel_name[len("member:"):]
+            if owner and moniker == owner:
+                return {"allowed": True, "reason": "Member channel owner"}
+            return {
+                "allowed": False,
+                "reason": "Member channel: only its owner may publish",
+            }
+
         if is_sysop is None:
             is_sysop = member_module.issysop(self.args, moniker=moniker) is True
 
