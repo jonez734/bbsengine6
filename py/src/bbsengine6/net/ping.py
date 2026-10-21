@@ -40,6 +40,13 @@ _DEFAULT_PORT = 8765
 _DEFAULT_PATH = "/"
 
 
+def _url_host(host: str) -> str:
+    """Host as it appears in a ws:// URL. IPv6 literals are bracketed."""
+    if ":" in host and not host.startswith("["):
+        return f"[{host}]"
+    return host
+
+
 class PingUnavailable(Exception):
     """Raised when the target WebSocket is unreachable.
 
@@ -63,7 +70,7 @@ class PingUnavailable(Exception):
         self.exc = exc
         self.prog = prog
         super().__init__(
-            f"{prog}: cannot connect to ws://{host}:{port}/ "
+            f"{prog}: cannot connect to ws://{_url_host(host)}:{port}/ "
             f"(is the bed daemon running?): {exc}"
         )
 
@@ -97,7 +104,7 @@ async def connect(
     ``ConnectionClosedError: 1011 keepalive ping timeout`` when
     the user's wall-clock between sends exceeds the default 20s.
     """
-    url = f"ws://{host}:{port}{path}"
+    url = f"ws://{_url_host(host)}:{port}{path}"
     kwargs: Dict[str, Any] = {}
     if ping_interval is not None:
         kwargs["ping_interval"] = ping_interval

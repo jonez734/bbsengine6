@@ -424,3 +424,33 @@ class TestBuildParser:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_ipv6_literal_host_is_bracketed_in_url():
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+    from bbsengine6.net import ping
+
+    with patch("websockets.connect", new=AsyncMock(return_value=object())) as conn:
+        asyncio.run(ping.connect("::1", 8765))
+    url = conn.call_args.args[0]
+    assert url == "ws://[::1]:8765/", url
+
+
+def test_ipv4_and_hostname_urls_unchanged():
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+    from bbsengine6.net import ping
+
+    with patch("websockets.connect", new=AsyncMock(return_value=object())) as conn:
+        asyncio.run(ping.connect("127.0.0.1", 8765))
+        asyncio.run(ping.connect("localhost", 8765))
+    urls = [c.args[0] for c in conn.call_args_list]
+    assert urls == ["ws://127.0.0.1:8765/", "ws://localhost:8765/"], urls
+
+
+def test_connect_error_message_brackets_ipv6():
+    from bbsengine6.net.ping import PingUnavailable
+
+    err = PingUnavailable("::1", 8765, OSError("refused"), prog="bedping")
+    assert "ws://[::1]:8765/" in str(err), str(err)
