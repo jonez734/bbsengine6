@@ -390,6 +390,22 @@ The full Phases 1-11 checklist is in
   unchanged; the implementation moved to
   `bbsengine6.message.{service,dal.*,cache,templates,lib}`.
 
+### Table message groups (casino)
+
+Casino creates one group per table, named `table:<moniker>`. The group is
+owned by casino (`casino/tablegroups.py`); bbsengine6 stores and expands it
+like any other group. A table's bot dealer posts as the named source
+`casino.dealer:<moniker>`, registered for the prefix `table:<moniker>`.
+
+**Implemented here:** a named source may address only the group prefixes it is
+registered for (see *Message source* above).
+
+**Not yet implemented:** a rule that a member may send to `@table:<moniker>`
+only while seated at that table. Today nothing in `resolve_recipients` checks
+seating, so any sender can address a table group that the source rule allows.
+Until the seated-only check lands, treat `table:` groups as readable by anyone
+who can send, and do not rely on them for privacy.
+
 ### Live-database test isolation
 
 Calls through `bbsengine6.message.service` (group creation, membership, the
