@@ -70,6 +70,7 @@ markers = [
     "unit: marks tests as unit tests (no database required)",
     "integration: marks tests as integration tests (require networking)",
     "requires_db: marks tests that require a database connection",
+    "requires_bed: marks tests that need a running bed server (see tests/_bed_gate.py)",
 ]
 
 [tool.pyright]
