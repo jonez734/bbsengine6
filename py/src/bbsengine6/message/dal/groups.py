@@ -133,3 +133,19 @@ def list_group_names_with_prefix(args: Any, prefix: str) -> List[str]:
         )
         return [row[0] for row in cur.fetchall()]
 
+
+def is_member(args: Any, group_id: int, moniker: str) -> bool:
+    """True if ``moniker`` is a member of group ``group_id``."""
+    from bbsengine6.message.dal._pool import _connect_ctx
+
+    with _connect_ctx(args, pool=None) as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+                SELECT 1 FROM engine.__message_group_member
+                WHERE group_id = %s AND member_moniker = %s
+                LIMIT 1
+                """,
+            (group_id, moniker),
+        )
+        return cur.fetchone() is not None
+

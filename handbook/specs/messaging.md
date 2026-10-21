@@ -390,6 +390,25 @@ The full Phases 1-11 checklist is in
   unchanged; the implementation moved to
   `bbsengine6.message.{service,dal.*,cache,templates,lib}`.
 
+### Who may address a named group
+
+A named group (`@name`) is addressable only by:
+
+| Sender | May address `@name` |
+|---|---|
+| a `member` who belongs to the group | yes |
+| a `member` who does not belong to the group | no (`PermissionError`) |
+| a sysop (`issysop`) | yes, any group |
+| an `operator` (CLI, no sender) | yes, any group |
+| a named source (e.g. `casino.dealer:<table>`) | only groups under a prefix it is registered for |
+
+`@everyone` keeps its own rule: a sysop (or a role listed in
+`everyone_allowed_roles`) only, and never a named source.
+
+The check runs in `resolve_recipients` before the group is expanded, so a
+refused group raises `PermissionError` and nothing is stored. Membership is
+read from `engine.__message_group_member` (`dal.groups.is_member`).
+
 ### Table message groups (casino)
 
 Casino creates one group per table, named `table:<moniker>`. The group is

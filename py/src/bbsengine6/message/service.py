@@ -95,6 +95,28 @@ def _source_may_address_group(
     )
 
 
+def _sender_may_address_group(
+    sender_moniker: Optional[str],
+    source: str,
+    group_id: int,
+    database_name: str,
+) -> bool:
+    """True if this sender may address the named group.
+
+    - Named system sources are governed by the source registry, not here.
+    - Operator/CLI calls (no sender) are unrestricted.
+    - A member sender must belong to the group, or be a sysop.
+    """
+    if source not in ("member",) or sender_moniker is None:
+        return True
+    from bbsengine6.member import lib as member_lib
+
+    args = _make_args(database_name)
+    if member_lib.issysop(args, moniker=sender_moniker) is True:
+        return True
+    return bool(dal_groups.is_member(args, group_id, sender_moniker))
+
+
 def _sender_may_broadcast(sender_moniker: Optional[str], database_name: str) -> bool:
     """True if the sender may address ``@everyone`` under the configured roles.
 
@@ -872,6 +894,12 @@ def resolve_recipients(
                     )
                 expanded_groups.add(key)
                 group_id = dal_recipients.get_group_id_by_name(args, token)
+                if group_id >= 0 and not _sender_may_address_group(
+                    sender_moniker, source, group_id, database_name
+                ):
+                    raise PermissionError(
+                        f"only members of {token!r} (or sysops) may address it"
+                    )
                 if group_id >= 0:
                     for m in get_message_group_members(
                         group_id, database=database_name

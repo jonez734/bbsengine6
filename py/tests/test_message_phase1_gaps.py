@@ -354,14 +354,16 @@ class TestStoreMessageExpandsRecipients:
 
         dal_ratelimit.try_reserve.return_value = (True, 9)
         dal_recipients.get_group_id_by_name.return_value = 3
-        dal_groups.list_members.return_value = ["bob", "carol"]
+        dal_groups.list_members.return_value = ["alice", "bob", "carol"]
+        # The sender must belong to the group to address it (sysops excepted).
+        dal_groups.is_member.return_value = True
         dal_messages.store_message_with_recipients.return_value = 55
 
         message.store_message(channel="member:direct", sender_moniker="alice",
                               content="hi", recipient_monikers=["@crew"])
 
         stored = dal_messages.store_message_with_recipients.call_args.args[-1]
-        assert sorted(stored) == ["bob", "carol"]
+        assert sorted(stored) == ["alice", "bob", "carol"]
 
     def test_store_message_passes_through_when_no_special_recipients(self):
         """When the recipient list has no @-prefixed tokens, the
