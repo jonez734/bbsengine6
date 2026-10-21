@@ -11,7 +11,8 @@ CREATE OR REPLACE FUNCTION engine.bed_list_pending_page(
     recipient citext,
     lim int,
     before_datestamp timestamptz DEFAULT NULL,
-    before_id bigint DEFAULT NULL
+    before_id bigint DEFAULT NULL,
+    max_age_days int DEFAULT 0
 )
 RETURNS TABLE (
     id bigint,
@@ -41,6 +42,7 @@ AS $$
     WHERE r.recipient_moniker = recipient
       AND r.status IN ('pending', 'delivered')
       AND (before_datestamp IS NULL OR (m.datestamp, m.id) < (before_datestamp, before_id))
+      AND (max_age_days <= 0 OR m.datestamp >= now() - make_interval(days => max_age_days))
     ORDER BY m.datestamp DESC, m.id DESC
     LIMIT lim
 $$;
@@ -58,11 +60,11 @@ AS $$
       AND r.status IN ('pending', 'delivered')
 $$;
 
-ALTER FUNCTION engine.bed_list_pending_page(citext, int, timestamptz, bigint) OWNER TO zoid6;
+ALTER FUNCTION engine.bed_list_pending_page(citext, int, timestamptz, bigint, int) OWNER TO zoid6;
 ALTER FUNCTION engine.bed_count_unread(citext) OWNER TO zoid6;
 
-REVOKE ALL ON FUNCTION engine.bed_list_pending_page(citext, int, timestamptz, bigint) FROM PUBLIC;
+REVOKE ALL ON FUNCTION engine.bed_list_pending_page(citext, int, timestamptz, bigint, int) FROM PUBLIC;
 REVOKE ALL ON FUNCTION engine.bed_count_unread(citext) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION engine.bed_list_pending_page(citext, int, timestamptz, bigint) TO bed;
+GRANT EXECUTE ON FUNCTION engine.bed_list_pending_page(citext, int, timestamptz, bigint, int) TO bed;
 GRANT EXECUTE ON FUNCTION engine.bed_count_unread(citext) TO bed;

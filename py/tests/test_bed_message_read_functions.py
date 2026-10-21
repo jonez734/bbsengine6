@@ -27,10 +27,19 @@ def test_file_exists():
 def test_pending_page_function_signature():
     assert re.search(
         r"CREATE\s+OR\s+REPLACE\s+FUNCTION\s+engine\.bed_list_pending_page\s*\(\s*"
-        r"recipient\s+citext\s*,\s*lim\s+int\s*,\s*before_datestamp\s+timestamptz\s+DEFAULT\s+NULL\s*,\s*before_id\s+bigint\s+DEFAULT\s+NULL\s*\)",
+        r"recipient\s+citext\s*,\s*lim\s+int\s*,\s*before_datestamp\s+timestamptz\s+DEFAULT\s+NULL\s*,\s*before_id\s+bigint\s+DEFAULT\s+NULL\s*,\s*max_age_days\s+int\s+DEFAULT\s+0\s*\)",
         _text(),
         re.IGNORECASE,
-    ), "bed_list_pending_page must take (recipient citext, lim int, before_datestamp timestamptz, before_id bigint)"
+    ), "bed_list_pending_page must take (recipient, lim, before_datestamp, before_id, max_age_days int DEFAULT 0)"
+
+
+def test_pending_page_applies_age_limit_in_function():
+    text = _text()
+    assert re.search(
+        r"max_age_days\s*>\s*0\s+AND\s+m\.datestamp\s*>=\s*now\(\)\s*-\s*\(max_age_days\s*\|\|\s*' days'\)::interval",
+        text,
+        re.IGNORECASE,
+    ) or re.search(r"make_interval\s*\(\s*days\s*=>\s*max_age_days", text, re.IGNORECASE)
 
 
 def test_count_unread_function_signature():
