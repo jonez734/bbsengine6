@@ -51,7 +51,16 @@ def main(args, **kwargs):
         )
         try:
             with database.cursor(conn=conn) as cur:
-                cur.execute('GRANT member TO "www-data"')
+                # Only grant when the membership is missing. Re-issuing GRANT
+                # for a role the caller cannot re-grant is refused even though
+                # the membership already exists.
+                cur.execute(
+                    "SELECT pg_has_role('www-data', 'member', 'MEMBER')"
+                )
+                row = cur.fetchone()
+                already = bool(row[0] if row and not isinstance(row, dict) else (row or {}).get("pg_has_role"))
+                if not already:
+                    cur.execute('GRANT member TO "www-data"')
             io.echo(f"{{level.ok}}  ok  {{/all}}")
         except Exception as e:
             io.echo(f"{{var:level.error}}  fail  {{/all}}")

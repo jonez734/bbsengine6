@@ -54,8 +54,10 @@ def main(args, **kwargs):
     def _work(c):
         with c.cursor() as cur:
             cur.execute(
-                "SELECT rolcreatedb, rolsuper, rolname "
-                "FROM pg_roles WHERE rolname = current_user"
+                "SELECT rolcreatedb, rolsuper, rolname, "
+                "has_database_privilege(current_user, %s, 'CREATE') "
+                "FROM pg_roles WHERE rolname = current_user",
+                (args.databasename,),
             )
             return cur.fetchone()
 
@@ -72,8 +74,8 @@ def main(args, **kwargs):
         )
         return False
 
-    rolcreatedb, rolsuper, rolname = row
-    if not (rolcreatedb or rolsuper):
+    rolcreatedb, rolsuper, rolname, can_create_in_db = row
+    if not (rolcreatedb or rolsuper or can_create_in_db):
         io.echo(
             f"current user '{rolname}' lacks CREATEDB privilege; "
             f"cannot create database '{args.databasename}'",
