@@ -37,7 +37,7 @@ classlist = (
     ("engine.__message_group", "message_groups.sql"),
     ("engine.__message_group_member", "message_groups.sql"),
     ("engine.__message_block", "message_groups.sql"),
-    ("engine.__message_source", "message_groups.sql"),
+    ("engine.__message_source", "message_source.sql"),
     ("engine.__message_type", "message_groups.sql"),
     ("engine.__message_rate_limit", "message_groups.sql"),
     ("engine.message", "messageview.sql"),
@@ -87,12 +87,21 @@ def main(args, **kwargs) -> bool:
                 io.echo("ok", level="ok")
 
         # --- message tables (Phase 1B + 1C) ---
+        # A SQL file can define several tables, and the files are not
+        # idempotent (plain CREATE TABLE). Import each file at most once per
+        # pass, so a missing sibling table does not re-create a table that the
+        # same file already created (duplicate relation error).
+        imported_files: set[str] = set()
         for c, sql in classlist:
             io.echo(
                 f"{{var:labelcolor}}class {{var:valuecolor}}{c}{{var:labelcolor}}: ",
                 end="",
             )
+            if classexists(args, c, conn=conn) is False and sql in imported_files:
+                io.echo("ok (file already imported this pass)", level="ok")
+                continue
             if classexists(args, c, conn=conn) is False:
+                imported_files.add(sql)
                 io.echo("import ", end="")
                 sp = lib._sanitize_sp(c)
                 with database.cursor(conn=conn) as cur:
