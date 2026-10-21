@@ -255,34 +255,48 @@ class TestMainInvokesSubscribe:
         subscribe.assert_called_once_with(args)
 
     def test_main_skips_subscribe_on_stage_failure(self):
+        """A failed stage_one rolls back the connection main opens and skips the subscribe."""
         startup_main = _load_startup_main()
 
         args = _make_args()
-        conn = MagicMock()
+        target_conn = MagicMock()
+        connect_cm = MagicMock()
+        connect_cm.__enter__.return_value = target_conn
+        connect_cm.__exit__.return_value = False
+
+        def runmodule(args, name, **kwargs):
+            # stage_zero passes; stage_one (the one that writes) fails.
+            return name != "stage_one"
 
         with patch.object(
             startup_main, "_maybe_subscribe_to_bed"
         ) as subscribe, patch.object(
-            startup_main.lib, "runmodule", return_value=False
+            startup_main.lib, "runmodule", side_effect=runmodule
         ), patch.object(
             startup_main.util, "heading"
+        ), patch.object(
+            startup_main, "_select_stage_one_pool", return_value=MagicMock()
+        ), patch.object(
+            startup_main.database, "connect", return_value=connect_cm
         ), patch(
             "bbsengine6.io.echo"
         ):
-            result = startup_main.main(args, conn=conn)
+            result = startup_main.main(args)
 
-        # Stage failure -> loop breaks before reaching the
-        # _maybe_subscribe_to_bed() call at the end of _work().
         assert result is False
         subscribe.assert_not_called()
-        conn.rollback.assert_called_once()
-        conn.commit.assert_not_called()
+        target_conn.rollback.assert_called_once()
+        target_conn.commit.assert_not_called()
 
     def test_main_commits_on_success(self):
+        """A passing stage_one commits the connection main opens."""
         startup_main = _load_startup_main()
 
         args = _make_args()
-        conn = MagicMock()
+        target_conn = MagicMock()
+        connect_cm = MagicMock()
+        connect_cm.__enter__.return_value = target_conn
+        connect_cm.__exit__.return_value = False
 
         with patch.object(
             startup_main, "_maybe_subscribe_to_bed"
@@ -290,10 +304,14 @@ class TestMainInvokesSubscribe:
             startup_main.lib, "runmodule", return_value=True
         ), patch.object(
             startup_main.util, "heading"
+        ), patch.object(
+            startup_main, "_select_stage_one_pool", return_value=MagicMock()
+        ), patch.object(
+            startup_main.database, "connect", return_value=connect_cm
         ), patch(
             "bbsengine6.io.echo"
         ):
-            result = startup_main.main(args, conn=conn)
+            result = startup_main.main(args)
 
         assert result is True
-        conn.commit.assert_called_once()
+        target_conn.commit.assert_called_once()
