@@ -18,6 +18,29 @@ from bbsengine6 import io, database, util
 from bbsengine6.backend import lib
 
 
+
+OWNER_ROLE = "zoid6"
+
+
+def _is_owner_member(args, rolname, *, conn=None, pool=None) -> bool:
+    """True when ``rolname`` is a member of the install owner role."""
+    def _work(c):
+        with c.cursor() as cur:
+            cur.execute("SELECT pg_has_role(%s, %s, 'MEMBER')", (rolname, OWNER_ROLE))
+            row = cur.fetchone()
+            return bool(row[0] if row and not isinstance(row, dict) else (row or {}).get("pg_has_role"))
+
+    try:
+        if conn is not None:
+            return _work(conn)
+        if pool is not None:
+            with database.connect(args, pool=pool) as c:
+                return _work(c)
+    except Exception:
+        return False
+    return False
+
+
 def init(args, **kwargs):
     return True
 
@@ -50,6 +73,14 @@ def main(args, **kwargs):
     if privs.get("rolsuper") is True:
         io.echo(
             f"'{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' has correct privs (superuser)"
+        )
+        return True
+    # Install-time DDL is owned by zoid6, so a member of zoid6 can run it as
+    # zoid6. This does not grant superuser rights.
+    if _is_owner_member(args, currentloginid, conn=conn, pool=pool):
+        io.echo(
+            f"'{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' is a member of "
+            f"'zoid6' (install owner)"
         )
         return True
     io.echo(
