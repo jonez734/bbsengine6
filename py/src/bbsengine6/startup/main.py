@@ -1,3 +1,4 @@
+import os
 import psycopg
 
 from bbsengine6 import io, database, util
