@@ -2703,6 +2703,6 @@ async def async_query(
     """
     sql_processed = query(sql, **params) if params else query(sql)
     async with async_connect(args, pool, database=database, dbname=dbname) as db_conn:
-        async with db_conn.cursor as cur:
+        async with db_conn.cursor() as cur:
             await cur.execute(sql_processed)
             return await cur.fetchall()
