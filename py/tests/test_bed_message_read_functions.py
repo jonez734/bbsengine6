@@ -56,6 +56,17 @@ def test_both_functions_are_security_definer_with_fixed_search_path():
     assert len(re.findall(r"SET\s+search_path\s*=\s*engine\s*,\s*pg_temp", text, re.IGNORECASE)) == 2
 
 
+def test_old_four_argument_overload_is_dropped():
+    # CREATE OR REPLACE does not remove an overload. The four-argument form
+    # predates the max_age_days TTL and must not stay executable by bed.
+    text = _text()
+    assert re.search(
+        r"DROP\s+FUNCTION\s+IF\s+EXISTS\s+engine\.bed_list_pending_page\s*\(\s*citext\s*,\s*int\s*,\s*timestamptz\s*,\s*bigint\s*\)",
+        text,
+        re.IGNORECASE,
+    )
+
+
 def test_functions_read_only_no_writes():
     text = _text()
     assert not re.search(r"\b(INSERT|UPDATE|DELETE|TRUNCATE)\b", text, re.IGNORECASE)

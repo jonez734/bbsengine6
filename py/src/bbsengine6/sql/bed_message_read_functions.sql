@@ -7,6 +7,10 @@
 -- Run by the owner during install (after checkmessage and the message
 -- ownership migration). Idempotent.
 
+-- Drop the pre-TTL overload. CREATE OR REPLACE does not remove it, and it
+-- would otherwise stay executable by bed without the max_age_days filter.
+DROP FUNCTION IF EXISTS engine.bed_list_pending_page(citext, int, timestamptz, bigint);
+
 CREATE OR REPLACE FUNCTION engine.bed_list_pending_page(
     recipient citext,
     lim int,
