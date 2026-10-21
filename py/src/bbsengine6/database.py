@@ -1030,8 +1030,11 @@ def schemaexists(args: Any, name: str, **kwargs: Any) -> bool:
     mogrify = kwargs.get("mogrify", False)
 
     def _work(conn):
+        # pg_namespace lists every schema. information_schema.schemata lists
+        # only those the connecting role has privileges on, so a role without
+        # privileges would see an existing schema as missing and recreate it.
         sql = (
-            "SELECT 't' as exists FROM information_schema.schemata where schema_name=%s"
+            "SELECT 't' as exists FROM pg_catalog.pg_namespace WHERE nspname=%s"
         )
         dat = (name,)
         with cursor(conn=conn) as cur:
