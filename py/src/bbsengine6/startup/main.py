@@ -291,7 +291,7 @@ def main(args, **kwargs) -> bool:
     # environments where mistermcfeely/postoffice is not installed
     # (e.g., a CI matrix that only tests bbsengine6).
     try:
-        if lib.runmodule(args, "startup", package="postoffice") is False:
+        if lib.runmodule(args, "startup", package="postoffice", pool=target_pool) is False:
             io.echo("postoffice startup failed", level="error")
             return False
     except Exception:
