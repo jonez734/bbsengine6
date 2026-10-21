@@ -490,58 +490,154 @@ class TestMessageRateLimiting:
         assert message.get_message_type_rate_limit("casino_kick") == 60
         dal_ratelimit.get_type_limit.assert_called_once()
 
+INTEGRATION_DB = "zoid6test"
+INTEGRATION_CHANNEL = "test:integration:messages"
+
+
+def _integration_db_available() -> bool:
+    """True only when the zoid6test message schema is present.
+
+    The integration tests write, so they run only against the throwaway
+    zoid6test database and only when its message tables exist. They never
+    use the shared zoid6 fixtures.
+    """
+    import psycopg
+    from bbsengine6.message import lib as message_lib
+
+    try:
+        with psycopg.connect(
+            f"host={message_lib._make_args(INTEGRATION_DB).databasehost} "
+            f"port=5432 dbname={INTEGRATION_DB} user=opencode",
+            connect_timeout=3,
+        ) as conn, conn.cursor() as cur:
+            cur.execute("select to_regclass('engine.__message') is not null")
+            return bool(cur.fetchone()[0])
+    except Exception:
+        return False
+
+
+INTEGRATION_MEMBERS = ("alice", "bob", "carol", "dave", "erin", "charlie")
+
+
+def _integration_connect():
+    import psycopg
+
+    return psycopg.connect(
+        f"host=/var/run/postgresql port=5432 dbname={INTEGRATION_DB} user=opencode"
+    )
+
+
+@pytest.fixture
+def integration_message_ids():
+    """Seed the test members, collect message ids, and clean up afterwards.
+
+    Members are created for the duration of the test and removed in teardown,
+    so zoid6test is left as it was found. Messages are deleted by id first, so
+    their recipient rows cascade and the member delete does not hit a foreign
+    key.
+    """
+    ids: list[int] = []
+    with _integration_connect() as conn, conn.cursor() as cur:
+        for name in INTEGRATION_MEMBERS:
+            cur.execute(
+                "INSERT INTO engine.__member (moniker, email, approved) "
+                "VALUES (%s, %s, true) ON CONFLICT (moniker) DO NOTHING",
+                (name, f"{name}@integration.test"),
+            )
+        conn.commit()
+    yield ids
+    with _integration_connect() as conn, conn.cursor() as cur:
+        if ids:
+            cur.execute("DELETE FROM engine.__message WHERE id = ANY(%s)", (list(ids),))
+        cur.execute(
+            "DELETE FROM engine.__member WHERE moniker = ANY(%s) "
+            "AND email LIKE %s",
+            (list(INTEGRATION_MEMBERS), "%@integration.test"),
+        )
+        conn.commit()
+
+
 @pytest.mark.integration
 @pytest.mark.requires_db
+@pytest.mark.skipif(
+    not _integration_db_available(),
+    reason="zoid6test message schema not present (run the bootstrap there)",
+)
 class TestMessageLibIntegration:
-    """Integration tests for message DAL with real database.
+    """Message DAL against the real zoid6test database.
 
-    These tests require the message tables to exist. Run the SQL first:
-        psql -d zoid6test -f bbsengine6/py/src/bbsengine6/sql/message.sql
+    Each test stores through the real service, reads back, and deletes the
+    rows it created. The shared zoid6 fixtures are not used.
     """
 
-    def test_store_and_retrieve_message(self, pool, db_connection):
-        """Store message and retrieve it - REQUIRES engine.__message table."""
-        pytest.skip("Requires message schema: psql -d zoid6test -f sql/message.sql")
+    def _store(self, sender, content, recipients, ids):
+        from bbsengine6 import message
+        from bbsengine6.message.dal import ratelimit as dal_ratelimit
+
+        # The rate-limit reservation is not what these tests check.
+        with patch.object(
+            dal_ratelimit, "try_reserve", return_value=(True, 999)
+        ):
+            msg_id = message.store_message(
+                channel=INTEGRATION_CHANNEL,
+                sender_moniker=sender,
+                content=content,
+                recipient_monikers=recipients,
+                database=INTEGRATION_DB,
+            )
+        if msg_id:
+            ids.append(msg_id)
+        return msg_id
+
+    def test_store_and_retrieve_message(self, integration_message_ids):
         from bbsengine6 import message
 
-        with pool.connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO engine.__message 
-                    (channel, sender_moniker, content)
-                    VALUES (%s, %s, %s)
-                    RETURNING id
-                    """,
-                    ("casino:table:blackjack-1", "alice", "Hello table!"),
-                )
-                msg_id = cur.fetchone()[0]
+        self._store("alice", "Hello table!", ["bob"], integration_message_ids)
 
-                cur.execute(
-                    """
-                    INSERT INTO engine.__message_recipient (message_id, recipient_moniker)
-                    VALUES (%s, %s)
-                    """,
-                    (msg_id, "bob"),
-                )
-                conn.commit()
+        messages = message.get_pending_messages("bob", database=INTEGRATION_DB)
+        mine = [m for m in messages if m["channel"] == INTEGRATION_CHANNEL]
+        assert len(mine) == 1
+        assert mine[0]["content"] == "Hello table!"
+        assert mine[0]["sender_moniker"] == "alice"
 
-        messages = message.get_pending_messages("bob", database="zoid6test")
-        assert len(messages) == 1
-        assert messages[0]["content"] == "Hello table!"
-        assert messages[0]["sender_moniker"] == "alice"
+    def test_mark_delivered_and_read(self, integration_message_ids):
+        from bbsengine6 import message
 
-    def test_mark_delivered_and_read(self, pool, db_connection):
-        """Test marking messages as delivered and read - REQUIRES engine.__message table."""
-        pytest.skip("Requires message schema: psql -d zoid6test -f sql/message.sql")
+        msg_id = self._store("alice", "read me", ["carol"], integration_message_ids)
+        message.mark_delivered(msg_id, "carol", database=INTEGRATION_DB)
+        message.mark_read(msg_id, "carol", database=INTEGRATION_DB)
 
-    def test_unread_count(self, pool, db_connection):
-        """Test unread message count - REQUIRES engine.__message table."""
-        pytest.skip("Requires message schema: psql -d zoid6test -f sql/message.sql")
+        import psycopg
 
-    def test_deliver_pending_on_connect(self, pool, db_connection):
-        """Test delivering pending messages on connect - REQUIRES engine.__message table."""
-        pytest.skip("Requires message schema: psql -d zoid6test -f sql/message.sql")
+        with psycopg.connect(
+            f"host=/var/run/postgresql port=5432 dbname={INTEGRATION_DB} user=opencode"
+        ) as conn, conn.cursor() as cur:
+            cur.execute(
+                "select status from engine.__message_recipient "
+                "where message_id = %s and recipient_moniker = %s",
+                (msg_id, "carol"),
+            )
+            assert cur.fetchone()[0] == "read"
+
+    def test_unread_count(self, integration_message_ids):
+        from bbsengine6 import message
+
+        self._store("alice", "one", ["dave"], integration_message_ids)
+        self._store("alice", "two", ["dave"], integration_message_ids)
+
+        assert message.get_unread_count("dave", database=INTEGRATION_DB) >= 2
+
+    def test_deliver_pending_on_connect(self, integration_message_ids):
+        from bbsengine6 import message
+
+        msg_id = self._store("alice", "on connect", ["erin"], integration_message_ids)
+
+        delivered = message.deliver_pending_on_connect("erin", database=INTEGRATION_DB)
+
+        assert msg_id in [m["id"] for m in delivered]
+        # Delivered once: a second connect has nothing new for this message.
+        again = message.deliver_pending_on_connect("erin", database=INTEGRATION_DB)
+        assert msg_id not in [m["id"] for m in again]
 
 
 # =============================================================================
