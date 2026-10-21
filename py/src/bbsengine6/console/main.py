@@ -5,6 +5,18 @@ from bbsengine6 import session, util, io, database, member
 from . import lib
 
 
+
+def _schema_ready(conn) -> bool:
+    """True when the engine member view exists (the bootstrap has reached it).
+
+    The console reads engine.member on every loop. On a database whose
+    bootstrap stopped early that view is absent, and the raw SQL error hides
+    the cause. Check once, up front, and report it plainly.
+    """
+    with conn.cursor() as cur:
+        cur.execute("select to_regclass('engine.member') is not null")
+        return bool(cur.fetchone()[0])
+
 def init(args, **kwargs):
     return True
 
@@ -33,6 +45,14 @@ def main(args, **kwargs):
         io.echo(f"con.main.main.100: {pool=}", level="debug")
         with database.connect(args, pool=pool, auto_commit=False) as conn:
             io.echo(f"con.main.main.120: {pool=} {conn=}", level="debug")
+            if not _schema_ready(conn):
+                io.echo(
+                    f"database {args.databasename!r} is not bootstrapped "
+                    "(engine.member is missing). Run the startup bootstrap "
+                    "for this database first.",
+                    level="error",
+                )
+                return False
             if session.start(args, conn=conn, **kwargs) is False:
                 io.echo("con.main.140: did not start session", level="error")
                 return False
