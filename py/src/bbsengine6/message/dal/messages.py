@@ -48,6 +48,7 @@ def store_message_with_recipients(
                 urgency,
                 template,
                 template_vars,
+                source,
             ),
         )
         message_id = cur.fetchone()[0]
