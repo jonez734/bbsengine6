@@ -36,7 +36,6 @@ dependencies = [
 ]
 
 [project.scripts]
-bed = "bbsengine6.bed:main"
 bbsengine6-auth-checkpassword = "bbsengine6.auth.dovecot:main"
 bbsengine6-auth-pam = "bbsengine6.auth.pam:main"
 
