@@ -36,7 +36,13 @@ def as_member(args: Any, moniker: str, **kwargs: Any) -> Generator[None, None, N
     if conn is None and pool is None:
         raise ValueError("as_member: conn or pool is required")
 
-    rolname = pgrole.ensure_login_role(args, moniker, **kwargs)
+    # Lookup only: a request must never provision a database role. A member
+    # gets a role when the approval or console flow creates it.
+    if conn is not None:
+        rolname = pgrole.lookup_login_role(args, moniker, conn=conn)
+    else:
+        with database.connect(args, pool=pool) as lookup_conn:
+            rolname = pgrole.lookup_login_role(args, moniker, conn=lookup_conn)
     if not rolname:
         raise PermissionError(f"no database role for member {moniker!r}")
 

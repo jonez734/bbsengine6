@@ -57,6 +57,23 @@ def role_name_for(moniker: str) -> str:
     return "m_" + re.sub(r"[^a-zA-Z0-9_]", "_", moniker).lower()
 
 
+def lookup_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
+    """The member's existing database role from engine.pgrole, or None.
+
+    Read-only. This never creates a role or a tracking row, so it is safe on a
+    request path: a member with no row is refused rather than provisioned.
+    """
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            "SELECT rolname FROM engine.pgrole WHERE membermoniker = %s",
+            (moniker,),
+        )
+        row = cur.fetchone()
+    if row is None:
+        return None
+    return row["rolname"] if isinstance(row, dict) else row[0]
+
+
 def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
     rolname = role_name_for(moniker)
 
