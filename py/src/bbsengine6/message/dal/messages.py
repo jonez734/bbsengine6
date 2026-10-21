@@ -84,31 +84,22 @@ def list_pending_page(
     ``max_age_days`` > 0, rows older than that are excluded (TTL). Zero means
     no age limit.
     """
-    clauses = ["r.recipient_moniker = %s", "r.status IN ('pending', 'delivered')"]
-    params: List[Any] = [recipient_moniker]
-    if max_age_days and max_age_days > 0:
-        clauses.append("m.datestamp >= now() - (%s || ' days')::interval")
-        params.append(str(int(max_age_days)))
-    if before is not None:
-        clauses.append("(m.datestamp, m.id) < (%s, %s)")
-        params.extend([before[0], before[1]])
-    where = " AND ".join(clauses)
-    params.append(limit)
-
+    # bed reads through the zoid6-owned engine.bed_list_pending_page function.
+    # bed has no table privileges on the message tables.
+    before_ts = before[0] if before is not None else None
+    before_id = before[1] if before is not None else None
     with _connect_ctx(args, pool=None) as conn, conn.cursor() as cur:
         cur.execute(
-            f"""
-                SELECT
-                    m.id, m.channel, m.sender_moniker, m.content, m.data,
-                    m.urgency, m.template, m.template_vars, m.datestamp,
-                    r.status, r.datedelivered, r.dateread
-                FROM engine.__message m
-                JOIN engine.__message_recipient r ON r.message_id = m.id
-                WHERE {where}
-                ORDER BY m.datestamp DESC, m.id DESC
-                LIMIT %s
+            """
+                SELECT * FROM engine.bed_list_pending_page(%s, %s, %s, %s, %s)
                 """,
-            tuple(params),
+            (
+                recipient_moniker,
+                limit,
+                before_ts,
+                before_id,
+                int(max_age_days) if max_age_days and max_age_days > 0 else 0,
+            ),
         )
         rows = cur.fetchall()
 
@@ -368,19 +359,13 @@ def count_unread_for_recipient(
     cursor. Otherwise a fresh connection is opened. Returns 0 if
     ``engine.__message_recipient`` does not exist in the target DB.
     """
+    # bed reads through the zoid6-owned engine.bed_count_unread function.
+    # The table_exists probe is gone: bed cannot see the message tables in
+    # information_schema, so the probe would report "missing" and return 0.
     def _work(c: Any) -> int:
         with c.cursor() as cur:
-            if not table_exists(cur, "engine", "__message_recipient"):
-                return 0
-            cur.execute(
-                """
-                SELECT COUNT(*) FROM engine.__message_recipient
-                WHERE recipient_moniker = %s
-                  AND status IN ('pending', 'delivered')
-                """,
-                (recipient_moniker,),
-            )
-            return cur.fetchone()[0]
+            cur.execute("SELECT engine.bed_count_unread(%s)", (recipient_moniker,))
+            return int(cur.fetchone()[0])
 
     if conn is not None:
         return _work(conn)
