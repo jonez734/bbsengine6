@@ -950,7 +950,12 @@ def run(args, modulename, **kwargs):
 
                 # If argv is empty but args already has subparser info from parent
                 # parser, use args directly to preserve that info
-                if not argv and _has_subparser_info(args):
+                # With no argv, the caller's namespace is authoritative. This
+                # covers subparser callers and any caller that has already parsed
+                # and config-applied its args (bed). Re-parsing an empty argv would
+                # restore the stage parser's defaults and drop the caller's values
+                # (for example the database name).
+                if not argv:
                     prgargs = args
                     if debug is True:
                         io.echo(

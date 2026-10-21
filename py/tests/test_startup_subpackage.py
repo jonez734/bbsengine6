@@ -414,6 +414,10 @@ class TestModuleRunOnSubpackage:
                 return_value=True,
             ),
             patch(
+                "bbsengine6.startup.main.database.getpool",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "bbsengine6.io.echo_traceback",
             ) as mock_traceback,
         ):
@@ -481,6 +485,10 @@ class TestCLIStartupInvocation:
             patch(
                 "bbsengine6.startup.main.issysop",
                 return_value=True,
+            ),
+            patch(
+                "bbsengine6.startup.main.database.getpool",
+                return_value=MagicMock(),
             ),
         ):
             # If access() raised AttributeError on lib.issysop,
