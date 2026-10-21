@@ -203,7 +203,8 @@ def main(args, **kwargs) -> bool:
     io.echo(
         f"bbsengine6.startup.115: pre-flight: building admin pool "
         f"against {_ADMIN_DATABASE!r} to bootstrap target db "
-        f"{args.databasename!r}",
+        f"{args.databasename!r} (args id={id(args)}, "
+        f"BBSENGINE6_DBNAME={os.environ.get('BBSENGINE6_DBNAME')!r})",
         level="debug",
     )
     try:
