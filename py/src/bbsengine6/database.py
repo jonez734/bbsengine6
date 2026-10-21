@@ -1794,7 +1794,14 @@ def switch_role(
                 original_role = row["current_role"] if isinstance(row, dict) else row[0]
 
         if not set_role(args, role_name, conn=conn):
-            raise ValueError(f"switch_role: role {role_name!r} does not exist")
+            # set_role returns False both when the role is missing and when the
+            # connecting role may not set it. Say which, so a denied switch is
+            # not reported as a missing role.
+            if not rolexists(args, role_name, conn=conn):
+                raise ValueError(f"switch_role: role {role_name!r} does not exist")
+            raise PermissionError(
+                f"switch_role: the connecting role may not set role {role_name!r}"
+            )
 
         yield
     finally:

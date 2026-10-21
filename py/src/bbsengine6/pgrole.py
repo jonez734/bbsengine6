@@ -48,8 +48,17 @@ def ensure_login_role(args: Any, moniker: str, **kwargs: Any) -> Optional[str]:
     return _ensure_login_role(args, moniker, conn=conn)
 
 
+def role_name_for(moniker: str) -> str:
+    """The PostgreSQL role for a new member: m_<moniker>, sanitized to [a-z0-9_].
+
+    An existing engine.pgrole row takes precedence, so a member whose role
+    predates this rule keeps it (zoid6's jam maps to role jam).
+    """
+    return "m_" + re.sub(r"[^a-zA-Z0-9_]", "_", moniker).lower()
+
+
 def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
-    rolname = "m_" + re.sub(r"[^a-zA-Z0-9_]", "_", moniker).lower()
+    rolname = role_name_for(moniker)
 
     # 1. Check if a pgrole row already exists for this member.
     with database.cursor(conn=conn) as cur:
