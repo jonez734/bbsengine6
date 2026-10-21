@@ -106,3 +106,30 @@ def list_user_groups(args: Any, moniker: str) -> List[Dict[str, Any]]:
             }
             for row in rows
         ]
+
+
+def delete_group(args: Any, group_id: int) -> bool:
+    """DELETE an ``engine.__message_group`` row. Members cascade."""
+    from bbsengine6.message.dal._pool import _connect_ctx
+
+    with _connect_ctx(args, pool=None) as conn, conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM engine.__message_group WHERE id = %s RETURNING id",
+            (group_id,),
+        )
+        deleted = cur.fetchone() is not None
+        conn.commit()
+    return deleted
+
+
+def list_group_names_with_prefix(args: Any, prefix: str) -> List[str]:
+    """Names of every group whose name starts with ``prefix:``."""
+    from bbsengine6.message.dal._pool import _connect_ctx
+
+    with _connect_ctx(args, pool=None) as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT name FROM engine.__message_group WHERE name LIKE %s",
+            (prefix + ":%",),
+        )
+        return [row[0] for row in cur.fetchall()]
+

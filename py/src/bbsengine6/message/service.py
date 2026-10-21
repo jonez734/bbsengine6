@@ -548,6 +548,116 @@ def add_to_message_group(
     return True
 
 
+def ensure_message_group(
+    name: str,
+    createdby: Optional[str] = None,
+    description: Optional[str] = None,
+    database: Optional[str] = None,
+) -> int:
+    """Return the id of group ``name``, creating it if it does not exist."""
+    if not _message_enabled:
+        return 0
+    database_name = _resolve_db(database)
+    args = _make_args(database_name)
+    existing = dal_recipients.get_group_id_by_name(args, name)
+    if existing >= 0:
+        return existing
+    return dal_groups.create(args, name, createdby, description)
+
+
+def group_member_add(
+    name: str,
+    member_moniker: str,
+    addedby: Optional[str] = None,
+    database: Optional[str] = None,
+) -> bool:
+    """Add ``member_moniker`` to group ``name`` (created if missing). Idempotent."""
+    if not _message_enabled:
+        return False
+    gid = ensure_message_group(name, createdby=addedby, database=database)
+    if not gid:
+        return False
+    return add_to_message_group(gid, member_moniker, addedby=addedby, database=database)
+
+
+def group_member_remove(
+    name: str,
+    member_moniker: str,
+    database: Optional[str] = None,
+) -> bool:
+    """Remove ``member_moniker`` from group ``name``. True if a row was removed."""
+    if not _message_enabled:
+        return False
+    database_name = _resolve_db(database)
+    args = _make_args(database_name)
+    gid = dal_recipients.get_group_id_by_name(args, name)
+    if gid < 0:
+        return False
+    removed = remove_from_group(gid, member_moniker, database=database_name)
+    if removed and not dal_groups.list_members(args, gid):
+        dal_groups.delete_group(args, gid)
+    return removed
+
+
+def group_delete(name: str, database: Optional[str] = None) -> bool:
+    """Delete group ``name`` and its members. True if the group existed."""
+    if not _message_enabled:
+        return False
+    database_name = _resolve_db(database)
+    args = _make_args(database_name)
+    gid = dal_recipients.get_group_id_by_name(args, name)
+    if gid < 0:
+        return False
+    return dal_groups.delete_group(args, gid)
+
+
+def group_names_with_prefix(prefix: str, database: Optional[str] = None) -> List[str]:
+    """Names of every group under ``prefix:``, for reconciliation."""
+    if not _message_enabled:
+        return []
+    args = _make_args(_resolve_db(database))
+    return dal_groups.list_group_names_with_prefix(args, prefix)
+
+
+def group_member_monikers(name: str, database: Optional[str] = None) -> List[str]:
+    """Members of group ``name``, or [] if it does not exist."""
+    if not _message_enabled:
+        return []
+    database_name = _resolve_db(database)
+    args = _make_args(database_name)
+    gid = dal_recipients.get_group_id_by_name(args, name)
+    if gid < 0:
+        return []
+    return dal_groups.list_members(args, gid)
+
+
+def register_named_source(
+    source: str,
+    group_prefix: str,
+    description: Optional[str] = None,
+    database: Optional[str] = None,
+) -> bool:
+    """Let named ``source`` address groups under ``group_prefix``. Idempotent."""
+    if not _message_enabled:
+        return False
+    args = _make_args(_resolve_db(database))
+    dal_recipients.register_source(args, source, group_prefix, description)
+    return True
+
+
+def unregister_named_source(
+    source: str,
+    group_prefix: Optional[str] = None,
+    database: Optional[str] = None,
+) -> bool:
+    """Remove a named source's registration (one prefix, or all if None)."""
+    if not _message_enabled:
+        return False
+    args = _make_args(_resolve_db(database))
+    dal_recipients.unregister_source(args, source, group_prefix)
+    return True
+
+
 def get_message_group_members(
     group_id: int,
     database: Optional[str] = None,
