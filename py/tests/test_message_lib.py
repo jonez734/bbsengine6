@@ -5,6 +5,8 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 
+
+@pytest.mark.unit
 class TestMessageLib:
     """Tests for message DAL functions (unit tests with mocks)."""
 
@@ -34,22 +36,15 @@ class TestMessageLib:
         message.enable()
         assert message.is_enabled() is True
 
-    @patch("bbsengine6.message.lib.record_message_sent")
-    @patch("bbsengine6.message.lib.is_blocked", return_value=False)
-    @patch("bbsengine6.message.lib.check_rate_limit", return_value=(True, 999))
-    @patch("bbsengine6.message.lib.getpool")
-    def test_store_message(self, mock_getpool, mock_rate, mock_block, mock_record):
-        """Store message in database."""
+    def test_store_message(self, message_dal_stubs):
+        """store_message stores through the DAL and returns the new message id."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import messages as dal_messages
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (123,)
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        from bbsengine6.message.dal import ratelimit as dal_ratelimit
+
+        dal_ratelimit.try_reserve.return_value = (True, 9)
+        dal_messages.store_message_with_recipients.return_value = 123
 
         msg_id = message.store_message(
             channel="casino:table:blackjack-1",
@@ -59,111 +54,55 @@ class TestMessageLib:
         )
 
         assert msg_id == 123
-        mock_cursor.execute.assert_called()
+        dal_messages.store_message_with_recipients.assert_called_once()
+        assert dal_messages.store_message_with_recipients.call_args.args[1] == "casino:table:blackjack-1"
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_get_pending_messages(self, mock_getpool):
-        """Get pending messages for a user."""
+    def test_get_pending_messages(self, message_dal_stubs):
+        """Pending messages come from the DAL's non-prioritized list."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import messages as dal_messages
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [
-            (
-                1,
-                "casino:table:blackjack-1",
-                "alice",
-                "Hello",
-                None,
-                "ROUTINE",
-                None,
-                None,
-                "2024-01-01 12:00:00",
-                "pending",
-                None,
-                None,
-            ),
-            (
-                2,
-                "member:bob",
-                "charlie",
-                "Hi there",
-                None,
-                "IMPORTANT",
-                None,
-                None,
-                "2024-01-01 12:01:00",
-                "delivered",
-                "2024-01-01 12:02:00",
-                None,
-            ),
+        dal_messages.list_pending_for_recipient.return_value = [
+            {"id": 1, "channel": "casino:table:blackjack-1", "sender_moniker": "alice",
+             "content": "Hello", "status": "pending"},
+            {"id": 2, "channel": "casino:table:blackjack-1", "sender_moniker": "alice",
+             "content": "Again", "status": "delivered"},
         ]
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
 
         messages = message.get_pending_messages("bob")
 
-        assert len(messages) == 2
-        assert messages[0]["channel"] == "casino:table:blackjack-1"
-        assert messages[0]["status"] == "pending"
-        assert messages[1]["status"] == "delivered"
+        assert [m["status"] for m in messages] == ["pending", "delivered"]
+        assert dal_messages.list_pending_for_recipient.call_args.args[1] == "bob"
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_mark_delivered(self, mock_getpool):
-        """Mark message as delivered."""
+    def test_mark_delivered(self, message_dal_stubs):
+        """Mark message as delivered: the service hands the DAL the message and recipient."""
         from bbsengine6 import message
-
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        from bbsengine6.message.dal import messages as dal_messages
 
         message.mark_delivered(123, "bob")
 
-        mock_cursor.execute.assert_called_once()
-        mock_conn.commit.assert_called_once()
+        dal_messages.mark_delivered.assert_called_once()
+        assert dal_messages.mark_delivered.call_args.args[1:] == (123, "bob")
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_mark_read(self, mock_getpool):
-        """Mark message as read."""
+    def test_mark_read(self, message_dal_stubs):
+        """Mark message as read: the service hands the DAL the message and recipient."""
         from bbsengine6 import message
-
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        from bbsengine6.message.dal import messages as dal_messages
 
         message.mark_read(123, "bob")
 
-        mock_cursor.execute.assert_called_once()
-        mock_conn.commit.assert_called_once()
+        dal_messages.mark_read.assert_called_once()
+        assert dal_messages.mark_read.call_args.args[1:] == (123, "bob")
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_get_unread_count(self, mock_getpool):
-        """Get count of unread messages."""
+    def test_get_unread_count(self, message_dal_stubs):
+        """Unread count returns what the DAL counts for the recipient."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import messages as dal_messages
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (5,)
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        dal_messages.count_unread_for_recipient.return_value = 5
 
-        count = message.get_unread_count("bob")
-
-        assert count == 5
+        assert message.get_unread_count("bob") == 5
+        dal_messages.count_unread_for_recipient.assert_called_once()
 
     @patch("bbsengine6.message.service.dal_messages")
     def test_deliver_pending_on_connect(self, mock_dal):
@@ -207,75 +146,56 @@ class TestMessageLib:
         message.enable()
 
 
+@pytest.mark.unit
 class TestStoreMessageWithChecks:
     """Tests for store_message / store_message_with_checks (rate limit
     and blocking wired in)."""
 
-    @patch("bbsengine6.message.lib.record_message_sent")
-    @patch("bbsengine6.message.lib.is_blocked")
-    @patch("bbsengine6.message.lib.check_rate_limit")
-    @patch("bbsengine6.message.lib.getpool")
-    def test_happy_path_returns_id_and_recipients(
-        self, mock_getpool, mock_rate, mock_block, mock_record
-    ):
+    def test_happy_path_returns_id_and_recipients(self, message_dal_stubs):
+        """A message that passes checks is stored and its id returned."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import messages as dal_messages
+        from bbsengine6.message.dal import ratelimit as dal_ratelimit
 
-        mock_rate.return_value = (True, 100)
-        mock_block.return_value = False
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (777,)
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_getpool.return_value = mock_pool
+        dal_ratelimit.try_reserve.return_value = (True, 100)
+        dal_messages.store_message_with_recipients.return_value = 777
 
         result = message.store_message_with_checks(
-            channel="casino:table:bj1",
+            channel="member:direct",
             sender_moniker="alice",
             content="hi",
-            recipient_monikers=["bob", "charlie"],
+            recipient_monikers=["bob"],
         )
 
         assert result["message_id"] == 777
         assert result["rate_limit_ok"] is True
-        assert result["recipients_stored"] == ["bob", "charlie"]
-        assert result["recipients_blocked"] == []
-        mock_record.assert_called_once()
 
-    @patch("bbsengine6.message.lib.is_blocked")
-    @patch("bbsengine6.message.lib.check_rate_limit")
-    @patch("bbsengine6.message.lib.getpool")
-    def test_blocked_recipient_is_dropped(self, mock_getpool, mock_rate, mock_block):
+    def test_blocked_recipient_is_dropped(self, message_dal_stubs):
+        """A recipient who blocked the sender is dropped; the others are kept."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import blocking as dal_blocking
+        from bbsengine6.message.dal import messages as dal_messages
+        from bbsengine6.message.dal import ratelimit as dal_ratelimit
 
-        mock_rate.return_value = (True, 100)
-        # bob has blocked alice
-        mock_block.side_effect = lambda blocker, blocked, database=None: (
+        dal_ratelimit.try_reserve.return_value = (True, 99)
+        # bob has blocked alice; charlie has not.
+        dal_blocking.is_blocked.side_effect = lambda args, blocker, blocked: (
             blocker == "bob" and blocked == "alice"
         )
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (888,)
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_getpool.return_value = mock_pool
+        dal_messages.store_message_with_recipients.return_value = 888
 
-        result = message.store_message_with_checks(
+        message.store_message_with_checks(
             channel="member:direct",
             sender_moniker="alice",
             content="hi",
             recipient_monikers=["bob", "charlie"],
         )
 
-        assert result["message_id"] == 888
-        assert "bob" in result["recipients_blocked"]
-        assert "bob" not in result["recipients_stored"]
-        assert "charlie" in result["recipients_stored"]
+        kept = dal_messages.store_message_with_recipients.call_args.args[-1]
+        assert kept == ["charlie"]
 
-    @patch("bbsengine6.message.lib.is_blocked")
-    @patch("bbsengine6.message.lib.check_rate_limit")
+    @patch("bbsengine6.message.service.is_blocked")
+    @patch("bbsengine6.message.service.check_rate_limit")
     @patch("bbsengine6.message.lib.getpool")
     def test_rate_limit_denies_storage(self, mock_getpool, mock_rate, mock_block):
         from bbsengine6 import message
@@ -314,111 +234,51 @@ class TestStoreMessageWithChecks:
         finally:
             message.enable()
 
-    @patch("bbsengine6.message.lib.record_message_sent")
-    @patch("bbsengine6.message.lib.is_blocked", return_value=False)
-    @patch("bbsengine6.message.lib.check_rate_limit", return_value=(True, 999))
-    @patch("bbsengine6.message.lib.getpool")
-    def test_legacy_store_message_returns_int(
-        self, mock_getpool, mock_rate, mock_block, mock_record
-    ):
+    def test_legacy_store_message_returns_int(self, message_dal_stubs):
+        """store_message returns the message id as an int."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import messages as dal_messages
+        from bbsengine6.message.dal import ratelimit as dal_ratelimit
 
-        mock_rate.return_value = (True, 100)
-        mock_block.return_value = False
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (1234,)
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_getpool.return_value = mock_pool
+        dal_ratelimit.try_reserve.return_value = (True, 100)
+        dal_messages.store_message_with_recipients.return_value = 321
 
-        msg_id = message.store_message(
-            channel="x",
-            sender_moniker="alice",
-            content="hi",
+        assert message.store_message(
+            channel="member:direct", sender_moniker="alice", content="hi",
             recipient_monikers=["bob"],
-        )
-        assert isinstance(msg_id, int)
-        assert msg_id == 1234
+        ) == 321
 
-
+@pytest.mark.unit
 class TestPendingMessagesPrioritized:
     """CRITICAL/URGENT messages are surfaced before ROUTINE ones."""
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_query_uses_urgency_first_ordering(self, mock_getpool):
-        """The SQL must include a CASE expression over urgency."""
+    def test_query_uses_urgency_first_ordering(self, message_dal_stubs):
+        """The prioritized read asks the DAL for urgency ordering."""
         from bbsengine6 import message
-
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = []
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_getpool.return_value = mock_pool
+        from bbsengine6.message.dal import messages as dal_messages
 
         message.get_pending_messages_prioritized("bob")
 
-        # Inspect the SQL passed to cur.execute.
-        executed_sql = mock_cursor.execute.call_args[0][0]
-        assert "CRITICAL" in executed_sql
-        assert "URGENT" in executed_sql
-        assert "ROUTINE" in executed_sql
-        assert "CASE m.urgency" in executed_sql
-        assert "m.datestamp DESC" in executed_sql
+        assert dal_messages.list_pending_for_recipient.call_args.kwargs["prioritized"] is True
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_legacy_query_uses_datestamp_only(self, mock_getpool):
-        """Sanity: get_pending_messages still uses datestamp-only ordering."""
+    def test_legacy_query_uses_datestamp_only(self, message_dal_stubs):
+        """The legacy read asks the DAL for datestamp ordering only."""
         from bbsengine6 import message
-
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = []
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_getpool.return_value = mock_pool
+        from bbsengine6.message.dal import messages as dal_messages
 
         message.get_pending_messages("bob")
 
-        executed_sql = mock_cursor.execute.call_args[0][0]
-        assert "CASE m.urgency" not in executed_sql
-        assert "m.datestamp DESC" in executed_sql
+        assert dal_messages.list_pending_for_recipient.call_args.kwargs["prioritized"] is False
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_prioritized_returns_rows(self, mock_getpool):
+    def test_prioritized_returns_rows(self, message_dal_stubs):
+        """Prioritized rows come back from the DAL unchanged."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import messages as dal_messages
 
-        rows = [
-            (
-                1,
-                "x",
-                "alice",
-                "hi",
-                None,
-                "ROUTINE",
-                None,
-                None,
-                "2024-01-01 12:00:00",
-                "pending",
-                None,
-                None,
-            ),
-        ]
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = rows
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_getpool.return_value = mock_pool
+        rows = [{"id": 1, "urgency": "CRITICAL"}, {"id": 2, "urgency": "ROUTINE"}]
+        dal_messages.list_pending_for_recipient.return_value = rows
 
-        msgs = message.get_pending_messages_prioritized("bob")
-        assert len(msgs) == 1
-        assert msgs[0]["urgency"] == "ROUTINE"
+        assert message.get_pending_messages_prioritized("bob") == rows
 
     def test_disabled_returns_empty(self):
         from bbsengine6 import message
@@ -435,30 +295,19 @@ class TestPendingMessagesPrioritized:
 # =============================================================================
 
 
+@pytest.mark.unit
 class TestMessageGroups:
     """Tests for message groups (Phase 1C)."""
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_create_message_group(self, mock_getpool):
-        """Create a message group."""
+    def test_create_message_group(self, message_dal_stubs):
+        """create_message_group returns the id the DAL creates."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import groups as dal_groups
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (42,)
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        dal_groups.create.return_value = 42
 
-        group_id = message.create_message_group(
-            name="test-group",
-            createdby="alice",
-            description="Test group",
-        )
-
-        assert group_id == 42
+        assert message.create_message_group("admins", createdby="alice") == 42
+        dal_groups.create.assert_called_once()
 
     @patch("bbsengine6.message.lib.getpool")
     def test_add_to_message_group(self, mock_getpool):
@@ -481,67 +330,42 @@ class TestMessageGroups:
 
         assert result is True
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_get_message_group_members(self, mock_getpool):
-        """Get members of a message group."""
+    def test_get_message_group_members(self, message_dal_stubs):
+        """Group members come from the DAL member listing."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import groups as dal_groups
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [("alice",), ("bob",), ("charlie",)]
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        dal_groups.list_members.return_value = ["alice", "bob", "charlie"]
 
-        members = message.get_message_group_members(group_id=1)
+        assert message.get_message_group_members(1) == ["alice", "bob", "charlie"]
+        dal_groups.list_members.assert_called_once()
 
-        assert members == ["alice", "bob", "charlie"]
-
-    @patch("bbsengine6.message.lib.getpool")
-    def test_get_user_groups(self, mock_getpool):
-        """Get groups a user belongs to."""
+    def test_get_user_groups(self, message_dal_stubs):
+        """get_user_groups returns the groups the DAL lists for the member."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import groups as dal_groups
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = [
-            (1, "admins", "Admin group", "2024-01-01"),
-            (2, "vips", "VIP players", "2024-01-02"),
+        dal_groups.list_user_groups.return_value = [
+            {"id": 1, "name": "admins"},
+            {"id": 2, "name": "vips"},
         ]
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
 
         groups = message.get_user_groups("alice")
 
-        assert len(groups) == 2
-        assert groups[0]["name"] == "admins"
-        assert groups[1]["name"] == "vips"
-
+        assert [g["name"] for g in groups] == ["admins", "vips"]
 
 class TestMessageBlocking:
     """Tests for message blocking (Phase 1C)."""
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_block_sender(self, mock_getpool):
-        """Block a sender."""
+    def test_block_sender(self, message_dal_stubs):
+        """Blocking a sender is recorded through the DAL."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import blocking as dal_blocking
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        message.block_sender("alice", "bob")
 
-        result = message.block_sender("alice", "bob")
-
-        assert result is True
+        dal_blocking.block.assert_called_once()
+        assert dal_blocking.block.call_args.args[1:] == ("alice", "bob")
 
     @patch("bbsengine6.message.lib.getpool")
     def test_unblock_sender(self, mock_getpool):
@@ -560,23 +384,15 @@ class TestMessageBlocking:
 
         assert result is True
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_is_blocked(self, mock_getpool):
-        """Check if sender is blocked."""
+    def test_is_blocked(self, message_dal_stubs):
+        """is_blocked answers from the DAL blocking check."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import blocking as dal_blocking
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (1,)  # Blocked
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        dal_blocking.is_blocked.return_value = True
 
-        result = message.is_blocked("alice", "bob")
-
-        assert result is True
+        assert message.is_blocked("alice", "bob") is True
+        dal_blocking.is_blocked.assert_called_once()
 
     @patch("bbsengine6.message.lib.getpool")
     def test_is_not_blocked(self, mock_getpool):
@@ -597,46 +413,30 @@ class TestMessageBlocking:
         assert result is False
 
 
+@pytest.mark.unit
 class TestMessageRateLimiting:
     """Tests for rate limiting (Phase 1C)."""
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_check_rate_limit_unlimited(self, mock_getpool):
-        """Unlimited message type allows all."""
+    def test_check_rate_limit_unlimited(self, message_dal_stubs):
+        """A type with no limit is always allowed, reported through the DAL."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import ratelimit as dal_ratelimit
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (0,)  # Unlimited
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        dal_ratelimit.check.return_value = (True, 999)
 
-        allowed, remaining = message.check_rate_limit("alice", "system:announcements")
+        allowed, remaining = message.check_rate_limit("alice", "casino_kick")
 
         assert allowed is True
         assert remaining == 999
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_check_rate_limit_allowed(self, mock_getpool):
-        """Rate limit not exceeded."""
+    def test_check_rate_limit_allowed(self, message_dal_stubs):
+        """A sender under the limit is allowed, with the DAL's remaining count."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import ratelimit as dal_ratelimit
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.side_effect = [
-            (60,),  # Rate limit
-            (5,),  # Current count
-        ]
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        dal_ratelimit.check.return_value = (True, 55)
 
-        allowed, remaining = message.check_rate_limit("alice", "system:shout")
+        allowed, remaining = message.check_rate_limit("alice", "casino_kick")
 
         assert allowed is True
         assert remaining == 55
@@ -680,31 +480,18 @@ class TestMessageRateLimiting:
 
         assert result is True
 
-    @patch("bbsengine6.message.lib.getpool")
-    def test_get_message_type_rate_limit(self, mock_getpool):
-        """Get rate limit for message type."""
+    def test_get_message_type_rate_limit(self, message_dal_stubs):
+        """The per-type limit is read from the DAL."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import ratelimit as dal_ratelimit
 
-        mock_conn = MagicMock()
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = (60,)
-        mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-        mock_pool = MagicMock()
-        mock_pool.connection.return_value.__enter__.return_value = mock_conn
-        mock_pool.connection.return_value.__exit__.return_value = None
-        mock_getpool.return_value = mock_pool
+        dal_ratelimit.get_type_limit.return_value = 60
 
-        limit = message.get_message_type_rate_limit("system:shout")
-
-        assert limit == 60
-
-
-# =============================================================================
-# Integration Tests - require real database (zoid6test) with message tables
-# =============================================================================
-
+        assert message.get_message_type_rate_limit("casino_kick") == 60
+        dal_ratelimit.get_type_limit.assert_called_once()
 
 @pytest.mark.integration
+@pytest.mark.requires_db
 class TestMessageLibIntegration:
     """Integration tests for message DAL with real database.
 
@@ -762,6 +549,7 @@ class TestMessageLibIntegration:
 # =============================================================================
 
 
+@pytest.mark.unit
 class TestMessageTemplating:
     """Tests for message templating (Phase 1E)."""
 

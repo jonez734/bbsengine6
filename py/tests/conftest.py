@@ -400,3 +400,7 @@ def _execute_sql_file(conn, sql_content: str, filename: str) -> None:
     except Exception:
         # Re-raise - let caller decide how to handle
         raise
+
+
+# Unit message tests must not reach the live database (see _message_db_guard).
+pytest_plugins = ["tests._message_db_guard"]

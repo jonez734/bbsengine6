@@ -34,6 +34,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from bbsengine6.message import lib as message_lib
+from bbsengine6.message import service as message_service
+
+pytestmark = pytest.mark.unit
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +173,7 @@ class TestSendDisabled:
         from bbsengine6 import message
         from bbsengine6.message import lib as message_lib
 
-        with patch.object(message_lib, "_message_enabled", False):
+        with patch.object(message_service, "_message_enabled", False):
             result = message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -206,7 +209,7 @@ class TestSendRoutesToStoreMessage:
     def test_returns_store_message_result(self):
         from bbsengine6 import message
 
-        with patch.object(message_lib, "store_message", return_value=42) as sm:
+        with patch.object(message_service, "store_message", return_value=42) as sm:
             result = message.send(
                 notification_type="casino_kick",
                 recipients=["alice", "bob"],
@@ -238,7 +241,7 @@ class TestSendRoutesToStoreMessage:
         from bbsengine6 import message
 
         args = SimpleNamespace(database="from_database", databasename="from_databasename")
-        with patch.object(message_lib, "store_message", return_value=1) as sm:
+        with patch.object(message_service, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino.bankalert",
                 recipients=["sysop"],
@@ -250,7 +253,7 @@ class TestSendRoutesToStoreMessage:
     def test_renders_template_with_missing_vars(self):
         from bbsengine6 import message
 
-        with patch.object(message_lib, "store_message", return_value=1) as sm:
+        with patch.object(message_service, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -264,7 +267,7 @@ class TestSendRoutesToStoreMessage:
     def test_urgency_string_passthrough(self):
         from bbsengine6 import message
 
-        with patch.object(message_lib, "store_message", return_value=1) as sm:
+        with patch.object(message_service, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -276,7 +279,7 @@ class TestSendRoutesToStoreMessage:
     def test_urgency_none_defaults_to_routine(self):
         from bbsengine6 import message
 
-        with patch.object(message_lib, "store_message", return_value=1) as sm:
+        with patch.object(message_service, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -287,7 +290,7 @@ class TestSendRoutesToStoreMessage:
     def test_no_args_database_is_none(self):
         from bbsengine6 import message
 
-        with patch.object(message_lib, "store_message", return_value=1) as sm:
+        with patch.object(message_service, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -299,7 +302,7 @@ class TestSendRoutesToStoreMessage:
         from bbsengine6 import message
 
         payload = {"custom": "payload", "n": 7}
-        with patch.object(message_lib, "store_message", return_value=1) as sm:
+        with patch.object(message_service, "store_message", return_value=1) as sm:
             message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
@@ -308,45 +311,35 @@ class TestSendRoutesToStoreMessage:
             )
         assert sm.call_args.kwargs["data"] is payload
 
-    def test_should_persist_kwarg_accepted_but_ignored(self):
-        """The new system always persists; the kwarg is kept for API
-        parity with message_delivery.send and must not be forwarded to
-        store_message."""
+    def test_should_persist_false_stores_nothing(self):
+        """should_persist=False means do not store: send returns 0 and the
+        store path is never called (this was ignored before Step 3b-ii)."""
         from bbsengine6 import message
 
-        with patch.object(message_lib, "store_message", return_value=1) as sm:
+        with patch.object(message_service, "store_message", return_value=1) as sm:
             result = message.send(
                 notification_type="casino_kick",
                 recipients=["alice"],
                 template="hi",
                 should_persist=False,
             )
-        assert result == 1
-        assert "should_persist" not in sm.call_args.kwargs
+        assert result == 0
+        sm.assert_not_called()
 
-    def test_extra_kwargs_swallowed(self):
-        """Unknown kwargs (e.g. legacy pool/conn) must not break the
-        shim and must not be forwarded to store_message."""
+    def test_unknown_kwargs_are_rejected(self):
+        """Unknown kwargs raise TypeError rather than being swallowed, so a
+        misspelled option cannot silently do nothing (Step 3b-ii)."""
         from bbsengine6 import message
 
-        with patch.object(message_lib, "store_message", return_value=1) as sm:
-            message.send(
-                notification_type="casino_kick",
-                recipients=["alice"],
-                template="hi",
-                pool="ignored",
-                conn="ignored",
-                garbage="ignored",
-            )
-        forwarded = sm.call_args.kwargs
-        for k in ("pool", "conn", "garbage"):
-            assert k not in forwarded
-
-
-# ---------------------------------------------------------------------------
-# register_type_compat()
-# ---------------------------------------------------------------------------
-
+        with patch.object(message_service, "store_message", return_value=1) as sm:
+            with pytest.raises(TypeError):
+                message.send(
+                    notification_type="casino_kick",
+                    recipients=["alice"],
+                    template="hi",
+                    garbage="ignored",
+                )
+        sm.assert_not_called()
 
 class TestRegisterTypeCompatPresent:
     def test_module_exports_it(self):
@@ -360,7 +353,7 @@ class TestRegisterTypeCompatDisabled:
         from bbsengine6 import message
         from bbsengine6.message import lib as message_lib
 
-        with patch.object(message_lib, "_message_enabled", False):
+        with patch.object(message_service, "_message_enabled", False):
             ok = message.register_type_compat(
                 "casino.bankalert",
                 message.MessageUrgency.ROUTINE,
@@ -379,7 +372,7 @@ class TestRegisterTypeCompatAdapter:
     def test_legacy_signature_routes_to_register_type(self):
         from bbsengine6 import message
 
-        with patch.object(message_lib, "register_type", return_value=True) as rt:
+        with patch.object(message_service, "register_type", return_value=True) as rt:
             ok = message.register_type_compat(
                 "casino.bankalert",
                 message.MessageUrgency.ROUTINE,
@@ -406,7 +399,7 @@ class TestRegisterTypeCompatAdapter:
         that already migrated to the new schema."""
         from bbsengine6 import message
 
-        with patch.object(message_lib, "register_type", return_value=True) as rt:
+        with patch.object(message_service, "register_type", return_value=True) as rt:
             ok = message.register_type_compat(
                 "casino.bankalert",
                 description="Casino bank alerts",
@@ -427,7 +420,7 @@ class TestRegisterTypeCompatAdapter:
     def test_no_urgency_skips_description(self):
         from bbsengine6 import message
 
-        with patch.object(message_lib, "register_type", return_value=True) as rt:
+        with patch.object(message_service, "register_type", return_value=True) as rt:
             message.register_type_compat(
                 "casino.bankalert",
                 urgency=None,

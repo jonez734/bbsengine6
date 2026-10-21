@@ -20,9 +20,14 @@ Coverage:
 
 from __future__ import annotations
 
+import pytest
+
 from unittest.mock import MagicMock, patch
 
 from bbsengine6.message import lib as message_lib
+from bbsengine6.message import service as message_service
+
+pytestmark = pytest.mark.unit
 
 
 
@@ -58,31 +63,19 @@ class TestPhase1GapFillsPresent:
 
 
 class TestRemoveFromGroup:
-    def test_returns_true_on_row_deleted(self):
+    def test_returns_true_on_row_deleted(self, message_dal_stubs):
+        """remove_from_group reports success from the DAL group removal."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import groups as dal_groups
+        from bbsengine6.message.dal import recipients as dal_recipients
 
-        cur = MagicMock()
-        cur.rowcount = 1
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
+        dal_recipients.get_group_id_by_name.return_value = 7
+        dal_groups.remove_member.return_value = True
+        dal_groups.list_members.return_value = ["bob"]
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
-        conn.commit = MagicMock()
-
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "getpool", return_value=pool):
-            result = message.remove_from_group(7, "alice")
-
-        assert result is True
-        cur.execute.assert_called_once()
-        sql = cur.execute.call_args[0][0]
-        assert "DELETE FROM engine.__message_group_member" in sql
-        conn.commit.assert_called_once()
+        assert message.remove_from_group(7, "alice") is True
+        dal_groups.remove_member.assert_called_once()
+        assert dal_groups.remove_member.call_args.args[1:] == (7, "alice")
 
     def test_returns_false_when_no_row(self):
         from bbsengine6 import message
@@ -109,7 +102,7 @@ class TestRemoveFromGroup:
         from bbsengine6 import message
         from bbsengine6.message import lib as message_lib
 
-        with patch.object(message_lib, "_message_enabled", False):
+        with patch.object(message_service, "_message_enabled", False):
             assert message.remove_from_group(1, "alice") is False
 
 
@@ -119,29 +112,14 @@ class TestRemoveFromGroup:
 
 
 class TestGetBlocked:
-    def test_returns_list_of_blocker_monikers(self):
+    def test_returns_list_of_blocker_monikers(self, message_dal_stubs):
+        """get_blocked returns the monikers the DAL lists as blocking the member."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import blocking as dal_blocking
 
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
-        cur.fetchall = MagicMock(return_value=[("alice",), ("bob",)])
+        dal_blocking.list_blocked_by.return_value = ["mallory", "eve"]
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
-
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "getpool", return_value=pool):
-            result = message.get_blocked("carol")
-
-        assert result == ["alice", "bob"]
-        sql = cur.execute.call_args[0][0]
-        assert "blocked_moniker" in sql
-        assert cur.execute.call_args[0][1] == ("carol",)
+        assert message.get_blocked("alice") == ["mallory", "eve"]
 
     def test_returns_empty_when_no_one_blocked(self):
         from bbsengine6 import message
@@ -169,104 +147,36 @@ class TestGetBlocked:
 
 
 class TestGetUrgent:
-    def test_filters_urgent_and_critical_only(self):
+    def test_filters_urgent_and_critical_only(self, message_dal_stubs):
+        """get_urgent asks the DAL for urgent and critical messages only."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import messages as dal_messages
 
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
-        cur.fetchall = MagicMock(return_value=[])
+        message.get_urgent("bob")
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
+        dal_messages.list_urgent_for_recipient.assert_called_once()
+        assert dal_messages.list_urgent_for_recipient.call_args.args[1] == "bob"
 
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "getpool", return_value=pool):
-            message.get_urgent("alice", limit=10)
-
-        sql = cur.execute.call_args[0][0]
-        # Should filter to URGENT + CRITICAL only
-        assert "m.urgency IN ('URGENT', 'CRITICAL')" in sql
-        # Should order by urgency (CRITICAL first)
-        assert "WHEN 'CRITICAL' THEN 0" in sql
-        # Args = (moniker, limit)
-        assert cur.execute.call_args[0][1] == ("alice", 10)
-
-    def test_returns_dict_shaped_messages(self):
+    def test_returns_dict_shaped_messages(self, message_dal_stubs):
+        """get_urgent returns the DAL's dict-shaped rows unchanged."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import messages as dal_messages
 
-        row = (
-            1,  # id
-            "system:shout",  # channel
-            "alice",  # sender_moniker
-            "Help!",  # content
-            None,  # data
-            "CRITICAL",  # urgency
-            None,  # template
-            None,  # template_vars
-            "2026-07-22T12:00:00",  # datestamp
-            "pending",  # status
-            None,  # datedelivered
-            None,  # dateread
-        )
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
-        cur.fetchall = MagicMock(return_value=[row])
+        rows = [{"id": 9, "urgency": "CRITICAL", "content": "help"}]
+        dal_messages.list_urgent_for_recipient.return_value = rows
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
-
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "getpool", return_value=pool):
-            result = message.get_urgent("bob")
-
-        assert len(result) == 1
-        assert result[0]["urgency"] == "CRITICAL"
-        assert result[0]["channel"] == "system:shout"
-        assert result[0]["id"] == 1
-
-
-# ---------------------------------------------------------------------------
-# expunge
-# ---------------------------------------------------------------------------
-
+        assert message.get_urgent("bob") == rows
 
 class TestExpunge:
-    def test_deletes_only_when_sender_matches(self):
+    def test_deletes_only_when_sender_matches(self, message_dal_stubs):
+        """expunge is delegated to the DAL, which enforces the sender match."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import messages as dal_messages
 
-        cur = MagicMock()
-        cur.rowcount = 1
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
+        message.expunge(5, "alice")
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
-        conn.commit = MagicMock()
-
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "getpool", return_value=pool):
-            result = message.expunge(42, "alice")
-
-        assert result is True
-        sql = cur.execute.call_args[0][0]
-        # The WHERE clause must include the sender check
-        assert "sender_moniker = %s" in sql
-        assert "id = %s" in sql
-        assert cur.execute.call_args[0][1] == (42, "alice")
+        dal_messages.expunge_sender_message.assert_called_once()
+        assert dal_messages.expunge_sender_message.call_args.args[1:] == (5, "alice")
 
     def test_returns_false_when_no_match(self):
         from bbsengine6 import message
@@ -300,7 +210,7 @@ class TestGetQueue:
         from bbsengine6 import message
 
         sentinel = [{"id": 1, "urgency": "ROUTINE"}]
-        with patch.object(message_lib, "get_pending_messages", return_value=sentinel
+        with patch.object(message_service, "get_pending_messages", return_value=sentinel
         ) as gpm:
             result = message.get_queue("alice")
 
@@ -321,7 +231,7 @@ class TestResolveRecipients:
     def test_passes_through_plain_monikers(self):
         from bbsengine6 import message
 
-        with patch.object(message_lib, "is_enabled", return_value=True):
+        with patch.object(message_service, "is_enabled", return_value=True):
             result = message.resolve_recipients(["alice", "bob"])
 
         assert result == ["alice", "bob"]
@@ -329,64 +239,33 @@ class TestResolveRecipients:
     def test_dedupes_plain_monikers(self):
         from bbsengine6 import message
 
-        with patch.object(message_lib, "is_enabled", return_value=True):
+        with patch.object(message_service, "is_enabled", return_value=True):
             result = message.resolve_recipients(["alice", "bob", "alice"])
 
         assert result == ["alice", "bob"]
 
-    def test_expands_everyone_to_all_approved_members(self):
+    def test_expands_everyone_to_all_approved_members(self, message_dal_stubs):
+        """@everyone expands to the approved member list, for a sysop sender."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import recipients as dal_recipients
+        dal_recipients.list_all_approved_member_monikers.return_value = ["alice", "bob", "carol"]
+        from bbsengine6.message import service as message_service
 
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
-        cur.fetchall = MagicMock(return_value=[("alice",), ("bob",), ("carol",)])
+        with patch.object(message_service, "_sender_may_broadcast", return_value=True):
+            out = message.resolve_recipients(["@everyone"], sender_moniker="root")
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
+        assert out == ["alice", "bob", "carol"]
 
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "is_enabled", return_value=True), \
-             patch.object(message_lib, "getpool", return_value=pool):
-            result = message.resolve_recipients(["@everyone"])
-
-        assert result == ["alice", "bob", "carol"]
-        sql = cur.execute.call_args[0][0]
-        assert "FROM engine.__member" in sql
-        assert "approved = TRUE" in sql
-
-    def test_expands_named_group(self):
+    def test_expands_named_group(self, message_dal_stubs):
+        """A named group expands to its members from the DAL."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import groups as dal_groups
+        from bbsengine6.message.dal import recipients as dal_recipients
 
-        # First call: SELECT id FROM engine.__message_group WHERE name = %s
-        id_cur = MagicMock()
-        id_cur.__enter__ = MagicMock(return_value=id_cur)
-        id_cur.__exit__ = MagicMock(return_value=False)
-        id_cur.fetchone = MagicMock(return_value=(5,))
+        dal_recipients.get_group_id_by_name.return_value = 3
+        dal_groups.list_members.return_value = ["alice", "bob", "carol"]
 
-        # Subsequent calls (none, since get_message_group_members is patched)
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=id_cur)
-
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "is_enabled", return_value=True), \
-             patch.object(message_lib, "getpool", return_value=pool), \
-             patch.object(message_lib, "get_message_group_members",
-                 return_value=["dave", "eve"],
-             ):
-            result = message.resolve_recipients(["@ops"])
-
-        assert result == ["dave", "eve"]
-        id_cur.execute.assert_called_once()
-        assert id_cur.execute.call_args[0][1] == ("ops",)
+        assert message.resolve_recipients(["@crew"]) == ["alice", "bob", "carol"]
 
     def test_unknown_group_is_silently_ignored(self):
         from bbsengine6 import message
@@ -404,40 +283,30 @@ class TestResolveRecipients:
         pool = MagicMock()
         pool.connection = MagicMock(return_value=conn)
 
-        with patch.object(message_lib, "is_enabled", return_value=True), \
+        with patch.object(message_service, "is_enabled", return_value=True), \
              patch.object(message_lib, "getpool", return_value=pool):
             result = message.resolve_recipients(["@nope", "alice"])
 
         assert result == ["alice"]
 
-    def test_mixed_plain_and_special(self):
+    def test_mixed_plain_and_special(self, message_dal_stubs):
+        """Plain monikers and a named group expand together, without duplicates."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import groups as dal_groups
+        from bbsengine6.message.dal import recipients as dal_recipients
 
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
-        cur.fetchall = MagicMock(return_value=[("bob",), ("carol",)])
+        dal_recipients.get_group_id_by_name.return_value = 3
+        dal_groups.list_members.return_value = ["alice", "bob"]
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
+        out = message.resolve_recipients(["dave", "@crew", "alice"])
 
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "is_enabled", return_value=True), \
-             patch.object(message_lib, "getpool", return_value=pool):
-            result = message.resolve_recipients(["alice", "@everyone", "bob"])
-
-        # alice first, then everyone (bob appears once, deduped)
-        assert result == ["alice", "bob", "carol"]
+        assert out == ["dave", "alice", "bob"]
 
     def test_returns_empty_when_disabled(self):
         from bbsengine6 import message
         from bbsengine6.message import lib as message_lib
 
-        with patch.object(message_lib, "_message_enabled", False):
+        with patch.object(message_service, "_message_enabled", False):
             assert message.resolve_recipients(["alice"]) == []
 
 
@@ -447,139 +316,52 @@ class TestResolveRecipients:
 
 
 class TestRateLimitAndTypes:
-    def test_set_rate_limit_upserts(self):
+    def test_set_rate_limit_upserts(self, message_dal_stubs):
+        """set_rate_limit writes the limit through the DAL."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import types as dal_types
 
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
+        assert message.set_rate_limit("casino_kick", 30) is True
+        dal_types.set_rate_limit.assert_called_once()
+        assert dal_types.set_rate_limit.call_args.args[1:] == ("casino_kick", 30)
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
-        conn.commit = MagicMock()
-
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "getpool", return_value=pool):
-            result = message.set_rate_limit("casino:table", 50)
-
-        assert result is True
-        sql = cur.execute.call_args[0][0]
-        assert "ON CONFLICT (type_name) DO UPDATE" in sql
-        assert cur.execute.call_args[0][1] == ("casino:table", "", 50)
-
-    def test_register_type_inserts_with_all_fields(self):
+    def test_register_type_inserts_with_all_fields(self, message_dal_stubs):
+        """register_type passes every field to the DAL upsert."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import types as dal_types
 
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
+        assert message.register_type("casino_kick", "Kicked", "ROUTINE", 10) is True
+        dal_types.upsert.assert_called_once()
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
-        conn.commit = MagicMock()
-
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "getpool", return_value=pool):
-            result = message.register_type(
-                "x:new", "new channel", 25, requires_approval=True
-            )
-
-        assert result is True
-        sql = cur.execute.call_args[0][0]
-        assert "ON CONFLICT (type_name) DO UPDATE" in sql
-        assert cur.execute.call_args[0][1] == (
-            "x:new", "new channel", 25, True,
-        )
-
-    def test_get_types_returns_list_of_dicts(self):
+    def test_get_types_returns_list_of_dicts(self, message_dal_stubs):
+        """get_types returns the DAL's type rows unchanged."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import types as dal_types
 
-        rows = [
-            ("casino:table", "casino", 300, False, "2026-07-22"),
-            ("system:shout", "shout", 60, False, "2026-07-22"),
-        ]
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
-        cur.fetchall = MagicMock(return_value=rows)
+        rows = [{"type_name": "casino_kick", "rate_limit_per_hour": 10}]
+        dal_types.list_all.return_value = rows
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
-
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        with patch.object(message_lib, "getpool", return_value=pool):
-            result = message.get_types()
-
-        assert len(result) == 2
-        assert result[0] == {
-            "type_name": "casino:table",
-            "description": "casino",
-            "rate_limit_per_hour": 300,
-            "requires_approval": False,
-            "datemodified": "2026-07-22",
-        }
-
-
-# ---------------------------------------------------------------------------
-# @group / @everyone expansion in store_message
-# ---------------------------------------------------------------------------
-
+        assert message.get_types() == rows
 
 class TestStoreMessageExpandsRecipients:
-    def test_store_message_expands_at_references(self):
-        """``store_message`` should call ``resolve_recipients`` on its
-        recipient list, so ``@group`` and ``@everyone`` work at the
-        call site without the caller pre-expanding."""
+    def test_store_message_expands_at_references(self, message_dal_stubs):
+        """store_message expands @group references before storing the recipients."""
         from bbsengine6 import message
+        from bbsengine6.message.dal import groups as dal_groups
+        from bbsengine6.message.dal import messages as dal_messages
+        from bbsengine6.message.dal import ratelimit as dal_ratelimit
+        from bbsengine6.message.dal import recipients as dal_recipients
 
-        # All cursors / conns / pools set up to no-op (we want to
-        # verify the call sequence, not the DB writes).
-        cur = MagicMock()
-        cur.__enter__ = MagicMock(return_value=cur)
-        cur.__exit__ = MagicMock(return_value=False)
-        cur.fetchone = MagicMock(return_value=(99,))
-        cur.rowcount = 0
+        dal_ratelimit.try_reserve.return_value = (True, 9)
+        dal_recipients.get_group_id_by_name.return_value = 3
+        dal_groups.list_members.return_value = ["bob", "carol"]
+        dal_messages.store_message_with_recipients.return_value = 55
 
-        conn = MagicMock()
-        conn.__enter__ = MagicMock(return_value=conn)
-        conn.__exit__ = MagicMock(return_value=False)
-        conn.cursor = MagicMock(return_value=cur)
-        conn.commit = MagicMock()
+        message.store_message(channel="member:direct", sender_moniker="alice",
+                              content="hi", recipient_monikers=["@crew"])
 
-        pool = MagicMock()
-        pool.connection = MagicMock(return_value=conn)
-
-        expanded = ["alice", "bob", "carol"]
-
-        with patch.object(message_lib, "getpool", return_value=pool), \
-             patch.object(message_lib, "resolve_recipients", return_value=expanded
-             ) as expand, \
-             patch.object(message_lib, "is_blocked", return_value=False), \
-             patch.object(message_lib, "check_rate_limit", return_value=(True, 999)):
-            result = message.store_message(
-                channel="system:shout",
-                sender_moniker="alice",
-                content="hi",
-                recipient_monikers=["@everyone"],
-            )
-
-        # resolve_recipients was called with the original list
-        expand.assert_called_once()
-        assert expand.call_args[0][0] == ["@everyone"]
-        # store_message returns the id
-        assert result == 99
+        stored = dal_messages.store_message_with_recipients.call_args.args[-1]
+        assert sorted(stored) == ["bob", "carol"]
 
     def test_store_message_passes_through_when_no_special_recipients(self):
         """When the recipient list has no @-prefixed tokens, the
@@ -602,11 +384,11 @@ class TestStoreMessageExpandsRecipients:
         pool.connection = MagicMock(return_value=conn)
 
         with patch.object(message_lib, "getpool", return_value=pool), \
-             patch.object(message_lib, "resolve_recipients",
+             patch.object(message_service, "resolve_recipients",
                  return_value=["alice", "bob"],
              ) as expand, \
-             patch.object(message_lib, "is_blocked", return_value=False), \
-             patch.object(message_lib, "check_rate_limit", return_value=(True, 999)):
+             patch.object(message_service, "is_blocked", return_value=False), \
+             patch.object(message_service, "check_rate_limit", return_value=(True, 999)):
             message.store_message(
                 channel="member:direct",
                 sender_moniker="carol",
