@@ -17,6 +17,9 @@ CREATE TABLE IF NOT EXISTS engine.__message_source (
 );
 CREATE INDEX IF NOT EXISTS idx_engine_message_source_prefix ON engine.__message_source(group_prefix);
 
+-- Match the sibling engine.__message_group grants (sysop has full access).
+GRANT SELECT, INSERT, UPDATE, DELETE ON engine.__message_source TO sysop;
+
 -- Existing seats are players. Role defaults to 'player'; no row is lost.
 ALTER TABLE casino.map_cardtable_player
     ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'player';
