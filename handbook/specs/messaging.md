@@ -389,3 +389,14 @@ The full Phases 1-11 checklist is in
   package surface (`from bbsengine6.message import <name>`) is
   unchanged; the implementation moved to
   `bbsengine6.message.{service,dal.*,cache,templates,lib}`.
+
+### Live-database test isolation
+
+Calls through `bbsengine6.message.service` (group creation, membership, the
+source registry) open their own connections. A test that runs them inside a
+rolled-back transaction on the DAL alone does not isolate them, and their
+writes commit to the live database. `casino.tablegroups.reconcile` deletes
+every `table:` group whose table is not in its `table_monikers` argument, so
+calling it with a partial list against a live database removes real groups.
+Run such checks against a database that holds no real data, or pass the full
+list of existing tables.
