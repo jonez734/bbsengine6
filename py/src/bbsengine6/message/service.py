@@ -9,7 +9,7 @@
 # !42!
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from bbsengine6 import io
 from bbsengine6.database import getpool
@@ -76,6 +76,36 @@ def configure(
 
 
 _RESERVED_SOURCES = ("member", "operator")
+
+# Keywords that expand to a group for the sender, resolved by the host app.
+# bbsengine6 does not interpret them; the host registers a resolver.
+_RESERVED_GROUP_NAMES = frozenset({"everyone", "here"})
+_here_resolver: Optional[Callable[[Optional[str]], Optional[str]]] = None
+
+
+def set_here_resolver(resolver: Optional[Callable[[Optional[str]], Optional[str]]]) -> None:
+    """Register how ``@here`` maps to a group name for a sender.
+
+    ``resolver(sender_moniker)`` returns the group name (for example
+    ``table:<moniker>``), or None when the sender has no current location.
+    ``None`` clears the resolver.
+    """
+    global _here_resolver
+    _here_resolver = resolver
+
+
+def is_reserved_group_name(name: str) -> bool:
+    """True if ``name`` is a keyword and cannot name a real group."""
+    return name.lower() in _RESERVED_GROUP_NAMES
+
+
+def _resolve_here(sender_moniker: Optional[str]) -> str:
+    if _here_resolver is None:
+        raise PermissionError("@here is not available in this application")
+    name = _here_resolver(sender_moniker)
+    if not name:
+        raise PermissionError("@here: you have no current location")
+    return name
 
 
 def _source_may_address_group(
@@ -579,6 +609,8 @@ def ensure_message_group(
     """Return the id of group ``name``, creating it if it does not exist."""
     if not _message_enabled:
         return 0
+    if is_reserved_group_name(name):
+        raise ValueError(f"group name {name!r} is reserved (a keyword such as @here)")
     database_name = _resolve_db(database)
     args = _make_args(database_name)
     existing = dal_recipients.get_group_id_by_name(args, name)
@@ -873,6 +905,10 @@ def resolve_recipients(
                     continue
                 database_name = _resolve_db(database)
                 args = _make_args(database_name)
+                if token.lower() == "here":
+                    token = _resolve_here(sender_moniker)
+                    if is_reserved_group_name(token):
+                        raise PermissionError(f"@here resolved to a reserved name: {token!r}")
                 if token.lower() == "everyone":
                     if source not in _RESERVED_SOURCES:
                         raise PermissionError(
