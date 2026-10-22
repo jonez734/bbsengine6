@@ -16,14 +16,14 @@ ARGS = MagicMock(debug=False)
 @pytest.mark.unit
 def test_info_reports_bed_source():
     with patch.object(member_lib, "_bed_balance", return_value={"balance": 250, "account": True}):
-        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 250, "source": "bed bank"}
+        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 250, "source": "bed bank", "reason": "ok"}
 
 
 @pytest.mark.unit
 def test_info_reports_bank_source_when_bed_down():
     with patch.object(member_lib, "_bed_balance", side_effect=ConnectionError("down")), \
          patch.object(member_lib, "_db_account", return_value={"balance": 75}):
-        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 75, "source": "bank"}
+        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 75, "source": "bank", "reason": "bed_down: ConnectionError"}
 
 
 @pytest.mark.unit
@@ -31,7 +31,7 @@ def test_info_reports_credits_source_when_no_bank_account():
     with patch.object(member_lib, "_bed_balance", return_value={"balance": 0, "account": False}), \
          patch.object(member_lib, "_db_account", return_value=None), \
          patch.object(member_lib, "getcurrent", return_value={"credits": 40}):
-        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 40, "source": "credits"}
+        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 40, "source": "credits", "reason": "no_bank_account"}
 
 
 @pytest.mark.unit
@@ -39,7 +39,7 @@ def test_null_credits_counts_as_zero():
     with patch.object(member_lib, "_bed_balance", return_value={"balance": 0, "account": False}), \
          patch.object(member_lib, "_db_account", return_value=None), \
          patch.object(member_lib, "getcurrent", return_value={"credits": None}):
-        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 0, "source": "credits"}
+        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 0, "source": "credits", "reason": "no_bank_account"}
 
 
 @pytest.mark.unit

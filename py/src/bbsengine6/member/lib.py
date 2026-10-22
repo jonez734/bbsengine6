@@ -1919,6 +1919,13 @@ def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
 # a missing bank account is not, and falls back to credits.
 
 
+def _resolve_bed_token(args) -> str:
+    """The bearer token for bed's bank calls: the --token value, else the token file."""
+    from bed.tools import _token
+
+    return _token.resolve_token(args) or ""
+
+
 def _bed_balance(args, moniker: str) -> dict:
     """Ask bed's bank for ``moniker``. Opens and closes its own socket.
 
@@ -1930,9 +1937,7 @@ def _bed_balance(args, moniker: str) -> dict:
     from bed.client import get_bed_connection
     from bed.client.bank import BedBankClient
 
-    from bed.tools import _token
-
-    token = _token.resolve_token(args) or ""
+    token = _resolve_bed_token(args)
 
     async def _run() -> dict:
         conn = get_bed_connection(args)
@@ -1957,34 +1962,53 @@ def _db_account(args, moniker: str, **kwargs) -> dict | None:
     return BankService(args).account.get(moniker)
 
 
-def getbalance_info(args, moniker: str | None = None, **kwargs) -> dict | None:
-    """The member's balance and where it came from.
+def _balance_reason_echo(reason: str, moniker: str) -> None:
+    """Debug-level line that says why bed's balance was or was not used."""
+    io.echo(f"bbsengine6.member.getbalance.reason: moniker={moniker} reason: {reason}", level="debug")
 
-    Order: bed's bank ("bed"), then the local bank account ("bank"), then the
-    member's credits ("credits"). A NULL credits value counts as 0. Returns None when
-    there is no member to report.
+
+def getbalance_info(args, moniker: str | None = None, **kwargs) -> dict | None:
+    """The member's balance, where it came from, and why bed was or was not used.
+
+    Order: bed's bank ("<bed name> bank", or "bed bank" without a name), then the local bank
+    account ("bank"), then the member's credits ("credits"). A NULL credits value counts as 0.
+    ``reason`` is one of: ok, no_token, bed_refused: <code>, bed_down: <exception>,
+    no_bank_account. It is also echoed at debug level. Returns None when there is no member.
     """
     if moniker is None:
         moniker = getcurrentmoniker(args, **kwargs)
         if moniker is None:
             return None
 
-    try:
-        reply = _bed_balance(args, moniker)
-        if reply.get("account"):
-            name = (reply.get("bed_name") or "").strip()
-            return {"balance": int(reply["balance"]), "source": f"{name} bank" if name else "bed bank"}
-    except Exception:
-        io.echo("bbsengine6.member.getbalance.100: bed unavailable; using local account", level="debug")
+    if not _resolve_bed_token(args):
+        reason = "no_token"
+    else:
+        try:
+            reply = _bed_balance(args, moniker)
+        except Exception as exc:
+            code = getattr(exc, "code", None)
+            reason = f"bed_refused: {code}" if code else f"bed_down: {exc.__class__.__name__}"
+        else:
+            if reply.get("account"):
+                name = (reply.get("bed_name") or "").strip()
+                _balance_reason_echo("ok", moniker)
+                return {
+                    "balance": int(reply["balance"]),
+                    "source": f"{name} bank" if name else "bed bank",
+                    "reason": "ok",
+                }
+            reason = "no_bank_account"
+
+    _balance_reason_echo(reason, moniker)
 
     account = _db_account(args, moniker, **kwargs)
     if account is not None:
-        return {"balance": int(account["balance"]), "source": "bank"}
+        return {"balance": int(account["balance"]), "source": "bank", "reason": reason}
 
     current = getcurrent(args, fields="credits", **kwargs)
     if current is None:
         return None
-    return {"balance": int(current["credits"] or 0), "source": "credits"}
+    return {"balance": int(current["credits"] or 0), "source": "credits", "reason": reason}
 
 
 def getbalance(args, moniker: str | None = None, **kwargs) -> int | None:
