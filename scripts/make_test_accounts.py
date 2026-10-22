@@ -5,10 +5,11 @@ Usage:
     python scripts/make_test_accounts.py --database zoid6test [-n 3]
         [--credentials PATH] [--allow-database] [--reset-passwords] [--with-bank]
 
-Passwords are random (secrets module) and are written only to the credentials
-file, never to stdout or the log. The file is created with mode 0600 inside a
-0700 directory. Existing accounts keep their password on a rerun; pass
---reset-passwords to change them.
+Passwords are random (secrets module) unless --password is given, which sets every
+account this run touches to that one password. Passwords are written only to the
+credentials file, never to stdout or the log. The file is created with mode 0600
+inside a 0700 directory. Existing accounts keep their password on a rerun; pass
+--reset-passwords to change them (with --password, they get that password).
 
 Creates the first N names of: alice, bob, charles, dana, eve, frank, ...
 (a generated ``tester<k>`` name is used beyond the named list). For each name:
@@ -175,12 +176,26 @@ def main(argv=None) -> int:
         help="also open a bank account for each test member (default: skip bank)",
     )
     parser.add_argument(
+        "--password",
+        default=None,
+        help=(
+            "set every account this run creates (or resets, with --reset-passwords) to this "
+            "one password instead of a random one. The value is written to the credentials "
+            "file only; it can still show in shell history, so prefer an env var or a file "
+            "for anything sensitive."
+        ),
+    )
+    parser.add_argument(
         "--bank-balance",
         type=int,
         default=0,
         help="starting balance for bank rows this run creates (default 0; an existing row keeps its balance)",
     )
     opts = parser.parse_args(argv)
+
+    if opts.password is not None and opts.password == "":
+        io.echo("--password must not be empty", level="error")
+        return 2
 
     if not opts.database.startswith(SAFE_PREFIX) and not opts.allow_database:
         io.echo(
@@ -210,7 +225,7 @@ def main(argv=None) -> int:
                     if opts.with_bank:
                         make_bank_account(args, moniker, pool=pool, balance=opts.bank_balance)
                     continue
-                password = generate_password()
+                password = opts.password if opts.password is not None else generate_password()
                 make_member(args, moniker, password, pool=pool)
                 if opts.with_bank:
                     make_bank_account(args, moniker, pool=pool, balance=opts.bank_balance)
