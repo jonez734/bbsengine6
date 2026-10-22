@@ -28,6 +28,7 @@ def main(args, **kwargs) -> bool:
             prev_autocommit = conn.autocommit
             conn.autocommit = True
             try:
+                kwargs.pop("conn", None)
                 if (database.create(args, args.databasename, conn=conn, **kwargs) is True):
                     lib.ok()
                 else:

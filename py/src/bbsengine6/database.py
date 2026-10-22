@@ -30,6 +30,11 @@ DEFAULTDATABASE = "postgres"
 #: than silently connecting to a stale legacy database.
 BBSENGINE6_DBNAME_DEFAULT: str = "NEEDINFO"
 
+#: Names that must never be created as a database. ``NEEDINFO`` means the name
+#: was never configured; ``bed`` is the packaged default that must be replaced
+#: by a real name. :func:`create` refuses both before any SQL runs.
+RESERVED_DATABASE_NAMES: frozenset[str] = frozenset({BBSENGINE6_DBNAME_DEFAULT, "bed"})
+
 #: Last-resort default host used by :func:`make_dsn` when no other
 #: source supplies one.
 BBSENGINE6_DBHOST_DEFAULT: str = "localhost"
@@ -1471,6 +1476,15 @@ def exists(args: Any, databasename: str, **kwargs: Any) -> bool:
         return False
 
 
+def _echo_reserved(name: str) -> None:
+    """Explain why a reserved database name was refused, for the sysop."""
+    io.echo(
+        f"database name '{name}' is reserved and was not created; "
+        "a sysop must set a real database name (--databasename or the config dbname) first",
+        level="error",
+    )
+
+
 def create(
     args: Any,
     name: str,
@@ -1529,6 +1543,10 @@ def create(
         duplicate names and the "cannot run inside a transaction block"
         error when the autocommit contract is violated).
     """
+
+    if name in RESERVED_DATABASE_NAMES:
+        _echo_reserved(name)
+        return False
 
     def _work(cur):
         clauses = [
