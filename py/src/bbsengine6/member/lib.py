@@ -1957,11 +1957,12 @@ def _db_account(args, moniker: str, **kwargs) -> dict | None:
     return BankService(args).account.get(moniker)
 
 
-def getbalance(args, moniker: str | None = None, **kwargs) -> int | None:
-    """The member's balance: bed's bank first, then the local account, then credits.
+def getbalance_info(args, moniker: str | None = None, **kwargs) -> dict | None:
+    """The member's balance and where it came from.
 
-    ``moniker`` defaults to the current member. Returns None when there is no
-    member to report.
+    Order: bed's bank ("bed"), then the local bank account ("bank"), then the
+    member's credits ("credits"). A NULL credits value counts as 0. Returns None when
+    there is no member to report.
     """
     if moniker is None:
         moniker = getcurrentmoniker(args, **kwargs)
@@ -1971,16 +1972,21 @@ def getbalance(args, moniker: str | None = None, **kwargs) -> int | None:
     try:
         reply = _bed_balance(args, moniker)
         if reply.get("account"):
-            return int(reply["balance"])
+            return {"balance": int(reply["balance"]), "source": "bed"}
     except Exception:
         io.echo("bbsengine6.member.getbalance.100: bed unavailable; using local account", level="debug")
 
-    # Bed has no account, or bed is down: the local bank account decides next.
     account = _db_account(args, moniker, **kwargs)
     if account is not None:
-        return int(account["balance"])
+        return {"balance": int(account["balance"]), "source": "bank"}
 
     current = getcurrent(args, fields="credits", **kwargs)
     if current is None:
         return None
-    return int(current["credits"])
+    return {"balance": int(current["credits"] or 0), "source": "credits"}
+
+
+def getbalance(args, moniker: str | None = None, **kwargs) -> int | None:
+    """The member's balance as a number (see getbalance_info for the source)."""
+    info = getbalance_info(args, moniker, **kwargs)
+    return None if info is None else info["balance"]
