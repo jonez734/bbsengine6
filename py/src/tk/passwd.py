@@ -105,7 +105,7 @@ class App(tk.Tk):
             return
 
         ttyio.echo(f"username={username!r}", level="debug")
-        ttyio.echo(f"new_password={new_password!r}", level="debug")
+        ttyio.echo("passwd: new password accepted (value not logged)", level="debug")
         memberid = bbsengine.getmemberidfromname(self.args, username)
         if memberid is False:
             ttyio.echo("you do not exist! go away!", level="error")

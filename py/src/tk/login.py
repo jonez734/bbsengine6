@@ -56,7 +56,7 @@ class App(tk.Tk):
     def check(self):
         moniker = self.moniker.get()
         password = self.password.get()
-        io.echo(f"{moniker=} {password=}", level="debug")
+        io.echo(f"login.check: {moniker=} (password value not logged)", level="debug")
 
         if util.checkpassword(args, password, moniker) is True:
             io.echo("password is correct")
