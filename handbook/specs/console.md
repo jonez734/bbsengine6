@@ -202,7 +202,7 @@ The module writes through `bbsengine6.member.libmember` (the
 4. On disapprove: clear `APPROVED` and the audit columns.
 5. Any failure rolls back the transaction.
 
-Access requires `member.checkflag(args, "SYSOP", member.getcurrentid(args))`.
+Access requires `member.checkflag(args, "SYSOP")`, which checks the current member by moniker.
 
 ## Session display
 

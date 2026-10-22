@@ -32,10 +32,9 @@ the full historical context.
 
 ### Thread-local caching
 
-`_threadlocal = threading.local()` caches the current member's `id` and
-`moniker` per thread to avoid repeated database queries during a
-request. Cached in `getcurrentid()` and `getcurrentmoniker()`; cleared
-by `clear_current_id_cache()` / `clear_current_moniker_cache()`.
+`_threadlocal = threading.local()` caches the current member's `moniker`
+per thread to avoid repeated database queries during a request. Cached in
+`getcurrentmoniker()`; cleared by `clear_current_moniker_cache()`.
 
 ### Pool-first pattern
 
@@ -47,11 +46,12 @@ an open transaction (pass `conn`) or run a one-shot operation (pass
 
 ### Allowed columns
 
-`ALLOWED_MEMBER_COLUMNS` is the 18-column frozenset used by field
-validation in the read helpers:
+`ALLOWED_MEMBER_COLUMNS` is the frozenset of columns that field validation
+in the read helpers accepts. Members are keyed by `moniker`; there is no `id`
+column.
 
 ```
-id, loginid, moniker, name, email, password, credits, attrs, flags, ui,
+loginid, moniker, name, email, password, credits, attrs, flags, ui,
 refcode, datecreated, createdbyid, dateupdated, updatedbyid,
 approvedbyid, dateapproved, lastlogin, lastloginfrom
 ```
@@ -61,21 +61,37 @@ approvedbyid, dateapproved, lastlogin, lastloginfrom
 ### Identity
 
 ```python
-getcurrentid(args, **kwargs) -> int | None
 getcurrentmoniker(args, **kwargs) -> str | None
 getcurrent(args, fields="*", **kwargs) -> dict | None
-getbyid(args, memberid: int, fields: str = "*", **kwargs) -> dict | None
 getbymoniker(args, moniker: str | None = None, fields: str = "*", **kwargs) -> dict | None
+getbalance(args, moniker: str | None = None, **kwargs) -> int | None
 count(args, **kwargs) -> int | None
-clear_current_id_cache() -> None
 clear_current_moniker_cache() -> None
 ```
 
-`getcurrentid` and `getcurrentmoniker` consult the thread-local cache
-before hitting the database. `getbyid` validates the supplied `fields`
-list against `ALLOWED_MEMBER_COLUMNS`. `getbymoniker` applies the
-timezone conversion to `lastlogin` and falls back to the current
-member's moniker when none is supplied.
+**Removed:** `getcurrentid` and `getbyid` raise `RuntimeError`. Members are
+keyed by moniker. Use `getcurrentmoniker()` and `getbymoniker()` instead.
+
+`getcurrentmoniker` consults the thread-local cache before hitting the
+database. `getcurrent` looks the current member up by moniker. `getbymoniker`
+validates the supplied `fields` against `ALLOWED_MEMBER_COLUMNS`, applies the
+timezone conversion to `lastlogin`, and falls back to the current member's
+moniker when none is supplied. `checkflag` defaults to the current moniker
+when none is given.
+
+### Balance
+
+`getbalance(args, moniker=None)` returns a member's balance in this order:
+
+1. **Bed's bank.** A short-lived bed socket sends `bank_balance`. If bed's
+   reply carries `account: true`, its `balance` is returned.
+2. **Local bank account.** If bed is down, or bed reports no account, the
+   local `bank.__account` row is read. A row returns its balance, including `0`.
+3. **Credits.** If there is no bank account at all, the member's `credits`
+   field is returned.
+
+A real zero balance is `0`. A missing bank account is not zero, so it falls
+through to credits. `None` means there is no member to report.
 
 ### Flags
 
@@ -301,7 +317,7 @@ code lives in `bed/` and is outside this repo.
 
 - All database operations are wrapped in `try/except` blocks.
 - Failures are logged via `io.echo_traceback()` with a location tag
-  such as `bbsengine6.member.getcurrentid.180`.
+  such as `bbsengine6.member.getcurrentmoniker.180`.
 - Pool/connection validation returns `None` or logs an error if
   missing.
 - Most functions return `None` on error, `False` for authentication
