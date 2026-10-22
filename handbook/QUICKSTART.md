@@ -72,6 +72,30 @@ dedicated `zoid6` role is created by `backend.checkzoid6role` and the
 five `SECURITY DEFINER` helpers are reassigned to it by
 `backend.checkzoid6owner` — both idempotent.
 
+### Test accounts (optional)
+
+`scripts/make_test_accounts.py` creates login accounts (`alice`, `bob`,
+`charles`, ... then `tester<k>`) for manual testing. It only writes to
+databases whose name starts with `zoid6test`, unless `--allow-database`
+is given, so it cannot seed the live database by accident.
+
+```bash
+python scripts/make_test_accounts.py --database zoid6test -n 3
+python scripts/make_test_accounts.py --database zoid6test -n 3 --password shared-pw
+python scripts/make_test_accounts.py --database zoid6test -n 3 --with-bank --bank-balance 100
+```
+
+- By default each account gets a random password. Passwords are written
+  only to `~/.config/zoid6/test-accounts.md` (directory `0700`, file
+  `0600`), never to stdout or the log.
+- `--password PW` sets every account the run creates to `PW`. The value
+  can appear in shell history, so prefer a random password for anything
+  shared.
+- Existing accounts keep their password on a rerun. `--reset-passwords`
+  gives them a new one (the shared one, when `--password` is also given).
+- `--with-bank` opens a bank account for each test member. Existing bank
+  balances are never overwritten.
+
 ## 5. Run the BBS door
 
 The `bed` console script is the TUI client:
