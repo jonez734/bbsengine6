@@ -127,7 +127,7 @@ def make_member(args, moniker: str, password: str, *, pool) -> None:
         raise RuntimeError(f"setpassword failed for {moniker}")
 
 
-def make_bank_account(args, moniker: str, *, pool, balance: int = 100000) -> None:
+def make_bank_account(args, moniker: str, *, pool, balance: int = 0) -> None:
     """Open the bank account for ``moniker`` if it does not exist."""
     with database.connect(args, pool=pool) as conn, database.cursor(conn) as cur:
         cur.execute(
@@ -174,6 +174,12 @@ def main(argv=None) -> int:
         action="store_true",
         help="also open a bank account for each test member (default: skip bank)",
     )
+    parser.add_argument(
+        "--bank-balance",
+        type=int,
+        default=0,
+        help="starting balance for bank rows this run creates (default 0; an existing row keeps its balance)",
+    )
     opts = parser.parse_args(argv)
 
     if not opts.database.startswith(SAFE_PREFIX) and not opts.allow_database:
@@ -200,11 +206,14 @@ def main(argv=None) -> int:
                 exists = member_exists(args, moniker, pool=pool)
                 if exists and not opts.reset_passwords:
                     io.echo(f"kept {moniker} (exists; password unchanged)", level="ok")
+                    # The password is kept, but the bank row is still opened if asked for.
+                    if opts.with_bank:
+                        make_bank_account(args, moniker, pool=pool, balance=opts.bank_balance)
                     continue
                 password = generate_password()
                 make_member(args, moniker, password, pool=pool)
                 if opts.with_bank:
-                    make_bank_account(args, moniker, pool=pool)
+                    make_bank_account(args, moniker, pool=pool, balance=opts.bank_balance)
                 if verify(args, moniker, password, pool=pool, with_bank=opts.with_bank):
                     creds[moniker] = password
                     io.echo(f"ok {moniker}", level="ok")
