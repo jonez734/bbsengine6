@@ -70,3 +70,23 @@ def test_reason_no_token_when_no_token_is_available():
     assert info["reason"] == "no_token"
     assert info["source"] == "bank"
     assert any("reason: no_token" in str(c.args[0]) for c in echo.call_args_list if c.args)
+
+
+@pytest.mark.unit
+def test_reason_echo_names_the_bed_when_bed_answers():
+    info, text = _reason(bed_result={"balance": 5, "account": True, "bed_name": "zoid6"})
+    assert "reason: ok bed=zoid6" in text
+
+
+@pytest.mark.unit
+def test_reason_echo_without_a_bed_name_has_no_bed_field():
+    _, text = _reason(bed_result={"balance": 5, "account": True})
+    assert "reason: ok" in text
+    assert "bed=" not in text
+
+
+@pytest.mark.unit
+def test_reason_echo_when_bed_is_down_names_no_bed():
+    _, text = _reason(bed_exc=ConnectionError("refused"), local={"balance": 7})
+    assert "reason: bed_down: ConnectionError" in text
+    assert "bed=" not in text

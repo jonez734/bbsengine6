@@ -1962,9 +1962,16 @@ def _db_account(args, moniker: str, **kwargs) -> dict | None:
     return BankService(args).account.get(moniker)
 
 
-def _balance_reason_echo(reason: str, moniker: str) -> None:
-    """Debug-level line that says why bed's balance was or was not used."""
-    io.echo(f"bbsengine6.member.getbalance.reason: moniker={moniker} reason: {reason}", level="debug")
+def _balance_reason_echo(reason: str, moniker: str, bed_name: str = "") -> None:
+    """Debug-level line that says why bed's balance was or was not used.
+
+    ``bed_name`` is appended as ``bed=<name>`` when bed answered (only then).
+    """
+    bed_part = f" bed={bed_name}" if bed_name else ""
+    io.echo(
+        f"bbsengine6.member.getbalance.reason: moniker={moniker} reason: {reason}{bed_part}",
+        level="debug",
+    )
 
 
 def getbalance_info(args, moniker: str | None = None, **kwargs) -> dict | None:
@@ -1991,7 +1998,7 @@ def getbalance_info(args, moniker: str | None = None, **kwargs) -> dict | None:
         else:
             if reply.get("account"):
                 name = (reply.get("bed_name") or "").strip()
-                _balance_reason_echo("ok", moniker)
+                _balance_reason_echo("ok", moniker, bed_name=name)
                 return {
                     "balance": int(reply["balance"]),
                     "source": f"{name} bank" if name else "bed bank",
