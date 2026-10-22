@@ -35,6 +35,11 @@ alter sequence postoffice.member_mailbox_password_id_seq owner to zoid6;
 alter sequence postoffice.message_routing_id_seq owner to zoid6;
 alter sequence postoffice.shared_mailbox_id_seq owner to zoid6;
 
+-- member flag tables (engine schema). checkmemberflag runs inside bed's
+-- zoid6-owned SECURITY DEFINER wrapper, so zoid6 must own the tables it reads.
+alter table engine.member_flag owner to zoid6;
+alter table engine.map_member_flag owner to zoid6;
+
 -- trigger function created by sql/message.sql (engine schema, zoid6-owned schema)
 alter function engine.__message_recipient_notify() owner to zoid6;
 
