@@ -1972,7 +1972,8 @@ def getbalance_info(args, moniker: str | None = None, **kwargs) -> dict | None:
     try:
         reply = _bed_balance(args, moniker)
         if reply.get("account"):
-            return {"balance": int(reply["balance"]), "source": "bed"}
+            name = (reply.get("bed_name") or "").strip()
+            return {"balance": int(reply["balance"]), "source": f"{name} bank" if name else "bed bank"}
     except Exception:
         io.echo("bbsengine6.member.getbalance.100: bed unavailable; using local account", level="debug")
 

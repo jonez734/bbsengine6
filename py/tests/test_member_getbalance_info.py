@@ -16,7 +16,7 @@ ARGS = MagicMock(debug=False)
 @pytest.mark.unit
 def test_info_reports_bed_source():
     with patch.object(member_lib, "_bed_balance", return_value={"balance": 250, "account": True}):
-        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 250, "source": "bed"}
+        assert member_lib.getbalance_info(ARGS, "alice") == {"balance": 250, "source": "bed bank"}
 
 
 @pytest.mark.unit
