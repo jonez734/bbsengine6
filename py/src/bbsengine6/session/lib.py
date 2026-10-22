@@ -81,6 +81,32 @@ def setcurrentsessionid(sessionid: str | int | bool | None) -> None:
     _threadlocal.currentsessionid = sessionid
 
 
+# Idle window: how long a session stays valid after its last activity.
+# Set by the host application through configure(); the default is 15 minutes.
+_DEFAULT_IDLE_MINUTES = 15
+_idle_minutes = _DEFAULT_IDLE_MINUTES
+
+
+def configure(*, idle_minutes: int | None = None) -> None:
+    """Set the session idle window from the host application's config.
+
+    ``None`` restores the default (15 minutes). Values must be integers >= 1.
+    The creation window in buildsession is separate and is not changed here.
+    """
+    global _idle_minutes
+    if idle_minutes is None:
+        _idle_minutes = _DEFAULT_IDLE_MINUTES
+        return
+    if not isinstance(idle_minutes, int) or isinstance(idle_minutes, bool) or idle_minutes < 1:
+        raise ValueError("session idle_minutes must be an integer >= 1")
+    _idle_minutes = idle_minutes
+
+
+def get_idle_minutes() -> int:
+    """The current session idle window in minutes."""
+    return _idle_minutes
+
+
 def is_valid(session: dict | None) -> bool:
     if session is None:
         return False
@@ -268,7 +294,7 @@ def updatelastactivity(args: Namespace, sessionid: str, **kwargs: Any) -> bool:
         io.echo(f"bbsengine.session.updatelastactivity.120: {session=}", level="debug")
 
         session["lastactivity"] = "now()"
-        session["expiry"] = datetime.now(timezone.utc) + timedelta(minutes=15)
+        session["expiry"] = datetime.now(timezone.utc) + timedelta(minutes=_idle_minutes)
         session["useragent"] = os.environ.get("TERM", "NEEDINFO")
         write(args, session, sessionid, conn=conn)
         conn.commit()
