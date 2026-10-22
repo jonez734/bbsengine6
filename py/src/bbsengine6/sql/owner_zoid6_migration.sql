@@ -71,4 +71,40 @@ alter table engine.map_member_flag owner to zoid6;
 -- trigger function created by sql/message.sql (engine schema, zoid6-owned schema)
 alter function engine.__message_recipient_notify() owner to zoid6;
 
+-- catch-all: move every engine and bank table, view, sequence, and function that
+-- zoid6 does not own. The explicit lines above name the known objects; this block
+-- covers objects the repo does not list (found in the live catalog, 2026-10-22).
+do $owner$
+declare
+    r record;
+begin
+    for r in
+        select n.nspname as schema, c.relname as name, c.relkind as kind
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname in ('engine', 'bank')
+          and c.relkind in ('r', 'v', 'S', 'm')
+          and pg_get_userbyid(c.relowner) <> 'zoid6'
+    loop
+        if r.kind = 'S' then
+            execute format('alter sequence %I.%I owner to zoid6', r.schema, r.name);
+        elsif r.kind = 'v' then
+            execute format('alter view %I.%I owner to zoid6', r.schema, r.name);
+        else
+            execute format('alter table %I.%I owner to zoid6', r.schema, r.name);
+        end if;
+    end loop;
+
+    for r in
+        select n.nspname as schema, p.proname as name, pg_get_function_identity_arguments(p.oid) as args
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname in ('engine', 'bank')
+          and pg_get_userbyid(p.proowner) <> 'zoid6'
+    loop
+        execute format('alter function %I.%I(%s) owner to zoid6', r.schema, r.name, r.args);
+    end loop;
+end
+$owner$;
+
 commit;
