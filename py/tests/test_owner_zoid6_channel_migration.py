@@ -16,7 +16,7 @@ SQL = Path(bbsengine6.__file__).parent / "sql" / "owner_zoid6_migration.sql"
 
 TABLES = ["__channel", "__channel_announcer", "subscribe_blurb", "subscribe_sig"]
 VIEWS = ["channel"]
-SEQUENCES = ["__channel_id_seq", "__channel_announcer_id_seq", "subscribe_blurb_id_seq", "subscribe_sig_id_seq"]
+SEQUENCES = ["__channel_id_seq", "__channel_announcer_id_seq"]  # subscribe_* have no serial column
 
 
 def _code(text: str) -> str:

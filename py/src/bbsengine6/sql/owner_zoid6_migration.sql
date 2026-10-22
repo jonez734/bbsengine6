@@ -57,8 +57,6 @@ alter table engine.subscribe_sig owner to zoid6;
 alter view engine.channel owner to zoid6;
 alter sequence engine.__channel_id_seq owner to zoid6;
 alter sequence engine.__channel_announcer_id_seq owner to zoid6;
-alter sequence engine.subscribe_blurb_id_seq owner to zoid6;
-alter sequence engine.subscribe_sig_id_seq owner to zoid6;
 
 -- member table and its view. engine.member is a plain view over
 -- engine.__member, so the view and the table it reads must share an owner.
