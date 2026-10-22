@@ -52,8 +52,6 @@ alter sequence bank.__transfer_id_seq owner to zoid6;
 -- its owner, so the owner must hold engine access.
 alter table engine.__channel owner to zoid6;
 alter table engine.__channel_announcer owner to zoid6;
-alter table engine.subscribe_blurb owner to zoid6;
-alter table engine.subscribe_sig owner to zoid6;
 alter view engine.channel owner to zoid6;
 alter sequence engine.__channel_id_seq owner to zoid6;
 alter sequence engine.__channel_announcer_id_seq owner to zoid6;
