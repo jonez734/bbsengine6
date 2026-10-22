@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### feat(scripts): `make_test_accounts --password` sets every account to one password
+
+`scripts/make_test_accounts.py --password PW` sets each account the run
+creates to `PW` instead of a random password. With `--reset-passwords`,
+existing accounts get it too. An empty value is rejected. The password is
+written only to the credentials file, never printed. Without the option,
+behaviour is unchanged.
+
 ### refactor(make): `stage` / `prod` deploy shape
 
 `stage` builds the engine library, skin, php, and smarty trees locally.
