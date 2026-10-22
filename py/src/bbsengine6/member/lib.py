@@ -1269,7 +1269,7 @@ def checkpassword(
             io.echo("You do not exist! Go away!", level="error")
             return None
 
-    if args is not None and args.debug is True:
+    if getattr(args, "debug", False) is True:
         io.echo(f"checkpassword: {membermoniker=} (password value not logged)", level="debug")
 
     def _work(cur):
