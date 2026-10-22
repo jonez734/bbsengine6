@@ -139,7 +139,7 @@ def visual(args, text: str = "", suffix: str = "noteupdate"):
 
     diary = {}
     diary["lastmodified"] = "now()"
-    diary["lastmodifiedbymoniker"] = member.getcurrentid(args)
+    diary["lastmodifiedbymoniker"] = member.getcurrentmoniker(args)
     diary["notes"] = notes
 
     io.echo(f"{diary=}", level="debug")

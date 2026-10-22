@@ -15,7 +15,7 @@ def init(args, **kw: dict) -> bool:
 
 def access(args, op: str, **kw: dict) -> bool:
     """Only SYSOPs may approve members."""
-    return member.checkflag(args, "SYSOP", member.getcurrentid(args))
+    return member.checkflag(args, "SYSOP")
 
 
 def buildargs(args, **kw: dict):

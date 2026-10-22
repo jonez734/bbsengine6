@@ -51,7 +51,7 @@ def insert(
         # psycopg3 adapts dict to jsonb automatically; pass-through.
         blurb["attributes"] = blurb["attributes"]
     blurb["datecreated"] = "now()"
-    blurb["createdbymoniker"] = member.getcurrentid(args)
+    blurb["createdbymoniker"] = member.getcurrentmoniker(args)
     if args.debug is True:
         io.echo(
             f"bbsengine.blurb.insert.100: blurb={blurb!r} table={table!r}",
@@ -156,7 +156,7 @@ def updateattributes(
 
 def update(args, id: int, blurb: dict, reset=False, mogrify=False):
     blurb["dateupdated"] = "now()"
-    blurb["updatedbymoniker"] = member.getcurrentid(args)
+    blurb["updatedbymoniker"] = member.getcurrentmoniker(args)
     attr = blurb["attributes"] if "attributes" in blurb else {}
     if len(attr) > 0:
         updateattributes(args, id, attr, reset=reset, mogrify=mogrify)

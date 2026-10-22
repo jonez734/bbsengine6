@@ -522,7 +522,7 @@ def set(
     pool = kwargs.get("pool", None)
     if memberid is None:
         memberid = (
-            member.getcurrentid(args, pool=pool) if pool else member.getcurrentid(args)
+            member.getcurrentmoniker(args, pool=pool) if pool else member.getcurrentmoniker(args)
         )
         if memberid is None:
             io.echo(
