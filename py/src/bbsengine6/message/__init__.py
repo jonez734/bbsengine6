@@ -161,6 +161,8 @@ def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
       "subscribe"    -- bind a websocket to a moniker for NOTIFY fanout
       "unsubscribe"  -- drop the websocket binding
       "list_pending" -- read the pending message queue for a moniker
+      "send"         -- send a message; the sender must be the session member
+                        (a sysop may send as anyone)
 
     Required kwargs (both optional, both default to "deny"):
       session : bed.api.session.SessionState (or any object with
@@ -196,5 +198,13 @@ def access(args: argparse.Namespace, op: str, /, **kwargs: Any) -> bool:
         if getattr(session, "is_sysop", False):
             return True
         return _moniker_eq(getattr(session, "moniker", None), target)
+
+    if op == "send":
+        sender = (message.get("sender") or "").strip()
+        if not sender:
+            return False
+        if getattr(session, "is_sysop", False):
+            return True
+        return _moniker_eq(getattr(session, "moniker", None), sender)
 
     return False
