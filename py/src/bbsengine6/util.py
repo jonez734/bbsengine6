@@ -1008,6 +1008,11 @@ def timedeltastr(delta: Any) -> str:
     return buf
 
 
+# Password-hashing debug output is off by default. These functions take no
+# args, so they cannot read args.debug; flip this only while debugging.
+_PASSWORD_DEBUG = False
+
+
 def encryptpassword(plaintextpassword: str) -> str:
     """Return a bcrypt hash of ``plaintextpassword`` computed locally.
 
@@ -1029,7 +1034,8 @@ def encryptpassword(plaintextpassword: str) -> str:
     """
     from . import password
 
-    io.echo("bbsengine6.util.encryptpassword.100: hashing password (value not logged)", level="debug")
+    if _PASSWORD_DEBUG:
+        io.echo("bbsengine6.util.encryptpassword.100: hashing password (value not logged)", level="debug")
     return password.hash_password(plaintextpassword)
 
 
@@ -1053,7 +1059,8 @@ def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
     Example:
         >>> encrypted = getencryptedpassword(args, "mypassword")
     """
-    io.echo("getencryptedpassword.100: hashing password (value not logged)", level="debug")
+    if _PASSWORD_DEBUG:
+        io.echo("getencryptedpassword.100: hashing password (value not logged)", level="debug")
     return encryptpassword(plaintextpassword)
 
 

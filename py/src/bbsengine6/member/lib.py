@@ -1269,7 +1269,8 @@ def checkpassword(
             io.echo("You do not exist! Go away!", level="error")
             return None
 
-    io.echo(f"checkpassword: {membermoniker=} (password value not logged)", level="debug")
+    if args is not None and args.debug is True:
+        io.echo(f"checkpassword: {membermoniker=} (password value not logged)", level="debug")
 
     def _work(cur):
         qualified_member = _qualified("member", args)
