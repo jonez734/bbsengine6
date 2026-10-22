@@ -97,3 +97,28 @@ def test_bed_balance_closes_its_socket_on_the_request_loop():
          patch("bed.client.bank.BedBankClient._request", fake_request):
         member_lib._bed_balance(ARGS, "alice")
     assert seen["close_loop"] is seen["request_loop"]
+
+
+@pytest.mark.unit
+def test_bed_balance_sends_the_session_token_in_the_message():
+    import asyncio
+    seen = {}
+
+    class FakeWs:
+        async def close(self):
+            pass
+
+    class FakeConn:
+        _ws = FakeWs()
+
+    async def fake_send(self, msg):
+        seen["msg"] = msg
+        return {"type": "bank_balance", "balance": 1, "account": True}
+
+    args = MagicMock(debug=False, token=None, token_file="/tmp/bed-test.token")
+    with patch("bed.client.get_bed_connection", return_value=FakeConn()), \
+         patch("bed.client.connection.BedConnection.send", fake_send), \
+         patch("bed.tools._token.read_token_file", return_value="tok-123"):
+        member_lib._bed_balance(args, "alice")
+    assert seen["msg"]["token"] == "tok-123"
+    assert seen["msg"]["type"] == "bank_balance"

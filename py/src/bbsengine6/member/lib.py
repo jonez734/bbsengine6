@@ -1930,10 +1930,14 @@ def _bed_balance(args, moniker: str) -> dict:
     from bed.client import get_bed_connection
     from bed.client.bank import BedBankClient
 
+    from bed.tools import _token
+
+    token = _token.resolve_token(args) or ""
+
     async def _run() -> dict:
         conn = get_bed_connection(args)
         try:
-            return await BedBankClient(conn).get_balance_result(moniker)
+            return await BedBankClient(conn).get_balance_result(moniker, token=token)
         finally:
             ws = getattr(conn, "_ws", None)
             conn._ws = None

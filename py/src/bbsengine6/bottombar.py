@@ -85,6 +85,13 @@ def _get_notification_status(args: Any = None, pool: Any = None, **kwargs) -> st
         if not message_module.is_enabled():
             return ""
 
+        # Use the args and pool this session's bottom bar was set up with, so the
+        # unread count reads the session's database, not the NEEDINFO sentinel.
+        if args is None or pool is None:
+            reg = _resolve_registry()
+            args = args if args is not None else getattr(reg, "args", None)
+            pool = pool if pool is not None else getattr(reg, "pool", None)
+
         # Last DB-derived count seen in this process; -1 sentinel = never read.
         cached = message_module.get_local_unread_count(moniker)
         if cached < 0:
