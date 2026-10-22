@@ -47,6 +47,19 @@ alter sequence bank.__account_id_seq owner to zoid6;
 alter sequence bank.__transaction_id_seq owner to zoid6;
 alter sequence bank.__transfer_id_seq owner to zoid6;
 
+-- channel and subscribe objects (engine schema). engine.__member references
+-- __channel (createdby); deleting a member runs an internal update on __channel as
+-- its owner, so the owner must hold engine access.
+alter table engine.__channel owner to zoid6;
+alter table engine.__channel_announcer owner to zoid6;
+alter table engine.subscribe_blurb owner to zoid6;
+alter table engine.subscribe_sig owner to zoid6;
+alter view engine.channel owner to zoid6;
+alter sequence engine.__channel_id_seq owner to zoid6;
+alter sequence engine.__channel_announcer_id_seq owner to zoid6;
+alter sequence engine.subscribe_blurb_id_seq owner to zoid6;
+alter sequence engine.subscribe_sig_id_seq owner to zoid6;
+
 -- member table and its view. engine.member is a plain view over
 -- engine.__member, so the view and the table it reads must share an owner.
 alter table engine.__member owner to zoid6;
