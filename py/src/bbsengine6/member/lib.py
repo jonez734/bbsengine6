@@ -1269,7 +1269,7 @@ def checkpassword(
             io.echo("You do not exist! Go away!", level="error")
             return None
 
-    io.echo(f"{plaintextpassword=} {membermoniker=}", level="debug")
+    io.echo(f"checkpassword: {membermoniker=} (password value not logged)", level="debug")
 
     def _work(cur):
         qualified_member = _qualified("member", args)

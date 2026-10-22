@@ -1029,7 +1029,7 @@ def encryptpassword(plaintextpassword: str) -> str:
     """
     from . import password
 
-    io.echo(f"bbsengine6.util.encryptpassword.100: {plaintextpassword=}", level="debug")
+    io.echo("bbsengine6.util.encryptpassword.100: hashing password (value not logged)", level="debug")
     return password.hash_password(plaintextpassword)
 
 
@@ -1053,7 +1053,7 @@ def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
     Example:
         >>> encrypted = getencryptedpassword(args, "mypassword")
     """
-    io.echo(f"getencryptedpassword.100: {plaintextpassword=}", level="debug")
+    io.echo("getencryptedpassword.100: hashing password (value not logged)", level="debug")
     return encryptpassword(plaintextpassword)
 
 
