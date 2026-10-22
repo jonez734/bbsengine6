@@ -35,6 +35,11 @@ alter sequence postoffice.member_mailbox_password_id_seq owner to zoid6;
 alter sequence postoffice.message_routing_id_seq owner to zoid6;
 alter sequence postoffice.shared_mailbox_id_seq owner to zoid6;
 
+-- member table and its view. engine.member is a plain view over
+-- engine.__member, so the view and the table it reads must share an owner.
+alter table engine.__member owner to zoid6;
+alter view engine.member owner to zoid6;
+
 -- member flag tables (engine schema). checkmemberflag runs inside bed's
 -- zoid6-owned SECURITY DEFINER wrapper, so zoid6 must own the tables it reads.
 alter table engine.member_flag owner to zoid6;

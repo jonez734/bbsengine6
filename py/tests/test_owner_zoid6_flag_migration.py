@@ -27,3 +27,9 @@ def test_map_member_flag_table_moves_to_zoid6():
 
 def test_flag_objects_not_moved_to_bed():
     assert not re.search(r"owner\s+to\s+bed\b", _code(SQL.read_text()), re.IGNORECASE)
+
+
+def test_member_table_and_view_move_to_zoid6():
+    text = SQL.read_text()
+    assert re.search(r"alter\s+table\s+engine\.__member\s+owner\s+to\s+zoid6", text, re.IGNORECASE)
+    assert re.search(r"alter\s+view\s+engine\.member\s+owner\s+to\s+zoid6", text, re.IGNORECASE)
