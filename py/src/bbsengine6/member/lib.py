@@ -389,48 +389,14 @@ def notifycount(args, **kwargs) -> int | None:
 
 
 def getcurrentid(args, **kwargs):
-    cached = getattr(_threadlocal, "id", None)
-    if cached is not None:
-        return cached
+    """Removed. The member table has no id column; members are keyed by moniker.
 
-    def _work(cur):
-        loginid = util.getcurrentloginid(args)
-        if loginid is None:
-            return None
-        try:
-            cur.execute(
-                database.query(
-                    "select moniker from $engine.member where loginid=$1",
-                    loginid,
-                )
-            )
-            if cur.rowcount == 0:
-                return None
-            rec = cur.fetchone()
-            moniker = rec["moniker"]
-            _threadlocal.id = moniker
-            if args is not None and getattr(args, "debug", False) is True:
-                io.echo(f"getcurrentid.120: {moniker=}", level="debug")
-            return moniker
-        except psycopg.DatabaseError:
-            io.echo_traceback(f"bbsengine6.member.getcurrentid.180:")
-            return None
-
-    if args is not None and getattr(args, "debug", False) is True:
-        io.echo(f"bbsengine6.member.getcurrentid.120: cached={cached}", level="debug")
-
-    conn = kwargs.get("conn", None)
-    if conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            return None
-        with database.connect(args, pool=pool) as conn:
-            with database.cursor(conn) as cur:
-                return _work(cur)
-    else:
-        with database.cursor(conn) as cur:
-            return _work(cur)
-
+    Use getcurrentmoniker(args) instead.
+    """
+    raise RuntimeError(
+        "member.getcurrentid() is removed: members are keyed by moniker. "
+        "Use member.getcurrentmoniker() instead."
+    )
 
 def clear_current_id_cache() -> None:
     """Clear the thread-local member ID cache.
@@ -640,12 +606,12 @@ def update(args, member, moniker: str | None = None, **kwargs):
 
 
 def getcurrent(args, fields="*", **kwargs) -> dict | None:
-    currentid = getcurrentid(args, **kwargs)
-    io.echo(f"bbsengine.member.getcurrent.100: {currentid=}", level="debug")
-    if currentid is None:
+    """The current member's record, looked up by moniker."""
+    moniker = getcurrentmoniker(args, **kwargs)
+    io.echo(f"bbsengine.member.getcurrent.100: {moniker=}", level="debug")
+    if moniker is None:
         return None
-    return getbyid(args, currentid, fields, **kwargs)
-
+    return getbymoniker(args, moniker, fields, **kwargs)
 
 def getbymoniker(
     args, moniker: str | None = None, fields: str = "*", **kwargs
@@ -683,34 +649,12 @@ def getbymoniker(
         return None
 
 
-def getbyid(args, memberid: int, fields: str = "*", **kwargs) -> dict | None:
-    def _work(cur):
-        validated_fields = _validate_fields(fields)
-        cur.execute(
-            database.query(
-                f"select {validated_fields} from $engine.member where id=$1",
-                memberid,
-            )
-        )
-        if cur.rowcount == 0:
-            io.echo("bbsengine6.member.getbyid: no rows returned")
-            return None
-        res = cur.fetchone()
-        return build(args, res, **kwargs)
-
-    cur = kwargs.get("cur", None)
-    try:
-        if cur is None:
-            pool = kwargs.get("pool", None)
-            with database.connect(args, pool=pool) as conn:
-                with database.cursor(conn) as cur:
-                    return _work(cur)
-        else:
-            return _work(cur)
-    except Exception:
-        io.echo_traceback("bbsengine6.member.getbyid.100:")
-        return None
-
+def getbyid(args, memberid, fields: str = "*", **kwargs):
+    """Removed. The member table has no id column; use getbymoniker(args, moniker)."""
+    raise RuntimeError(
+        "member.getbyid() is removed: members are keyed by moniker. "
+        "Use member.getbymoniker() instead."
+    )
 
 def checkflag(
     args, flag: str, moniker: str | None = None, mogrify: bool = False, **kwargs
@@ -1966,3 +1910,73 @@ def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
                 conn_cm.__exit__(None, None, None)
             except Exception:
                 pass
+
+
+# --- bank balance -----------------------------------------------------------
+#
+# getbalance returns a member's balance. Order: bed's bank (short-lived socket),
+# then the local bank account, then member.credits. A real zero balance is 0;
+# a missing bank account is not, and falls back to credits.
+
+
+def _bed_balance(args, moniker: str) -> dict:
+    """Ask bed's bank for ``moniker``. Opens and closes its own socket.
+
+    Returns ``{"balance": int, "account": bool}``. Raises on bed unavailable.
+    The socket is opened and closed inside one coroutine, on one event loop.
+    """
+    import asyncio
+
+    from bed.client import get_bed_connection
+    from bed.client.bank import BedBankClient
+
+    async def _run() -> dict:
+        conn = get_bed_connection(args)
+        try:
+            return await BedBankClient(conn).get_balance_result(moniker)
+        finally:
+            ws = getattr(conn, "_ws", None)
+            conn._ws = None
+            if ws is not None:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+
+    return asyncio.run(_run())
+
+
+def _db_account(args, moniker: str, **kwargs) -> dict | None:
+    """The local bank account row for ``moniker``, or None if there is none."""
+    from bbsengine6.bank import BankService
+
+    return BankService(args).account.get(moniker)
+
+
+def getbalance(args, moniker: str | None = None, **kwargs) -> int | None:
+    """The member's balance: bed's bank first, then the local account, then credits.
+
+    ``moniker`` defaults to the current member. Returns None when there is no
+    member to report.
+    """
+    if moniker is None:
+        moniker = getcurrentmoniker(args, **kwargs)
+        if moniker is None:
+            return None
+
+    try:
+        reply = _bed_balance(args, moniker)
+        if reply.get("account"):
+            return int(reply["balance"])
+    except Exception:
+        io.echo("bbsengine6.member.getbalance.100: bed unavailable; using local account", level="debug")
+
+    # Bed has no account, or bed is down: the local bank account decides next.
+    account = _db_account(args, moniker, **kwargs)
+    if account is not None:
+        return int(account["balance"])
+
+    current = getcurrent(args, fields="credits", **kwargs)
+    if current is None:
+        return None
+    return int(current["credits"])
