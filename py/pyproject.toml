@@ -27,7 +27,6 @@ dependencies = [
     "argcomplete",
     "bcrypt>=4.0",
     "bbsengine6",
-    "getdate-next>=0.0.1.dev202608",
     "markdown",
     "psycopg[binary,pool]",
     "psycopg-pool",
@@ -46,6 +45,9 @@ script-files = [
 ] 
 
 [project.optional-dependencies]
+dates = [
+    "getdate-next>=0.0.1.dev202608",
+]
 dev = [
     "pytest",
     "ruff",
