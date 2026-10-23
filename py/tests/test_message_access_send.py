@@ -41,3 +41,13 @@ def test_send_denied_without_a_sender():
 
 def test_send_denied_when_session_unbound():
     assert message_access(None, "send", session=None, message={"sender": "alice"}) is False
+
+
+def test_send_moniker_match_ignores_case():
+    s = _session("Alice")
+    assert message_access(None, "send", session=s, message={"sender": "alice"}) is True
+
+
+def test_send_denied_for_a_different_moniker_with_the_same_prefix():
+    s = _session("alice")
+    assert message_access(None, "send", session=s, message={"sender": "alice2"}) is False
