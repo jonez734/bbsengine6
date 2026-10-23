@@ -1940,17 +1940,10 @@ def _bed_balance(args, moniker: str) -> dict:
     token = _resolve_bed_token(args)
 
     async def _run() -> dict:
-        conn = get_bed_connection(args)
-        try:
+        # `async with` releases the socket through bed's aclose() on this loop, even when the
+        # request fails. The hand-written close it replaces never stopped the receive task.
+        async with get_bed_connection(args) as conn:
             return await BedBankClient(conn).get_balance_result(moniker, token=token)
-        finally:
-            ws = getattr(conn, "_ws", None)
-            conn._ws = None
-            if ws is not None:
-                try:
-                    await ws.close()
-                except Exception:
-                    pass
 
     return asyncio.run(_run())
 

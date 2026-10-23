@@ -89,6 +89,13 @@ def test_bed_balance_closes_its_socket_on_the_request_loop():
     class FakeConn:
         _ws = FakeWs()
 
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            await FakeWs.close(self._ws)
+            return False
+
     async def fake_request(self, msg):
         seen["request_loop"] = asyncio.get_running_loop()
         return {"balance": 1, "account": True}
@@ -110,6 +117,12 @@ def test_bed_balance_sends_the_session_token_in_the_message():
 
     class FakeConn:
         _ws = FakeWs()
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
 
     async def fake_send(self, msg):
         seen["msg"] = msg
