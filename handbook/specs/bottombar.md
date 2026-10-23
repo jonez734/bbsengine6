@@ -12,6 +12,14 @@ callables; the registry renders them joined with `" | "` and
 prepends the unread-notification status when the message system
 is enabled.
 
+**Known issue.** The unread count shown in the notification status can lag
+behind the database. The count is cached per process and the cache is not
+refreshed while the session is idle, so a message sent after login may not
+appear until the cache is cleared. Tests for the refresh are in
+`py/tests/test_notification_cache_refresh.py` (marked xfail). A fix that
+re-reads the count on every redraw was tried and reverted: it caused suite-wide
+regressions and its cause is not yet identified.
+
 ## Contents
 
 - [Public API](#public-api)
