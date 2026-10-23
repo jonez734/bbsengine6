@@ -118,13 +118,13 @@ check('explicit format %Y', '2026', datestamp($ts, '%Y'));
 check('explicit format %Y-%m-%d', '2026-10-13', datestamp($ts, '%Y-%m-%d'));
 
 // Empty/null format → falls back to DATEFORMAT. The test does NOT
-// define DATEFORMAT; util.php's fallback chain produces
-// "%Y-%m-%d %H:%M".
+// define DATEFORMAT; util.php's fallback chain produces the Python
+// default "%Y-%m-%d %I:%M%P %Z (%a)" (see test_datestamp_default_matches_python.php).
 check('null format falls back to default',
-      '2026-10-13 14:30',
+      '2026-10-13 02:30pm UTC (Tue)',
       datestamp($ts, null));
 check('empty format falls back to default',
-      '2026-10-13 14:30',
+      '2026-10-13 02:30pm UTC (Tue)',
       datestamp($ts, ''));
 
 // Bare DATEFORMAT in the global namespace (define before testing).

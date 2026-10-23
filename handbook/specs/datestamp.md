@@ -86,7 +86,7 @@ datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $format = 
 | Argument | Type | Description |
 |----------|------|-------------|
 | `$t` | `null \| int \| float \| string \| DateTimeInterface` | The value to format. `null` uses the current time. `int`/`float` are Unix epoch seconds. Numeric strings are interpreted as Unix epochs (the `@`-prefix convention used by PHP's `strtotime()` is applied internally). Other strings are parsed via `strtotime()`. `DateTimeInterface` is used as-is. Unparseable strings return `""`. |
-| `$format` | `string \| null` | strftime format string. `null`/empty falls back to `\config\DATEFORMAT` → bare `DATEFORMAT` → `"%Y-%m-%d %H:%M"`. |
+| `$format` | `string \| null` | strftime format string. `null`/empty falls back to `\config\DATEFORMAT` → bare `DATEFORMAT` → `"%Y-%m-%d %I:%M%P %Z (%a)"` (the same default as Python's `datestamp()`). |
 
 ```php
 >>> datestamp()  // Current time
@@ -162,11 +162,12 @@ idiomatic type system differs:
   the `datetime` instance's `utcoffset()` for `%z`/`%:z` and its
   native `strftime()`. The two surfaces agree on the timestamp
   interpretation but differ in the date object's type API.
-- **Default format string**: PHP reads `DATEFORMAT` (the vhost
-  constant) with a fallback chain. Python's `datestamp(t, format)`
-  has a hardcoded default of `"%Y-%m-%d %I:%M%P %Z (%a)"`. To
-  pin a specific default across both surfaces, callers should
-  pass the format string explicitly.
+- **Default format string**: both surfaces default to
+  `"%Y-%m-%d %I:%M%P %Z (%a)"` when no format is given and no
+  `DATEFORMAT` constant is defined. PHP reads `DATEFORMAT` (the vhost
+  constant) first, so a vhost that sets it changes PHP's default.
+  Callers that need a fixed layout on both surfaces should pass the
+  format string explicitly.
 - **Failure modes**: PHP returns `""` on unparseable input or
   wrong type. Python raises `AssertionError` on wrong type and
   returns the original string from `getdate()` on unparseable

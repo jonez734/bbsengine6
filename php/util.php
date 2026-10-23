@@ -1114,7 +1114,7 @@ function env_bool(string $key, bool $default = false): bool
  * @param string|null $format
  *        strftime format string. If null or empty, falls back to
  *        the vhost's \config\DATEFORMAT (or bare DATEFORMAT)
- *        constant, then to "%Y-%m-%d %H:%M". See
+ *        constant, then to "%Y-%m-%d %I:%M%P %Z (%a)" (the Python default). See
  *        bbsengine6/handbook/specs/datestamp.md for the supported
  *        token vocabulary.
  * @return string Formatted datetime string, or "" on bad input.
@@ -1166,7 +1166,8 @@ function datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $
         } elseif (defined('DATEFORMAT')) {
             $format = DATEFORMAT;
         } else {
-            $format = '%Y-%m-%d %H:%M';
+            // Same default as Python's bbsengine6.util.datestamp().
+            $format = '%Y-%m-%d %I:%M%P %Z (%a)';
         }
     }
 
