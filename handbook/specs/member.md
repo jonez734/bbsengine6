@@ -83,11 +83,11 @@ when none is given.
 
 `getbalance(args, moniker=None)` returns a member's balance in this order:
 
-1. **Bed's bank.** A short-lived bed connection sends `bank_balance`. It is
-   opened and released inside one call (`async with`), so the websocket is
-   closed on the same event loop before the lookup returns, including when
-   bed refuses the request. If bed's reply carries `account: true`, its
-   `balance` is returned.
+1. **Bed's bank.** When the caller passes `bed_fetch`, it is called as
+   `bed_fetch(args, moniker)` and returns bed's reply, `{"balance", "account",
+   "bed_name"}`. If the reply carries `account: true`, its `balance` is
+   returned. The fetch may raise; the reason records why. With no `bed_fetch`,
+   bed is not consulted (see below).
 2. **Local bank account.** If bed is down, or bed reports no account, the
    local `bank.__account` row is read. A row returns its balance, including `0`.
 3. **Credits.** If there is no bank account at all, the member's `credits`
@@ -96,11 +96,18 @@ when none is given.
 A real zero balance is `0`. A missing bank account is not zero, so it falls
 through to credits. `None` means there is no member to report.
 
-This lookup is the one place bbsengine6 reaches bed. `member/lib.py` imports
-`bed.client` lazily at call time, and `bed` is not a declared dependency. The
-dependency is an accepted exception recorded in `bed/handbook/KNOWN_GAPS.md`
-(section 6). The bottombar calls this lookup on every redraw, so a caching
-change is deferred there as well (section 7).
+`getbalance_info` reports `reason`: `ok`, `bed_refused: <code>`, `bed_down:
+<exception>`, `no_bank_account`, or `no_bed_source`. The reason is also echoed at
+debug level.
+
+bbsengine6 does not import bed. The bed step belongs to the caller: the shell
+supplies `bed_fetch` (`shell/lib.py::_bed_fetch`) for both its bottombar and
+its welcome line. A caller that passes no `bed_fetch` gets the local bank or
+credits, with `reason` set to `no_bed_source`. The rule is enforced by
+`tests/test_no_bed_import_anywhere.py`, which fails on any `bed` import under
+`bbsengine6/`. The history of this change is in `bed/handbook/KNOWN_GAPS.md`
+(section 6, done). Caching the lookup, which runs on every bottombar redraw, is
+deferred (section 7).
 
 ### Flags
 
