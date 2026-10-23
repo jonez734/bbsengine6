@@ -20,8 +20,7 @@ def _ok(balance, account=True, bed_name="zoid6"):
 @pytest.fixture(autouse=True)
 def _db_and_credits():
     with patch.object(member_lib, "_db_account", return_value=None), \
-         patch.object(member_lib, "getcurrent", return_value={"credits": 75}), \
-         patch.object(member_lib, "_resolve_bed_token", create=True, return_value="tok"):
+         patch.object(member_lib, "getcurrent", return_value={"credits": 75}):
         yield
 
 

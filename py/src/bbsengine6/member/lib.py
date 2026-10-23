@@ -1919,35 +1919,6 @@ def get_group_members(args, group_name: str, **kwargs) -> list[str] | None:
 # a missing bank account is not, and falls back to credits.
 
 
-def _resolve_bed_token(args) -> str:
-    """The bearer token for bed's bank calls: the --token value, else the token file."""
-    from bed.tools import _token
-
-    return _token.resolve_token(args) or ""
-
-
-def _bed_balance(args, moniker: str) -> dict:
-    """Ask bed's bank for ``moniker``. Opens and closes its own socket.
-
-    Returns ``{"balance": int, "account": bool}``. Raises on bed unavailable.
-    The socket is opened and closed inside one coroutine, on one event loop.
-    """
-    import asyncio
-
-    from bed.client import get_bed_connection
-    from bed.client.bank import BedBankClient
-
-    token = _resolve_bed_token(args)
-
-    async def _run() -> dict:
-        # `async with` releases the socket through bed's aclose() on this loop, even when the
-        # request fails. The hand-written close it replaces never stopped the receive task.
-        async with get_bed_connection(args) as conn:
-            return await BedBankClient(conn).get_balance_result(moniker, token=token)
-
-    return asyncio.run(_run())
-
-
 def _db_account(args, moniker: str, **kwargs) -> dict | None:
     """The local bank account row for ``moniker``, or None if there is none."""
     from bbsengine6.bank import BankService
@@ -1967,24 +1938,28 @@ def _balance_reason_echo(reason: str, moniker: str, bed_name: str = "") -> None:
     )
 
 
-def getbalance_info(args, moniker: str | None = None, **kwargs) -> dict | None:
+def getbalance_info(
+    args, moniker: str | None = None, *, bed_fetch=None, **kwargs
+) -> dict | None:
     """The member's balance, where it came from, and why bed was or was not used.
 
     Order: bed's bank ("<bed name> bank", or "bed bank" without a name), then the local bank
     account ("bank"), then the member's credits ("credits"). A NULL credits value counts as 0.
-    ``reason`` is one of: ok, no_token, bed_refused: <code>, bed_down: <exception>,
-    no_bank_account. It is also echoed at debug level. Returns None when there is no member.
+    ``bed_fetch(args, moniker)`` supplies bed's bank reply (``{"balance", "account", "bed_name"}``)
+    and may raise. With no ``bed_fetch`` bed is not consulted. ``reason`` is one of: ok,
+    bed_refused: <code>, bed_down: <exception>, no_bank_account, no_bed_source. It is also echoed
+    at debug level. Returns None when there is no member.
     """
     if moniker is None:
         moniker = getcurrentmoniker(args, **kwargs)
         if moniker is None:
             return None
 
-    if not _resolve_bed_token(args):
-        reason = "no_token"
+    if bed_fetch is None:
+        reason = "no_bed_source"
     else:
         try:
-            reply = _bed_balance(args, moniker)
+            reply = bed_fetch(args, moniker)
         except Exception as exc:
             code = getattr(exc, "code", None)
             reason = f"bed_refused: {code}" if code else f"bed_down: {exc.__class__.__name__}"
