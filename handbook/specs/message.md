@@ -292,24 +292,69 @@ runs the operator CLI. The default program name is `bbsengine6-msg`.
 | Subcommand         | Args                                                       | Mutating? |
 |--------------------|------------------------------------------------------------|-----------|
 | `list-types`       | —                                                          | no        |
-| `pending`          | `moniker [--limit N]`                                      | no        |
+| `pending`          | `moniker [--limit N]` (default 50)                         | no        |
 | `unread`           | `moniker`                                                  | no        |
-| `mark-read`        | `moniker --message-id N --yes`                             | yes       |
-| `mark-delivered`   | `moniker --message-id N --yes`                             | yes       |
-| `expunge`          | `--message-id N --sender MONIKER --yes`                    | yes       |
-| `register-type`    | `type_name [--description ...] [--rate-limit N] [--requires-approval] --yes` | yes |
+| `mark-read`        | `moniker --message-id N [--yes]`                           | yes       |
+| `mark-delivered`   | `moniker --message-id N [--yes]`                           | yes       |
+| `expunge`          | `--message-id N --sender MONIKER [--yes]`                  | yes       |
+| `register-type`    | `type_name [--description TEXT] [--rate-limit N] [--requires-approval] [--yes]` | yes |
 | `resolve`          | `--to TOKEN [--to TOKEN ...]`                              | no        |
-| `send`             | `--to TOKEN [--to TOKEN ...] --type TYPE --body BODY [--sender MONIKER] [--urgency U] [--vars k=v] [--dry-run] --yes` | yes |
+| `send`             | `--to TOKEN [--to TOKEN ...] --type TYPE --body BODY [--sender MONIKER] [--urgency U] [--vars k=v] [--dry-run] [--yes]` | yes |
 
-Mutating subcommands require `--yes`; `send` also accepts
-`--dry-run` to preview the rendered output without writing.
+`--type` is required for `send`; there is no default channel.
+`--urgency` takes `ROUTINE`, `IMPORTANT`, `URGENT`, or `CRITICAL`
+(default `ROUTINE`). `--rate-limit` defaults to `0`, which means
+unlimited.
+
+`--yes` is required before a mutating subcommand writes. Without
+it the command refuses and prints `… pass --yes`. `send --dry-run`
+renders and resolves recipients without calling `send`, and does
+not need `--yes`.
+
 `send --to @everyone` is a privilege gate, not a confirmation:
-the CLI checks `bbsengine6.backend.lib.issysop` against the
-connected DB role and refuses with a clear error if `current_user`
-is not in the `sysop` pg role. `--to` accepts comma-separated
-tokens (`alice,bob`) and may be repeated.
+the CLI calls `issysop` (`bbsengine6.backend.lib`) against the
+connected DB role and refuses unless `current_user` is in the
+`sysop` pg role. `--to` accepts comma-separated tokens
+(`alice,bob`) and may be repeated.
 
 `--database` overrides `$BBSENGINE6_DBNAME` (default `zoid6`).
+
+### Client commands
+
+These call the bed daemon and do not need database access. They
+send with the signed-in member's token, so the sender is never
+taken from the command line.
+
+**Bed CLI** (`message`, installed from the `bed` package):
+
+```
+message send --account alice --to bob --content "hello from alice"
+```
+
+- The subcommand comes first. Common flags (`--account`,
+  `--token-file`, `--moniker`) go after it, as in the example.
+- `send` runs through the daemon by default. `--direct` stores
+  through the local database instead.
+- `--channel` defaults to `cli.message`. `--urgency` defaults to
+  `ROUTINE`. `--to` may be repeated.
+- The body is `--content TEXT`, or `--template` with `--var k=v`.
+
+**Shell** (`message`, inside a `shell` session):
+
+```
+message --to bob --body "hello from alice"
+```
+
+- The shell sends on the `member:direct` channel with urgency
+  `ROUTINE`. `--to` accepts comma-separated monikers, and may be
+  repeated. `--urgency` may be given.
+
+Note that the two clients default to different channels
+(`cli.message` in the bed CLI, `member:direct` in the shell).
+
+Each login has its own token file. `--account NAME` reads
+`bed-NAME.token` beside the default token file; `--token-file`
+overrides it. See bed's handbook for the token file rules.
 
 ## Module API and `access()`
 
@@ -324,16 +369,42 @@ session/message pair. Recognized op values:
 
 | `op`            | Required `message` keys | Returns `True` when                                |
 |-----------------|-------------------------|-----------------------------------------------------|
-| `subscribe`     | `moniker`               | session.is_sysop is True, or session.moniker == target moniker |
+| `subscribe`     | `moniker`               | the target `moniker` is non-empty and session.is_sysop is True, or session.moniker equals the target |
 | `unsubscribe`   | `moniker`               | (same as `subscribe`)                               |
 | `list_pending`  | `moniker`               | (same as `subscribe`)                               |
+| `send`          | `sender`                | the `sender` is non-empty and session.is_sysop is True, or session.moniker equals the sender |
+
+`send` is self-only: a member may send only as themselves, and a
+sysop may send as anyone. The sender is the `sender` field of the
+message; bed takes the actual sender from the session token, so the
+wire field is only checked against the session here.
+
+A `session` of `None` (an unbound websocket) is always denied, and
+so is any op not listed above.
 
 At module-load time (`bbsengine6.module.check` calls with
 `op="run"` and no `session` kwarg), `access` returns `True` for
 everyone; the per-op rules only fire when the caller passes a
 `session` kwarg. The function does NOT perform input validation
-(moniker present, non-empty); that's the caller's job, sitting
-next to the wire-envelope shape checks.
+(moniker or sender present, non-empty); that's the caller's job,
+sitting next to the wire-envelope shape checks.
+
+### bed `message_send` verb
+
+bed exposes sending over its WebSocket as the `message_send` wire
+type, handled by `bed.api.message` (`_handle_send`). The request
+carries `recipients`, `content`, and optionally `channel` (default
+`member:direct`) and `urgency` (default `ROUTINE`; `IMPORTANT`,
+`URGENT`, and `CRITICAL` are the other values). The reply is
+`message_send_result`, with `message_id` on success.
+
+The verb does not take a sender. It passes the SHA-256 digest of
+the session token to `engine.bed_message_send`, which reads the
+sender from the session row. It refuses an empty recipient list
+(`missing_recipients`) and empty content (`missing_content`), and
+returns `not_sent` when no recipient survives expansion or the rate
+limit is reached. Groups (`@group`) and `@everyone` are expanded by
+the SQL function; `@here` is refused.
 
 ## SQL surface
 
