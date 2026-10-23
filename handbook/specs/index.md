@@ -8,7 +8,7 @@
 > handbook root and `handbook/specs/console/` was collapsed into
 > a single [`console.md`](./console.md). The 10
 > `BBSENGINE6_NOTIFYD_*.md` specs are HISTORICAL and were
-> superseded by [`messaging.md`](./messaging.md).
+> superseded by [`message.md`](./message.md).
 >
 > The 2026-10-15 update added ADR 16 (blurb `lastmodified`
 > frontmatter contract) and updated [`blurb.md`](./blurb.md) and
@@ -45,7 +45,7 @@
 
 ## Messaging and net layer
 
-- [messaging.md](./messaging.md) — `bbsengine6.message` Phase 11
+- [message.md](./message.md) — `bbsengine6.message` Phase 11
   layered package (Service / DAL / State / Domain)
 - [net-layer.md](./net-layer.md) — `bbsengine6.net` SMTP-style
   addressing, transport, packets, integration
@@ -78,10 +78,10 @@ consolidation. They are referenced only from the migration
 changelogs:
 
 - `BBSENGINE6_NOTIFYD_*.md` (10 files) — superseded by
-  [`messaging.md`](./messaging.md); the notify subsystem was
+  [`message.md`](./message.md); the notify subsystem was
   deleted 2026-07-22 (Phase 7 of `TODO-message-migration.md`).
 - `notify.md`, `NOTIFY_MESSAGING.md`, `NET_LAYER_SPEC.md` —
-  folded into [`messaging.md`](./messaging.md) /
+  folded into [`message.md`](./message.md) /
   [`net-layer.md`](./net-layer.md).
 - `web.md` (1342 lines) — folded into
   [`architecture.md`](./architecture.md) §3.8 "Web domain".

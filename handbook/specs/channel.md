@@ -795,7 +795,7 @@ the inline block in `member.sql` was removed.
 
 - [`handbook/specs/net-layer.md`](./net-layer.md) — WebSocket
   transport, the underlying `ChannelState` container lives here.
-- [`handbook/specs/messaging.md`](./messaging.md) — orthogonal
+- [`handbook/specs/message.md`](./message.md) — orthogonal
   message subsystem, similar DAL pattern but independent storage.
 - [`handbook/specs/member.md`](./member.md) — `issysop`,
   `verifyMemberFound`, session management, namespacing

@@ -244,7 +244,7 @@ members = member.get_group_members(args, "all", pool=pool)
 # Returns: flattened unique list of every member under those groups
 ```
 
-See `handbook/specs/messaging.md` (the post-Phase 7 messaging
+See `handbook/specs/message.md` (the post-Phase 7 messaging
 spec, replacing the deleted `NOTIFY_MESSAGING.md`) for the
 historical context; the live API surface is what is
 documented here.

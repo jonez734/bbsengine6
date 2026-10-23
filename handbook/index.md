@@ -31,7 +31,7 @@ own:
 - [PG ident auth](specs/pg-ident-auth.md) — per-member `l_<loginid>` / `m_<moniker>` roles
 - [Best practices](specs/bestpractices.md) — `io.echo` f-string rule, JSONB
   boundary
-- [Messaging](specs/messaging.md) — `bbsengine6.message` (Phase 11 layered package)
+- [Messaging](specs/message.md) — `bbsengine6.message` (Phase 11 layered package)
 - [Net layer](specs/net-layer.md) — `bbsengine6.net` (transport, packets, registry)
 - [Console](specs/console.md) — admin CLI
 - [Module](specs/module.md) — `bbsengine6.module` registry / plugin loader
@@ -66,7 +66,7 @@ handbook/
 │   ├── auth-bank.md
 │   ├── pg-ident-auth.md
 │   ├── bestpractices.md
-│   ├── messaging.md
+│   ├── message.md
 │   ├── net-layer.md
 │   ├── console.md
 │   ├── module.md

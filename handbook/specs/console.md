@@ -286,7 +286,7 @@ needed.
 lives at `python -m bbsengine6.message` (subcommands `list-types`,
 `pending`, `unread`, `mark-read`, `mark-delivered`, `expunge`,
 `register-type`, `resolve`, `send`). It is **not** a console
-subcommand — see `handbook/specs/messaging.md` §CLI.
+subcommand — see `handbook/specs/message.md` §CLI.
 
 **Notify subsystem (deleted).** `bbsengine6.console.notify` and the
 `bbsengine6.console.checknotify` / `checknotifyd` shims were part

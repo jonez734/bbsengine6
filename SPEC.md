@@ -317,7 +317,7 @@ for each subsystem:
 | `auth-bank.md`                        | WS auth → bank authorization flow                 |
 | `pg-ident-auth.md`                    | Per-member `l_<loginid>` / `m_<moniker>` roles    |
 | `bestpractices.md`                    | `io.echo` f-string rule + JSONB boundary rule     |
-| `messaging.md`                        | `bbsengine6.message` (Phase 11 layered package)   |
+| `message.md`                        | `bbsengine6.message` (Phase 11 layered package)   |
 | `net-layer.md`                        | `bbsengine6.net` (transport, packets, registry)  |
 | `console.md`                          | Admin CLI                                          |
 | `module.md`                           | `bbsengine6.module` registry / plugin loader     |
@@ -362,7 +362,7 @@ In addition to the Phase 0-5 audit, the recent work includes:
   `member.get_group_members`). The historical changelog
   `CHANGELOG_NOTIFY_MESSAGING.md` was removed from the canonical
   tree on 2026-09-04 alongside the BBSENGINE6_NOTIFYD_*.md specs;
-  see `handbook/specs/messaging.md` for the live message system
+  see `handbook/specs/message.md` for the live message system
   and `handbook/specs/decisions.md` Decision 15 for the migration
   record.
 - The `member.py` → `member/` package refactor (commit `ca3d680`).
@@ -491,7 +491,7 @@ Phase 3 regression tests (created 2026-08-02):
   The three surviving functions are in
   `py/src/bbsengine6/member/lib.py`: `member.moniker_exists`,
   `member.group_exists`, `member.get_group_members`. The canonical
-  replacement is [`handbook/specs/messaging.md`](handbook/specs/messaging.md)
+  replacement is [`handbook/specs/message.md`](handbook/specs/message.md)
   (the Phase 11 layered `bbsengine6.message` package). The
   historical `BBSENGINE6_NOTIFYD_*.md` specs and the
   `CHANGELOG_NOTIFY_MESSAGING.md` changelog are HISTORICAL only
