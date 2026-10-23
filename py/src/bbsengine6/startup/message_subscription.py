@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
 import logging
 import threading
 from typing import Any, Awaitable, Callable, Optional
@@ -98,7 +99,9 @@ def mark_subscribed(moniker: str, active: bool) -> None:
 
 
 _owner_loop: Optional[asyncio.AbstractEventLoop] = None
+_owner_thread: Optional[threading.Thread] = None
 _owner_lock = threading.Lock()
+_atexit_registered = False
 
 
 def owner_loop() -> asyncio.AbstractEventLoop:
@@ -107,19 +110,62 @@ def owner_loop() -> asyncio.AbstractEventLoop:
     A subscriber whose connection receive task must outlive the call that
     created it runs its work on this loop. If the loop that subscribed a
     connection is closed, pushes stop, so the loop stays running for the
-    life of the process.
+    life of the process. At interpreter exit, :func:`shutdown_owner_loop`
+    releases the owned connections so no socket is left open.
     """
-    global _owner_loop
+    global _owner_loop, _owner_thread, _atexit_registered
     with _owner_lock:
         if _owner_loop is None or _owner_loop.is_closed():
             loop = asyncio.new_event_loop()
-            threading.Thread(
+            thread = threading.Thread(
                 target=loop.run_forever,
                 name="bbsengine6-push-owner-loop",
                 daemon=True,
-            ).start()
+            )
+            thread.start()
             _owner_loop = loop
+            _owner_thread = thread
+            if not _atexit_registered:
+                atexit.register(shutdown_owner_loop)
+                _atexit_registered = True
         return _owner_loop
+
+
+def shutdown_owner_loop(timeout: float = 5.0) -> None:
+    """Release the owned connections and stop the owner loop. Safe to call more than once.
+
+    Every task still running on the owner loop is cancelled and awaited, so each connection's
+    close runs to completion. Then the loop is stopped and its thread is joined. A no-op when no
+    owner loop was started.
+    """
+    global _owner_loop, _owner_thread
+    with _owner_lock:
+        loop, thread = _owner_loop, _owner_thread
+        _owner_loop = None
+        _owner_thread = None
+    if loop is None or loop.is_closed():
+        return
+
+    async def _drain() -> None:
+        current = asyncio.current_task()
+        pending = [t for t in asyncio.all_tasks() if t is not current]
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
+    try:
+        if loop.is_running():
+            asyncio.run_coroutine_threadsafe(_drain(), loop).result(timeout=timeout)
+    except Exception:
+        io.echo_traceback("bbsengine6.startup.message_subscription.shutdown_owner_loop:")
+    finally:
+        if loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=timeout)
+        if not loop.is_running() and not loop.is_closed():
+            loop.close()
 
 
 def subscribe_to_bed_sync(args: Any, moniker: str, **kwargs: Any) -> bool:
