@@ -284,6 +284,17 @@ the current wall-clock time:
 | `date`      | `datetime.now().strftime("%Y-%m-%d")` |
 | `time`      | `datetime.now().strftime("%H:%M:%S")` |
 
+**Templates are rendered on the sending client, not by the daemon.**
+The bed CLI renders `--template` with `--var k=v` before it sends
+(`bed/src/bed/tools/message.py`, `_resolve_send_content`). The
+shell's `message` command takes literal `--body` text. Either way
+the daemon receives only rendered `content`, and the verb has no
+`template` or `template_vars` fields. A message sent through bed or
+the shell is stored with its rendered text, and its `template` and
+`template_vars` columns are NULL. Only the operator CLI's `send`
+and the library's `store_message` / `send` store a template name
+and variables.
+
 ## CLI
 
 `python -m bbsengine6.message` (or `python -m bbsengine6.message.cli`)
@@ -338,6 +349,8 @@ message send --account alice --to bob --content "hello from alice"
 - `--channel` defaults to `cli.message`. `--urgency` defaults to
   `ROUTINE`. `--to` may be repeated.
 - The body is `--content TEXT`, or `--template` with `--var k=v`.
+  A `--template` is rendered by this CLI before the send, so the
+  daemon stores the rendered text only.
 
 **Shell** (`message`, inside a `shell` session):
 
@@ -405,6 +418,9 @@ sender from the session row. It refuses an empty recipient list
 returns `not_sent` when no recipient survives expansion or the rate
 limit is reached. Groups (`@group`) and `@everyone` are expanded by
 the SQL function; `@here` is refused.
+
+The verb takes `content` only. It has no template fields; templates
+are rendered by the client first (see [Templates](#templates)).
 
 ## SQL surface
 
