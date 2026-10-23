@@ -11,6 +11,9 @@ import sys
 import threading
 import time
 import unittest
+
+# A key that never arrives must fail the test in seconds, not hang the run.
+GETCH_TEST_TIMEOUT = 5.0
 from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -50,15 +53,23 @@ class TestBellWindow(unittest.TestCase):
 
 class TestIdleWait(unittest.TestCase):
     def setUp(self):
+        # Each idle test starts with a closed bell window, no session moniker, and an empty unread
+        # cache, so state left by an earlier test cannot make the idle check ring or wake.
+        g._bell_window = g.BellWindow(5.0)
+        from bbsengine6.member import _threadlocal
+        _threadlocal.moniker = None
+        cache.clear_local_unread_cache()
         self.master, self.slave = pty.openpty()
         self.stream = os.fdopen(self.slave, "r", buffering=1, encoding="utf-8")
-        self._saved = (common._current_input_stream, g._current_input_stream)
-        common._current_input_stream = self.stream
-        g._current_input_stream = self.stream
+        self._saved = common._current_input_stream
+        common.set_input_stream(self.stream)
         cache.drain_change_wake()
+        # Keys left in the process-wide input queue by an earlier DSR read must not reach this test.
+        with common._input_queue_lock:
+            common._input_queue.clear()
 
     def tearDown(self):
-        common._current_input_stream, g._current_input_stream = self._saved
+        common.set_input_stream(self._saved)
         try:
             self.stream.close()
             os.close(self.master)
@@ -77,9 +88,12 @@ class TestIdleWait(unittest.TestCase):
             time.sleep(0.15)
             os.write(self.master, b"a")
 
-        threading.Thread(target=later, daemon=True).start()
+        _writer = threading.Thread(target=later, daemon=True)
+
+        _writer.start()
         t0 = time.time()
-        self.assertEqual(g.getch_str(timeout=None), "a")
+        self.assertEqual(g.getch_str(timeout=GETCH_TEST_TIMEOUT), "a")
+        _writer.join(timeout=5)
         self.assertLess(time.time() - t0, 3.0)
 
     def test_idle_wait_with_no_change_does_not_ring(self):
@@ -87,8 +101,10 @@ class TestIdleWait(unittest.TestCase):
             def key_later():
                 time.sleep(0.2)
                 os.write(self.master, b"x")
-            threading.Thread(target=key_later, daemon=True).start()
-            self.assertEqual(g.getch_str(timeout=None, moniker=None), "x")
+            _writer = threading.Thread(target=key_later, daemon=True)
+            _writer.start()
+            self.assertEqual(g.getch_str(timeout=GETCH_TEST_TIMEOUT, moniker=None), "x")
+            _writer.join(timeout=5)
         bell.assert_not_called()
 
 
@@ -96,15 +112,17 @@ class TestBellOnWake(unittest.TestCase):
     def setUp(self):
         self.master, self.slave = pty.openpty()
         self.stream = os.fdopen(self.slave, "r", buffering=1, encoding="utf-8")
-        self._saved = (common._current_input_stream, g._current_input_stream)
-        common._current_input_stream = self.stream
-        g._current_input_stream = self.stream
+        self._saved = common._current_input_stream
+        common.set_input_stream(self.stream)
         cache.drain_change_wake()
+        # Keys left in the process-wide input queue by an earlier DSR read must not reach this test.
+        with common._input_queue_lock:
+            common._input_queue.clear()
         cache.set_local_unread_count("bellman", 0)
         _as_member("bellman")
 
     def tearDown(self):
-        common._current_input_stream, g._current_input_stream = self._saved
+        common.set_input_stream(self._saved)
         try:
             self.stream.close()
             os.close(self.master)
@@ -135,8 +153,10 @@ class TestBellOnWake(unittest.TestCase):
                     cache.set_local_unread_count("bellman", i + 1)
                 time.sleep(0.2)
                 os.write(self.master, b"k")
-            threading.Thread(target=writes, daemon=True).start()
-            self.assertEqual(g.getch_str(timeout=None), "k")
+            _writer = threading.Thread(target=writes, daemon=True)
+            _writer.start()
+            self.assertEqual(g.getch_str(timeout=GETCH_TEST_TIMEOUT), "k")
+            _writer.join(timeout=5)
         self.assertEqual(len(rings), 1)
 
     def test_db_fallback_polls_without_push(self):
@@ -145,8 +165,10 @@ class TestBellOnWake(unittest.TestCase):
             def key_later():
                 time.sleep(2.3)
                 os.write(self.master, b"z")
-            threading.Thread(target=key_later, daemon=True).start()
-            self.assertEqual(g.getch_str(timeout=None), "z")
+            _writer = threading.Thread(target=key_later, daemon=True)
+            _writer.start()
+            self.assertEqual(g.getch_str(timeout=GETCH_TEST_TIMEOUT), "z")
+            _writer.join(timeout=5)
         self.assertGreaterEqual(chk.call_count, 1)
 
 
