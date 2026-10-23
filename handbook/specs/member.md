@@ -83,8 +83,11 @@ when none is given.
 
 `getbalance(args, moniker=None)` returns a member's balance in this order:
 
-1. **Bed's bank.** A short-lived bed socket sends `bank_balance`. If bed's
-   reply carries `account: true`, its `balance` is returned.
+1. **Bed's bank.** A short-lived bed connection sends `bank_balance`. It is
+   opened and released inside one call (`async with`), so the websocket is
+   closed on the same event loop before the lookup returns, including when
+   bed refuses the request. If bed's reply carries `account: true`, its
+   `balance` is returned.
 2. **Local bank account.** If bed is down, or bed reports no account, the
    local `bank.__account` row is read. A row returns its balance, including `0`.
 3. **Credits.** If there is no bank account at all, the member's `credits`
@@ -92,6 +95,12 @@ when none is given.
 
 A real zero balance is `0`. A missing bank account is not zero, so it falls
 through to credits. `None` means there is no member to report.
+
+This lookup is the one place bbsengine6 reaches bed. `member/lib.py` imports
+`bed.client` lazily at call time, and `bed` is not a declared dependency. The
+dependency is an accepted exception recorded in `bed/handbook/KNOWN_GAPS.md`
+(section 6). The bottombar calls this lookup on every redraw, so a caching
+change is deferred there as well (section 7).
 
 ### Flags
 

@@ -38,8 +38,10 @@
 5. On failure: `conn.rollback()`, return `False`. On success:
    `conn.commit()`, return `True`.
 6. `startup.main._maybe_subscribe_to_bed` opens a `BedConnection`
-   and subscribes the current moniker to bed's message pushes.
-   Failure is non-fatal — `io.getch` falls back to DB polling.
+   and subscribes the current moniker to bed's message pushes, on the
+   owner loop. Failure is non-fatal — `io.getch` falls back to DB polling.
+   At interpreter exit the `atexit` hook `shutdown_owner_loop` closes the
+   owned connections before the loop is stopped.
 
 **Outcome.** `engine` schema + roles are present, the `bank` and
 `message` tables exist, and (optionally) the local session is

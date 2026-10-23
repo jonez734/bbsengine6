@@ -453,7 +453,8 @@ unambiguous; the thin shims preserve existing import paths.
 call sites. At the end of a successful boot,
 `startup.main._maybe_subscribe_to_bed` opens a `BedConnection`
 and subscribes to bed's message pushes (failure is non-fatal —
-`io.getch` falls back to DB polling).
+`io.getch` falls back to DB polling). The subscription lives on the owner
+loop, which an `atexit` hook shuts down so its socket is closed at exit.
 
 ### Alternatives considered
 

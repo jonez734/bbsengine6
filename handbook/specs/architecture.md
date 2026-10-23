@@ -194,7 +194,12 @@ with `package="bbsengine6.startup"`. `console.lib.runmodule` carries a
 mechanism serves both call sites. At the end of a successful boot,
 `startup.main._maybe_subscribe_to_bed` opens a `BedConnection` and
 subscribes to bed's message pushes (failure is non-fatal — `io.getch`
-falls back to DB polling).
+falls back to DB polling). The subscription runs on the owner loop
+(`startup.message_subscription.owner_loop`), a daemon thread's event loop.
+An `atexit` hook, `shutdown_owner_loop`, cancels and awaits the tasks on that
+loop so their connections close, then stops the loop and joins its thread.
+A process that exits without it leaves the bed socket open, which the
+interpreter reports as a `ResourceWarning`.
 
 The thin console-script shim lives at `py/src/bbsengine6/bed.py`
 and constructs a `BED` daemon from
