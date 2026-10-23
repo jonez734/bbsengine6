@@ -130,8 +130,8 @@ except (OSError, ValueError):
 
 
 from ..message import cache as _msg_cache
+from . import common as _common
 from .common import (
-    _current_input_stream,
     _current_stream_lock,
     _input_queue,
     _read_current_input_stream,
@@ -153,7 +153,7 @@ except ImportError:
 # Track if bell has been emitted this session (emit only once)
 
 # Track if bottom bar has been updated this session (update only once)
-_bottombar_updated_this_session = False
+_bottombar_updated_this_session = ""  # last notification status drawn; "" = none yet
 _bottombar_update_lock = threading.Lock()
 
 # ============================================================================
@@ -455,6 +455,15 @@ def clear_key_event_history() -> None:
 # ============================================================================
 
 
+def _check_kwargs(kwargs: dict) -> dict:
+    """The kwargs to forward to _check_notifications: everything except ``moniker``.
+
+    The check takes the session moniker as its first argument. A caller's ``moniker`` keyword must
+    not be forwarded as well, or the call passes the moniker twice.
+    """
+    return {k: v for k, v in kwargs.items() if k != "moniker"}
+
+
 def _check_notifications(moniker: str, **kwargs) -> tuple[bool, int]:
     """Check for pending notifications. Returns (has_notifications, count).
 
@@ -549,19 +558,20 @@ def _emit_notification_bell_once() -> bool:
 
 
 def _update_bottombar_on_notification() -> bool:
-    """Update bottom bar once per session to show notification status.
+    """Redraw the bottom bar's notification status when it has changed.
 
-    Returns True if update was performed, False if already updated this session.
+    The last status drawn is remembered, so an unchanged status is not redrawn, and a changed status
+    (a new message, or a message read) is drawn again. Returns True if a redraw was performed.
     """
     global _bottombar_updated_this_session
+    notification_status = screen.get_notification_status()
     with _bottombar_update_lock:
-        if _bottombar_updated_this_session:
+        if notification_status == _bottombar_updated_this_session:
             return False
-        _bottombar_updated_this_session = True
+        _bottombar_updated_this_session = notification_status
 
     try:
-        # Get notification status string (e.g., "F2: notify (3)")
-        notification_status = screen.get_notification_status()
+        # The status string, e.g. "F2: messages (3)".
         if notification_status:
             # Try to use echo_commands to position cursor and display notification
             try:
@@ -794,16 +804,9 @@ def getch_str(
     """
     global _notified_this_session
 
-    # Check for notifications and emit bell (once) before waiting for input
     moniker = None
     if _has_member_module:
         moniker = getattr(_threadlocal, "moniker", None)
-
-    if check_notifications and moniker:
-        has_notifications, notification_count = _check_notifications(moniker, **kwargs)
-        if has_notifications:
-            _emit_notification_bell_once()
-            _update_bottombar_on_notification()
 
     with _current_stream_lock:
         if _input_queue:
@@ -812,7 +815,7 @@ def getch_str(
             return result
 
         # Get file descriptor and settings while holding lock
-        fd = _current_input_stream.fileno()
+        fd = _common._current_input_stream.fileno()
         old_settings = termios.tcgetattr(fd)
 
     # Store settings globally for signal handler
@@ -827,6 +830,15 @@ def getch_str(
         except Exception:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             raise
+
+    # The pre-wait notification check runs with the tty already raw. A key sent while the check is
+    # slow (a database read) is then available to the wait below, instead of sitting in a cooked line
+    # buffer until a newline arrives.
+    if check_notifications and moniker:
+        has_notifications, notification_count = _check_notifications(moniker, **_check_kwargs(kwargs))
+        if has_notifications:
+            _emit_notification_bell_once()
+            _update_bottombar_on_notification()
 
     try:
         # 2. Wait for input using wall-clock timeout for accuracy
@@ -872,17 +884,17 @@ def getch_str(
             if timeout is None and not push_active:
                 wait_for = min(select_timeout, poll_interval)
             ready, _, _ = select.select(
-                [_current_input_stream, wake_fd], [], [], wait_for
+                [_common._current_input_stream, wake_fd], [], [], wait_for
             )
 
-            if _current_input_stream in ready:
+            if _common._current_input_stream in ready:
                 break
 
             if not ready:
                 # Nothing readable: either the finite timeout expired (the loop
                 # top returns), or the DB poll cadence elapsed with no bed push.
                 if timeout is None and not push_active and check_notifications and moniker:
-                    has_notifications, _ = _check_notifications(moniker, **kwargs)
+                    has_notifications, _ = _check_notifications(moniker, **_check_kwargs(kwargs))
                     if has_notifications:
                         _emit_notification_bell_once()
                         _update_bottombar_on_notification()
