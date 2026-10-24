@@ -182,6 +182,86 @@ def render_member(args, **kwargs):
         )
 
 
+def _stored_psqlrole(conn, moniker: str):
+    """The data role already recorded for this member in engine.pgrole, or None."""
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            "SELECT rolname FROM engine.pgrole WHERE membermoniker = %s",
+            (moniker,),
+        )
+        row = cur.fetchone()
+    if row is None:
+        return None
+    return row["rolname"] if isinstance(row, dict) else row[0]
+
+
+def _ask_os_login_menu(args, loginid: str, *, conn):
+    """[O] menu option: ask for the OS username, then check its login role. Writes nothing.
+
+    Returns (osuser, ok). ok is False when the sysop leaves it blank or declines to
+    create a missing login role; the caller then keeps the previous value.
+    """
+    stored = None
+    if conn is not None:
+        with database.cursor(conn=conn) as cur:
+            cur.execute(
+                "SELECT osuser FROM engine.pgrole WHERE membermoniker = "
+                "(SELECT moniker FROM engine.__member WHERE loginid = %s)",
+                (loginid,),
+            )
+            row = cur.fetchone()
+        if row is not None:
+            stored = row["osuser"] if isinstance(row, dict) else row[0]
+    osuser = io.inputstring(
+        f"{{var:promptcolor}}OS username{{var:promptcolor}} "
+        f"(blank to skip): {{var:inputcolor}}",
+        stored or loginid,
+        noneok=True,
+    )
+    if not osuser:
+        return None, False
+    if database.rolexists(args, osuser, conn=conn) is False:
+        if (
+            io.inputboolean(
+                f"{{var:promptcolor}}login role {{var:valuecolor}}{osuser}{{var:promptcolor}} "
+                f"does not exist. create it when you exit the menu? {{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
+                "Y",
+            )
+            is False
+        ):
+            io.echo("login role not created.")
+            return None, False
+    return osuser, True
+
+
+def _ask_psqlrole_menu(args, moniker: str, stored, *, conn):
+    """[X] menu option: name the data role, then check it exists. Writes nothing.
+
+    An existing data role is not renamed here (the same rule as the loginid): the stored
+    name is kept and the sysop is told so. A new name is checked and created on exit.
+    """
+    default = stored or pgrole.role_name_for(moniker)
+    name = io.inputstring(
+        f"{{var:promptcolor}}data role{{var:promptcolor}} (default {{var:valuecolor}}{default}{{var:promptcolor}}): {{var:inputcolor}}",
+        default,
+        noneok=True,
+    )
+    name = (name or "").strip() or default
+    if stored is not None and name != stored:
+        io.echo(
+            f"{{var:labelcolor}}data role {{var:valuecolor}}{stored}{{var:labelcolor}} already exists for this "
+            f"member; it is not renamed from the menu.",
+            level="error",
+        )
+        return stored
+    if database.rolexists(args, name, conn=conn) is False:
+        io.echo(
+            f"{{var:labelcolor}}data role {{var:valuecolor}}{name}{{var:labelcolor}} "
+            f"does not exist yet; it is created when you exit the menu."
+        )
+    return name
+
+
 def _edit(args, mode, member, **kwargs):
     """Drive the per-field edit loop. Purely in-memory; no DB writes.
 
@@ -199,15 +279,27 @@ def _edit(args, mode, member, **kwargs):
     while not done:
         render_member(args, member=member, _member=_member)
         ch = io.inputchoice(
-            f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFURQ]{{var:promptcolor}}: {{var:inputcolor}}",
-            "LMECPFURQ",
+            f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFOXURQ]{{var:promptcolor}}: {{var:inputcolor}}",
+            "LMECPFOXURQ",
             "",
             help=render_member,
             member=member,
             _member=_member,
             **kwargs,
         )
-        if ch == "M":
+        if ch == "O":
+            io.echo("OS login")
+            # Existence is checked right after the input. Nothing is written here; the
+            # login role is created when the menu exits (see configurerole).
+            osuser, ok = _ask_os_login_menu(args, member["loginid"], conn=conn)
+            if ok:
+                member["osuser"] = osuser
+        elif ch == "X":
+            io.echo("Data role (psql role)")
+            member["psqlrole"] = _ask_psqlrole_menu(
+                args, member["moniker"], _stored_psqlrole(conn, member["moniker"]), conn=conn
+            )
+        elif ch == "M":
             io.echo("Moniker")
             _moniker = member["moniker"]
             moniker = io.inputstring("moniker:", _moniker, args=args)
@@ -325,7 +417,22 @@ def setui(args, rolname, ui, **kwargs):
         database.manage_secondary_role(args, rolname, "revoke", "web", **kwargs)
 
 
-def configurerole(args, rolename: str, sysop=False, **kwargs: dict) -> bool:
+def configurerole(
+    args,
+    rolename: str,
+    sysop=False,
+    *,
+    osuser=None,
+    psqlrole=None,
+    menu_answered: bool = False,
+    **kwargs: dict,
+) -> bool:
+    """Apply a member's psql role configuration.
+
+    menu_answered=True means the [O]/[X] menu already asked the sysop and checked
+    existence; osuser (None = no OS login) and psqlrole are then applied without
+    prompting again. Otherwise the prompts run here, as before.
+    """
     conn = kwargs.get("conn", None)
     io.echo(f"con.member.configurerole.100: {conn=}", level="debug")
     if conn is None:
@@ -343,24 +450,29 @@ def configurerole(args, rolename: str, sysop=False, **kwargs: dict) -> bool:
     # 'member' and writes the engine.pgrole tracking row, which the request path needs.
     # A bare CREATE ROLE <loginid> here skipped both, so the member was refused at login.
     target = pgrole.role_name_for(moniker)
-    io.echo(f"{{var:labelcolor}}checking for role {{var:valuecolor}}{target}")
-    if database.rolexists(args, target, conn=conn) is False:
-        if (
-            io.inputboolean(
-                f"{{var:promptcolor}}role {{var:valuecolor}}{target}{{var:promptcolor}} does not exist. create it? {{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
-                "Y",
-            )
-            is False
-        ):
-            io.echo("role not created.")
+    # When the [O]/[X] menu answered, those were checked right after input and the sysop
+    # was already asked. Only the bare path (no menu answers) prompts here.
+    if not menu_answered:
+        io.echo(f"{{var:labelcolor}}checking for role {{var:valuecolor}}{target}")
+        if database.rolexists(args, target, conn=conn) is False:
+            if (
+                io.inputboolean(
+                    f"{{var:promptcolor}}role {{var:valuecolor}}{target}{{var:promptcolor}} does not exist. create it? {{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
+                    "Y",
+                )
+                is False
+            ):
+                io.echo("role not created.")
+                return False
+
+        # Ask every question before the first write, so a "no" anywhere changes nothing.
+        osuser = _ask_os_login(args, rolename, target, **kwargs)
+        if osuser is False:
             return False
+    else:
+        osuser = osuser  # the menu's answer: a name, or None for no OS login
 
-    # Ask every question before the first write, so a "no" anywhere changes nothing.
-    osuser = _ask_os_login(args, rolename, target, **kwargs)
-    if osuser is False:
-        return False
-
-    rolname = pgrole.ensure_login_role(args, moniker, conn=conn)
+    rolname = pgrole.ensure_login_role(args, moniker, conn=conn, rolname=psqlrole)
     if not rolname:
         io.echo(
             f"{{var:labelcolor}}could not provision a psql role for {{var:valuecolor}}{rolename}",
@@ -564,6 +676,9 @@ def edit(args, **kwargs):
                 m.get("flags", {}).get("SYSOP", {}).get("value", False),
                 conn=conn,
                 moniker=m["moniker"],
+                osuser=m.get("osuser"),
+                psqlrole=m.get("psqlrole"),
+                menu_answered=True,
                 **kwargs,
             )
             setui(args, m["loginid"], m["ui"], conn=conn, **kwargs)
@@ -661,6 +776,9 @@ def add(args, **kwargs) -> bool:
                 member.get("flags", {}).get("SYSOP", {}).get("value", False),
                 conn=conn,
                 moniker=moniker,
+                osuser=member.get("osuser"),
+                psqlrole=member.get("psqlrole"),
+                menu_answered=True,
                 **kwargs,
             )
             pgrole.ensure_login_role(

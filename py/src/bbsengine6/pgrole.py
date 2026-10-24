@@ -43,9 +43,9 @@ def ensure_login_role(args: Any, moniker: str, **kwargs: Any) -> Optional[str]:
             )
             return None
         with database.connect(args, pool=pool) as conn:
-            return _ensure_login_role(args, moniker, conn=conn)
+            return _ensure_login_role(args, moniker, conn=conn, rolname=kwargs.get("rolname"))
 
-    return _ensure_login_role(args, moniker, conn=conn)
+    return _ensure_login_role(args, moniker, conn=conn, rolname=kwargs.get("rolname"))
 
 
 def role_name_for(moniker: str) -> str:
@@ -94,8 +94,11 @@ def _reconcile_nologin(args: Any, rolname: str, *, conn: Any) -> None:
         util.logentry(f"bbsengine6.pgrole._reconcile_nologin.100: set NOLOGIN on {rolname=}")
 
 
-def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
-    rolname = role_name_for(moniker)
+def _ensure_login_role(
+    args: Any, moniker: str, *, conn: Any, rolname: Optional[str] = None
+) -> Optional[str]:
+    # A chosen name applies only to a new member. A stored tracking row keeps its name.
+    rolname = rolname or role_name_for(moniker)
 
     # 1. Check if a pgrole row already exists for this member.
     with database.cursor(conn=conn) as cur:
