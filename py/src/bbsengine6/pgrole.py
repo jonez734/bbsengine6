@@ -257,6 +257,47 @@ def remove_os_login_role(
     return True
 
 
+def preview_nologin_migration(args: Any, *, conn: Any) -> list:
+    """Read-only: the m_ data roles that can still log in (superusers and jam excluded).
+
+    Writes nothing. Used by the console before the sysop confirms the migration, and at
+    startup to report pending roles.
+    """
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            """
+            select pr.rolname
+              from engine.pgrole pr
+              join pg_roles pg on pg.rolname = pr.rolname
+             where pr.rolname like 'm\\_%'
+               and pr.rolname <> 'jam'
+               and pg.rolcanlogin
+               and not pg.rolsuper
+             order by pr.rolname
+            """
+        )
+        rows = cur.fetchall() or []
+    return [r["rolname"] if isinstance(r, dict) else r[0] for r in rows]
+
+
+def run_nologin_migration(args: Any, *, conn: Any) -> bool:
+    """Apply sql/migrate_nologin.sql in one transaction. Commits on success, rolls back on error.
+
+    Returns True when the migration ran and committed, False otherwise. The caller decides
+    what to tell the sysop; this function reports the failure in the log.
+    """
+    util.logentry("bbsengine6.pgrole.run_nologin_migration.100: starting")
+    try:
+        database.importsql(args, "migrate_nologin.sql", conn=conn, rollback=False)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        util.logentry(f"bbsengine6.pgrole.run_nologin_migration.900: failed: {e}")
+        return False
+    util.logentry("bbsengine6.pgrole.run_nologin_migration.200: committed")
+    return True
+
+
 def sync_groups(args: Any, loginid: str, **kwargs: Any) -> bool:
     """
     Sync the m_<moniker> role's group memberships (sysop, term, web)

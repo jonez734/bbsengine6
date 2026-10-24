@@ -1,201 +1,158 @@
 # Per-member psql access (ident auth)
 
-> Status: canonical. Updated 2026-09-04.
+> Status: canonical. Updated 2026-10-24.
 
-Every approved `engine.member` gets a PostgreSQL `LOGIN` role so they
-can connect with `psql` directly. Authentication is by `ident` -- the
-member connects as their own OS account, and `pg_ident.conf` on the DB
-host maps that OS user to the member's `l_<loginid>` PG role. No
-password is ever set, displayed, or stored.
+Each approved member can connect to PostgreSQL with `psql` as their own
+OS account. Two PostgreSQL roles are involved per member:
 
-The `l_<loginid>` pattern is the canonical ident-auth role naming. A
-parallel Python provisioning helper (`bbsengine6.pgrole`) uses the
-`m_<moniker>` pattern for the connection-pool path; both are
-LOGIN-capable and both inherit from the `member` group role. They are
-distinct namespaces: `l_<loginid>` is the legacy ident-auth name,
-`m_<moniker>` is the Python-managed provisioning name. New code should
-call `bbsengine6.pgrole.ensure_login_role()` rather than constructing
-role names directly.
+- **Login role** `<osuser>`: the OS username. `ident` logs the connection
+  in as this role. It is `LOGIN NOINHERIT`, holds no privileges of its
+  own, and is granted the data role.
+- **Data role** `m_<moniker>`: holds the member's privileges. It is
+  `NOLOGIN`, so it cannot be connected to directly. The login role reaches
+  it with `SET ROLE`.
 
-## Architecture
+No password is ever set, displayed, or stored.
+
+## Current model
 
 | Layer | Detail |
 | --- | --- |
-| PG role | `l_<loginid>`, derived from the member's `loginid` (lowercased, non-alnum -> `_`, numeric suffix on collision with any existing `pg_roles.rolname`) |
-| Group role | `member` (NOLOGIN, NOINHERIT). Every `l_<loginid>` is GRANTed membership. Baseline schema usage and SELECT privileges are granted to `member`, not to each `l_<loginid>` |
-| Group sync | `engine.syncpgrolegroups(memberid)` brings a member's `l_<loginid>` role's `sysop` / `term` / `web` group memberships in line with the member's current flags. Called from the sysop console (`console/member.py:edit()`, `add()`) and from the approvals flow (`console/memberapproval.py`) |
-| Tracking | `engine.pgrole(memberid, rolname, osuser, created_at, last_ack_at)`. `osuser` is the OS username the member connects from; `last_ack_at` records that the member has seen the welcome screen |
-| Provisioning (legacy SQL) | `engine.createpgrole(loginid, osuser)` is the single SQL entry point. It derives the rolename, collision-suffixes, runs `CREATE ROLE ... LOGIN INHERIT` (no password), `GRANT member TO`, and INSERTs the tracking row |
-| Provisioning (Python) | `bbsengine6.pgrole.ensure_login_role(args, moniker)` -- idempotent Python wrapper around the same flow, using `m_<moniker>` naming |
-| Removal | `engine.deletepgrole(rolname)` runs `DROP ROLE IF EXISTS` and removes the `engine.pgrole` row |
+| Data role | `m_<moniker>`, `NOLOGIN`, granted `member`. Chosen by the sysop on new members (default `m_<moniker>`). An existing member's data role is not renamed from the console |
+| Login role | The member's OS username (`engine.pgrole.osuser`). `LOGIN NOINHERIT`, granted the data role so `SET ROLE` works |
+| Group role | `member` (NOLOGIN, NOINHERIT). Granted to every data role. Schema usage and SELECT come from `member` |
+| Tracking | `engine.pgrole(membermoniker, rolname, osuser, ...)`. `rolname` is the data role; `osuser` is the login role's name |
+| Provisioning | `bbsengine6.pgrole`: `ensure_login_role` (data role), `ensure_os_login_role` (login role), `remove_os_login_role` (old login), `preview_nologin_migration` and `run_nologin_migration` (migration) |
+| Console | `console/member.py`: `configurerole` provisions both roles. The edit menu's `[O]` (OS login) and `[X]` (data role) options check existence right after input and write only when the menu exits |
+| Migration | Run from the console. See "Migrating existing roles" |
+
+Only `SET ROLE` reaches member privileges. A login role without
+membership in its data role can connect and do nothing with it.
+
+## Authentication method
+
+**Current method: `ident`.** The connecting OS account must match a
+login role name exactly. No `pg_ident.conf` map is used in this setup.
+
+**Planned: other methods.** Other authentication methods are planned.
+The candidates are peer authentication over a Unix socket, and
+`scram-sha-256` with a password. Neither is implemented. Choosing one
+means changing `pg_hba.conf` and the login-role setup, and deciding how
+credentials are stored (none are, under ident).
 
 ## Configuration
 
 ### `pg_hba.conf`
 
-The DB host needs an `ident` line that uses the `bbbsmap` map for local
-connections:
+The TCP localhost rules must use `ident`:
 
 ```
-host    all    all    127.0.0.1/32    ident    map=bbbsmap
+host    all    all    127.0.0.1/32    ident
+host    all    all    ::1/128         ident
 ```
 
-If members also need to connect from a specific subnet (e.g. a
-terminal-server LAN), add additional `host` lines scoped to that
-subnet. Do **not** use `0.0.0.0/0` for ident -- ident is meaningful
-only for trusted, controlled networks.
+Do not use `0.0.0.0/0` for ident. It is meaningful only on trusted,
+controlled networks.
 
-### `pg_ident.conf`
+## First-time setup
 
-One line per member, mapping the OS user to the PG role:
+1. Confirm the `ident` lines above in `pg_hba.conf`.
+2. Create the member through the console (`[N]` New Member). The
+   `configurerole` step creates both roles and records them in
+   `engine.pgrole`. Answer the OS-login question with the member's OS
+   username.
+3. The console asks before creating a missing login role. Accept the
+   default to create it.
+4. The member connects with `psql -h 127.0.0.1 -U <osuser> -d <dbname>`.
 
-```
-bbbsmap    l_jonez    jonez
-```
+## Migrating existing roles
 
-The OS user is what the member `su`s to (or is logged in as) on the
-client host. It does not have to be unique globally -- it just has to
-be unique per client host. The PG role name on the left side must
-match the `l_<loginid>` value stored in `engine.pgrole.rolname`.
+Data roles created before the NOLOGIN rule may still be `LOGIN`. A
+`LOGIN` data role lets an OS account of the same name connect and skip
+the login role. The migration removes that login.
 
-After editing, reload PostgreSQL:
+**Run it from the console.** Open the main console as a sysop and press
+`[K]` (Migrate data roles to NOLOGIN).
 
-```
-sudo systemctl reload postgresql
-```
+- The console lists the roles it will change, then asks `[yN]`.
+  Declining changes nothing.
+- It excludes `jam` (the legacy owner mapping) and superusers.
+- It runs `sql/migrate_nologin.sql` in one transaction. On error it
+  rolls back and reports the message.
+- It re-checks afterward and reports any roles still able to log in.
 
-(or `SELECT pg_reload_conf();` from a SQL session as a superuser.)
+**Startup warning.** When a sysop opens the console and login-capable
+data roles exist, the console prints one line: how many roles can still
+log in, and to press `[K]`. The warning never blocks startup.
 
-## First-time setup checklist
+**Why it is not automatic.** `checkclasses` imports a table's SQL only
+when the table is missing, so it never re-runs `pgrole.sql` on an
+existing database. The migration is a separate, explicit action.
 
-1. Add the `ident` line to `pg_hba.conf`.
-2. Run `\i bbsengine6.sql` so the `engine.pgrole` table, the `member`
-   group role, and the `engine.createpgrole` /
-   `engine.syncpgrolegroups` / `engine.deletepgrole` functions are
-   created.
-3. Run `py/src/bbsengine6/sql/backfill_pgrole.sql` to provision
-   `l_<loginid>` roles for all currently-approved members. Their
-   `osuser` is left NULL -- to be filled in by the member on first
-   `[P] psql credentials` visit, or by the sysop.
-4. For each backfilled member (and each new member going forward), add
-   a `bbbsmap` line to `pg_ident.conf` and reload PG.
-5. Members run `[P]` from the `member:` console menu. The first visit
-   prompts for `osuser` and acknowledges the welcome. The `psql`
-   connect command is printed.
+**Effect.** A member who connects directly as `m_<name>` is locked out
+after the migration. They must connect as their login role instead.
 
-## Member flow (the `[P]` menu entry)
-
-`py/src/bbsengine6/console/showpgrole.py:main()`:
-
-- If no `engine.pgrole` row exists for the member: tell them to ask a
-  sysop to approve them.
-- If a row exists: print the rolname, osuser, and the `psql` connect
-  command. If `last_ack_at` is NULL, require an ENTER to acknowledge,
-  then capture `osuser` if blank.
-- No password, no regenerate, no re-show. Auth is by ident; the only
-  secret the member needs is their own OS account.
-
-## What the `member` group grants (and doesn't)
+## The `member` group
 
 Granted to `member`:
 
 - `USAGE` on `engine` and `bank` schemas.
-- `SELECT` on all existing tables in `engine` and `bank`.
-- `ALTER DEFAULT PRIVILEGES` so future tables inherit the same
-  `SELECT` grant.
-- `SELECT` on `engine.pgrole` (so a future `SET LOCAL ROLE` flow can
-  read the tracking row).
+- `SELECT` on all existing tables in `engine` and `bank`, and default
+  privileges so future tables inherit it.
+- `SELECT` on `engine.pgrole`.
 
-**Not** granted (intentionally):
+Not granted (intentionally):
 
-- `INSERT` / `UPDATE` / `DELETE` on `engine.__session` or
-  `engine.__invite`. Members don't write to these via psql. If that
-  becomes a need, add it explicitly.
-- `CREATEROLE`, `CREATEDB`, `SUPERUSER`. Members connect read-only.
-- `USAGE` on any schema other than `engine` and `bank`. New schemas
-  (e.g. a future `games` schema) need their own grants.
+- `INSERT` / `UPDATE` / `DELETE` on `engine.__session` or `engine.__invite`.
+- `CREATEROLE`, `CREATEDB`, `SUPERUSER`.
+- `USAGE` on any other schema. New schemas need their own grants.
 
 ## Operations
 
-### Adding a new member
+### Adding a member
 
-1. The new member submits `join.php` (no PG role is created here).
-2. A sysop runs `[A] Approvals` from the `member:` menu and approves
-   the application. The console hook calls
-   `engine.createpgrole(loginid, NULL)`. The console prints the new
-   rolname and reminds the sysop to add the `bbbsmap` line to
-   `pg_ident.conf`.
-3. The sysop edits `pg_ident.conf` and reloads PG.
-4. The member logs in and runs `[P] psql credentials`. The welcome
-   flow records `osuser` and sets `last_ack_at = now()`.
+1. Create the member with `[N]` (New Member). This is the complete path:
+   it creates the data role and, with an OS username, the login role.
+2. In the edit menu, `[O]` sets the OS username. It defaults to the
+   stored value or the loginid. If the login role does not exist, the
+   console asks whether to create it on exit.
+3. `[X]` sets the data role. The default is `m_<moniker>`. An existing
+   data role is not renamed.
+4. Exit the menu. The console creates the roles, grants them, and
+   records `osuser` in `engine.pgrole`.
+
+### Changing a member's OS username
+
+Press `[O]` and enter the new name. If the stored name changes, the
+console asks whether to remove the old login role (default No). Yes
+revokes the old login's access to the data role, and drops the role if
+nothing else uses it. Removal happens on exit, with the other writes.
+
+**Known gap:** `[A] Approvals` creates only the data role. It does not
+ask for an OS username, so it creates no login role, and the member
+cannot connect until the sysop sets one with `[O]`. Its message still
+tells the sysop to add a `bbbsmap` line to `pg_ident.conf`, which is no
+longer used.
 
 ### Removing a member
 
-- `engine.deletepgrole(rolname)` drops the PG role and the
-  `engine.pgrole` row.
-- The sysop should also remove the corresponding `bbbsmap` line from
-  `pg_ident.conf` and reload PG.
+Use the member console. Removing a login role revokes its access to
+the data role. Jam and superusers are never removed.
 
-### Flag changes
+## Previous design (historical)
 
-Whenever a member's flags change (e.g. they become a sysop), the
-`engine.syncpgrolegroups(memberid)` SQL function is called from
-`console/member.py:edit()` to bring the `l_<loginid>` role's `sysop` /
-`term` / `web` group memberships in line. This is idempotent and cheap;
-safe to call on every edit.
-
-## Python-managed provisioning (current)
-
-`py/src/bbsengine6/pgrole.py` is the current Python implementation of
-per-member role provisioning. It exposes two public functions:
-
-```python
-ensure_login_role(args, moniker, **kwargs) -> str
-sync_groups(args, loginid) -> bool
-```
-
-`ensure_login_role` is idempotent: if the role already exists or a
-`pgrole` row exists, it returns the existing rolename without making
-changes. On a fresh provisioning it:
-
-1. Derives the rolename `m_<moniker>` (regex-sanitized to
-   `[A-Za-z0-9_]+`).
-2. Checks for an existing `engine.pgrole` row.
-3. Checks whether the PostgreSQL role exists; if not, calls
-   `database.createrol(..., login=True, superuser=False, createdb=False,
-   createrole=False)`.
-4. `GRANT member TO <rolename>`.
-5. `manage_schema_priv(args, "grant", "usage", "engine", rolname)` for
-   schema access.
-6. `INSERT INTO engine.pgrole (membermoniker, rolname, created_at)`.
-
-`sync_groups` calls `engine.syncpgrolegroups(<membermoniker>)` to
-update the role's `sysop` / `term` / `web` memberships after a flag
-change.
+Earlier versions named the login role `l_<loginid>`, mapped the OS user
+to it with a `bbbsmap` line in `pg_ident.conf`, and created data roles
+as `LOGIN`. That design is replaced. The `l_` names and `pg_ident.conf`
+are not used now.
 
 ## Deferred work
 
-- **Password fallback**: add a password to `engine.createpgrole` for
-  deployments without stable OS accounts per member. Would also require
-  `engine.rotatepgrole`, a regenerate UI in `showpgrole.py`, and a
-  redaction list in the logging helpers.
-- **PHP web surface**: `engine/psql_credentials.php` plus helpers in
-  `php/libmember.php`. Blocked on the web machine being on the same
-  host as the DB.
-- **`SET LOCAL ROLE member` per request**: implemented in
-  `database.connect()` / `database.async_connect()` via the
-  `set_role=` keyword argument. The `www-data` DSN user has been
-  granted membership in `member` (`checkwebserverrole.py`). Call
-  `database.connect(args, pool=pool, set_role="member")` to run a
-  transaction as the `member` group role. Per-member data isolation
-  still requires RLS -- see `bbsengine6/TODO_RLS.md`.
-- **`SET LOCAL ROLE l_<loginid>` per request**: would switch to the
-  specific member's role. Requires RLS for meaningful privacy
-  enforcement, plus `GRANT l_<loginid> TO "www-data"` per member (or a
-  superuser DSN user).
-- **Email notification** on psql access provisioning.
-- **Audit table**: `engine.pgrole_event` for tighter tracking of every
-  `CREATE ROLE` / `ALTER ROLE` / `DROP ROLE` / `GRANT` / `REVOKE`.
-- **Re-show the current osuser** would require no extra work (it is
-  already shown). Re-show a *password* is impossible without
-  persisting it, which contradicts the design.
+- **Other authentication methods** (see "Authentication method").
+- **Password fallback** for deployments without stable OS accounts per
+  member. Would need credential storage, rotation, and redaction.
+- **PHP web surface** (`engine/psql_credentials.php`). Blocked on the
+  web machine running on the same host as the database.
+- **Per-request `SET LOCAL ROLE`** for the web path. Per-member data
+  isolation still requires row-level security; see `TODO_RLS.md`.
+- **Audit table** (`engine.pgrole_event`) for role and grant changes.

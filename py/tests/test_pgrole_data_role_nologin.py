@@ -71,7 +71,7 @@ def test_superuser_data_role_is_never_altered():
 @pytest.mark.unit
 def test_migration_sql_skips_superusers_and_jam_and_is_idempotent():
     from pathlib import Path
-    sql = (Path(pgrole.__file__).parent / "sql" / "pgrole.sql").read_text()
+    sql = (Path(pgrole.__file__).parent / "sql" / "migrate_nologin.sql").read_text()
     assert "rolcanlogin" in sql and "NOLOGIN" in sql
     assert "rolsuper" in sql, "migration must skip superusers"
     assert "'jam'" in sql, "migration must skip jam (legacy mapping)"

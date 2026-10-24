@@ -1,6 +1,7 @@
 """Interactive console menu for the BBS engine."""
 
-from bbsengine6 import session, util, io, database, member
+from bbsengine6 import session, util, io, database, member, pgrole
+from bbsengine6.backend.lib import issysop
 
 from . import lib
 
@@ -16,6 +17,48 @@ def _schema_ready(conn) -> bool:
     with conn.cursor() as cur:
         cur.execute("select to_regclass('engine.member') is not null")
         return bool(cur.fetchone()[0])
+
+def _startup_nologin_warning(args, *, conn) -> None:
+    """Tell the sysop how many data roles can still log in. Never raises, never blocks startup."""
+    try:
+        pending = pgrole.preview_nologin_migration(args, conn=conn)
+    except Exception as e:
+        util.logentry(f"con.main._startup_nologin_warning.100: preview failed: {e}")
+        return
+    if pending:
+        io.echo(
+            f"{{var:labelcolor}}{len(pending)} data roles can still log in. "
+            f"Run [K] to migrate them to NOLOGIN.",
+            level="warn",
+        )
+
+
+def _migrate_nologin(args, *, conn, roles=None) -> bool:
+    """Show the roles the migration will change, ask, then apply. Writes only on yes."""
+    if roles is None:
+        roles = pgrole.preview_nologin_migration(args, conn=conn)
+    if not roles:
+        io.echo("nothing to migrate: no data roles can log in.")
+        return True
+    io.echo("{var:labelcolor}these data roles can log in and will be set to NOLOGIN:")
+    for r in roles:
+        io.echo(f"{{var:valuecolor}}  {r}")
+    if io.inputboolean(
+        "{var:promptcolor}apply the migration? {var:optioncolor}[yN]{var:promptcolor}: {var:inputcolor}",
+        "N",
+    ) is not True:
+        io.echo("migration not applied.")
+        return False
+    if not pgrole.run_nologin_migration(args, conn=conn):
+        io.echo("migration failed and was rolled back. See the log.", level="error")
+        return False
+    remaining = pgrole.preview_nologin_migration(args, conn=conn)
+    if remaining:
+        io.echo(f"{len(remaining)} data roles still can log in: {', '.join(remaining)}", level="warn")
+        return False
+    io.echo("migration complete: no data roles can log in.", level="ok")
+    return True
+
 
 def init(args, **kwargs):
     return True
@@ -53,6 +96,7 @@ def main(args, **kwargs):
                     level="error",
                 )
                 return False
+            _startup_nologin_warning(args, conn=conn)
             if session.start(args, conn=conn, **kwargs) is False:
                 io.echo("con.main.140: did not start session", level="error")
                 return False
@@ -77,10 +121,12 @@ def main(args, **kwargs):
                 io.echo("{var:optioncolor}[M]{var:labelcolor} Members")
                 io.echo("{var:optioncolor}[S]{var:labelcolor} Sessions")
                 io.echo("{var:optioncolor}[A]{var:labelcolor} Approvals")
+                if issysop(args, conn=conn):
+                    io.echo("{var:optioncolor}[K]{var:labelcolor} Migrate data roles to NOLOGIN")
                 io.echo("{f6}{var:optioncolor}[X]{var:labelcolor} Exit{f6}")
                 ch = io.inputchoice(
                     "{var:promptcolor}console: {var:inputcolor}",
-                    "ASMXQ",
+                    "ASMKXQ",
                     "X",
                     conn=conn,
                     args=args,
@@ -98,6 +144,13 @@ def main(args, **kwargs):
                 elif ch == "A":
                     io.echo("Member Approval")
                     lib.runmodule(args, "memberapproval", pool=pool, **kwargs)
+                elif ch == "K":
+                    if not issysop(args, conn=conn):
+                        io.echo("sysop only.", level="error")
+                        continue
+                    io.echo("Migrate data roles to NOLOGIN")
+                    _migrate_nologin(args, conn=conn)
+                    continue
                 elif ch == "Q" or ch == "X":
                     io.echo("Exit")
                     break
