@@ -393,17 +393,32 @@ def configurerole(args, rolename: str, sysop=False, **kwargs: dict) -> bool:
     return _apply_os_login(args, rolname, osuser, **kwargs)
 
 
+def _stored_osuser(conn, rolname: str):
+    """The OS username already recorded for this data role, or None."""
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            "SELECT osuser FROM engine.pgrole WHERE rolname = %s",
+            (rolname,),
+        )
+        row = cur.fetchone()
+    if row is None:
+        return None
+    return row["osuser"] if isinstance(row, dict) else row[0]
+
+
 def _ask_os_login(args, rolename: str, target: str, **kwargs):
     """Prompt for the OS username and any login-role creation. Writes nothing.
 
+    The prompt defaults to the stored osuser if one exists, otherwise to the loginid.
     Returns the OS username to set up (a str), None when the sysop leaves it blank,
     or False when the sysop declines to create the login role.
     """
     conn = kwargs.get("conn")
+    default = _stored_osuser(conn, target) or rolename
     osuser = io.inputstring(
         f"{{var:promptcolor}}OS username for {{var:valuecolor}}{rolename}{{var:promptcolor}} "
         f"(blank to skip): {{var:inputcolor}}",
-        "",
+        default,
         noneok=True,
     )
     if not osuser:
