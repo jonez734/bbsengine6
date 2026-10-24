@@ -26,7 +26,6 @@ classifiers = [
 dependencies = [
     "argcomplete",
     "bcrypt>=4.0",
-    "bbsengine6",
     "markdown",
     "psycopg[binary,pool]",
     "psycopg-pool",
