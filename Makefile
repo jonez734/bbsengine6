@@ -225,6 +225,20 @@ sign:
 
 wheel-release: build rename-sdist sign
 
+# Local install of the engine wheel into a venv on this machine. Nothing here touches a
+# remote host: no rsync, ssh, or scp. deploy bed.venv depends on this target, so it must
+# stay remote-free. VENV_DIR defaults to ~/.venv and honors deploytool's --prefix.
+VENV_DIR ?= $(or $(DEPLOY_PREFIX),$(HOME)/.venv)
+venv:
+	$(PYTHON) -m venv "$(VENV_DIR)" || true
+	"$(VENV_DIR)/bin/pip" install --upgrade pip
+	rm -rf py/build
+	"$(VENV_DIR)/bin/python" -m build --wheel --outdir py/dist py
+	"$(VENV_DIR)/bin/pip" install --upgrade py/dist/*.whl
+	@echo "bbsengine6 installed into $(VENV_DIR)"
+
+.PHONY: venv
+
 .PHONY: handbook handbook-prod handbook-deploy-prod release sql stage prod wwworg wwwcom apidocs clean log engine skin-prod php-deploy php-deploy-prod engine-deploy-prod parsedown-deploy parsedown-deploy-prod deploy deploy-wwworg deploy-wwwcom deploy-handbook deploy-handbook-prod deploy-tui deploy-engine-stage deploy-engine-prod
 .PHONY: version ensure-repo ensure-build-dir build rename-sdist sign wheel-release
 
