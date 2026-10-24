@@ -229,14 +229,20 @@ wheel-release: build rename-sdist sign
 # remote host: no rsync, ssh, or scp. deploy bed.venv depends on this target, so it must
 # stay remote-free. VENV_DIR defaults to ~/.venv and honors deploytool's --prefix.
 VENV_DIR ?= $(or $(DEPLOY_PREFIX),$(HOME)/.venv)
+# bbsengine6 requires <3.13. A new venv is created with this interpreter; an existing venv
+# keeps its own. A missing interpreter is an error, not a fallback to python3.
+VENV_PYTHON ?= python3.12
 venv:
-	$(PYTHON) -m venv "$(VENV_DIR)" || true
-	"$(VENV_DIR)/bin/pip" install --upgrade pip
-	"$(VENV_DIR)/bin/pip" install --upgrade build
+	@if [ ! -x "$(VENV_DIR)/bin/python" ]; then \
+		command -v "$(VENV_PYTHON)" >/dev/null 2>&1 || { echo "venv: $(VENV_PYTHON) not found; install it or set VENV_PYTHON" >&2; exit 1; }; \
+		"$(VENV_PYTHON)" -m venv "$(VENV_DIR)" || { echo "venv: could not create $(VENV_DIR)" >&2; exit 1; }; \
+	fi
+	"$(VENV_DIR)/bin/python" -m pip install --upgrade pip
+	"$(VENV_DIR)/bin/python" -m pip install --upgrade build
 	@wheels="$$(mktemp -d)" && \
 	trap 'rm -rf "$$wheels"' EXIT && \
 	"$(VENV_DIR)/bin/python" -m build --wheel --outdir "$$wheels" py && \
-	"$(VENV_DIR)/bin/pip" install --upgrade "$$wheels"/*.whl && \
+	"$(VENV_DIR)/bin/python" -m pip install --upgrade "$$wheels"/*.whl && \
 	echo "bbsengine6 installed into $(VENV_DIR)"
 
 .PHONY: venv

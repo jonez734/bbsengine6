@@ -50,7 +50,7 @@ def test_venv_recipe_has_no_remote_commands():
 @pytest.mark.unit
 def test_venv_recipe_builds_and_installs_locally():
     body = _recipe("venv")
-    assert re.search(r'bin/pip"?\s+install', body), body
+    assert re.search(r'-m pip install', body), body
     assert "-m build" in body
 
 
@@ -59,7 +59,7 @@ def test_venv_recipe_installs_build_before_using_it():
     """`python -m build` runs inside the target venv, which may not have `build` yet
     (a fresh venv, or one created for the bed service). Install it first."""
     body = _recipe("venv")
-    install_build = re.search(r'bin/pip"?\s+install[^\n]*\bbuild\b', body)
+    install_build = re.search(r'-m pip install[^\n]*\bbuild\b', body)
     use_build = body.find("-m build")
     assert install_build, body
     assert install_build.start() < use_build, body
@@ -69,7 +69,7 @@ def test_venv_recipe_installs_build_before_using_it():
 def test_venv_recipe_installs_only_the_wheel_it_just_built():
     """Stale wheels from earlier builds conflict, so the install must read only this build's output."""
     body = _recipe("venv")
-    install = re.search(r'bin/pip"?\s+install[^\n]*\$\$"?wheels"?/\*\.whl', body)
+    install = re.search(r'-m pip install[^\n]*\$\$"?wheels"?/\*\.whl', body)
     assert install, body
     assert "mktemp" in body and body.index("mktemp") < install.start(), body
 
@@ -85,3 +85,31 @@ def test_venv_recipe_builds_into_a_fresh_temp_dir():
     assert "mktemp" in body, body
     assert "py/dist" not in body, body
     assert "rm -rf py/dist" not in body, body
+
+
+@pytest.mark.unit
+def test_venv_recipe_has_no_error_swallowing():
+    """A failed venv creation must stop the recipe, not run pip against a missing venv."""
+    body = _recipe("venv")
+    assert "|| true" not in body, body
+
+
+@pytest.mark.unit
+def test_venv_recipe_uses_the_venv_interpreter_for_pip():
+    """pip runs as `<venv>/bin/python -m pip`, so the venv's own Python does every step."""
+    body = _recipe("venv")
+    assert "bin/pip" not in body, body
+    assert re.search(r'"\$\(VENV_DIR\)/bin/python" -m pip install', body), body
+
+
+@pytest.mark.unit
+def test_venv_recipe_defaults_to_python312():
+    """bbsengine6 requires <3.13, so the default interpreter for a new venv is python3.12."""
+    text = MAKEFILE.read_text()
+    assert re.search(r"^VENV_PYTHON\s*\?=\s*python3\.12\s*$", text, re.MULTILINE), text[:0]
+
+
+@pytest.mark.unit
+def test_venv_recipe_creates_the_venv_only_when_missing():
+    body = _recipe("venv")
+    assert re.search(r'if \[ ! -x "\$\(VENV_DIR\)/bin/python" \]', body), body
