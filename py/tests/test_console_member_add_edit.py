@@ -743,7 +743,7 @@ class TestConfigureRoleSuperuserGuard:
 
         with (
             patch.object(
-                console_member.database, "rolexists", return_value=True
+                console_member.pgrole, "ensure_login_role", return_value="m_jam"
             ),
             patch.object(
                 console_member.database, "get_role_privs", return_value=privs_super
@@ -756,14 +756,15 @@ class TestConfigureRoleSuperuserGuard:
                 console_member.database,
                 "manage_secondary_role",
             ) as mock_secondary,
+            patch.object(console_member.io, "inputstring", return_value=""),
             patch("bbsengine6.console.member.io.echo"),
             patch("bbsengine6.console.member.io.inputboolean"),
         ):
             result_true = console_member.configurerole(
-                args, "jam", sysop=True, conn=fake_conn
+                args, "jam", sysop=True, conn=fake_conn, moniker="jam"
             )
             result_false = console_member.configurerole(
-                args, "jam", sysop=False, conn=fake_conn
+                args, "jam", sysop=False, conn=fake_conn, moniker="jam"
             )
 
         assert result_true is True
@@ -779,8 +780,8 @@ class TestConfigureRoleSuperuserGuard:
             (c.args[1], c.args[2], c.args[3])
             for c in mock_secondary.call_args_list
         ]
-        assert ("jam", "grant", "sysop") in secondary_calls
-        assert ("jam", "revoke", "sysop") in secondary_calls
+        assert ("m_jam", "grant", "sysop") in secondary_calls
+        assert ("m_jam", "revoke", "sysop") in secondary_calls
 
     def test_runs_privs_when_role_is_not_superuser(self):
         """When ``rolsuper`` is False the existing grant/revoke behavior
@@ -800,7 +801,7 @@ class TestConfigureRoleSuperuserGuard:
 
         with (
             patch.object(
-                console_member.database, "rolexists", return_value=True
+                console_member.pgrole, "ensure_login_role", return_value="m_alice"
             ),
             patch.object(
                 console_member.database, "get_role_privs", return_value=privs_normal
@@ -813,26 +814,27 @@ class TestConfigureRoleSuperuserGuard:
                 console_member.database,
                 "manage_secondary_role",
             ) as mock_secondary,
+            patch.object(console_member.io, "inputstring", return_value=""),
             patch("bbsengine6.console.member.io.echo"),
         ):
             result_true = console_member.configurerole(
-                args, "alice", sysop=True, conn=fake_conn
+                args, "alice", sysop=True, conn=fake_conn, moniker="alice"
             )
             result_false = console_member.configurerole(
-                args, "alice", sysop=False, conn=fake_conn
+                args, "alice", sysop=False, conn=fake_conn, moniker="alice"
             )
 
         assert result_true is True
         assert result_false is True
 
-# sysop=True -> grant createdb, grant createrole
+        # sysop=True -> grant createdb, grant createrole
         grant_actions = [
             (c.args[1], c.args[2], c.args[3])
             for c in mock_privs.call_args_list
             if c.args[3] == "createdb" or c.args[3] == "createrole"
         ]
-        assert ("alice", "grant", "createdb") in grant_actions
-        assert ("alice", "grant", "createrole") in grant_actions
+        assert ("m_alice", "grant", "createdb") in grant_actions
+        assert ("m_alice", "grant", "createrole") in grant_actions
 
         # sysop=False -> revoke createdb, revoke createrole
         revoke_actions = [
@@ -840,16 +842,16 @@ class TestConfigureRoleSuperuserGuard:
             for c in mock_privs.call_args_list
             if c.args[2] == "revoke"
         ]
-        assert ("alice", "revoke", "createdb") in revoke_actions
-        assert ("alice", "revoke", "createrole") in revoke_actions
+        assert ("m_alice", "revoke", "createdb") in revoke_actions
+        assert ("m_alice", "revoke", "createrole") in revoke_actions
 
         assert mock_secondary.call_count == 2
         secondary_calls = [
             (c.args[1], c.args[2], c.args[3])
             for c in mock_secondary.call_args_list
         ]
-        assert ("alice", "grant", "sysop") in secondary_calls
-        assert ("alice", "revoke", "sysop") in secondary_calls
+        assert ("m_alice", "grant", "sysop") in secondary_calls
+        assert ("m_alice", "revoke", "sysop") in secondary_calls
 
     def test_runs_privs_when_get_role_privs_returns_none(self):
         """A lookup failure (``privs is None``) must fall back to the
@@ -860,7 +862,7 @@ class TestConfigureRoleSuperuserGuard:
 
         with (
             patch.object(
-                console_member.database, "rolexists", return_value=True
+                console_member.pgrole, "ensure_login_role", return_value="m_bob"
             ),
             patch.object(
                 console_member.database, "get_role_privs", return_value=None
@@ -873,17 +875,20 @@ class TestConfigureRoleSuperuserGuard:
                 console_member.database,
                 "manage_secondary_role",
             ),
+            patch.object(console_member.io, "inputstring", return_value=""),
             patch("bbsengine6.console.member.io.echo"),
         ):
-            console_member.configurerole(args, "bob", sysop=False, conn=fake_conn)
+            console_member.configurerole(
+                args, "bob", sysop=False, conn=fake_conn, moniker="bob"
+            )
 
         revoke_actions = [
             (c.args[1], c.args[2], c.args[3])
             for c in mock_privs.call_args_list
             if c.args[2] == "revoke"
         ]
-        assert ("bob", "revoke", "createdb") in revoke_actions
-        assert ("bob", "revoke", "createrole") in revoke_actions
+        assert ("m_bob", "revoke", "createdb") in revoke_actions
+        assert ("m_bob", "revoke", "createrole") in revoke_actions
 
 
 # ---------------------------------------------------------------------------

@@ -331,25 +331,47 @@ def configurerole(args, rolename: str, sysop=False, **kwargs: dict) -> bool:
     if conn is None:
         return False
 
-    io.echo(f"{{var:labelcolor}}checking for role {{var:valuecolor}}{rolename}")
-    if database.rolexists(args, rolename, **kwargs) is False:
+    moniker = kwargs.get("moniker")
+    if not moniker:
+        io.echo(
+            f"con.member.configurerole.110: no moniker for {rolename=}",
+            level="error",
+        )
+        return False
+
+    # The role is m_<moniker>, created by pgrole.ensure_login_role. That path also grants
+    # 'member' and writes the engine.pgrole tracking row, which the request path needs.
+    # A bare CREATE ROLE <loginid> here skipped both, so the member was refused at login.
+    target = pgrole.role_name_for(moniker)
+    io.echo(f"{{var:labelcolor}}checking for role {{var:valuecolor}}{target}")
+    if database.rolexists(args, target, conn=conn) is False:
         if (
             io.inputboolean(
-                f"{{var:promptcolor}}role {{var:valuecolor}}{rolename}{{var:promptcolor}} does not exist. create it? {{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
+                f"{{var:promptcolor}}role {{var:valuecolor}}{target}{{var:promptcolor}} does not exist. create it? {{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
                 "Y",
             )
             is False
         ):
             io.echo("role not created.")
             return False
-        database.createrol(args, rolename, **kwargs)
-        database.manage_role_privs(args, rolename, "grant", "login", **kwargs)
-        database.manage_role_privs(args, rolename, "grant", "inherit", **kwargs)
 
-    privs = database.get_role_privs(args, rolename, conn=conn)
+    # Ask every question before the first write, so a "no" anywhere changes nothing.
+    osuser = _ask_os_login(args, rolename, target, **kwargs)
+    if osuser is False:
+        return False
+
+    rolname = pgrole.ensure_login_role(args, moniker, conn=conn)
+    if not rolname:
+        io.echo(
+            f"{{var:labelcolor}}could not provision a psql role for {{var:valuecolor}}{rolename}",
+            level="error",
+        )
+        return False
+
+    privs = database.get_role_privs(args, rolname, conn=conn)
     if privs is not None and privs.get("rolsuper") is True:
         io.echo(
-            f"{{var:valuecolor}}{rolename}{{var:labelcolor}} has "
+            f"{{var:valuecolor}}{rolname}{{var:labelcolor}} has "
             f"SUPERUSER; skipping login/inherit/createdb/createrole sync "
             f"(zoid6 cannot ALTER a SUPERUSER role). Leave SUPERUSER in "
             f"place.",
@@ -357,17 +379,75 @@ def configurerole(args, rolename: str, sysop=False, **kwargs: dict) -> bool:
         )
     else:
         if sysop is True:
-            database.manage_role_privs(args, rolename, "grant", "createdb", **kwargs)
-            database.manage_role_privs(args, rolename, "grant", "createrole", **kwargs)
+            database.manage_role_privs(args, rolname, "grant", "createdb", **kwargs)
+            database.manage_role_privs(args, rolname, "grant", "createrole", **kwargs)
         else:
-            database.manage_role_privs(args, rolename, "revoke", "createdb", **kwargs)
-            database.manage_role_privs(args, rolename, "revoke", "createrole", **kwargs)
+            database.manage_role_privs(args, rolname, "revoke", "createdb", **kwargs)
+            database.manage_role_privs(args, rolname, "revoke", "createrole", **kwargs)
 
     if sysop is True:
-        database.manage_secondary_role(args, rolename, "grant", "sysop", **kwargs)
+        database.manage_secondary_role(args, rolname, "grant", "sysop", **kwargs)
     else:
-        database.manage_secondary_role(args, rolename, "revoke", "sysop", **kwargs)
+        database.manage_secondary_role(args, rolname, "revoke", "sysop", **kwargs)
 
+    return _apply_os_login(args, rolname, osuser, **kwargs)
+
+
+def _ask_os_login(args, rolename: str, target: str, **kwargs):
+    """Prompt for the OS username and any login-role creation. Writes nothing.
+
+    Returns the OS username to set up (a str), None when the sysop leaves it blank,
+    or False when the sysop declines to create the login role.
+    """
+    conn = kwargs.get("conn")
+    osuser = io.inputstring(
+        f"{{var:promptcolor}}OS username for {{var:valuecolor}}{rolename}{{var:promptcolor}} "
+        f"(blank to skip): {{var:inputcolor}}",
+        "",
+        noneok=True,
+    )
+    if not osuser:
+        return None
+    if database.rolexists(args, osuser, conn=conn) is False:
+        if (
+            io.inputboolean(
+                f"{{var:promptcolor}}login role {{var:valuecolor}}{osuser}{{var:promptcolor}} "
+                f"does not exist. create it (NOINHERIT, can SET ROLE {target})? "
+                f"{{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
+                "Y",
+            )
+            is False
+        ):
+            io.echo("login role not created.")
+            return False
+    return osuser
+
+
+def _apply_os_login(args, rolname: str, osuser, **kwargs) -> bool:
+    """Create the login role if needed, grant it the member role, and record the osuser.
+
+    Runs only after every prompt has been answered (see _ask_os_login). Refused names
+    and failed creation return False with an error message.
+    """
+    conn = kwargs.get("conn")
+    if osuser is None:
+        io.echo("{{var:labelcolor}}no OS login set up for this member.")
+        return True
+
+    ok = pgrole.ensure_os_login_role(args, osuser, rolname, conn=conn)
+    if not ok:
+        io.echo(
+            f"{{var:labelcolor}}could not create or grant login role {{var:valuecolor}}{osuser}",
+            level="error",
+        )
+        return False
+
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            "UPDATE engine.pgrole SET osuser = %s WHERE rolname = %s",
+            (osuser, rolname),
+        )
+    io.echo(f"{{var:okcolor}}login role {osuser} may SET ROLE {rolname}.")
     return True
 
 
@@ -468,6 +548,7 @@ def edit(args, **kwargs):
                 m["loginid"],
                 m.get("flags", {}).get("SYSOP", {}).get("value", False),
                 conn=conn,
+                moniker=m["moniker"],
                 **kwargs,
             )
             setui(args, m["loginid"], m["ui"], conn=conn, **kwargs)
@@ -564,6 +645,7 @@ def add(args, **kwargs) -> bool:
                 member["loginid"],
                 member.get("flags", {}).get("SYSOP", {}).get("value", False),
                 conn=conn,
+                moniker=moniker,
                 **kwargs,
             )
             pgrole.ensure_login_role(
