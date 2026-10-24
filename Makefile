@@ -242,8 +242,12 @@ venv:
 	@wheels="$$(mktemp -d)" && \
 	trap 'rm -rf "$$wheels"' EXIT && \
 	"$(VENV_DIR)/bin/python" -m build --wheel --outdir "$$wheels" py && \
-	"$(VENV_DIR)/bin/python" -m pip install --upgrade "$$wheels"/*.whl && \
-	echo "bbsengine6 installed into $(VENV_DIR)"
+	whl="$$(ls "$$wheels"/*.whl)" && \
+	want="$$(unzip -p "$$whl" '*/METADATA' | sed -n 's/^Version: //p' | head -1)" && \
+	"$(VENV_DIR)/bin/python" -m pip install --upgrade --force-reinstall --no-deps "$$whl" && \
+	have="$$("$(VENV_DIR)/bin/python" -m pip show bbsengine6 | sed -n 's/^Version: //p')" && \
+	if [ "$$have" != "$$want" ]; then echo "venv: installed bbsengine6 $$have, but the wheel is $$want" >&2; exit 1; fi && \
+	echo "bbsengine6 $$want installed into $(VENV_DIR)"
 
 .PHONY: venv
 

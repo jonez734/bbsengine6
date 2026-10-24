@@ -69,7 +69,7 @@ def test_venv_recipe_installs_build_before_using_it():
 def test_venv_recipe_installs_only_the_wheel_it_just_built():
     """Stale wheels from earlier builds conflict, so the install must read only this build's output."""
     body = _recipe("venv")
-    install = re.search(r'-m pip install[^\n]*\$\$"?wheels"?/\*\.whl', body)
+    install = re.search(r'-m pip install[^\n]*\$\$"?whl"?', body)
     assert install, body
     assert "mktemp" in body and body.index("mktemp") < install.start(), body
 
@@ -113,3 +113,20 @@ def test_venv_recipe_defaults_to_python312():
 def test_venv_recipe_creates_the_venv_only_when_missing():
     body = _recipe("venv")
     assert re.search(r'if \[ ! -x "\$\(VENV_DIR\)/bin/python" \]', body), body
+
+
+@pytest.mark.unit
+def test_venv_recipe_forces_reinstall_of_the_built_wheel():
+    """pip skips an install when the same version is present and exits 0, so the recipe
+    would report success while the old code stays installed. Force the reinstall."""
+    body = _recipe("venv")
+    assert "--force-reinstall" in body, body
+
+
+@pytest.mark.unit
+def test_venv_recipe_verifies_the_installed_version_matches_the_wheel():
+    """After installing, the recipe checks pip show against the wheel it built, and fails if
+    they differ, so 'installed' is only printed when it is true."""
+    body = _recipe("venv")
+    assert "pip show bbsengine6" in body or "-m pip show bbsengine6" in body, body
+    assert "exit 1" in body, body
