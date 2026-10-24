@@ -66,3 +66,42 @@ def test_approval_does_not_print_the_pg_ident_instruction():
     src = inspect.getsource(memberapproval)
     assert "bbbsmap" not in src
     assert "pg_ident" not in src
+
+
+@pytest.mark.unit
+def test_stored_osuser_is_looked_up_by_join_and_used_as_default():
+    """An approved member whose engine.pgrole row already has an osuser keeps it as the default."""
+    conn = MagicMock()
+    cur = conn.cursor.return_value.__enter__.return_value
+    cur.fetchone.return_value = {"osuser": "lo_os"}
+    assert memberapproval._stored_osuser_for_moniker(conn, "lo_test") == "lo_os"
+    sql = cur.execute.call_args.args[0]
+    assert "engine.__member" in sql and "engine.pgrole" in sql and "join" in sql.lower()
+
+
+@pytest.mark.unit
+def test_new_member_with_no_pgrole_osuser_gets_none_as_stored():
+    conn = MagicMock()
+    cur = conn.cursor.return_value.__enter__.return_value
+    cur.fetchone.return_value = None
+    assert memberapproval._stored_osuser_for_moniker(conn, "lo_test") is None
+
+
+@pytest.mark.unit
+def test_process_member_passes_the_stored_osuser_as_the_default():
+    r = None
+    conn = MagicMock()
+    with patch.object(memberapproval, "_stored_osuser_for_moniker", return_value="lo_os"), \
+         patch.object(memberapproval.member, "getbymoniker", return_value=M), \
+         patch.object(memberapproval.member, "checkflag", return_value=True), \
+         patch.object(memberapproval, "_set_email_verified"), \
+         patch.object(memberapproval, "_approve_member", return_value=True), \
+         patch.object(memberapproval.pgrole, "ensure_login_role", return_value="m_lo_test"), \
+         patch.object(memberapproval.io, "inputboolean", side_effect=[True, True]), \
+         patch.object(memberapproval.io, "echo"), \
+         patch.object(memberapproval.util, "hr"), \
+         patch.object(memberapproval.console_member, "_ask_os_login_menu_full",
+                      return_value=("lo_os", True, None, False)) as ask, \
+         patch.object(memberapproval.console_member, "_apply_os_login", return_value=True):
+        memberapproval._process_member(object(), {"moniker": "lo_test"}, "sysop", conn=conn)
+    assert ask.call_args.kwargs.get("stored") == "lo_os"

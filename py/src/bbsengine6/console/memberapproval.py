@@ -101,6 +101,27 @@ def _disapprove_member(args, moniker: str, *, conn) -> bool:
     return True
 
 
+def _stored_osuser_for_moniker(conn, moniker: str):
+    """The OS username already recorded for this member, via engine.__member join engine.pgrole.
+
+    None when the member has no pgrole row yet, or the row has no osuser.
+    """
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            """
+            select pr.osuser
+              from engine.__member mm
+              join engine.pgrole pr on pr.membermoniker = mm.moniker
+             where mm.moniker = %s
+            """,
+            (moniker,),
+        )
+        row = cur.fetchone()
+    if row is None:
+        return None
+    return row["osuser"] if isinstance(row, dict) else row[0]
+
+
 def _process_member(args, rec, currentmoniker, *, conn) -> None:
     """Decide one pending member: verify email, then approve (with psql roles) or disapprove.
 
@@ -132,8 +153,9 @@ def _process_member(args, rec, currentmoniker, *, conn) -> None:
                 return
 
             m = member.getbymoniker(args, moniker, conn=conn)
+            stored = _stored_osuser_for_moniker(conn, moniker)
             osuser, ok, old, remove = console_member._ask_os_login_menu_full(
-                args, m["loginid"], conn=conn, stored=None
+                args, m["loginid"], conn=conn, stored=stored
             )
             if ok:
                 console_member._apply_os_login(
