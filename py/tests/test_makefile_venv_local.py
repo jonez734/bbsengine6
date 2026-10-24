@@ -142,3 +142,12 @@ def test_venv_recipe_builds_from_a_copy_not_in_tree():
     assert "cp -a" in body or "tar -C" in body, body
     assert "--exclude=build" in body or "--exclude=./build" in body, body
     assert "--exclude=egg-info" in body or "egg-info" in body, body
+
+
+@pytest.mark.unit
+def test_venv_recipe_verifies_installed_files_not_only_the_version():
+    """Same version, changed code: pip reports the same version, so a version-only check passes
+    while the venv keeps old files. The recipe must compare the installed package's files with
+    the built wheel's, and fail on any difference."""
+    body = _recipe("venv")
+    assert "RECORD" in body or "hash" in body.lower() or "sha256" in body.lower() or "cmp" in body, body
