@@ -63,3 +63,13 @@ def test_venv_recipe_installs_build_before_using_it():
     use_build = body.find("-m build")
     assert install_build, body
     assert install_build.start() < use_build, body
+
+
+@pytest.mark.unit
+def test_venv_recipe_clears_old_wheels_before_install():
+    """pip installs py/dist/*.whl. Stale wheels from earlier builds conflict, so clear them first."""
+    body = _recipe("venv")
+    clear = re.search(r"rm -rf py/dist\b|rm -f py/dist/", body)
+    install = re.search(r'bin/pip"?\s+install[^\n]*py/dist/\*\.whl', body)
+    assert clear and install, body
+    assert clear.start() < install.start(), body
