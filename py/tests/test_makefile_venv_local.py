@@ -52,3 +52,14 @@ def test_venv_recipe_builds_and_installs_locally():
     body = _recipe("venv")
     assert re.search(r'bin/pip"?\s+install', body), body
     assert "-m build" in body
+
+
+@pytest.mark.unit
+def test_venv_recipe_installs_build_before_using_it():
+    """`python -m build` runs inside the target venv, which may not have `build` yet
+    (a fresh venv, or one created for the bed service). Install it first."""
+    body = _recipe("venv")
+    install_build = re.search(r'bin/pip"?\s+install[^\n]*\bbuild\b', body)
+    use_build = body.find("-m build")
+    assert install_build, body
+    assert install_build.start() < use_build, body

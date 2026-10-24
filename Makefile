@@ -232,6 +232,7 @@ VENV_DIR ?= $(or $(DEPLOY_PREFIX),$(HOME)/.venv)
 venv:
 	$(PYTHON) -m venv "$(VENV_DIR)" || true
 	"$(VENV_DIR)/bin/pip" install --upgrade pip
+	"$(VENV_DIR)/bin/pip" install --upgrade build
 	rm -rf py/build
 	"$(VENV_DIR)/bin/python" -m build --wheel --outdir py/dist py
 	"$(VENV_DIR)/bin/pip" install --upgrade py/dist/*.whl
