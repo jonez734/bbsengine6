@@ -130,3 +130,15 @@ def test_venv_recipe_verifies_the_installed_version_matches_the_wheel():
     body = _recipe("venv")
     assert "pip show bbsengine6" in body or "-m pip show bbsengine6" in body, body
     assert "exit 1" in body, body
+
+
+@pytest.mark.unit
+def test_venv_recipe_builds_from_a_copy_not_in_tree():
+    """setuptools writes build/ and egg-info inside the source tree. A root-owned or stale
+    build/ there makes the build fail, so the recipe builds from a temp copy of py/ that
+    leaves build/, dist/ and egg-info out."""
+    body = _recipe("venv")
+    assert "build --wheel --outdir \"$$wheels\" py" not in body, body
+    assert "cp -a" in body or "tar -C" in body, body
+    assert "--exclude=build" in body or "--exclude=./build" in body, body
+    assert "--exclude=egg-info" in body or "egg-info" in body, body

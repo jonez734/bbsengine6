@@ -239,9 +239,12 @@ venv:
 	fi
 	"$(VENV_DIR)/bin/python" -m pip install --upgrade pip
 	"$(VENV_DIR)/bin/python" -m pip install --upgrade build
-	@wheels="$$(mktemp -d)" && \
-	trap 'rm -rf "$$wheels"' EXIT && \
-	"$(VENV_DIR)/bin/python" -m build --wheel --outdir "$$wheels" py && \
+	@work="$$(mktemp -d)" && \
+	trap 'rm -rf "$$work"' EXIT && \
+	mkdir "$$work/src" && \
+	tar -C py --exclude=./build --exclude=./dist --exclude='*.egg-info' --exclude=__pycache__ -cf - . | tar -C "$$work/src" -xf - && \
+	wheels="$$work/out" && \
+	"$(VENV_DIR)/bin/python" -m build --wheel --outdir "$$wheels" "$$work/src" && \
 	whl="$$(ls "$$wheels"/*.whl)" && \
 	want="$$(unzip -p "$$whl" '*/METADATA' | sed -n 's/^Version: //p' | head -1)" && \
 	"$(VENV_DIR)/bin/python" -m pip install --upgrade --force-reinstall --no-deps "$$whl" && \
