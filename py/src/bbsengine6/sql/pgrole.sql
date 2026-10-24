@@ -49,3 +49,25 @@ end $$;
 -- when the deferred 'web -> psql via SET LOCAL ROLE' work is picked
 -- up. Granting now keeps the migration trivial when that day comes.
 grant select on engine.pgrole to member;
+
+-- Migration: data roles are NOLOGIN. A LOGIN data role lets an OS account of the same
+-- name connect directly and skip its login role. Only SET ROLE reaches a data role.
+-- Idempotent: roles already NOLOGIN are not touched. Superusers and 'jam' (the legacy
+-- owner mapping) are skipped. Only m_-prefixed tracked roles are changed.
+do $$
+declare
+  r record;
+begin
+  for r in
+    select pr.rolname
+      from engine.pgrole pr
+      join pg_roles pg on pg.rolname = pr.rolname
+     where pr.rolname like 'm\_%'
+       and pr.rolname <> 'jam'
+       and pg.rolcanlogin
+       and not pg.rolsuper
+  loop
+    execute format('alter role %I nologin', r.rolname);
+    raise notice 'pgrole: set nologin on %', r.rolname;
+  end loop;
+end $$;

@@ -74,6 +74,26 @@ def lookup_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
     return row["rolname"] if isinstance(row, dict) else row[0]
 
 
+def _reconcile_nologin(args: Any, rolname: str, *, conn: Any) -> None:
+    """Make an existing data role NOLOGIN, so only SET ROLE reaches it.
+
+    Data roles were created LOGIN before this rule. A LOGIN data role lets an OS account
+    of that name connect directly and skip the login role. Superusers are never altered
+    (the connecting role may not ALTER them, and jam is the legacy owner mapping).
+    """
+    if not database.rolexists(args, rolname, conn=conn):
+        return
+    privs = database.get_role_privs(args, rolname, conn=conn)
+    if privs is None or privs.get("rolsuper") is True:
+        return
+    if privs.get("rolcanlogin") is True:
+        from psycopg import sql as pg_sql
+
+        with database.cursor(conn=conn) as cur:
+            cur.execute(pg_sql.SQL("ALTER ROLE {} NOLOGIN").format(pg_sql.Identifier(rolname)))
+        util.logentry(f"bbsengine6.pgrole._reconcile_nologin.100: set NOLOGIN on {rolname=}")
+
+
 def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
     rolname = role_name_for(moniker)
 
@@ -90,6 +110,7 @@ def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
             f"bbsengine6.pgrole._ensure_login_role.140: "
             f"pgrole row exists for {moniker=}, rolname={existing['rolname']}"
         )
+        _reconcile_nologin(args, existing["rolname"], conn=conn)
         return existing["rolname"]
 
     # 2. Check if the PostgreSQL role already exists (e.g. created via psql).
@@ -98,7 +119,7 @@ def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
             args,
             rolname,
             conn=conn,
-            login=True,
+            login=False,
             superuser=False,
             createdb=False,
             createrole=False,
@@ -109,6 +130,8 @@ def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
                 f"createrol failed for {rolname=}"
             )
             return None
+    else:
+        _reconcile_nologin(args, rolname, conn=conn)
 
     # 3. Grant the 'member' group role.
     # rolname is regex-sanitized to [A-Za-z0-9_]+ so it's safe to splice,
@@ -139,6 +162,59 @@ def _ensure_login_role(args: Any, moniker: str, *, conn: Any) -> Optional[str]:
         f"created {rolname=} for {moniker=}"
     )
     return rolname
+
+
+_PLAIN_NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+
+
+def ensure_os_login_role(
+    args: Any, osuser: str, member_role: str, *, conn: Any
+) -> bool:
+    """Create the OS-user login role and let it SET ROLE into the member's role.
+
+    ident (no pg_ident map) logs a connection in as the role named like the OS user.
+    That login role is created NOINHERIT: it holds no privileges of its own and acts
+    only through ``SET ROLE <member_role>``, which requires membership in it.
+
+    Returns True when the role exists and is granted membership, False otherwise.
+    Refuses an osuser that is not a plain lowercase name, and refuses the member role
+    itself as the login role. Nothing is created in either refused case.
+    """
+    util.logentry(f"bbsengine6.pgrole.ensure_os_login_role.100: {osuser=!r} {member_role=!r}")
+
+    if not _PLAIN_NAME.match(osuser or ""):
+        util.logentry(f"bbsengine6.pgrole.ensure_os_login_role.110: refused osuser {osuser!r}")
+        return False
+    if osuser == member_role:
+        util.logentry("bbsengine6.pgrole.ensure_os_login_role.120: osuser is the member role")
+        return False
+
+    if not database.rolexists(args, osuser, conn=conn):
+        ok = database.createrol(
+            args,
+            osuser,
+            conn=conn,
+            login=True,
+            inherit=False,
+            superuser=False,
+            createdb=False,
+            createrole=False,
+        )
+        if not ok:
+            util.logentry(
+                f"bbsengine6.pgrole.ensure_os_login_role.130: createrol failed for {osuser!r}"
+            )
+            return False
+
+    from psycopg import sql as pg_sql
+
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            pg_sql.SQL("GRANT {} TO {}").format(
+                pg_sql.Identifier(member_role), pg_sql.Identifier(osuser)
+            )
+        )
+    return True
 
 
 def sync_groups(args: Any, loginid: str, **kwargs: Any) -> bool:

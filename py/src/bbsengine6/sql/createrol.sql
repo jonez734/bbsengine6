@@ -27,8 +27,12 @@ grant execute on function engine.createrol to sysop;
 -- Per-member psql access roles (ident auth, no password).
 -- See handbook/specs/pg-ident-auth.md.
 
+-- DEPRECATED: engine.createpgrole is unused by the application. The console provisions
+-- through bbsengine6.pgrole (ensure_login_role / ensure_os_login_role). Its only caller
+-- is the one-shot sql/backfill_pgrole.sql. Scheduled for removal; do not add callers.
+--
 -- engine.createpgrole: derive 'm_' + sanitized(p_moniker),
--- collision-suffixed, CREATE ROLE ... LOGIN (no password),
+-- collision-suffixed, CREATE ROLE ... NOLOGIN (data roles are reached only by SET ROLE),
 -- GRANT member TO m_xxx, INSERT INTO engine.pgrole, return rolname.
 -- Idempotent: if engine.pgrole already has a row for this member,
 -- the existing rolname is returned (and osuser is updated if provided).
@@ -67,8 +71,8 @@ BEGIN
     rname := base || '_' || n;
   END LOOP;
 
-  -- Create the LOGIN role. No PASSWORD clause: auth is by ident.
-  EXECUTE format('CREATE ROLE %I LOGIN INHERIT', rname);
+  -- Create the data role NOLOGIN NOINHERIT. No PASSWORD clause. Only SET ROLE reaches it.
+  EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT', rname);
 
   -- Every approved member is a member of the 'member' group role.
   -- The 'member' group is created in pgrole.sql.
