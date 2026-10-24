@@ -111,8 +111,9 @@ Not granted (intentionally):
 
 ### Adding a member
 
-1. Create the member with `[N]` (New Member). This is the complete path:
-   it creates the data role and, with an OS username, the login role.
+1. Create the member with `[N]` (New Member), or approve one in `[A]
+   Approvals`. Both create the data role. Both then ask for the OS
+   username, and create the login role if it is missing.
 2. In the edit menu, `[O]` sets the OS username. It defaults to the
    stored value or the loginid. If the login role does not exist, the
    console asks whether to create it on exit.
@@ -127,12 +128,6 @@ Press `[O]` and enter the new name. If the stored name changes, the
 console asks whether to remove the old login role (default No). Yes
 revokes the old login's access to the data role, and drops the role if
 nothing else uses it. Removal happens on exit, with the other writes.
-
-**Known gap:** `[A] Approvals` creates only the data role. It does not
-ask for an OS username, so it creates no login role, and the member
-cannot connect until the sysop sets one with `[O]`. Its message still
-tells the sysop to add a `bbbsmap` line to `pg_ident.conf`, which is no
-longer used.
 
 ### Removing a member
 

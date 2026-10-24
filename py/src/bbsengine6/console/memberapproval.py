@@ -6,6 +6,7 @@ approval. Requires SYSOP flag to access this module.
 
 from bbsengine6 import util, member, database, io
 from bbsengine6 import pgrole
+from bbsengine6.console import member as console_member
 
 
 def init(args, **kw: dict) -> bool:
@@ -100,6 +101,63 @@ def _disapprove_member(args, moniker: str, *, conn) -> bool:
     return True
 
 
+def _process_member(args, rec, currentmoniker, *, conn) -> None:
+    """Decide one pending member: verify email, then approve (with psql roles) or disapprove.
+
+    Approval creates the data role and, after asking the sysop for the OS username, the
+    login role that ident maps to it. The prompts and writes are the same as the member
+    console's [O] option, so approval and the console cannot disagree.
+    """
+    moniker = rec.get("moniker")
+    try:
+        if io.inputboolean(
+            "{var:promptcolor}is this email address verified? {var:optioncolor}[Yn]{var:promptcolor}: {var:inputcolor}",
+            "Y",
+        ):
+            _set_email_verified(args, moniker, True, conn=conn)
+        else:
+            _set_email_verified(args, moniker, False, conn=conn)
+
+        if io.inputboolean(
+            "{var:promptcolor}approve this member? {var:optioncolor}[Yn]{var:promptcolor}: {var:inputcolor}",
+            "Y",
+        ):
+            if not _approve_member(args, moniker, currentmoniker, conn=conn):
+                raise RuntimeError(f"approve_member failed for {moniker!r}")
+            conn.commit()
+
+            rolname = pgrole.ensure_login_role(args, moniker, conn=conn)
+            if rolname is None:
+                io.echo("psql role provisioning failed; see logs", level="error")
+                return
+
+            m = member.getbymoniker(args, moniker, conn=conn)
+            osuser, ok, old, remove = console_member._ask_os_login_menu_full(
+                args, m["loginid"], conn=conn, stored=None
+            )
+            if ok:
+                console_member._apply_os_login(
+                    args, rolname, osuser, conn=conn, old_osuser=old, remove_old=remove
+                )
+                io.echo(
+                    f"{{var:labelcolor}}psql access provisioned: "
+                    f"{{var:valuecolor}}{osuser} {{var:labelcolor}}may SET ROLE {{var:valuecolor}}{rolname}"
+                )
+            else:
+                io.echo(
+                    f"{{var:labelcolor}}no OS login for {{var:valuecolor}}{moniker}{{var:labelcolor}}; "
+                    f"set one with [O] in the member menu before they can connect.",
+                    level="warn",
+                )
+        else:
+            if not _disapprove_member(args, moniker, conn=conn):
+                raise RuntimeError(f"disapprove_member failed for {moniker!r}")
+            conn.commit()
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.console.memberapproval._process_member: {e}")
+        conn.rollback()
+
+
 def main(args, **kw):
     util.heading("member approval")
     sql = "select moniker from engine.member where approvedbymoniker is null"
@@ -146,52 +204,5 @@ def main(args, **kw):
                 io.echo(" (not verified)")
             util.hr()
 
-            try:
-                if io.inputboolean(
-                    "{var:promptcolor}is this email address verified? {var:optioncolor}[Yn]{var:promptcolor}: {var:inputcolor}",
-                    "Y",
-                ):
-                    _set_email_verified(args, moniker, True, conn=conn)
-                else:
-                    _set_email_verified(args, moniker, False, conn=conn)
-
-                if io.inputboolean(
-                    "{var:promptcolor}approve this member? {var:optioncolor}[Yn]{var:promptcolor}: {var:inputcolor}",
-                    "Y",
-                ):
-                    if not _approve_member(
-                        args, moniker, currentmoniker, conn=conn
-                    ):
-                        raise RuntimeError(
-                            f"approve_member failed for {moniker!r}"
-                        )
-                    conn.commit()
-
-                    rolname = pgrole.ensure_login_role(
-                        args, moniker, conn=conn
-                    )
-                    if rolname is not None:
-                        io.echo(
-                            f"{{var:labelcolor}}psql access provisioned: "
-                            f"{{var:valuecolor}}{rolname} "
-                            f"{{var:labelcolor}}(add a 'bbbsmap' line to "
-                            f"{{var:valuecolor}}pg_ident.conf{{var:labelcolor}} "
-                            f"and reload PG; see handbook/specs/pg-ident-auth.md)"
-                        )
-                    else:
-                        io.echo(
-                            "psql role provisioning failed; see logs",
-                            level="error",
-                        )
-                else:
-                    if not _disapprove_member(args, moniker, conn=conn):
-                        raise RuntimeError(
-                            f"disapprove_member failed for {moniker!r}"
-                        )
-                    conn.commit()
-            except Exception as e:
-                io.echo_traceback(
-                    f"bbsengine6.console.memberapproval.main: {e}"
-                )
-                conn.rollback()
+            _process_member(args, rec, currentmoniker, conn=conn)
     return True
