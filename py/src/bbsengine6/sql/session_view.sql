@@ -10,6 +10,6 @@ create view engine.session as
     left outer join engine.__member as currentmember on (currentmember.loginid = CURRENT_USER)
 ;
 
-create unique index idx_session_sessionid_unique on engine.__session(id);
+create unique index if not exists idx_session_sessionid_unique on engine.__session(id);
 
 grant select on engine.session to web, term, sysop, member;

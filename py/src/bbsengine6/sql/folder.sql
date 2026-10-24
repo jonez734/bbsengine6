@@ -15,7 +15,7 @@ create table engine.__folder (
     "createdbymoniker" citext constraint fk_engine_folder_createdbymoniker references engine.__member(moniker) on update cascade on delete set null
 );
 
-CREATE INDEX idx_folder_attrs ON engine.__folder USING gin (attrs);
+CREATE INDEX IF NOT EXISTS idx_folder_attrs ON engine.__folder USING gin (attrs);
 
 grant select on table engine.__folder to web, term;
 grant all on table engine.__folder to sysop;

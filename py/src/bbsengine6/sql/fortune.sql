@@ -1,4 +1,3 @@
-\echo fortune.sql
 --CREATE TABLE engine.__mantra (
 --    id serial unique not null primary key,
 --    description text,

@@ -1,4 +1,3 @@
-\echo view engine.blurb
 create or replace view engine.blurb as
     select
         b.*,
@@ -18,5 +17,4 @@ create or replace view engine.blurb as
     left join engine.__member as approvedby ON (approvedby.moniker = b.approvedbymoniker)
 ;
 
-\echo grant engine.blurb
 grant select on engine.blurb to web;
