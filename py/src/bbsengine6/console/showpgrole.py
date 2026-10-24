@@ -161,20 +161,17 @@ def _render(row: dict, loginid: str) -> None:
             f"{{var:labelcolor}}last ack:    {{var:valuecolor}}{row['last_ack_at']}"
         )
     io.echo("")
+    # Members log in as their login role (the OS username). The data role is NOLOGIN and
+    # is reached only by SET ROLE, so it is never a connect target.
+    login = row.get("osuser") or "(not set)"
     io.echo("{{var:labelcolor}}Connect with:")
     io.echo(
-        f"{{var:valuecolor}}  psql -h 127.0.0.1 -U {row['rolname']} -d <dbname>"
+        f"{{var:valuecolor}}  psql -h 127.0.0.1 -U {login} -d <dbname>"
     )
     io.echo("")
     io.echo(
         "{{var:labelcolor}}(no password -- authentication is by ident. Your"
     )
     io.echo(
-        "{{var:labelcolor}}local OS username must match the 'osuser' above,"
-    )
-    io.echo(
-        "{{var:labelcolor}}and pg_ident.conf on the DB host must have a"
-    )
-    io.echo(
-        "{{var:labelcolor}}'bbbsmap' line mapping that OS user to the PG role.)"
+        "{{var:labelcolor}}local OS username must match the login role above.)"
     )
