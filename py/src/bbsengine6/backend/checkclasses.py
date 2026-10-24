@@ -48,11 +48,7 @@ classlist = (
     ("engine.__folder", "folder.sql"),
     ("engine.folder", "folderview.sql"),
 
-    # Read by engine.site, siteauth and engine.log, so it must come first.
-    ("engine.blurb", "blurbview.sql"),
     ("engine.fortune", "fortune.sql"),
-    ("engine.site", "site.sql"),
-    ("siteauth", "siteauth.sql"),
 )
 
 

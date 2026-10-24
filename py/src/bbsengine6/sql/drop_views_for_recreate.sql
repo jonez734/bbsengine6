@@ -10,5 +10,3 @@
 drop view if exists engine.folder;
 drop view if exists engine.fortune;
 drop view if exists engine.session;
-drop view if exists engine.site;
-drop view if exists siteauth;

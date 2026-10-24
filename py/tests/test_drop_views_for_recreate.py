@@ -25,7 +25,13 @@ def _dropped():
 
 @pytest.mark.unit
 def test_drop_file_covers_every_plain_create_view():
-    assert _plain_create_views() <= _dropped(), _plain_create_views() - _dropped()
+    # engine.site and siteauth are plain CREATE VIEW but depend on the blurb group, which
+    # startup does not build. They are deliberately left in place, not dropped (see
+    # test_blurb_views_not_in_startup). Any other plain CREATE VIEW must be dropped.
+    left_in_place = {"engine.site", "siteauth"}
+    assert _plain_create_views() - left_in_place <= _dropped(), (
+        _plain_create_views() - left_in_place - _dropped()
+    )
 
 
 @pytest.mark.unit
