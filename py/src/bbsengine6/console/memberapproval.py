@@ -102,18 +102,13 @@ def _disapprove_member(args, moniker: str, *, conn) -> bool:
 
 
 def _stored_osuser_for_moniker(conn, moniker: str):
-    """The OS username already recorded for this member, via engine.__member join engine.pgrole.
+    """The OS username already recorded for this member, from engine.pgrole_member.
 
     None when the member has no pgrole row yet, or the row has no osuser.
     """
     with database.cursor(conn=conn) as cur:
         cur.execute(
-            """
-            select pr.osuser
-              from engine.__member mm
-              join engine.pgrole pr on pr.membermoniker = mm.moniker
-             where mm.moniker = %s
-            """,
+            "select osuser from engine.pgrole_member where moniker = %s",
             (moniker,),
         )
         row = cur.fetchone()

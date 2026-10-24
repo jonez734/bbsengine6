@@ -76,7 +76,7 @@ def test_stored_osuser_is_looked_up_by_join_and_used_as_default():
     cur.fetchone.return_value = {"osuser": "lo_os"}
     assert memberapproval._stored_osuser_for_moniker(conn, "lo_test") == "lo_os"
     sql = cur.execute.call_args.args[0]
-    assert "engine.__member" in sql and "engine.pgrole" in sql and "join" in sql.lower()
+    assert "engine.pgrole_member" in sql
 
 
 @pytest.mark.unit

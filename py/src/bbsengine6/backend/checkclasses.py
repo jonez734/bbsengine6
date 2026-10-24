@@ -36,6 +36,7 @@ classlist = (
     ("engine.member", "memberview.sql"),
 
     ("engine.pgrole", "pgrole.sql"),
+    ("engine.pgrole_member", "pgrole_member_view.sql"),
 
     ("engine.__session", "session.sql"),
     ("engine.session", "session_view.sql"),
