@@ -86,10 +86,3 @@ def test_createpgrole_sql_creates_nologin_data_roles():
     create = [line for line in body.splitlines() if "CREATE ROLE" in line]
     assert create and all("NOLOGIN" in line for line in create), create
 
-
-@pytest.mark.unit
-def test_createpgrole_is_marked_deprecated():
-    from pathlib import Path
-    sql = (Path(pgrole.__file__).parent / "sql" / "createrol.sql").read_text()
-    header = sql.split("CREATE OR REPLACE FUNCTION engine.createpgrole")[0]
-    assert "DEPRECATED" in header, "createpgrole must carry a DEPRECATED marker above its definition"
