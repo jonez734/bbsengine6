@@ -41,3 +41,14 @@ def test_drop_file_does_not_drop_or_replace_views():
 def test_drop_file_uses_if_exists():
     text = (SQL / "drop_views_for_recreate.sql").read_text()
     assert all("if exists" in line.lower() for line in text.splitlines() if line.lower().startswith("drop view"))
+
+
+@pytest.mark.unit
+def test_every_dropped_view_is_recreated_by_startup():
+    """Dropping a view is only safe if startup brings it back. Every view the drop file removes
+    must be in checkclasses.classlist with its SQL file, so the two lists cannot drift."""
+    from bbsengine6.backend import checkclasses
+
+    registered = {cls.lower() for cls, _ in checkclasses.classlist}
+    missing = _dropped() - registered
+    assert not missing, f"dropped but not recreated on startup: {sorted(missing)}"
