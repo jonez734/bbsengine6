@@ -47,7 +47,7 @@ def test_menu_offers_the_osuser_and_data_role_choices():
 @pytest.mark.unit
 def test_os_option_checks_existence_right_after_input_and_defers_writes():
     m = _member()
-    with patch.object(console_member, "_ask_os_login_menu", return_value=("lo_test", True)) as ask, \
+    with patch.object(console_member, "_ask_os_login_menu_full", return_value=("lo_test", True, None, False)) as ask, \
          patch.object(console_member.pgrole, "ensure_os_login_role") as eo, \
          patch.object(console_member.database, "createrol") as cr:
         out = _run_edit(["O", "Q"], m)
@@ -60,7 +60,7 @@ def test_os_option_checks_existence_right_after_input_and_defers_writes():
 @pytest.mark.unit
 def test_declined_login_role_leaves_the_member_unchanged():
     m = _member()
-    with patch.object(console_member, "_ask_os_login_menu", return_value=(None, False)):
+    with patch.object(console_member, "_ask_os_login_menu_full", return_value=(None, False, None, False)):
         out = _run_edit(["O", "Q"], m)
     assert out["osuser"] is None
 

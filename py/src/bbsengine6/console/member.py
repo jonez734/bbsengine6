@@ -219,31 +219,26 @@ def _stored_psqlrole(conn, moniker: str):
     return row["rolname"] if isinstance(row, dict) else row[0]
 
 
-def _ask_os_login_menu(args, loginid: str, *, conn):
-    """[O] menu option: ask for the OS username, then check its login role. Writes nothing.
+def _ask_os_login_menu_full(args, loginid: str, *, conn, stored=None):
+    """[O] menu option: ask for the OS username, check its login role, and ask about the
+    old one if it changed. Writes nothing.
 
-    Returns (osuser, ok). ok is False when the sysop leaves it blank or declines to
-    create a missing login role; the caller then keeps the previous value.
+    ``stored`` is the osuser the member had when the menu opened (from _load_psql), and
+    is the default. Returns (osuser, ok, old_osuser, remove_old):
+      osuser      the chosen name, or None when left blank
+      ok          False when blank or the sysop declined to create the login role
+      old_osuser  the previous name when it changed, else None
+      remove_old  True when the sysop asked to remove the previous login role
     """
-    stored = None
-    if conn is not None:
-        with database.cursor(conn=conn) as cur:
-            cur.execute(
-                "SELECT osuser FROM engine.pgrole WHERE membermoniker = "
-                "(SELECT moniker FROM engine.__member WHERE loginid = %s)",
-                (loginid,),
-            )
-            row = cur.fetchone()
-        if row is not None:
-            stored = row["osuser"] if isinstance(row, dict) else row[0]
+    default = stored or loginid
     osuser = io.inputstring(
         f"{{var:promptcolor}}OS username{{var:promptcolor}} "
         f"(blank to skip): {{var:inputcolor}}",
-        stored or loginid,
+        default,
         noneok=True,
     )
     if not osuser:
-        return None, False
+        return None, False, None, False
     if database.rolexists(args, osuser, conn=conn) is False:
         if (
             io.inputboolean(
@@ -254,8 +249,25 @@ def _ask_os_login_menu(args, loginid: str, *, conn):
             is False
         ):
             io.echo("login role not created.")
-            return None, False
-    return osuser, True
+            return None, False, None, False
+
+    old = None
+    remove = False
+    if stored and osuser != stored:
+        old = stored
+        remove = io.inputboolean(
+            f"{{var:promptcolor}}remove the old OS login {{var:valuecolor}}{old}{{var:promptcolor}} "
+            f"(revokes its access; drops it if unused)? {{var:optioncolor}}[yN]{{var:promptcolor}}: {{var:inputcolor}}",
+            "N",
+        )
+        remove = remove is True
+    return osuser, True, old, remove
+
+
+def _ask_os_login_menu(args, loginid: str, *, conn):
+    """Compatibility wrapper: returns (osuser, ok) for callers that do not track removal."""
+    osuser, ok, _old, _remove = _ask_os_login_menu_full(args, loginid, conn=conn)
+    return osuser, ok
 
 
 def _ask_psqlrole_menu(args, moniker: str, stored, *, conn):
@@ -315,9 +327,13 @@ def _edit(args, mode, member, **kwargs):
             io.echo("OS login")
             # Existence is checked right after the input. Nothing is written here; the
             # login role is created when the menu exits (see configurerole).
-            osuser, ok = _ask_os_login_menu(args, member["loginid"], conn=conn)
+            osuser, ok, old, remove = _ask_os_login_menu_full(
+                args, member["loginid"], conn=conn, stored=_member.get("osuser")
+            )
             if ok:
                 member["osuser"] = osuser
+                member["old_osuser"] = old
+                member["remove_old_osuser"] = remove
         elif ch == "X":
             io.echo("Data role (psql role)")
             member["psqlrole"] = _ask_psqlrole_menu(
@@ -448,6 +464,8 @@ def configurerole(
     *,
     osuser=None,
     psqlrole=None,
+    old_osuser=None,
+    remove_old_osuser: bool = False,
     menu_answered: bool = False,
     **kwargs: dict,
 ) -> bool:
@@ -526,7 +544,14 @@ def configurerole(
     else:
         database.manage_secondary_role(args, rolname, "revoke", "sysop", **kwargs)
 
-    return _apply_os_login(args, rolname, osuser, **kwargs)
+    return _apply_os_login(
+        args,
+        rolname,
+        osuser,
+        old_osuser=old_osuser,
+        remove_old=remove_old_osuser,
+        **kwargs,
+    )
 
 
 def _stored_osuser(conn, rolname: str):
@@ -574,11 +599,20 @@ def _ask_os_login(args, rolename: str, target: str, **kwargs):
     return osuser
 
 
-def _apply_os_login(args, rolname: str, osuser, **kwargs) -> bool:
+def _apply_os_login(
+    args,
+    rolname: str,
+    osuser,
+    *,
+    old_osuser=None,
+    remove_old: bool = False,
+    **kwargs,
+) -> bool:
     """Create the login role if needed, grant it the member role, and record the osuser.
 
-    Runs only after every prompt has been answered (see _ask_os_login). Refused names
-    and failed creation return False with an error message.
+    When the osuser changed and the sysop asked to remove the old one, the old login
+    role's access to the data role is revoked (and the role is dropped if unused).
+    Runs only after every prompt has been answered. Failures return False with a message.
     """
     conn = kwargs.get("conn")
     if osuser is None:
@@ -592,6 +626,18 @@ def _apply_os_login(args, rolname: str, osuser, **kwargs) -> bool:
             level="error",
         )
         return False
+
+    if old_osuser and old_osuser != osuser and remove_old:
+        removed = pgrole.remove_os_login_role(
+            args, old_osuser, rolname, conn=conn, drop_role=True
+        )
+        if not removed:
+            io.echo(
+                f"{{var:labelcolor}}could not remove old OS login {{var:valuecolor}}{old_osuser}",
+                level="error",
+            )
+            return False
+        io.echo(f"{{var:okcolor}}removed old OS login {old_osuser}.")
 
     with database.cursor(conn=conn) as cur:
         cur.execute(
@@ -703,6 +749,8 @@ def edit(args, **kwargs):
                 moniker=m["moniker"],
                 osuser=m.get("osuser"),
                 psqlrole=m.get("psqlrole"),
+                old_osuser=m.get("old_osuser"),
+                remove_old_osuser=bool(m.get("remove_old_osuser")),
                 menu_answered=True,
                 **kwargs,
             )
@@ -803,6 +851,8 @@ def add(args, **kwargs) -> bool:
                 moniker=moniker,
                 osuser=member.get("osuser"),
                 psqlrole=member.get("psqlrole"),
+                old_osuser=member.get("old_osuser"),
+                remove_old_osuser=bool(member.get("remove_old_osuser")),
                 menu_answered=True,
                 **kwargs,
             )

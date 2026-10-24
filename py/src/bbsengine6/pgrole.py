@@ -220,6 +220,43 @@ def ensure_os_login_role(
     return True
 
 
+#: Login roles that are never removed by the console (legacy owner mapping).
+PROTECTED_LOGIN_ROLES = frozenset({"jam"})
+
+
+def remove_os_login_role(
+    args: Any, osuser: str, member_role: str, *, conn: Any, drop_role: bool
+) -> bool:
+    """Remove an old OS login's SET ROLE path to a member's data role.
+
+    Always revokes ``member_role`` from ``osuser``. Drops the ``osuser`` role itself only
+    when ``drop_role`` is true. A missing role is a successful no-op. Protected roles
+    (jam) and superusers are refused, and nothing is changed in that case.
+    """
+    util.logentry(f"bbsengine6.pgrole.remove_os_login_role.100: {osuser=!r} {member_role=!r}")
+    if osuser in PROTECTED_LOGIN_ROLES:
+        util.logentry(f"bbsengine6.pgrole.remove_os_login_role.110: protected role {osuser!r}")
+        return False
+    if not database.rolexists(args, osuser, conn=conn):
+        return True
+    privs = database.get_role_privs(args, osuser, conn=conn)
+    if privs is None or privs.get("rolsuper") is True:
+        util.logentry(f"bbsengine6.pgrole.remove_os_login_role.120: refused {osuser!r}")
+        return False
+
+    from psycopg import sql as pg_sql
+
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            pg_sql.SQL("REVOKE {} FROM {}").format(
+                pg_sql.Identifier(member_role), pg_sql.Identifier(osuser)
+            )
+        )
+        if drop_role:
+            cur.execute(pg_sql.SQL("DROP ROLE {}").format(pg_sql.Identifier(osuser)))
+    return True
+
+
 def sync_groups(args: Any, loginid: str, **kwargs: Any) -> bool:
     """
     Sync the m_<moniker> role's group memberships (sysop, term, web)
