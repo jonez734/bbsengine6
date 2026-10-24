@@ -233,10 +233,11 @@ venv:
 	$(PYTHON) -m venv "$(VENV_DIR)" || true
 	"$(VENV_DIR)/bin/pip" install --upgrade pip
 	"$(VENV_DIR)/bin/pip" install --upgrade build
-	rm -rf py/build py/dist
-	"$(VENV_DIR)/bin/python" -m build --wheel --outdir py/dist py
-	"$(VENV_DIR)/bin/pip" install --upgrade py/dist/*.whl
-	@echo "bbsengine6 installed into $(VENV_DIR)"
+	@wheels="$$(mktemp -d)" && \
+	trap 'rm -rf "$$wheels"' EXIT && \
+	"$(VENV_DIR)/bin/python" -m build --wheel --outdir "$$wheels" py && \
+	"$(VENV_DIR)/bin/pip" install --upgrade "$$wheels"/*.whl && \
+	echo "bbsengine6 installed into $(VENV_DIR)"
 
 .PHONY: venv
 

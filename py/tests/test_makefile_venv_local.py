@@ -66,10 +66,22 @@ def test_venv_recipe_installs_build_before_using_it():
 
 
 @pytest.mark.unit
-def test_venv_recipe_clears_old_wheels_before_install():
-    """pip installs py/dist/*.whl. Stale wheels from earlier builds conflict, so clear them first."""
+def test_venv_recipe_installs_only_the_wheel_it_just_built():
+    """Stale wheels from earlier builds conflict, so the install must read only this build's output."""
     body = _recipe("venv")
-    clear = re.search(r"rm -rf [^\n]*py/dist\b", body)
-    install = re.search(r'bin/pip"?\s+install[^\n]*py/dist/\*\.whl', body)
-    assert clear and install, body
-    assert clear.start() < install.start(), body
+    install = re.search(r'bin/pip"?\s+install[^\n]*\$\$"?wheels"?/\*\.whl', body)
+    assert install, body
+    assert "mktemp" in body and body.index("mktemp") < install.start(), body
+
+
+@pytest.mark.unit
+def test_venv_recipe_builds_into_a_fresh_temp_dir():
+    """A root-owned py/dist left by an earlier sudo run must not break the venv deploy.
+
+    The recipe builds into a new temp directory and installs from it, so no shared
+    output directory has to be deleted or written to.
+    """
+    body = _recipe("venv")
+    assert "mktemp" in body, body
+    assert "py/dist" not in body, body
+    assert "rm -rf py/dist" not in body, body
