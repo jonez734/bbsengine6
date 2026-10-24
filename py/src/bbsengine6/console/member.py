@@ -182,6 +182,30 @@ def render_member(args, **kwargs):
         )
 
 
+def _load_psql(conn, m: dict) -> None:
+    """Put the member's stored osuser and data role into the edit dict.
+
+    Without this an existing member's [O]/[X] menu starts blank, and an untouched save
+    would pass None to configurerole, clearing the OS login. A member with no tracking
+    row gets None for both.
+    """
+    with database.cursor(conn=conn) as cur:
+        cur.execute(
+            "SELECT osuser, rolname FROM engine.pgrole WHERE membermoniker = %s",
+            (m["moniker"],),
+        )
+        row = cur.fetchone()
+    if row is None or not isinstance(row, (dict, tuple, list)):
+        m["osuser"] = None
+        m["psqlrole"] = None
+        return
+    if isinstance(row, dict):
+        m["osuser"] = row.get("osuser")
+        m["psqlrole"] = row.get("rolname")
+    else:
+        m["osuser"], m["psqlrole"] = row[0], row[1]
+
+
 def _stored_psqlrole(conn, moniker: str):
     """The data role already recorded for this member in engine.pgrole, or None."""
     with database.cursor(conn=conn) as cur:
@@ -609,6 +633,7 @@ def edit(args, **kwargs):
             rec = cur.fetchone()
 
         m = libmember.build(args, rec, conn=conn, **kwargs)
+        _load_psql(conn, m)
         _baseline_loginid = m["loginid"]
         _baseline_email = m["email"]
         _baseline_flags = {
