@@ -633,7 +633,7 @@ def _apply_os_login(
     """
     conn = kwargs.get("conn")
     if osuser is None:
-        io.echo("{{var:labelcolor}}no OS login set up for this member.")
+        io.echo(f"{{var:labelcolor}}no OS login set up for this member.")
         return True
 
     ok = pgrole.ensure_os_login_role(args, osuser, rolname, conn=conn)

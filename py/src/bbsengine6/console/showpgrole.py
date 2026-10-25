@@ -62,10 +62,10 @@ def main(args, loginid: Optional[str] = None, **kwargs):
                 f"{{var:valuecolor}}{target_loginid}{{var:labelcolor}}."
             )
             io.echo(
-                "{{var:labelcolor}}ask a sysop to approve you; once approved,"
+                f"{{var:labelcolor}}ask a sysop to approve you; once approved,"
             )
             io.echo(
-                "{{var:labelcolor}}the [P] psql credentials option will show your rolname."
+                f"{{var:labelcolor}}the [P] psql credentials option will show your rolname."
             )
             return True
 
@@ -75,7 +75,7 @@ def main(args, loginid: Optional[str] = None, **kwargs):
         # (cron, scripts, etc.) so this module is safe in non-TTY contexts.
         if not sys.stdin.isatty():
             io.echo(
-                "{{var:labelcolor}}non-interactive session; skipping welcome/osuser prompts",
+                f"{{var:labelcolor}}non-interactive session; skipping welcome/osuser prompts",
                 level="info",
             )
             return True
@@ -84,10 +84,10 @@ def main(args, loginid: Optional[str] = None, **kwargs):
         # and capture the osuser if it isn't set yet.
         if row.get("last_ack_at") is None:
             io.echo(
-                "{{var:labelcolor}}press ENTER to acknowledge you have read this"
+                f"{{var:labelcolor}}press ENTER to acknowledge you have read this"
                 "{{var:inputcolor}}"
             )
-            io.inputstring("{{var:promptcolor}}{{var:inputcolor}}", "", noneok=True)
+            io.inputstring(f"{{var:promptcolor}}{{var:inputcolor}}", "", noneok=True)
             with database.cursor(conn=conn) as cur:
                 cur.execute(
                     "UPDATE engine.pgrole SET last_ack_at = now() "
@@ -95,12 +95,12 @@ def main(args, loginid: Optional[str] = None, **kwargs):
                     (row["membermoniker"],),
                 )
             conn.commit()
-            io.echo("{{var:okcolor}}acknowledged.")
+            io.echo(f"{{var:okcolor}}acknowledged.")
             row["last_ack_at"] = "now()"
 
         if not row.get("osuser"):
             osuser = io.inputstring(
-                "{{var:promptcolor}}enter the OS username you connect from "
+                f"{{var:promptcolor}}enter the OS username you connect from "
                 "(or leave blank to skip): {{var:inputcolor}}",
                 "",
                 noneok=True,
@@ -119,7 +119,7 @@ def main(args, loginid: Optional[str] = None, **kwargs):
                 io.echo(
                     f"{{var:okcolor}}a 'bbbsmap' line to pg_ident.conf (see"
                 )
-                io.echo("{{var:okcolor}}handbook/specs/pg-ident-auth.md).")
+                io.echo(f"{{var:okcolor}}handbook/specs/pg-ident-auth.md).")
     return True
 
 
@@ -164,14 +164,14 @@ def _render(row: dict, loginid: str) -> None:
     # Members log in as their login role (the OS username). The data role is NOLOGIN and
     # is reached only by SET ROLE, so it is never a connect target.
     login = row.get("osuser") or "(not set)"
-    io.echo("{{var:labelcolor}}Connect with:")
+    io.echo(f"{{var:labelcolor}}Connect with:")
     io.echo(
         f"{{var:valuecolor}}  psql -h 127.0.0.1 -U {login} -d <dbname>"
     )
     io.echo("")
     io.echo(
-        "{{var:labelcolor}}(no password -- authentication is by ident. Your"
+        f"{{var:labelcolor}}(no password -- authentication is by ident. Your"
     )
     io.echo(
-        "{{var:labelcolor}}local OS username must match the login role above.)"
+        f"{{var:labelcolor}}local OS username must match the login role above.)"
     )
