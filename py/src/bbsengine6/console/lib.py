@@ -2,7 +2,7 @@
 
 import argparse
 
-from bbsengine6 import database, module
+from bbsengine6 import database, io, module
 
 CONSOLE_SUBCOMMANDS = (
     "createdatabase",
@@ -62,6 +62,37 @@ def runmodule(args, submodule, *, package="bbsengine6.console", **kwargs):
 
 
 # @since 20230523 copied from teos
+_no_member_warned = False
+
+
+def _current_moniker(args):
+    """The member this process runs as, or None. Read through the member module."""
+    from bbsengine6 import member
+
+    return member.getcurrentmoniker(args)
+
+
+def no_member_right(**kwargs) -> str:
+    """Right side of the console bottombar: says when there is no member identity.
+
+    A CLI sysop with no member login has no moniker, so the bar would otherwise be blank.
+    This shows "| no member" and logs a single warning per process, so the state is visible
+    and the reason is in the log. With a member present it shows nothing extra.
+    """
+    global _no_member_warned
+    args = kwargs.get("args")
+    if _current_moniker(args) is not None:
+        return ""
+    if not _no_member_warned:
+        _no_member_warned = True
+        io.echo(
+            "console: no member identity for this login (no bed or member account matches "
+            "the Unix user). Member-only features are unavailable.",
+            level="warning",
+        )
+    return "| no member"
+
+
 def setbottombar(args, left, **kwargs):
     from bbsengine6 import bottombar
 
@@ -70,7 +101,9 @@ def setbottombar(args, left, **kwargs):
             " | F1: Help" if "help" in kwargs and kwargs["help"] is True else ""
         )
         debug_suffix = " | debug" if args is not None and args.debug is True else ""
-        return f"con{debug_suffix}{help_suffix}"
+        member_suffix = no_member_right(args=args)
+        member_suffix = f" {member_suffix}" if member_suffix else ""
+        return f"con{debug_suffix}{help_suffix}{member_suffix}"
 
     bottombar.register_bottombar_fragment(_console_right_fragment)
     try:
