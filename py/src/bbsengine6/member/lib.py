@@ -1648,6 +1648,11 @@ def insert(args, member, **kwargs):
     if "id" in cols:
         del cols["id"]
         io.echo(f"bbsengine6.insert.200: removed 'id' from member")
+    # The plaintext never reaches engine.__member. The add flow hashes it with setpassword
+    # after the insert; chk_member_password_bcrypt rejects anything else.
+    if "password" in cols:
+        del cols["password"]
+        io.echo(f"bbsengine6.insert.300: removed 'password' from member (set via setpassword)")
 
     io.echo(f"bbsengine6.member.insert.100: {member=}", level="debug")
 
