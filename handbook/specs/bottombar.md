@@ -75,10 +75,18 @@ class FragmentRegistry:
 | `unregister_bottombar_fragment(item)` |                                                    | (same routing)                                                         |
 | `clear_bottombar_fragments()`     |                                                          | (same routing)                                                         |
 | `setbottombar(args, buf, **kwargs)` | `(Any, str) -> bool`                                   | Central shim: stash context, render with `buf` on the left            |
+| `init(args=None, topmargin=1, bottommargin=1)` | `(Any, int, int) -> None`                   | Set the scroll region so the bar stays on the last line. Call once per screen, before the first `setbottombar`. Replaces `bbsengine6.screen.init` (deprecated shim) |
 
 `setbottombar` is the drop-in replacement for the old
 `bbsengine6.io.screen.setbottombar`. It accepts the same args and
 kwargs, returns `True` to match the previous contract.
+
+### Scroll region: `init`
+
+`init` owns the terminal scroll-region setup. Callers use it instead of
+the deprecated `bbsengine6.screen.init`, which emits a `DeprecationWarning`
+and delegates to nothing new. The console entry, the editor's
+`init_screen`, and `startup/__main__.py` all call `bottombar.init`.
 
 ### Type alias
 
@@ -180,6 +188,26 @@ Lookup order:
 
 The `KEY_F2` binding in `io/getch.py` reads the same source, so
 the bottombar count and the F2 hotkey stay in sync.
+
+### Terminal bell
+
+The bell is rung from `io/getch.py`, not the bottombar, and rings only
+when the unread count **rises**:
+
+- `BellBaseline` keeps, per moniker and per process, the unread count the
+  last bell was based on. A bell rings only when the count is greater than
+  that baseline. Repeated checks with the same count never ring, so a
+  message that stays unread does not ring every poll.
+- A drop in the count lowers the baseline, so a later rise rings again
+  (3 -> 1 -> 2 rings on the rise to 2).
+- A reconnect starts the baseline at zero, so the first unread count rings once.
+- `BellWindow` (default 5 s; bed's `notify.bell_window_seconds`, applied with `set_bell_window_seconds`) still
+  collapses a burst of rises into one bell.
+
+Three call sites use one helper, `_emit_bell_for(baseline, moniker, count)`:
+the pre-wait check on each `getch`, the idle poll (every 2 s without a bed
+push), and the wake path when the local cache changes. Each passes the
+count it has just read.
 
 ## Phase 5b (future)
 
