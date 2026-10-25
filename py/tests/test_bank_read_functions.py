@@ -79,3 +79,12 @@ def test_functions_are_installed_by_checkfunctions():
     src = Path(checkfunctions.__file__).read_text()
     assert '"bank.get_balance"' in src
     assert '"bank.get_transactions"' in src
+
+
+@pytest.mark.unit
+def test_bank_functions_map_to_their_shared_sql_file():
+    """Both bank read functions live in bank_read_functions.sql, so checkfunctions must map each
+    name to that file. Without the mapping it looks for bank.get_balance.sql, which does not exist."""
+    from bbsengine6.backend import checkfunctions as cf
+    assert cf.SQL_FILE_OVERRIDES.get("bank.get_balance") == "bank_read_functions.sql"
+    assert cf.SQL_FILE_OVERRIDES.get("bank.get_transactions") == "bank_read_functions.sql"

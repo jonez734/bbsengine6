@@ -19,6 +19,9 @@ SQL_FILE_OVERRIDES = {
     "engine.createpgrole": "createrol.sql",
     "engine.deletepgrole": "createrol.sql",
     "engine.syncpgrolegroups": "createrol.sql",
+    # Both bank read functions are defined together in bank_read_functions.sql.
+    "bank.get_balance": "bank_read_functions.sql",
+    "bank.get_transactions": "bank_read_functions.sql",
 }
 
 
