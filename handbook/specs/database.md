@@ -44,6 +44,21 @@ Context manager that borrows a connection from `pool` via `pool.getconn()`
 and returns it via `pool.putconn()` on exit. `auto_commit=False` is required
 for multi-statement transactions.
 
+**Exit behavior.** The transaction is always ended before the connection goes
+back to the pool, by `_end_transaction_on_exit`:
+
+| Exit | Action |
+| --- | --- |
+| Clean, `auto_commit=True` | `commit()`, then `putconn` |
+| Clean, `auto_commit=False`, still in a transaction | `rollback()`, then `putconn` |
+| Clean, `auto_commit=False`, idle | `putconn` only |
+| Exception raised in the block | `rollback()`, then `putconn`; never commits |
+
+A connection returned mid-transaction makes psycopg_pool log
+`rolling back returned connection` and roll it back itself. Ending the
+transaction here avoids that warning. Callers that need their writes to
+persist must commit inside the block (or use `auto_commit=True`).
+
 `set_role` is the per-transaction role-switch entry point: when supplied,
 `connect` validates the role exists in `pg_roles`, then runs
 `SET LOCAL ROLE <set_role>` after acquiring the connection. The role
