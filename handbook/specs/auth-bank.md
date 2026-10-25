@@ -60,6 +60,29 @@ bank ops via `OP_MAP`, then delegates the per-op authorization decision
 to `bbsengine6.bank.access`. The session id is `id(websocket)` --
 the same value the transport hands to `SessionManager.alloc_session_id()`.
 
+## Database read access
+
+Members read their own bank data through two SECURITY DEFINER functions, not the
+tables or views:
+
+| Function | Returns |
+| --- | --- |
+| `bank.get_balance(moniker)` | the account row (id, moniker, balance) for one member |
+| `bank.get_transactions(moniker, limit)` | that member's transactions, newest first |
+
+**Access rule.** The caller's login role must be a member of `m_<moniker>`
+(the member's data role), or be `sysop` or `term`. Anyone else gets no rows.
+The check runs before the query, and `search_path` is pinned.
+
+**Why not a grant.** A grant on `bank.account` or `bank.transaction` gives a role
+every row, because grants are per object, not per row. Before this change,
+`member` could read every balance and every transaction through the views
+`bank.account` and `bank.transaction`. Members no longer have `select` on
+either view, and the base tables were already closed to them.
+
+The functions are defined in `sql/bank_read_functions.sql`, owned by `zoid6`,
+and installed by `checkfunctions`.
+
 ## End-to-end sequence
 
 1. Client opens WebSocket to the transport.

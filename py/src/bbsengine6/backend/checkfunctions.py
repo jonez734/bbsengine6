@@ -73,6 +73,9 @@ def main(args, **kwargs):
                 # Login log writer (log_action.sql). The only path that inserts into
                 # engine.__actionlog; owned by zoid6, executable by bed/web/term.
                 "engine.log_action",
+                # Bank reads (bank_read_functions.sql): members see only their own rows.
+                "bank.get_balance",
+                "bank.get_transactions",
             )
         failcount = 0
         for f in funcs:
