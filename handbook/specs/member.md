@@ -173,8 +173,13 @@ JSONB boundary rules are documented in
 build(args, row={}, **kwargs) -> dict
 buildrec(member) -> dict
 insert(args, member, **kwargs) -> str | False
-update(args, member, moniker: str | None = None, **kwargs) -> None
+update(args, member, moniker: str | None = None, **kwargs) -> bool | None
 ```
+
+`update` returns `None` on success and `False` on failure. A failure
+rolls back the open transaction and prints the traceback through
+`io.echo_traceback`. The return value is the only signal a caller
+gets, so callers must check it: `if libmember.update(...) is False`.
 
 `build` applies defaults (credits=100, ui=["term"], flags, ...) and
 parses the comma-separated `ui` string into a sorted list.
@@ -186,7 +191,14 @@ keep dicts as dicts and never pre-serialize.
 
 `update` and `insert` keep the transaction open (`commit=False`) when
 called with `conn=`, then commit atomically after all flag operations
-complete. Exceptions propagate so the caller can `conn.rollback()`.
+complete. A database error does not propagate: it is printed through
+`io.echo_traceback`, the transaction is rolled back, and the function
+returns `False`.
+
+`insert` removes the plaintext `password` from the row it sends. The
+password is hashed afterwards by `setpassword`, because
+`chk_member_password_bcrypt` rejects any unhashed value. `update` also
+strips `password` (it is written by `setpassword` too).
 
 ### Validation helpers
 
@@ -287,7 +299,22 @@ loop the messaging layer.
 
 `insert` and `update` both keep the transaction open when called with
 `conn=`, perform all flag operations in order, then commit atomically.
-Exceptions propagate so the caller can roll back.
+A failure returns `False` after rolling back (see CRUD above).
+
+### Console add and edit
+
+The console's add and edit each run their writes in one transaction,
+through a single helper (`_add_write`, `_edit_write`):
+
+1. Each step is named: `insert`, `flags`, `password`, `initial credits`,
+   `psql roles`, `user interface`, `psql role record`, `group sync`, `commit`.
+2. A failure at any step rolls back the whole transaction, prints the full
+   traceback through `io.echo_traceback`, and prints one line:
+   `could not add member 'X': failed at <step> (<error>). No changes were saved.`
+3. A failed `update` stops before any later step runs.
+4. Only a fully successful run commits.
+
+The sysop sees the reason on the screen, and the log keeps the traceback.
 
 ### Moniker-change special case
 
