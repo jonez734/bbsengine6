@@ -7,6 +7,29 @@ from .transaction import Transaction
 from .transfer import Transfer
 
 
+#: Balance a new member's bank account starts with (bed.json: bank.starting_balance).
+DEFAULT_STARTING_BALANCE = 100
+
+_CONFIG: dict = {"starting_balance": DEFAULT_STARTING_BALANCE}
+
+
+def configure(*, starting_balance: int = DEFAULT_STARTING_BALANCE) -> None:
+    """Set the bank policy. Called at startup from bed.json (bank.starting_balance).
+
+    Must be a non-negative integer. A bool is refused even though it is an int subclass.
+    """
+    if isinstance(starting_balance, bool) or not isinstance(starting_balance, int):
+        raise ValueError("bank.starting_balance must be an integer")
+    if starting_balance < 0:
+        raise ValueError("bank.starting_balance must be >= 0")
+    _CONFIG["starting_balance"] = starting_balance
+
+
+def get_starting_balance() -> int:
+    """The balance a new bank account starts with."""
+    return _CONFIG["starting_balance"]
+
+
 class BankService:
     """Main bank service combining account, transaction, and transfer operations."""
 

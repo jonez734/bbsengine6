@@ -306,7 +306,7 @@ A failure returns `False` after rolling back (see CRUD above).
 The console's add and edit each run their writes in one transaction,
 through a single helper (`_add_write`, `_edit_write`):
 
-1. Each step is named: `insert`, `flags`, `password`, `initial credits`,
+1. Each step is named: `insert`, `flags`, `password`, `bank account`,
    `psql roles`, `user interface`, `psql role record`, `group sync`, `commit`.
 2. A failure at any step rolls back the whole transaction, prints the full
    traceback through `io.echo_traceback`, and prints one line:

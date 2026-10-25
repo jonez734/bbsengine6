@@ -60,6 +60,17 @@ bank ops via `OP_MAP`, then delegates the per-op authorization decision
 to `bbsengine6.bank.access`. The session id is `id(websocket)` --
 the same value the transport hands to `SessionManager.alloc_session_id()`.
 
+## New member bank account
+
+When a member is added, the add flow creates their bank account in the same
+transaction, as the named step `bank account`. The starting balance is set by
+`bank.starting_balance` in `bed.json` (default `100`), applied at startup through
+`bbsengine6.bank.configure()`. A value must be a non-negative integer; a bad value
+stops startup.
+
+If the step fails, the whole add rolls back and the sysop sees
+`failed at bank account`.
+
 ## Database read access
 
 Members read their own bank data through two SECURITY DEFINER functions, not the

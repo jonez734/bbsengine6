@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 from .account import Account
 from .transaction import Transaction
 from .transfer import Transfer
-from .bank import BankService
+from .bank import BankService, DEFAULT_STARTING_BALANCE, configure, get_starting_balance
 
 __version__ = "202608130000"
 
@@ -15,6 +15,9 @@ __all__ = [
     "Transaction",
     "Transfer",
     "BankService",
+    "configure",
+    "get_starting_balance",
+    "DEFAULT_STARTING_BALANCE",
     "access",
 ]
 

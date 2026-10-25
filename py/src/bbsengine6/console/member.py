@@ -833,10 +833,11 @@ def _add_write(args, member, *, conn, **kwargs) -> bool:
         if member.get("password"):
             libmember.setpassword(args, member["password"], moniker, conn=conn, **kwargs)
 
-        step = "initial credits"
+        step = "bank account"
         bank_service = bank.BankService(args)
+        starting = bank.get_starting_balance()
         bank_service.add_funds(
-            moniker, 100, transaction_type="initial",
+            moniker, starting, transaction_type="initial",
             description="New member bonus", conn=conn,
         )
 
