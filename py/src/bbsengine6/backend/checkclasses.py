@@ -38,6 +38,10 @@ classlist = (
     ("engine.pgrole", "pgrole.sql"),
     ("engine.pgrole_member", "pgrole_member_view.sql"),
 
+    # Login and action log: the table first, then the view that reads it.
+    ("engine.__actionlog", "actionlog.sql"),
+    ("engine.actionlog", "actionlog_view.sql"),
+
     ("engine.__session", "session.sql"),
     ("engine.session", "session_view.sql"),
 
