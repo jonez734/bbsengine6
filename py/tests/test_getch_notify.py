@@ -97,7 +97,7 @@ class TestIdleWait(unittest.TestCase):
         self.assertLess(time.time() - t0, 3.0)
 
     def test_idle_wait_with_no_change_does_not_ring(self):
-        with patch.object(g, "_emit_notification_bell_once") as bell:
+        with patch.object(g, "_emit_bell_for") as bell:
             def key_later():
                 time.sleep(0.2)
                 os.write(self.master, b"x")
@@ -132,17 +132,18 @@ class TestBellOnWake(unittest.TestCase):
     def test_burst_in_window_rings_once(self):
         """Three changes inside one window must ring once, not three times."""
         g._bell_window = g.BellWindow(5.0)
+        g._bell_baseline = g.BellBaseline()
         rings = []
-        real_emit = g._emit_notification_bell_once
+        real_emit = g._emit_bell_for
 
-        def counting_emit():
-            # Same windowing as production; count only actual rings.
-            rang = real_emit()
+        def counting_emit(baseline, moniker, count):
+            # Same rise rule and window as production; count only actual rings.
+            rang = real_emit(baseline, moniker, count)
             if rang:
                 rings.append(1)
             return rang
 
-        with patch.object(g, "_emit_notification_bell_once", side_effect=counting_emit), \
+        with patch.object(g, "_emit_bell_for", side_effect=counting_emit), \
              patch.object(g, "_update_bottombar_on_notification", return_value=True), \
              patch.object(g, "_push_subscribed", return_value=True), \
              patch.object(common, "_current_input_stream", self.stream), \

@@ -520,6 +520,48 @@ class BellWindow:
 
 _bell_window = BellWindow(5.0)
 
+class BellBaseline:
+    """Remember the unread count each moniker's last bell was based on.
+
+    The bell rings only when the count rises above that baseline. Repeated checks
+    with the same count do not ring, so a message that stays unread does not ring the
+    bell every poll. A drop lowers the baseline, so a later rise rings again. The
+    baseline is per process; a reconnect starts it at zero.
+    """
+
+    def __init__(self) -> None:
+        self._last: dict[str, int] = {}
+        self._lock = threading.Lock()
+
+    def should_ring(self, moniker: str, count: int) -> bool:
+        with self._lock:
+            previous = self._last.get(moniker, 0)
+            self._last[moniker] = count
+            return count > previous
+
+    def clear(self) -> None:
+        with self._lock:
+            self._last.clear()
+
+
+_bell_baseline = BellBaseline()
+
+
+def _emit_bell_for(baseline: "BellBaseline", moniker: str, count: int) -> bool:
+    """Ring once when the count rises for this moniker, and only inside a free bell window.
+
+    The baseline is updated on every call, so a drop resets it even when no bell rings.
+    """
+    rose = baseline.should_ring(moniker, count)
+    if not rose:
+        return False
+    if not _bell_window.should_ring():
+        return False
+    echo("{bel}", end="", flush=True)
+    return True
+
+
+
 
 def set_bell_window_seconds(seconds: float) -> None:
     """Set the bell window (from bed.json ``notify.bell_window_seconds``)."""
@@ -836,8 +878,8 @@ def getch_str(
     # buffer until a newline arrives.
     if check_notifications and moniker:
         has_notifications, notification_count = _check_notifications(moniker, **_check_kwargs(kwargs))
+        _emit_bell_for(_bell_baseline, moniker, notification_count)
         if has_notifications:
-            _emit_notification_bell_once()
             _update_bottombar_on_notification()
 
     try:
@@ -894,9 +936,9 @@ def getch_str(
                 # Nothing readable: either the finite timeout expired (the loop
                 # top returns), or the DB poll cadence elapsed with no bed push.
                 if timeout is None and not push_active and check_notifications and moniker:
-                    has_notifications, _ = _check_notifications(moniker, **_check_kwargs(kwargs))
+                    has_notifications, poll_count = _check_notifications(moniker, **_check_kwargs(kwargs))
+                    _emit_bell_for(_bell_baseline, moniker, poll_count)
                     if has_notifications:
-                        _emit_notification_bell_once()
                         _update_bottombar_on_notification()
                 continue
 
@@ -906,8 +948,8 @@ def getch_str(
             _msg_cache.drain_change_wake()
             if check_notifications and moniker:
                 count = _msg_cache.get_local_unread_count(moniker)
+                _emit_bell_for(_bell_baseline, moniker, count)
                 if count > 0:
-                    _emit_notification_bell_once()
                     _update_bottombar_on_notification()
             continue
 
