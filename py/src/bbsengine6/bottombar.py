@@ -50,6 +50,7 @@
 #       Door mode (no ContextVar set) is unchanged.
 
 import contextvars
+import sys
 import threading
 from typing import Any, Callable, Iterable, List, Optional, Union
 
@@ -284,6 +285,10 @@ def init(args: Any = None, topmargin: int = 1, bottommargin: int = 1) -> None:
     Call once per screen, before the first setbottombar. Moved here from the deprecated
     bbsengine6.screen.init; screen.init now delegates to this.
     """
+    # Without a terminal there is no scroll region to set, and {savecursor} asks the terminal
+    # for its cursor position (termios), which fails on a non-TTY. Skip the sequences then.
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return
     echo("{f6:3}{cursorup:3}", end="", flush=True)
     h = terminal.lines() - bottommargin
     echo("{savecursor}", end="")

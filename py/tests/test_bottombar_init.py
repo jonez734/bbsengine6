@@ -17,7 +17,9 @@ def test_bottombar_has_init():
 
 @pytest.mark.unit
 def test_init_sets_the_scroll_region_above_the_bottom_margin():
-    with patch.object(bottombar, "echo") as echo, \
+    with patch.object(bottombar.sys.stdin, "isatty", return_value=True), \
+         patch.object(bottombar.sys.stdout, "isatty", return_value=True), \
+         patch.object(bottombar, "echo") as echo, \
          patch.object(bottombar.terminal, "lines", return_value=24):
         bottombar.init(None, topmargin=1, bottommargin=1)
     seq = [c.args[0] for c in echo.call_args_list]
