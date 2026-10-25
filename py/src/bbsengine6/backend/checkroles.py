@@ -44,7 +44,7 @@ def main(args, **kwargs):
                 )
                 is False
             ):
-                io.echo("{{level.error}} fail ", level="error")
+                io.echo(f"{{level.error}} fail ", level="error")
                 failcount += 1
                 break
             else:

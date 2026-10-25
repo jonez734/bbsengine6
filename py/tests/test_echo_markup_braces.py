@@ -12,13 +12,16 @@ import pytest
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "bbsengine6"
 
+# Calls whose first argument is printed or used as a prompt, so markup in it is rendered.
+ECHO_FUNCS = {"echo", "echo_traceback", "inputstring", "inputboolean", "inputchoice",
+              "inputinteger", "inputpassword"}
 
-# Scope: the console package. Other packages are out of scope for this change.
+
 def _plain_string_echo_calls():
     """(file, line, text) for io.echo calls whose first argument is a non-f-string literal
     containing doubled braces."""
     hits = []
-    for f in (SRC / "console").rglob("*.py"):
+    for f in SRC.rglob("*.py"):
         if "tests" in f.parts:
             continue
         try:
@@ -30,7 +33,7 @@ def _plain_string_echo_calls():
                 continue
             fn = node.func
             name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
-            if name != "echo" or not node.args:
+            if name not in ECHO_FUNCS or not node.args:
                 continue
             arg = node.args[0]
             if isinstance(arg, ast.Constant) and isinstance(arg.value, str):

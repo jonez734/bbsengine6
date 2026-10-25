@@ -85,14 +85,14 @@ def line(args, **kwargs):
                 io.echo(f"editing line {editline=}", level="debug")
             elif ch == "s":
                 filename = io.inputstring(
-                    "Save. {{var:promptcolor}}filename: {{var:inputcolor}}"
+                    f"Save. {{var:promptcolor}}filename: {{var:inputcolor}}"
                 )
             elif ch == "d":
                 if len(buf) == 0:
                     io.echo("{bell}")
                     continue
                 deleteline = io.inputstring(
-                    "Delete. Range: {{var:promptcolor}}start{{var:inputcolor}}-{{var:promptcolor}}end: "
+                    f"Delete. Range: {{var:promptcolor}}start{{var:inputcolor}}-{{var:promptcolor}}end: "
                 )
             else:
                 io.echo("{bell}", flush=True, end="")

@@ -53,7 +53,7 @@ def main(args, **kwargs):
         end="",
     )
     if database.rolexists(args, ROLE_NAME, conn=conn) is False:
-        io.echo("{{var:labelcolor}}create ", end="")
+        io.echo(f"{{var:labelcolor}}create ", end="")
         if (
             database.createrol(
                 args,
@@ -67,12 +67,12 @@ def main(args, **kwargs):
             )
             is False
         ):
-            io.echo("{{var:level.error}} fail {{/all}}", level="error")
+            io.echo(f"{{var:level.error}} fail {{/all}}", level="error")
             failcount += 1
         else:
-            io.echo("{{level.ok}}  ok  {{/all}}")
+            io.echo(f"{{level.ok}}  ok  {{/all}}")
     else:
-        io.echo("{{level.ok}}  ok  {{/all}}")
+        io.echo(f"{{level.ok}}  ok  {{/all}}")
 
         # Hard guard: a `zoid6` with rolsuper=True breaks the trust
         # model. The verifier would still pass (a superuser can own
