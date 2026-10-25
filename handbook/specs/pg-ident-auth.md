@@ -107,6 +107,18 @@ Not granted (intentionally):
 - `CREATEROLE`, `CREATEDB`, `SUPERUSER`.
 - `USAGE` on any other schema. New schemas need their own grants.
 
+## Read views
+
+`engine.pgrole_member` is a view over `engine.__member` and `engine.pgrole`.
+It exposes `moniker`, `loginid`, `rolname` (the data role) and `osuser` (the
+login role), one row per member, with `osuser` NULL until one is set.
+Code that needs the member-to-role join uses this view instead of writing the
+join again. It is `CREATE OR REPLACE`, granted to `sysop` and `member`, and
+registered in `checkclasses`.
+
+The approval flow reads the stored OS username through this view to default
+the OS-username prompt.
+
 ## Operations
 
 ### Adding a member
@@ -121,6 +133,12 @@ Not granted (intentionally):
    data role is not renamed.
 4. Exit the menu. The console creates the roles, grants them, and
    records `osuser` in `engine.pgrole`.
+
+**Approval (`[A]`)** provisions the same way. After a member is approved, it
+creates the data role, then asks for the OS username (defaulting to the stored
+value or the loginid) and creates the login role. A blank answer creates no
+login role, and the sysop is told to set one with `[O]` before the member can
+connect. Disapproval provisions nothing.
 
 ### Changing a member's OS username
 
