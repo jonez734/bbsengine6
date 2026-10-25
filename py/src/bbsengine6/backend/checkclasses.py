@@ -48,7 +48,6 @@ classlist = (
     ("engine.__folder", "folder.sql"),
     ("engine.folder", "folderview.sql"),
 
-    ("engine.fortune", "fortune.sql"),
 )
 
 

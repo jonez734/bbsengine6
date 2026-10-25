@@ -8,5 +8,4 @@
 -- IF EXISTS makes the file safe to re-run.
 
 drop view if exists engine.folder;
-drop view if exists engine.fortune;
 drop view if exists engine.session;
