@@ -123,8 +123,22 @@ _update_member_flags(args, moniker, flags_dict, conn, commit=False) -> bool
 in `engine.map_member_flag` and inserts the new one. Pass `conn=` to
 participate in a caller's transaction, `pool=` for standalone use.
 
-`checkflag` raises `KeyError` on unknown flag names and returns `None`
-for members with no row in `map_member_flag`.
+`checkflag` returns `None` for unknown flag names, for members with no row in
+`map_member_flag`, and on any database error (the error is logged). It connects
+with `set_role=False`, so it runs as the caller's login role.
+
+#### Sysop
+
+```python
+issysop(args, moniker=None, **kwargs) -> bool | None   # SYSOP flag only
+is_sysop(args, moniker, **kwargs) -> bool              # flag OR sysop role
+```
+
+`issysop` reads only the `SYSOP` flag in `engine.map_member_flag`.
+`is_sysop` is true when that flag is true, or when the member's login role or
+data role (`<moniker>`, `m_<moniker>`) is a member of the Postgres `sysop` role
+(`pg_auth_members`). Login uses `is_sysop`, so a member granted sysop through
+the role is reported as a sysop. Both helpers connect with `set_role=False`.
 
 ### Credits
 

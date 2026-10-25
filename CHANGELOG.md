@@ -1,5 +1,29 @@
 ## [Unreleased]
 
+### fix(database): `connect(set_role=False)` keeps the login role
+
+`database.connect` takes `set_role`: a role name switches to it, `None` (default)
+inherits the process-wide role from `set_current_role()`, and `False` makes no
+switch. bed's definer-function calls pass `False`, so they run as bed's login role.
+Before this, the inherited member role made `SET LOCAL ROLE` fail with
+"permission denied to set role" on every bank and login call.
+
+### fix(member): sysop checks keep the login role
+
+`checkflag` and the new `_has_sysop_role` connect with `set_role=False`, so
+they no longer inherit the member's role during login.
+
+### feat(member): `is_sysop` checks the flag or the sysop role
+
+`member.issysop()` reads only the `SYSOP` flag (`engine.map_member_flag`).
+`member.is_sysop()` is true when the flag is set or the member's login or data
+role (`<moniker>`, `m_<moniker>`) is a member of the Postgres `sysop` role. Login
+uses `is_sysop`, so a member granted sysop through the role is reported as one.
+
+### chore(version): 0.0.3.dev series
+
+`make version` stamps `0.0.3.dev<datestamp>`.
+
 ### feat(scripts): `make_test_accounts --password` sets every account to one password
 
 `scripts/make_test_accounts.py --password PW` sets each account the run
