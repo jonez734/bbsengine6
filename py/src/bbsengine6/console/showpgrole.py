@@ -85,7 +85,7 @@ def main(args, loginid: Optional[str] = None, **kwargs):
         if row.get("last_ack_at") is None:
             io.echo(
                 f"{{var:labelcolor}}press ENTER to acknowledge you have read this"
-                "{{var:inputcolor}}"
+                f"{{var:inputcolor}}"
             )
             io.inputstring(f"{{var:promptcolor}}{{var:inputcolor}}", "", noneok=True)
             with database.cursor(conn=conn) as cur:
@@ -101,7 +101,7 @@ def main(args, loginid: Optional[str] = None, **kwargs):
         if not row.get("osuser"):
             osuser = io.inputstring(
                 f"{{var:promptcolor}}enter the OS username you connect from "
-                "(or leave blank to skip): {{var:inputcolor}}",
+                f"(or leave blank to skip): {{var:inputcolor}}",
                 "",
                 noneok=True,
             )
