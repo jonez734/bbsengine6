@@ -125,20 +125,23 @@ def render_member(args, **kwargs):
     _ui = _member["ui"]
     io.echo(f"{ui=} {_ui=}", level="debug")
     if ui is None or len(ui) == 0:
+        # Print the empty UI line and keep drawing the rest of the menu. Returning here
+        # cut the menu off, so [F], [R], [O] and [X] never showed.
         io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: None", end="")
         if _ui is not None:
             _ui.sort()
             io.echo(f" (was: {', '.join(_ui)})")
         else:
             io.echo()
-        return
+    else:
+        if ui is not None:
+            ui.sort()
+        if _ui is not None:
+            _ui.sort()
 
-    if ui is not None:
-        ui.sort()
-    if _ui is not None:
-        _ui.sort()
-
-    if ui != _ui:
+    if ui is None or len(ui) == 0:
+        pass  # the empty UI line was printed above
+    elif ui != _ui:
         if _ui is None:
             io.echo(
                 f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: {', '.join(ui)} (was: None)"
@@ -180,6 +183,16 @@ def render_member(args, **kwargs):
         io.echo(
             f"  {{var:optioncolor}}[R]{{var:labelcolor}} Refcode: {member['refcode']}"
         )
+
+    # [O] and [X] are accepted by the edit loop; show them so the sysop can see them.
+    osuser = member.get("osuser")
+    io.echo(
+        f"  {{var:optioncolor}}[O]{{var:labelcolor}} OS login:{{var:valuecolor}} {osuser or '(none)'}"
+    )
+    psqlrole = member.get("psqlrole")
+    io.echo(
+        f"  {{var:optioncolor}}[X]{{var:labelcolor}} Data role:{{var:valuecolor}} {psqlrole or '(none)'}"
+    )
 
 
 def _load_psql(conn, m: dict) -> None:
