@@ -24,6 +24,90 @@ uses `is_sysop`, so a member granted sysop through the role is reported as one.
 
 `make version` stamps `0.0.3.dev<datestamp>`.
 
+### feat(actionlog): login log split into a table and a view; `engine.log_action` is the one writer
+
+`engine.__actionlog` (the table) and `engine.actionlog` (the view) are loaded at startup.
+The table's `moniker` is `citext`, matching `engine.__member`, so the foreign key holds.
+`engine.log_action` is a SECURITY DEFINER writer owned by `zoid6`; no role has direct
+insert, update, or delete on the table, so the login log is append-only.
+
+### feat(bank): members read balances and transactions through security-definer functions
+
+`bank.get_balance(citext)` and `bank.get_transactions(citext, integer)` run as the owner
+and check the caller's session. `member` has no `SELECT` on `bank.account` or
+`bank.transaction`, so one member cannot read another's balance. `checkfunctions` maps
+both to `bank_read_functions.sql`.
+
+### feat(bank): new members get a bank account as a named add step
+
+`bank.configure` and `get_starting_balance` set the starting balance from `bed.json`
+(`bank.starting_balance`, default 100). Member add creates the account as a named step.
+
+### feat(pgrole): data roles are NOLOGIN; OS users log in through their own role
+
+Data roles are `NOLOGIN`. `ensure_os_login_role` creates a login role that can `SET ROLE`
+into the member's data role. Approval creates the psql login role too. `engine.pgrole_member`
+is a view that joins members to their psql roles. The console migrates existing data roles
+to `NOLOGIN` through `[K]`, and warns at startup when one is still `LOGIN`.
+
+### feat(console): OS login and data-role menu options; configurerole provisions through pgrole
+
+The member edit screen has `[O]` (OS login) and `[X]` (data role). The OS-username prompt
+defaults to the stored value. Changing an OS login asks before removing the old one.
+
+### refactor(privs): one `public.manage_priv` dispatcher; the three helpers delegate to it
+
+`manage_role_privs`, `manage_schema_priv`, and `manage_database_priv` keep their behaviour
+(including the SUPERUSER skip on roles) and call `manage_priv`.
+
+### fix(database): a clean `connect` exit ends the transaction before returning the connection
+
+`connect` commits on a clean exit and rolls back on error. Ctrl-D and Ctrl-C roll back
+quietly instead of logging a traceback.
+
+### fix(member): `insert()` does not send the plaintext password to the database
+
+Member insert and update return a clear error instead of raising, and the error contract is
+documented in `handbook/specs/member.md`.
+
+### fix(getch): the bell rings only when the unread count rises
+
+`BellBaseline` tracks the last count, so a steady count does not ring.
+
+### fix(bottombar): `init` skips terminal control when there is no TTY
+
+Non-interactive runs (`bed`, tests, scripts) no longer call termios. The bottombar
+`{savecursor}` tag was the cause of the failures on those runs.
+
+### fix(startup): keep engine.fortune and the blurb-dependent views out of startup
+
+`fortune`, `blurb`, `site`, and `siteauth` read `engine.__blurb`, which startup does not build.
+They are removed from the classlist until that table exists.
+
+### fix(startup): `checkfunctions` maps SQL files by override when the name differs
+
+`SQL_FILE_OVERRIDES` maps `bank.get_balance` and `bank.get_transactions` to
+`bank_read_functions.sql`.
+
+### fix(console): markup in plain strings is rendered, not swallowed
+
+Plain strings passed to `io.echo` or an input prompt must be f-strings when they contain
+`{{var:...}}`, or the markup is dropped. `showpgrole` and the member console were fixed.
+
+### fix(install): the superuser gate checks the connecting database role
+
+`checksuperuser` checks the role the connection uses, so an install run as a non-superuser
+fails clearly.
+
+### fix(make): the venv recipe builds from a clean copy of py/ into a fresh temp dir
+
+`make venv` builds in a temp directory outside the tree, reinstalls, and verifies the installed
+files and version. A stale-wheel check clears old bbsengine6 wheels first.
+
+### build(bbsengine6): `setup.py` is a metadata-free shim; metadata lives in pyproject.toml
+
+Matches letteredolive, so one file holds the package metadata.
+
 ### feat(scripts): `make_test_accounts --password` sets every account to one password
 
 `scripts/make_test_accounts.py --password PW` sets each account the run
