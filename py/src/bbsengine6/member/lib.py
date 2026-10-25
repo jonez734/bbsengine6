@@ -558,7 +558,8 @@ def update(args, member, moniker: str | None = None, **kwargs):
                     f"bbsengine6.member.update.160: Failed to update flags for {moniker}",
                     level="error",
                 )
-                return None
+                conn.rollback()
+                return False
 
         # STEP 2: Update member record (may include PK change from moniker to new_moniker)
         # If moniker is changing:
@@ -588,7 +589,8 @@ def update(args, member, moniker: str | None = None, **kwargs):
                     f"bbsengine6.member.update.170: Failed to update flags for {moniker}",
                     level="error",
                 )
-                return None
+                conn.rollback()
+                return False
 
         # Note: Caller (not this function) is responsible for final conn.commit()
         # This keeps the entire member update operation atomic
@@ -602,7 +604,10 @@ def update(args, member, moniker: str | None = None, **kwargs):
 
     except Exception:
         io.echo_traceback("bbsengine6.member.update.120:")
-        return None
+        # Roll back the open transaction so a failed update leaves nothing half-written.
+        # The caller also rolls back; this keeps the failure explicit and the return False.
+        conn.rollback()
+        return False
 
 
 def getcurrent(args, fields="*", **kwargs) -> dict | None:

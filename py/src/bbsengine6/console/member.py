@@ -648,6 +648,66 @@ def _apply_os_login(
     return True
 
 
+def _edit_write(args, m, *, _baseline_flags, _baseline_email, conn, **kwargs) -> bool:
+    """Update and provision an existing member. One transaction: commit on success, roll back on failure.
+
+    A failed step prints one readable line naming it. The full traceback goes through
+    io.echo_traceback and is kept. Nothing is saved after a failure.
+    """
+    step = "update"
+    try:
+        if libmember.update(args, m, m["moniker"], conn=conn, **kwargs) is False:
+            io.echo(
+                f"could not update member {m.get('moniker')!r}: the member record was not saved. "
+                f"No changes were saved.",
+                level="error",
+            )
+            conn.rollback()
+            return False
+
+        step = "flags"
+        for name, data in (m.get("flags") or {}).items():
+            if data.get("value") != _baseline_flags.get(name, {}).get("value"):
+                libmember.setflag(args, name, data["value"], moniker=m["moniker"], conn=conn, **kwargs)
+
+        if m["email"] != _baseline_email:
+            step = "email verification flag"
+            libmember.setflag(args, "EMAILVERIFIED", False, moniker=m["moniker"], conn=conn, **kwargs)
+
+        step = "password"
+        libmember.setpassword(args, m["password"], m["moniker"], conn=conn, **kwargs)
+
+        step = "psql roles"
+        configurerole(
+            args, m["loginid"],
+            m.get("flags", {}).get("SYSOP", {}).get("value", False),
+            conn=conn, moniker=m["moniker"],
+            osuser=m.get("osuser"), psqlrole=m.get("psqlrole"),
+            old_osuser=m.get("old_osuser"),
+            remove_old_osuser=bool(m.get("remove_old_osuser")),
+            menu_answered=True, **kwargs,
+        )
+        step = "user interface"
+        setui(args, m["loginid"], m["ui"], conn=conn, **kwargs)
+        step = "psql role record"
+        pgrole.ensure_login_role(args, m["moniker"], conn=conn, **kwargs)
+        step = "group sync"
+        pgrole.sync_groups(args, m["loginid"], conn=conn, **kwargs)
+
+        step = "commit"
+        conn.commit()
+        return True
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.console.member.edit.{step}: {e}")
+        io.echo(
+            f"could not update member {m.get('moniker')!r}: failed at {step} ({type(e).__name__}). "
+            f"No changes were saved.",
+            level="error",
+        )
+        conn.rollback()
+        return False
+
+
 def edit(args, **kwargs):
     """Edit an existing member. No DB writes happen before confirmation.
 
@@ -711,61 +771,70 @@ def edit(args, **kwargs):
             # TODO: support rename via database.renamerole(args, old, new, conn=conn)
             return False
 
-        # All side effects below run inside the open `with conn` block.
-        # Any exception rolls back; on success we commit at the end.
-        try:
-            libmember.update(args, m, m["moniker"], conn=conn, **kwargs)
+        return _edit_write(args, m, _baseline_flags=_baseline_flags, _baseline_email=_baseline_email, conn=conn, **kwargs)
+    return True
 
-            for name, data in (m.get("flags") or {}).items():
-                if data.get("value") != _baseline_flags.get(name, {}).get("value"):
-                    libmember.setflag(
-                        args,
-                        name,
-                        data["value"],
-                        moniker=m["moniker"],
-                        conn=conn,
-                        **kwargs,
-                    )
 
-            if m["email"] != _baseline_email:
-                libmember.setflag(
-                    args,
-                    "EMAILVERIFIED",
-                    False,
-                    moniker=m["moniker"],
-                    conn=conn,
-                    **kwargs,
-                )
+def _add_write(args, member, *, conn, **kwargs) -> bool:
+    """Insert and provision a new member. One transaction: commit on success, roll back on any failure.
 
-            libmember.setpassword(
-                args, m["password"], m["moniker"], conn=conn, **kwargs
+    A failed step prints one readable line naming it, and the full traceback through
+    io.echo_traceback (kept, not dropped). The menu stays usable.
+    """
+    step = "insert"
+    try:
+        moniker = libmember.insert(
+            args, member, primarykey="moniker", conn=conn, **kwargs
+        )
+        if not moniker:
+            io.echo(
+                f"could not insert member {member.get('moniker')!r}: insert returned no moniker. "
+                f"No changes were saved.",
+                level="error",
             )
-
-            configurerole(
-                args,
-                m["loginid"],
-                m.get("flags", {}).get("SYSOP", {}).get("value", False),
-                conn=conn,
-                moniker=m["moniker"],
-                osuser=m.get("osuser"),
-                psqlrole=m.get("psqlrole"),
-                old_osuser=m.get("old_osuser"),
-                remove_old_osuser=bool(m.get("remove_old_osuser")),
-                menu_answered=True,
-                **kwargs,
-            )
-            setui(args, m["loginid"], m["ui"], conn=conn, **kwargs)
-            pgrole.ensure_login_role(
-                args, m["moniker"], conn=conn, **kwargs
-            )
-            pgrole.sync_groups(args, m["loginid"], conn=conn, **kwargs)
-
-            conn.commit()
-        except Exception as e:
-            io.echo_traceback(f"bbsengine6.console.member.edit: {e}")
             conn.rollback()
             return False
-    return True
+
+        step = "flags"
+        for name, data in (member.get("flags") or {}).items():
+            libmember.setflag(args, name, data["value"], moniker=moniker, conn=conn, **kwargs)
+
+        step = "password"
+        if member.get("password"):
+            libmember.setpassword(args, member["password"], moniker, conn=conn, **kwargs)
+
+        step = "initial credits"
+        bank_service = bank.BankService(args)
+        bank_service.add_funds(
+            moniker, 100, transaction_type="initial",
+            description="New member bonus", conn=conn,
+        )
+
+        step = "psql roles"
+        configurerole(
+            args, member["loginid"],
+            member.get("flags", {}).get("SYSOP", {}).get("value", False),
+            conn=conn, moniker=moniker,
+            osuser=member.get("osuser"), psqlrole=member.get("psqlrole"),
+            old_osuser=member.get("old_osuser"),
+            remove_old_osuser=bool(member.get("remove_old_osuser")),
+            menu_answered=True, **kwargs,
+        )
+        pgrole.ensure_login_role(args, moniker, conn=conn, **kwargs)
+        pgrole.sync_groups(args, member["loginid"], conn=conn, **kwargs)
+
+        step = "commit"
+        conn.commit()
+        return True
+    except Exception as e:
+        io.echo_traceback(f"bbsengine6.console.member.add.{step}: {e}")
+        io.echo(
+            f"could not add member {member.get('moniker')!r}: failed at {step} ({type(e).__name__}). "
+            f"No changes were saved.",
+            level="error",
+        )
+        conn.rollback()
+        return False
 
 
 def add(args, **kwargs) -> bool:
@@ -802,72 +871,7 @@ def add(args, **kwargs) -> bool:
         ):
             return False
 
-        # All side effects run inside the open `with conn` block.
-        # Any exception rolls back; on success we commit at the end.
-        try:
-            moniker = libmember.insert(
-                args, member, primarykey="moniker", conn=conn, **kwargs
-            )
-            if not moniker:
-                io.echo(
-                    "con.member.add.200: libmember.insert returned no moniker",
-                    level="error",
-                )
-                return False
-
-            for name, data in (member.get("flags") or {}).items():
-                libmember.setflag(
-                    args,
-                    name,
-                    data["value"],
-                    moniker=moniker,
-                    conn=conn,
-                    **kwargs,
-                )
-
-            if member.get("password"):
-                libmember.setpassword(
-                    args,
-                    member["password"],
-                    moniker,
-                    conn=conn,
-                    **kwargs,
-                )
-
-            bank_service = bank.BankService(args)
-            bank_service.add_funds(
-                moniker,
-                100,
-                transaction_type="initial",
-                description="New member bonus",
-                conn=conn,
-            )
-
-            configurerole(
-                args,
-                member["loginid"],
-                member.get("flags", {}).get("SYSOP", {}).get("value", False),
-                conn=conn,
-                moniker=moniker,
-                osuser=member.get("osuser"),
-                psqlrole=member.get("psqlrole"),
-                old_osuser=member.get("old_osuser"),
-                remove_old_osuser=bool(member.get("remove_old_osuser")),
-                menu_answered=True,
-                **kwargs,
-            )
-            pgrole.ensure_login_role(
-                args, moniker, conn=conn, **kwargs
-            )
-            pgrole.sync_groups(
-                args, member["loginid"], conn=conn, **kwargs
-            )
-
-            conn.commit()
-        except Exception as e:
-            io.echo_traceback(f"bbsengine6.console.member.add: {e}")
-            conn.rollback()
-            return False
+        return _add_write(args, member, conn=conn, **kwargs)
     return True
 
 
