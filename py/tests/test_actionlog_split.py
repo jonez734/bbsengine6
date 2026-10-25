@@ -70,3 +70,12 @@ def test_table_grants_no_update_or_delete_to_any_role():
 def test_table_is_idempotent():
     text = TABLE.read_text().lower()
     assert "create table if not exists" in text
+
+
+@pytest.mark.unit
+def test_moniker_column_matches_member_moniker_type():
+    """engine.__member.moniker is citext. A foreign key needs the same type, so the log's
+    moniker column must be citext too, or startup fails with DatatypeMismatch."""
+    text = TABLE.read_text().lower()
+    assert re.search(r"moniker\s+citext\b", text), "moniker must be citext to match engine.__member"
+    assert not re.search(r"moniker\s+text\b", text), "moniker must not be text"

@@ -4,7 +4,7 @@
 -- role gets a direct insert. No role gets update or delete: the log is never edited. The view
 -- is in actionlog_view.sql.
 create table if not exists engine.__actionlog (
-    moniker text constraint fk_actionlog_moniker references engine.__member(moniker) on update cascade on delete cascade,
+    moniker citext constraint fk_actionlog_moniker references engine.__member(moniker) on update cascade on delete cascade,
     action text not null,
     actiondate timestamptz,
     remoteaddr inet,
