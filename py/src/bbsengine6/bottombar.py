@@ -278,6 +278,19 @@ _active_registry: "contextvars.ContextVar[Optional[FragmentRegistry]]" = (
 )
 
 
+def init(args: Any = None, topmargin: int = 1, bottommargin: int = 1) -> None:
+    """Set the terminal scroll region so the bottom bar stays on the last line.
+
+    Call once per screen, before the first setbottombar. Moved here from the deprecated
+    bbsengine6.screen.init; screen.init now delegates to this.
+    """
+    echo("{f6:3}{cursorup:3}", end="", flush=True)
+    h = terminal.lines() - bottommargin
+    echo("{savecursor}", end="")
+    echo("{decstbm:%s,%s}" % (topmargin, h), end="")
+    echo("{restorecursor}", flush=True, end="")
+
+
 def default_registry() -> FragmentRegistry:
     """Return the process-global FragmentRegistry, creating it on first use.
 

@@ -2,7 +2,7 @@ import time
 import locale
 import sys
 
-from bbsengine6 import io, screen
+from bbsengine6 import io, bottombar
 from . import lib
 
 parser = lib.buildargs()
@@ -25,7 +25,7 @@ if _argv_has_help_flag(sys.argv[1:]):
 else:
     args = parser.parse_args() if parser is not None else None
 
-screen.init()
+bottombar.init()
 
 locale.setlocale(locale.LC_ALL, "")
 time.tzset()

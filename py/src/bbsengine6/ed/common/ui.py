@@ -20,7 +20,7 @@ _editor_fragments: list = []
 def init_screen() -> None:
     global _screen_initialized
     if not _screen_initialized:
-        io.screen.init()
+        bottombar.init()
         _screen_initialized = True
 
 

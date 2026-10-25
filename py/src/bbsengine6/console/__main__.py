@@ -9,7 +9,7 @@ interactive menu (``bbsengine6.console.main``) is shown.
 
 import sys
 
-from bbsengine6 import io, screen
+from bbsengine6 import io, bottombar
 
 try:
     import argcomplete
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     args, rest_argv = parser.parse_known_args()
 
     try:
-        screen.init(args)
+        bottombar.init(args)
         lib.setbottombar(args, "con")
     except SystemExit:
         raise
