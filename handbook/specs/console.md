@@ -170,6 +170,46 @@ def main(args, **kwargs) -> Any: ...
 
 See `handbook/specs/module.md` for the full contract.
 
+## Bottombar and identity
+
+The console bottombar's right side is built by `console/lib.py`
+(`setbottombar` and `no_member_right`):
+
+- With a member identity, the bar shows `con` plus any `| debug` and
+  `| F1: Help` suffixes, and nothing else.
+- With no member (a CLI sysop whose Unix login matches no member and no
+  bed account), the bar also shows `| no member`. One warning is logged per
+  process explaining that member-only features are unavailable. The
+  warning is logged once, not on every redraw.
+
+The console has no login step. It identifies the member from the Unix login
+(`member.getcurrentmoniker`). When that finds nothing, the console still runs,
+and the notice is how the sysop learns why member features are missing.
+
+## Startup and the migration
+
+The startup check (`python -m bbsengine6.startup --databasename <db>`) runs
+`stage_zero`, then `stage_one`, `engine`, and `bank`. `stage_one` runs
+`checkclasses`, which imports each classlist entry whose class is missing.
+
+Two rules follow from how `checkclasses` works:
+
+- A classlist file must be plain SQL. `importsql` sends it as-is, so psql
+  meta-commands (`\echo`, `\i`) fail, and `CREATE INDEX` must use
+  `IF NOT EXISTS` because startup can rerun over an existing database.
+- A view that reads a table startup does not build must stay out of the
+  classlist. `engine.blurb`, `engine.fortune`, `engine.site` and `siteauth`
+  read `engine.__blurb`, which is built by the monolithic `bbsengine6.sql` only.
+  They are left in place on zoid6 and not dropped.
+
+Dropping a plain `CREATE VIEW` requires the drop file (`sql/drop_views_for_recreate.sql`)
+first, because `CREATE VIEW` cannot replace an existing object. The
+`engine.pgrole_member` view is `CREATE OR REPLACE`, so it needs no drop.
+
+The NOLOGIN migration for data roles is run from the console with `[K]`
+(sysop only). See [`pg-ident-auth.md`](./pg-ident-auth.md) for the migration
+and for the role model.
+
 ## Member management
 
 `bbsengine6.console.member` is the admin member CRUD module. It
