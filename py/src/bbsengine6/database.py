@@ -651,19 +651,36 @@ def connect(
                     f"database.connect: finally for conn id={conn_id} ({hex(conn_id)}), pool id={pool_id}, status={tx_status}, auto_commit={auto_commit}, exception={exception_occurred}",
                     level="debug",
                 )
-            if auto_commit and not exception_occurred:
-                conn.commit()
-                if _debug:
-                    io.echo(
-                        f"database.connect: after commit conn id={conn_id} ({hex(conn_id)}), pool id={pool_id}, status={conn.pgconn.transaction_status}",
-                        level="debug",
-                    )
-            pool.putconn(conn)
+            _end_transaction_on_exit(
+                conn,
+                pool,
+                auto_commit=auto_commit,
+                exception_occurred=exception_occurred,
+            )
             if _debug:
                 io.echo(
                     f"database.connect: putconn done conn id={conn_id} ({hex(conn_id)}), pool id={pool_id}, tx_status before={tx_status}",
                     level="debug",
                 )
+
+
+def _end_transaction_on_exit(conn, pool, *, auto_commit: bool, exception_occurred: bool) -> None:
+    """End the transaction, then return the connection to the pool.
+
+    The pool logs "rolling back returned connection" and rolls back itself when a connection
+    comes back mid-transaction. A clean exit with auto_commit=False used to do exactly that, so
+    this ends the transaction explicitly:
+      - auto_commit and no exception: commit (the write paths rely on this).
+      - otherwise, if still in a transaction: roll back (read-only or failed block).
+      - an exception never commits.
+    """
+    if exception_occurred:
+        conn.rollback()
+    elif auto_commit:
+        conn.commit()
+    elif conn.pgconn.transaction_status != 0:  # 0 = IDLE; anything else is an open transaction
+        conn.rollback()
+    pool.putconn(conn)
 
 
 # def buildkwargs(args, **kwargs):
