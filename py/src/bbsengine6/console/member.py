@@ -494,9 +494,12 @@ def configurerole(
     target = pgrole.role_name_for(moniker)
     # When the [O]/[X] menu answered, those were checked right after input and the sysop
     # was already asked. Only the bare path (no menu answers) prompts here.
+    # preexisting is read once: the prompt check on the bare path, otherwise a single check.
     if not menu_answered:
         io.echo(f"{{var:labelcolor}}checking for role {{var:valuecolor}}{target}")
-        if database.rolexists(args, target, conn=conn) is False:
+        exists = database.rolexists(args, target, conn=conn)
+        preexisting = exists is True
+        if exists is False:
             if (
                 io.inputboolean(
                     f"{{var:promptcolor}}role {{var:valuecolor}}{target}{{var:promptcolor}} does not exist. create it? {{var:optioncolor}}[Yn]{{var:promptcolor}}: {{var:inputcolor}}",
@@ -514,6 +517,8 @@ def configurerole(
     else:
         osuser = osuser  # the menu's answer: a name, or None for no OS login
 
+    if menu_answered:
+        preexisting = database.rolexists(args, psqlrole or target, conn=conn) is True
     rolname = pgrole.ensure_login_role(args, moniker, conn=conn, rolname=psqlrole)
     if not rolname:
         io.echo(
@@ -535,7 +540,11 @@ def configurerole(
         if sysop is True:
             database.manage_role_privs(args, rolname, "grant", "createdb", **kwargs)
             database.manage_role_privs(args, rolname, "grant", "createrole", **kwargs)
-        else:
+        elif preexisting:
+            # Only revoke on a role that already existed: it may hold privileges from before.
+            # A role created here was made without CREATEDB/CREATEROLE, so there is nothing to
+            # revoke, and ALTER ROLE would fail (manage_role_privs runs as zoid6, which cannot
+            # alter roles it did not create).
             database.manage_role_privs(args, rolname, "revoke", "createdb", **kwargs)
             database.manage_role_privs(args, rolname, "revoke", "createrole", **kwargs)
 
