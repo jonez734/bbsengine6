@@ -792,8 +792,8 @@ class TestConfigureRoleSuperuserGuard:
         privs_normal = {
             "rolname": "alice",
             "rolsuper": False,
-            "rolcreaterole": False,
-            "rolcreatedb": False,
+            "rolcreaterole": True,
+            "rolcreatedb": True,
             "rolcanlogin": True,
             "rolreplication": False,
             "rolbypassrls": False,
@@ -887,8 +887,8 @@ class TestConfigureRoleSuperuserGuard:
             for c in mock_privs.call_args_list
             if c.args[2] == "revoke"
         ]
-        assert ("m_bob", "revoke", "createdb") in revoke_actions
-        assert ("m_bob", "revoke", "createrole") in revoke_actions
+        # Unknown privileges: no revoke is guessed. The sysop is told, and the revoke is skipped.
+        assert revoke_actions == [], revoke_actions
 
 
 # ---------------------------------------------------------------------------

@@ -540,13 +540,21 @@ def configurerole(
         if sysop is True:
             database.manage_role_privs(args, rolname, "grant", "createdb", **kwargs)
             database.manage_role_privs(args, rolname, "grant", "createrole", **kwargs)
-        elif preexisting:
-            # Only revoke on a role that already existed: it may hold privileges from before.
-            # A role created here was made without CREATEDB/CREATEROLE, so there is nothing to
-            # revoke, and ALTER ROLE would fail (manage_role_privs runs as zoid6, which cannot
-            # alter roles it did not create).
-            database.manage_role_privs(args, rolname, "revoke", "createdb", **kwargs)
-            database.manage_role_privs(args, rolname, "revoke", "createrole", **kwargs)
+        else:
+            # Revoke only a privilege the role actually holds. An ALTER ROLE on a role that holds
+            # nothing is redundant, and manage_role_privs runs as zoid6, which cannot alter a role
+            # it did not create (InsufficientPrivilege). Privileges come from the role itself.
+            if privs is None:
+                io.echo(
+                    f"{{var:labelcolor}}could not read privileges for {{var:valuecolor}}{rolname}; "
+                    f"not changing createdb/createrole this time.",
+                    level="warning",
+                )
+            holds = privs or {}
+            if holds.get("rolcreatedb") is True:
+                database.manage_role_privs(args, rolname, "revoke", "createdb", **kwargs)
+            if holds.get("rolcreaterole") is True:
+                database.manage_role_privs(args, rolname, "revoke", "createrole", **kwargs)
 
     if sysop is True:
         database.manage_secondary_role(args, rolname, "grant", "sysop", **kwargs)
