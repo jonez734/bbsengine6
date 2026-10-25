@@ -704,6 +704,48 @@ def checkflag(
         return None
 
 
+def _has_sysop_role(args, moniker: str, **kwargs) -> bool:
+    """True when the member's login or data role is a member of the Postgres 'sysop' role.
+
+    Checks both the member's data role (m_<moniker>) and the bare moniker role, since
+    either can be granted sysop. Returns False when no such role exists.
+    """
+    def _work(conn):
+        with database.cursor(conn) as cur:
+            cur.execute(
+                "SELECT 1 FROM pg_auth_members a "
+                "JOIN pg_roles r ON r.oid = a.roleid "
+                "JOIN pg_roles m ON m.oid = a.member "
+                "WHERE r.rolname = 'sysop' AND m.rolname = ANY(%s)",
+                ([f"m_{moniker}", moniker],),
+            )
+            return cur.fetchone() is not None
+
+    try:
+        conn = kwargs.get("conn", None)
+        if conn is None:
+            pool = kwargs.get("pool", None)
+            if pool is None:
+                return False
+            with database.connect(args, pool=pool) as conn:
+                return _work(conn)
+        return _work(conn)
+    except Exception:
+        io.echo_traceback("bbsengine6.member._has_sysop_role.100:")
+        return False
+
+
+def is_sysop(args, moniker: str, **kwargs) -> bool:
+    """True when the member is a sysop: the SYSOP flag is set, or the member's role is in sysop.
+
+    The flag is the member's record. The role is the database grant the sysop console and
+    the bank access functions check. Either source makes the member a sysop.
+    """
+    if issysop(args, moniker=moniker, **kwargs) is True:
+        return True
+    return _has_sysop_role(args, moniker, **kwargs) is True
+
+
 def issysop(args, moniker: str | None = None, **kwargs) -> bool | None:
     """Check if the sysop flag is set on an account.
 
