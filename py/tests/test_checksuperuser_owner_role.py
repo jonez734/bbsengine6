@@ -21,3 +21,14 @@ def test_gate_accepts_owner_role_membership():
 def test_gate_still_accepts_superuser():
     src = inspect.getsource(checksuperuser.main)
     assert "rolsuper" in src
+
+
+def test_gate_checks_the_connecting_database_role_not_the_os_login():
+    """The install connects as a database role (--databaseuser). The gate must test that role.
+    Testing the OS login name fails whenever the OS account has no matching database role, even
+    when the database user that is connecting is a superuser."""
+    src = inspect.getsource(checksuperuser.main)
+    assert "current_user" in src or "databaseuser" in src or "dbrole" in src, \
+        "the gate must read the connecting database role, not util.getcurrentloginid"
+    assert "getcurrentloginid" not in src, \
+        "getcurrentloginid is the OS login; it does not identify the install's database role"

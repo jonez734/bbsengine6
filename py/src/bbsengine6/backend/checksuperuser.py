@@ -53,10 +53,34 @@ def access(args, op, **kwargs):
     return lib.issysop(args, **kwargs)
 
 
+def _connecting_role(args, *, conn=None, pool=None):
+    """The database role this connection runs as (``select current_user``), or None."""
+    def _work(c):
+        with c.cursor() as cur:
+            cur.execute("SELECT current_user")
+            row = cur.fetchone()
+            return row[0] if row and not isinstance(row, dict) else (row or {}).get("current_user")
+
+    try:
+        if conn is not None:
+            return _work(conn)
+        if pool is not None:
+            with database.connect(args, pool=pool) as c:
+                return _work(c)
+    except Exception:
+        return None
+    return None
+
+
 def main(args, **kwargs):
     conn = kwargs.get("conn", None)
     pool = kwargs.get("pool", None)
-    currentloginid = util.getcurrentloginid(args)
+    # The role to test is the one the install connects as (current_user), not the OS login
+    # name. The OS login can differ from the database role the install was given.
+    currentloginid = _connecting_role(args, conn=conn, pool=pool)
+    if currentloginid is None:
+        io.echo("could not read the connecting database role", level="error")
+        return False
     if database.rolexists(args, currentloginid, conn=conn, mogrify=True) is False:
         io.echo(
             f"{{var:labelcolor}}role '{{var:valuecolor}}{currentloginid}{{var:labelcolor}}' does not exist"
