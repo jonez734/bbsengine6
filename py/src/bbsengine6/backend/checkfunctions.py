@@ -19,9 +19,6 @@ SQL_FILE_OVERRIDES = {
     "engine.createpgrole": "createrol.sql",
     "engine.deletepgrole": "createrol.sql",
     "engine.syncpgrolegroups": "createrol.sql",
-    # Both bank read functions are defined together in bank_read_functions.sql.
-    "bank.get_balance": "bank_read_functions.sql",
-    "bank.get_transactions": "bank_read_functions.sql",
 }
 
 
@@ -78,9 +75,8 @@ def main(args, **kwargs):
                 # Login log writer (log_action.sql). The only path that inserts into
                 # engine.__actionlog; owned by zoid6, executable by bed/web/term.
                 "engine.log_action",
-                # Bank reads (bank_read_functions.sql): members see only their own rows.
-                "bank.get_balance",
-                "bank.get_transactions",
+                # Bank reads (bank_read_functions.sql) are installed by checkbank,
+                # after the bank schema and tables exist.
             )
         failcount = 0
         for f in funcs:

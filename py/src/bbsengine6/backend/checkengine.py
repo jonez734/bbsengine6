@@ -28,6 +28,23 @@ def main(args, **kwargs):
     # the admin DB, but stage 1's checkfunctions() only installs
     # engine.* functions and would leave the target DB without the
     # helper.
+    # manage_schema_priv.sql calls public.manage_priv (the dispatcher).
+    # Install the dispatcher first, or the wrapper fails with
+    # "function public.manage_priv does not exist" on a fresh target DB.
+    if database.functionexists(
+        args, "public.manage_priv", conn=conn
+    ) is False:
+        if database.importsql(
+            args, "manage_priv.sql", conn=conn, pool=pool
+        ) is False:
+            io.echo(
+                f"{{var:labelcolor}}function "
+                f"{{var:valuecolor}}public.manage_priv"
+                f"{{var:labelcolor}}: "
+                f"{{level.error}}fail{{/all}}"
+            )
+            return False
+
     if database.functionexists(
         args, "public.manage_schema_priv", conn=conn
     ) is False:

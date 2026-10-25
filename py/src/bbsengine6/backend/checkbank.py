@@ -118,5 +118,16 @@ def main(args, **kwargs):
             lib.ok()
 
     lib.hr(failcount)
+    if failcount > 0:
+        return False
+
+    # Bank read functions (bank_read_functions.sql): members see only their own rows.
+    # Installed here, not in checkfunctions, because they reference bank.* objects
+    # that exist only after the classes above are created.
+    io.echo("{var:labelcolor}function {var:valuecolor}bank.get_balance, bank.get_transactions: ", end="")
+    if database.importsql(args, "bank_read_functions.sql", conn=conn, pool=pool) is False:
+        lib.fail()
+        return False
+    lib.ok()
 
     return True if failcount == 0 else False
