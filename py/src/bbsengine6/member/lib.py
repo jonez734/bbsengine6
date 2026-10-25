@@ -696,7 +696,7 @@ def checkflag(
             if pool is None:
                 io.echo(f"bbsengine.member.checkflag.200: pool=None", level="critical")
                 return None
-            with database.connect(args, pool=pool) as conn:
+            with database.connect(args, pool=pool, set_role=False) as conn:
                 return _work(conn)
         return _work(conn)
     except Exception:
@@ -727,7 +727,7 @@ def _has_sysop_role(args, moniker: str, **kwargs) -> bool:
             pool = kwargs.get("pool", None)
             if pool is None:
                 return False
-            with database.connect(args, pool=pool) as conn:
+            with database.connect(args, pool=pool, set_role=False) as conn:
                 return _work(conn)
         return _work(conn)
     except Exception:

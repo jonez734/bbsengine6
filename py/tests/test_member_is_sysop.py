@@ -35,3 +35,47 @@ class TestMemberIsSysop(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSysopCheckKeepsLoginRole(unittest.TestCase):
+    """The sysop check runs as bed's login role, so it must not inherit the member role.
+
+    A plain database.connect() takes the process-wide role. For a bound member that issues
+    SET LOCAL ROLE <member>, which bed's login role cannot do, so login fails after the token
+    is minted.
+    """
+
+    def test_checkflag_connects_with_set_role_false(self):
+        from bbsengine6 import database
+        from unittest.mock import MagicMock, patch
+
+        conn = MagicMock()
+        cur = MagicMock()
+        cur.fetchone.return_value = {"checkmemberflag": True}
+        cur.rowcount = 1
+        conn.cursor.return_value.__enter__.return_value = cur
+        conn.__enter__.return_value = conn
+        pool = MagicMock()
+
+        with patch.object(database, "connect", return_value=conn) as connect, \
+                patch.object(database, "cursor", return_value=cur):
+            member.checkflag(MagicMock(), "sysop", moniker="jam", pool=pool)
+
+        self.assertIs(connect.call_args.kwargs.get("set_role"), False)
+
+    def test_has_sysop_role_connects_with_set_role_false(self):
+        from bbsengine6 import database
+        from unittest.mock import MagicMock, patch
+
+        conn = MagicMock()
+        cur = MagicMock()
+        cur.fetchone.return_value = None
+        conn.cursor.return_value.__enter__.return_value = cur
+        conn.__enter__.return_value = conn
+        pool = MagicMock()
+
+        with patch.object(database, "connect", return_value=conn) as connect, \
+                patch.object(database, "cursor", return_value=cur):
+            member._has_sysop_role(MagicMock(), "jam", pool=pool)
+
+        self.assertIs(connect.call_args.kwargs.get("set_role"), False)
