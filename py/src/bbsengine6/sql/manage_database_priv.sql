@@ -1,20 +1,15 @@
-CREATE OR REPLACE FUNCTION manage_database_priv(
-    action TEXT,
-    priv TEXT,
-    target_db TEXT,
-    target_role TEXT
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-AS $$
-BEGIN
-    IF action = 'grant' THEN
-        EXECUTE format('GRANT %I ON DATABASE %I TO %I', priv, target_db, target_role);
-    ELSIF action = 'revoke' THEN
-        EXECUTE format('REVOKE %I ON DATABASE %I FROM %I', priv, target_db, target_role);
-    ELSE
-        RAISE EXCEPTION 'Invalid action: %, must be grant or revoke', action;
-    END IF;
-END;
+-- Thin wrapper over public.manage_priv (manage_priv.sql). Same signature.
+
+create or replace function public.manage_database_priv(action text, priv text, target_db text, target_role text)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+    perform public.manage_priv('database', action, priv, target_db, target_role);
+end
 $$;
+
+alter function public.manage_database_priv(text, text, text, text) owner to zoid6;
+grant execute on function public.manage_database_priv(text, text, text, text) to sysop;

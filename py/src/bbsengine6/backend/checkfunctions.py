@@ -44,6 +44,7 @@ def main(args, **kwargs):
             funcs = (
                 "public.get_role_privs",
                 "public.manage_secondary_role",
+                "public.manage_priv",
                 "public.manage_role_privs",
                 "public.manage_database_priv",
                 "public.manage_schema_priv",
@@ -58,6 +59,7 @@ def main(args, **kwargs):
             funcs = (
                 "public.get_role_privs",
                 "public.manage_secondary_role",
+                "public.manage_priv",
                 "public.manage_role_privs",
                 "public.manage_database_priv",
                 "public.manage_schema_priv",
