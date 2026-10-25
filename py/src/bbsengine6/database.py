@@ -548,7 +548,7 @@ def connect(
     *,
     auto_commit: bool = True,
     wrapper: bool = False,
-    set_role: str | None = None,
+    set_role: str | bool | None = None,
     **kwargs: Any,
 ) -> Generator[Any, None, None]:
     """Context manager that safely gets a connection and returns it to the pool.
@@ -559,8 +559,14 @@ def connect(
       auto_commit: If True (default), commits before returning connection to pool.
                    Set to False for multi-statement transactions.
       wrapper: If True, yields DatabaseConnection wrapper with method-style API.
-      set_role: If provided, runs SET LOCAL ROLE <set_role> after acquiring the
-                connection. The role reverts automatically at transaction end.
+      set_role: Role selection for this connection.
+                - a role name: runs SET LOCAL ROLE <name>.
+                - None (default): inherits the context role set by
+                  set_current_role(), if any.
+                - False: no role switch, even when a context role is set. Use this
+                  when the connection must keep its login role, e.g. bed's
+                  definer-function calls.
+                The role reverts automatically at transaction end.
       **kwargs: Additional arguments
 
     Yields:
@@ -607,6 +613,8 @@ def connect(
 
     if set_role is None:
         set_role = _current_db_role.get()
+    elif set_role is False:
+        set_role = None  # explicit: keep the login role, ignore the context role
 
     if set_role is not None:
         try:

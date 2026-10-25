@@ -11,7 +11,7 @@ OUTDIR = /srv/repo/$(PROJECT)/
 # freshly-built wheel's Version against the installed Version (same
 # string) and report "Requirement already satisfied".
 VERSION ?= $(shell date +%Y%m%d%H%M%S)
-export VERSION_PREFIX ?= 0.0.1.dev
+export VERSION_PREFIX ?= 0.0.2.dev
 
 PYTHON ?= python3
 PIP ?= $(PYTHON) -m pip

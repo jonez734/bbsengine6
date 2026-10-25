@@ -59,9 +59,19 @@ A connection returned mid-transaction makes psycopg_pool log
 transaction here avoids that warning. Callers that need their writes to
 persist must commit inside the block (or use `auto_commit=True`).
 
-`set_role` is the per-transaction role-switch entry point: when supplied,
-`connect` validates the role exists in `pg_roles`, then runs
-`SET LOCAL ROLE <set_role>` after acquiring the connection. The role
+`set_role` takes three forms:
+
+- a role name: `connect` validates the role exists in `pg_roles`, then runs
+  `SET LOCAL ROLE <name>` after acquiring the connection;
+- `None` (default): inherits the process-wide role set by `set_current_role()`,
+  if any;
+- `False`: no role switch, even when a context role is set. The connection
+  keeps its login role. Use it for calls that run as the login role, such as
+  bed's definer-function calls to `engine.bed_bank_op` and
+  `engine.bed_message_send`.
+
+For a role name, the role is validated in `pg_roles` before `SET LOCAL ROLE`
+runs after acquiring the connection. The role
 reverts automatically at transaction end. The DSN user must be a member of
 the target role (or a superuser). This is the path used for the
 `SET LOCAL ROLE member` request-scoped role switch documented in
