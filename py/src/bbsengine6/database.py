@@ -633,6 +633,12 @@ def connect(
             yield DatabaseConnection(conn, pool, set_role=set_role)
         else:
             yield conn
+    except (EOFError, KeyboardInterrupt):
+        # A user exit (Ctrl-D or Ctrl-C) is not an error. Roll back so nothing half-written
+        # persists, and let the menu loop end. No traceback: the caller prints the exit line.
+        exception_occurred = True
+        conn.rollback()
+        raise
     except BaseException as e:
         exception_occurred = True
         io.echo_traceback(f"bbsengine6.database.connect.400: {e}")
