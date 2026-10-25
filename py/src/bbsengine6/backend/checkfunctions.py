@@ -70,6 +70,9 @@ def main(args, **kwargs):
                 "engine.createpgrole",
                 "engine.deletepgrole",
                 "engine.syncpgrolegroups",
+                # Login log writer (log_action.sql). The only path that inserts into
+                # engine.__actionlog; owned by zoid6, executable by bed/web/term.
+                "engine.log_action",
             )
         failcount = 0
         for f in funcs:
