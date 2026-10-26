@@ -541,6 +541,10 @@ def update(args, member, moniker: str | None = None, **kwargs):
 
     rec = buildrec(member_copy)
     flags_dict = rec.pop("flags", None)
+    # OS login and data role live in engine.pgrole, not engine.__member. The edit form carries
+    # them so configurerole can apply them; they must not reach the engine.__member UPDATE.
+    for pgrole_only in ("osuser", "old_osuser", "remove_old_osuser", "psqlrole"):
+        rec.pop(pgrole_only, None)
 
     # Detect if moniker is changing
     new_moniker = rec.get("moniker", None)
