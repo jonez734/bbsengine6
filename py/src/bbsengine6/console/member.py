@@ -109,7 +109,11 @@ def render_member(args, **kwargs):
             f"{{red}} *{{var:optioncolor}}[E]{{var:labelcolor}} Email: {member['email']}"
         )
 
-    if member["password"] is None:
+    # [P] changes the password, so it is always offered. The value is never shown: only whether
+    # a new password has been entered in this edit.
+    if member.get("password"):
+        io.echo("  {var:optioncolor}[P]{var:labelcolor} Password: {var:valuecolor}(set, not shown){/all}")
+    else:
         io.echo("  {var:optioncolor}[P]{var:labelcolor} Password{/all}")
 
     if member["credits"] is None:

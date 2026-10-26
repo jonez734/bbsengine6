@@ -75,3 +75,21 @@ def test_data_role_is_d_and_x_only_exits_with_q():
     assert 'if ch == "D":' in src
     assert 'elif ch in ("Q", "X"):' in src
     assert 'if ch == "X":' not in src
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("password", [None, "hunter2-secret"])
+def test_password_option_is_always_shown_and_never_reveals_the_value(password):
+    """[P] Password is on the edit menu whether or not a password is set, and the value is never
+    printed."""
+    from unittest.mock import patch
+    from bbsengine6.console import member as cm
+
+    m = _member()
+    m["password"] = password
+    out = []
+    with patch.object(cm.io, "echo", side_effect=lambda *a, **k: out.append(str(a[0]) if a else "")):
+        cm.render_member(None, member=m, _member=dict(m))
+    text = "\n".join(out)
+    assert "[P]" in text, text
+    assert "hunter2-secret" not in text
