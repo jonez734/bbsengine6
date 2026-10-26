@@ -483,10 +483,20 @@ def _check_notifications(moniker: str, **kwargs) -> tuple[bool, int]:
             cached = message_module.get_local_unread_count(moniker)
             if cached >= 0:
                 return cached > 0, cached
+            # Resolve args and pool from the session's bottombar registry when the
+            # caller did not pass them, so the count reads the session's database,
+            # not the default one (see bottombar.py: the same fallback).
+            args = kwargs.get("args")
+            pool = kwargs.get("pool")
+            if args is None or pool is None:
+                from .. import bottombar
+                reg = bottombar._resolve_registry()
+                args = args if args is not None else getattr(reg, "args", None)
+                pool = pool if pool is not None else getattr(reg, "pool", None)
             count = message_module.get_unread_count(
                 moniker,
-                args=kwargs.get("args"),
-                pool=kwargs.get("pool"),
+                args=args,
+                pool=pool,
                 conn=kwargs.get("conn"),
             )
             message_module.set_local_unread_count(moniker, count or 0)
