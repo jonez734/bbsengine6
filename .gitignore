@@ -13,3 +13,4 @@ dist/
 skin/css/*.css
 **/skin/css/*.css
 
+*.egg-info.stale.*/
