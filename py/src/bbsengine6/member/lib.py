@@ -325,49 +325,13 @@ def build(args, row={}, **kwargs):
 
 
 def getcurrentloginid(args, **kwargs):
-    """Return the OS login name for the current member, or None.
+    """Return the current OS login name, as queried from the operating system.
 
-    The OS login (``osuser``) is stored on ``engine.pgrole`` for the member whose
-    ``loginid`` matches the process's login name. Its value is the member's OS login as
-    configured in the console [O] menu. If no member row matches, the process's own
-    login name is returned (``util.getcurrentloginid``), so callers always get the name
-    the process runs as.
+    This is the login of the user running the process (``os.getlogin()``, falling back to the
+    login environment variables). It is not a database value: the member's stored OS login
+    (``engine.pgrole.osuser``) is a separate thing and is read where it is needed.
     """
-    cached = getattr(_threadlocal, "loginid", None)
-    if cached is not None:
-        return cached
-
-    processlogin = util.getcurrentloginid(args, **kwargs)
-    if processlogin is None:
-        return None
-
-    def _work(conn):
-        try:
-            with database.cursor(conn) as cur:
-                cur.execute(
-                    database.query(
-                        "select pr.osuser from $engine.member m "
-                        "join $engine.pgrole pr on pr.membermoniker = m.moniker "
-                        "where m.loginid=$1",
-                        processlogin,
-                    )
-                )
-                row = cur.fetchone() if cur.rowcount else None
-                osuser = row["osuser"] if row and row["osuser"] else processlogin
-                _threadlocal.loginid = osuser
-                return osuser
-        except psycopg.DatabaseError:
-            io.echo_traceback("bbsengine6.member.getcurrentloginid.100:")
-            return processlogin
-
-    conn = kwargs.get("conn", None)
-    if conn is None:
-        pool = kwargs.get("pool", None)
-        if pool is None:
-            return processlogin
-        with database.connect(args, pool=pool) as c:
-            return _work(c)
-    return _work(conn)
+    return util.getcurrentloginid(args, **kwargs)
 
 
 def getcurrentmoniker(args, **kwargs):
