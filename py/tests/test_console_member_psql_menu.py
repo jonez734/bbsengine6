@@ -1,4 +1,4 @@
-"""[X] data role menu option in the member console. The OS login is the loginid, so there is no
+"""[D] data role menu option in the member console. The OS login is the loginid, so there is no
 [O] option; the loginid's login role is applied by configurerole.
 
 Each option checks existence right after its input, and writes nothing. The
@@ -50,7 +50,7 @@ def test_data_role_option_checks_existence_on_the_chosen_name():
     with patch.object(console_member.database, "rolexists", side_effect=exists), \
          patch.object(console_member.io, "inputstring", return_value="m_custom"), \
          patch.object(console_member.database, "createrol") as cr:
-        out = _run_edit(["X", "Q"], m)
+        out = _run_edit(["D", "Q"], m)
     assert seen["name"] == "m_custom"
     cr.assert_not_called()
     assert out["psqlrole"] == "m_custom"
@@ -61,7 +61,7 @@ def test_data_role_option_defaults_to_the_moniker_role():
     m = _member()
     with patch.object(console_member.io, "inputstring", return_value="m_lo_test") as ins, \
          patch.object(console_member.database, "rolexists", return_value=True):
-        _run_edit(["X", "Q"], m)
+        _run_edit(["D", "Q"], m)
     assert ins.call_args.args[1] == "m_lo_test"
 
 
@@ -73,7 +73,7 @@ def test_existing_data_role_cannot_be_renamed_from_the_menu():
          patch.object(console_member.io, "inputstring", return_value="m_other"), \
          patch.object(console_member.database, "rolexists", return_value=True), \
          patch.object(console_member.io, "inputboolean") as ask:
-        out = _run_edit(["X", "Q"], m, mode_existing=True)
+        out = _run_edit(["D", "Q"], m, mode_existing=True)
     assert out["psqlrole"] == "m_lo_test", "stored data role must not change"
 
 

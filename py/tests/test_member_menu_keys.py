@@ -16,7 +16,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 cm = importlib.import_module("bbsengine6.console.member")
 
-ACCEPTED = "LMECPFXURQ"
+ACCEPTED = "LMECPFDURQX"
 
 
 def _member():
@@ -52,7 +52,7 @@ def test_prompt_lists_the_accepted_keys():
 
 @pytest.mark.unit
 def test_menu_draws_every_item_when_ui_is_none():
-    """A member with no UI value must still see [F], [R], [O] and [X]. The empty-UI branch
+    """A member with no UI value must still see [F], [R], [D] and [X]. The empty-UI branch
     used to return early, which cut the menu off after [U]."""
     m = _member()
     m["ui"] = None
@@ -60,5 +60,18 @@ def test_menu_draws_every_item_when_ui_is_none():
     with um.patch.object(cm.io, "echo", side_effect=lambda *a, **k: out.append(str(a[0]) if a else "")):
         cm.render_member(None, member=m, _member=copy.deepcopy(m))
     text = "\n".join(out)
-    for key in ("F", "R", "X"):
+    for key in ("F", "R", "D"):
         assert f"[{key}]" in text, f"[{key}] missing when ui is None:\n{text}"
+
+
+@pytest.mark.unit
+def test_data_role_is_d_and_x_only_exits_with_q():
+    """[D] is the data role. [X] is an exit key alongside [Q], not an option of its own."""
+    import inspect
+    from bbsengine6.console import member as cm
+
+    src = inspect.getsource(cm._edit)
+    assert '"LMECPFDURQX"' in src
+    assert 'if ch == "D":' in src
+    assert 'elif ch in ("Q", "X"):' in src
+    assert 'if ch == "X":' not in src

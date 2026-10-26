@@ -128,7 +128,7 @@ def render_member(args, **kwargs):
     # io.echo(f"{ui=} {_ui=}", level="debug")  # noisy: printed ui=None on every menu draw
     if ui is None or len(ui) == 0:
         # Print the empty UI line and keep drawing the rest of the menu. Returning here
-        # cut the menu off, so [F], [R], [O] and [X] never showed.
+        # cut the menu off, so [F], [R], [D] and [X] never showed.
         io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: None", end="")
         if _ui is not None:
             _ui.sort()
@@ -188,14 +188,14 @@ def render_member(args, **kwargs):
 
     psqlrole = member.get("psqlrole")
     io.echo(
-        f"  {{var:optioncolor}}[X]{{var:labelcolor}} Data role:{{var:valuecolor}} {psqlrole or '(none)'}"
+        f"  {{var:optioncolor}}[D]{{var:labelcolor}} Data role:{{var:valuecolor}} {psqlrole or '(none)'}"
     )
 
 
 def _load_psql(conn, m: dict) -> None:
     """Put the member's data role into the edit dict (the loginid is the OS login).
 
-    Without this an existing member's [X] menu starts blank. A member with no tracking row
+    Without this an existing member's [D] menu starts blank. A member with no tracking row
     gets None.
     """
     with database.cursor(conn=conn) as cur:
@@ -223,7 +223,7 @@ def _stored_psqlrole(conn, moniker: str):
 
 
 def _ask_psqlrole_menu(args, moniker: str, stored, *, conn):
-    """[X] menu option: name the data role, then check it exists. Writes nothing.
+    """[D] menu option: name the data role, then check it exists. Writes nothing.
 
     An existing data role is not renamed here (the same rule as the loginid): the stored
     name is kept and the sysop is told so. A new name is checked and created on exit.
@@ -267,15 +267,15 @@ def _edit(args, mode, member, **kwargs):
     while not done:
         render_member(args, member=member, _member=_member)
         ch = io.inputchoice(
-            f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFXURQ]{{var:promptcolor}}: {{var:inputcolor}}",
-            "LMECPFXURQ",
+            f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFDURQX]{{var:promptcolor}}: {{var:inputcolor}}",
+            "LMECPFDURQX",
             "",
             help=render_member,
             member=member,
             _member=_member,
             **kwargs,
         )
-        if ch == "X":
+        if ch == "D":
             io.echo("Data role (psql role)")
             member["psqlrole"] = _ask_psqlrole_menu(
                 args, member["moniker"], _stored_psqlrole(conn, member["moniker"]), conn=conn
@@ -339,7 +339,7 @@ def _edit(args, mode, member, **kwargs):
             if refcode == "":
                 refcode = None
             member["refcode"] = refcode
-        elif ch == "Q":
+        elif ch in ("Q", "X"):
             io.echo("Quit")
             errcount = 0
             for f in ("loginid", "moniker", "email"):
@@ -409,7 +409,7 @@ def configurerole(
 ) -> bool:
     """Apply a member's psql role configuration.
 
-    menu_answered=True means the [O]/[X] menu already asked the sysop and checked
+    menu_answered=True means the [D] menu already asked the sysop and checked
     existence; psqlrole is then applied without
     prompting again. Otherwise the prompts run here, as before.
     """
@@ -430,7 +430,7 @@ def configurerole(
     # 'member' and writes the engine.pgrole tracking row, which the request path needs.
     # A bare CREATE ROLE <loginid> here skipped both, so the member was refused at login.
     target = pgrole.role_name_for(moniker)
-    # When the [O]/[X] menu answered, those were checked right after input and the sysop
+    # When the [D] menu answered, those were checked right after input and the sysop
     # was already asked. Only the bare path (no menu answers) prompts here.
     # preexisting is read once: the prompt check on the bare path, otherwise a single check.
     if not menu_answered:
