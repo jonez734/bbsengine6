@@ -58,6 +58,17 @@ def test_writer_rejects_an_unknown_action():
 
 
 @pytest.mark.unit
+def test_client_exit_reasons_include_ws_error_for_ops():
+    # Each exit reason is its own value so ops can count them apart. ws_error covers a websocket
+    # failure after login, which is distinct from idle (keepalive 1011) and eof.
+    text = SQL.read_text().lower()
+    m = re.search(r"p_note not in \(([^)]*)\)", text)
+    assert m, "writer must validate the client_exit reason"
+    reasons = set(re.findall(r"'([a-z_]+)'", m.group(1)))
+    assert reasons == {"quit", "eof", "intr", "idle", "ws_error", "auth_failed", "error"}
+
+
+@pytest.mark.unit
 def test_only_the_writer_is_granted_insert_and_no_role_gets_direct_insert():
     text = SQL.read_text().lower()
     assert "grant execute" in text

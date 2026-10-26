@@ -1,7 +1,7 @@
 -- engine.log_action: the single writer for engine.__actionlog.
 --
 -- Every login, login failure, logout, token expiry and client exit is recorded through this function.
--- A client_exit carries its reason in the note: quit, eof, intr, idle, auth_failed or error. It is
+-- A client_exit carries its reason in the note: quit, eof, intr, idle, ws_error, auth_failed or error. It is
 -- SECURITY DEFINER and owned by zoid6, which is the only role that inserts into the log, so no
 -- caller gets a direct insert. The search_path is pinned so a caller cannot redirect it.
 --
@@ -32,7 +32,7 @@ begin
         if p_note is null then
             raise exception 'log_action: client_exit requires a reason';
         end if;
-        if p_note not in ('quit', 'eof', 'intr', 'idle', 'auth_failed', 'error') then
+        if p_note not in ('quit', 'eof', 'intr', 'idle', 'ws_error', 'auth_failed', 'error') then
             raise exception 'log_action: unknown reason %', p_note;
         end if;
     end if;
