@@ -1,4 +1,5 @@
-"""[O] OS login and [X] data role menu options in the member console.
+"""[X] data role menu option in the member console. The OS login is the loginid, so there is no
+[O] option; the loginid's login role is applied by configurerole.
 
 Each option checks existence right after its input, and writes nothing. The
 member dict carries the answers; configurerole applies them when the menu exits.
@@ -19,7 +20,7 @@ def _no_stored_rows(conn):
 def _member(**over):
     m = {"moniker": "lo_test", "loginid": "lo_test", "email": "x@y", "ui": None,
          "credits": 0, "refcode": None, "flags": {}, "password": None,
-         "osuser": None, "psqlrole": None}
+         "psqlrole": None}
     m.update(over)
     return m
 
@@ -34,35 +35,7 @@ def _run_edit(choices, member, **patches):
         return console_member._edit(object(), "edit", member, conn=_no_stored_rows(MagicMock()), **patches)
 
 
-@pytest.mark.unit
-def test_menu_offers_the_osuser_and_data_role_choices():
-    """The edit menu's choice string includes O (OS login) and X (data role)."""
-    import inspect
-    src = inspect.getsource(console_member._edit)
-    choices = [line for line in src.splitlines() if '"LMECPF' in line or "LMECPF" in line]
-    assert choices, "edit menu choice string not found"
-    assert "O" in choices[0] and "X" in choices[0], choices[0]
 
-
-@pytest.mark.unit
-def test_os_option_checks_existence_right_after_input_and_defers_writes():
-    m = _member()
-    with patch.object(console_member, "_ask_os_login_menu_full", return_value=("lo_test", True, None, False)) as ask, \
-         patch.object(console_member.pgrole, "ensure_os_login_role") as eo, \
-         patch.object(console_member.database, "createrol") as cr:
-        out = _run_edit(["O", "Q"], m)
-    ask.assert_called_once()
-    eo.assert_not_called()
-    cr.assert_not_called()
-    assert out["osuser"] == "lo_test"
-
-
-@pytest.mark.unit
-def test_declined_login_role_leaves_the_member_unchanged():
-    m = _member()
-    with patch.object(console_member, "_ask_os_login_menu_full", return_value=(None, False, None, False)):
-        out = _run_edit(["O", "Q"], m)
-    assert out["osuser"] is None
 
 
 @pytest.mark.unit
@@ -113,11 +86,10 @@ def test_configurerole_uses_menu_answers_without_reprompting():
          patch.object(console_member.database, "get_role_privs", return_value={"rolsuper": False}), \
          patch.object(console_member.database, "manage_role_privs"), \
          patch.object(console_member.database, "manage_secondary_role"), \
-         patch.object(console_member.pgrole, "ensure_os_login_role", return_value=True), \
          patch("bbsengine6.console.member.io.echo"):
         ok = console_member.configurerole(
             object(), "lo_test", sysop=False, conn=conn, moniker="lo_test",
-            osuser="lo_test", psqlrole="m_lo_test", menu_answered=True,
+            psqlrole="m_lo_test", menu_answered=True,
         )
     assert ok is True
     ins.assert_not_called()

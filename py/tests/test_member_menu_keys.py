@@ -16,14 +16,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 cm = importlib.import_module("bbsengine6.console.member")
 
-ACCEPTED = "LMECPFOXURQ"
+ACCEPTED = "LMECPFXURQ"
 
 
 def _member():
     flags = {n: {"value": False, "description": n} for n in
              ["SYSOP", "MAGIC", "EROS", "AUTHENTICATED", "ASIMOV", "NOCALUMNI", "EMAILVERIFIED", "APPROVED"]}
     return {"moniker": "jam", "loginid": "jam", "email": "j@x", "ui": ["term"], "credits": 100,
-            "refcode": None, "flags": flags, "password": None, "osuser": None, "psqlrole": None, "attrs": {}}
+            "refcode": None, "flags": flags, "password": None, "psqlrole": None, "attrs": {}}
 
 
 def _rendered_keys():
@@ -60,5 +60,5 @@ def test_menu_draws_every_item_when_ui_is_none():
     with um.patch.object(cm.io, "echo", side_effect=lambda *a, **k: out.append(str(a[0]) if a else "")):
         cm.render_member(None, member=m, _member=copy.deepcopy(m))
     text = "\n".join(out)
-    for key in ("F", "R", "O", "X"):
+    for key in ("F", "R", "X"):
         assert f"[{key}]" in text, f"[{key}] missing when ui is None:\n{text}"

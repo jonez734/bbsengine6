@@ -6,9 +6,7 @@
 --
 -- Idempotent: skips members already in engine.pgrole. Safe to re-run.
 --
--- osuser is left NULL for backfilled rows; members fill it in via
--- the [P] psql credentials console flow (see
--- py/src/bbsengine6/console/showpgrole.py).
+-- The loginid is the OS login: backfilled rows take the member's loginid.
 --
 -- Run as a member of the 'sysop' group (or any role that has EXECUTE
 -- on engine.createpgrole).

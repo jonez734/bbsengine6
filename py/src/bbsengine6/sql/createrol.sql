@@ -31,10 +31,10 @@ grant execute on function engine.createrol to sysop;
 -- collision-suffixed, CREATE ROLE ... NOLOGIN (data roles are reached only by SET ROLE),
 -- GRANT member TO m_xxx, INSERT INTO engine.pgrole, return rolname.
 -- Idempotent: if engine.pgrole already has a row for this member,
--- the existing rolname is returned (and osuser is updated if provided).
+-- the existing rolname is returned.
+DROP FUNCTION IF EXISTS engine.createpgrole(TEXT, TEXT);
 CREATE OR REPLACE FUNCTION engine.createpgrole(
-  p_moniker TEXT,
-  p_osuser  TEXT DEFAULT NULL
+  p_moniker TEXT
 ) RETURNS TEXT AS $$
 DECLARE
   base     TEXT;
@@ -46,14 +46,9 @@ BEGIN
     RAISE EXCEPTION 'createpgrole: moniker is required';
   END IF;
 
-  -- Idempotency: if a row already exists for this member, return
-  -- the existing rolname (and update osuser if a non-NULL one was
-  -- provided).
+  -- Idempotency: if a row already exists for this member, return the existing rolname.
   SELECT rolname INTO existing FROM engine.pgrole WHERE membermoniker = p_moniker;
   IF existing IS NOT NULL THEN
-    IF p_osuser IS NOT NULL THEN
-      UPDATE engine.pgrole SET osuser = p_osuser WHERE membermoniker = p_moniker;
-    END IF;
     RETURN existing;
   END IF;
 
@@ -74,14 +69,14 @@ BEGIN
   -- The 'member' group is created in pgrole.sql.
   EXECUTE format('GRANT member TO %I', rname);
 
-  INSERT INTO engine.pgrole (membermoniker, rolname, osuser)
-  VALUES (p_moniker, rname, p_osuser);
+  INSERT INTO engine.pgrole (membermoniker, rolname)
+  VALUES (p_moniker, rname);
 
   RETURN rname;
 END;
 $$ LANGUAGE plpgsql;
 
-grant execute on function engine.createpgrole(text, text) to sysop;
+grant execute on function engine.createpgrole(text) to sysop;
 
 -- engine.deletepgrole: DROP ROLE IF EXISTS. The engine.pgrole row
 -- goes away via the ON DELETE CASCADE from engine.__member, or we

@@ -328,8 +328,7 @@ def getcurrentloginid(args, **kwargs):
     """Return the current OS login name, as queried from the operating system.
 
     This is the login of the user running the process (``os.getlogin()``, falling back to the
-    login environment variables). It is not a database value: the member's stored OS login
-    (``engine.pgrole.osuser``) is a separate thing and is read where it is needed.
+    login environment variables). It is not a database value.
     """
     return util.getcurrentloginid(args, **kwargs)
 
@@ -551,10 +550,9 @@ def update(args, member, moniker: str | None = None, **kwargs):
 
     rec = buildrec(member_copy)
     flags_dict = rec.pop("flags", None)
-    # OS login and data role live in engine.pgrole, not engine.__member. The edit form carries
-    # them so configurerole can apply them; they must not reach the engine.__member UPDATE.
-    for pgrole_only in ("osuser", "old_osuser", "remove_old_osuser", "psqlrole"):
-        rec.pop(pgrole_only, None)
+    # The data role lives in engine.pgrole, not engine.__member; the edit form carries it so
+    # configurerole can apply it. It must not reach the engine.__member UPDATE.
+    rec.pop("psqlrole", None)
 
     # Detect if moniker is changing
     new_moniker = rec.get("moniker", None)

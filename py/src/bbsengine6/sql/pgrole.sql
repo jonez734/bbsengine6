@@ -12,7 +12,6 @@
 create table if not exists engine.pgrole (
   membermoniker     citext primary key references engine.__member(moniker) on delete cascade,
   rolname      name not null unique,
-  osuser       text,
   created_at   timestamptz not null default now(),
   last_ack_at  timestamptz
 );

@@ -1,15 +1,13 @@
--- engine.pgrole_member: one row per member with the psql roles they use.
+-- engine.pgrole_member: one row per member with the psql role they use.
 --
--- The data role (rolname, NOLOGIN) holds the member's privileges; the login role
--- (osuser, LOGIN NOINHERIT) is the OS username ident maps to. osuser is NULL until the
--- sysop sets one. Use this view instead of repeating the join.
+-- The data role (rolname, NOLOGIN) holds the member's privileges. The login role is named for
+-- the member's loginid, which is also the OS login ident maps to.
 
 create or replace view engine.pgrole_member as
     select
         mm.moniker,
         mm.loginid,
-        pr.rolname,
-        pr.osuser
+        pr.rolname
       from engine.__member as mm
       left outer join engine.pgrole as pr on pr.membermoniker = mm.moniker
 ;

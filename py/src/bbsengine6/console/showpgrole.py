@@ -1,8 +1,8 @@
 """
-Show a member's psql access info (rolname, osuser, connect command).
+Show a member's psql access info (rolname, the OS login = loginid, connect command).
 
 Auth is by ident: members connect to PostgreSQL as the OS user
-recorded in engine.pgrole.osuser, and pg_ident.conf on the DB host
+the loginid is the OS login; pg_ident.conf on the DB host
 maps that OS user to the m_<moniker> PG role.
 
 No password is ever displayed or stored by this module. If the member
@@ -75,13 +75,13 @@ def main(args, loginid: Optional[str] = None, **kwargs):
         # (cron, scripts, etc.) so this module is safe in non-TTY contexts.
         if not sys.stdin.isatty():
             io.echo(
-                f"{{var:labelcolor}}non-interactive session; skipping welcome/osuser prompts",
+                f"{{var:labelcolor}}non-interactive session; skipping the welcome prompt",
                 level="info",
             )
             return True
 
         # Welcome flow: if last_ack_at is NULL, require acknowledgment
-        # and capture the osuser if it isn't set yet.
+        # and record that the member has read it.
         if row.get("last_ack_at") is None:
             io.echo(
                 f"{{var:labelcolor}}press ENTER to acknowledge you have read this"
@@ -91,35 +91,13 @@ def main(args, loginid: Optional[str] = None, **kwargs):
             with database.cursor(conn=conn) as cur:
                 cur.execute(
                     "UPDATE engine.pgrole SET last_ack_at = now() "
-                    "WHERE membermoniker = %s",
-                    (row["membermoniker"],),
+                    "WHERE loginid = %s",
+                    (row["loginid"],),
                 )
             conn.commit()
             io.echo(f"{{var:okcolor}}acknowledged.")
             row["last_ack_at"] = "now()"
 
-        if not row.get("osuser"):
-            osuser = io.inputstring(
-                f"{{var:promptcolor}}enter the OS username you connect from "
-                f"(or leave blank to skip): {{var:inputcolor}}",
-                "",
-                noneok=True,
-            )
-            if osuser:
-                with database.cursor(conn=conn) as cur:
-                    cur.execute(
-                        "UPDATE engine.pgrole SET osuser = %s "
-                        "WHERE membermoniker = %s",
-                        (osuser, row["membermoniker"]),
-                    )
-                conn.commit()
-                io.echo(
-                    f"{{var:okcolor}}recorded osuser={osuser}; ask a sysop to add"
-                )
-                io.echo(
-                    f"{{var:okcolor}}a 'bbbsmap' line to pg_ident.conf (see"
-                )
-                io.echo(f"{{var:okcolor}}handbook/specs/pg-ident-auth.md).")
     return True
 
 
@@ -130,7 +108,6 @@ def _fetch(args, loginid: str, *, conn) -> Optional[dict]:
             SELECT mm.moniker AS membermoniker,
                    mm.loginid,
                    pr.rolname,
-                   pr.osuser,
                    pr.created_at,
                    pr.last_ack_at
               FROM engine.__member mm
@@ -150,8 +127,7 @@ def _fetch(args, loginid: str, *, conn) -> Optional[dict]:
 def _render(row: dict, loginid: str) -> None:
     util.heading(f"psql access for {loginid}")
     io.echo(f"{{var:labelcolor}}PG role:     {{var:valuecolor}}{row['rolname']}")
-    osuser = row.get("osuser") or "(not set)"
-    io.echo(f"{{var:labelcolor}}OS user:     {{var:valuecolor}}{osuser}")
+    io.echo(f"{{var:labelcolor}}OS user:     {{var:valuecolor}}{row['loginid']}")
     if row.get("created_at"):
         io.echo(
             f"{{var:labelcolor}}created:     {{var:valuecolor}}{row['created_at']}"
@@ -163,10 +139,9 @@ def _render(row: dict, loginid: str) -> None:
     io.echo("")
     # Members log in as their login role (the OS username). The data role is NOLOGIN and
     # is reached only by SET ROLE, so it is never a connect target.
-    login = row.get("osuser") or "(not set)"
     io.echo(f"{{var:labelcolor}}Connect with:")
     io.echo(
-        f"{{var:valuecolor}}  psql -h 127.0.0.1 -U {login} -d <dbname>"
+        f"{{var:valuecolor}}  psql -h 127.0.0.1 -U {row['loginid']} -d <dbname>"
     )
     io.echo("")
     io.echo(

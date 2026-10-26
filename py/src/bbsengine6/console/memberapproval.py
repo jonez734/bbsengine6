@@ -101,28 +101,11 @@ def _disapprove_member(args, moniker: str, *, conn) -> bool:
     return True
 
 
-def _stored_osuser_for_moniker(conn, moniker: str):
-    """The OS username already recorded for this member, from engine.pgrole_member.
-
-    None when the member has no pgrole row yet, or the row has no osuser.
-    """
-    with database.cursor(conn=conn) as cur:
-        cur.execute(
-            "select osuser from engine.pgrole_member where moniker = %s",
-            (moniker,),
-        )
-        row = cur.fetchone()
-    if row is None:
-        return None
-    return row["osuser"] if isinstance(row, dict) else row[0]
-
-
 def _process_member(args, rec, currentmoniker, *, conn) -> None:
     """Decide one pending member: verify email, then approve (with psql roles) or disapprove.
 
-    Approval creates the data role and, after asking the sysop for the OS username, the
-    login role that ident maps to it. The prompts and writes are the same as the member
-    console's [O] option, so approval and the console cannot disagree.
+    Approval creates the data role and the login role for the member's loginid, which is the
+    OS login ident maps to. No OS username is asked for: the loginid is the OS login.
     """
     moniker = rec.get("moniker")
     try:
@@ -148,23 +131,11 @@ def _process_member(args, rec, currentmoniker, *, conn) -> None:
                 return
 
             m = member.getbymoniker(args, moniker, conn=conn)
-            stored = _stored_osuser_for_moniker(conn, moniker)
-            osuser, ok, old, remove = console_member._ask_os_login_menu_full(
-                args, m["loginid"], conn=conn, stored=stored
-            )
-            if ok:
-                console_member._apply_os_login(
-                    args, rolname, osuser, conn=conn, old_osuser=old, remove_old=remove
-                )
+            # The loginid is the OS login, so the approved member's login role is named for it.
+            if console_member._apply_login_role(args, rolname, m["loginid"], conn=conn):
                 io.echo(
                     f"{{var:labelcolor}}psql access provisioned: "
-                    f"{{var:valuecolor}}{osuser} {{var:labelcolor}}may SET ROLE {{var:valuecolor}}{rolname}"
-                )
-            else:
-                io.echo(
-                    f"{{var:labelcolor}}no OS login for {{var:valuecolor}}{moniker}{{var:labelcolor}}; "
-                    f"set one with [O] in the member menu before they can connect.",
-                    level="warn",
+                    f"{{var:valuecolor}}{m['loginid']} {{var:labelcolor}}may SET ROLE {{var:valuecolor}}{rolname}"
                 )
         else:
             if not _disapprove_member(args, moniker, conn=conn):
