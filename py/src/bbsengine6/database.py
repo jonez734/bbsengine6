@@ -645,12 +645,18 @@ def connect(
         # A user exit (Ctrl-D or Ctrl-C) is not an error. Roll back so nothing half-written
         # persists, and let the menu loop end. No traceback: the caller prints the exit line.
         exception_occurred = True
-        conn.rollback()
+        _safe_rollback(conn)
         raise
     except BaseException as e:
         exception_occurred = True
-        io.echo_traceback(f"bbsengine6.database.connect.400: {e}")
-        conn.rollback()
+        if _connection_lost(conn) or isinstance(e, (psycopg.OperationalError, psycopg.InterfaceError)):
+            io.echo(
+                f"bbsengine6.database.connect: the database connection was lost; nothing was saved. ({e})",
+                level="error",
+            )
+        else:
+            io.echo_traceback(f"bbsengine6.database.connect.400: {e}")
+        _safe_rollback(conn)
         raise
     finally:
         if conn is not None:
@@ -678,6 +684,33 @@ def connect(
                 )
 
 
+def _connection_lost(conn) -> bool:
+    """True only when psycopg reports the session as closed or broken (the server dropped it).
+
+    Only an actual True counts: a connection whose state is not a boolean is not treated as lost.
+    """
+    try:
+        return conn.closed is True or conn.broken is True
+    except Exception:
+        return False
+
+
+def _safe_rollback(conn) -> bool:
+    """Roll back, tolerating a connection the server has already closed.
+
+    Returns True when the rollback ran. A lost connection cannot roll back, and nothing it held
+    survives the server closing it, so that case returns False instead of raising.
+    """
+    if _connection_lost(conn):
+        return False
+    try:
+        conn.rollback()
+        return True
+    except (psycopg.OperationalError, psycopg.InterfaceError) as e:
+        io.echo(f"bbsengine6.database: connection lost during rollback ({e}); transaction discarded", level="warning")
+        return False
+
+
 def _end_transaction_on_exit(conn, pool, *, auto_commit: bool, exception_occurred: bool) -> None:
     """End the transaction, then return the connection to the pool.
 
@@ -688,12 +721,20 @@ def _end_transaction_on_exit(conn, pool, *, auto_commit: bool, exception_occurre
       - otherwise, if still in a transaction: roll back (read-only or failed block).
       - an exception never commits.
     """
+    if _connection_lost(conn):
+        # The server closed the session: nothing can be committed or rolled back. Drop the
+        # connection instead of handing a dead one back to the pool.
+        try:
+            pool.putconn(conn)
+        except Exception:
+            pass
+        return
     if exception_occurred:
-        conn.rollback()
+        _safe_rollback(conn)
     elif auto_commit:
         conn.commit()
     elif conn.pgconn.transaction_status != 0:  # 0 = IDLE; anything else is an open transaction
-        conn.rollback()
+        _safe_rollback(conn)
     pool.putconn(conn)
 
 

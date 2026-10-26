@@ -2,6 +2,8 @@
 
 import copy
 
+import psycopg
+
 from bbsengine6 import io, database, util, bank, pgrole
 from bbsengine6 import member as libmember
 
@@ -750,6 +752,34 @@ def main(args, **kwargs):
 
     done = False
     while not done:
+        try:
+            done = _menu_once(args, **kwargs)
+        except _DatabaseLost as e:
+            io.echo(
+                f"{{var:labelcolor}}the database connection was lost ({e}); the member menu is closing. "
+                f"Nothing from the interrupted action was saved.",
+                level="error",
+            )
+            return False
+    return True
+
+
+class _DatabaseLost(Exception):
+    """The server closed the session while the member menu was running."""
+
+
+def _menu_once(args, **kwargs) -> bool:
+    """One pass of the member menu. Returns True when the user chose to quit."""
+    done = False
+    try:
+        return _menu_pass(args, **kwargs)
+    except (psycopg.OperationalError, psycopg.InterfaceError) as e:
+        raise _DatabaseLost(str(e)) from e
+
+
+def _menu_pass(args, **kwargs) -> bool:
+    done = False
+    if True:
         util.heading("member")
         io.echo(
             f"{{f6}}{{var:labelcolor}}database: {{var:valuecolor}}{args.databasename} {{var:labelcolor}}host: {{var:valuecolor}}{args.databasehost}:{args.databaseport}{{f6}}"
@@ -788,3 +818,4 @@ def main(args, **kwargs):
         elif ch == "Q" or ch == "X":
             io.echo("Quit")
             done = True
+    return done
