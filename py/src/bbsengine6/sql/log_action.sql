@@ -1,6 +1,7 @@
 -- engine.log_action: the single writer for engine.__actionlog.
 --
--- Every login, login failure, logout and token expiry is recorded through this function. It is
+-- Every login, login failure, logout, token expiry and client exit is recorded through this function.
+-- A client_exit carries its reason in the note: quit, eof, intr, idle, auth_failed or error. It is
 -- SECURITY DEFINER and owned by zoid6, which is the only role that inserts into the log, so no
 -- caller gets a direct insert. The search_path is pinned so a caller cannot redirect it.
 --
@@ -21,8 +22,19 @@ security definer
 set search_path = engine, public, pg_temp
 as $$
 begin
-    if p_action not in ('login', 'login_failed', 'logout', 'auth_expired') then
+    if p_action not in ('login', 'login_failed', 'logout', 'auth_expired', 'client_exit') then
         raise exception 'log_action: unknown action %', p_action;
+    end if;
+
+    -- A client_exit records why the client ended. The reason is the note, and it must be one
+    -- of a fixed vocabulary, so the log stays queryable and free text cannot slip in.
+    if p_action = 'client_exit' then
+        if p_note is null then
+            raise exception 'log_action: client_exit requires a reason';
+        end if;
+        if p_note not in ('quit', 'eof', 'intr', 'idle', 'auth_failed', 'error') then
+            raise exception 'log_action: unknown reason %', p_note;
+        end if;
     end if;
 
     insert into engine.__actionlog (moniker, action, actiondate, remoteaddr, note)
