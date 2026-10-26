@@ -20,19 +20,19 @@ def _osline(member):
 
 
 @pytest.mark.unit
-def test_no_stored_os_login_shows_the_loginid_default():
+def test_no_stored_os_login_shows_the_loginid():
     line = _osline({"moniker": "lo_test", "loginid": "lo_test", "osuser": None,
                     "email": "e", "credits": 1, "flags": {}, "ui": ["term"], "password": None, "tz": None, "attrs": {}, "datecreated": None})
-    assert "lo_test" in line and "not yet set" in line
+    assert "lo_test" in line
     assert "(none)" not in line
 
 
 @pytest.mark.unit
-def test_a_stored_os_login_is_shown_as_stored():
+def test_the_loginid_wins_over_a_stored_os_login():
     line = _osline({"moniker": "lo_test", "loginid": "lo_test", "osuser": "opsbob",
                     "email": "e", "credits": 1, "flags": {}, "ui": ["term"], "password": None, "tz": None, "attrs": {}, "datecreated": None})
-    assert "opsbob" in line
-    assert "not yet set" not in line
+    assert "lo_test" in line
+    assert "opsbob" not in line
 
 
 @pytest.mark.unit

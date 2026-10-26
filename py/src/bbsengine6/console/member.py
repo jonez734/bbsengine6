@@ -185,14 +185,12 @@ def render_member(args, **kwargs):
         )
 
     # [O] and [X] are accepted by the edit loop; show them so the sysop can see them.
+    # The loginid is the OS login default; [O] offers it, so the menu line shows it.
     osuser = member.get("osuser")
-    if osuser:
-        osuser_text = osuser
-    elif member.get("loginid"):
-        # No stored OS login yet: [O] offers the loginid as its default, so show that default.
-        osuser_text = f"{member['loginid']} (loginid, not yet set)"
+    if member.get("loginid"):
+        osuser_text = member["loginid"]
     else:
-        osuser_text = "(none)"
+        osuser_text = osuser or "(none)"
     io.echo(
         f"  {{var:optioncolor}}[O]{{var:labelcolor}} OS login:{{var:valuecolor}} {osuser_text}"
     )
@@ -250,7 +248,9 @@ def _ask_os_login_menu_full(args, loginid: str, *, conn, stored=None):
       old_osuser  the previous name when it changed, else None
       remove_old  True when the sysop asked to remove the previous login role
     """
-    default = stored or loginid
+    # The loginid is the default OS login: [O] offers it whether or not a different value was
+    # stored earlier. ``stored`` is kept for the caller's removal of an old login role.
+    default = loginid or stored
     osuser = io.inputstring(
         f"{{var:promptcolor}}OS username{{var:promptcolor}} "
         f"(blank to skip): {{var:inputcolor}}",
