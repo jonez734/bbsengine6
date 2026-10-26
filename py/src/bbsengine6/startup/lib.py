@@ -32,7 +32,14 @@ def runstage(args, name, **kwargs):
 
 # @since 20230518 copied from con
 def buildargs(args=None, **kwargs):
+    from bbsengine6._version import __version__ as bbs_version
+
     parser = argparse.ArgumentParser("startup")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"bbsengine6 {bbs_version}",
+    )
     parser.add_argument("--verbose", action="store_true", dest="verbose")
     parser.add_argument("--debug", action="store_true", dest="debug")
 
