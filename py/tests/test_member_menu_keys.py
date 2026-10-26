@@ -93,3 +93,20 @@ def test_password_option_is_always_shown_and_never_reveals_the_value(password):
     text = "\n".join(out)
     assert "[P]" in text, text
     assert "hunter2-secret" not in text
+
+
+@pytest.mark.unit
+def test_edit_menu_lists_exit_as_x_and_not_q():
+    """The edit menu shows [X] Exit. [Q] still works as a key, but has no entry on the menu."""
+    import inspect
+    from unittest.mock import patch
+    from bbsengine6.console import member as cm
+
+    m = _member()
+    out = []
+    with patch.object(cm.io, "echo", side_effect=lambda *a, **k: out.append(str(a[0]) if a else "")):
+        cm.render_member(None, member=m, _member=dict(m))
+    text = "\n".join(out)
+    assert "[X]" in text and "Exit" in text, text
+    assert "[Q]" not in text, text
+    assert '"LMECPFDURQX"' in inspect.getsource(cm._edit)

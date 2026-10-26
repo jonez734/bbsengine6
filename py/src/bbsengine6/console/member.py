@@ -159,6 +159,9 @@ def render_member(args, **kwargs):
     else:
         io.echo(f"  {{var:optioncolor}}[U]{{var:labelcolor}} UI: {', '.join(ui)}")
 
+    # The exit key is on the menu. [Q] also exits, but it is not listed.
+    io.echo(f"  {{var:optioncolor}}[X]{{var:labelcolor}} Exit")
+
     flags = member["flags"] or {}
     set_flags = _format_flags(flags)
     if len(set_flags) > 0:
