@@ -125,7 +125,7 @@ def render_member(args, **kwargs):
 
     ui = member["ui"]
     _ui = _member["ui"]
-    io.echo(f"{ui=} {_ui=}", level="debug")
+    # io.echo(f"{ui=} {_ui=}", level="debug")  # noisy: printed ui=None on every menu draw
     if ui is None or len(ui) == 0:
         # Print the empty UI line and keep drawing the rest of the menu. Returning here
         # cut the menu off, so [F], [R], [O] and [X] never showed.
