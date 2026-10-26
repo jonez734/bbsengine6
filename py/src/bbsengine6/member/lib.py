@@ -324,6 +324,52 @@ def build(args, row={}, **kwargs):
     return member
 
 
+def getcurrentloginid(args, **kwargs):
+    """Return the OS login name for the current member, or None.
+
+    The OS login (``osuser``) is stored on ``engine.pgrole`` for the member whose
+    ``loginid`` matches the process's login name. Its value is the member's OS login as
+    configured in the console [O] menu. If no member row matches, the process's own
+    login name is returned (``util.getcurrentloginid``), so callers always get the name
+    the process runs as.
+    """
+    cached = getattr(_threadlocal, "loginid", None)
+    if cached is not None:
+        return cached
+
+    processlogin = util.getcurrentloginid(args, **kwargs)
+    if processlogin is None:
+        return None
+
+    def _work(conn):
+        try:
+            with database.cursor(conn) as cur:
+                cur.execute(
+                    database.query(
+                        "select pr.osuser from $engine.member m "
+                        "join $engine.pgrole pr on pr.membermoniker = m.moniker "
+                        "where m.loginid=$1",
+                        processlogin,
+                    )
+                )
+                row = cur.fetchone() if cur.rowcount else None
+                osuser = row["osuser"] if row and row["osuser"] else processlogin
+                _threadlocal.loginid = osuser
+                return osuser
+        except psycopg.DatabaseError:
+            io.echo_traceback("bbsengine6.member.getcurrentloginid.100:")
+            return processlogin
+
+    conn = kwargs.get("conn", None)
+    if conn is None:
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            return processlogin
+        with database.connect(args, pool=pool) as c:
+            return _work(c)
+    return _work(conn)
+
+
 def getcurrentmoniker(args, **kwargs):
     cached = getattr(_threadlocal, "moniker", None)
     if cached is not None:
