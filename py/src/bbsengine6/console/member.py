@@ -186,8 +186,15 @@ def render_member(args, **kwargs):
 
     # [O] and [X] are accepted by the edit loop; show them so the sysop can see them.
     osuser = member.get("osuser")
+    if osuser:
+        osuser_text = osuser
+    elif member.get("loginid"):
+        # No stored OS login yet: [O] offers the loginid as its default, so show that default.
+        osuser_text = f"{member['loginid']} (loginid, not yet set)"
+    else:
+        osuser_text = "(none)"
     io.echo(
-        f"  {{var:optioncolor}}[O]{{var:labelcolor}} OS login:{{var:valuecolor}} {osuser or '(none)'}"
+        f"  {{var:optioncolor}}[O]{{var:labelcolor}} OS login:{{var:valuecolor}} {osuser_text}"
     )
     psqlrole = member.get("psqlrole")
     io.echo(
