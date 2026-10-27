@@ -1783,6 +1783,34 @@ def manage_role_privs(
     return _work(conn)
 
 
+def is_role_in(args: Any, rolname: str, group: str, **kwargs: Any) -> bool:
+    """True when ``rolname`` is a direct member of ``group``.
+
+    Reads pg_auth_members, so it needs no privilege on ``group``. Callers use it to decide whether a
+    REVOKE is needed: revoking a role the member never held still needs ADMIN OPTION on the group.
+    """
+
+    def _work(cur):
+        cur.execute(
+            "SELECT 1 FROM pg_auth_members m "
+            "JOIN pg_roles r ON r.oid = m.roleid "
+            "JOIN pg_roles u ON u.oid = m.member "
+            "WHERE r.rolname = %s AND u.rolname = %s",
+            (group, rolname),
+        )
+        return cur.fetchone() is not None
+
+    conn = kwargs.get("conn", None)
+    if conn is None:
+        pool = kwargs.get("pool", None)
+        if pool is None:
+            return False
+        with connect(args, pool=pool) as conn, cursor(conn=conn) as cur:
+            return _work(cur)
+    with cursor(conn=conn) as cur:
+        return _work(cur)
+
+
 def manage_secondary_role(
     args: Any, role_name: str, action: str, secondary: str, **kwargs: Any
 ) -> Any:

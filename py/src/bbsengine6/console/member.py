@@ -497,7 +497,9 @@ def configurerole(
 
     if sysop is True:
         database.manage_secondary_role(args, rolname, "grant", "sysop", **kwargs)
-    else:
+    elif database.is_role_in(args, rolname, "sysop", **kwargs):
+        # Only revoke what the member holds. A revoke of a role never granted still needs
+        # ADMIN OPTION on sysop, which a non-sysop member's setup must not require.
         database.manage_secondary_role(args, rolname, "revoke", "sysop", **kwargs)
 
     return _apply_login_role(args, rolname, rolename, **kwargs)

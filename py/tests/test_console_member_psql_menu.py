@@ -118,3 +118,40 @@ def test_stored_data_role_name_wins_over_a_chosen_one():
         out = pgrole._ensure_login_role(object(), "lo_test", conn=conn, rolname="m_other")
     cr.assert_not_called()
     assert out == "m_lo_test"
+
+
+@pytest.mark.unit
+def test_non_sysop_member_not_in_sysop_is_never_revoked_from_it():
+    # REVOKE sysop needs ADMIN OPTION on sysop. A member who was never granted sysop must not
+    # trigger it, or every new non-sysop member fails at role setup.
+    conn = MagicMock()
+    with patch.object(console_member.pgrole, "ensure_login_role", return_value="m_lo_test"), \
+         patch.object(console_member.database, "rolexists", return_value=True), \
+         patch.object(console_member.database, "get_role_privs", return_value={"rolsuper": False}), \
+         patch.object(console_member.database, "manage_role_privs"), \
+         patch.object(console_member.database, "is_role_in", return_value=False, create=True), \
+         patch.object(console_member.database, "manage_secondary_role") as secondary, \
+         patch("bbsengine6.console.member.io.echo"):
+        console_member.configurerole(
+            object(), "lo_test", sysop=False, conn=conn, moniker="lo_test",
+            psqlrole="m_lo_test", menu_answered=True,
+        )
+    secondary.assert_not_called()
+
+
+@pytest.mark.unit
+def test_non_sysop_member_who_holds_sysop_is_revoked_from_it():
+    conn = MagicMock()
+    with patch.object(console_member.pgrole, "ensure_login_role", return_value="m_lo_test"), \
+         patch.object(console_member.database, "rolexists", return_value=True), \
+         patch.object(console_member.database, "get_role_privs", return_value={"rolsuper": False}), \
+         patch.object(console_member.database, "manage_role_privs"), \
+         patch.object(console_member.database, "is_role_in", return_value=True, create=True), \
+         patch.object(console_member.database, "manage_secondary_role") as secondary, \
+         patch("bbsengine6.console.member.io.echo"):
+        console_member.configurerole(
+            object(), "lo_test", sysop=False, conn=conn, moniker="lo_test",
+            psqlrole="m_lo_test", menu_answered=True,
+        )
+    secondary.assert_called_once()
+    assert secondary.call_args.args[2:4] == ("revoke", "sysop")
