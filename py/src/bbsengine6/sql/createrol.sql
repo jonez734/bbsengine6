@@ -81,13 +81,16 @@ grant execute on function engine.createpgrole(text) to sysop;
 -- engine.deletepgrole: DROP ROLE IF EXISTS. The engine.pgrole row
 -- goes away via the ON DELETE CASCADE from engine.__member, or we
 -- can delete it explicitly here for safety.
+-- SECURITY DEFINER, owned by zoid6: the schema USAGE grant that pgrole step 4 gave the data role can
+-- only be revoked by the schema owner, and DROP ROLE is refused while that grant exists.
 CREATE OR REPLACE FUNCTION engine.deletepgrole(p_rolname NAME)
 RETURNS VOID AS $$
 BEGIN
   DELETE FROM engine.pgrole WHERE rolname = p_rolname;
+  EXECUTE format('REVOKE USAGE ON SCHEMA engine FROM %I', p_rolname);
   EXECUTE format('DROP ROLE IF EXISTS %I', p_rolname);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = engine, pg_temp;
 
 grant execute on function engine.deletepgrole(name) to sysop;
 
