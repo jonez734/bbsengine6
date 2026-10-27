@@ -217,7 +217,19 @@ def ensure_os_login_role(
                 pg_sql.Identifier(member_role), pg_sql.Identifier(osuser)
             )
         )
+        # The bed daemon switches into the member's login role for every request it serves
+        # (bed role_for_session). It needs SET on that role and nothing more. Membership in
+        # member or in another login role would let members act for each other.
+        cur.execute(
+            pg_sql.SQL("GRANT {} TO {} WITH SET TRUE, INHERIT FALSE").format(
+                pg_sql.Identifier(osuser), pg_sql.Identifier(BED_ROLE)
+            )
+        )
     return True
+
+
+#: The database login the bed daemon connects as. It switches into each member's login role.
+BED_ROLE = "bed"
 
 
 #: Login roles that are never removed by the console (legacy owner mapping).
@@ -250,6 +262,13 @@ def remove_os_login_role(
         cur.execute(
             pg_sql.SQL("REVOKE {} FROM {}").format(
                 pg_sql.Identifier(member_role), pg_sql.Identifier(osuser)
+            )
+        )
+        # Remove the bed daemon's SET on this login role first; a login role cannot be dropped
+        # while another role holds membership in it. A bed grant that is absent is not an error.
+        cur.execute(
+            pg_sql.SQL("REVOKE {} FROM {}").format(
+                pg_sql.Identifier(osuser), pg_sql.Identifier(BED_ROLE)
             )
         )
         if drop_role:
