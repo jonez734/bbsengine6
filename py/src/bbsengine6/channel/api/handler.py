@@ -197,6 +197,15 @@ class ChannelServiceHandler(BaseService):
                 "message": "channel required",
             }
 
+        # The subscribe gate: a restricted channel admits only the moniker its authority allows.
+        verdict = ChannelService(self.args).can_subscribe(channel, moniker)
+        if not verdict.get("allowed"):
+            return {
+                "type": "error",
+                "code": "forbidden",
+                "message": f"Cannot subscribe to {channel}: {verdict.get('reason')}",
+            }
+
         channel_subscribe(self.channel_state, session_id, channel)
 
         return {

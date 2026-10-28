@@ -17,6 +17,23 @@ from typing import Any, Dict, List, Optional
 
 from bbsengine6 import database, member as member_module
 
+# Subscribe authorities. A callable ``(channel_name, moniker) -> Optional[bool]`` registered by an
+# application. The first authority that returns a boolean decides; ``None`` means "no opinion".
+# bbsengine6 knows nothing about the application's objects (tables, rooms); it only asks.
+_subscribe_authorities: List[Any] = []
+
+
+def register_subscribe_authority(authority: Any) -> None:
+    """Register a subscribe authority. Idempotent for the same callable."""
+    if authority not in _subscribe_authorities:
+        _subscribe_authorities.append(authority)
+
+
+def unregister_subscribe_authority(authority: Any) -> None:
+    """Remove a previously registered subscribe authority, if present."""
+    if authority in _subscribe_authorities:
+        _subscribe_authorities.remove(authority)
+
 
 class ChannelService:
     """Service for channel configuration and publish-permission checks."""
@@ -31,6 +48,8 @@ class ChannelService:
         description: Optional[str] = None,
         announce_only: bool = False,
         announcers: Optional[List[str]] = None,
+        subscribe_restricted: bool = False,
+        publish_requires_subscription: bool = False,
     ) -> Dict[str, Any]:
         """Create a new channel.
 
@@ -40,6 +59,10 @@ class ChannelService:
             description: Optional human description.
             announce_only: If True, only announcers (and sysops) may publish.
             announcers: Optional list of initial announcer monikers.
+            subscribe_restricted: If True, a session may subscribe only when a registered
+                subscribe authority allows it (sysop is always allowed).
+            publish_requires_subscription: If True, publishing requires the publisher to be
+                subscribed (sysop is always allowed).
 
         Returns:
             Dict with success status and the new channel record.
@@ -60,14 +83,19 @@ class ChannelService:
             cur.execute(
                 database.query(
                     """INSERT INTO $engine.__channel
-                               (name, description, announce_only, createdby)
-                           VALUES (:name, :description, :announce_only, :createdby)
+                               (name, description, announce_only, createdby,
+                                subscribe_restricted, publish_requires_subscription)
+                           VALUES (:name, :description, :announce_only, :createdby,
+                                   :subscribe_restricted, :publish_requires_subscription)
                            RETURNING id, name, description, announce_only,
-                                     createdby, datecreated""",
+                                     createdby, datecreated,
+                                     subscribe_restricted, publish_requires_subscription""",
                     name=name,
                     description=description,
                     announce_only=announce_only,
                     createdby=createdby,
+                    subscribe_restricted=subscribe_restricted,
+                    publish_requires_subscription=publish_requires_subscription,
                 )
             )
             row = cur.fetchone()
@@ -98,6 +126,8 @@ class ChannelService:
                     "announce_only": row["announce_only"],
                     "createdby": row["createdby"],
                     "datecreated": row["datecreated"],
+                    "subscribe_restricted": row["subscribe_restricted"],
+                    "publish_requires_subscription": row["publish_requires_subscription"],
                 },
             }
 
@@ -111,7 +141,8 @@ class ChannelService:
             cur.execute(
                 database.query(
                     """SELECT id, name, description, announce_only,
-                                  createdby, datecreated, datemodified, announcers
+                                  createdby, datecreated, datemodified, announcers,
+                                  subscribe_restricted, publish_requires_subscription
                            FROM $engine.channel
                            WHERE name = :name""",
                     name=name,
@@ -316,8 +347,56 @@ class ChannelService:
             ),
         }
 
-    def can_publish(
+    def can_subscribe(
         self, channel_name: str, moniker: str, is_sysop: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """Check whether a moniker may subscribe to a channel.
+
+        Open channels (``subscribe_restricted`` false) allow any authenticated member. A restricted
+        channel allows a sysop always, and otherwise asks each registered subscribe authority; the
+        first authority that returns a boolean decides. With no authority to answer, a restricted
+        channel denies. Member DM channels (``member:<moniker>``) are owner-only.
+
+        Returns:
+            Dict with ``allowed`` (bool) and ``reason`` (str).
+        """
+        if channel_name.startswith("member:"):
+            owner = channel_name[len("member:"):]
+            if owner and moniker == owner:
+                return {"allowed": True, "reason": "Member channel owner"}
+            return {"allowed": False, "reason": "Member channel: only its owner may subscribe"}
+
+        if is_sysop is None:
+            is_sysop = member_module.issysop(self.args, moniker=moniker) is True
+
+        channel = self.get_channel(channel_name)
+        if not channel:
+            return {"allowed": False, "reason": "Channel not found"}
+
+        if not channel.get("subscribe_restricted"):
+            return {"allowed": True, "reason": "Channel is open"}
+
+        if is_sysop:
+            return {"allowed": True, "reason": "Sysop"}
+
+        for authority in list(_subscribe_authorities):
+            try:
+                verdict = authority(channel_name, moniker)
+            except Exception as e:  # an authority must not crash the subscribe path
+                return {"allowed": False, "reason": f"Subscribe authority failed: {e}"}
+            if verdict is True:
+                return {"allowed": True, "reason": "Subscribe authority allowed"}
+            if verdict is False:
+                return {"allowed": False, "reason": "Subscribe authority denied"}
+
+        return {"allowed": False, "reason": "Channel is restricted and no authority allowed it"}
+
+    def can_publish(
+        self,
+        channel_name: str,
+        moniker: str,
+        is_sysop: Optional[bool] = None,
+        subscribed: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Check whether a moniker may publish to a channel.
 
@@ -331,6 +410,8 @@ class ChannelService:
             channel_name: Channel name.
             moniker: Member attempting to publish.
             is_sysop: Optional cached sysop flag. If None, looks it up.
+            subscribed: Whether the publisher is subscribed. Only consulted for channels with
+                ``publish_requires_subscription``; the caller (transport) knows the answer.
 
         Returns:
             Dict with ``allowed`` (bool) and ``reason`` (str).
@@ -354,6 +435,15 @@ class ChannelService:
         channel = self.get_channel(channel_name)
         if not channel:
             return {"allowed": False, "reason": "Channel not found"}
+
+        if is_sysop:
+            return {"allowed": True, "reason": "Sysop"}
+
+        if channel.get("publish_requires_subscription") and subscribed is not True:
+            return {
+                "allowed": False,
+                "reason": "Channel requires a subscription to publish",
+            }
 
         if not channel["announce_only"]:
             return {"allowed": True, "reason": "Channel is open"}
