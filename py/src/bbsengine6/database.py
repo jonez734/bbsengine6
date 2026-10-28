@@ -2703,8 +2703,8 @@ class AsyncDBConnection:
     def __init__(self, conn: Any):
         self._conn = conn
 
-    @property
     def cursor(self):
+        """A new async cursor on this connection. Called as ``db_conn.cursor()``."""
         return AsyncCursor(self._conn)
 
     async def __aenter__(self) -> "AsyncDBConnection":
@@ -2793,16 +2793,16 @@ async def async_connect(
                 sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(set_role))
             )
 
-    # psycopg-pool 3.3.0+ changed pool.connection() to return an async context manager
-    # Handle both old (3.1.x) and new (3.3.0+) APIs
-    try:
-        # Try new 3.3.0+ API: async with pool.connection() as conn
-        async with pool.connection() as conn:
+    # psycopg-pool 3.3.0+ returns an async context manager from pool.connection(); 3.1.x returns an
+    # awaitable. Choose the form once, from what the pool returns, so a TypeError raised inside the
+    # body is never mistaken for an API mismatch (which would re-await the context manager).
+    maybe_cm = pool.connection()
+    if hasattr(maybe_cm, "__aenter__"):
+        async with maybe_cm as conn:
             await _set_role(conn)
             yield AsyncDBConnection(conn)
-    except TypeError:
-        # Fall back to old 3.1.x API: conn = await pool.connection()
-        conn = await pool.connection()
+    else:
+        conn = await maybe_cm
         await _set_role(conn)
         yield AsyncDBConnection(conn)
 
