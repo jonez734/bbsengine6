@@ -232,6 +232,9 @@ VENV_DIR ?= $(or $(DEPLOY_PREFIX),$(HOME)/.venv)
 # bbsengine6 requires <3.13. A new venv is created with this interpreter; an existing venv
 # keeps its own. A missing interpreter is an error, not a fallback to python3.
 VENV_PYTHON ?= python3.12
+# Version prefix for the wheel built by `venv`. Matches py/src (0.0.3.dev series),
+# not the top-level VERSION_PREFIX, which is still 0.0.1.dev.
+ENGINE_VERSION_PREFIX ?= 0.0.3.dev
 venv:
 	@if [ ! -x "$(VENV_DIR)/bin/python" ]; then \
 		command -v "$(VENV_PYTHON)" >/dev/null 2>&1 || { echo "venv: $(VENV_PYTHON) not found; install it or set VENV_PYTHON" >&2; exit 1; }; \
@@ -243,6 +246,10 @@ venv:
 	trap 'rm -rf "$$work"' EXIT && \
 	mkdir "$$work/src" && \
 	tar -C py --exclude=./build --exclude=./dist --exclude='*.egg-info' --exclude=__pycache__ -cf - . | tar -C "$$work/src" -xf - && \
+	pyver="$(ENGINE_VERSION_PREFIX)$$(date +%Y%m%d%H%M%S)" && \
+	stamp="$$(date +%Y%m%d%H%M%S)" && \
+	githash="$$(git -C "$(CURDIR)" log -1 --format='%H' 2>/dev/null | cut -c 1-16)" && \
+	printf '__version__ = "%s"\n__datestamp__ = "%s"\n__githash__ = "%s"\n' "$$pyver" "$$stamp" "$$githash" > "$$work/src/src/bbsengine6/_version.py" && \
 	wheels="$$work/out" && \
 	"$(VENV_DIR)/bin/python" -m build --wheel --outdir "$$wheels" "$$work/src" && \
 	whl="$$(ls "$$wheels"/*.whl)" && \
