@@ -212,8 +212,7 @@ bbsengine6/
 bed
 
 # 2. Start the WebSocket daemon for browser/CLI clients
-bed --router zoid6.api.handler.MessageRouter \
-    --config /etc/zoid6/bed.json
+bed --router zoid6.api.handler.MessageRouter   # packaged config; no /etc file
 
 # 3. Render the public website (Apache + mod_php)
 #    per www/{com,org}/htaccess-prod and config-prod.php.

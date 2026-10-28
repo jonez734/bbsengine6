@@ -108,8 +108,7 @@ For browser/CLI clients, run the WebSocket daemon. The router is loaded
 from `zoid6.api.handler.MessageRouter`:
 
 ```bash
-bed --router zoid6.api.handler.MessageRouter \
-    --config /etc/zoid6/bed.json
+bed --router zoid6.api.handler.MessageRouter   # packaged config; no /etc file
 ```
 
 `bed` is the thin shim in `py/src/bbsengine6/bed.py`; the daemon
