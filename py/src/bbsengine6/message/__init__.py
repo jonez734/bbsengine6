@@ -46,6 +46,7 @@ __version__ = "202608130000"
 
 
 from bbsengine6.message import cli as cli  # noqa: F401
+from bbsengine6.message.service import configure  # noqa: F401  (message policy, set by the daemon)
 
 
 # Public surface of the package. ``lib`` defines the canonical names;
@@ -58,6 +59,7 @@ __all__ = [
     "store_message_with_checks",
     "register_type",
     "register_type_compat",
+    "configure",
     "get_types",
     "get_pending_messages",
     "get_pending_messages_prioritized",
