@@ -33,7 +33,7 @@ BBSENGINE6_DBNAME_DEFAULT: str = "NEEDINFO"
 #: Names that must never be created as a database. ``NEEDINFO`` means the name
 #: was never configured; ``bed`` is the packaged default that must be replaced
 #: by a real name. :func:`create` refuses both before any SQL runs.
-RESERVED_DATABASE_NAMES: frozenset[str] = frozenset({BBSENGINE6_DBNAME_DEFAULT, "bed"})
+RESERVED_DATABASE_NAMES: frozenset[str] = frozenset({BBSENGINE6_DBNAME_DEFAULT, "bed", "bed_zoid6"})
 
 #: Last-resort default host used by :func:`make_dsn` when no other
 #: source supplies one.

@@ -34,7 +34,7 @@ _threadlocal = threading.local()
 #
 # See also: bbsengine6/EXTENDING_CHANNELS.md for the namespacing convention
 # and module onboarding pattern.
-RESERVED_MONIKERS = frozenset({"sysop", "term", "web", "bed"})
+RESERVED_MONIKERS = frozenset({"sysop", "term", "web", "bed", "bed_zoid6"})
 
 
 def is_namespaced_moniker(moniker: str) -> bool:

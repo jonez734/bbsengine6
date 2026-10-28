@@ -229,7 +229,10 @@ def ensure_os_login_role(
 
 
 #: The database login the bed daemon connects as. It switches into each member's login role.
-BED_ROLE = "bed"
+#: The daemon's database login. The zoid6 OS user maps to it through identd (pg_ident map).
+DAEMON_ROLE = "bed_zoid6"
+#: Old name, kept for the rollback window only (bed is removed at cutover).
+BED_ROLE = DAEMON_ROLE
 
 
 #: Login roles that are never removed by the console (legacy owner mapping).

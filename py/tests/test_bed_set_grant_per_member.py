@@ -33,7 +33,7 @@ def test_creating_a_login_role_grants_bed_set_on_it():
         ok = pgrole.ensure_os_login_role(object(), "jam", "m_jam", conn=conn)
     assert ok is True
     stmts = _statements(cur)
-    assert any('GRANT "jam" TO "bed"' in s for s in stmts), stmts
+    assert any('GRANT "jam" TO "bed_zoid6"' in s for s in stmts), stmts
 
 
 @pytest.mark.unit
@@ -43,7 +43,7 @@ def test_the_bed_grant_uses_set_true_and_no_inheritance():
     with patch.object(pgrole.database, "rolexists", return_value=False), \
          patch.object(pgrole.database, "createrol", return_value=True):
         pgrole.ensure_os_login_role(object(), "jam", "m_jam", conn=conn)
-    grant = [s for s in _statements(cur) if 'TO "bed"' in s]
+    grant = [s for s in _statements(cur) if 'TO "bed_zoid6"' in s]
     assert grant, "no bed grant issued"
     assert "WITH SET TRUE" in grant[0].upper() and "INHERIT FALSE" in grant[0].upper(), grant[0]
 
@@ -56,7 +56,7 @@ def test_remove_login_role_revokes_bed_before_dropping_the_login_role():
          patch.object(pgrole.database, "get_role_privs", return_value={"rolsuper": False}):
         ok = pgrole.remove_os_login_role(object(), "lo_test", "m_lo_test", conn=conn, drop_role=True)
     stmts = _statements(cur)
-    revoke_bed = [i for i, s in enumerate(stmts) if 'REVOKE "lo_test" FROM "bed"' in s]
+    revoke_bed = [i for i, s in enumerate(stmts) if 'REVOKE "lo_test" FROM "bed_zoid6"' in s]
     drop = [i for i, s in enumerate(stmts) if s.startswith("DROP ROLE")]
     assert ok is True
     assert revoke_bed, stmts
@@ -69,7 +69,7 @@ def test_removal_without_dropping_the_role_still_revokes_bed():
     with patch.object(pgrole.database, "rolexists", return_value=True), \
          patch.object(pgrole.database, "get_role_privs", return_value={"rolsuper": False}):
         pgrole.remove_os_login_role(object(), "lo_test", "m_lo_test", conn=conn, drop_role=False)
-    assert any('REVOKE "lo_test" FROM "bed"' in s for s in _statements(cur))
+    assert any('REVOKE "lo_test" FROM "bed_zoid6"' in s for s in _statements(cur))
 
 
 @pytest.mark.unit
@@ -92,4 +92,4 @@ def test_bed_grant_is_never_made_to_the_shared_member_role():
         pgrole.ensure_os_login_role(object(), "jam", "m_jam", conn=conn)
     stmts = _statements(cur)
     assert not any('TO "member"' in s and '"jam"' in s for s in stmts)
-    assert not any('GRANT "member" TO "bed"' in s for s in stmts)
+    assert not any('GRANT "member" TO "bed_zoid6"' in s for s in stmts)
