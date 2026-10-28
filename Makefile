@@ -48,7 +48,7 @@ export ENGINESTAGEDOCROOT ?= $(ENGINE_DOCROOT)
 export ENGINEPRODDOCROOT  = $(ENGINEHOST):$(ENGINESTAGEDOCROOT)
 
 PY_VERSION := $(shell date +%Y%m%d%H%M%S)
-VERSION_PREFIX = 0.0.1.dev
+VERSION_PREFIX = 0.4.0.dev
 
 # Set by `deploy --editable` (deploytool). Empty by default. Propagated
 # to py/src/Makefile deploy-tui which switches between editable and
@@ -232,9 +232,9 @@ VENV_DIR ?= $(or $(DEPLOY_PREFIX),$(HOME)/.venv)
 # bbsengine6 requires <3.13. A new venv is created with this interpreter; an existing venv
 # keeps its own. A missing interpreter is an error, not a fallback to python3.
 VENV_PYTHON ?= python3.12
-# Version prefix for the wheel built by `venv`. Matches py/src (0.0.3.dev series),
-# not the top-level VERSION_PREFIX, which is still 0.0.1.dev.
-ENGINE_VERSION_PREFIX ?= 0.0.3.dev
+# Version prefix for the wheel built by `venv`. Matches py/src (0.4.0.dev series),
+# not the top-level VERSION_PREFIX, which is also 0.4.0.dev.
+ENGINE_VERSION_PREFIX ?= 0.4.0.dev
 venv:
 	@if [ ! -x "$(VENV_DIR)/bin/python" ]; then \
 		command -v "$(VENV_PYTHON)" >/dev/null 2>&1 || { echo "venv: $(VENV_PYTHON) not found; install it or set VENV_PYTHON" >&2; exit 1; }; \
