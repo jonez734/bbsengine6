@@ -465,9 +465,13 @@ class MessageRouter:
         channel_state: Optional[ChannelState] = None,
         server: Any = None,
         config: Optional[Dict[str, Any]] = None,
+        *,
+        session_registry: Any = None,
     ):
         self.args = args
-        self.sessions = SessionManager()
+        # Use the caller's session store when given (BED's SessionRegistry, where auth binds the
+        # login). Otherwise a private SessionManager, as before, so existing callers are unchanged.
+        self.sessions = session_registry if session_registry is not None else SessionManager()
         # Accept a shared state from the caller (typically BED) so that
         # server.publish(...) and ChannelServiceHandler see the same
         # subscriptions. Falls back to a private state for callers that
