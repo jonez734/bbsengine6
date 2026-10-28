@@ -127,6 +127,26 @@ def _auto_seed_channels(args: Any, channel_cfg: Dict[str, Any]) -> None:
             )
 
 
+def _moniker_for(sessions: Any, websocket: Any) -> Optional[str]:
+    """The moniker bound to this websocket's session, from whichever store is wired.
+
+    A session manager that is keyed by the integer session id answers ``get_moniker``. bed's
+    ``SessionRegistry`` is keyed by the websocket: auth binds the login under ``str(websocket.id)``,
+    so it is resolved with ``get_by_websocket``.
+    """
+    get_moniker = getattr(sessions, "get_moniker", None)
+    if callable(get_moniker):
+        moniker = get_moniker(_session_id_for(websocket))
+        if moniker:
+            return moniker
+    by_websocket = getattr(sessions, "get_by_websocket", None)
+    if callable(by_websocket):
+        state = by_websocket(str(getattr(websocket, "id", "")))
+        if state is not None:
+            return getattr(state, "moniker", None)
+    return None
+
+
 def _session_id_for(websocket: Any) -> int:
     """Return the stable session id for a websocket.
 
@@ -174,18 +194,18 @@ class ChannelServiceHandler(BaseService):
         session_id = _session_id_for(websocket)
 
         if msg_type == "subscribe_channel":
-            return await self._handle_subscribe(session_id, message)
+            return await self._handle_subscribe(websocket, message)
         elif msg_type == "unsubscribe_channel":
-            return await self._handle_unsubscribe(session_id, message)
+            return await self._handle_unsubscribe(websocket, message)
         elif msg_type == "get_subscriptions":
-            return await self._handle_get_subscriptions(session_id)
+            return await self._handle_get_subscriptions(websocket)
 
         return None
 
     async def _handle_subscribe(
-        self, session_id: int, message: Dict[str, Any]
+        self, websocket: Any, message: Dict[str, Any]
     ) -> Dict[str, Any]:
-        moniker = self.sessions.get_moniker(session_id)
+        moniker = _moniker_for(self.sessions, websocket)
         if not moniker:
             return {"type": "error", "code": "not_authenticated"}
 
@@ -215,9 +235,9 @@ class ChannelServiceHandler(BaseService):
         }
 
     async def _handle_unsubscribe(
-        self, session_id: int, message: Dict[str, Any]
+        self, websocket: Any, message: Dict[str, Any]
     ) -> Dict[str, Any]:
-        moniker = self.sessions.get_moniker(session_id)
+        moniker = _moniker_for(self.sessions, websocket)
         if not moniker:
             return {"type": "error", "code": "not_authenticated"}
 
@@ -237,8 +257,8 @@ class ChannelServiceHandler(BaseService):
             "message": f"Unsubscribed from {channel}",
         }
 
-    async def _handle_get_subscriptions(self, session_id: int) -> Dict[str, Any]:
-        moniker = self.sessions.get_moniker(session_id)
+    async def _handle_get_subscriptions(self, websocket: Any) -> Dict[str, Any]:
+        moniker = _moniker_for(self.sessions, websocket)
         if not moniker:
             return {"type": "error", "code": "not_authenticated"}
 
@@ -295,8 +315,7 @@ class ChannelAdminHandler(BaseService):
 
     def _resolve_actor(self, websocket: Any) -> Optional[str]:
         """Return the acting moniker for this websocket, or None."""
-        session_id = _session_id_for(websocket)
-        return self.sessions.get_moniker(session_id) or None
+        return _moniker_for(self.sessions, websocket) or None
 
     async def _handle_channel_create(
         self, websocket: Any, message: Dict[str, Any]
