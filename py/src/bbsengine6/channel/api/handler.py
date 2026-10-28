@@ -205,6 +205,7 @@ class ChannelServiceHandler(BaseService):
     async def _handle_subscribe(
         self, websocket: Any, message: Dict[str, Any]
     ) -> Dict[str, Any]:
+        session_id = _session_id_for(websocket)
         moniker = _moniker_for(self.sessions, websocket)
         if not moniker:
             return {"type": "error", "code": "not_authenticated"}
@@ -237,6 +238,7 @@ class ChannelServiceHandler(BaseService):
     async def _handle_unsubscribe(
         self, websocket: Any, message: Dict[str, Any]
     ) -> Dict[str, Any]:
+        session_id = _session_id_for(websocket)
         moniker = _moniker_for(self.sessions, websocket)
         if not moniker:
             return {"type": "error", "code": "not_authenticated"}
@@ -258,6 +260,7 @@ class ChannelServiceHandler(BaseService):
         }
 
     async def _handle_get_subscriptions(self, websocket: Any) -> Dict[str, Any]:
+        session_id = _session_id_for(websocket)
         moniker = _moniker_for(self.sessions, websocket)
         if not moniker:
             return {"type": "error", "code": "not_authenticated"}
