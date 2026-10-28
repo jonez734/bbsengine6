@@ -83,9 +83,10 @@ def db_connection(request):
         pytest.skip("unit-only session: no database required")
 
     user = getpass.getuser()
-    logger.info(f"Connecting to zoid6 database as {user}...")
-    conn = psycopg.connect(f"dbname=zoid6 user={user}")
-    logger.info("✓ Connected to zoid6")
+    dbname = os.environ.get("BBSENGINE6_TEST_DB", "zoid6test")
+    logger.info(f"Connecting to {dbname} database as {user}...")
+    conn = psycopg.connect(f"dbname={dbname} user={user}")
+    logger.info(f"✓ Connected to {dbname}")
 
     yield conn
 
