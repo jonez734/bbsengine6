@@ -70,7 +70,7 @@ class ChannelService:
         if not name:
             return {"success": False, "message": "Channel name required"}
 
-        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+        with database.connect(self.args, set_role=False) as conn, database.cursor(conn) as cur:
             cur.execute(
                 database.query(
                     "SELECT id FROM $engine.__channel WHERE name = :name",
@@ -137,7 +137,7 @@ class ChannelService:
         Returns:
             Dict with channel fields (including the announcers list) or None.
         """
-        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+        with database.connect(self.args, set_role=False) as conn, database.cursor(conn) as cur:
             cur.execute(
                 database.query(
                     """SELECT id, name, description, announce_only,
@@ -179,7 +179,7 @@ class ChannelService:
 
         where_sql = ("WHERE " + " AND ".join(clauses)) if clauses else ""
 
-        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+        with database.connect(self.args, set_role=False) as conn, database.cursor(conn) as cur:
             cur.execute(
                 database.query(
                     f"""SELECT id, name, description, announce_only,
@@ -212,7 +212,7 @@ class ChannelService:
         if verdict is not None:
             return verdict
 
-        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+        with database.connect(self.args, set_role=False) as conn, database.cursor(conn) as cur:
             cur.execute(
                 database.query(
                     """UPDATE $engine.__channel
@@ -245,7 +245,7 @@ class ChannelService:
         # ``verifyMemberFound`` requires a pool kwarg that ``add_announcer``
         # doesn't carry; doing the check inline avoids an extra connection
         # round-trip and works for callers that don't manage a pool.
-        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+        with database.connect(self.args, set_role=False) as conn, database.cursor(conn) as cur:
             cur.execute(
                 database.query(
                     "SELECT 1 FROM $engine.member WHERE moniker = :moniker",
@@ -297,7 +297,7 @@ class ChannelService:
         if verdict is not None:
             return verdict
 
-        with database.connect(self.args) as conn, database.cursor(conn) as cur:
+        with database.connect(self.args, set_role=False) as conn, database.cursor(conn) as cur:
             cur.execute(
                 database.query(
                     """DELETE FROM $engine.__channel_announcer
