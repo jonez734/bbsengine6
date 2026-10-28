@@ -467,6 +467,14 @@ class MessageRouter:
         config: Optional[Dict[str, Any]] = None,
         *,
         session_registry: Any = None,
+        # Auth wiring the zoid6 loader passes to every sub-router. The channel router does not use
+        # these; they are accepted so the loader's first attempt succeeds and session_registry is
+        # honoured (a TypeError here made the loader fall back and drop it).
+        secret: Any = None,
+        token_store: Any = None,
+        instance_id: Any = None,
+        clock: Any = None,
+        **_unused: Any,
     ):
         self.args = args
         # Use the caller's session store when given (BED's SessionRegistry, where auth binds the
