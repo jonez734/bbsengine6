@@ -88,13 +88,13 @@ def step_child_exit_and_redraw(log) -> None:
     )
     _note(f"child exit status: {status}", log)
     _ask("Did the child's output appear, and then the screen clear for the shell?", log)
-    _ask(f"Is the text typed before the child ({typed!r}) still visible on the screen?", log)
-    # A real prompt after the child. Nothing reads input between the child and this
-    # line, so this is the check that the shell can take input again.
-    after = inputstring("Type a second line, then press Enter (new prompt after the child): ")
+    # The child cleared the line the user typed on. The caller keeps the typed text and
+    # passes it back as oldvalue, so the prompt redraws it and editing continues from it.
+    after = inputstring("Type a second line, then press Enter: ", typed)  # oldvalue is positional-only
     _note(f"typed after child: {after!r}", log)
-    _ask("Did the new prompt appear on a clean line, with the bottom bar on the last line?", log)
-    _ask(f"Did the second prompt accept your typing and return {after!r}?", log)
+    _ask(f"Did the prompt redraw the text typed before the child ({typed!r}) on a clean line?", log)
+    _ask("Did the bottom bar appear on the last line?", log)
+    _ask(f"Did the prompt accept your typing and return {after!r}?", log)
 
 
 def step_fullscreen(program: str, log) -> None:

@@ -188,3 +188,70 @@ class TestInterrupt:
         assert "RAISED" not in out
         assert "REDRAW" in out
         assert f"RETURNED {sc.INTERRUPTED_STATUS}" in out
+
+
+class TestRestoreTypedText:
+    """Caller-reprompt: after a child, the caller passes the typed text back to inputstring.
+
+    oldvalue is positional-only in inputstring(); passing it by keyword raised TypeError,
+    so the caller passes it positionally. This pins the flow on a real pty.
+    """
+
+    def test_typed_text_is_redrawn_and_editable_after_child(self):
+        import os
+        import sys
+        import time
+
+        pexpect = pytest.importorskip("pexpect")
+        code = (
+            "import sys; sys.path.insert(0, 'src')\n"
+            "from bbsengine6.io.inputstring import inputstring\n"
+            "from bbsengine6 import subprocess_command as sc\n"
+            "typed = inputstring('name: ')\n"
+            "sc.run_child(['sh', '-c', 'sleep 0.2; exit 3'], term='xterm')\n"
+            "sys.stderr.write('AFTER_CHILD\\n'); sys.stderr.flush()\n"
+            "after = inputstring('name: ', typed)\n"
+            "sys.stdout.write('RESULT=%r\\n' % after); sys.stdout.flush()\n"
+        )
+        child = pexpect.spawn(
+            sys.executable, ["-c", code], encoding="utf-8", timeout=15,
+            env={**os.environ, "TERM": "xterm"}, dimensions=(24, 80),
+        )
+        out = []
+        # A real terminal answers the cursor query (ESC[6n); the harness must too, or the
+        # prompt times out. Answer each query as the output arrives.
+        def answer(until, t=10):
+            end = time.time() + t
+            while time.time() < end:
+                try:
+                    chunk = child.read_nonblocking(4096, timeout=0.2)
+                except pexpect.TIMEOUT:
+                    continue
+                except pexpect.EOF:
+                    return None
+                out.append(chunk)
+                for _ in range(chunk.count("\x1b[6n")):
+                    child.send("\x1b[1;1R")
+                if until in "".join(out):
+                    return True
+            return False
+
+        assert answer("name: ")
+        time.sleep(0.3)
+        child.send("abc")
+        time.sleep(0.3)
+        child.send("\r")
+        # Wait for the child to finish, then for the second prompt to draw. A key sent in the
+        # gap between the child exiting and the prompt reading is dropped (measured: no
+        # settle time loses X), so pause briefly after the prompt draws before typing.
+        assert answer("AFTER_CHILD", 8), "".join(out)[-300:]
+        end = time.time() + 8
+        while "".join(out).count("name: ") < 2 and time.time() < end:
+            answer("name: ", 0.2)
+        assert "".join(out).count("name: ") >= 2, "".join(out)[-300:]
+        time.sleep(0.5)
+        child.send("X")
+        time.sleep(0.3)
+        child.send("\r")
+        assert answer("RESULT=", 8), "".join(out)[-300:]
+        assert "RESULT='abcX'" in "".join(out)

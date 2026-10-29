@@ -201,9 +201,19 @@ Numbered as in the command plan. This is not the inputstring "Phase 4" above.
   all questions answered yes. Step 1: TERM refusal shown, shell usable. Step 2: child exit
   status 3, then a new prompt on a clean line with the bottom bar; typing accepted. Step 3:
   worm (exit 0) took the whole screen, left no drawing, and the prompt accepted input.
-  Not checked by that run: the step 2 text typed before the child surviving the redraw. A
-  question for it is now in step 2 of the script; it needs one more live run to answer.
   Earlier logs (`live-check-subprocess.log`) are superseded; they predate the prompt fix.
+- [x] Typed text before a child (live run `captures/live-check-20261029-1623.log`): the text
+  was gone after the child (`n`). Decision: the caller keeps it and passes it back as the
+  positional `oldvalue` (caller-reprompt). Pty-verified: the prompt redraws `abc`, accepts `X`,
+  returns `abcX`. Test `TestRestoreTypedText` fails if the text is dropped.
+  - Bug found: `inputstring(prompt, oldvalue=...)` raises `TypeError`; `oldvalue` is
+    positional-only and the wrapper passes it positionally. Not fixed in the signature (the
+    `/` is intentional); callers pass it positionally. Spec `commands.md` says so.
+  - Finding: a key typed in the gap after a command exits and before the next prompt reads is
+    dropped (no settle time loses `X`; 0.5 s keeps it). Real shell users can hit this. Not
+    fixed; open for a decision (buffer keys across the gap, or document it).
+  - Live script step 2 now uses the caller-reprompt flow and asks whether the redraw shows the
+    typed text. That question needs one more live run to answer on a real terminal.
 - [x] Downstream io check after the subprocess and Enter-CRLF commits (`4ee2830`). All 48
   casino and zoidoffice test files that import the io layer were run one file at a time.
   36 pass (or skip, or have no tests). 12 fail, with the same failing tests on the pre-change

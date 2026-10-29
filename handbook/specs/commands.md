@@ -101,7 +101,13 @@ still a module command:
   redrawn.
 - After the child exits, whatever happened, `redraw_all(bottom_buf)` restores the screen in
   this order: attribute and cursor reset, clear screen, scroll region and bottom bar, then
-  the prompt line is marked dirty so the next read redraws the typed text.
+  the prompt line is marked dirty.
+- The child clears the line the user was typing on. The text typed before the child is not
+  kept by the launcher. The caller keeps it and passes it back to the next prompt as the
+  positional `oldvalue` (`inputstring(prompt, typed)`), so the prompt redraws it and editing
+  continues from it. (`oldvalue` is positional-only; the keyword form raises `TypeError`.)
+  Measured on a pty: a key sent in the gap between the child exiting and the next prompt
+  reading is dropped, so the caller must not type until the prompt is drawn.
 
 Status: `py/src/bbsengine6/subprocess_command.py` is implemented and tested
 (`py/tests/test_subprocess_command.py`). No shipped wrapper module exists yet; letteredolive
