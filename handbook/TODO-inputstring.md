@@ -136,3 +136,10 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Reported paste verified: full text returned; the drawn row stays on row 1.
 - [ ] Confirm Ctrl-Shift-V in gnome-terminal (user).
 
+## Phase 13: prompt layout in the terminal
+
+- [x] First frame draws the prompt with its INS indicator (`cf5e605`).
+- [x] Word-wrap disabled on every input-line draw (`f340e8a`). Stray line breaks in the scrolled window are gone in the scroll capture.
+- [x] User confirms in gnome-terminal: layout and scrolling work much better.
+- [ ] 4-character cursor offset from the prompt: not reproduced in the emulator; not confirmed fixed.
+
