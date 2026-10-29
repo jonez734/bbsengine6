@@ -86,3 +86,15 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [ ] Manual check in xterm: no regressions. (Not confirmed.)
 - [x] Commit `bbsengine6/` changes, including `py/src/bbsengine6/_version.py`: commit `20d0d30` on `main`. Not pushed.
 - [ ] Pointer bump: not applicable. `bbsengine6` is tracked as regular files in the meta-repo and is not in `.gitmodules`, so `scripts/bump-submodule-pointers.sh` has no gitlink to update (AGENTS.md). Meta-repo `bbsengine6/` changes are left uncommitted by design. User pushes.
+
+## Phase 8: tab completion (added after the initial plan)
+
+- [x] A typed Tab completes an unambiguous prefix in the first word.
+- [x] Completer receives the word under the cursor (io_inputstring.spec contract), so the second word completes.
+- [x] Tab, Tab on an empty word lists every completion; the buffer is unchanged.
+- [x] A Tab updates completion state and does not fall into the insert branch (which cleared it).
+- [x] A paste batch never takes a trailing Tab (that Tab is completion); Backspace stops the batch so the key path deletes.
+- [x] Shared key registry: `remove_key_mapping` restores the handler an override replaced (editor no longer erases defaults).
+- [x] `insert_tabs=True` keeps pasted tabs as tab characters for a future editor.
+- [x] `tests/tab_complete_check.py` (12 cases; `--interactive` for a manual prompt) and `test_inputstring_tab_complete.py`.
+- [ ] Verified in local gnome-terminal (user).
