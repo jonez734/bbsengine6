@@ -40,7 +40,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 ## Phase 3: selection and exports
 
 - [x] `set_getch_impl()`, `get_getch_impl()`, and per-call `impl=` keyword.
-- [ ] Export `getch_utf8` and `set_getch_impl` from `io/__init__.py`. (Not done.)
+- [x] Export `getch_utf8`, `set_getch_impl`, `get_getch_impl` from `io/__init__.py` (commit `f7c7356`).
 
 ## Phase 4: `inputstring()` (`py/src/bbsengine6/io/inputstring.py`)
 
@@ -49,7 +49,8 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [ ] `PASTE` inserts as one operation. (Not done; paste bursts are handled by the reader, not as a single event.)
 - [ ] Typed overflow beeps. (Not done.)
 - [ ] Ctrl+W and Ctrl+Y wired through the per-call table. (Not done.)
-- [ ] `noneok` default `True`; update `io/specs/io_inputstring.spec`. (Not done.)
+- [ ] `noneok` default `True`. (Not done: default is still `False`. Spec documents the current default and lists this as a known issue.)
+- [x] `io/specs/io_inputstring.spec` updated to the code (commit `4cb50db`).
 - [ ] `noneok=False`: empty Enter beeps and reprompts. (Not done.)
 - [ ] `allowed=` per-character set. (Not done.)
 - [ ] `filter=` regex checked on Enter. (Not done.)
@@ -86,6 +87,12 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [ ] Manual check in xterm: no regressions. (Not confirmed.)
 - [x] Commit `bbsengine6/` changes, including `py/src/bbsengine6/_version.py`: commit `20d0d30` on `main`. Not pushed.
 - [ ] Pointer bump: not applicable. `bbsengine6` is tracked as regular files in the meta-repo and is not in `.gitmodules`, so `scripts/bump-submodule-pointers.sh` has no gitlink to update (AGENTS.md). Meta-repo `bbsengine6/` changes are left uncommitted by design. User pushes.
+
+## Phase 9: documentation
+
+- [x] `io/specs/io_getch.spec` updated: two readers, `impl=` and selector, raw session, escape tail, input queue, fix history (commit `e25a747`).
+- [x] `io/specs/io_inputstring.spec` updated: real signature and parameters, key table, tab rules, paste batching, mouse state, key-mapping restore, known issues (commit `4cb50db`).
+- [x] Plan items not built are listed as known issues in the spec rather than described as done.
 
 ## Phase 8: tab completion (added after the initial plan)
 
