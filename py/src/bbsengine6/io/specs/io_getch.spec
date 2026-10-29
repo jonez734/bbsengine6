@@ -13,14 +13,35 @@
 
 ## Public API
 
-### Main Function
+### Main Functions
 
 ```python
-getch_str(timeout=1.0, debug=False, fire_events=True, check_notifications=True, idle=None, **kwargs) -> str | None
+getch_str(timeout=1.0, debug=False, fire_events=True, check_notifications=True, idle=None, impl=None, **kwargs) -> str | None
+getch_utf8(timeout=1.0, debug=False, fire_events=True, check_notifications=True, idle=None, impl=None, **kwargs) -> str | None
 getch = getch_str  # alias exported from bbsengine6.io
 ```
 
 Reads a single keypress and returns a key name or character.
+
+Two readers share one implementation (`_getch_core`) and one key table
+(`_proc_char`, `resolve_escape_sequence`). They differ only in how input is read:
+
+- `getch_str()`: the byte-at-a-time reader. Existing behavior; the default.
+- `getch_utf8()`: drains all available input and decodes characters in order.
+  Emits key events with `source_func="getch_utf8"`; `getch_str()` emits `"getch_str"`.
+
+Both must return the same key names for the same input. Neither is removed.
+
+### Selecting the Default Reader
+
+```python
+set_getch_impl(name: str) -> None   # "str" or "utf8"; ValueError otherwise
+get_getch_impl() -> str
+```
+
+`getch_str()` and `getch_utf8()` accept `impl=` per call. `impl=None` uses the
+runtime default set by `set_getch_impl()` (initially `"str"`). These names are
+exported from `bbsengine6.io`. The default is not changed to `"utf8"` yet.
 
 **Parameters:**
 - `timeout`: Seconds to wait for input (default: 1.0). If 0, returns immediately.
@@ -29,6 +50,7 @@ Reads a single keypress and returns a key name or character.
 - `check_notifications`: If True, check for notifications and emit bell (default: True)
 - `idle`: Optional callable called on idle (timeout) (default: None)
   - Called each time getch_str() times out waiting for input
+- `impl`: `"str"` or `"utf8"` to choose the reader for this call (default: None, the runtime default)
   - Useful for updating status displays, checking notifications, etc.
 - `**kwargs`: Additional arguments passed to notification handlers:
   - `args`: Application args namespace (for database connection if pool not provided)
@@ -105,14 +127,22 @@ Reads a single keypress and returns a key name or character.
 
 ## Internal Functions
 
-### `_proc_char(char: str) -> str`
+### `_proc_char(char, debug=False, fire_events=True, source_func="getch_str") -> str | None`
 
-Processes a single character and returns the appropriate key name.
+Processes a single character and returns the appropriate key name. Shared by
+both readers. `source_func` labels the key events it emits.
 
 **Process:**
-1. Check for control characters (Ctrl+A, Ctrl+C, etc.)
-2. Handle ESC (Escape) to detect extended sequences
-3. Return plain character for regular input
+1. Fire a raw key event (if the dispatcher is running)
+2. Check for control characters (Ctrl+A, Ctrl+C, etc.)
+3. Handle ESC: gather the sequence with `_read_escape_tail()` and resolve it
+   with `resolve_escape_sequence()`
+4. Return plain character for regular input
+
+### `resolve_escape_sequence(sequence, debug=False) -> str | None`
+
+Maps a complete escape sequence to a `KEY_MAP` name. Unknown sequences return
+the raw text, or `None` when `debug=True`. Used by both readers.
 
 ---
 
@@ -120,10 +150,28 @@ Processes a single character and returns the appropriate key name.
 
 ### Terminal Mode Management
 
+Outside a raw session, each `getch` call:
+
 1. Saves terminal settings with `termios.tcgetattr()`
-2. Sets raw/cbreak mode with `tty.setraw()`
-3. Uses non-blocking I/O with `fcntl.fcntl()` 
-4. Restores original settings in `finally` block
+2. Sets raw mode with `tty.setraw()`
+3. Uses non-blocking I/O with `fcntl.fcntl()` while reading one key
+4. Restores the original settings before returning
+
+**Raw session (`begin_raw_session()` / `end_raw_session()`).** A caller that
+edits a line (`inputstring()`) holds the tty in raw mode for the whole prompt.
+While a session is active:
+
+- `getch`, the DSR query, and the mouse-state query do not switch modes and do
+  not restore cooked settings between keys. A key pressed between two reads is
+  therefore never echoed (for example as `^[[C`).
+- Keys already typed when the session starts are drained into `_input_queue`
+  first; `tty.setraw()` would otherwise discard them.
+- `end_raw_session()` restores the saved settings. `inputstring()` calls it in
+  `finally`, so it runs on return, exception, and Ctrl-C.
+
+The session state lives in `io/common.py` (`_session_raw_fd`,
+`_in_raw_session()`, `_restore_cooked()`). Both `getch.py` and `common.py` use
+it, which avoids a circular import.
 
 ### Timeout Accuracy
 
@@ -134,15 +182,34 @@ Processes a single character and returns the appropriate key name.
 
 ### Escape Sequence Detection
 
-1. When ESC is detected, reads up to 10 additional bytes
-2. Stops reading on `BlockingIOError` (no more data)
-3. Matches against `KEY_MAP` (sorted by length, longest first)
-4. Falls back to raw sequence for unknown sequences
+A terminal can deliver one escape sequence (`ESC [ C`) in several reads, so
+the reader does not stop at the first pause.
+
+1. On ESC, `_read_escape_tail()` gathers the rest of the sequence. After each
+   byte it waits up to `ESC_TAIL_WAIT` (50 ms) for the next one.
+2. A CSI (`ESC [`) or SS3 (`ESC O`) sequence ends at its first final byte in
+   `0x40-0x7e`. The sequence is bounded to 10 characters.
+3. A lone ESC followed by a non-introducer character is the Escape key
+   (`KEY_ESC`). The following character is put back on `_input_queue` so it is
+   read as its own key.
+4. A queued ESC is resolved from the queue in one step (`_resolve_queued_escape`),
+   so a sequence drained before a prompt is not split.
+5. The sequence is matched against `KEY_MAP` (sorted by length, longest first).
+   Unknown sequences fall back to the raw text (or `None` when `debug=True`).
 
 ### Input Queue
 
-- Uses `_input_queue` from `common.py` for buffered input
-- Checks queue first before doing blocking read
+- `_input_queue` in `common.py` holds keys read from the stream but not yet
+  returned. Keys are returned in arrival order.
+- Before waiting, `_getch_core` drains all available input from the stream into
+  the queue (`drain_stream_to_queue`). A character that the text wrapper has
+  already buffered is invisible to `select()`, so draining is what makes it
+  visible to the next call.
+- `drain_stream_to_queue()` maps a cooked-mode newline back to `\r`. The tty
+  turns Enter into `\n` (ICRNL) in cooked mode, and the key table expects
+  `\r` (`KEY_ENTER`).
+- The DSR and mouse-state queries keep typed input: bytes that are not a reply
+  are put back on the queue, not discarded.
 
 ### Notification Integration
 
@@ -186,6 +253,7 @@ Processes a single character and returns the appropriate key name.
 2. No support for modified keys (Shift+, Ctrl+, Alt+ variants)
 3. No support for application cursor keys (DECCKM mode)
 4. Unknown escape sequences: with `debug=False` (default), returns raw sequence; with `debug=True`, logs and returns `None`
+5. Unmapped control bytes (other than the keys in the key tables) are not filtered by `getch`; `inputstring()` drops them from paste text
 
 ---
 
@@ -220,3 +288,16 @@ Processes a single character and returns the appropriate key name.
   5. Restoring terminal settings in finally block
 - This fix resolves hang when inputstring() calls echo() during getch() wait
 - Result: KEY_ENTER and other keys now properly handled in inputstring()
+
+### Keyboard Input Fixes (bbsengine6, 2026)
+
+- **Keys echoed between reads (`^[[C`)**: the tty was restored to cooked mode after
+  every `getch`. Fixed by the raw session (see Terminal Mode Management).
+- **Split escape sequences**: a sequence arriving in pieces left its tail as text.
+  Fixed by `_read_escape_tail()`.
+- **Keys dropped before raw mode**: `tty.setraw()` discards pending input. Fixed by
+  draining into `_input_queue` before the mode switch.
+- **Enter as `\n`**: cooked-mode Enter is mapped back to `\r` (see Input Queue).
+- **Lock held during redraw**: a non-reentrant lock was held while `echo()`
+  re-acquired it. Handled in `inputstring()`, not in `getch`.
+
