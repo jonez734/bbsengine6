@@ -71,23 +71,48 @@ inputstring("Name: ", completer=Completer(name_completer, conn=db_conn))
 ### Main Function
 
 ```python
-inputstring(prompt="> ", oldString="", **kwargs) -> str
+inputstring(prompt="> ", oldvalue="", /, history=False, pagesize=10, beep_on_error=True,
+            f1_help=None, help=None, function_key_handlers=None, **kwargs) -> str
 ```
 
-Returns the input string.
+Reads one line with line editing. Returns the entered text. `prompt` and
+`oldvalue` are positional-only.
 
 **Parameters:**
 - `prompt`: String to display before input (default: `"> "`)
-- `oldString`: Pre-fill input with existing value
-- `max_len`: Maximum input length (default: 255)
-- `max_width`: Display width for scrolling (default: 80)
+- `oldvalue`: Pre-fill the buffer with this value (default: `""`)
+- `history`: Enable UP/DOWN history for this call (default: False)
+- `pagesize`: Characters jumped by PAGE UP / PAGE DOWN (default: 10)
+- `beep_on_error`: Beep on errors such as Delete at end of line (default: True)
+- `f1_help`: Help text (str) or callable returning it, shown on F1 (default: None)
+- `help`: Alias for `f1_help`
+- `function_key_handlers`: Dict mapping `KEY_F2`..`KEY_F12` to handlers
+- `max_len`: Maximum input length (default: 255, via `**kwargs`)
+- `max_width`: Display width for scrolling (default: 80, via `**kwargs`)
 - `mask`: If set, mask input (e.g., `mask="*"` for password)
-- `completer`: Callback for tab completion: `completer(buffer, curpos, **kwargs) -> list[str]`
-- `verify`: Callback for input validation: `verify(buffer, **kwargs) -> bool`
-- `args`: Application args namespace (passed to verify callback and completer)
+- `completer`: Tab completion callback; see Tab Completion
+- `verify`: Validation callback `verify(buffer, **kwargs) -> bool`, run on Enter
+- `args`: Application args namespace (passed to verify and completer)
 - `pool`: Database connection pool (passed to completer via kwargs)
-- `noneok`: Allow empty input (default: False)
-- `**kwargs`: Additional arguments are passed to the `completer` callback.
+- `insert_tabs`: If True, a tab inside pasted text is inserted as `\t`
+  (for an editor). Default False: a pasted tab is shown as a space. A typed Tab
+  is always completion, regardless of this flag.
+- `noneok`: Accepted by `handle_key_enter`, but the default is currently
+  `False` and empty Enter is accepted only when `noneok=True`. See Known Issues.
+- `**kwargs`: Remaining arguments are passed to the `completer` callback.
+
+**Terminal state during the call:**
+- The tty is held in raw mode for the whole prompt (`begin_raw_session()`), and
+  restored on return, exception, and Ctrl-C (see `io_getch.spec`).
+- The terminal's mouse-reporting modes (1000, 1002, 1003, 1006) are queried
+  (DECRQM) before editing. Only modes the terminal reports as on are turned off
+  for the prompt, and only those are turned back on at exit. A mode with no reply
+  is never written, so a tab that had mouse tracking enabled keeps it.
+  `common.MOUSE_STATE_MANAGED = False` disables this.
+
+**Concurrency:** the module-level key table `KEY_ACTIONS` is shared by all
+callers. Key handlers are looked up under `_key_actions_lock`. A redraw runs
+outside `_current_stream_lock` because `echo()` takes that lock.
 
 
 ---
@@ -99,7 +124,12 @@ add_key_mapping(key_string, action_lambda)
 remove_key_mapping(key_string)
 ```
 
-Register/remove custom key handlers.
+`add_key_mapping()` replaces the handler for a key in the shared `KEY_ACTIONS`
+table and records the handler it replaced. `remove_key_mapping()` undoes the most
+recent add for that key by restoring the earlier handler. If the key had no
+handler before the add, the key is removed. This lets an editor take over
+`KEY_LEFT`, `KEY_BACKSPACE`, and others and give them back, so later prompts keep
+the defaults.
 
 ---
 
@@ -148,9 +178,13 @@ Return the common prefix of a list of strings.
 | `KEY_CTRL_W` | Cut previous word (Ctrl+W) |
 | `KEY_CUTTOBOL` | Cut to beginning of line |
 | `KEY_YANK` | Paste from yank buffer |
-| `KEY_F1` | Help (stub) |
+| `KEY_F1` | Show `f1_help` inline |
 | `KEY_ENTER` | Accept input |
-| `KEY_TAB` | Tab completion |
+| `KEY_TAB` | Tab completion (see Tab Completion) |
+
+`KEY_INSERT` toggles insert and overwrite mode; overwrite mode shows the `[OVR]`
+indicator. The toggle is local to each call. `KEY_YANK` is registered, but no byte
+in the reader produces it yet (Ctrl+Y is `\x19`, not mapped in `getch.py`).
 
 ## Handler Functions
 
@@ -190,29 +224,56 @@ Print tab completion matches in columns. Returns number of lines printed.
 
 ## Tab Completion
 
-The `handle_tab_manager` function processes tab completion and handles potential scrolling:
+`handle_tab_manager` processes Tab. Its behavior, by word under the cursor:
 
-1. First tab: Show common prefix of matches
-2. Second tab on same matches: Print all matches
-3. Single match: Insert match automatically
-4. No matches: Bell sound
-5. Tab on single match (no other options): Bell sound
+- **Non-empty word, one match**: the word is replaced by the match.
+- **Non-empty word, several matches**: the buffer is unchanged; the matches are
+  listed on a second press of Tab on the same word.
+- **Non-empty word, no matches**: bell; the buffer is unchanged.
+- **Empty word**: Tab lists every completion. A further Tab on the same list
+  rings the bell.
+- **Repeated Tab on a single match**: bell.
+
+A Tab only updates completion state; it does not reach the character-insert
+branch, which clears that state.
+
+A typed Tab is one keypress and always goes to completion. Tab inside pasted
+text is handled by the paste path (see Paste Input).
 
 **Scrolling Logic:**
 When matches are printed, the terminal may scroll. `handle_tab_manager` detects this and updates `start_row` to ensure `redraw_line` draws at the correct screen position.
 
 **Callback signature:**
 ```python
-def completer(buffer, curpos, **kwargs) -> list[str]
+def completer(word, curpos=..., **kwargs) -> list[str]
 ```
 
-Returns list of possible completions for the current word.
-
 **Behavior:**
-- The completer receives the current word (not prefix) as the first argument, OR an empty string if no word is present.
+- The completer receives the **word under the cursor**, not the whole line. For
+  a second word, `hello ban` + Tab passes `ban`, and the result is `hello banana`.
+  The word is `""` when the cursor is not on a word.
+- `curpos` is passed by keyword.
 - Additional `**kwargs` passed to `inputstring` are forwarded to the completer.
-- Returns list of matching strings
+- Returns the list of matching strings (replacement words for the word under the cursor).
+- The test script `tests/tab_complete_check.py` checks these cases on a pty.
 
+
+## Paste Input
+
+A paste delivers several characters at once. When two or more keys are queued,
+`_take_paste_burst()` takes the leading run of text and inserts it as text:
+
+- Printable characters are inserted literally. A newline or carriage return ends
+  the entry, as Enter does.
+- A tab is paste text only when printable text follows it in the queue. A Tab
+  with nothing but Tabs (or nothing) after it is left for completion, so a typed
+  Tab or double Tab still completes.
+- Backspace (`\x7f`, `\x08`) stops the batch and runs as a key.
+- Other control bytes are dropped from paste text.
+- An escape sequence at the head of the queue is a real key; it is not batched.
+- Paste text is truncated at `max_len`.
+
+Pasted tabs become a space unless `insert_tabs=True`.
 
 ## Input Verification
 
@@ -244,6 +305,21 @@ The main loop manages display:
 - Input scrolls horizontally when `curpos >= scroll_offset + max_width`
 - Scroll offset adjusts to keep cursor visible
 
+## Recent Fixes (bbsengine6, 2026)
+
+- **Arrow keys leaked as `^[[D`**: fixed by the raw session (tty stays raw during the prompt).
+- **Click-drag selection broken in the prompt tab**: mouse modes were reset even when
+  the terminal did not answer DECRQM. Now only modes reported on are changed.
+- **Pasted characters dropped, Tab and Ctrl-A in paste**: the paste batch inserts text
+  literally (see Paste Input).
+- **Second-word completion**: the completer receives the word under the cursor.
+- **Double Tab on empty input printed nothing**: a Tab fell into the insert branch and
+  cleared completion state. Fixed; a double Tab lists all completions.
+- **Default key handlers lost after an editor session**: `remove_key_mapping()` now
+  restores the handler an override replaced.
+- **Self-deadlock on redraw**: a redraw ran under `_current_stream_lock` and `echo()`
+  re-acquired it. The redraw now runs outside the lock.
+
 ## Recent Fixes (May 2026)
 
 ### Lock Contention with getch()
@@ -259,6 +335,15 @@ The main loop manages display:
 
 ## Known Issues / TODOs
 
+0. **Not built from the plan** (documented so the gaps are visible):
+   - `noneok` default is `False`; the plan's change to `True` was not made.
+   - `filter=` (regex on Enter) and `allowed=` (per-character set) are not implemented;
+     `inputinteger` still passes its regex as `filter`, which `inputstring` ignores.
+   - Per-call key table: `KEY_ACTIONS` is still shared (see Concurrency).
+   - Bracketed paste (`ESC[200~`) is not recognized; pastes are detected by burst only.
+   - Typed-overflow beep and an explicit `PASTE` event are not implemented.
+   - Ctrl+Y (`\x19`) is not mapped to `KEY_YANK` in the reader; Ctrl+W (`\x17`) is not mapped to `KEY_CTRL_W` either.
+   - Asimov's wrapper (`asimov/src/asimov/io/inputstring.py`) is not updated.
 1. ~~`get_current_word()` is a stub~~ - now properly finds word at cursor position using alphanumeric boundaries
 2. ~~Some echo calls use inconsistent escaping~~ (FIXED - standardized to `"{command}"` for static commands)
 3. ~~Lock contention between inputstring() and getch()~~ (FIXED - removed unnecessary lock acquisition)
