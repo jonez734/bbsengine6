@@ -180,3 +180,13 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
   replace mode previously held the default list.
 - [x] Spec: `handbook/specs/commands.md`, linked from the specs index.
 
+## Phase 2: interaction container
+
+- [x] `bbsengine6/interaction.py`: `Interaction` holds the command registry; `current_session()`,
+  `new_session()`, `use_session()` over a ContextVar with a module default. Named `interaction`
+  because `bbsengine6/session/` is the login-session package.
+- [x] Tests: default is used without a block; `use_session` restores, including after an
+  exception; nested blocks; registries do not leak between interactions or into the default;
+  each thread sees its own.
+- [ ] Phase 3: move io state into the interaction (not started).
+

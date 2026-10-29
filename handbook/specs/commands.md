@@ -5,8 +5,8 @@ tier. A shell (letteredolive) builds its command list with it, and a host progra
 (casino) builds its own list inside its own session. Both use the same rules for
 matching, overriding and availability.
 
-Status: the registry is implemented (`py/src/bbsengine6/commands.py`). Sessions that
-hold a registry per context are in progress; see `io/index.md` for the io state.
+Status: the registry is implemented (`py/src/bbsengine6/commands.py`). Each interaction
+holds its registry in an `Interaction` (`py/src/bbsengine6/interaction.py`); see below.
 
 ## Tiers
 
@@ -88,6 +88,22 @@ These are the shell's messages for typed input, to be wired in the shell's dispa
 - Ambiguous prefix: `ambiguous command <prefix>` (one line, no list, nothing runs).
 
 Candidates are shown only by tab completion (double Tab) and by the help key (F1).
+
+## Interaction (per-context state)
+
+`bbsengine6.interaction` holds the state one interaction keeps. It is named `interaction`
+because `bbsengine6/session/` is already the login-session package.
+
+- `current_session()` returns the interaction for the current context. Without a
+  `use_session` call it is a module-level default, so existing code is unchanged.
+- `new_session(mode, name)` makes a fresh interaction with an empty registry.
+- `use_session(s)` makes `s` current inside a block, and restores the previous one on
+  exit, including when the block raises. Blocks nest.
+- Each thread, and each context, has its own current interaction. Registering a command
+  in one interaction does not affect another.
+
+Phase 3 moves the io state (input queue, terminal state, key table, and the rest) into the
+same object. Until then an interaction holds only the registry.
 
 ## Known limits
 
