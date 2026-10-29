@@ -82,9 +82,13 @@ def step_child_exit_and_redraw(log) -> None:
         bottom_buf="live check: bottom bar",
     )
     _note(f"child exit status: {status}", log)
-    _ask("Did the child's output appear, then the shell screen come back?", log)
-    _ask("Is the bottom bar drawn on the last line?", log)
-    _ask(f"Is the text you typed ({typed!r}) still on the prompt line?", log)
+    _ask("Did the child's output appear, and then the screen clear for the shell?", log)
+    # A real prompt after the child. Nothing reads input between the child and this
+    # line, so this is the check that the shell can take input again.
+    after = inputstring("Type a second line, then press Enter (new prompt after the child): ")
+    _note(f"typed after child: {after!r}", log)
+    _ask("Did the new prompt appear on a clean line, with the bottom bar on the last line?", log)
+    _ask(f"Did the second prompt accept your typing and return {after!r}?", log)
 
 
 def step_fullscreen(program: str, log) -> None:
@@ -93,8 +97,12 @@ def step_fullscreen(program: str, log) -> None:
     status = sc.run_child([program], bottom_buf="live check: bottom bar")
     _note(f"{program} exit status: {status}", log)
     _ask(f"Did {program} take the whole screen?", log)
-    _ask("After it quit, is the shell screen back, with no leftover game drawing?", log)
-    _ask("Is the bottom bar drawn again?", log)
+    # A real prompt after the program. Its line must be clean, with no game drawing left.
+    after = inputstring("Type a line, then press Enter (prompt after the game): ")
+    _note(f"typed after {program}: {after!r}", log)
+    _ask("Is the screen free of leftover game drawing, with the prompt on a clean line?", log)
+    _ask("Is the bottom bar drawn on the last line?", log)
+    _ask(f"Did the prompt accept your typing and return {after!r}?", log)
 
 
 def main() -> int:
