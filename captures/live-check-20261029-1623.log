@@ -1,0 +1,40 @@
+== live check 2026-10-29T16:23:17 TERM='xterm-256color' size=183x42
+# Step 1: TERM refusal
+# refused as expected: TERM is 'dumb'; a full-screen program needs a terminal type such as xterm
+Q: Did the screen show a clear refusal message and stay usable?
+A: y
+
+# Step 2: child exit and redraw
+# typed before child: 'something'
+# child exit status: 3
+Q: Did the child's output appear, and then the screen clear for the shell?
+A: y
+
+Q: Is the text typed before the child ('something') still visible on the screen?
+A: n
+
+# typed after child: '2nd line'
+Q: Did the new prompt appear on a clean line, with the bottom bar on the last line?
+A: y
+
+Q: Did the second prompt accept your typing and return '2nd line'?
+A: y
+
+# Step 3: full-screen child: worm
+Q: Ready? The program 'worm' will take the screen. Quit it normally.
+A: y
+
+# worm exit status: 0
+Q: Did worm take the whole screen?
+A: y
+
+# typed after worm: 'a line'
+Q: Is the screen free of leftover game drawing, with the prompt on a clean line?
+A: y
+
+Q: Is the bottom bar drawn on the last line?
+A: y
+
+Q: Did the prompt accept your typing and return 'a line'?
+A: y
+
