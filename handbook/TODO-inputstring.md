@@ -84,5 +84,5 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Manual check of arrow keys in local gnome-terminal (VTE): KEY_LEFT and KEY_RIGHT without leaks (reported by user).
 - [ ] Manual check in local gnome-terminal (VTE): click-drag selection and middle-click paste. (Not confirmed.)
 - [ ] Manual check in xterm: no regressions. (Not confirmed.)
-- [ ] Commit `bbsengine6/` changes, including `py/src/bbsengine6/_version.py`. Do not push.
-- [ ] Run `scripts/bump-submodule-pointers.sh` from the meta-repo; user pushes.
+- [x] Commit `bbsengine6/` changes, including `py/src/bbsengine6/_version.py`: commit `20d0d30` on `main`. Not pushed.
+- [ ] Pointer bump: not applicable. `bbsengine6` is tracked as regular files in the meta-repo and is not in `.gitmodules`, so `scripts/bump-submodule-pointers.sh` has no gitlink to update (AGENTS.md). Meta-repo `bbsengine6/` changes are left uncommitted by design. User pushes.
