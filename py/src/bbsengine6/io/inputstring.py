@@ -1505,7 +1505,7 @@ def _inputstring_body(
         else:
             ch = getch(
                 timeout=INPUTSTRING_GETCH_TIMEOUT,
-                fire_events=False,
+                fire_events=True,
                 check_notifications=False,
             )
         if ch is None:
