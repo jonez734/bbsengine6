@@ -194,7 +194,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
   - [x] `io/common.py`: input queue, streams, terminal state and stack, dirty flag (`8e2f3ca`).
     Verified: no new failures in the full suite; zoidoffice, murdermotel and casino io tests
     match their recorded baselines.
-  - [ ] `io/echo.py` (runtime vars, options, raw flag).
+  - [x] `io/echo.py`: raw mode, previous token, first-line flag, runtime vars, options (commit below).
   - [ ] `io/inputstring.py` (key table, yank buffer, snapshot stack, mode fragment).
   - [ ] `io/getch.py` (impl selector, bottom-bar status).
   - [ ] `bottombar.py` / `screen.py` (registry, bar stack).
