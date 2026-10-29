@@ -482,9 +482,13 @@ def _render_bottombar(
         left_buf = left_buf[:truncate_to] + "..."
         left_len = rendered_length(left_buf)
     padding = " " * max(0, terminalwidth - left_len - right_len)
+    # Save and restore the hardware cursor with the terminal's own ESC 7 / ESC 8.
+    # {savecursor} would ask the terminal for its position first (a DSR round-trip on
+    # every redraw), and a terminal that does not answer stalls each bar update.
+    # The terminal keeps the saved position itself, so no query is needed.
     echo(
-        f"{{savecursor}}{{bottombarcolor}}{{curpos:{terminal.lines()},0}}"
-        f"{left_buf}{padding}{right_buf}{{/all}}{{restorecursor}}",
+        f"\x1b7{{bottombarcolor}}{{curpos:{terminal.lines()},0}}"
+        f"{left_buf}{padding}{right_buf}{{/all}}\x1b8",
         wordwrap=False,
         end="",
         flush=True,
