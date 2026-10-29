@@ -199,6 +199,19 @@ Numbered as in the command plan. This is not the inputstring "Phase 4" above.
 - [ ] Live-terminal check (`scripts/live-check-subprocess.py`, default program worm) still to
   be run by the operator in gnome-terminal. Result to be recorded here. TERM is `dumb` in the
   sandbox, so the sandbox cannot run it. Needed before the wrappers are wired.
+- [x] Downstream io check after the subprocess and Enter-CRLF commits (`4ee2830`). All 48
+  casino and zoidoffice test files that import the io layer were run one file at a time.
+  36 pass (or skip, or have no tests). 12 fail, with the same failing tests on the pre-change
+  baseline `c88bddb`, so they are not regressions:
+  - casino: bottom-bar and menu width assertions (`test_client_bottombar.py`,
+    `test_menu_inline_prompt.py`); blackjack and client tests (`test_blackjack_*`,
+    `test_client.py`, `test_member_create_and_casino_auth.py`, `test_slots_integrated.py`).
+  - zoidoffice: SQL text assertions (`test_project_search_sql.py`,
+    `test_project_list_filter.py`, `test_project_lifecycle_integration.py`); the query builder
+    uses `zoidoffice.__project`, which the tests do not expect.
+  - `test_yahtzee_integrated.py` aborts at interpreter shutdown on both trees (known).
+  - murdermotel io tests unchanged from baseline (22 errors: missing `murdermotel.player` table).
+  Not covered by this run: the subprocess launcher and the Enter fix inside those apps.
 
 ## Phases 0 and 1: command registry
 
