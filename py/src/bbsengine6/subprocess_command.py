@@ -26,6 +26,10 @@ from .interaction import current_session
 #: TERM values that cannot drive a full-screen program.
 UNUSABLE_TERMS = ("", "dumb")
 
+#: Status returned when the user interrupts the child (Ctrl-C). 128 + SIGINT (2), the
+#: shell convention, so callers can tell an interrupted run from a normal exit.
+INTERRUPTED_STATUS = 130
+
 
 class SubprocessCommandError(Exception):
     """A subprocess command could not be started (for example, TERM is unusable)."""
@@ -86,6 +90,9 @@ def run_child(
 ) -> int:
     """Run ``argv`` on the terminal and return its exit status.
 
+    Returns INTERRUPTED_STATUS when the user presses Ctrl-C; that is a normal way to leave
+    a full-screen program, so it is not raised.
+
     Raises SubprocessCommandError (before anything runs) if the TERM check fails. Any
     other failure to start the program (missing binary) is raised as OSError after the
     screen has been restored.
@@ -101,5 +108,10 @@ def run_child(
     try:
         completed = subprocess.run(list(argv), env=env, check=False)
         return completed.returncode
+    except KeyboardInterrupt:
+        # Ctrl-C is the normal way out of a full-screen program (snake has no quit key).
+        # The child gets the same SIGINT, so it is already stopping. Return the shell's
+        # convention for an interrupted command rather than raising into the caller.
+        return INTERRUPTED_STATUS
     finally:
         redraw_all(bottom_buf)

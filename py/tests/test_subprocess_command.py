@@ -156,3 +156,35 @@ def test_unavailable_subprocess_entry_takes_no_part():
     r.lookup("snake").available = lambda state: False
     kind, entry = r.resolve("s", {})
     assert (kind, entry.name) == (cmds.RESOLVE_UNIQUE, "stats")
+
+
+class TestInterrupt:
+    """Ctrl-C on a real pty ends the child, redraws, and returns INTERRUPTED_STATUS."""
+
+    def test_ctrl_c_returns_status_and_redraws(self):
+        import os
+        import sys
+
+        pexpect = pytest.importorskip("pexpect")
+        if not sys.stdin.isatty() and not hasattr(os, "openpty"):
+            pytest.skip("needs a pty")
+
+        code = (
+            "import sys; sys.path.insert(0, 'src')\n"
+            "from bbsengine6 import subprocess_command as sc\n"
+            "sc.redraw_all = lambda bottom_buf='': print('REDRAW', flush=True)\n"
+            "st = sc.run_child(['sh', '-c', \"echo READY; trap 'exit 130' INT; "
+            "while :; do sleep 0.1; done\"], term='xterm')\n"
+            "print('RETURNED', st, flush=True)\n"
+        )
+        child = pexpect.spawn(
+            sys.executable, ["-c", code], encoding="utf-8", timeout=10,
+            env={**os.environ, "TERM": "xterm"},
+        )
+        child.expect("READY", timeout=5)
+        child.sendintr()
+        child.expect(pexpect.EOF)
+        out = child.before
+        assert "RAISED" not in out
+        assert "REDRAW" in out
+        assert f"RETURNED {sc.INTERRUPTED_STATUS}" in out

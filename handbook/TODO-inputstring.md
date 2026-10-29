@@ -179,6 +179,11 @@ Numbered as in the command plan. This is not the inputstring "Phase 4" above.
 - [x] TERM check before every launch: `dumb`, empty, or unset refuses to start. Controlled by
   the per-session setting `subprocess_term_check` (default on; `Session` field).
 - [x] Child runs with the shell's raw session ended. Return status returned to the caller.
+- [x] Ctrl-C ends a full-screen child gracefully: `run_child` returns `INTERRUPTED_STATUS`
+  (130) and does not raise. Checked on a real pty (`pexpect`): before the fix,
+  `KeyboardInterrupt` escaped to the caller. Regression test `TestInterrupt` (fails without
+  the fix). snake itself exits at once here: it cannot open `/var/games/snakerawscores`
+  (permission). robots has the same problem. worm and atc run for this user.
 - [x] Redraw after the child exits, even on failure: reset, clear, scroll region and bottom
   bar, then the prompt line is marked dirty so the typed text redraws.
 - [x] Launch path is `module.run()`; a wrapper module's `main()` calls `run_child`. Tested
@@ -186,9 +191,9 @@ Numbered as in the command plan. This is not the inputstring "Phase 4" above.
 - [x] Overridable by name (default tier, session override); unavailable entries take no part.
 - [ ] No shipped wrapper modules yet (snake, robots, worm, trek, atc). Letteredolive wires them
   in its own phase.
-- [ ] Not verified on a real terminal: the child was not run against a live tty in this
-  session (TERM is `dumb` here, so the check refuses it by design). Needs a manual check in
-  gnome-terminal before the wrappers are wired.
+- [ ] Live-terminal check (`scripts/live-check-subprocess.py`, default program worm) still to
+  be run by the operator in gnome-terminal. Result to be recorded here. TERM is `dumb` in the
+  sandbox, so the sandbox cannot run it. Needed before the wrappers are wired.
 
 ## Phases 0 and 1: command registry
 

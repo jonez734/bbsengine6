@@ -9,11 +9,16 @@ Steps:
   2. Child exit and redraw: run a short child that exits with status 3. Afterwards the
      bottom bar and the prompt must be redrawn, and the text you typed before the child
      must still be on the line.
-  3. Full-screen child: run snake (or another program you name) through the launcher.
+  3. Full-screen child: run a full-screen program (default: worm) through the launcher.
      It must take the whole screen, and the shell screen must come back afterwards.
 
 Usage:
-    python3 scripts/live-check-subprocess.py [--program snake] [--log FILE]
+    python3 scripts/live-check-subprocess.py [--program worm] [--log FILE]
+
+Quitting: snake has no quit key; Ctrl-C ends it, and the launcher returns 130 (see
+INTERRUPTED_STATUS). worm and atc also end on Ctrl-C. snake and robots need a
+/var/games score file the opencode user cannot open here, so they exit at once with a
+permission error; pick another program with --program.
 
 Each answer is written to the log (default: captures/live-check-subprocess.log, in the
 repo). Attach the log and, if useful, a capture from scripts/capture-session.sh.
@@ -107,7 +112,7 @@ def step_fullscreen(program: str, log) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--program", default="snake", help="full-screen program for step 3")
+    ap.add_argument("--program", default="worm", help="full-screen program for step 3")
     ap.add_argument("--log", default=str(REPO / "captures" / "live-check-subprocess.log"))
     ap.add_argument("--skip", action="append", default=[], choices=["1", "2", "3"])
     args = ap.parse_args()

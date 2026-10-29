@@ -95,6 +95,10 @@ still a module command:
   `subprocess_term_check` (default on).
 - `run_child` leaves the shell's raw input session, runs the child with `subprocess.run`,
   and returns its exit status.
+- Ctrl-C is a normal way out of a full-screen program (snake has no quit key). When the
+  user presses it, `run_child` returns `INTERRUPTED_STATUS` (130, the shell convention for
+  SIGINT) instead of raising `KeyboardInterrupt` into the caller. The screen is still
+  redrawn.
 - After the child exits, whatever happened, `redraw_all(bottom_buf)` restores the screen in
   this order: attribute and cursor reset, clear screen, scroll region and bottom bar, then
   the prompt line is marked dirty so the next read redraws the typed text.
