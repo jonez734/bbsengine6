@@ -57,7 +57,7 @@ separate change.
 
 | Spec | What it describes |
 |---|---|
-| [`../../../py/src/bbsengine6/io/specs/io_screen.spec`](../../../py/src/bbsengine6/io/specs/io_screen.spec) | `bbsengine6/screen.py`, a top-level module, not part of io. Left in place. Its title still says `asimov.io.screen`. |
+| [`../../../py/src/bbsengine6/io/specs/screen.spec`](../../../py/src/bbsengine6/io/specs/screen.spec) | `bbsengine6/screen.py`, a top-level module, not part of io. Kept beside the io specs. Describes the bottom-bar shims and the functions that have no shim. |
 
 ## Design notes and records
 

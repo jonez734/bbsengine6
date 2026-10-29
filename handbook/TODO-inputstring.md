@@ -164,8 +164,8 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
   promises a list (`inputinteger`); `{settitle}` does not exist; events do not fire during
   `inputstring()`.
 - [x] Handbook index links the io folder; TODO and comment references point at the new paths.
-- [ ] `io_screen.spec` stays in `py/src/bbsengine6/io/specs/`: it describes top-level
-  `screen.py`, which is outside io. Its title still says `asimov.io.screen`.
+- [x] `io_screen.spec` renamed to `screen.spec` and rewritten against `screen.py`. It stays in
+  `py/src/bbsengine6/io/specs/` because `screen.py` is outside io. No `asimov` references remain.
 
 ## Version
 
