@@ -80,6 +80,29 @@ Commands are launched through `bbsengine6.module.run()` only. `run()` calls the 
 `access()` before `init`, `buildargs` and `main`, and stops with a message when the
 check fails. The registry does not call `module.check()` directly.
 
+## Subprocess commands
+
+A full-screen program (for example `snake`, `robots`, `worm`) runs as a subprocess. It is
+still a module command:
+
+- The registry entry's `spec` names a small wrapper module. Its `main()` calls
+  `bbsengine6.subprocess_command.run_child(argv)`, so the command is launched through
+  `module.run()` and `access()` is checked.
+- Subprocess entries are overridable like any default entry (a session may replace one by
+  name, in extend mode).
+- `run_child` first checks `TERM`. When it is unset, empty, or `dumb`, nothing starts and
+  `SubprocessCommandError` is raised. The check is controlled per session by
+  `subprocess_term_check` (default on).
+- `run_child` leaves the shell's raw input session, runs the child with `subprocess.run`,
+  and returns its exit status.
+- After the child exits, whatever happened, `redraw_all(bottom_buf)` restores the screen in
+  this order: attribute and cursor reset, clear screen, scroll region and bottom bar, then
+  the prompt line is marked dirty so the next read redraws the typed text.
+
+Status: `py/src/bbsengine6/subprocess_command.py` is implemented and tested
+(`py/tests/test_subprocess_command.py`). No shipped wrapper module exists yet; letteredolive
+and casino wire them in their own phases.
+
 ## Messages (planned, letteredolive)
 
 These are the shell's messages for typed input, to be wired in the shell's dispatch:

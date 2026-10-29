@@ -171,6 +171,25 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 
 - [x] Version bumped to `0.4.0.dev` (`py/Makefile` and `_version.py`).
 
+## Command plan: Phase 4 (subprocess commands)
+
+Numbered as in the command plan. This is not the inputstring "Phase 4" above.
+
+- [x] `py/src/bbsengine6/subprocess_command.py`: `run_child(argv)` and `redraw_all(bottom_buf)`.
+- [x] TERM check before every launch: `dumb`, empty, or unset refuses to start. Controlled by
+  the per-session setting `subprocess_term_check` (default on; `Session` field).
+- [x] Child runs with the shell's raw session ended. Return status returned to the caller.
+- [x] Redraw after the child exits, even on failure: reset, clear, scroll region and bottom
+  bar, then the prompt line is marked dirty so the typed text redraws.
+- [x] Launch path is `module.run()`; a wrapper module's `main()` calls `run_child`. Tested
+  through `run()` with a stub wrapper (`test_subprocess_command.py`).
+- [x] Overridable by name (default tier, session override); unavailable entries take no part.
+- [ ] No shipped wrapper modules yet (snake, robots, worm, trek, atc). Letteredolive wires them
+  in its own phase.
+- [ ] Not verified on a real terminal: the child was not run against a live tty in this
+  session (TERM is `dumb` here, so the check refuses it by design). Needs a manual check in
+  gnome-terminal before the wrappers are wired.
+
 ## Phases 0 and 1: command registry
 
 - [x] Phase 0: plan confirmed; names recorded (tiers protected/default/session; messages
