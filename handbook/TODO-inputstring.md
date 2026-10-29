@@ -50,7 +50,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Typed overflow beeps; a paste cut at `max_len` beeps once (commit `8d4ee1a`).
 - [ ] Ctrl+W and Ctrl+Y wired through the per-call table. (Not done.)
 - [x] `noneok` default `True` (`inputstring`, `io_inputstring.spec`).
-- [x] `io/specs/io_inputstring.spec` updated to the code (commit `4cb50db`).
+- [x] `handbook/specs/io/io_inputstring.md` updated to the code (commit `4cb50db`).
 - [x] `noneok=False`: empty Enter beeps and reprompts.
 - [x] `allowed=` per-character set, on typing and paste; disallowed characters beep and are dropped.
 - [x] `filter=` regex checked on Enter (whole buffer); a non-match beeps and reprompts.
@@ -90,8 +90,8 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 
 ## Phase 9: documentation
 
-- [x] `io/specs/io_getch.spec` updated: two readers, `impl=` and selector, raw session, escape tail, input queue, fix history (commit `e25a747`).
-- [x] `io/specs/io_inputstring.spec` updated: real signature and parameters, key table, tab rules, paste batching, mouse state, key-mapping restore, known issues (commit `4cb50db`).
+- [x] `handbook/specs/io/io_getch.md` updated: two readers, `impl=` and selector, raw session, escape tail, input queue, fix history (commit `e25a747`).
+- [x] `handbook/specs/io/io_inputstring.md` updated: real signature and parameters, key table, tab rules, paste batching, mouse state, key-mapping restore, known issues (commit `4cb50db`).
 - [x] Plan items not built are listed as known issues in the spec rather than described as done.
 
 ## Phase 8: tab completion (added after the initial plan)

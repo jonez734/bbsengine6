@@ -587,7 +587,7 @@ explicitly justified in Pass 4 before the next commit:
   - [x] `py/src/bbsengine6/ed.spec` (doc reference:
     `screen.register_bottombar_fragment()` →
     `bbsengine6.bottombar.register_bottombar_fragment()`)
-- [ ] `py/src/bbsengine6/io/specs/echo_commands.spec` —
+- [ ] `handbook/specs/io/echo_commands.md` —
   removes the `{level.fail}` variable and the
   `echo("message", level="fail")` example. The `level.fail`
   color and the `fail` log level exist in code; this is a
