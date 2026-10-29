@@ -1420,6 +1420,7 @@ def _inputstring_body(
             KEY_ACTIONS[key_name] = make_function_key_handler(key_name)
 
     _current_display_str = None
+    last_placed_col = None  # column the cursor was last placed at; None = must place
     done = False
 
     while not done:
@@ -1443,6 +1444,7 @@ def _inputstring_body(
             with _current_stream_lock:
                 _input_dirty = False
             _current_display_str = None
+            last_placed_col = None
 
         display_str = buffer[scroll_offset : scroll_offset + max_width]
 
@@ -1465,10 +1467,15 @@ def _inputstring_body(
                 echo(display_str, end="", flush=True, raw=True, wordwrap=False)
 
             _current_display_str = display_str
+            last_placed_col = None
 
         cursor_display_col = text_col + (curpos - scroll_offset)
-        # Position cursor BEFORE getch() without holding lock during the call
-        echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
+        # Place the cursor only when the line was redrawn or the cursor moved. Doing it
+        # on every wait timeout repositioned the cursor about 65 times a second while the
+        # prompt was idle, which stops a mouse drag from selecting in the terminal.
+        if last_placed_col != cursor_display_col:
+            echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
+            last_placed_col = cursor_display_col
 
         burst = _take_paste_burst(insert_tabs=insert_tabs)
         if burst is not None:
