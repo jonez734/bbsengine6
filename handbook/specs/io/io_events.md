@@ -305,39 +305,45 @@ def clear_key_event_history() -> None:
 
 ## Integration Points
 
-### Modified in getch.py
+### Where events are fired (getch.py)
+
+Events are pushed inline in `_proc_char()`, once for each stage:
 
 ```python
-# In _proc_char():
-def _proc_char(char: str, debug: bool = False, fire_events: bool = True) -> str | None:
-    # ... existing logic ...
-    
-    if fire_events and _event_dispatcher.is_running():
-        # Fire raw event
-        event = KeyEvent(raw_char=char, processed_key=None, stage='raw', ...)
-        _event_dispatcher.push_event(event)
-    
-    processed = ...  # Existing processing
-    
-    if fire_events and _event_dispatcher.is_running():
-        # Fire processed event
-        event = KeyEvent(raw_char=char, processed_key=processed, stage='processed', ...)
-        _event_dispatcher.push_event(event)
-    
-    return processed
-
-# In getch_str():
-def getch_str(timeout: float = 1.0, debug: bool = False, **kwargs):
-    # ... existing code ...
-    return _proc_char(char, debug=debug, fire_events=True)  # Explicit flag
+# in _proc_char(char, debug, fire_events, source_func):
+if fire_events and _event_dispatcher.is_running():
+    _event_dispatcher.push_event(KeyEvent(raw_char=char, processed_key=None,
+                                          stage="raw", source_func=source_func, ...))
+# ... key is resolved (control key, escape sequence, or plain character) ...
+if fire_events and _event_dispatcher.is_running():
+    _event_dispatcher.push_event(KeyEvent(raw_char=char, processed_key=processed,
+                                          stage="processed", source_func=source_func, ...))
 ```
 
-### No Changes Required
+`source_func` is `"getch_str"` or `"getch_utf8"`, depending on the reader that read
+the key. Both readers fire events through this one path.
 
-- `getstr.py` - Events fire automatically from getch() calls
-- `inputstring.py` - Events fire automatically from getch() calls
-- `inputchoice.py` - Events fire automatically from getch() calls
-- All other input functions - Events fire automatically
+**Bracketed paste does not fire a `processed` event in the case tested.** When the
+paste is already queued (it arrived in one read), `getch_str()` returns `PASTE:<text>`
+through `_resolve_queued_escape()`, which returns before the processed event is pushed.
+A raw event for the escape bytes is not produced either in that path. A paste read
+from the stream rather than the queue was not tested, so its event behaviour is not
+stated here.
+
+### Which callers fire events
+
+**`inputstring()` does not fire key events.** It calls `getch(..., fire_events=False)`
+for every key, so a handler registered with `register_key_event_handler` receives
+nothing while a prompt is running. This was checked: a handler registered before a
+prompt saw no events during it.
+
+Other callers pass the default `fire_events=True` and do fire events. Check the call
+site of the input function you use.
+
+### Names that do not exist
+
+Earlier versions of this spec named `_fire_raw`, `_fire_processed` and `_fire_event`.
+They are not in the package. The events are pushed directly, as shown above.
 
 ---
 
