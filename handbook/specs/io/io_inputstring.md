@@ -1,4 +1,4 @@
-# asimov.io.inputstring Specification
+# bbsengine6.io.inputstring Specification
 
 ## Overview
 
@@ -42,9 +42,13 @@ class Completer:
             List of matching strings.
         """
         
-    def __call__(self, buffer, curpos, **kwargs) -> list[str]:
-        """Called by inputstring to get completions."""
+    def __call__(self, buffer, **kwargs) -> list[str]:
+        """Called by inputstring with the word under the cursor, curpos as a keyword."""
 ```
+
+`Completer` is defined in `inputstring.py`. It is not the same class as
+`InputCompleter` in `inputcompleter.py`, which wraps a database connection in a
+readline-style `completer(text, state)` and is documented in its own spec.
 
 ### Usage Examples
 
@@ -111,6 +115,10 @@ Reads one line with line editing. Returns the entered text. `prompt` and
 - `**kwargs`: Remaining arguments are passed to the `completer` callback.
 
 **Terminal state during the call:**
+- The INS/OVR mode is a bottom-bar fragment, not part of the input line. The prompt
+  registers it when it starts, redraws the bar when the mode changes, and removes it
+  and redraws the bar when it returns. A plain bottom-bar update uses ESC 7 / ESC 8
+  to save and restore the cursor, so it does not query the terminal.
 - The tty is held in raw mode for the whole prompt (`begin_raw_session()`), and
   restored on return, exception, and Ctrl-C (see `io_getch.spec`).
 - The terminal's mouse-reporting modes (1000, 1002, 1003, 1006) are queried
@@ -196,8 +204,8 @@ Return the common prefix of a list of strings.
 | `KEY_ENTER` | Accept input |
 | `KEY_TAB` | Tab completion (see Tab Completion) |
 
-`KEY_INSERT` toggles insert and overwrite mode; overwrite mode shows the `[OVR]`
-indicator. The toggle is local to each call. Ctrl+W (`\x17`) produces `KEY_CTRL_W`
+`KEY_INSERT` toggles insert and overwrite mode; the bottom bar shows `[INS]` or `[OVR]`.
+The toggle is local to each call. Ctrl+W (`\x17`) produces `KEY_CTRL_W`
 and Ctrl+Y (`\x19`) produces `KEY_YANK` in the reader.
 
 ## Handler Functions
@@ -223,10 +231,13 @@ def handler(buffer, curpos, scroll_offset, max_width) -> (buffer, curpos, scroll
 ## Display Functions
 
 ```python
-redraw_line(prompt, buffer, max_len, start_row, start_col, curpos, scroll_offset, max_width, mask=None)
+redraw_line(prompt, buffer, max_len, start_row, start_col, curpos, scroll_offset, max_width,
+            mask=None, insert_mode=True)
 ```
 
-Clear and redraw the input line. Handles both regular and masked input.
+Clear and redraw the input line. Handles both regular and masked input. The line
+holds the prompt and the text only; the INS/OVR mode is not drawn on it (see
+Terminal state during the call).
 
 ---
 
@@ -299,6 +310,7 @@ set to False disables the mode request.
 
 **Overflow.** A typed key that cannot fit within `max_len` beeps once and is
 dropped. In overwrite mode a full buffer still accepts keys, so there is no beep.
+(`max_len` is the entry limit. The visible window is separate; see `max_width`.)
 
 Pasted tabs become a space unless `insert_tabs=True`.
 
