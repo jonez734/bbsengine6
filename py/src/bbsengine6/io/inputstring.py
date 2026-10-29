@@ -1242,6 +1242,9 @@ def _inputstring_body(
         int(rendered_length(INPUTSTRING_OVERWRITE_MODE_INDICATOR)),
     )
     max_width = max(1, max_width - (prompt_len + indicator_len))
+    # Column where the text starts: after the prompt and the mode indicator, the same
+    # place redraw_line() draws it.
+    text_col = start_col + prompt_len + indicator_len
 
     def enter_handler(buffer, curpos, scroll_offset, max_width):
         return handle_key_enter(
@@ -1393,13 +1396,15 @@ def _inputstring_body(
         if _current_display_str != display_str:
             # Don't hold lock - echo() manages its own locking internally
             # Holding the lock here would deadlock when echo() tries to acquire it again
+            # Blank the text window (not to end of row: a caller may draw a border
+            # to the right of the input). Starts where the text starts.
             echo(
-                f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}",
+                f"{{curpos:{start_row},{text_col}}}{' ' * max_width}",
                 end="",
                 flush=True,
             )
 
-            echo(f"{{curpos:{start_row},{input_col_start}}}", end="")
+            echo(f"{{curpos:{start_row},{text_col}}}", end="")
             if mask is not None:
                 echo(mask * len(display_str), end="", flush=True)
             else:

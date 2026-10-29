@@ -49,7 +49,17 @@ def term(monkeypatch):
                 os.write(master, piece)
         threading.Thread(target=feed, daemon=True).start()
         result = call()
-        time.sleep(0.1)
+        # Let the reader drain what the prompt wrote: wait until the output stops
+        # growing, rather than sleeping a fixed time that a loaded machine can miss.
+        last, quiet = -1, 0
+        for _ in range(200):
+            time.sleep(0.02)
+            if len(out) == last:
+                quiet += 1
+                if quiet >= 3:
+                    break
+            else:
+                quiet, last = 0, len(out)
         return result, bytes(out)
 
     yield run
@@ -146,3 +156,40 @@ def test_long_bracketed_paste_stays_on_one_row_and_is_complete(term):
     for row, col in re.findall(rb"\x1b\[(\d+);(\d+)H", out):
         assert int(row) == 1, f"cursor left row 1: {row!r}"
         assert 1 <= int(col) <= width, f"cursor past width {width}: {col!r}"
+    # Replay the drawn bytes onto a small row model: the final row must show the
+    # tail of the paste exactly once (no leftovers from an earlier, longer draw).
+    # Start the replay at this prompt's own output: the first mode request. Anything
+    # earlier in the capture belongs to earlier output and would shift the model.
+    start = out.find(b"\x1b[?2004h")
+    assert start >= 0, "bracketed-paste mode request not seen"
+    row = _replay_row1(out[start:].decode("utf-8", errors="replace"), width)
+    assert row.count(text[-5:]) == 1, f"tail duplicated on screen: {row!r}"
+
+
+def _replay_row1(data: str, width: int) -> str:
+    """Minimal model of the escapes inputstring emits: cursor position, text,
+    and blanks. Returns what is on row 1 after the bytes are applied."""
+    import re as _re
+    cells = [" "] * (width + 1)
+    r, c = 1, 1
+    token = _re.compile(r"\x1b\[(\d+);(\d+)H|\x1b\[[0-9;?$]*[A-Za-z]|\x1b\[[0-9;?$]*p")
+    i = 0
+    while i < len(data):
+        m = token.match(data, i)
+        if m:
+            if m.group(1) is not None:
+                r, c = int(m.group(1)), int(m.group(2))
+            i = m.end()
+            continue
+        ch = data[i]
+        if ch == "\n":
+            r, c = r + 1, 1
+        elif ch == "\r":
+            c = 1
+        elif ch >= " " and r == 1 and 1 <= c <= width:
+            cells[c] = ch
+            c += 1
+        elif ch >= " ":
+            c += 1
+        i += 1
+    return "".join(cells[1:]).rstrip()
