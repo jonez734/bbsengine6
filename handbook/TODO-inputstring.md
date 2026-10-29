@@ -120,7 +120,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Enter at the head of a paste batch is a command: it waits for the key path, so these rules apply to it.
 - [x] Key handlers run outside `_key_actions_lock` (handlers write to the terminal).
 - [x] Asimov's separate `inputstring`/`inputinteger` copy: gone; both are aliases of bbsengine6 (`03e54d8`).
-- [ ] `inputinteger` list entry (`1 2`): the regex still validates a single value. Not changed.
+- [ ] `inputinteger` list entry (`1 2`): decision needed. The filter regex (`^([+-]?[1-9]\d*|0)[ ,]?$`) takes one value with an optional trailing separator, so `1 2` is refused on Enter. Lists are not supported. Either add list support or keep single-value and say so in the spec.
 
 ## Phase 11: editing keys, overflow, bracketed paste
 
