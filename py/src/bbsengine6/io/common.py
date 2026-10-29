@@ -478,6 +478,7 @@ def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:
     finally:
         _restore_cooked(fd, old_settings)
 
+    _mouse_trace(f"query raw replies {replies!r}")
     # None = the terminal did not answer for this mode (unknown, not "off").
     state = {mode: None for mode in MOUSE_MODES}
     for mode_s, status in _DECRPM_RE.findall(replies):
@@ -502,6 +503,7 @@ def _write_mouse_modes(state: dict[int, bool | None], only_known: bool = False) 
     every mode gets a write, so None is treated as off. Used when no query was
     answered at all.
     """
+    written = []
     with _current_stream_lock:
         for mode in MOUSE_MODES:
             value = state.get(mode)
@@ -511,7 +513,9 @@ def _write_mouse_modes(state: dict[int, bool | None], only_known: bool = False) 
                 value = False
             suffix = "h" if value else "l"
             _write_current_output_stream(f"{CSI}?{mode}{suffix}", flush=True)
+            written.append(f"{mode}{suffix}")
         _current_output_stream.flush()
+    _mouse_trace(f"write {' '.join(written) or '(none)'}")
 
 
 def mouse_state_push() -> dict[int, bool] | None:
@@ -523,12 +527,12 @@ def mouse_state_push() -> dict[int, bool] | None:
     if not MOUSE_STATE_MANAGED:
         return None
     saved = _query_mouse_modes()
-    # Turn off only the modes the terminal reported as on. A mode with no reply
-    # is not touched: resetting it could silently disable tracking in a tab that
-    # had it enabled.
-    to_reset = {mode: False for mode, on in saved.items() if on}
-    if to_reset:
-        _write_mouse_modes(to_reset, only_known=True)
+    _mouse_trace(f"push: query replies {saved}")
+    # Reset every managed mode, whatever the query said. A terminal can report a mode
+    # off (or not answer) while tracking is in fact on, and then selection stays
+    # blocked for the whole prompt. Resetting a mode that is already off is harmless.
+    _write_mouse_modes({mode: False for mode in MOUSE_MODES})
+    _mouse_trace("push: reset all managed modes")
     return saved
 
 
@@ -536,6 +540,26 @@ def mouse_state_pop(saved: dict[int, bool] | None) -> None:
     """Restore the mouse state returned by mouse_state_push()."""
     if saved is None:
         return
-    # Only modes that were reset on entry (reported on) need restoring. Anything
-    # else was never changed, so writing it again could only add noise.
-    _write_mouse_modes({mode: True for mode, on in saved.items() if on}, only_known=True)
+    # Restore the modes the terminal reported on at entry. Modes that were off, or did
+    # not answer, stay off: that is the state a prompt leaves a tab in.
+    on = {mode: True for mode, state in saved.items() if state}
+    _write_mouse_modes(on, only_known=True)
+    _mouse_trace(f"pop: restored {sorted(on)}")
+
+
+_MOUSE_TRACE_ENV = "BBSENGINE_MOUSE_TRACE"
+
+
+def _mouse_trace(message: str) -> None:
+    """Append a line to the file named by BBSENGINE_MOUSE_TRACE, when it is set.
+
+    Off by default. Used to see what the terminal answers and what the prompt writes.
+    """
+    path = os.environ.get(_MOUSE_TRACE_ENV)
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(f"{time.strftime('%H:%M:%S')} {message}\n")
+    except OSError:
+        pass

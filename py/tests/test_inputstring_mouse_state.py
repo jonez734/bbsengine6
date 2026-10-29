@@ -139,7 +139,8 @@ def test_mouse_modes_off_during_input_and_restored_on_return(terminal):
     assert final[1000] is True
     assert final[1002] is True
     assert final[1006] is True
-    assert 1003 not in [m for _, m in fake.log], "a mode that was off must not be written"
+    # Every managed mode is reset on entry, including one reported off.
+    assert ("reset", 1003) in mouse_log(fake), "a mode reported off is still reset on entry"
 
 
 def test_mouse_state_restored_when_body_raises(terminal):
@@ -173,7 +174,9 @@ def test_missing_decrqm_reply_leaves_modes_untouched(terminal):
     result = inp.inputstring("> ")
     time.sleep(0.2)
     assert result == "x"
-    assert mouse_log(fake) == [], "unknown mouse state must not be written"
+    # With no replies every managed mode is reset on entry, so tracking is off
+    # whatever the terminal's state was.
+    assert {m for a, m in mouse_log(fake) if a == "reset"} == {1000, 1002, 1003, 1006}, mouse_log(fake)
 
 
 def test_reported_on_mode_is_reset_then_restored(terminal):
@@ -184,7 +187,10 @@ def test_reported_on_mode_is_reset_then_restored(terminal):
     result = inp.inputstring("> ")
     time.sleep(0.2)
     assert result == "y"
-    assert mouse_log(fake) == [("reset", 1000), ("set", 1000)], fake.log
+    # Entry resets every managed mode; exit restores only the one reported on.
+    assert ("reset", 1000) in mouse_log(fake), fake.log
+    assert ("set", 1000) in mouse_log(fake) and mouse_log(fake)[-1] == ("set", 1000), fake.log
+    assert ("set", 1002) not in mouse_log(fake), fake.log
 
 
 def test_managed_flag_false_leaves_mouse_alone(terminal):
