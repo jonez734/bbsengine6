@@ -1424,6 +1424,9 @@ def _inputstring_body(
                 echo("{BEL}", end="", flush=True)
             _input_dirty = True
             tab_count = 0
+            # A paste can move the cursor far past the visible window. Scroll now, as
+            # the bottom of the loop does for single keys; `continue` skips that.
+            scroll_offset = adjust_scroll_offset(curpos, scroll_offset, max_width)
             continue
         else:
             ch = getch(
