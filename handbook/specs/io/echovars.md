@@ -1,5 +1,7 @@
-# DEPRECATED: This module is not used.
-# asimov.io.echovars Specification
+# bbsengine6.io.echovars Specification
+
+> **DEPRECATED.** This module is not used by live code. It is used only by the deprecated
+> `output.py`. Not documented further; see `index.md`.
 
 ## Overview
 

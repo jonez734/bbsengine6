@@ -1,4 +1,4 @@
-# asimov.io echo() Command Reference
+# bbsengine6.io echo() Command Reference
 
 ## Overview
 
@@ -7,7 +7,7 @@ The `echo()` function supports various formatting commands enclosed in curly bra
 ## Basic Usage
 
 ```python
-from asimov.io import echo
+from bbsengine6.io import echo
 echo("{red}Hello {bold}World{/bold}!{/red}")
 ```
 
@@ -87,7 +87,7 @@ echo("{red}Hello {bold}World{/bold}!{/red}")
 You can also register custom emojis at runtime:
 
 ```python
-from asimov.io import register_emojis
+from bbsengine6.io import register_emojis
 register_emojis({"horse": "\\U0001F40E", "grain": "\\U0001F33E"})
 echo(":horse: :grain:")
 ```
@@ -117,7 +117,7 @@ echo(":horse: :grain:")
 You can define custom variables for reuse:
 
 ```python
-from asimov.io.echo import setvar, getvar
+from bbsengine6.io.echo import setvar, getvar
 setvar("title", "{bold}{blue}My Title{/all}")
 echo("{title}")
 ```

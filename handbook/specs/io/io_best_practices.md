@@ -1,4 +1,4 @@
-# asimov.io Best Practices
+# bbsengine6.io Best Practices
 
 ## Echo Commands in F-strings
 
@@ -16,7 +16,7 @@ echo(f"{f6}Some text")
 
 ### Common Echo Commands to Escape
 
-| Command | F-string写法 |
+| Command | Escaped in an f-string |
 |---------|-------------|
 | `{f6}` | `{{f6}}` |
 | `{bell}` | `{{bell}}` |
@@ -61,7 +61,7 @@ text = io.inputstring("Name: ", args=args)
 ch = io.inputchoice("Select:", "ABC")
 ```
 
-The `args` parameter provides the database connection info needed for `notify.count()` to check for pending notifications. If you have a pool already, you can pass `pool` instead of (or in addition to) `args`.
+The `args` parameter provides the database connection used to check for pending messages (`bbsengine6.message`'s unread count). `notify.count()` no longer exists. If you have a pool already, you can pass `pool` instead of (or in addition to) `args`.
 
 ### Pattern for Module Functions
 
