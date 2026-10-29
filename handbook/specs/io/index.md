@@ -18,7 +18,7 @@ code is a bug in the spec; say so in the commit that fixes it.
 | `inputinteger.py` | [inputinteger.md](io_inputinteger.md) | Live. Integer prompt. |
 | `inputchoice.py` | [inputchoice.md](io_inputchoice.md) | Live. Choice prompt. |
 | `inputcompleter.py` | [inputcompleter.md](io_inputcompleter.md) | Live. Database-backed readline completer. **Has a known import defect; see its spec.** |
-| `getstr.py` | [getstr.md](io_getstr.md) | Live. Plain string prompt. |
+| `getstr.py` | [getstr.md](io_getstr.md) | **Deprecated.** Use `inputstring()`. Not exported; no callers in bbsengine6. |
 
 ## Output
 
@@ -52,6 +52,7 @@ separate change.
 | `output.py` | `bbsengine6.io.echo` |
 | `lib.py` | Used only by `output.py`. |
 | `echovars.py` | Used only by `output.py`. |
+| `getstr.py` | `bbsengine6.io.inputstring` |
 
 ## Outside the io package
 

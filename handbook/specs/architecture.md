@@ -108,7 +108,7 @@ Packages and modules grouped by responsibility:
 
 | Module / Package | Role |
 |------------------|------|
-| `bbsengine6.io` | TUI primitives (`echo`, `getch`, `getstr`, `input`, `inputstring`, `inputchoice`, `inputboolean`, `inputinteger`, `terminal`, `screen`, `palette`, `keymap`, `common`, `const`, `lib`, `output`, `util`). |
+| `bbsengine6.io` | TUI primitives (`echo`, `getch`, `input`, `inputstring`, `inputchoice`, `inputboolean`, `inputinteger`, `terminal`, `screen`, `palette`, `keymap`, `common`, `const`, `lib`, `output`, `util`). `getstr` is deprecated (use `inputstring`). |
 | `bbsengine6.listbox`, `listboxcursor` | Paginated TUI listbox. |
 | `bbsengine6.form` | `FormItem` base class. |
 | `bbsengine6.input`, `inputdate`, `getdate` | Date / datetime / email input wrappers. |

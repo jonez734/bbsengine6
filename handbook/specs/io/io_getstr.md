@@ -1,5 +1,9 @@
 # bbsengine6.io.getstr Specification
 
+> **DEPRECATED.** Use `bbsengine6.io.inputstring()` instead. `getstr` is not exported from
+> `bbsengine6.io`, nothing in bbsengine6 calls it, and importing `bbsengine6.io.getstr`
+> emits a `DeprecationWarning`. It is documented here as it is and is not being extended.
+
 ## Overview
 
 `getstr.py` reads a line with cursor movement, backspace, and an insert/overwrite
