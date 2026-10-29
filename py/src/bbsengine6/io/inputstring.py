@@ -852,15 +852,20 @@ def redraw_line(
     input_col_start = start_col + rendered_length(full_prompt)
 
     echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
-    echo(full_prompt, end="", flush=True)
+    echo(full_prompt, end="", flush=True, wordwrap=False)
     echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
 
     display_str = buffer[scroll_offset : scroll_offset + max_width]
 
+    # Blank the whole text window first. Without this, a shorter window drawn over an
+    # earlier, longer one leaves the old tail on the row (the duplicated "shed)").
+    echo(f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}", end="", flush=True, wordwrap=False)
+    echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
+
     if mask is not None:
-        echo(f"{mask * len(display_str)}", end="", flush=True)
+        echo(f"{mask * len(display_str)}", end="", flush=True, wordwrap=False)
     else:
-        echo(display_str, end="", flush=True, raw=True)
+        echo(display_str, end="", flush=True, raw=True, wordwrap=False)
 
     echo(
         f"{{curpos:{start_row},{input_col_start + (curpos - scroll_offset)}}}",
@@ -1404,17 +1409,18 @@ def _inputstring_body(
                 f"{{curpos:{start_row},{text_col}}}{' ' * max_width}",
                 end="",
                 flush=True,
+                wordwrap=False,
             )
 
             echo(f"{{curpos:{start_row},{text_col}}}", end="")
             if mask is not None:
-                echo(mask * len(display_str), end="", flush=True)
+                echo(mask * len(display_str), end="", flush=True, wordwrap=False)
             else:
-                echo(display_str, end="", flush=True, raw=True)
+                echo(display_str, end="", flush=True, raw=True, wordwrap=False)
 
             _current_display_str = display_str
 
-        cursor_display_col = input_col_start + (curpos - scroll_offset)
+        cursor_display_col = text_col + (curpos - scroll_offset)
         # Position cursor BEFORE getch() without holding lock during the call
         echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
 
