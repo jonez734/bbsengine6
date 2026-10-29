@@ -196,9 +196,14 @@ Numbered as in the command plan. This is not the inputstring "Phase 4" above.
 - [x] Overridable by name (default tier, session override); unavailable entries take no part.
 - [ ] No shipped wrapper modules yet (snake, robots, worm, trek, atc). Letteredolive wires them
   in its own phase.
-- [ ] Live-terminal check (`scripts/live-check-subprocess.py`, default program worm) still to
-  be run by the operator in gnome-terminal. Result to be recorded here. TERM is `dumb` in the
-  sandbox, so the sandbox cannot run it. Needed before the wrappers are wired.
+- [x] Live-terminal check (`scripts/live-check-subprocess.py`) run by the operator in
+  gnome-terminal (TERM=xterm-256color, 183x42). Log `captures/live-check-20261029-1617.log`:
+  all questions answered yes. Step 1: TERM refusal shown, shell usable. Step 2: child exit
+  status 3, then a new prompt on a clean line with the bottom bar; typing accepted. Step 3:
+  worm (exit 0) took the whole screen, left no drawing, and the prompt accepted input.
+  Not checked by a question: the step 2 text typed before the child (`something`) surviving
+  the redraw. Add that question if it matters before the wrappers are wired.
+  Earlier logs (`live-check-subprocess.log`) are superseded; they predate the prompt fix.
 - [x] Downstream io check after the subprocess and Enter-CRLF commits (`4ee2830`). All 48
   casino and zoidoffice test files that import the io layer were run one file at a time.
   36 pass (or skip, or have no tests). 12 fail, with the same failing tests on the pre-change
