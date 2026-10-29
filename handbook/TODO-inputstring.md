@@ -119,7 +119,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 
 ## Phase 11: editing keys, overflow, bracketed paste
 
-- [x] Ctrl-W / Ctrl-Y reach the key table (`89f8d4d`).
+- [x] Ctrl-W / Ctrl-Y reach the key table (`89f8d4d`). Verified in gnome-terminal (user).
 - [x] Typed overflow beeps; overflow in a paste beeps once (`8d4ee1a`).
 - [x] Bracketed paste: `ESC[?2004h` for the prompt; body returned as one `PASTE:` key; newline ends the entry (`7bf0c29`).
 - [x] Per-call key handlers are restored on exit (`3f2e3c1`).
