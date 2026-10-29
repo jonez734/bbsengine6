@@ -8,7 +8,7 @@ USER = $(shell whoami)
 all:
 
 version:
-	@echo '__version__ = "0.0.3.dev$(VERSION)"' > src/$(PROJECT)/_version.py
+	@echo '__version__ = "0.4.0.dev$(VERSION)"' > src/$(PROJECT)/_version.py
 	@echo '__datestamp__ = "$(VERSION)"' >> src/$(PROJECT)/_version.py
 	@echo '__githash__ = "'`git log -1 --format='%H' 2>/dev/null | cut -c 1-16`'"' >> src/$(PROJECT)/_version.py
 	@cat src/$(PROJECT)/_version.py
