@@ -195,7 +195,13 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
     Verified: no new failures in the full suite; zoidoffice, murdermotel and casino io tests
     match their recorded baselines.
   - [x] `io/echo.py`: raw mode, previous token, first-line flag, runtime vars, options (commit below).
-  - [ ] `io/inputstring.py` (key table, yank buffer, snapshot stack, mode fragment).
+  - [x] `io/inputstring.py`: key table, saved-handler map, yank buffer, snapshot stack, INS/OVR
+    fragment state (commit below). Also fixes a split-brain: the prompt loop read
+    `_input_dirty` by value from `common`, so its writes never reached the interaction.
+    Built-in keys live in `_BUILTIN_KEY_ACTIONS` and are copied per interaction on first use.
+    Verified: full suite at baseline (63 failed, 2283 passed; two baseline failures now pass);
+    ed tests green; zoidoffice and casino io tests match baseline; murdermotel errors identical
+    on clean HEAD (missing `murdermotel.player` table).
   - [ ] `io/getch.py` (impl selector, bottom-bar status).
   - [ ] `bottombar.py` / `screen.py` (registry, bar stack).
 

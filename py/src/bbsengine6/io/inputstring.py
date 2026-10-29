@@ -19,7 +19,8 @@ from .getch import getch_str as getch
 from .common import (
     get_cursor_position,
     _current_stream_lock,
-    _input_dirty,
+    _get_input_dirty,
+    _set_input_dirty,
     _input_queue,
     _input_queue_lock,
     mouse_state_push,
@@ -237,8 +238,8 @@ class Completer:
         return result if result is not None else []
 
 
-# Clipboard buffer for cut/yank operations. MUST be accessed only within _yank_buffer_lock.
-yank_buffer = []
+# Clipboard buffer for cut/yank operations lives on the interaction (see _yank_buffer()).
+# MUST be accessed only within _yank_buffer_lock.
 _yank_buffer_lock = threading.Lock()
 
 _key_actions_lock = threading.Lock()
@@ -332,14 +333,62 @@ def adjust_scroll_offset(curpos: int, scroll_offset: int, max_width: int) -> int
     return scroll_offset
 
 
-# --- 1. Global Key Actions Dictionary ---
-KEY_ACTIONS: dict[str, KeyHandler] = {}
+# --- 1. Key Actions ---
+#
+# The key table belongs to the current interaction (see _key_actions()). The
+# module-level name KEY_ACTIONS reads through to it, so `inputstring.KEY_ACTIONS` is the
+# table of the interaction in effect. A new interaction starts from _BUILTIN_KEY_ACTIONS,
+# which is filled in at the bottom of this module.
+_BUILTIN_KEY_ACTIONS: dict[str, KeyHandler] = {}
 
 
-# Handlers replaced by add_key_mapping(), most recent last, per key. remove_key_mapping()
-# pops one entry and puts the earlier handler back, so an override (for example the
-# editor taking KEY_LEFT) does not erase the default for later prompts.
-_key_action_saved: dict[str, list[KeyHandler | None]] = {}
+def _interaction():
+    """The interaction in effect for this context (see bbsengine6.interaction)."""
+    from ..interaction import current_session
+
+    return current_session()
+
+
+def _key_actions() -> dict[str, KeyHandler]:
+    """The current interaction's key table (copied from the built-ins on first use)."""
+    it = _interaction()
+    if it.key_actions is None:
+        it.key_actions = dict(_BUILTIN_KEY_ACTIONS)
+    return it.key_actions
+
+
+def _key_actions_of(it) -> dict[str, KeyHandler]:
+    """The key table of ``it``, copied from the built-ins on first read."""
+    if it.key_actions is None:
+        it.key_actions = dict(_BUILTIN_KEY_ACTIONS)
+    return it.key_actions
+
+
+def _key_action_saved_of(it) -> dict[str, list[KeyHandler | None]]:
+    if it.key_action_saved is None:
+        it.key_action_saved = {}
+    return it.key_action_saved
+
+
+def _saved_map() -> dict[str, list[KeyHandler | None]]:
+    """Handlers replaced by add_key_mapping(), most recent last, per key, for this interaction.
+
+    remove_key_mapping() pops one entry and puts the earlier handler back, so an override
+    (for example the editor taking KEY_LEFT) does not erase the default for later prompts.
+    """
+    it = _interaction()
+    if it.key_action_saved is None:
+        it.key_action_saved = {}
+    return it.key_action_saved
+
+
+def _yank_buffer() -> list:
+    """The clipboard for cut and yank, owned by the current interaction."""
+    return _interaction().yank_buffer
+
+
+def _snapshot_stack() -> list[dict]:
+    return _interaction().key_snapshot_stack
 
 
 def add_key_mapping(key_string: str, action_lambda: KeyHandler) -> None:
@@ -352,8 +401,9 @@ def add_key_mapping(key_string: str, action_lambda: KeyHandler) -> None:
         action_lambda: Handler function with signature (buffer, curpos, scroll_offset, max_width) -> tuple
     """
     with _key_actions_lock:
-        _key_action_saved.setdefault(key_string, []).append(KEY_ACTIONS.get(key_string))
-        KEY_ACTIONS[key_string] = action_lambda
+        table = _key_actions()
+        _saved_map().setdefault(key_string, []).append(table.get(key_string))
+        table[key_string] = action_lambda
 
 
 def remove_key_mapping(key_string: str) -> None:
@@ -366,18 +416,20 @@ def remove_key_mapping(key_string: str) -> None:
         key_string: Key name to restore or remove
     """
     with _key_actions_lock:
-        saved = _key_action_saved.get(key_string)
+        table = _key_actions()
+        saved_map = _saved_map()
+        saved = saved_map.get(key_string)
         if saved:
             previous = saved.pop()
             if not saved:
-                del _key_action_saved[key_string]
+                del saved_map[key_string]
             if previous is None:
-                KEY_ACTIONS.pop(key_string, None)
+                table.pop(key_string, None)
             else:
-                KEY_ACTIONS[key_string] = previous
+                table[key_string] = previous
         else:
             # No recorded override: keep the old behavior of removing the key.
-            KEY_ACTIONS.pop(key_string, None)
+            table.pop(key_string, None)
 
 
 # --- 2. Helper Functions ---
@@ -436,11 +488,10 @@ def handle_cuttobol(
     buffer: str, curpos: int, scroll_offset: int, max_width: int
 ) -> Tuple[str, int, int]:
     """Cut from beginning of line to cursor and store in yank buffer."""
-    global yank_buffer
     cut_text = buffer[:curpos]
     with _yank_buffer_lock:
         if cut_text:
-            yank_buffer = [cut_text]
+            _yank_buffer()[:] = [cut_text]
     buffer = buffer[curpos:]
     return buffer, 0, 0
 
@@ -452,7 +503,6 @@ def handle_cutpreviousword(
 
     Uses \w word boundary matching (consistent with get_current_word).
     """
-    global yank_buffer
     word_end = curpos
     while word_end > 0 and not _WORD_CHAR_PATTERN.match(buffer[word_end - 1]):
         word_end -= 1
@@ -464,7 +514,7 @@ def handle_cutpreviousword(
     cut_text = buffer[word_start:curpos]
     with _yank_buffer_lock:
         if cut_text:
-            yank_buffer = [cut_text]
+            _yank_buffer()[:] = [cut_text]
     buffer = buffer[:word_start] + buffer[curpos:]
     return buffer, word_start, scroll_offset
 
@@ -476,9 +526,8 @@ def handle_yank(
 
     Note: Pasting may cause buffer to exceed max_len - validation happens in main loop.
     """
-    global yank_buffer
     with _yank_buffer_lock:
-        yank_text = "\n".join(yank_buffer)
+        yank_text = "\n".join(_yank_buffer())
     buffer = buffer[:curpos] + yank_text + buffer[curpos:]
     return buffer, curpos + len(yank_text), scroll_offset
 
@@ -492,7 +541,6 @@ def handle_help(
     help: str | Callable[[], str] | None = None,
 ) -> Tuple[str, int, int]:
     """Display F1 help text as simple vertical list below current input line."""
-    global _input_dirty
     help_text = f1_help if f1_help is not None else help
     if help_text is None:
         return buffer, curpos, scroll_offset
@@ -507,7 +555,7 @@ def handle_help(
     for line in lines:
         echo(f"{{var:labelcolor}}{line}{{var:inputcolor}}", flush=True)
 
-    _input_dirty = True
+    _set_input_dirty(True)
     return buffer, curpos, scroll_offset
 
 
@@ -824,11 +872,13 @@ def handle_tab_manager(
 # The INS/OVR marker is a bottom-bar fragment owned by the prompt in progress. It is
 # registered when the prompt starts and removed when it returns, so the bar shows the
 # mode only while the prompt is active.
-_mode_fragment_state: dict = {"item": None, "insert": True}
+def _mode_state() -> dict:
+    """The INS/OVR fragment state for the current interaction."""
+    return _interaction().mode_fragment
 
 
 def _mode_fragment(**_kwargs) -> str:
-    return INPUTSTRING_INSERT_MODE_INDICATOR if _mode_fragment_state["insert"] else INPUTSTRING_OVERWRITE_MODE_INDICATOR
+    return INPUTSTRING_INSERT_MODE_INDICATOR if _mode_state()["insert"] else INPUTSTRING_OVERWRITE_MODE_INDICATOR
 
 
 def _show_mode(insert_mode: bool) -> None:
@@ -841,10 +891,10 @@ def _show_mode(insert_mode: bool) -> None:
         from .. import bottombar as _bottombar
     except Exception:
         return
-    _mode_fragment_state["insert"] = insert_mode
+    _mode_state()["insert"] = insert_mode
     try:
-        if _mode_fragment_state["item"] is None:
-            _mode_fragment_state["item"] = _bottombar.register_bottombar_fragment(_mode_fragment)
+        if _mode_state()["item"] is None:
+            _mode_state()["item"] = _bottombar.register_bottombar_fragment(_mode_fragment)
         _bottombar.setbottombar(None, "")
     except Exception:
         return
@@ -856,8 +906,8 @@ def _hide_mode() -> None:
         from .. import bottombar as _bottombar
     except Exception:
         return
-    item = _mode_fragment_state["item"]
-    _mode_fragment_state["item"] = None
+    item = _mode_state()["item"]
+    _mode_state()["item"] = None
     try:
         if item is not None:
             _bottombar.unregister_bottombar_fragment(item)
@@ -942,45 +992,52 @@ def print_matches(matches: List[str]) -> int:
 
 
 # --- 5. Initial Key Mappings ---
+#
+# The built-in table every interaction starts from. Written here, before any interaction
+# exists, so it goes straight into _BUILTIN_KEY_ACTIONS.
 
-add_key_mapping("KEY_LEFT", handle_left)
-add_key_mapping("KEY_RIGHT", handle_right)
-add_key_mapping("KEY_HOME", handle_home)
-add_key_mapping("KEY_CTRL_A", handle_home)
-add_key_mapping("KEY_END", handle_end)
-add_key_mapping("KEY_CTRL_E", handle_end)
-add_key_mapping("KEY_BACKSPACE", handle_backspace)
-add_key_mapping("KEY_CUTTOBOL", handle_cuttobol)
-add_key_mapping("KEY_CTRL_W", handle_cutpreviousword)
-add_key_mapping("KEY_YANK", handle_yank)
+def _builtin(key_string: str, handler: KeyHandler) -> None:
+    _BUILTIN_KEY_ACTIONS[key_string] = handler
+
+
+_builtin("KEY_LEFT", handle_left)
+_builtin("KEY_RIGHT", handle_right)
+_builtin("KEY_HOME", handle_home)
+_builtin("KEY_CTRL_A", handle_home)
+_builtin("KEY_END", handle_end)
+_builtin("KEY_CTRL_E", handle_end)
+_builtin("KEY_BACKSPACE", handle_backspace)
+_builtin("KEY_CUTTOBOL", handle_cuttobol)
+_builtin("KEY_CTRL_W", handle_cutpreviousword)
+_builtin("KEY_YANK", handle_yank)
 
 # NEW: History navigation (Phase 4)
-add_key_mapping("KEY_UP", handle_history_previous)
-add_key_mapping("KEY_DOWN", handle_history_next)
+_builtin("KEY_UP", handle_history_previous)
+_builtin("KEY_DOWN", handle_history_next)
 
 # NEW: Additional editing keys (Phase 4)
-add_key_mapping("KEY_DELETE", handle_delete)
-add_key_mapping("KEY_INSERT", handle_insert_toggle)
-add_key_mapping("KEY_PAGEUP", handle_pageup)
-add_key_mapping("KEY_PAGEDOWN", handle_pagedown)
+_builtin("KEY_DELETE", handle_delete)
+_builtin("KEY_INSERT", handle_insert_toggle)
+_builtin("KEY_PAGEUP", handle_pageup)
+_builtin("KEY_PAGEDOWN", handle_pagedown)
 
 # Function keys (Phase 4)
 # KEY_F1 is handled dynamically with f1_help context per-call, not registered at module load
-add_key_mapping("KEY_F2", lambda b, c, s, m: handle_function_key("KEY_F2", b, c, s, m))
-add_key_mapping("KEY_F3", lambda b, c, s, m: handle_function_key("KEY_F3", b, c, s, m))
-add_key_mapping("KEY_F4", lambda b, c, s, m: handle_function_key("KEY_F4", b, c, s, m))
-add_key_mapping("KEY_F5", lambda b, c, s, m: handle_function_key("KEY_F5", b, c, s, m))
-add_key_mapping("KEY_F6", lambda b, c, s, m: handle_function_key("KEY_F6", b, c, s, m))
-add_key_mapping("KEY_F7", lambda b, c, s, m: handle_function_key("KEY_F7", b, c, s, m))
-add_key_mapping("KEY_F8", lambda b, c, s, m: handle_function_key("KEY_F8", b, c, s, m))
-add_key_mapping("KEY_F9", lambda b, c, s, m: handle_function_key("KEY_F9", b, c, s, m))
-add_key_mapping(
+_builtin("KEY_F2", lambda b, c, s, m: handle_function_key("KEY_F2", b, c, s, m))
+_builtin("KEY_F3", lambda b, c, s, m: handle_function_key("KEY_F3", b, c, s, m))
+_builtin("KEY_F4", lambda b, c, s, m: handle_function_key("KEY_F4", b, c, s, m))
+_builtin("KEY_F5", lambda b, c, s, m: handle_function_key("KEY_F5", b, c, s, m))
+_builtin("KEY_F6", lambda b, c, s, m: handle_function_key("KEY_F6", b, c, s, m))
+_builtin("KEY_F7", lambda b, c, s, m: handle_function_key("KEY_F7", b, c, s, m))
+_builtin("KEY_F8", lambda b, c, s, m: handle_function_key("KEY_F8", b, c, s, m))
+_builtin("KEY_F9", lambda b, c, s, m: handle_function_key("KEY_F9", b, c, s, m))
+_builtin(
     "KEY_F10", lambda b, c, s, m: handle_function_key("KEY_F10", b, c, s, m)
 )
-add_key_mapping(
+_builtin(
     "KEY_F11", lambda b, c, s, m: handle_function_key("KEY_F11", b, c, s, m)
 )
-add_key_mapping(
+_builtin(
     "KEY_F12", lambda b, c, s, m: handle_function_key("KEY_F12", b, c, s, m)
 )
 
@@ -989,9 +1046,6 @@ add_key_mapping(
 
 # Per-call key snapshots: _inputstring_body pushes the handlers it is about to
 # replace; inputstring() pops and restores them in its finally block.
-_key_snapshot_stack: list[dict] = []
-
-
 def _restore_key_snapshot(depth: int) -> None:
     """Restore handlers replaced by prompts deeper than `depth`, innermost first.
 
@@ -999,13 +1053,15 @@ def _restore_key_snapshot(depth: int) -> None:
     before pushing does not pop a snapshot that belongs to an outer call.
     """
     with _key_actions_lock:
-        while len(_key_snapshot_stack) > depth:
-            snap = _key_snapshot_stack.pop()
+        stack = _snapshot_stack()
+        table = _key_actions()
+        while len(stack) > depth:
+            snap = stack.pop()
             for key, previous in snap.items():
                 if previous is None:
-                    KEY_ACTIONS.pop(key, None)
+                    table.pop(key, None)
                 else:
-                    KEY_ACTIONS[key] = previous
+                    table[key] = previous
 
 
 def inputstring(
@@ -1117,7 +1173,7 @@ def inputstring(
     """
     # Hold the tty in raw mode for the whole prompt, so keys typed between reads
     # are not echoed by the line discipline (the stray arrow-key text).
-    key_depth = len(_key_snapshot_stack)
+    key_depth = len(_snapshot_stack())
     begin_raw_session()
     saved_mouse = mouse_state_push()
     paste_mode = bracketed_paste_on()
@@ -1209,7 +1265,6 @@ def _inputstring_body(
     **kwargs,
 ) -> str:
     """Implementation of inputstring(); see inputstring() for the contract."""
-    global _input_dirty
 
     max_len: int = kwargs.pop("max_len", 255)
     max_width: int = kwargs.pop("max_width", None) or terminal.columns()
@@ -1402,22 +1457,23 @@ def _inputstring_body(
     _per_call_keys = ["KEY_ENTER", "KEY_UP", "KEY_DOWN", "KEY_DELETE", "KEY_PAGEUP",
                       "KEY_PAGEDOWN", "KEY_INSERT", "KEY_F1"] + [f"KEY_F{n}" for n in range(2, 13)]
     with _key_actions_lock:
-        _key_snapshot_stack.append({k: KEY_ACTIONS.get(k) for k in _per_call_keys})
-        KEY_ACTIONS["KEY_ENTER"] = enter_handler
+        table = _key_actions()
+        _snapshot_stack().append({k: table.get(k) for k in _per_call_keys})
+        table["KEY_ENTER"] = enter_handler
         # Override history handlers with closures
         if _history:
-            KEY_ACTIONS["KEY_UP"] = history_previous_handler
-            KEY_ACTIONS["KEY_DOWN"] = history_next_handler
+            table["KEY_UP"] = history_previous_handler
+            table["KEY_DOWN"] = history_next_handler
         # Override other new handlers with closures
-        KEY_ACTIONS["KEY_DELETE"] = delete_handler
-        KEY_ACTIONS["KEY_PAGEUP"] = pageup_handler
-        KEY_ACTIONS["KEY_PAGEDOWN"] = pagedown_handler
-        KEY_ACTIONS["KEY_INSERT"] = insert_toggle_handler
-        KEY_ACTIONS["KEY_F1"] = help_handler
+        table["KEY_DELETE"] = delete_handler
+        table["KEY_PAGEUP"] = pageup_handler
+        table["KEY_PAGEDOWN"] = pagedown_handler
+        table["KEY_INSERT"] = insert_toggle_handler
+        table["KEY_F1"] = help_handler
         # NEW: Override function key handlers with closures
         for key_num in range(2, 13):  # F2 through F12
             key_name = f"KEY_F{key_num}"
-            KEY_ACTIONS[key_name] = make_function_key_handler(key_name)
+            table[key_name] = make_function_key_handler(key_name)
 
     _current_display_str = None
     last_placed_col = None  # column the cursor was last placed at; None = must place
@@ -1427,7 +1483,7 @@ def _inputstring_body(
         # redraw_line() calls echo(), which takes _current_stream_lock itself.
         # The lock is not reentrant, so the redraw must run outside it.
         with _current_stream_lock:
-            needs_redraw = _input_dirty
+            needs_redraw = _get_input_dirty()
         if needs_redraw:
             redraw_line(
                 prompt=prompt,
@@ -1442,7 +1498,7 @@ def _inputstring_body(
                 insert_mode=_insert_mode,
             )
             with _current_stream_lock:
-                _input_dirty = False
+                _set_input_dirty(False)
             _current_display_str = None
             last_placed_col = None
 
@@ -1496,7 +1552,7 @@ def _inputstring_body(
                     overflow = True  # text past max_len is dropped; beep once below
             if rejected or overflow:
                 echo("{BEL}", end="", flush=True)
-            _input_dirty = True
+            _set_input_dirty(True)
             tab_count = 0
             # A paste can move the cursor far past the visible window. Scroll now, as
             # the bottom of the loop does for single keys; `continue` skips that.
@@ -1545,7 +1601,7 @@ def _inputstring_body(
         # Look the handler up under the lock, but run it outside: handlers write to
         # the terminal (echo takes _current_stream_lock), and the lock is not reentrant.
         with _key_actions_lock:
-            handler = KEY_ACTIONS.get(ch)
+            handler = _key_actions().get(ch)
         if handler is not None:
             result = handler(buffer, curpos, scroll_offset, max_width)
 
@@ -1590,3 +1646,25 @@ def _inputstring_body(
         scroll_offset = adjust_scroll_offset(curpos, scroll_offset, max_width)
 
     return buffer
+
+
+# ---------------------------------------------------------------------------
+# Per-interaction names: read through the current interaction (Phase 3).
+#
+# `KEY_ACTIONS` is the key table of the interaction in effect. The module-level name
+# reads and writes that table, so existing code and tests that use
+# `inputstring.KEY_ACTIONS` keep working. `_key_action_saved` is served the same way.
+# ---------------------------------------------------------------------------
+from ..interaction import install_read_through as _install_read_through  # noqa: E402
+
+_install_read_through(
+    __name__,
+    {
+        "KEY_ACTIONS": "key_actions",
+        "_key_action_saved": "key_action_saved",
+    },
+    getters={
+        "KEY_ACTIONS": lambda it: _key_actions_of(it),
+        "_key_action_saved": lambda it: _key_action_saved_of(it),
+    },
+)

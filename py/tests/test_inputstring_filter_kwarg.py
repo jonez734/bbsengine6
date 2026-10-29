@@ -4,7 +4,7 @@ Regression tests for Phase 4 io/inputstring.py hardening.
 Covers:
 - inputstring() pops `filter` kwarg so it never leaks into verify() callback
 - inputstring() accepts and silently discards unknown kwargs without TypeError
-- handle_help() marks the module-global _input_dirty flag
+- handle_help() marks the current interaction's input_dirty flag
 """
 
 import importlib
@@ -79,6 +79,16 @@ def test_inputstring_pops_known_kwargs_from_kwargs():
         )
 
 
+
+def _get_dirty():
+    from bbsengine6.io.common import _get_input_dirty
+    return _get_input_dirty()
+
+
+def _set_dirty(value):
+    from bbsengine6.io.common import _set_input_dirty
+    _set_input_dirty(value)
+
 def test_handle_help_marks_input_dirty():
     """handle_help() must set the module-global _input_dirty flag so the
     main input loop redraws the prompt after displaying help text.
@@ -92,7 +102,7 @@ def test_handle_help_marks_input_dirty():
     """
     mod = _inputstring_module()
 
-    mod._input_dirty = False
+    _set_dirty(False)
     try:
         # handle_help with help= text (not f1_help) returns unchanged buffer
         # and sets _input_dirty.
@@ -104,11 +114,11 @@ def test_handle_help_marks_input_dirty():
             help="line1\nline2",
         )
         assert result == ("buf", 0, 0)
-        assert mod._input_dirty is True, (
+        assert _get_dirty() is True, (
             "handle_help must set module-global _input_dirty, not a function-local"
         )
     finally:
-        mod._input_dirty = False
+        _set_dirty(False)
 
 
 def test_handle_help_returns_early_when_no_help():
@@ -116,13 +126,13 @@ def test_handle_help_returns_early_when_no_help():
     nor help is supplied."""
     mod = _inputstring_module()
 
-    mod._input_dirty = False
+    _set_dirty(False)
     try:
         result = mod.handle_help("buf", 0, 0, 80, f1_help=None, help=None)
         assert result == ("buf", 0, 0)
-        assert mod._input_dirty is False
+        assert _get_dirty() is False
     finally:
-        mod._input_dirty = False
+        _set_dirty(False)
 
 
 def test_handle_help_with_callable_f1_help():
@@ -130,7 +140,7 @@ def test_handle_help_with_callable_f1_help():
     and _input_dirty is set."""
     mod = _inputstring_module()
 
-    mod._input_dirty = False
+    _set_dirty(False)
     try:
         result = mod.handle_help(
             "buf",
@@ -140,6 +150,6 @@ def test_handle_help_with_callable_f1_help():
             f1_help=lambda: "called",
         )
         assert result == ("buf", 0, 0)
-        assert mod._input_dirty is True
+        assert _get_dirty() is True
     finally:
-        mod._input_dirty = False
+        _set_dirty(False)

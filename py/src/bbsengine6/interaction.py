@@ -44,6 +44,13 @@ class Session:
         self.first_line_after_f6 = False
         self.runtime_vars = None
         self.options: dict = {}
+        # io/inputstring.py state. The key table starts as None: inputstring copies the
+        # built-in table on first use, so each interaction starts with the same keys.
+        self.key_actions = None
+        self.key_action_saved = None
+        self.key_snapshot_stack: list = []
+        self.yank_buffer: list = []
+        self.mode_fragment: dict = {"item": None, "insert": True}
 
     def __repr__(self) -> str:
         return f"Session(name={self.name!r}, mode={self.commands.mode!r})"
