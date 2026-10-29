@@ -188,5 +188,14 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Tests: default is used without a block; `use_session` restores, including after an
   exception; nested blocks; registries do not leak between interactions or into the default;
   each thread sees its own.
-- [ ] Phase 3: move io state into the interaction (not started).
+- [ ] Phase 3: move io state into the interaction (in progress).
+  - [x] Read-through mechanism (`install_read_through`): module names become properties over the
+    current interaction; module keeps its globals dict (`1fb02a3`).
+  - [x] `io/common.py`: input queue, streams, terminal state and stack, dirty flag (`8e2f3ca`).
+    Verified: no new failures in the full suite; zoidoffice, murdermotel and casino io tests
+    match their recorded baselines.
+  - [ ] `io/echo.py` (runtime vars, options, raw flag).
+  - [ ] `io/inputstring.py` (key table, yank buffer, snapshot stack, mode fragment).
+  - [ ] `io/getch.py` (impl selector, bottom-bar status).
+  - [ ] `bottombar.py` / `screen.py` (registry, bar stack).
 
