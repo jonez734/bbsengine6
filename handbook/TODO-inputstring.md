@@ -143,3 +143,11 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] User confirms in gnome-terminal: layout and scrolling work much better.
 - [ ] 4-character cursor offset from the prompt: not reproduced in the emulator; not confirmed fixed.
 
+## Phase 14: mouse drag while the prompt waits
+
+- [x] Cause: the prompt loop re-sent the cursor position on every wait timeout (about 65 times a second while idle). `inputboolean()` does not run that loop, and it drags fine (`92a1924`).
+- [x] Fix: the cursor is placed only when the line is redrawn or the cursor column changes. Idle output is now one-time setup only.
+- [x] Mouse push resets all four managed modes on entry; the exit restores the ones reported on (`1a1338d`).
+- [x] `BBSENGINE_MOUSE_TRACE=<file>` logs query replies and writes (off by default).
+- [x] User confirms drag works in gnome-terminal.
+
