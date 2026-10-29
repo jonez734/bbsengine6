@@ -7,6 +7,7 @@ from typing import Any, Callable, Optional, Tuple, List, Union, Deque
 from . import terminal
 
 from .const import (
+    ESC,
     INPUTSTRING_GETCH_TIMEOUT,
     INPUTSTRING_DEFAULT_HISTORY_SIZE,
     INPUTSTRING_DEFAULT_PAGESIZE,
@@ -19,6 +20,8 @@ from .common import (
     get_cursor_position,
     _current_stream_lock,
     _input_dirty,
+    _input_queue,
+    _input_queue_lock,
     mouse_state_push,
     mouse_state_pop,
 )
@@ -1030,6 +1033,32 @@ def inputstring(
         end_raw_session()
 
 
+def _take_paste_burst() -> str | None:
+    """Return queued plain text when more than one key is already waiting.
+
+    A paste (Ctrl-Shift-V, middle click) delivers many characters at once. Each
+    one must be inserted as text, not run as an editing command: a tab would
+    start completion, and a control byte such as \x01 would move the cursor.
+
+    Takes the leading run of printable characters and Enter from the queue.
+    Returns None when fewer than two keys are waiting, or when an escape
+    sequence leads (that is a real key, handled by the normal path).
+    """
+    with _input_queue_lock:
+        if len(_input_queue) < 2 or _input_queue[0] == ESC:
+            return None
+        taken = []
+        while _input_queue and _input_queue[0] != ESC:
+            ch = _input_queue[0]
+            if ch in ("\r", "\n"):
+                taken.append("\n")
+            elif ch.isprintable() or ch == "\t":
+                taken.append(ch)
+            # other control bytes are discarded
+            _input_queue.popleft()
+        return "".join(taken)
+
+
 def _inputstring_body(
     prompt: str = "> ",
     oldvalue: str = "",
@@ -1268,11 +1297,28 @@ def _inputstring_body(
         # Position cursor BEFORE getch() without holding lock during the call
         echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
 
-        ch = getch(
-            timeout=INPUTSTRING_GETCH_TIMEOUT,
-            fire_events=False,
-            check_notifications=False,
-        )
+        burst = _take_paste_burst()
+        if burst is not None:
+            # A paste: insert literal text; a newline ends the entry like Enter.
+            text, end_here = burst.split("\n", 1)[0], "\n" in burst
+            for c in text:
+                if c == "\t":
+                    c = " "  # keep a tab from becoming completion or a literal tab in a field
+                if len(buffer) < max_len:
+                    buffer = buffer[:curpos] + c + buffer[curpos:]
+                    curpos += 1
+            _input_dirty = True
+            tab_count = 0
+            if end_here:
+                ch = "KEY_ENTER"
+            else:
+                continue
+        else:
+            ch = getch(
+                timeout=INPUTSTRING_GETCH_TIMEOUT,
+                fire_events=False,
+                check_notifications=False,
+            )
         if ch is None:
             continue
 
