@@ -1,65 +1,72 @@
-# asimov.io.common Specification
+# bbsengine6.io.common Specification
 
 ## Overview
 
-`common.py` provides core utilities for terminal I/O including stream management, cursor position queries, and terminal state tracking.
+`common.py` holds the shared I/O state for the io package: the input and output
+streams and their lock, the input queue, the terminal state, and the terminal queries
+(cursor position, status). It also holds the raw-session and mode-switching helpers
+that `getch`, `inputstring` and the bottom bar use.
+
+Most names here are private (leading underscore) and are used only inside io. The
+public ones are listed in this spec.
 
 ## Dependencies
 
-- Standard library: `os`, `re`, `sys`, `tty`, `fcntl`, `termios`, `threading`, `collections`
-- `const.py`: MAX_TERMINAL_WIDTH, BEL, ESC
-- `terminal.py`: Terminal size detection
+- Standard library: `os`, `re`, `sys`, `select`, `tty`, `fcntl`, `termios`,
+  `threading`, `collections`, `time`
+- `const.py`: `ESC`, `CSI`, `DEFAULT_INDENT_CHAR`
+- `terminal.py`: terminal size
 
-## Data Classes
+## Data classes
 
 ### `Token`
 
-Represents a parsed token from input text.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `kind` | str | Token type (WORD, WHITESPACE, F6, RGB, etc.) |
-| `value` | str | Literal string or command |
-| `args` | List | Positional arguments |
-| `kwargs` | Dict | Keyword arguments |
-| `text` | str | Processed text (e.g., `\n` for `{f6}`) |
-| `repeat` | int | Repeat count |
-| `raw` | str | Raw input that generated token |
-
----
+A parsed token from echo input. Fields: `kind` (str, e.g. `WORD`, `F6`, `RGB`),
+`value` (the literal text or command), `args` (list), `kwargs` (dict), `text` (the
+processed text, such as `\n` for `{f6}`), `repeat` (int, default 1), `raw` (the input
+that produced it).
 
 ### `TerminalState`
 
-Tracks current terminal state.
+The software copy of the terminal's state, used by `echo()`.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `cursor_row` | int | Current cursor row |
-| `cursor_col` | int | Current cursor column |
-| `wordwrap` | bool | Word wrap enabled |
-| `has_color` | bool | Color support |
-| `hidden` | bool | Cursor hidden |
-| `width` | int | Terminal width |
-| `acs` | bool | Alternate Character Set mode |
-| `raw` | bool | Raw mode |
-| `decdhl` | bool | Double-height line |
-| `decdwl` | bool | Double-width line |
+| Field | Default | Description |
+|-------|---------|-------------|
+| `cursor_row`, `cursor_col` | 1, 1 | Cursor position as `echo()` last placed it |
+| `wordwrap` | `True` | Word wrap |
+| `has_color` | `True` | Colour output |
+| `hidden` | `False` | Cursor hidden |
+| `width` | 100 | Width used by `echo()` |
+| `acs` | `False` | Alternate character set (box drawing) |
+| `raw` | `False` | Commands treated as text |
+| `decdhl`, `decdwl` | `False` | Double-height and double-width lines |
+| `indent` | 0 | Indent width for `{indent:n}` |
+| `indent_char` | `" "` | Indent character |
 
-## Global State
+`cursor_row` and `cursor_col` follow `{curpos}` commands. They do not follow raw
+ANSI cursor movements (`ESC [ n ; m H` written with `raw=True`), so a raw move makes
+them stale.
 
-| Variable | Type | Description |
-|----------|------|-------------|
-| `_current_input_stream` | file | Input stream (default: stdin) |
-| `_current_output_stream` | file | Output stream (default: stdout) |
-| `_current_stream_lock` | threading.Lock | Thread-safe lock for I/O |
-| `_input_queue` | deque | Buffered input characters |
-| `_terminal_state` | TerminalState | Current terminal state |
-| `_terminal_state_stack` | list | Stack for save/restore |
-| `_input_dirty` | bool | Flag for input refresh needed |
+## Global state
 
-## Functions
+| Name | Type | Description |
+|------|------|-------------|
+| `_current_input_stream` | file | Input stream (default `sys.stdin`) |
+| `_current_output_stream` | file | Output stream (default `sys.stdout`) |
+| `_current_stream_lock` | `threading.Lock` | Serialises stream reads and writes. Not reentrant. |
+| `_terminal_state_lock` | `threading.Lock` | Guards `_terminal_state` |
+| `_terminal_state` | `TerminalState` | Current software terminal state |
+| `_terminal_state_stack` | list | Saved states for `{decsc}` / `{decrc}` |
+| `_terminal_state_stack_enabled` | bool | `False`: one save slot, restore does not pop |
+| `_input_queue` | deque | Keys read but not yet returned to a caller |
+| `_input_queue_lock` | `threading.Lock` | Guards `_input_queue` |
+| `_session_raw_fd` | int or None | The fd held in raw mode by a raw session |
 
-### Stream Management
+`_input_dirty` is not in this module. It is a global of `inputstring.py`.
+
+## Public functions
+
+### Streams
 
 ```python
 set_output_stream(stream)
@@ -68,46 +75,111 @@ write_current_output_stream(s, flush=False)
 read_current_input_stream(size=1) -> str
 ```
 
-### Terminal Queries
+Set or use the streams that every io function reads and writes. Tests and tools set
+a pseudo-terminal stream here.
+
+### Cursor position
 
 ```python
 get_cursor_position(timeout=1.0) -> tuple[int, int]
 ```
 
-Returns current cursor position as (row, col).
+Asks the terminal for its cursor position (DSR `ESC [ 6 n`) and returns `(row, col)`,
+1-based.
 
----
+**Raises `TimeoutError`** if no reply arrives within `timeout` seconds. A terminal that
+does not answer the query makes every caller wait the full timeout. Observed: 0.50 s
+with `timeout=0.5` and no reply.
+
+`{decsc}` and `inputstring()`'s first draw both call this. See `io_echo.md`.
+
+### Status
 
 ```python
 get_terminal_status() -> bool | None
 ```
 
-Returns terminal ready status:
-- `True`: OK (ESC[0n)
-- `False`: Error (ESC[3n)
-- `None`: Unknown
+DSR status query (`ESC [ 5 n`):
+- `True`: the terminal replied `ESC [ 0 n` (ready)
+- `False`: the terminal replied `ESC [ 3 n` (malfunction)
+- `None`: any other reply, or no reply
 
----
+### Device status reports
 
 ```python
 get_dsr(mode="curpos", timeout=1.0) -> tuple[int, int] | str
 ```
 
-Device Status Report - queries terminal for status.
+The general query behind `get_cursor_position` and `get_terminal_status`.
 
----
+### Input queue
 
 ```python
 drain_stream_to_queue(stream, queue)
 ```
 
-Read all available characters from stream into queue (non-blocking).
+Reads every character the stream can give without blocking, into `queue`, in order.
+A cooked-mode newline (`\n`, from Enter under ICRNL) is stored as `\r`, which is the
+key the reader expects for Enter.
+
+## Raw sessions
+
+```python
+begin_raw_session() -> None
+end_raw_session() -> None
+```
+
+`begin_raw_session()` drains pending input into `_input_queue`, then puts the input
+tty in raw mode and keeps the saved settings. `end_raw_session()` restores them.
+
+While a session is open, `getch`, the DSR query, and the mouse-state query do not
+switch modes and do not restore cooked settings between keys. This is why a key
+pressed between reads is not echoed (`^[[C`). `inputstring()` opens a session in its
+wrapper and closes it in `finally`.
+
+Calling `begin_raw_session()` when the input is not a terminal does nothing.
+
+## Bracketed paste
+
+```python
+BRACKETED_PASTE_MANAGED = True
+bracketed_paste_on() -> bool
+bracketed_paste_off(enabled: bool) -> None
+```
+
+`bracketed_paste_on()` writes `ESC [ ? 2004 h` and returns `True`. `bracketed_paste_off`
+writes `ESC [ ? 2004 l` if `enabled` is true. With `BRACKETED_PASTE_MANAGED = False`,
+`bracketed_paste_on()` writes nothing and returns `False`.
+
+## Mouse state
+
+```python
+MOUSE_MODES = (1000, 1002, 1003, 1006)
+MOUSE_STATE_MANAGED = True
+mouse_state_push() -> dict[int, bool] | None
+mouse_state_pop(saved) -> None
+```
+
+Mouse reporting makes the terminal send button and motion events to the application,
+which stops it selecting text on click-drag. `inputstring()` turns the four modes off
+for the prompt and restores them after.
+
+- `mouse_state_push()` asks the terminal for each mode (`ESC [ ? mode $ p`), then
+  resets **all four** modes, whatever the replies said. It returns the replies, with
+  `None` for a mode that gave no reply.
+- `mouse_state_pop(saved)` sets back only the modes that were reported on.
+- `MOUSE_STATE_MANAGED = False` skips both.
+
+A mode that gave no reply is left off after the prompt, not restored. VTE was observed
+to reply "reset" (`2`) for all four modes during a prompt.
+
+### Tracing
+
+`BBSENGINE_MOUSE_TRACE=<file>` appends the raw query replies, each mode write, and the
+restore to `<file>`. It is off by default and is for diagnosis.
 
 ## Usage
 
 ```python
-from asimov.io.common import (
-    Token, TerminalState, _terminal_state,
-    get_cursor_position, set_input_stream
-)
+from bbsengine6.io.common import get_cursor_position, set_input_stream
 ```
