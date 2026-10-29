@@ -209,9 +209,10 @@ Numbered as in the command plan. This is not the inputstring "Phase 4" above.
   - Bug found: `inputstring(prompt, oldvalue=...)` raises `TypeError`; `oldvalue` is
     positional-only and the wrapper passes it positionally. Not fixed in the signature (the
     `/` is intentional); callers pass it positionally. Spec `commands.md` says so.
-  - Finding: a key typed in the gap after a command exits and before the next prompt reads is
-    dropped (no settle time loses `X`; 0.5 s keeps it). Real shell users can hit this. Not
-    fixed; open for a decision (buffer keys across the gap, or document it).
+  - Key-drop gap: a key typed after a command exits and before the next prompt reads can be
+    dropped (pty: no settle time loses `X`; 0.5 s keeps it). Decision: document it as a known
+    limit (spec `commands.md`); no code change. Cause not confirmed. Not checked on a real
+    terminal. Fast typing at an ordinary prompt is not affected (16 characters arrived intact).
   - Live script step 2 now uses the caller-reprompt flow and asks whether the redraw shows the
     typed text. That question needs one more live run to answer on a real terminal.
 - [x] Downstream io check after the subprocess and Enter-CRLF commits (`4ee2830`). All 48

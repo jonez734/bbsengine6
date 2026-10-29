@@ -106,8 +106,9 @@ still a module command:
   kept by the launcher. The caller keeps it and passes it back to the next prompt as the
   positional `oldvalue` (`inputstring(prompt, typed)`), so the prompt redraws it and editing
   continues from it. (`oldvalue` is positional-only; the keyword form raises `TypeError`.)
-  Measured on a pty: a key sent in the gap between the child exiting and the next prompt
-  reading is dropped, so the caller must not type until the prompt is drawn.
+  Known limit: a key typed in the short gap after the child exits and before the next prompt
+  reads can be dropped (seen on a pty; not yet checked on a real terminal, and the cause is
+  not confirmed). Callers should not depend on keys typed in that gap.
 
 Status: `py/src/bbsengine6/subprocess_command.py` is implemented and tested
 (`py/tests/test_subprocess_command.py`). No shipped wrapper module exists yet; letteredolive
