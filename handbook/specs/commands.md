@@ -114,14 +114,29 @@ Status: `py/src/bbsengine6/subprocess_command.py` is implemented and tested
 (`py/tests/test_subprocess_command.py`). No shipped wrapper module exists yet; letteredolive
 and casino wire them in their own phases.
 
-## Messages (planned, letteredolive)
+## Dispatch and messages (letteredolive)
 
-These are the shell's messages for typed input, to be wired in the shell's dispatch:
+`bbsengine6.command_runner` turns one typed name into an outcome:
 
-- Unknown name: `command not found <name>` (one line, no list).
-- Ambiguous prefix: `ambiguous command <prefix>` (one line, no list, nothing runs).
+- `dispatch(registry, name, state)` returns a `Dispatch` with `outcome` `run`, `not_found`
+  or `ambiguous`. It only decides; it does not launch.
+- `launch(entry, args, argv, **kwargs)` runs a matched entry through `module.run()`, using
+  `entry.spec["prg"]`. A missing `prg` raises `KeyError` before anything runs.
+
+Messages (one line, no candidate list, nothing runs on failure):
+
+- Unknown or unavailable name: `command not found <name>`.
+- Ambiguous prefix: `ambiguous command <prefix>`.
 
 Candidates are shown only by tab completion (double Tab) and by the help key (F1).
+
+Letteredolive builds its registry with `lib.build_registry()` from the `commands` dict. The
+dict stays the single list. `logout` (with aliases `lo`, `quit`, `q`, `o`, `o!`) and
+`message` are protected. `exit` is a default entry. Availability is the dict's `disabled`
+flag only; visibility does not call `module.check()`.
+
+Known gap: `visible_commands()` (help and completion) still uses `module.check()` to hide
+modules that are not installed. Moving that to the availability predicate is open.
 
 ## Interaction (per-context state)
 

@@ -229,6 +229,33 @@ Numbered as in the command plan. This is not the inputstring "Phase 4" above.
   - murdermotel io tests unchanged from baseline (22 errors: missing `murdermotel.player` table).
   Not covered by this run: the subprocess launcher and the Enter fix inside those apps.
 
+## Command plan: Phase 5 (launch via run(), error handling)
+
+Scope confirmed by the operator: includes letteredolive.
+
+- [x] `py/src/bbsengine6/command_runner.py`: `dispatch()` (run / not_found / ambiguous, with the
+  spec's one-line messages) and `launch()` (through `module.run()`, `spec["prg"]`). 11 tests
+  (`test_command_runner.py`); one case uses a name that differs from its prg, so a launch that
+  uses the typed name instead fails the test (checked by mutation).
+- [x] Letteredolive (`src/shell`): `lib.build_registry()` builds the registry from the
+  `commands` dict; `logout` (aliases `lo quit q o o!`) and `message` are protected; `exit` is a
+  default entry. `main.py` dispatches through the registry and launches through `launch()`.
+  Exit words no longer hard-coded.
+- [x] Two source-shape tests in letteredolive (`test_shell_disabled.py`,
+  `test_shell_login.py`) were rewritten to check behaviour. The logout one now requires the
+  `clear_session()` call inside the logout branch (checked by mutation).
+- [x] Verified: letteredolive shell suite at baseline (263 passed, 6 skipped); bbsengine6 full
+  suite at baseline (63 failed, 2312 passed, same two baseline failures fixed).
+- [x] Message change: a disabled or unknown command in the loop now prints `command not found
+  <name>` (was `unknown command '<name>'` or `'<name>' is disabled (not installed).`).
+- [ ] Known gap: `visible_commands()` (help and completion) still calls `module.check()` to hide
+  modules that are not installed. The spec says visibility uses the availability predicate
+  only. Not moved yet.
+- [x] Ambiguous prefix checked against letteredolive's real registry: `m` (matches `message`
+  and `murdermotel`) gives `ambiguous command m`; `mu` runs `murdermotel`. Not yet a test in the
+  letteredolive tree.
+- [ ] Not run on a live terminal.
+
 ## Phases 0 and 1: command registry
 
 - [x] Phase 0: plan confirmed; names recorded (tiers protected/default/session; messages
