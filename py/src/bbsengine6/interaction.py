@@ -14,6 +14,7 @@ its own session, and leaving the block restores the previous one.
 
 from __future__ import annotations
 
+import collections
 import contextlib
 import contextvars
 from typing import Iterator, Optional
@@ -27,6 +28,15 @@ class Session:
     def __init__(self, mode: str = MODE_EXTEND, name: str = "") -> None:
         self.name = name
         self.commands = CommandRegistry(mode=mode)
+        # io state (moved from io/common.py). Process-wide state (locks, the tty
+        # settings, the *_MANAGED flags) stays in its module.
+        self.input_stream = None  # None: the io module's default stream (sys.stdin)
+        self.output_stream = None  # None: the io module's default stream (sys.stdout)
+        self.input_queue = collections.deque()
+        self.terminal_state = None  # None: the io module builds its default
+        self.terminal_state_stack: list = []
+        self.terminal_state_stack_enabled = False
+        self.input_dirty = False
 
     def __repr__(self) -> str:
         return f"Session(name={self.name!r}, mode={self.commands.mode!r})"
@@ -59,3 +69,74 @@ def use_session(session: Session) -> Iterator[Session]:
         yield session
     finally:
         _current.reset(token)
+
+
+# ---------------------------------------------------------------------------
+# Read-through module state
+# ---------------------------------------------------------------------------
+#
+# io modules used to keep their per-interaction state in module globals. Phase 3 moves
+# that state onto the Interaction, and each module keeps its old names by replacing its
+# module object with a subclass whose names are properties. A property reads and writes
+# the current interaction's field, so existing code (and tests that assign module
+# attributes) keeps working and sees the interaction in effect.
+
+import sys as _sys
+import types as _types
+
+_MISSING = object()
+
+
+class _FieldProxyModule(_types.ModuleType):
+    """A module whose listed names are properties over the current interaction.
+
+    ``fields`` maps a module-level name to a field name on ``Interaction``. Anything not
+    listed behaves as an ordinary module attribute.
+    """
+
+    _fields: dict = {}
+
+    def __getattr__(self, name):  # only called when normal lookup fails
+        raise AttributeError(name)
+
+
+def install_read_through(module_name: str, fields: dict, getters: Optional[dict] = None) -> None:
+    """Make the names in ``fields`` read and write the current interaction, in ``module_name``.
+
+    ``fields`` maps module-level names to attribute names on the current interaction. Each
+    name is removed from the module's own dict and served by a property on a per-module
+    subclass. Everything else stays in the module's ``__dict__``, which is the globals dict
+    the module's functions use. (A proxy with a separate dict would not be seen by those
+    functions, so writes to the proxy would not take effect.)
+
+    ``getters`` optionally maps a name to a function of the interaction that returns the
+    value to read. Use it when the stored value may be ``None`` and the module builds a
+    default on first read. Writes always store the field.
+    """
+    getters = getters or {}
+    module = _sys.modules[module_name]
+    for name in fields:
+        module.__dict__.pop(name, None)
+    proxy_cls = type(
+        f"_ReadThrough_{module_name.rsplit('.', 1)[-1]}",
+        (_types.ModuleType,),
+        {},
+    )
+    for name, field_name in fields.items():
+        getter = getters.get(name)
+        if getter is None:
+            read = lambda self, _f=field_name: getattr(current_session(), _f)
+        else:
+            read = lambda self, _g=getter: _g(current_session())
+        setattr(
+            proxy_cls,
+            name,
+            property(
+                read,
+                lambda self, value, _f=field_name: setattr(current_session(), _f, value),
+                lambda self, _f=field_name: setattr(current_session(), _f, None),
+            ),
+        )
+    # Only the class changes: the module keeps its dict (the functions' globals), and
+    # attribute access on the module object goes through the properties above.
+    module.__class__ = proxy_cls
