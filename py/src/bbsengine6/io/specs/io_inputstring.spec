@@ -88,7 +88,10 @@ Reads one line with line editing. Returns the entered text. `prompt` and
 - `help`: Alias for `f1_help`
 - `function_key_handlers`: Dict mapping `KEY_F2`..`KEY_F12` to handlers
 - `max_len`: Maximum input length (default: 255, via `**kwargs`)
-- `max_width`: Display width for scrolling (default: 80, via `**kwargs`)
+- `max_width`: Width of the visible text window (default: `terminal.columns()`, via `**kwargs`).
+  The window is what is left of the row after the prompt and the INS/OVR indicator,
+  so text never runs past the right edge. A pinned width (for example
+  `BBSENGINE_MAX_WIDTH`) is honoured through `terminal.columns()`.
 - `mask`: If set, mask input (e.g., `mask="*"` for password)
 - `completer`: Tab completion callback; see Tab Completion
 - `verify`: Validation callback `verify(buffer, **kwargs) -> bool`, run on Enter
@@ -283,6 +286,7 @@ A paste delivers several characters at once. When two or more keys are queued,
 - Other control bytes are dropped from paste text.
 - An escape sequence at the head of the queue is a real key; it is not batched.
 - Paste text is truncated at `max_len`; a paste that is cut beeps once.
+- A paste moves the cursor and scrolls the window to keep it visible, as typing does.
 
 **Bracketed paste.** For the duration of the prompt, `inputstring()` asks the
 terminal to wrap pastes in `ESC[200~` ... `ESC[201~` (`ESC[?2004h`), and turns the
@@ -325,7 +329,9 @@ The main loop manages display:
 
 ### Scroll Handling
 
-- Input scrolls horizontally when `curpos >= scroll_offset + max_width`
+- Input scrolls horizontally when `curpos >= scroll_offset + window`, where `window`
+  is `max_width` less the prompt and indicator width. A paste scrolls the same way
+  as a typed key.
 - Scroll offset adjusts to keep cursor visible
 
 ## Recent Fixes (bbsengine6, 2026)

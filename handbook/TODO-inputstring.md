@@ -127,3 +127,12 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [ ] Asimov copy: unchanged (other submodule).
 - [ ] Concurrent prompts in different threads: not supported; the key table and the terminal are shared.
 
+## Phase 12: long paste display
+
+- [x] A paste scrolls the window so the cursor stays visible (`94641ec`).
+- [x] Text window fits the row after the prompt and INS/OVR indicator (`8f71dd6`).
+- [x] `max_width` defaults to `terminal.columns()` instead of 80 (`8f71dd6`).
+- [x] Regression test for the 149-character paste at 80 columns, width pinned (`test_inputstring_editing.py`).
+- [x] Reported paste verified: full text returned; the drawn row stays on row 1.
+- [ ] Confirm Ctrl-Shift-V in gnome-terminal (user).
+
