@@ -443,7 +443,8 @@ def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:
     finally:
         _restore_cooked(fd, old_settings)
 
-    state = {mode: False for mode in MOUSE_MODES}
+    # None = the terminal did not answer for this mode (unknown, not "off").
+    state = {mode: None for mode in MOUSE_MODES}
     for mode_s, status in _DECRPM_RE.findall(replies):
         mode = int(mode_s)
         if mode in state:
@@ -459,11 +460,21 @@ def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:
     return state
 
 
-def _write_mouse_modes(state: dict[int, bool]) -> None:
-    """Set each mouse mode on or off to match state (h = on, l = off)."""
+def _write_mouse_modes(state: dict[int, bool | None], only_known: bool = False) -> None:
+    """Set each mouse mode on or off to match state (h = on, l = off).
+
+    A mode whose state is None (no reply) is left alone. With only_known=False
+    every mode gets a write, so None is treated as off. Used when no query was
+    answered at all.
+    """
     with _current_stream_lock:
         for mode in MOUSE_MODES:
-            suffix = "h" if state.get(mode) else "l"
+            value = state.get(mode)
+            if value is None:
+                if only_known:
+                    continue
+                value = False
+            suffix = "h" if value else "l"
             _write_current_output_stream(f"{CSI}?{mode}{suffix}", flush=True)
         _current_output_stream.flush()
 
@@ -477,7 +488,12 @@ def mouse_state_push() -> dict[int, bool] | None:
     if not MOUSE_STATE_MANAGED:
         return None
     saved = _query_mouse_modes()
-    _write_mouse_modes({mode: False for mode in MOUSE_MODES})
+    # Turn off only the modes the terminal reported as on. A mode with no reply
+    # is not touched: resetting it could silently disable tracking in a tab that
+    # had it enabled.
+    to_reset = {mode: False for mode, on in saved.items() if on}
+    if to_reset:
+        _write_mouse_modes(to_reset, only_known=True)
     return saved
 
 
@@ -485,4 +501,6 @@ def mouse_state_pop(saved: dict[int, bool] | None) -> None:
     """Restore the mouse state returned by mouse_state_push()."""
     if saved is None:
         return
-    _write_mouse_modes(saved)
+    # Only modes that were reset on entry (reported on) need restoring. Anything
+    # else was never changed, so writing it again could only add noise.
+    _write_mouse_modes({mode: True for mode, on in saved.items() if on}, only_known=True)

@@ -120,14 +120,14 @@ def test_mouse_modes_off_during_input_and_restored_on_return(terminal):
     # Turned off on entry, then the saved state restored on exit.
     assert ("reset", 1000) in fake.log
     assert ("reset", 1006) in fake.log
-    # Final state matches the entry state for every mode.
+    # Modes reported on are restored on. A mode reported off is never touched.
     final = {}
     for action, mode in fake.log:
         final[mode] = action == "set"
     assert final[1000] is True
     assert final[1002] is True
     assert final[1006] is True
-    assert final[1003] is False
+    assert 1003 not in [m for _, m in fake.log], "a mode that was off must not be written"
 
 
 def test_mouse_state_restored_when_body_raises(terminal):
@@ -151,20 +151,28 @@ def test_mouse_state_restored_when_body_raises(terminal):
     assert final.get(1000) is True, "mouse 1000 must be restored after an exception"
 
 
-def test_missing_decrqm_reply_falls_back_to_off(terminal):
+def test_missing_decrqm_reply_leaves_modes_untouched(terminal):
+    # No DECRQM answers means the terminal's state is unknown. The prompt must not
+    # switch any mouse mode on or off, or it could disable tracking in a tab that
+    # had it enabled.
     fake = terminal({1000: True, 1002: True, 1003: True, 1006: True}, answer_queries=False)
     master = fake.master
     threading.Timer(0.3, _feed, args=(master, b"x\r")).start()
-    # No reply means "unknown, restore to off": the restore writes "l" for every mode.
-    inp.inputstring("> ")
+    result = inp.inputstring("> ")
     time.sleep(0.2)
-    resets = [m for action, m in fake.log if action == "reset"]
-    for mode in (1000, 1002, 1003, 1006):
-        assert resets.count(mode) >= 2, f"mode {mode} should be reset on entry and on fallback restore"
-    final = {}
-    for action, mode in fake.log:
-        final[mode] = action == "set"
-    assert all(v is False for v in final.values()), "fallback must leave every mode off"
+    assert result == "x"
+    assert fake.log == [], "unknown mouse state must not be written"
+
+
+def test_reported_on_mode_is_reset_then_restored(terminal):
+    # Mode 1000 is reported on: it is reset for the prompt and set back on exit.
+    fake = terminal({1000: True, 1002: False, 1003: False, 1006: False})
+    master = fake.master
+    threading.Timer(0.3, _feed, args=(master, b"y\r")).start()
+    result = inp.inputstring("> ")
+    time.sleep(0.2)
+    assert result == "y"
+    assert fake.log == [("reset", 1000), ("set", 1000)], fake.log
 
 
 def test_managed_flag_false_leaves_mouse_alone(terminal):
