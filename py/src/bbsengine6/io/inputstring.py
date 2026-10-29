@@ -691,10 +691,9 @@ def handle_tab_manager(
 
     # If empty word, try to get all matches by passing empty string
     # Completers should return all matches when called with empty string
-    if not word:
-        matches = completer("", curpos=curpos, **kwargs)
-    else:
-        matches = completer(buffer, curpos=curpos, **kwargs)
+    # Per the completer contract (io_inputstring.spec, Tab Completion), the
+    # completer receives the word under the cursor, not the whole line.
+    matches = completer(word, curpos=curpos, **kwargs)
 
     if not matches:
         echo("{bell}", end="", flush=True)
@@ -702,12 +701,13 @@ def handle_tab_manager(
 
     # If empty word (user pressed tab with nothing typed), show all matches
     if not word:
-        if matches == last_matches and tab_count >= 1:
-            # Second tab with empty word - ring bell
+        # Tab, Tab on an empty word lists every completion. A further Tab, after
+        # the list is already shown, rings the bell: nothing new will appear.
+        if matches == last_matches and tab_count >= 2:
             echo("{bell}", end="", flush=True)
             return buffer, curpos, scroll_offset, last_matches, tab_count, start_row
 
-        # First tab with empty word - show all matches in columns
+        # First or second tab with empty word - show all matches in columns
         echo("\n")
         lines_printed = print_matches(matches)
 
@@ -1059,35 +1059,54 @@ def _take_paste_burst(insert_tabs: bool = False) -> str | None:
     """Return queued plain text when more than one key is already waiting.
 
     A paste (Ctrl-Shift-V, middle click) delivers many characters at once. Each
-    one must be inserted as text, not run as an editing command: a tab would
-    start completion, and a control byte such as \x01 would move the cursor.
+    one must be inserted as text, not run as an editing command: a control byte
+    such as \x01 would move the cursor.
 
-    Takes the leading run of printable characters and Enter from the queue.
-    Tabs are returned as \t; the caller decides whether a tab is inserted or
-    shown as a space (insert_tabs).
-    Returns None when fewer than two keys are waiting, or when an escape
-    sequence leads (that is a real key, handled by the normal path).
+    Tab is ambiguous: a pasted tab sits between text, but a typed Tab (possibly
+    several, e.g. a double Tab) sits at the end of what is queued. A Tab is paste
+    text only when text follows it in the queue; a Tab with nothing but Tabs (or
+    nothing) after it is left for the key path, so completion still runs.
+
+    Returns the leading run of text (Enter becomes \n, tabs stay \t), or None
+    when fewer than two keys are waiting or an escape sequence leads.
     """
     with _input_queue_lock:
-        if len(_input_queue) < 2 or _input_queue[0] == ESC:
+        queued = list(_input_queue)
+        if len(queued) < 2 or queued[0] == ESC:
             return None
-        # A Tab is a command when nothing follows it: a typed Tab (completion) can
-        # arrive in the same read as the characters before it. A Tab with more text
-        # queued after it is paste content.
-        if _input_queue[0] == "\t" and len(_input_queue) < 2:
-            return None
+
+        # Index of the last printable character. Tabs after it are trailing
+        # commands. Enter does not count as text: it is a command, so a Tab
+        # before a final Enter (a typed double Tab then Enter) still completes.
+        last_text = -1
+        for i, c in enumerate(queued):
+            if c.isprintable() and c != "\t":
+                last_text = i
+
         taken = []
-        while _input_queue and _input_queue[0] != ESC:
-            ch = _input_queue[0]
-            if ch == "\t" and len(_input_queue) == 1:
-                break  # trailing Tab: leave it for the key path (completion)
-            if ch in ("\r", "\n"):
+        n = 0
+        for i, c in enumerate(queued):
+            if c == ESC:
+                break
+            if c == "\t" and i > last_text:
+                break  # trailing Tab(s): completion, not paste
+            if c in ("\r", "\n"):
                 taken.append("\n")
-            elif ch == "\t" or ch.isprintable():
-                taken.append(ch)
-            # other control bytes are discarded
+            elif c == "\t" or c.isprintable():
+                taken.append(c)
+            elif c in ("\x7f", "\x08"):
+                # Backspace is an editing key, typed or pasted: stop the batch so
+                # the key path deletes a character.
+                break
+            # other control bytes (\x01 etc.) are dropped from paste text
+            n += 1
+
+        if n == 0:
+            return None
+        for _ in range(n):
             _input_queue.popleft()
-        return "".join(taken)
+        text = "".join(taken)
+        return text if text else None
 
 
 def _inputstring_body(
@@ -1372,6 +1391,11 @@ def _inputstring_body(
                 )
             )
             _current_display_str = None
+            # A Tab only updates completion state; it must not reach the insert
+            # branch below, which clears last_matches and tab_count. Keep the
+            # scroll update that the bottom of the loop normally does.
+            scroll_offset = adjust_scroll_offset(curpos, scroll_offset, max_width)
+            continue
 
         with _key_actions_lock:
             if ch in KEY_ACTIONS:
