@@ -1168,7 +1168,7 @@ def _inputstring_body(
     global _input_dirty
 
     max_len: int = kwargs.pop("max_len", 255)
-    max_width: int = kwargs.pop("max_width", 80)
+    max_width: int = kwargs.pop("max_width", None) or terminal.columns()
     mask: str = kwargs.pop("mask", None)
     completer = kwargs.pop("completer", None)
     insert_tabs = bool(kwargs.pop("insert_tabs", False))
@@ -1234,6 +1234,14 @@ def _inputstring_body(
 
     prompt_len: int = int(rendered_length(prompt))
     input_col_start = start_col + prompt_len
+    # The row holds the prompt, the mode indicator and the text. Give the text only the
+    # room left after the prompt, so a long paste wraps inside the window instead of
+    # past the right edge. "[INS]"/"[OVR]" plus its leading space is 6 columns.
+    indicator_len = 1 + max(
+        int(rendered_length(INPUTSTRING_INSERT_MODE_INDICATOR)),
+        int(rendered_length(INPUTSTRING_OVERWRITE_MODE_INDICATOR)),
+    )
+    max_width = max(1, max_width - (prompt_len + indicator_len))
 
     def enter_handler(buffer, curpos, scroll_offset, max_width):
         return handle_key_enter(

@@ -124,3 +124,25 @@ def test_reader_returns_paste_as_one_key():
         rs.close()
         os.close(master)
         os.close(slave)
+
+
+def test_long_bracketed_paste_stays_on_one_row_and_is_complete(term):
+    # The reported paste: longer than the 80-column row after the prompt. The entry must
+    # be complete, every drawn cursor position must be on the row and inside the width,
+    # and the visible text must never run past the right edge.
+    text = ("Ctrl-W and Ctrl-Y are confirmed working in your gnome-terminal. I recorded "
+            "that in the sidebar and in the handbook (ba51c2c, local only, not pushed).")
+    # Pin the width so the test does not depend on the host's terminal size.
+    monkeypatch_width = pytest.MonkeyPatch()
+    monkeypatch_width.setenv("BBSENGINE_MAX_WIDTH", "80")
+    try:
+        result, out = term([b"\x1b[200~" + text.encode() + b"\x1b[201~", b"\r"],
+                           lambda: inp.inputstring("> "), delay=0.3)
+    finally:
+        monkeypatch_width.undo()
+    assert result == text
+    import re
+    width = 80
+    for row, col in re.findall(rb"\x1b\[(\d+);(\d+)H", out):
+        assert int(row) == 1, f"cursor left row 1: {row!r}"
+        assert 1 <= int(col) <= width, f"cursor past width {width}: {col!r}"
