@@ -201,8 +201,8 @@ Numbered as in the command plan. This is not the inputstring "Phase 4" above.
   all questions answered yes. Step 1: TERM refusal shown, shell usable. Step 2: child exit
   status 3, then a new prompt on a clean line with the bottom bar; typing accepted. Step 3:
   worm (exit 0) took the whole screen, left no drawing, and the prompt accepted input.
-  Not checked by a question: the step 2 text typed before the child (`something`) surviving
-  the redraw. Add that question if it matters before the wrappers are wired.
+  Not checked by that run: the step 2 text typed before the child surviving the redraw. A
+  question for it is now in step 2 of the script; it needs one more live run to answer.
   Earlier logs (`live-check-subprocess.log`) are superseded; they predate the prompt fix.
 - [x] Downstream io check after the subprocess and Enter-CRLF commits (`4ee2830`). All 48
   casino and zoidoffice test files that import the io layer were run one file at a time.

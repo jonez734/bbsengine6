@@ -88,6 +88,7 @@ def step_child_exit_and_redraw(log) -> None:
     )
     _note(f"child exit status: {status}", log)
     _ask("Did the child's output appear, and then the screen clear for the shell?", log)
+    _ask(f"Is the text typed before the child ({typed!r}) still visible on the screen?", log)
     # A real prompt after the child. Nothing reads input between the child and this
     # line, so this is the check that the shell can take input again.
     after = inputstring("Type a second line, then press Enter (new prompt after the child): ")
