@@ -1088,11 +1088,13 @@ def _take_paste_burst(insert_tabs: bool = False) -> str | None:
         for i, c in enumerate(queued):
             if c == ESC:
                 break
+            if c in ("\r", "\n"):
+                # Enter ends the batch and stays queued: it is a command, handled by
+                # the key path (noneok, filter, verify). Text after it waits.
+                break
             if c == "\t" and i > last_text:
                 break  # trailing Tab(s): completion, not paste
-            if c in ("\r", "\n"):
-                taken.append("\n")
-            elif c == "\t" or c.isprintable():
+            if c == "\t" or c.isprintable():
                 taken.append(c)
             elif c in ("\x7f", "\x08"):
                 # Backspace is an editing key, typed or pasted: stop the batch so
@@ -1397,27 +1399,32 @@ def _inputstring_body(
             scroll_offset = adjust_scroll_offset(curpos, scroll_offset, max_width)
             continue
 
+        # Look the handler up under the lock, but run it outside: handlers write to
+        # the terminal (echo takes _current_stream_lock), and the lock is not reentrant.
         with _key_actions_lock:
-            if ch in KEY_ACTIONS:
-                result = KEY_ACTIONS[ch](buffer, curpos, scroll_offset, max_width)
+            handler = KEY_ACTIONS.get(ch)
+        if handler is not None:
+            result = handler(buffer, curpos, scroll_offset, max_width)
 
-                if ch == "KEY_ENTER":
-                    # Enter handler returns 5-tuple; other handlers return 3-tuple
-                    buffer, curpos, scroll_offset, accepted, need_redraw = result  # type: ignore[assignment]
-                    if accepted:
-                        # NEW: Add non-empty input to history (if enabled)
-                        if _history and buffer and buffer.strip():
-                            _history.add_entry(buffer)
-                        return buffer
-                    if need_redraw:
-                        _current_display_str = None
-                    continue
+            if ch == "KEY_ENTER":
+                # Enter handler returns 5-tuple; other handlers return 3-tuple
+                buffer, curpos, scroll_offset, accepted, need_redraw = result  # type: ignore[assignment]
+                if accepted:
+                    # NEW: Add non-empty input to history (if enabled)
+                    if _history and buffer and buffer.strip():
+                        _history.add_entry(buffer)
+                    return buffer
+                if need_redraw:
+                    _current_display_str = None
+                continue
 
-                buffer, curpos, scroll_offset = result  # type: ignore[assignment]
-                last_matches = []
-                tab_count = 0
-            else:
-                if len(ch) == 1:
+            buffer, curpos, scroll_offset = result  # type: ignore[assignment]
+            last_matches = []
+            tab_count = 0
+        else:
+                if len(ch) == 1 and allowed is not None and ch not in allowed:
+                    echo("{BEL}", end="", flush=True)
+                elif len(ch) == 1:
                     if len(buffer) < max_len or _insert_mode is False:
                         # NEW: Support insert/overwrite modes
                         if _insert_mode:
