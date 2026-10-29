@@ -65,6 +65,7 @@
 - [blurb.md](./blurb.md) — content entity (filesystem-based)
 - [folder.md](./folder.md) — ltree-backed folder hierarchy
 - [bottombar.md](./bottombar.md) — fragment registry + Phase 5b
+- [commands.md](./commands.md) — command registry: protected, default and session tiers; matching; overrides
   wire-push plan
 
 ## Build / templating

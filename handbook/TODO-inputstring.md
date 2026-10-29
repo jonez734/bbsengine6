@@ -171,3 +171,12 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 
 - [x] Version bumped to `0.4.0.dev` (`py/Makefile` and `_version.py`).
 
+## Phases 0 and 1: command registry
+
+- [x] Phase 0: plan confirmed; names recorded (tiers protected/default/session; messages
+  `command not found <name>` and `ambiguous command <prefix>`); `subprocess_term_check` default on.
+- [x] Phase 1: `bbsengine6/commands.py` registry, committed with its tests (`bff28cb`).
+- [x] Replace mode loads no default entries; registering one is refused. Found in review:
+  replace mode previously held the default list.
+- [x] Spec: `handbook/specs/commands.md`, linked from the specs index.
+
