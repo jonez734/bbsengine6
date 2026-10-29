@@ -44,23 +44,19 @@ on every call, not once.
 Sets a scroll region that leaves `topmargin` rows above it and `bottommargin` rows
 below it for the bottom bar.
 
-- Moves the cursor up three rows from the next line, then saves the cursor.
+- Moves the cursor up three rows from the next line, then saves the cursor with ESC 7.
 - Sets the scroll region to `topmargin` through `terminal.lines() - bottommargin`
-  (DECSTBM), then restores the cursor.
+  (DECSTBM), then restores the cursor with ESC 8.
 
 Verified: `init(topmargin=2, bottommargin=1)` on a 24-row terminal sends `ESC[2;23r`.
 
-`{savecursor}` asks the terminal for its position first, so `init` waits for a
-cursor-position reply (see `io_common.md`).
+The cursor is saved and restored with the terminal's own ESC 7 / ESC 8, so `init`
+sends no cursor-position query and does not wait for a reply.
 
 ### `updatebottombar(buf: str) -> None` (live)
 
 Draws `buf` on the last terminal line, in the bottom-bar colour, without word wrap.
-It saves and restores the cursor with `{savecursor}` / `{restorecursor}`, so it also
-waits for a cursor-position reply.
-
-`bottombar.py` avoids this cost by writing `ESC 7` / `ESC 8` instead. `updatebottombar`
-was not changed.
+It saves and restores the cursor with ESC 7 / ESC 8 and sends no cursor-position query.
 
 ### `setbottombar(left, right=None, **kwargs)` (shim)
 
@@ -125,12 +121,14 @@ copies. In the source tree the cache is refreshed by the poll in `getch`, not by
 
 ## Known issues
 
-1. `updatebottombar`, `updateprogress`, and `init` use `{savecursor}` or `{decsc}`, so each
-   call waits for the terminal to reply. A terminal that does not reply makes each call
-   wait the full timeout (one second). `bottombar.py` no longer does this; these three do.
-2. `popbottombar` has no producer in the package (see above). It is a no-op in practice.
-3. The shims are scheduled for removal ("will be removed in a future release"). Their
+1. `popbottombar` has no producer in the package (see above). It is a no-op in practice.
+2. The shims are scheduled for removal ("will be removed in a future release"). Their
    removal date is not set.
+
+Fixed: `init`, `updatebottombar`, and `updateprogress` no longer query the terminal for
+the cursor position. They used `{savecursor}`, which waited the full one-second timeout
+on a terminal that does not reply. They now use ESC 7 / ESC 8 (verified: no DSR query,
+under 0.01 s for all three).
 
 Fixed in the past and removed from this list: `io.getterminalwidth()` (now
 `terminal.width()`), and the uninitialised `bottombarstack` (now an empty list).
