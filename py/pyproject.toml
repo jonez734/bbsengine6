@@ -50,6 +50,8 @@ dates = [
 dev = [
     "pytest",
     "ruff",
+    "pexpect",
+    "pyte",
 ]
 
 [project.urls]
