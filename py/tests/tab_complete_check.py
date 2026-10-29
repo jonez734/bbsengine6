@@ -84,6 +84,30 @@ CASES = [
         {},
     ),
     (
+        "second word completes",
+        [b"hello ban", b"\t", b"\r"],
+        "hello banana",
+        {},
+    ),
+    (
+        "second word mid-line completes the word under the cursor",
+        [b"hello cher", b"\t", b"\r"],
+        "hello cherry",
+        {},
+    ),
+    (
+        "second word ambiguous stays as typed",
+        [b"hello ap", b"\t", b"\r"],
+        "hello ap",
+        {},
+    ),
+    (
+        "empty input: double Tab lists all completions (result unchanged)",
+        [b"\t", b"\t", b"\r"],
+        "",
+        {},
+    ),
+    (
         "no completer: Tab is ignored",
         [b"ban", b"\t", b"\r"],
         "ban",
