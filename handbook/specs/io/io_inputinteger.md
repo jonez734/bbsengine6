@@ -17,7 +17,7 @@ def inputinteger(
     prompt: str,
     oldvalue: int | str | None = None,
     **kwargs
-) -> int | list[int] | None
+) -> int | None
 ```
 
 **Parameters:**
@@ -47,14 +47,12 @@ A rejected value beeps and reprompts, as `inputstring` does for any failed `filt
 
 **Returns:**
 - `int` for an accepted value
-- `None` if the result is empty, or if `int()` fails on the text
+- `None` if the result is empty, or if `int()` fails on the text (only the default filter stops most of these)
 
-## Lists are not accepted by the default filter
+## Lists
 
-The return type includes `list[int]`, and the code has a branch for a list result.
-`inputstring` returns a string, not a list, so that branch is never taken, and the
-default filter rejects `1 2`. A caller that wants several integers must pass its own
-`filter` and split the string itself. No list-entry filter is built in.
+`inputinteger` returns one `int` or `None`. A caller that wants several integers must
+pass its own `filter`, read the string, and split it. No list-entry filter is built in.
 
 ## Examples
 
@@ -64,8 +62,7 @@ n = inputinteger("Enter value: ", oldvalue=42)        # pre-filled with 42
 n = inputinteger("Enter level: ", filter=r"^[1-9]$")  # single digit 1-9 only
 ```
 
-## Known gap
+## Fixed
 
-The return annotation `int | list[int] | None` promises a list the module never
-returns. The annotation should be `int | None`. Correcting the annotation is a code
-change, recorded here and not made in this pass.
+The return annotation promised `list[int]`, and a list branch was unreachable because
+`inputstring` returns a string. Both are removed: the return type is `int | None`.

@@ -3,7 +3,7 @@ from .inputstring import inputstring
 
 def inputinteger(
     prompt: str, oldvalue: int | str | None = None, **kwargs
-) -> int | list[int] | None:
+) -> int | None:
     """Read integer input from the terminal.
 
     Args:
@@ -12,26 +12,17 @@ def inputinteger(
         **kwargs: Passed to inputstring
 
     Returns:
-        Integer value, list of integers, or None if cancelled
+        The integer entered, or None if the entry is empty or not an integer
     """
     filter = kwargs.pop("filter", r"^([+-]?[1-9]\d*|0)[ ,]?$")
     # Only characters that can appear in an integer (and a separator) are accepted
     # while typing; the regex then checks the whole value on Enter.
     kwargs.setdefault("allowed", "0123456789+- ,")
     default = str(oldvalue) if oldvalue is not None else ""
-    buf: str | list[str] = inputstring(prompt, default, filter=filter, **kwargs)
+    buf: str = inputstring(prompt, default, filter=filter, **kwargs)
 
     if buf is None or buf == "":
         return None
-
-    if isinstance(buf, list):
-        result: list[int] = []
-        for b in buf:
-            try:
-                result.append(int(b))
-            except ValueError:
-                return None
-        return result
 
     try:
         return int(buf)
