@@ -27,7 +27,9 @@ class InputCompleter(object):
         self._matches: List[str] = []
 
     def _refresh(self, text: str) -> None:
-        from . import database
+        # Absolute import: a relative import here resolved to bbsengine6.io.database,
+        # which does not exist, so every completion raised ImportError.
+        from bbsengine6 import database
         from psycopg import sql
 
         try:

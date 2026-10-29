@@ -44,24 +44,23 @@ class InputCompleter:
 - Matches are filtered again in Python to those that start with `text`.
 - The query runs inside a `try` block: a database error clears the match list and
   `completer` returns `None`, with no report to the caller. See Known defect below for
-  an error that is raised before that block.
+  an error that is raised before that block (the import error, now fixed).
 - `args` is stored but not used by the completer.
 
 **Correction to the module docstring:** it says the completer reads on each keystroke.
 It reads once per completion request (on `state == 0`), as above.
 
-## Known defect
+## Fixed defect
 
-`_refresh` imports the database module with `from . import database`. Inside
-`bbsengine6.io` that resolves to `bbsengine6.io.database`, which does not exist, so
-the import raises `ImportError` before the `try` block. The database module is
-`bbsengine6.database`. As written, every completion request raises instead of
-returning matches, and the "errors are swallowed" behaviour above does not apply to
-this import.
+`_refresh` used a relative import (`from . import database`), which resolved to
+`bbsengine6.io.database`, a module that does not exist. Every completion raised
+`ImportError` before the `try` block. It now imports `bbsengine6.database` by its
+absolute name. `tests/test_inputcompleter.py` covers it and fails on the old code.
 
-The fix is to import `bbsengine6.database` (or a package-absolute import) inside
-`_refresh`, and to add a test that calls `completer` with a fake cursor. It is
-recorded here, not fixed, because the code change belongs in its own commit.
+**Not yet fixed in the callers:** zoidoffice calls `io.inputcompleter` from
+`invoice/invoiceflow.py` and `customer/lib.py`, which are a separate project and are
+deferred to a later session. Nothing in bbsengine6 uses `inputcompleter` outside its
+own export.
 
 ## Limits
 
