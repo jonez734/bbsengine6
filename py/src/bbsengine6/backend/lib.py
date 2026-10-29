@@ -94,7 +94,7 @@ def created():
     io.echo(  f"{{level.ok}} created {{/all}}")
 
 # Historical note (2026-07-06): commit 8a5d1c0 removed {level.fail} and the
-# level="fail" example from io/specs/echo_commands.spec on the assumption
+# level="fail" example from handbook/specs/io/echo_commands.md on the assumption
 # that no caller used them. backend.lib.fail() above emits {{level.fail}}
 # fail {{/all}} and is called by checkdatabase, checkroles, checkwebserverrole,
 # checkmemberflag, checksuperuser, and checkbank. Commit 7115e77 restored both lines
