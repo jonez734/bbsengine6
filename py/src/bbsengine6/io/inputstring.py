@@ -1404,6 +1404,7 @@ def _inputstring_body(
             # A paste: insert literal text; a newline ends the entry like Enter.
             text = burst
             rejected = False
+            overflow = False
             for c in text:
                 if c == "\t" and not insert_tabs:
                     c = " "  # a single-line field has no tab stops: show a space
@@ -1413,7 +1414,9 @@ def _inputstring_body(
                 if len(buffer) < max_len:
                     buffer = buffer[:curpos] + c + buffer[curpos:]
                     curpos += 1
-            if rejected:
+                else:
+                    overflow = True  # text past max_len is dropped; beep once below
+            if rejected or overflow:
                 echo("{BEL}", end="", flush=True)
             _input_dirty = True
             tab_count = 0
@@ -1425,6 +1428,13 @@ def _inputstring_body(
                 check_notifications=False,
             )
         if ch is None:
+            continue
+        if isinstance(ch, str) and ch.startswith("PASTE:"):
+            # Bracketed paste: the body goes back on the queue, in order, so the
+            # same paste-batch rules apply as for a paste that was not bracketed.
+            body = ch[len("PASTE:"):]
+            with _input_queue_lock:
+                _input_queue.extendleft(reversed(body))
             continue
 
         if ch == "KEY_TAB" and callable(completer):
@@ -1477,6 +1487,9 @@ def _inputstring_body(
                 if len(ch) == 1 and allowed is not None and ch not in allowed:
                     echo("{BEL}", end="", flush=True)
                 elif len(ch) == 1:
+                    if len(buffer) >= max_len and _insert_mode is True:
+                        # Full: a key that cannot be inserted beeps (overwrite still fits).
+                        echo("{BEL}", end="", flush=True)
                     if len(buffer) < max_len or _insert_mode is False:
                         # NEW: Support insert/overwrite modes
                         if _insert_mode:
