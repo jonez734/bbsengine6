@@ -49,35 +49,96 @@ class Token:
 # _cursor_row = 1
 # _cursor_col = 1
 
-_current_input_stream = sys.stdin
-
-_current_output_stream = sys.stdout
-
 _current_stream_lock = threading.Lock()
 _terminal_state_lock = threading.Lock()
 
 
+def _in_stream():
+    return _get_input_stream()
+
+
+def _out_stream():
+    return _get_output_stream()
+
+
+def _queue():
+    return _interaction().input_queue
+
+
+def _interaction():
+    """The interaction in effect for this context (see bbsengine6.interaction)."""
+    from ..interaction import current_session
+
+    return current_session()
+
+
+def _get_input_stream():
+    v = _interaction().input_stream
+    return sys.stdin if v is None else v
+
+
+def _get_output_stream():
+    v = _interaction().output_stream
+    return sys.stdout if v is None else v
+
+
+def _get_input_queue():
+    return _interaction().input_queue
+
+
+def _terminal_state_of(it):
+    """The interaction's terminal state, built from the terminal size on first read."""
+    if it.terminal_state is None:
+        it.terminal_state = _default_terminal_state()
+    return it.terminal_state
+
+
+def _get_terminal_state():
+    st = _interaction().terminal_state
+    if st is None:
+        st = _default_terminal_state()
+        _interaction().terminal_state = st
+    return st
+
+
+def _get_terminal_state_stack():
+    return _interaction().terminal_state_stack
+
+
+def _get_terminal_state_stack_enabled():
+    return _interaction().terminal_state_stack_enabled
+
+
+def _set_terminal_state_stack_enabled(value):
+    _interaction().terminal_state_stack_enabled = bool(value)
+
+
+def _get_input_dirty():
+    return _interaction().input_dirty
+
+
+def _set_input_dirty(value):
+    _interaction().input_dirty = bool(value)
+
+
 def set_output_stream(stream):
-    global _current_output_stream
     with _current_stream_lock:
-        _current_output_stream = stream
+        _interaction().output_stream = stream
 
 
 def set_input_stream(stream):
-    global _current_input_stream
     with _current_stream_lock:
-        _current_input_stream = stream
+        _interaction().input_stream = stream
 
 
-_input_queue = collections.deque()
 _input_queue_lock = threading.Lock()
 
 
 def _read_current_input_stream(size: int = 1) -> str:
     with _input_queue_lock:
-        if _input_queue:
-            return _input_queue.popleft()
-    return _current_input_stream.read(size)
+        if _queue():
+            return _queue().popleft()
+    return _in_stream().read(size)
 
 
 def read_current_input_stream(size: int = 1) -> str:
@@ -86,9 +147,9 @@ def read_current_input_stream(size: int = 1) -> str:
 
 
 def _write_current_output_stream(s: str, flush=False):
-    _current_output_stream.write(s)
+    _out_stream().write(s)
     if flush:
-        _current_output_stream.flush()
+        _out_stream().flush()
 
 
 def write_current_output_stream(s: str, flush=False):
@@ -113,14 +174,14 @@ def begin_raw_session() -> None:
     if _session_raw_fd is not None:
         return
     try:
-        fd = _current_input_stream.fileno()
+        fd = _in_stream().fileno()
         settings = termios.tcgetattr(fd)
     except Exception:
         return  # not a terminal
     with _current_stream_lock:
         # Keys already typed are in the cooked line discipline; setraw() would
         # discard them. Queue them first, in arrival order.
-        drain_stream_to_queue(_current_input_stream, _input_queue)
+        drain_stream_to_queue(_in_stream(), _queue())
         tty.setraw(fd)
     _session_raw_fd = fd
     _session_raw_settings = settings
@@ -159,7 +220,7 @@ def _read_terminal_response(terminator: str, timeout: float = 1.0) -> str | None
     Reads characters from the terminal until the specified terminator is received
     or the timeout expires, using a non-blocking select loop.
     """
-    fd = _current_input_stream.fileno()
+    fd = _in_stream().fileno()
 
     # 1. Save and set terminal mode
     old_settings = termios.tcgetattr(fd)
@@ -169,7 +230,7 @@ def _read_terminal_response(terminator: str, timeout: float = 1.0) -> str | None
 
         response = ""
         for _ in range(10):
-            ch = os.read(fd, 1).decode(_current_input_stream.encoding)
+            ch = os.read(fd, 1).decode(_in_stream().encoding)
             response += ch
             if ch == terminator:
                 return response
@@ -207,8 +268,8 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 
     # Hold lock only for setup/teardown, not during the full DSR exchange
     with _current_stream_lock:
-        drain_stream_to_queue(_current_input_stream, _input_queue)
-        fd = _current_input_stream.fileno()
+        drain_stream_to_queue(_in_stream(), _queue())
+        fd = _in_stream().fileno()
         old_settings = termios.tcgetattr(fd)
 
     try:
@@ -217,7 +278,7 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
         _write_current_output_stream(f"{ESC}[{code}n", flush=True)
 
         buffer = ""
-        encoding = _current_input_stream.encoding or "utf-8"
+        encoding = _in_stream().encoding or "utf-8"
 
         # Use select() for real timeout instead of fixed byte count.
         # Read whatever bytes arrive within the timeout window and look
@@ -246,8 +307,8 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
                 start, end = match.span()
                 leftover = buffer[:start] + buffer[end:]
                 with _input_queue_lock:
-                    _input_queue.clear()
-                    _input_queue.extend(leftover)
+                    _queue().clear()
+                    _queue().extend(leftover)
                 return (row, col)
             raise TimeoutError(
                 f"DSR response not received in {timeout}s: {buffer!r}"
@@ -258,7 +319,7 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 
 
 ##    write_current_output_stream(f"{CSI}{code}n", flush=True)
-##    _current_output_stream.flush()
+##    _out_stream().flush()
 ##    return _read_terminal_response(terminator)
 
 
@@ -338,10 +399,10 @@ def drain_stream_to_queue(stream, queue):
                 # Cooked mode turns Enter (\r) into \n (ICRNL). Raw mode delivers \r,
                 # which the key table maps to KEY_ENTER, so restore it here for
                 # every key drained into the input queue.
-                if ch == "\n" and queue is _input_queue:
+                if ch == "\n" and queue is _queue():
                     ch = "\r"
-                # Lock for _input_queue, otherwise assume caller handles it
-                if queue is _input_queue:
+                # Lock for _queue(), otherwise assume caller handles it
+                if queue is _queue():
                     with _input_queue_lock:
                         queue.append(ch)
                 else:
@@ -373,26 +434,21 @@ class TerminalState:
         return f"TerminalState({self.cursor_row=}, {self.cursor_col=}, {self.wordwrap=}, {self.has_color=}, {self.hidden=}, {self.acs=}, {self.raw=})"
 
 
-_terminal_state = TerminalState(
-    cursor_row=terminal.lines(), cursor_col=terminal.columns()
-)
-_terminal_state_stack = []
-_terminal_state_stack_enabled = False
-
 _terminal_state_stack_lock = threading.Lock()
 
-_input_dirty = False
+
+def _default_terminal_state() -> TerminalState:
+    return TerminalState(cursor_row=terminal.lines(), cursor_col=terminal.columns())
 
 
 def get_terminal_state():
     with _terminal_state_lock:
-        return _terminal_state
+        return _get_terminal_state()
 
 
 def set_terminal_state(state: TerminalState):
-    global _terminal_state
     with _terminal_state_lock:
-        _terminal_state = state
+        _interaction().terminal_state = state
 
 
 # --------------------------
@@ -449,9 +505,9 @@ def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:
     Returns {mode: enabled}. A mode with no reply is reported as disabled,
     which is the fallback the restore logic relies on.
     """
-    fd = _current_input_stream.fileno()
+    fd = _in_stream().fileno()
     with _current_stream_lock:
-        drain_stream_to_queue(_current_input_stream, _input_queue)
+        drain_stream_to_queue(_in_stream(), _queue())
         old_settings = termios.tcgetattr(fd)
     replies = ""
     try:
@@ -492,7 +548,7 @@ def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:
     if leftover:
         keys = ["\r" if c == "\n" else c for c in leftover]
         with _input_queue_lock:
-            _input_queue.extend(keys)
+            _queue().extend(keys)
     return state
 
 
@@ -514,7 +570,7 @@ def _write_mouse_modes(state: dict[int, bool | None], only_known: bool = False) 
             suffix = "h" if value else "l"
             _write_current_output_stream(f"{CSI}?{mode}{suffix}", flush=True)
             written.append(f"{mode}{suffix}")
-        _current_output_stream.flush()
+        _out_stream().flush()
     _mouse_trace(f"write {' '.join(written) or '(none)'}")
 
 
@@ -563,3 +619,32 @@ def _mouse_trace(message: str) -> None:
             fh.write(f"{time.strftime('%H:%M:%S')} {message}\n")
     except OSError:
         pass
+
+
+# ---------------------------------------------------------------------------
+# Per-interaction names: read through the current interaction (Phase 3).
+#
+# These names used to be module globals. Each one is now a property over the current
+# interaction, so `common.<name>` reads and writes the interaction in effect, and existing
+# callers (echo, getch, inputstring, and tests that assign module attributes) are unchanged.
+# The process-wide names above (locks, the tty settings, the *_MANAGED flags) are not here.
+# ---------------------------------------------------------------------------
+from ..interaction import install_read_through as _install_read_through  # noqa: E402
+
+_install_read_through(
+    __name__,
+    {
+        "_current_input_stream": "input_stream",
+        "_current_output_stream": "output_stream",
+        "_input_queue": "input_queue",
+        "_terminal_state": "terminal_state",
+        "_terminal_state_stack": "terminal_state_stack",
+        "_terminal_state_stack_enabled": "terminal_state_stack_enabled",
+        "_input_dirty": "input_dirty",
+    },
+    getters={
+        "_current_input_stream": lambda it: sys.stdin if it.input_stream is None else it.input_stream,
+        "_current_output_stream": lambda it: sys.stdout if it.output_stream is None else it.output_stream,
+        "_terminal_state": lambda it: _terminal_state_of(it),
+    },
+)
