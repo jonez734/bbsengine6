@@ -151,3 +151,23 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] `BBSENGINE_MOUSE_TRACE=<file>` logs query replies and writes (off by default).
 - [x] User confirms drag works in gnome-terminal.
 
+## Phase 15: io specifications
+
+- [x] Specs moved to `handbook/specs/io/` (`git mv`), with an index. Legacy modules
+  `input.py`, `output.py`, `lib.py` and `echovars.py` are marked deprecated and left alone.
+- [x] Each live module's spec checked against its code and corrected: getch, inputstring,
+  inputstring enhancements, inputboolean, inputinteger, inputchoice, getstr, inputcompleter
+  (new), echo, echo_commands, palette, terminal, common, const, keymap, util, events,
+  echovars, best practices.
+- [x] Defects found while checking are recorded in the specs, not fixed: `inputcompleter`
+  import error; `getstr` insert toggle tests `KEY_IC`; `inputchoice` return annotation
+  promises a list (`inputinteger`); `{settitle}` does not exist; events do not fire during
+  `inputstring()`.
+- [x] Handbook index links the io folder; TODO and comment references point at the new paths.
+- [ ] `io_screen.spec` stays in `py/src/bbsengine6/io/specs/`: it describes top-level
+  `screen.py`, which is outside io. Its title still says `asimov.io.screen`.
+
+## Version
+
+- [x] Version bumped to `0.4.0.dev` (`py/Makefile` and `_version.py`).
+
