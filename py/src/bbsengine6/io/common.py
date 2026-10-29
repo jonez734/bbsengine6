@@ -183,6 +183,12 @@ def begin_raw_session() -> None:
         # discard them. Queue them first, in arrival order.
         drain_stream_to_queue(_in_stream(), _queue())
         tty.setraw(fd)
+        # setraw() also clears OPOST, which turns off the tty's LF-to-CRLF translation.
+        # Without it, a bare "\n" (from {f6}, and so from the Enter key) moves the cursor
+        # down without returning to column 0. Input stays raw: only the output flag changes.
+        attrs = termios.tcgetattr(fd)
+        attrs[1] |= termios.OPOST | termios.ONLCR
+        termios.tcsetattr(fd, termios.TCSANOW, attrs)
     _session_raw_fd = fd
     _session_raw_settings = settings
 

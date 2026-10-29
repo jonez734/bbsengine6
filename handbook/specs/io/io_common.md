@@ -132,6 +132,11 @@ end_raw_session() -> None
 `begin_raw_session()` drains pending input into `_input_queue`, then puts the input
 tty in raw mode and keeps the saved settings. `end_raw_session()` restores them.
 
+Raw mode is `tty.setraw()` with output post-processing (`OPOST`) turned back on. `setraw()`
+clears `OPOST`, which stops the tty turning `\n` into `\r\n`; without it, a bare `\n` (the
+`{f6}` newline, and so the Enter key) moves the cursor down without returning to column 0.
+Input stays raw.
+
 While a session is open, `getch`, the DSR query, and the mouse-state query do not
 switch modes and do not restore cooked settings between keys. This is why a key
 pressed between reads is not echoed (`^[[C`). `inputstring()` opens a session in its

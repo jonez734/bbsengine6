@@ -45,6 +45,11 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 ## Phase 4: `inputstring()` (`py/src/bbsengine6/io/inputstring.py`)
 
 - [x] Per-call keys restored on exit (commit `3f2e3c1`). Table is still one shared dict; concurrent prompts in threads are not supported.
+- [x] Enter returns the cursor to column 0. Cause: `tty.setraw()` clears `OPOST`, so the bare
+  `\n` from `{f6}` moved down without a CR. `begin_raw_session` turns `OPOST` back on after
+  `setraw()` (input stays raw). Verified on a real pty: every LF after Enter is CRLF. Regression
+  test `test_inputstring_enter_crlf.py` (fails without the fix). Specs `io_common.md` and
+  `io_getch.md` updated.
 - [ ] Working INSERT toggle, `[OVR]` indicator, real overwrite. (Not done.)
 - [x] `PASTE` inserts as one operation: a bracketed paste arrives as one `PASTE:` key and is inserted through the paste-batch rules (commit `7bf0c29`).
 - [x] Typed overflow beeps; a paste cut at `max_len` beeps once (commit `8d4ee1a`).

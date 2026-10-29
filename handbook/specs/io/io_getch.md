@@ -187,6 +187,8 @@ While a session is active:
   therefore never echoed (for example as `^[[C`).
 - Keys already typed when the session starts are drained into `_input_queue`
   first; `tty.setraw()` would otherwise discard them.
+- Output post-processing (`OPOST`) is turned back on after `tty.setraw()`, so `\n`
+  is written as `\r\n` and Enter returns the cursor to column 0.
 - `end_raw_session()` restores the saved settings. `inputstring()` calls it in
   `finally`, so it runs on return, exception, and Ctrl-C.
 
