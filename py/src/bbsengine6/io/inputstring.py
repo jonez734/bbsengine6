@@ -24,6 +24,8 @@ from .common import (
     _input_queue_lock,
     mouse_state_push,
     mouse_state_pop,
+    bracketed_paste_on,
+    bracketed_paste_off,
 )
 from .getch import begin_raw_session, end_raw_session
 
@@ -942,6 +944,27 @@ add_key_mapping(
 # --- 6. MAIN INPUT FUNCTION ---
 
 
+# Per-call key snapshots: _inputstring_body pushes the handlers it is about to
+# replace; inputstring() pops and restores them in its finally block.
+_key_snapshot_stack: list[dict] = []
+
+
+def _restore_key_snapshot(depth: int) -> None:
+    """Restore handlers replaced by prompts deeper than `depth`, innermost first.
+
+    `depth` is the stack size when the prompt started, so a prompt that failed
+    before pushing does not pop a snapshot that belongs to an outer call.
+    """
+    with _key_actions_lock:
+        while len(_key_snapshot_stack) > depth:
+            snap = _key_snapshot_stack.pop()
+            for key, previous in snap.items():
+                if previous is None:
+                    KEY_ACTIONS.pop(key, None)
+                else:
+                    KEY_ACTIONS[key] = previous
+
+
 def inputstring(
     prompt: str = "> ",
     oldvalue: str = "",
@@ -1307,7 +1330,12 @@ def _inputstring_body(
 
         return function_key_handler
 
+    # Keys this call overwrites. Their previous handlers are restored on exit, so a
+    # prompt never leaves its closures (or F1 help) in the shared table.
+    _per_call_keys = ["KEY_ENTER", "KEY_UP", "KEY_DOWN", "KEY_DELETE", "KEY_PAGEUP",
+                      "KEY_PAGEDOWN", "KEY_F1"] + [f"KEY_F{n}" for n in range(2, 13)]
     with _key_actions_lock:
+        _key_snapshot_stack.append({k: KEY_ACTIONS.get(k) for k in _per_call_keys})
         KEY_ACTIONS["KEY_ENTER"] = enter_handler
         # Override history handlers with closures
         if _history:
