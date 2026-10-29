@@ -11,8 +11,7 @@ def _shell(mode=c.MODE_EXTEND):
     r = c.CommandRegistry(mode=mode)
     r.register("logout", c.TIER_PROTECTED, aliases=("lo", "quit", "q", "o", "o!"))
     r.register("message", c.TIER_PROTECTED)
-    r.register("exit", c.TIER_DEFAULT)
-    r.register("murdermotel", c.TIER_DEFAULT)
+    r.use_default([c.Entry("exit", c.TIER_DEFAULT), c.Entry("murdermotel", c.TIER_DEFAULT)])
     return r
 
 
@@ -172,8 +171,9 @@ def test_session_overrides_session_entry():
     assert r.lookup("snake").spec == {"v": 2}
 
 
-def test_replace_mode_drops_default_in_favour_of_session():
+def test_replace_mode_session_entry_has_no_default_to_override():
     r = _shell(mode=c.MODE_REPLACE)
+    assert r.lookup("murdermotel") is None
     r.register("murdermotel", c.TIER_SESSION, spec={"prg": "casino_mm"})
     assert r.lookup("murdermotel").tier == c.TIER_SESSION
 
@@ -196,3 +196,32 @@ def test_two_registries_do_not_share_entries():
 def test_listing_is_sorted_by_name():
     names = [e.name for e in _shell().visible({})]
     assert names == sorted(names)
+
+
+# ---- default list loading ---------------------------------------------
+
+def test_replace_mode_does_not_load_default_list():
+    r = c.CommandRegistry(mode=c.MODE_REPLACE)
+    r.use_default([c.Entry("murdermotel", c.TIER_DEFAULT), c.Entry("exit", c.TIER_DEFAULT)])
+    assert r.lookup("murdermotel") is None
+    assert r.lookup("exit") is None
+
+
+def test_replace_mode_refuses_registering_a_default_entry():
+    r = c.CommandRegistry(mode=c.MODE_REPLACE)
+    with pytest.raises(c.CommandError):
+        r.register("murdermotel", c.TIER_DEFAULT)
+
+
+def test_extend_mode_loads_default_list():
+    r = c.CommandRegistry(mode=c.MODE_EXTEND)
+    r.use_default([c.Entry("murdermotel", c.TIER_DEFAULT)])
+    assert r.lookup("murdermotel").tier == c.TIER_DEFAULT
+
+
+def test_replace_mode_still_holds_protected_and_session_entries():
+    r = c.CommandRegistry(mode=c.MODE_REPLACE)
+    r.register("logout", c.TIER_PROTECTED, aliases=("lo",))
+    r.register("snake", c.TIER_SESSION)
+    assert r.lookup("lo").name == "logout"
+    assert r.lookup("snake").tier == c.TIER_SESSION

@@ -4,7 +4,8 @@ A registry maps typed command names (and their aliases) to entries. Entries come
 tiers:
 
 - ``protected``: always present. A session cannot remove or override them.
-- ``default``: the shell's own list. A session may override one by name.
+- ``default``: the shell's own list. A session may override one by name in extend mode.
+  In replace mode the default list is not loaded at all (see ``use_default``).
 - ``session``: added by a host for its own session. A session may override a default
   entry or another session entry.
 
@@ -98,6 +99,9 @@ class CommandRegistry:
         """
         if tier not in TIERS:
             raise CommandError(f"unknown tier {tier!r}")
+        if tier == TIER_DEFAULT and self.mode == MODE_REPLACE:
+            # Replace mode never holds default entries; see use_default().
+            raise CommandError(f"default {name!r} is not loaded in replace mode")
         entry = Entry(name, tier, dict(spec or {}), tuple(aliases), available)
         with self._lock:
             for typed in entry.names():
@@ -115,15 +119,23 @@ class CommandRegistry:
                 self._entries[typed] = entry
         return entry
 
+    def use_default(self, entries: List[Entry]) -> None:
+        """Load a shell's default list. In replace mode the list is not loaded at all.
+
+        Extend mode keeps the default entries (a session may override them). Replace mode
+        keeps only the protected tier, so a host that replaces the shell's list never sees
+        the shell's default commands.
+        """
+        if self.mode == MODE_REPLACE:
+            return
+        for entry in entries:
+            self.register(entry.name, TIER_DEFAULT, entry.spec, aliases=entry.aliases, available=entry.available)
+
     def _check_replaceable(self, existing: Entry, new: Entry) -> None:
         if existing.tier == TIER_PROTECTED:
             raise CommandError(f"{existing.name!r} is protected and cannot be overridden")
         if new.tier == TIER_PROTECTED:
             # Protected entries are added by the shell itself, before any host runs.
-            return
-        if self.mode == MODE_REPLACE and existing.tier == TIER_DEFAULT and new.tier == TIER_SESSION:
-            # In replace mode default entries are dropped; overriding one is the same as
-            # removing it and adding the session entry. Allowed.
             return
         if new.tier == TIER_DEFAULT:
             raise CommandError(f"default {new.name!r} may not replace an existing {existing.tier} entry")
