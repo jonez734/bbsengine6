@@ -13,8 +13,8 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Shared logic (escape resolution, `_proc_char`, `_getch_core`) lives in common helpers.
 - [x] Runtime selection: `set_getch_impl("str" | "utf8")` sets the default; per-call `impl=` overrides. Default stays `"str"`.
 - [x] `source_func` is `"getch_str"` for the existing reader and `"getch_utf8"` for the new one.
-- [ ] `noneok` defaults to `True`. `noneok=False` reprompts on empty Enter. No caller edits required. (Not implemented.)
-- [ ] `filter` split: `allowed=` (per-character set) and `filter=` (regex, checked on Enter). (Not implemented.)
+- [x] `noneok` defaults to `True`. `noneok=False` reprompts on empty Enter. No caller edits required.
+- [x] `filter` split: `allowed=` (per-character set) and `filter=` (regex, checked on Enter).
 - [x] Mouse state: save on entry, restore on return/exception/Ctrl+C. DECRQM reply restores previous state; no reply restores "off".
 - [ ] Module flag to disable mouse handling is present (`MOUSE_STATE_MANAGED`); no user-facing setting.
 - [x] Cutover of the default to `"utf8"` is NOT part of this change.
@@ -49,13 +49,13 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [ ] `PASTE` inserts as one operation. (Not done; paste bursts are handled by the reader, not as a single event.)
 - [ ] Typed overflow beeps. (Not done.)
 - [ ] Ctrl+W and Ctrl+Y wired through the per-call table. (Not done.)
-- [ ] `noneok` default `True`. (Not done: default is still `False`. Spec documents the current default and lists this as a known issue.)
+- [x] `noneok` default `True` (`inputstring`, `io_inputstring.spec`).
 - [x] `io/specs/io_inputstring.spec` updated to the code (commit `4cb50db`).
-- [ ] `noneok=False`: empty Enter beeps and reprompts. (Not done.)
-- [ ] `allowed=` per-character set. (Not done.)
-- [ ] `filter=` regex checked on Enter. (Not done.)
-- [ ] `inputinteger` passes `allowed=` and `filter=`. (Not done.)
-- [ ] Asimov wrapper (`asimov/src/asimov/io/inputstring.py`, `inputinteger.py`) updated to match. (Not done.)
+- [x] `noneok=False`: empty Enter beeps and reprompts.
+- [x] `allowed=` per-character set, on typing and paste; disallowed characters beep and are dropped.
+- [x] `filter=` regex checked on Enter (whole buffer); a non-match beeps and reprompts.
+- [x] `inputinteger` passes `allowed=` and `filter=`.
+- [ ] Asimov wrapper (`asimov/src/asimov/io/inputstring.py`, `inputinteger.py`) updated to match. Not done: separate submodule, left unchanged on purpose. Its `noneok` default is still `False`.
 - [ ] Update `py/tests/test_inputstring_filter_kwarg.py`. (Not done; the test now reads the body function for pops, which is the only change.)
 - [x] `inputstring()` wraps `_inputstring_body()` with a raw session and mouse push/pop.
 - [x] Dirty-redraw no longer runs under the non-reentrant `_current_stream_lock` (fixes a self-deadlock).
@@ -75,7 +75,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [ ] Runtime default and per-call `impl=` override. (Not written.)
 - [ ] Pty tests: burst paste, bracketed paste, ESC followed by text, control bytes. (Burst and ESC covered by probes, not by tests in the tree.)
 - [ ] Pty tests: `\x17` and `\x19`, typed overflow beep, INSERT toggle. (Not written.)
-- [ ] Pty tests: `noneok=False` reprompt, `allowed=` and `filter=`. (Not written.)
+- [x] Pty tests: `noneok=False` reprompt, `allowed=`, `filter=`, `inputinteger` (`test_inputstring_validation.py`, 10 tests).
 - [x] Pty tests: mouse state restored on normal return, exception, and fallback (`test_inputstring_mouse_state.py`, 4 tests). Ctrl+C path not tested.
 - [x] `test_inputstring_*`, `test_getch_*`, and `test_echo_*` green (69 tests).
 - [x] Full `py/tests` run: no new failures against baseline. Remaining failures are Postgres-dependent and cannot run in the sandbox.
@@ -105,3 +105,15 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] `insert_tabs=True` keeps pasted tabs as tab characters for a future editor.
 - [x] `tests/tab_complete_check.py` (12 cases; `--interactive` for a manual prompt) and `test_inputstring_tab_complete.py`.
 - [ ] Verified in local gnome-terminal (user).
+
+## Phase 10: input rules (noneok, filter, allowed)
+
+- [x] `noneok` controls empty Enter; default accepts, `noneok=False` reprompts.
+- [x] `allowed` drops disallowed characters on typing and paste (beep, once per paste).
+- [x] `filter` is a whole-buffer regex checked on Enter; not applied per keystroke.
+- [x] `inputinteger` passes `allowed` and its regex; letters are dropped, invalid values reprompt.
+- [x] Enter at the head of a paste batch is a command: it waits for the key path, so these rules apply to it.
+- [x] Key handlers run outside `_key_actions_lock` (handlers write to the terminal).
+- [ ] Asimov's separate `inputstring`/`inputinteger` copy: not changed (other submodule).
+- [ ] `inputinteger` list entry (`1 2`): the regex still validates a single value. Not changed.
+

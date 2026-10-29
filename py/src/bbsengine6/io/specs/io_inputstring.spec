@@ -97,8 +97,14 @@ Reads one line with line editing. Returns the entered text. `prompt` and
 - `insert_tabs`: If True, a tab inside pasted text is inserted as `\t`
   (for an editor). Default False: a pasted tab is shown as a space. A typed Tab
   is always completion, regardless of this flag.
-- `noneok`: Accepted by `handle_key_enter`, but the default is currently
-  `False` and empty Enter is accepted only when `noneok=True`. See Known Issues.
+- `noneok`: Allow empty input (default: `True`). With `noneok=False`, Enter on an
+  empty line beeps and reprompts; the caller gets input only once something is typed.
+- `allowed`: String of characters accepted while typing and pasting (default: `None`,
+  no restriction). Any other character beeps and is dropped.
+- `filter`: Regular expression the whole buffer must match on Enter (default: `None`).
+  A non-matching value beeps and reprompts, as a failed `verify` does. The pattern is
+  checked on Enter only, not per keystroke, so a partial value such as `-` can be typed.
+  An invalid pattern raises `re.error` from the call; the terminal is restored first.
 - `**kwargs`: Remaining arguments are passed to the `completer` callback.
 
 **Terminal state during the call:**
@@ -307,6 +313,14 @@ The main loop manages display:
 
 ## Recent Fixes (bbsengine6, 2026)
 
+- **Empty Enter**: `noneok` now controls it (default accepts; `noneok=False` reprompts).
+- **`filter` and `allowed`**: implemented as documented in Public API.
+- **Enter in a paste batch**: an Enter at the head of a batch is a command and waits
+  for the key path, so `noneok` and `filter` apply to it. Text typed after a rejected
+  Enter is kept.
+- **Key handler run under a lock**: handlers now run outside `_key_actions_lock`;
+  they write to the terminal, which takes another lock.
+
 - **Arrow keys leaked as `^[[D`**: fixed by the raw session (tty stays raw during the prompt).
 - **Click-drag selection broken in the prompt tab**: mouse modes were reset even when
   the terminal did not answer DECRQM. Now only modes reported on are changed.
@@ -336,14 +350,15 @@ The main loop manages display:
 ## Known Issues / TODOs
 
 0. **Not built from the plan** (documented so the gaps are visible):
-   - `noneok` default is `False`; the plan's change to `True` was not made.
-   - `filter=` (regex on Enter) and `allowed=` (per-character set) are not implemented;
-     `inputinteger` still passes its regex as `filter`, which `inputstring` ignores.
    - Per-call key table: `KEY_ACTIONS` is still shared (see Concurrency).
    - Bracketed paste (`ESC[200~`) is not recognized; pastes are detected by burst only.
    - Typed-overflow beep and an explicit `PASTE` event are not implemented.
    - Ctrl+Y (`\x19`) is not mapped to `KEY_YANK` in the reader; Ctrl+W (`\x17`) is not mapped to `KEY_CTRL_W` either.
-   - Asimov's wrapper (`asimov/src/asimov/io/inputstring.py`) is not updated.
+   - Asimov has its own copy of `inputstring` and `inputinteger`
+     (`asimov/src/asimov/io/`). It is a separate submodule and is not updated here;
+     its `noneok` default is still `False`, and it ignores `filter` and `allowed`.
+   - `inputinteger` validates a single integer. Its regex does not accept a list of
+     values (`1 2`), although the function can return a list.
 1. ~~`get_current_word()` is a stub~~ - now properly finds word at cursor position using alphanumeric boundaries
 2. ~~Some echo calls use inconsistent escaping~~ (FIXED - standardized to `"{command}"` for static commands)
 3. ~~Lock contention between inputstring() and getch()~~ (FIXED - removed unnecessary lock acquisition)
