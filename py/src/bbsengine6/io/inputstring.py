@@ -1033,7 +1033,7 @@ def inputstring(
         end_raw_session()
 
 
-def _take_paste_burst() -> str | None:
+def _take_paste_burst(insert_tabs: bool = False) -> str | None:
     """Return queued plain text when more than one key is already waiting.
 
     A paste (Ctrl-Shift-V, middle click) delivers many characters at once. Each
@@ -1041,6 +1041,8 @@ def _take_paste_burst() -> str | None:
     start completion, and a control byte such as \x01 would move the cursor.
 
     Takes the leading run of printable characters and Enter from the queue.
+    Tabs are returned as \t; the caller decides whether a tab is inserted or
+    shown as a space (insert_tabs).
     Returns None when fewer than two keys are waiting, or when an escape
     sequence leads (that is a real key, handled by the normal path).
     """
@@ -1052,7 +1054,7 @@ def _take_paste_burst() -> str | None:
             ch = _input_queue[0]
             if ch in ("\r", "\n"):
                 taken.append("\n")
-            elif ch.isprintable() or ch == "\t":
+            elif ch == "\t" or ch.isprintable():
                 taken.append(ch)
             # other control bytes are discarded
             _input_queue.popleft()
@@ -1077,6 +1079,7 @@ def _inputstring_body(
     max_width: int = kwargs.pop("max_width", 80)
     mask: str = kwargs.pop("mask", None)
     completer = kwargs.pop("completer", None)
+    insert_tabs = bool(kwargs.pop("insert_tabs", False))
     filter_fn = kwargs.pop("filter", None)
 
     verify = kwargs.pop("verify", None)
@@ -1297,13 +1300,13 @@ def _inputstring_body(
         # Position cursor BEFORE getch() without holding lock during the call
         echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
 
-        burst = _take_paste_burst()
+        burst = _take_paste_burst(insert_tabs=insert_tabs)
         if burst is not None:
             # A paste: insert literal text; a newline ends the entry like Enter.
             text, end_here = burst.split("\n", 1)[0], "\n" in burst
             for c in text:
-                if c == "\t":
-                    c = " "  # keep a tab from becoming completion or a literal tab in a field
+                if c == "\t" and not insert_tabs:
+                    c = " "  # a single-line field has no tab stops: show a space
                 if len(buffer) < max_len:
                     buffer = buffer[:curpos] + c + buffer[curpos:]
                     curpos += 1
