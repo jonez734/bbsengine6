@@ -202,6 +202,13 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
     Verified: full suite at baseline (63 failed, 2283 passed; two baseline failures now pass);
     ed tests green; zoidoffice and casino io tests match baseline; murdermotel errors identical
     on clean HEAD (missing `murdermotel.player` table).
-  - [ ] `io/getch.py` (impl selector, bottom-bar status).
+  - [x] `io/getch.py`: default reader (`set_getch_impl`), UTF-8 pending characters, last
+    notification status drawn on the bottom bar (commit below). Stays process-wide, on purpose:
+    tty settings and fd, signal handlers, resize callbacks, bell throttling, the event bus,
+    queue and dispatcher thread, the event error handler, and the locks.
+    Dead `global _notified_this_session` declaration removed.
+    Verified: full suite at baseline (63 failed, 2283 passed; the same two baseline failures
+    fixed); focused getch, bottombar, key-event and inputstring tests green (234); zoidoffice
+    and casino io tests match baseline; murdermotel unchanged from clean HEAD.
   - [ ] `bottombar.py` / `screen.py` (registry, bar stack).
 

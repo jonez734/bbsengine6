@@ -164,7 +164,7 @@ except ImportError:
 # Track if bell has been emitted this session (emit only once)
 
 # Track if bottom bar has been updated this session (update only once)
-_bottombar_updated_this_session = ""  # last notification status drawn; "" = none yet
+# Last notification status drawn on the bottom bar: per interaction, see _bottombar_status().
 _bottombar_update_lock = threading.Lock()
 
 # ============================================================================
@@ -626,12 +626,12 @@ def _update_bottombar_on_notification() -> bool:
     The last status drawn is remembered, so an unchanged status is not redrawn, and a changed status
     (a new message, or a message read) is drawn again. Returns True if a redraw was performed.
     """
-    global _bottombar_updated_this_session
     notification_status = screen.get_notification_status()
     with _bottombar_update_lock:
-        if notification_status == _bottombar_updated_this_session:
+        it = _interaction()
+        if notification_status == it.bottombar_status:
             return False
-        _bottombar_updated_this_session = notification_status
+        it.bottombar_status = notification_status
 
     try:
         # The status string, e.g. "F2: messages (3)".
@@ -1020,8 +1020,6 @@ def _getch_core(
         in the live source tree today, so the open-ended-wait poll above
         is the active mechanism.
     """
-    global _notified_this_session
-
     moniker = None
     if _has_member_module:
         moniker = getattr(_threadlocal, "moniker", None)
@@ -1191,13 +1189,30 @@ def _getch_core(
 # PUBLIC READERS: getch_str (existing) and getch_utf8 (new), plus selector
 # ============================================================================
 
-# Default reader for getch() when impl= is not given. Runtime setting.
-_GETCH_IMPL = "str"
+# Default reader for getch() when impl= is not given. Per interaction: see _getch_impl().
 _GETCH_IMPLS = ("str", "utf8")
 
-# Pending decoded characters for the UTF-8 reader. Guarded by _current_stream_lock
-# (held by _getch_core around the read), so no separate lock is needed.
-_utf8_pending: "deque[str]" = deque()
+# Decoded characters the UTF-8 reader has not returned yet. Per interaction (they belong to
+# one input stream). Guarded by _current_stream_lock (held by _getch_core around the read).
+
+
+def _interaction():
+    """The interaction in effect for this context (see bbsengine6.interaction)."""
+    from ..interaction import current_session
+
+    return current_session()
+
+
+def _utf8_pending() -> "deque[str]":
+    return _interaction().utf8_pending
+
+
+def _getch_impl() -> str:
+    return _interaction().getch_impl
+
+
+def _bottombar_status() -> str:
+    return _interaction().bottombar_status
 
 
 def set_getch_impl(name: str) -> None:
@@ -1206,15 +1221,14 @@ def set_getch_impl(name: str) -> None:
     Args:
         name: "str" (byte-at-a-time, existing default) or "utf8" (drain and decode).
     """
-    global _GETCH_IMPL
     if name not in _GETCH_IMPLS:
         raise ValueError(f"unknown getch impl {name!r}; expected one of {_GETCH_IMPLS}")
-    _GETCH_IMPL = name
+    _interaction().getch_impl = name
 
 
 def get_getch_impl() -> str:
     """Return the current default reader name."""
-    return _GETCH_IMPL
+    return _getch_impl()
 
 
 def _read_one_str() -> str:
@@ -1228,8 +1242,9 @@ def _pop_utf8_pending() -> str | None:
     Queued entries are fully resolved key names (ESC sequences are mapped by
     _read_drained_utf8), so they are returned as-is.
     """
-    if _utf8_pending:
-        return _utf8_pending.popleft()
+    pending = _utf8_pending()
+    if pending:
+        return pending.popleft()
     return None
 
 
@@ -1241,8 +1256,9 @@ def _read_drained_utf8() -> str:
     keeps the text wrapper's own buffer intact, so no bytes are skipped.
     Raises BlockingIOError when nothing is available.
     """
-    if _utf8_pending:
-        return _utf8_pending.popleft()
+    pending = _utf8_pending()
+    if pending:
+        return pending.popleft()
 
     stream = _common._current_input_stream
     # The fd is non-blocking while _getch_core reads, so stream.read(1) returns
@@ -1264,18 +1280,18 @@ def _read_drained_utf8() -> str:
     i = 0
     while i < len(raw):
         if raw[i] != ESC:
-            _utf8_pending.append(raw[i])
+            _utf8_pending().append(raw[i])
             i += 1
             continue
         end = _escape_end(raw, i)
         if end == i + 1:
-            _utf8_pending.append("KEY_ESC")
+            _utf8_pending().append("KEY_ESC")
         else:
             seq = "".join(raw[i:end])
-            _utf8_pending.append(resolve_escape_sequence(seq) or seq)
+            _utf8_pending().append(resolve_escape_sequence(seq) or seq)
         i = end
 
-    return _utf8_pending.popleft()
+    return _utf8_pending().popleft()
 
 
 def _escape_end(chars: list[str], start: int) -> int:
@@ -1313,7 +1329,7 @@ def getch_str(
     "str" and "getch_utf8" when routed to the UTF-8 reader.
     """
     if impl is None:
-        impl = _GETCH_IMPL
+        impl = _getch_impl()
     if impl == "utf8":
         return getch_utf8(
             timeout=timeout, debug=debug, fire_events=fire_events,
@@ -1358,3 +1374,21 @@ def getch_utf8(
         idle=idle,
         **kwargs,
     )
+
+
+# ---------------------------------------------------------------------------
+# Per-interaction names: read through the current interaction (Phase 3).
+#
+# `_bottombar_updated_this_session` and `_GETCH_IMPL` were module globals. They now live on
+# the interaction; the module-level names read and write that field, so code and tests that
+# use them keep working.
+# ---------------------------------------------------------------------------
+from ..interaction import install_read_through as _install_read_through  # noqa: E402
+
+_install_read_through(
+    __name__,
+    {
+        "_bottombar_updated_this_session": "bottombar_status",
+        "_GETCH_IMPL": "getch_impl",
+    },
+)

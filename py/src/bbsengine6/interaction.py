@@ -51,6 +51,11 @@ class Session:
         self.key_snapshot_stack: list = []
         self.yank_buffer: list = []
         self.mode_fragment: dict = {"item": None, "insert": True}
+        # io/getch.py state: the default reader, the UTF-8 reader's undelivered characters
+        # (they belong to one input stream), and the notification status last drawn.
+        self.getch_impl = "str"
+        self.utf8_pending: collections.deque = collections.deque()
+        self.bottombar_status = ""
 
     def __repr__(self) -> str:
         return f"Session(name={self.name!r}, mode={self.commands.mode!r})"
