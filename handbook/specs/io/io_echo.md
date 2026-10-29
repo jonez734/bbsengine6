@@ -1,4 +1,4 @@
-# asimov.io.echo Specification
+# bbsengine6.io.echo Specification
 
 ## Overview
 
@@ -71,13 +71,19 @@ The module uses a **token-based pipeline**:
 | `{savecursor}` / `{decsc}` | Save cursor position |
 | `{restorecursor}` / `{decrc}` | Restore cursor position |
 
+`{decsc}` asks the terminal for its position before it saves it (a DSR query,
+with a one-second timeout; see `io_common.md`). Each save therefore waits for a
+reply. `{decrc}` restores the saved position without a query. The bottom bar avoids
+this cost by emitting the terminal's own ESC 7 / ESC 8 instead.
+
 ### 4. Display Control
 
 | Command | Description |
 |---------|-------------|
-| `{cls}` / `{erasedisplay}` | Clear screen |
-| `{eraseline}` | Erase current line |
-| `{bell}` / `{bel}` | Sound terminal bell |
+| `{erasedisplay}` / `{ed}` | Clear the display |
+| `{cls}` | Runtime variable, not a command: expands to `{erasedisplay}{home}` |
+| `{eraseline}` / `{elo}` | Erase the current line |
+| `{bell}` / `{bel}` | Sound the terminal bell |
 
 ### 5. Scroll Regions
 
@@ -116,14 +122,14 @@ Colon-wrapped emoji names: `:smile:`, `:fire:`, `:warning:`, etc. (100+ emojis d
 
 | Command | Description |
 |---------|-------------|
-| `{fullwidth}` | Enable double-width text |
+| `{fullwidth}` | Enable double-width text (alias of `{decdhl}`) |
 | `{/fullwidth}` | Disable double-width text |
 
 ### 11. Window Title
 
-```python
-echo("{settitle:My Window}")  # Sets terminal window title
-```
+`terminal.title(t)` sets the window title. **There is no `{settitle}` command:**
+`echo("{settitle:My Window}")` writes the literal text `{settitle:My Window}` to the
+terminal. Use `terminal.title()` to set the title.
 
 ## Public API
 
@@ -198,10 +204,12 @@ getoption(opt, default=None)
 - `const.py`: Terminal constants (ESC, CSI, BEL, etc.)
 - `terminal.py`: Terminal size detection
 
-## Known Issues / TODOs
+## Known defects
 
-1. ~~Line 50 has a typo: `"{bgblue}{white]"` should be `"{bgblue}{white}"`~~ (FIXED)
-2. ~~`_handle_ed()` has debug print statement~~ (FIXED - commented out)
-3. ~~`_handle_literalopen()` has debug print~~ (FIXED - commented out)
-4. ~~Dead code in `_handle_box()`~~ (FIXED - removed)
-5. ~~`_decdhl` global variable referenced but never properly initialized~~ (FIXED - now uses `_terminal_state.decdhl`)
+- `{settitle:...}` is documented in earlier versions of this spec. It is not
+  implemented; the text is written as-is. `terminal.title()` is the working call.
+- The `{decsc}` query described above makes each save slow when the terminal does not
+  answer. The bottom bar was changed for this; `{decsc}` callers were not.
+
+The earlier debug-print and dead-code items were fixed in the module and are no longer
+open; they are removed from this list.
