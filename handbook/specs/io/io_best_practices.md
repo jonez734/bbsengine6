@@ -75,3 +75,17 @@ def my_module_main(args, **kwargs):
     # If you call submodules, pass kwargs through
     result = other_module.some_function(args, **kwargs)
 ```
+
+## Testing terminal behaviour on a pty
+
+Test what the user sees, not the escape bytes. The helper `py/tests/_pty_screen.py` runs a
+prompt in a child process on a real pty and feeds its output into `pyte`, a VT100 screen
+model. Tests then assert on the rows on screen and the cursor position.
+
+- Answer the cursor-position query (`ESC[6n`) the way a terminal does. The helper does this.
+- Wait for text on screen, not for a fixed time. Use `wait_for` and `wait_exit`.
+- Pause briefly after a child exits before typing. A key sent in that gap can be dropped
+  (see `commands.md`, known limit).
+- Check each new test against a mutation of the code it covers. A mutation that the test does
+  not catch means the test is too weak, or the mutation does not run on the path under test.
+- Dependencies `pexpect` and `pyte` are in the `dev` extra.

@@ -50,10 +50,10 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
   `setraw()` (input stays raw). Verified on a real pty: every LF after Enter is CRLF. Regression
   test `test_inputstring_enter_crlf.py` (fails without the fix). Specs `io_common.md` and
   `io_getch.md` updated.
-- [ ] Working INSERT toggle, `[OVR]` indicator, real overwrite. (Not done.)
+- [x] Working INSERT toggle, `[OVR]` indicator, real overwrite. Tested on a pty (`test_inputstring_pty_screen.py`): toggle, overwrite, `[OVR]`. Mutation of the per-call handler is caught (3 failures).
 - [x] `PASTE` inserts as one operation: a bracketed paste arrives as one `PASTE:` key and is inserted through the paste-batch rules (commit `7bf0c29`).
 - [x] Typed overflow beeps; a paste cut at `max_len` beeps once (commit `8d4ee1a`).
-- [ ] Ctrl+W and Ctrl+Y wired through the per-call table. (Not done.)
+- [x] Ctrl+W and Ctrl+Y wired through the per-call table. Tested on a pty: cut previous word, yank it back, yank with nothing cut. Mutation of Ctrl+W is caught.
 - [x] `noneok` default `True` (`inputstring`, `io_inputstring.spec`).
 - [x] `handbook/specs/io/io_inputstring.md` updated to the code (commit `4cb50db`).
 - [x] `noneok=False`: empty Enter beeps and reprompts.
@@ -75,10 +75,10 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 
 ## Phase 6: tests (`py/tests/`)
 
-- [ ] Parity test: `getch_str()` and `getch_utf8()` return identical key names for the same input. (Not written.)
-- [ ] Shared key table: ASCII, multi-byte UTF-8, ESC sequences, bracketed paste, control bytes. (Partly: ESC sequences and UTF-8 covered by probes only.)
-- [ ] Runtime default and per-call `impl=` override. (Not written.)
-- [ ] Pty tests: burst paste, bracketed paste, ESC followed by text, control bytes. (Burst and ESC covered by probes, not by tests in the tree.)
+- [~] Parity test: `getch_str()` and `getch_utf8()` return identical key names (`test_getch_readers_parity.py`, 3 inputs). Passes. Not yet shown to fail on a real utf8 divergence: the one mutation tried did not run on that path, so this needs a better mutation before it is trusted as a regression guard.
+- [~] Shared key table: ASCII, UTF-8 plain, backspace and Ctrl+W checked identical in both readers (`test_getch_readers_parity.py`). Not covered: multi-byte UTF-8, control bytes beyond those, bracketed paste in the readers. The parity test was not shown to catch a utf8-only divergence (see below).
+- [x] Runtime default and `impl=` routing tested (`test_getch_readers_parity.py`): `set_getch_impl` changes the default and restores; `impl=utf8` routes; an unknown name is refused.
+- [x] Pty tests: bracketed paste inserts the whole text, typing continues after it, the result is exact, and a newline in a paste ends input (`test_inputstring_pty_screen.py`). Mutation of the paste body is caught (4 failures). Burst paste without brackets is covered by `test_inputstring_paste_burst.py`.
 - [x] Pty tests: `\x17`/`\x19`, typed and paste overflow beep, bracketed paste, key restore (`test_inputstring_editing.py`). INSERT toggle not tested.
 - [x] Pty tests: `noneok=False` reprompt, `allowed=`, `filter=`, `inputinteger` (`test_inputstring_validation.py`, 10 tests).
 - [x] Pty tests: mouse state restored on normal return, exception, and fallback (`test_inputstring_mouse_state.py`, 4 tests). Ctrl+C path not tested.
@@ -128,7 +128,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Typed overflow beeps; overflow in a paste beeps once (`8d4ee1a`).
 - [x] Bracketed paste: `ESC[?2004h` for the prompt; body returned as one `PASTE:` key; newline ends the entry (`7bf0c29`).
 - [x] Per-call key handlers are restored on exit (`3f2e3c1`).
-- [ ] INSERT toggle and `[OVR]` overwrite: not verified by a test.
+- [x] INSERT toggle and `[OVR]` overwrite: tested on a pty (see line 53).
 - [x] Asimov copy: gone; alias of bbsengine6 (see line 63).
 - [ ] Concurrent prompts in different threads: not supported; the key table and the terminal are shared.
 
