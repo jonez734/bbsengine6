@@ -56,6 +56,8 @@ class Session:
         self.getch_impl = "str"
         self.utf8_pending: collections.deque = collections.deque()
         self.bottombar_status = ""
+        # screen.py state: the stack of bottom-bar contents pushed by callers (popbottombar).
+        self.bottombarstack: list = []
 
     def __repr__(self) -> str:
         return f"Session(name={self.name!r}, mode={self.commands.mode!r})"

@@ -210,5 +210,14 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
     Verified: full suite at baseline (63 failed, 2283 passed; the same two baseline failures
     fixed); focused getch, bottombar, key-event and inputstring tests green (234); zoidoffice
     and casino io tests match baseline; murdermotel unchanged from clean HEAD.
-  - [ ] `bottombar.py` / `screen.py` (registry, bar stack).
+  - [x] `bottombar.py` / `screen.py`: `bottombarstack` (the pushed-bar stack, read through
+    `screen.bottombarstack`) lives on the interaction (commit below). Stays process-wide, on
+    purpose: the default registry, the named-registry cache (`registry_for`, shared across
+    packages), the `_active_registry` ContextVar (already per context), and the locks. Dropped
+    `bottombarstack` from `screen.__all__`, since a read-through name is not a module attribute.
+    Verified: full suite at baseline (63 failed, 2283 passed; same two baseline failures fixed);
+    focused screen, bottombar and io tests green (266); zoidoffice and casino io tests match
+    baseline; murdermotel unchanged from clean HEAD.
+  - [x] Phase 3 complete for the io modules listed above. Remaining io state (bell throttling,
+    resize callbacks, event dispatcher) is process-wide by design (see getch entry).
 
