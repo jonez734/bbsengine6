@@ -1,4 +1,4 @@
-# asimov.io.palette Specification
+# bbsengine6.io.palette Specification
 
 ## Overview
 
@@ -32,9 +32,13 @@
 | lightcyan | `\x1b[96m` |
 | lightwhite | `\x1b[97m` |
 
+The ANSI palette has foreground entries only. It has no `bg*` names (`bgblack` is not
+defined in it); background colours come from the C64 palette or `rgb(48, ...)`.
+
 ### C64 Palette
 
-Uses 24-bit RGB escape sequences. Includes background variants (e.g., `bgblack`, `bgwhite`).
+Uses 24-bit RGB escape sequences. Includes background variants (e.g., `bgblack`, `bgwhite`),
+built by `make_bg()` from the foreground entries.
 
 ## Functions
 
@@ -64,7 +68,9 @@ Returns darkened version of a color.
 Sets the current palette globally.
 
 **Parameters:**
-- `palette_name`: "ansi" or "c64"
+- `palette_name`: `"ansi"` or `"c64"`
+
+Any other name is ignored: no error is raised and the current palette is unchanged.
 
 ---
 
