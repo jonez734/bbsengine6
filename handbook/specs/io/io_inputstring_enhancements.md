@@ -112,19 +112,25 @@ function_key_handlers: Optional[dict] = None
 
 **Status:** IMPLEMENTED & READY
 
-### 5. Mode Indicator Display (IMPLEMENTED)
+### 5. Mode Indicator Display (IMPLEMENTED, moved to the bottom bar)
 
 **File:** `bbsengine6/io/inputstring.py`, `bbsengine6/io/const.py`
 
 **Implementation:**
-- Constants added to `const.py`:
+- Constants in `const.py`:
   - `INPUTSTRING_INSERT_MODE_INDICATOR = "[INS]"`
   - `INPUTSTRING_OVERWRITE_MODE_INDICATOR = "[OVR]"`
-- Integrated into `redraw_line()` function
-- Displayed inline with prompt
-- Updates on INSERT key toggle
+- The indicator is a **bottom-bar fragment**, not part of the input line. The prompt
+  registers it when it starts, redraws the bar when the mode changes, and removes it
+  when the prompt returns.
+- `redraw_line()` draws the prompt and text only.
 
-**Status:** IMPLEMENTED & TESTED
+**Status:** IMPLEMENTED & TESTED. Verified in a terminal emulator: `[INS]` on the
+bottom row, `[OVR]` after the INSERT key, nothing on the input line.
+
+**Change of placement:** the first version drew the indicator on the input line, which
+put a second space between prompt and text when the prompt ended in a space. It was
+moved to the bottom bar.
 
 ## New Parameters
 
