@@ -881,14 +881,20 @@ def _proc_char(
         processed = "KEY_ENTER"
     elif char == "\x15":  # ctrl-u
         processed = "KEY_CUTTOBOL"
+    elif char == "\x17":  # ctrl-w: cut previous word
+        processed = "KEY_CTRL_W"
+    elif char == "\x19":  # ctrl-y: yank (paste) the cut buffer
+        processed = "KEY_YANK"
     elif char == "\t":
         processed = "KEY_TAB"
     # 4. Handle Escape Sequences and Plain ESC
     elif char == ESC:  # ESCAPE
         sequence = _read_escape_tail()
 
+        if sequence == PASTE_START:
+            processed = _read_bracketed_paste()
         # A. Check for plain ESC
-        if len(sequence) == 1:
+        elif len(sequence) == 1:
             processed = (
                 "KEY_ESC"  # Plain ESC key was pressed (as no other bytes followed)
             )
