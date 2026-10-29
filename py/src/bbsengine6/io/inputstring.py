@@ -1049,9 +1049,16 @@ def _take_paste_burst(insert_tabs: bool = False) -> str | None:
     with _input_queue_lock:
         if len(_input_queue) < 2 or _input_queue[0] == ESC:
             return None
+        # A Tab is a command when nothing follows it: a typed Tab (completion) can
+        # arrive in the same read as the characters before it. A Tab with more text
+        # queued after it is paste content.
+        if _input_queue[0] == "\t" and len(_input_queue) < 2:
+            return None
         taken = []
         while _input_queue and _input_queue[0] != ESC:
             ch = _input_queue[0]
+            if ch == "\t" and len(_input_queue) == 1:
+                break  # trailing Tab: leave it for the key path (completion)
             if ch in ("\r", "\n"):
                 taken.append("\n")
             elif ch == "\t" or ch.isprintable():
