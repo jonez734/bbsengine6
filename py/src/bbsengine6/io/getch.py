@@ -827,11 +827,41 @@ def _getch_from_queue(debug: bool, fire_events: bool, source_func: str) -> str |
     """Return the next key from _input_queue (caller holds _current_stream_lock)."""
     char = _input_queue.popleft()
     if char == ESC:
-        return _resolve_queued_escape(debug=debug)
+        return _resolve_queued_escape(
+            debug=debug, fire_events=fire_events, source_func=source_func
+        )
     return _proc_char(char, debug=debug, fire_events=fire_events, source_func=source_func)
 
 
-def _resolve_queued_escape(debug: bool = False) -> str | None:
+# Event names for keys that have a meaning in the application. The key the reader returns
+# is unchanged (KEY_F1, KEY_F2), so existing callers keep working; only the processed name
+# on the event is changed. KEY_F1 is help; KEY_F2 is the messages key.
+EVENT_KEY_ALIASES = {"KEY_F1": "KEY_HELP", "KEY_F2": "KEY_MESSAGES"}
+
+
+def _push_key_event(char: str, processed, stage: str, source_func: str) -> None:
+    """Push one key event to the dispatcher when it is running.
+
+    Shared by the streamed path (_proc_char) and the queued escape path, so the two can
+    not drift apart again: a queued escape previously returned without firing either event.
+    """
+    if not _event_dispatcher.is_running():
+        return
+    processed = EVENT_KEY_ALIASES.get(processed, processed) if isinstance(processed, str) else processed
+    _event_dispatcher.push_event(
+        KeyEvent(
+            raw_char=char,
+            processed_key=processed,
+            timestamp=time.time(),
+            stage=stage,
+            source_func=source_func,
+        )
+    )
+
+
+def _resolve_queued_escape(
+    debug: bool = False, fire_events: bool = True, source_func: str = "getch_str"
+) -> str | None:
     """Resolve an ESC whose following bytes are already in _input_queue.
 
     Caller holds _current_stream_lock. Consumes exactly one sequence from the
@@ -842,14 +872,21 @@ def _resolve_queued_escape(debug: bool = False) -> str | None:
         queued = list(_input_queue)
     end = _escape_end_queue(queued)
     if end == 1:
-        return "KEY_ESC"
-    seq = ESC + "".join(queued[: end - 1])
-    with _input_queue_lock:
-        for _ in range(end - 1):
-            _input_queue.popleft()
-    if seq == PASTE_START:
-        return _read_bracketed_paste()
-    return resolve_escape_sequence(seq, debug=debug)
+        processed = "KEY_ESC"
+        seq = ESC
+    else:
+        seq = ESC + "".join(queued[: end - 1])
+        with _input_queue_lock:
+            for _ in range(end - 1):
+                _input_queue.popleft()
+        if seq == PASTE_START:
+            processed = _read_bracketed_paste()
+        else:
+            processed = resolve_escape_sequence(seq, debug=debug)
+    if fire_events:
+        _push_key_event(seq, processed, "raw", source_func)
+        _push_key_event(seq, processed, "processed", source_func)
+    return processed
 
 
 def _escape_end_queue(chars: list) -> int:
@@ -887,15 +924,8 @@ def _proc_char(
         Processed key name or character, or None for unknown sequences when debug=True
     """
     # Fire raw event before processing
-    if fire_events and _event_dispatcher.is_running():
-        raw_event = KeyEvent(
-            raw_char=char,
-            processed_key=None,
-            timestamp=time.time(),
-            stage="raw",
-            source_func=source_func,
-        )
-        _event_dispatcher.push_event(raw_event)
+    if fire_events:
+        _push_key_event(char, None, "raw", source_func)
 
     # Initialize processed (will be set in all non-exception paths)
     processed: str | None = None
@@ -942,15 +972,8 @@ def _proc_char(
         processed = char
 
     # Fire processed event after processing
-    if fire_events and _event_dispatcher.is_running():
-        processed_event = KeyEvent(
-            raw_char=char,
-            processed_key=processed,
-            timestamp=time.time(),
-            stage="processed",
-            source_func=source_func,
-        )
-        _event_dispatcher.push_event(processed_event)
+    if fire_events:
+        _push_key_event(char, processed, "processed", source_func)
 
     return processed
 
@@ -1014,8 +1037,9 @@ def _getch_core(
             if char == ESC:
                 # The whole sequence may already be queued (drained before raw
                 # mode). Take it from the queue in one step, not byte by byte.
-                processed = _resolve_queued_escape(debug=debug)
-                return processed
+                return _resolve_queued_escape(
+                    debug=debug, fire_events=fire_events, source_func=source_func
+                )
             result = _proc_char(
                 char, debug=debug, fire_events=fire_events, source_func=source_func
             )
