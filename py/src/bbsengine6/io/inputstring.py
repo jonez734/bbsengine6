@@ -1074,8 +1074,10 @@ def inputstring(
     """
     # Hold the tty in raw mode for the whole prompt, so keys typed between reads
     # are not echoed by the line discipline (the stray arrow-key text).
+    key_depth = len(_key_snapshot_stack)
     begin_raw_session()
     saved_mouse = mouse_state_push()
+    paste_mode = bracketed_paste_on()
     try:
         return _inputstring_body(
             prompt,
@@ -1089,6 +1091,8 @@ def inputstring(
             **kwargs,
         )
     finally:
+        _restore_key_snapshot(key_depth)
+        bracketed_paste_off(paste_mode)
         mouse_state_pop(saved_mouse)
         end_raw_session()
 

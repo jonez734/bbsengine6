@@ -396,6 +396,41 @@ def set_terminal_state(state: TerminalState):
 
 
 # --------------------------
+# Bracketed paste (inputstring)
+# --------------------------
+
+# Module flag: when False, inputstring() does not ask the terminal to wrap pastes.
+BRACKETED_PASTE_MANAGED = True
+
+
+def bracketed_paste_on() -> bool:
+    """Ask the terminal to wrap pasted text in ESC[200~ ... ESC[201~.
+
+    Returns True when enabled (so bracketed_paste_off() should follow), False
+    when disabled or not a terminal. A terminal that does not know the mode
+    ignores the request and pastes as plain keys, which the paste-batch rules
+    still handle.
+    """
+    if not BRACKETED_PASTE_MANAGED:
+        return False
+    try:
+        _write_current_output_stream(f"{CSI}?2004h", flush=True)
+    except Exception:
+        return False
+    return True
+
+
+def bracketed_paste_off(enabled: bool) -> None:
+    """Turn bracketed paste off again, if bracketed_paste_on() enabled it."""
+    if not enabled:
+        return
+    try:
+        _write_current_output_stream(f"{CSI}?2004l", flush=True)
+    except Exception:
+        pass
+
+
+# --------------------------
 # Mouse reporting state (inputstring)
 # --------------------------
 

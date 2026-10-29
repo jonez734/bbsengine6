@@ -73,6 +73,18 @@ class FakeTerminal:
                 self._buf = self._buf[-64:]
 
 
+MOUSE_MODES_SET = (1000, 1002, 1003, 1006)
+
+
+def mouse_log(fake):
+    """The fake terminal's log, restricted to mouse-reporting modes.
+
+    Bracketed paste (2004) is written by the same prompt but is not mouse state,
+    so it is excluded here.
+    """
+    return [(action, mode) for action, mode in fake.log if mode in MOUSE_MODES_SET]
+
+
 @pytest.fixture
 def terminal(monkeypatch):
     master, slave = pty.openpty()
@@ -161,7 +173,7 @@ def test_missing_decrqm_reply_leaves_modes_untouched(terminal):
     result = inp.inputstring("> ")
     time.sleep(0.2)
     assert result == "x"
-    assert fake.log == [], "unknown mouse state must not be written"
+    assert mouse_log(fake) == [], "unknown mouse state must not be written"
 
 
 def test_reported_on_mode_is_reset_then_restored(terminal):
@@ -172,7 +184,7 @@ def test_reported_on_mode_is_reset_then_restored(terminal):
     result = inp.inputstring("> ")
     time.sleep(0.2)
     assert result == "y"
-    assert fake.log == [("reset", 1000), ("set", 1000)], fake.log
+    assert mouse_log(fake) == [("reset", 1000), ("set", 1000)], fake.log
 
 
 def test_managed_flag_false_leaves_mouse_alone(terminal):
@@ -182,4 +194,4 @@ def test_managed_flag_false_leaves_mouse_alone(terminal):
     threading.Timer(0.3, _feed, args=(master, b"y\r")).start()
     inp.inputstring("> ")
     time.sleep(0.2)
-    assert fake.log == [], "with the flag off, no mouse modes may be written"
+    assert mouse_log(fake) == [], "with the flag off, no mouse modes may be written"

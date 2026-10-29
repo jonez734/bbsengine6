@@ -789,6 +789,40 @@ def _read_escape_tail() -> str:
     return seq
 
 
+PASTE_START = f"{ESC}[200~"
+PASTE_END = f"{ESC}[201~"
+PASTE_MAX = 65536  # bytes of paste body kept; longer pastes are cut here
+
+
+def _read_bracketed_paste() -> str:
+    """Collect a bracketed-paste body up to ESC[201~ and return it as "PASTE:<text>".
+
+    Called after ESC[200~ has been read. The body is read from the queue first,
+    then the stream, so a paste split across reads is collected whole. A paste
+    with no end marker is returned with what arrived, after a short wait.
+    """
+    body = ""
+    deadline = time.time() + max(ESC_TAIL_WAIT, 0.2)
+    while len(body) < PASTE_MAX:
+        if body.endswith(PASTE_END):
+            body = body[: -len(PASTE_END)]
+            break
+        with _input_queue_lock:
+            queued = _input_queue.popleft() if _input_queue else None
+        if queued is not None:
+            body += queued
+            deadline = time.time() + max(ESC_TAIL_WAIT, 0.2)
+            continue
+        try:
+            body += _read_current_input_stream()
+            deadline = time.time() + max(ESC_TAIL_WAIT, 0.2)
+        except BlockingIOError:
+            if time.time() >= deadline:
+                break
+            time.sleep(0.005)
+    return "PASTE:" + body
+
+
 def _getch_from_queue(debug: bool, fire_events: bool, source_func: str) -> str | None:
     """Return the next key from _input_queue (caller holds _current_stream_lock)."""
     char = _input_queue.popleft()
@@ -813,6 +847,8 @@ def _resolve_queued_escape(debug: bool = False) -> str | None:
     with _input_queue_lock:
         for _ in range(end - 1):
             _input_queue.popleft()
+    if seq == PASTE_START:
+        return _read_bracketed_paste()
     return resolve_escape_sequence(seq, debug=debug)
 
 
