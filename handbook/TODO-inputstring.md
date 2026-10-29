@@ -248,6 +248,10 @@ Scope confirmed by the operator: includes letteredolive.
   suite at baseline (63 failed, 2312 passed, same two baseline failures fixed).
 - [x] Message change: a disabled or unknown command in the loop now prints `command not found
   <name>` (was `unknown command '<name>'` or `'<name>' is disabled (not installed).`).
+- [x] Behaviour change: an exit word with an unmatched quote (`o"`) used to log out, because the
+  exit check ran on the raw line. It now goes through `split_input` first, so it prints
+  `unmatched quote in command` and stays in the shell. Kept on purpose: a stray quote is not a
+  valid exit.
 - [ ] Known gap: `visible_commands()` (help and completion) still calls `module.check()` to hide
   modules that are not installed. The spec says visibility uses the availability predicate
   only. Not moved yet.
