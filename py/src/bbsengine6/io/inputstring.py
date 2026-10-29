@@ -821,6 +821,51 @@ def handle_tab_manager(
 # --- 4. Display Functions ---
 
 
+# The INS/OVR marker is a bottom-bar fragment owned by the prompt in progress. It is
+# registered when the prompt starts and removed when it returns, so the bar shows the
+# mode only while the prompt is active.
+_mode_fragment_state: dict = {"item": None, "insert": True}
+
+
+def _mode_fragment(**_kwargs) -> str:
+    return INPUTSTRING_INSERT_MODE_INDICATOR if _mode_fragment_state["insert"] else INPUTSTRING_OVERWRITE_MODE_INDICATOR
+
+
+def _show_mode(insert_mode: bool) -> None:
+    """Register the MODE fragment (if needed), set the mode, and redraw the bottom bar.
+
+    Silent when there is no bottom bar to draw on (no tty, or the module is not
+    available): editing behaves the same either way.
+    """
+    try:
+        from .. import bottombar as _bottombar
+    except Exception:
+        return
+    _mode_fragment_state["insert"] = insert_mode
+    try:
+        if _mode_fragment_state["item"] is None:
+            _mode_fragment_state["item"] = _bottombar.register_bottombar_fragment(_mode_fragment)
+        _bottombar.setbottombar(None, "")
+    except Exception:
+        return
+
+
+def _hide_mode() -> None:
+    """Unregister the MODE fragment and redraw the bottom bar without it."""
+    try:
+        from .. import bottombar as _bottombar
+    except Exception:
+        return
+    item = _mode_fragment_state["item"]
+    _mode_fragment_state["item"] = None
+    try:
+        if item is not None:
+            _bottombar.unregister_bottombar_fragment(item)
+        _bottombar.setbottombar(None, "")
+    except Exception:
+        return
+
+
 def redraw_line(
     prompt: str,
     buffer: str,
@@ -840,14 +885,7 @@ def redraw_line(
     Args:
         insert_mode: If False, shows [OVR] indicator; if True, shows [INS].
     """
-    # NEW: Add mode indicator to prompt
-    mode_indicator = ""
-    if insert_mode:
-        mode_indicator = f" {INPUTSTRING_INSERT_MODE_INDICATOR}"
-    else:
-        mode_indicator = f" {INPUTSTRING_OVERWRITE_MODE_INDICATOR}"
-
-    full_prompt = prompt + mode_indicator
+    full_prompt = prompt
 
     input_col_start = start_col + rendered_length(full_prompt)
 
@@ -1096,6 +1134,7 @@ def inputstring(
             **kwargs,
         )
     finally:
+        _hide_mode()  # remove the MODE fragment when the prompt ends
         _restore_key_snapshot(key_depth)
         bracketed_paste_off(paste_mode)
         mouse_state_pop(saved_mouse)
@@ -1238,16 +1277,14 @@ def _inputstring_body(
     # Draw the prompt with its mode indicator from the first frame, the same text
     # redraw_line() draws, so the first frame and later redraws agree on the layout.
     echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
-    echo(f"{prompt} {INPUTSTRING_INSERT_MODE_INDICATOR}", end="", flush=True, wordwrap=False)
+    echo(prompt, end="", flush=True, wordwrap=False)
+    _show_mode(_insert_mode)
 
     input_col_start = start_col + prompt_len
     # The row holds the prompt, the mode indicator and the text. Give the text only the
     # room left after the prompt, so a long paste wraps inside the window instead of
     # past the right edge. "[INS]"/"[OVR]" plus its leading space is 6 columns.
-    indicator_len = 1 + max(
-        int(rendered_length(INPUTSTRING_INSERT_MODE_INDICATOR)),
-        int(rendered_length(INPUTSTRING_OVERWRITE_MODE_INDICATOR)),
-    )
+    indicator_len = 0  # the mode is in the bottom bar, not on the input line
     max_width = max(1, max_width - (prompt_len + indicator_len))
     # Column where the text starts: after the prompt and the mode indicator, the same
     # place redraw_line() draws it.
@@ -1322,6 +1359,14 @@ def _inputstring_body(
             new_scroll = scroll_offset
         return buffer, new_curpos, new_scroll
 
+    def insert_toggle_handler(buffer, curpos, scroll_offset, max_width):
+        # INSERT key: switch between insert and overwrite. The mode is shown in the
+        # bottom bar (see _show_mode), so only the flag changes here.
+        nonlocal _insert_mode
+        _insert_mode = not _insert_mode
+        _show_mode(_insert_mode)
+        return buffer, curpos, scroll_offset
+
     def help_handler(buffer, curpos, scroll_offset, max_width):
         return handle_help(
             buffer,
@@ -1355,7 +1400,7 @@ def _inputstring_body(
     # Keys this call overwrites. Their previous handlers are restored on exit, so a
     # prompt never leaves its closures (or F1 help) in the shared table.
     _per_call_keys = ["KEY_ENTER", "KEY_UP", "KEY_DOWN", "KEY_DELETE", "KEY_PAGEUP",
-                      "KEY_PAGEDOWN", "KEY_F1"] + [f"KEY_F{n}" for n in range(2, 13)]
+                      "KEY_PAGEDOWN", "KEY_INSERT", "KEY_F1"] + [f"KEY_F{n}" for n in range(2, 13)]
     with _key_actions_lock:
         _key_snapshot_stack.append({k: KEY_ACTIONS.get(k) for k in _per_call_keys})
         KEY_ACTIONS["KEY_ENTER"] = enter_handler
@@ -1367,6 +1412,7 @@ def _inputstring_body(
         KEY_ACTIONS["KEY_DELETE"] = delete_handler
         KEY_ACTIONS["KEY_PAGEUP"] = pageup_handler
         KEY_ACTIONS["KEY_PAGEDOWN"] = pagedown_handler
+        KEY_ACTIONS["KEY_INSERT"] = insert_toggle_handler
         KEY_ACTIONS["KEY_F1"] = help_handler
         # NEW: Override function key handlers with closures
         for key_num in range(2, 13):  # F2 through F12

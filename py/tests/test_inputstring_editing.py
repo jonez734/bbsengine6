@@ -154,7 +154,8 @@ def test_long_bracketed_paste_stays_on_one_row_and_is_complete(term):
     import re
     width = 80
     for row, col in re.findall(rb"\x1b\[(\d+);(\d+)H", out):
-        assert int(row) == 1, f"cursor left row 1: {row!r}"
+        # Row 24 is the bottom bar (the MODE marker), not the input line.
+        assert int(row) in (1, 24), f"cursor left the input row: {row!r}"
         assert 1 <= int(col) <= width, f"cursor past width {width}: {col!r}"
     # Replay the drawn bytes onto a small row model: the final row must show the
     # tail of the paste exactly once (no leftovers from an earlier, longer draw).
