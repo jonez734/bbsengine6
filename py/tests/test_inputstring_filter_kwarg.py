@@ -62,7 +62,9 @@ def test_inputstring_pops_known_kwargs_from_kwargs():
     pop() calls are present for each popped name.
     """
     mod = _inputstring_module()
-    src = inspect.getsource(mod.inputstring)
+    # The kwarg pops live in _inputstring_body; inputstring() is a thin wrapper
+    # that adds the mouse-state push/pop around it.
+    src = inspect.getsource(mod._inputstring_body)
     # Confirm at least a representative subset of popped kwargs.
     for name in (
         "max_len",

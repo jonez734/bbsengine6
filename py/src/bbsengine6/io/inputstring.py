@@ -19,7 +19,10 @@ from .common import (
     get_cursor_position,
     _current_stream_lock,
     _input_dirty,
+    mouse_state_push,
+    mouse_state_pop,
 )
+from .getch import begin_raw_session, end_raw_session
 
 
 # --- 0. MANDATORY DEFINITIONS & GLOBALS ---
@@ -1006,6 +1009,39 @@ def inputstring(
             f1_help="Enter a number between 1 and 100"
         )
     """
+    # Hold the tty in raw mode for the whole prompt, so keys typed between reads
+    # are not echoed by the line discipline (the stray arrow-key text).
+    begin_raw_session()
+    saved_mouse = mouse_state_push()
+    try:
+        return _inputstring_body(
+            prompt,
+            oldvalue,
+            history=history,
+            pagesize=pagesize,
+            beep_on_error=beep_on_error,
+            f1_help=f1_help,
+            help=help,
+            function_key_handlers=function_key_handlers,
+            **kwargs,
+        )
+    finally:
+        mouse_state_pop(saved_mouse)
+        end_raw_session()
+
+
+def _inputstring_body(
+    prompt: str = "> ",
+    oldvalue: str = "",
+    history: bool = False,
+    pagesize: int = INPUTSTRING_DEFAULT_PAGESIZE,
+    beep_on_error: bool = True,
+    f1_help: Union[str, Callable[[], str], None] = None,
+    help: Union[str, Callable[[], str], None] = None,
+    function_key_handlers: Optional[dict] = None,
+    **kwargs,
+) -> str:
+    """Implementation of inputstring(); see inputstring() for the contract."""
     global _input_dirty
 
     max_len: int = kwargs.pop("max_len", 255)
@@ -1188,22 +1224,26 @@ def inputstring(
     done = False
 
     while not done:
+        # redraw_line() calls echo(), which takes _current_stream_lock itself.
+        # The lock is not reentrant, so the redraw must run outside it.
         with _current_stream_lock:
-            if _input_dirty:
-                redraw_line(
-                    prompt=prompt,
-                    buffer=buffer,
-                    max_len=max_width,
-                    start_row=start_row,
-                    start_col=start_col,
-                    curpos=curpos,
-                    scroll_offset=scroll_offset,
-                    max_width=max_width,
-                    mask=mask,
-                    insert_mode=_insert_mode,
-                )
+            needs_redraw = _input_dirty
+        if needs_redraw:
+            redraw_line(
+                prompt=prompt,
+                buffer=buffer,
+                max_len=max_width,
+                start_row=start_row,
+                start_col=start_col,
+                curpos=curpos,
+                scroll_offset=scroll_offset,
+                max_width=max_width,
+                mask=mask,
+                insert_mode=_insert_mode,
+            )
+            with _current_stream_lock:
                 _input_dirty = False
-                _current_display_str = None
+            _current_display_str = None
 
         display_str = buffer[scroll_offset : scroll_offset + max_width]
 

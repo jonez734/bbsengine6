@@ -7,9 +7,10 @@ import fcntl
 import termios
 import threading
 import collections
+import time
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 
 from .const import ESC, CSI
 
@@ -95,6 +96,59 @@ def write_current_output_stream(s: str, flush=False):
         return _write_current_output_stream(s, flush=flush)
 
 
+# Set by a caller (inputstring) that holds the tty in raw mode for a whole prompt.
+# While it is set, _getch_core leaves the tty mode alone: no raw switch, no restore
+# between keys. Otherwise the line discipline echoes keys typed between reads.
+_session_raw_fd: Optional[int] = None
+_session_raw_settings: Optional[Any] = None
+
+
+def begin_raw_session() -> None:
+    """Put the input tty in raw mode and keep it there until end_raw_session().
+
+    Restores nothing between getch() calls, so keys pressed between reads are
+    never echoed. Safe to call when stdin is not a tty (then it is a no-op).
+    """
+    global _session_raw_fd, _session_raw_settings
+    if _session_raw_fd is not None:
+        return
+    try:
+        fd = _current_input_stream.fileno()
+        settings = termios.tcgetattr(fd)
+    except Exception:
+        return  # not a terminal
+    with _current_stream_lock:
+        # Keys already typed are in the cooked line discipline; setraw() would
+        # discard them. Queue them first, in arrival order.
+        drain_stream_to_queue(_current_input_stream, _input_queue)
+        tty.setraw(fd)
+    _session_raw_fd = fd
+    _session_raw_settings = settings
+
+
+def end_raw_session() -> None:
+    """Restore the tty mode saved by begin_raw_session()."""
+    global _session_raw_fd, _session_raw_settings
+    if _session_raw_fd is None:
+        return
+    try:
+        termios.tcsetattr(_session_raw_fd, termios.TCSADRAIN, _session_raw_settings)
+    except Exception:
+        pass
+    _session_raw_fd = None
+    _session_raw_settings = None
+
+
+def _restore_cooked(fd: int, old_settings: Any) -> None:
+    """Return the tty to its pre-getch mode, unless a raw session owns it."""
+    if _in_raw_session():
+        return
+    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+
+def _in_raw_session() -> bool:
+    return _session_raw_fd is not None
+
 # --------------------------
 # DSR (Device Status Report)
 # --------------------------
@@ -121,7 +175,7 @@ def _read_terminal_response(terminator: str, timeout: float = 1.0) -> str | None
                 return response
     finally:
         # 3. Restore terminal settings
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        _restore_cooked(fd, old_settings)
 
 
 # Regex for DSR reply: ESC [ <row> ; <col> R
@@ -158,7 +212,8 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
         old_settings = termios.tcgetattr(fd)
 
     try:
-        tty.setraw(fd)
+        if not _in_raw_session():
+            tty.setraw(fd)
         _write_current_output_stream(f"{ESC}[{code}n", flush=True)
 
         buffer = ""
@@ -199,7 +254,7 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
             )
         return buffer
     finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        _restore_cooked(fd, old_settings)
 
 
 ##    write_current_output_stream(f"{CSI}{code}n", flush=True)
@@ -280,6 +335,11 @@ def drain_stream_to_queue(stream, queue):
                 ch = stream.read(1)
                 if not ch:
                     break  # EOF or no more data
+                # Cooked mode turns Enter (\r) into \n (ICRNL). Raw mode delivers \r,
+                # which the key table maps to KEY_ENTER, so restore it here for
+                # every key drained into the input queue.
+                if ch == "\n" and queue is _input_queue:
+                    ch = "\r"
                 # Lock for _input_queue, otherwise assume caller handles it
                 if queue is _input_queue:
                     with _input_queue_lock:
@@ -333,3 +393,96 @@ def set_terminal_state(state: TerminalState):
     global _terminal_state
     with _terminal_state_lock:
         _terminal_state = state
+
+
+# --------------------------
+# Mouse reporting state (inputstring)
+# --------------------------
+
+# Mouse tracking modes that cause a terminal to capture click-drag selection.
+MOUSE_MODES = (1000, 1002, 1003, 1006)
+
+# Module flag: when False, inputstring() leaves the terminal's mouse state alone.
+MOUSE_STATE_MANAGED = True
+
+_DECRPM_RE = re.compile(r"\x1b\[\?(\d+);(\d)\$y")
+
+
+def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:
+    """Ask the terminal which mouse modes are set (DECRQM).
+
+    Returns {mode: enabled}. A mode with no reply is reported as disabled,
+    which is the fallback the restore logic relies on.
+    """
+    fd = _current_input_stream.fileno()
+    with _current_stream_lock:
+        drain_stream_to_queue(_current_input_stream, _input_queue)
+        old_settings = termios.tcgetattr(fd)
+    replies = ""
+    try:
+        if not _in_raw_session():
+            tty.setraw(fd)
+        for mode in MOUSE_MODES:
+            _write_current_output_stream(f"{CSI}?{mode}$p", flush=True)
+        # Read until every mode has answered AND the terminal has gone quiet.
+        # Stopping on the fourth match alone can leave the batch's final bytes
+        # in the stream, where they are read as keystrokes.
+        deadline = time.time() + timeout
+        quiet_until = None
+        while time.time() < deadline:
+            rlist, _, _ = select.select([fd], [], [], 0.02)
+            if rlist:
+                replies += os.read(fd, 256).decode("utf-8", errors="replace")
+                quiet_until = None
+                continue
+            if len(_DECRPM_RE.findall(replies)) >= len(MOUSE_MODES):
+                if quiet_until is None:
+                    quiet_until = time.time() + 0.03
+                elif time.time() >= quiet_until:
+                    break
+    finally:
+        _restore_cooked(fd, old_settings)
+
+    state = {mode: False for mode in MOUSE_MODES}
+    for mode_s, status in _DECRPM_RE.findall(replies):
+        mode = int(mode_s)
+        if mode in state:
+            state[mode] = status in ("1", "3")  # 1 = set, 3 = permanently set
+
+    # Anything typed while the query ran is not a reply: keep it, in order, for
+    # the reader. Replies are removed; the rest goes back onto the input queue.
+    leftover = _DECRPM_RE.sub("", replies)
+    if leftover:
+        keys = ["\r" if c == "\n" else c for c in leftover]
+        with _input_queue_lock:
+            _input_queue.extend(keys)
+    return state
+
+
+def _write_mouse_modes(state: dict[int, bool]) -> None:
+    """Set each mouse mode on or off to match state (h = on, l = off)."""
+    with _current_stream_lock:
+        for mode in MOUSE_MODES:
+            suffix = "h" if state.get(mode) else "l"
+            _write_current_output_stream(f"{CSI}?{mode}{suffix}", flush=True)
+        _current_output_stream.flush()
+
+
+def mouse_state_push() -> dict[int, bool] | None:
+    """Save the terminal's mouse state and turn mouse reporting off.
+
+    Returns the saved state for mouse_state_pop(), or None when managed
+    handling is disabled (MOUSE_STATE_MANAGED is False).
+    """
+    if not MOUSE_STATE_MANAGED:
+        return None
+    saved = _query_mouse_modes()
+    _write_mouse_modes({mode: False for mode in MOUSE_MODES})
+    return saved
+
+
+def mouse_state_pop(saved: dict[int, bool] | None) -> None:
+    """Restore the mouse state returned by mouse_state_push()."""
+    if saved is None:
+        return
+    _write_mouse_modes(saved)
