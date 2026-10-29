@@ -334,26 +334,48 @@ def adjust_scroll_offset(curpos: int, scroll_offset: int, max_width: int) -> int
 KEY_ACTIONS: dict[str, KeyHandler] = {}
 
 
+# Handlers replaced by add_key_mapping(), most recent last, per key. remove_key_mapping()
+# pops one entry and puts the earlier handler back, so an override (for example the
+# editor taking KEY_LEFT) does not erase the default for later prompts.
+_key_action_saved: dict[str, list[KeyHandler | None]] = {}
+
+
 def add_key_mapping(key_string: str, action_lambda: KeyHandler) -> None:
-    """Register a key handler function.
+    """Register a key handler function, replacing any current handler for the key.
+
+    Pair each call with remove_key_mapping() to restore the previous handler.
 
     Args:
         key_string: Key name (e.g., 'KEY_LEFT', 'KEY_ENTER')
         action_lambda: Handler function with signature (buffer, curpos, scroll_offset, max_width) -> tuple
     """
     with _key_actions_lock:
+        _key_action_saved.setdefault(key_string, []).append(KEY_ACTIONS.get(key_string))
         KEY_ACTIONS[key_string] = action_lambda
 
 
 def remove_key_mapping(key_string: str) -> None:
-    """Unregister a key handler function.
+    """Undo the most recent add_key_mapping() for this key.
+
+    Restores the handler that was in place before it. If the key had no handler
+    before any add, the key is removed.
 
     Args:
-        key_string: Key name to remove
+        key_string: Key name to restore or remove
     """
     with _key_actions_lock:
-        if key_string in KEY_ACTIONS:
-            del KEY_ACTIONS[key_string]
+        saved = _key_action_saved.get(key_string)
+        if saved:
+            previous = saved.pop()
+            if not saved:
+                del _key_action_saved[key_string]
+            if previous is None:
+                KEY_ACTIONS.pop(key_string, None)
+            else:
+                KEY_ACTIONS[key_string] = previous
+        else:
+            # No recorded override: keep the old behavior of removing the key.
+            KEY_ACTIONS.pop(key_string, None)
 
 
 # --- 2. Helper Functions ---
