@@ -14,7 +14,8 @@
 #   -h          show this help
 #
 # Output (in OUTDIR):
-#   NAME.typescript   the bytes the program wrote (raw, with escape codes)
+#   NAME.typescript   raw script(1) file, with its banner and footer (replay this)
+#   NAME.clean        the same bytes without the banner and footer (read this)
 #   NAME.timing       timing data for: scriptreplay NAME.timing NAME.typescript
 #   NAME.info         the terminal size and command used
 #
@@ -59,6 +60,7 @@ fi
 
 mkdir -p "$OUTDIR"
 TYPESCRIPT="$OUTDIR/$NAME.typescript"
+CLEAN="$OUTDIR/$NAME.clean"
 TIMING="$OUTDIR/$NAME.timing"
 INFO="$OUTDIR/$NAME.info"
 
@@ -90,7 +92,15 @@ script -q -f -T "$TIMING" -E "$ECHO_MODE" -c "$CMD" "$TYPESCRIPT"
 STATUS=$?
 set -e
 
-echo "Saved: $TYPESCRIPT"
+# script(1) writes its own banner and footer into the file. Keep the raw file: the
+# timing file counts its bytes, so removing the header would break scriptreplay.
+# Write a cleaned copy (program bytes only) next to it for reading.
+if [ -f "$TYPESCRIPT" ]; then
+    awk 'NR==1 && /^Script started on /{next} /^Script done on /{next} {print}' \
+        "$TYPESCRIPT" > "$CLEAN"
+fi
+
+echo "Saved: $TYPESCRIPT (raw) and $CLEAN (program output only)"
 echo "Replay: scriptreplay $TIMING $TYPESCRIPT"
 echo "Info:   $INFO"
 exit "$STATUS"
