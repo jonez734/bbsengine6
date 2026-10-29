@@ -40,6 +40,7 @@ own:
 - [Folder](specs/folder.md) — ltree-backed folder hierarchy
 - [Bottombar](specs/bottombar.md) — fragment registry
 - [md2tpl](specs/md2tpl.md) — markdown → Smarty `.tmpl` converter
+- [io](specs/io/index.md) — `bbsengine6.io` terminal I/O: getch, inputstring, the input prompts, echo, palette, and the modules they depend on
 
 ### Security
 
