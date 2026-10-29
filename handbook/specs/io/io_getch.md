@@ -1,4 +1,4 @@
-# asimov.io.getch Specification
+# bbsengine6.io.getch Specification
 
 ## Overview
 
@@ -6,10 +6,10 @@
 
 ## Dependencies
 
-- `common.py`: Input stream management
+- `common.py`: input stream management, raw session, DSR and mouse-state queries
 - `keymap.py`: ANSI escape sequence to key name mapping
-- `util.py`: Loggingconst.py`: Constants utilities
-- ` (ESC, ETX, EOF)
+- `util.py`: logging
+- `const.py`: constants (`ESC`, `ETX`, `EOF`)
 
 ## Public API
 
@@ -85,7 +85,6 @@ exported from `bbsengine6.io`. The default is not changed to `"utf8"` yet.
 |-----------|----------|
 | `\x01` (Ctrl+A) | `KEY_CTRL_A` |
 | `\x05` (Ctrl+E) | `KEY_CTRL_E` |
-| `\x07` (Ctrl+G, BEL) | `KEY_BELL` |
 | `\x08` (Backspace) | `KEY_BACKSPACE` |
 | `\x0d` (Carriage Return) | `KEY_ENTER` |
 | `\x09` (Tab) | `KEY_TAB` |
@@ -94,13 +93,21 @@ exported from `bbsengine6.io`. The default is not changed to `"utf8"` yet.
 | `\x19` (Ctrl+Y) | `KEY_YANK` |
 | `\x7f` (DEL) | `KEY_BACKSPACE` |
 
+Ctrl+C (`\x03`) raises `KeyboardInterrupt` and Ctrl+D (`\x04`) raises `EOFError`;
+they produce no key name. Any other control byte that is not in this table is
+returned as its raw character.
+
+`KEY_BELL` is not produced by this reader. Earlier versions of this table listed
+it; no code path maps `\x07` to it.
+
 ### Bracketed Paste
 
 When the terminal wraps a paste in `ESC[200~` ... `ESC[201~`, the reader collects
 the text between the markers and returns it as one key, `"PASTE:<text>"`. Keys
 after the end marker are returned individually. The body is read from the queue
 first, then the stream, so a paste split across reads is kept whole. A paste with
-no end marker returns what arrived after a short wait. A body is capped at 64 KiB.
+no end marker returns what arrived after a short wait. A body is capped at 65536
+characters (`PASTE_MAX`); the cap counts characters, not bytes.
 
 `inputstring()` requests this mode with `ESC[?2004h` and turns it off on exit.
 The reader recognises `ESC[200~` whenever it arrives. A terminal sends the markers only
