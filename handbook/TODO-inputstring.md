@@ -60,8 +60,8 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] `allowed=` per-character set, on typing and paste; disallowed characters beep and are dropped.
 - [x] `filter=` regex checked on Enter (whole buffer); a non-match beeps and reprompts.
 - [x] `inputinteger` passes `allowed=` and `filter=`.
-- [ ] Asimov wrapper (`asimov/src/asimov/io/inputstring.py`, `inputinteger.py`) updated to match. Not done: separate submodule, left unchanged on purpose. Its `noneok` default is still `False`.
-- [ ] Update `py/tests/test_inputstring_filter_kwarg.py`. (Not done; the test now reads the body function for pops, which is the only change.)
+- [x] Asimov wrapper (`asimov/src/asimov/io/inputstring.py`, `inputinteger.py`) is an alias of bbsengine6 (`03e54d8`), verified by identity: same function objects, so `noneok` defaults to `True` as in bbsengine6. No separate copy remains.
+- [x] `py/tests/test_inputstring_filter_kwarg.py` updated; it reads the body function for pops. 6 passed.
 - [x] `inputstring()` wraps `_inputstring_body()` with a raw session and mouse push/pop.
 - [x] Dirty-redraw no longer runs under the non-reentrant `_current_stream_lock` (fixes a self-deadlock).
 
@@ -119,7 +119,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] `inputinteger` passes `allowed` and its regex; letters are dropped, invalid values reprompt.
 - [x] Enter at the head of a paste batch is a command: it waits for the key path, so these rules apply to it.
 - [x] Key handlers run outside `_key_actions_lock` (handlers write to the terminal).
-- [ ] Asimov's separate `inputstring`/`inputinteger` copy: not changed (other submodule).
+- [x] Asimov's separate `inputstring`/`inputinteger` copy: gone; both are aliases of bbsengine6 (`03e54d8`).
 - [ ] `inputinteger` list entry (`1 2`): the regex still validates a single value. Not changed.
 
 ## Phase 11: editing keys, overflow, bracketed paste
@@ -129,7 +129,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Bracketed paste: `ESC[?2004h` for the prompt; body returned as one `PASTE:` key; newline ends the entry (`7bf0c29`).
 - [x] Per-call key handlers are restored on exit (`3f2e3c1`).
 - [ ] INSERT toggle and `[OVR]` overwrite: not verified by a test.
-- [ ] Asimov copy: unchanged (other submodule).
+- [x] Asimov copy: gone; alias of bbsengine6 (see line 63).
 - [ ] Concurrent prompts in different threads: not supported; the key table and the terminal are shared.
 
 ## Phase 12: long paste display
@@ -277,7 +277,7 @@ Scope confirmed by the operator: includes letteredolive.
 - [x] Tests: default is used without a block; `use_session` restores, including after an
   exception; nested blocks; registries do not leak between interactions or into the default;
   each thread sees its own.
-- [ ] Phase 3: move io state into the interaction (in progress).
+- [x] Phase 3: move io state into the interaction. Complete for the io modules listed above (commits `8e2f3ca`, `c72a53c`, `57ce2b8`, `e78ba1a`, `c88bddb`).
   - [x] Read-through mechanism (`install_read_through`): module names become properties over the
     current interaction; module keeps its globals dict (`1fb02a3`).
   - [x] `io/common.py`: input queue, streams, terminal state and stack, dirty flag (`8e2f3ca`).
