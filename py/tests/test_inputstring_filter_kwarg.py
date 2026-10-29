@@ -39,21 +39,14 @@ def test_inputstring_signature_is_positional_only_for_prompt_oldvalue():
     assert params[1].kind is inspect.Parameter.POSITIONAL_ONLY
 
 
-def test_filter_kwarg_is_popped_not_forwarded():
-    """Passing filter= as a kwarg must NOT raise and must NOT leak it
-    through to the verify() callback.
-
-    Phase 4 fix: inputstring() now does `filter_fn = kwargs.pop("filter", None)`
-    to discard the unsupported kwarg silently instead of forwarding it to
-    the verify callback (which previously crashed with TypeError on an
-    unexpected keyword).
+def test_filter_and_allowed_are_consumed_not_forwarded():
+    """filter= and allowed= are inputstring options. They must be consumed by
+    inputstring and must NOT reach the verify() callback.
     """
     mod = _inputstring_module()
-    sig = inspect.signature(mod.inputstring)
-    assert "filter" not in sig.parameters, (
-        "inputstring should NOT advertise `filter` as a parameter; "
-        "unknown kwargs are silently popped"
-    )
+    src = inspect.getsource(mod._inputstring_body)
+    assert 'kwargs.pop("filter"' in src
+    assert 'kwargs.pop("allowed"' in src
 
 
 def test_inputstring_pops_known_kwargs_from_kwargs():

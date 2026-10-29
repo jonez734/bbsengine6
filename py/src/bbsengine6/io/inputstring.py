@@ -619,6 +619,7 @@ def handle_key_enter(
     start_col: int,
     input_col_start: int,
     noneok: bool,
+    filter_pattern: Optional[str] = None,
     **kwargs: Any,
 ) -> Tuple[str, int, int, bool, bool]:
     """Process Enter key with optional verification.
@@ -631,6 +632,20 @@ def handle_key_enter(
         **kwargs: Additional parameters passed to verify
     """
     echo("{f6}", end="", flush=True)
+
+    # Empty input is rejected unless the caller allows it (noneok=True is the default).
+    # Rejection beeps and reprompts; the buffer is already empty, so only a redraw.
+    if buffer == "" and not noneok:
+        echo("{BEL}", end="", flush=True)
+        return buffer, curpos, scroll_offset, False, True
+
+    # filter: whole-buffer regex. A value that does not match is rejected like a
+    # failed verify (beep and reprompt). Checked before verify, which is for the
+    # caller's own rules.
+    if filter_pattern is not None and buffer != "":
+        if not re.search(filter_pattern, buffer):
+            echo("{BEL}", end="", flush=True)
+            return buffer, curpos, scroll_offset, False, True
 
     # No verify → accept immediately
     if not callable(verify):
@@ -1130,12 +1145,17 @@ def _inputstring_body(
     mask: str = kwargs.pop("mask", None)
     completer = kwargs.pop("completer", None)
     insert_tabs = bool(kwargs.pop("insert_tabs", False))
-    filter_fn = kwargs.pop("filter", None)
+    # filter: regex the whole buffer must match on Enter (not per keystroke).
+    filter_pattern = kwargs.pop("filter", None)
+    if filter_pattern is not None:
+        re.compile(filter_pattern)  # fail fast on a bad pattern
+    # allowed: characters accepted on typing and paste; others beep and are dropped.
+    allowed = kwargs.pop("allowed", None)
 
     verify = kwargs.pop("verify", None)
     args = kwargs.pop("args", None)  # argparse.Namespace()
 
-    noneok = kwargs.pop("noneok", False)
+    noneok = kwargs.pop("noneok", True)
 
     # NEW: Initialize history if enabled
     _history = None
@@ -1202,6 +1222,7 @@ def _inputstring_body(
             start_col=start_col,
             input_col_start=input_col_start,
             noneok=noneok,
+            filter_pattern=filter_pattern,
             **kwargs,
         )
 
@@ -1353,19 +1374,22 @@ def _inputstring_body(
         burst = _take_paste_burst(insert_tabs=insert_tabs)
         if burst is not None:
             # A paste: insert literal text; a newline ends the entry like Enter.
-            text, end_here = burst.split("\n", 1)[0], "\n" in burst
+            text = burst
+            rejected = False
             for c in text:
                 if c == "\t" and not insert_tabs:
                     c = " "  # a single-line field has no tab stops: show a space
+                if allowed is not None and c != "\n" and c not in allowed:
+                    rejected = True  # drop it; beep once below
+                    continue
                 if len(buffer) < max_len:
                     buffer = buffer[:curpos] + c + buffer[curpos:]
                     curpos += 1
+            if rejected:
+                echo("{BEL}", end="", flush=True)
             _input_dirty = True
             tab_count = 0
-            if end_here:
-                ch = "KEY_ENTER"
-            else:
-                continue
+            continue
         else:
             ch = getch(
                 timeout=INPUTSTRING_GETCH_TIMEOUT,
