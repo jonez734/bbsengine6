@@ -78,10 +78,30 @@ _runtime_vars_lock = threading.Lock()
 _emoji_lock = threading.Lock()
 _state_lock = threading.Lock()  # Protects: _raw, _previous_token, _first_line_after_f6
 
-_raw = False  # Global state - whether to output raw (without command processing)
 _raw_lock = threading.Lock()
-_previous_token = Token("UNKNOWN")
-_first_line_after_f6 = False  # Don't reduce width on first line after F6
+
+
+def _interaction():
+    """The interaction in effect for this context (see bbsengine6.interaction)."""
+    from ..interaction import current_session
+
+    return current_session()
+
+
+def _default_runtime_vars() -> dict:
+    """The runtime variables a new interaction starts with: built-in names, then the skin."""
+    rv: dict = {}
+    rv.update({"cls": "{erasedisplay}{home}"})
+    rv.update({"home": "{curpos:1,1}"})
+    rv.update(_skin)
+    return rv
+
+
+def _runtime_vars_of(it) -> dict:
+    """This interaction's runtime variables (built from the defaults on first use)."""
+    if it.runtime_vars is None:
+        it.runtime_vars = _default_runtime_vars()
+    return it.runtime_vars
 
 _skin = {
     "theanswer": 42,
@@ -130,26 +150,18 @@ _skin = {
     "message.recipientcolor": "{cyan}",
 }
 
-# Runtime variables dictionary
-_runtime_vars = {}
-
-_runtime_vars.update({"cls": "{erasedisplay}{home}"})
-_runtime_vars.update({"home": "{curpos:1,1}"})
-###_runtime_vars.update({"/all": "{reset}"})
-
-_runtime_vars.update(_skin)
 
 
 def setvar(name: str, value: Any) -> None:
     """Set a runtime variable for use in {var:<name>} or {<name>} commands."""
     with _runtime_vars_lock:
-        _runtime_vars[name] = value
+        _runtime_vars_of(_interaction())[name] = value
 
 
 def getvar(name: str, default: Any = None) -> Any:
     """Get a runtime variable by name, returning default if not found."""
     with _runtime_vars_lock:
-        return _runtime_vars.get(name, default)
+        return _runtime_vars_of(_interaction()).get(name, default)
 
 
 def register_emoji(name: str, value: str) -> None:
@@ -350,7 +362,7 @@ def _handle_word(token, **kwargs):
 
     # ACS is a rendering concern → emit before word if needed
     with _raw_lock:
-        raw_now = _raw
+        raw_now = _interaction().raw
     if not raw_now:
         yield from _acs_off()
 
@@ -368,7 +380,6 @@ def _handle_word(token, **kwargs):
             word_len = len(token_text)
 
             if _terminal_state.wordwrap:
-                global _first_line_after_f6
                 if _terminal_state.cursor_col >= width:
                     _terminal_state.cursor_col = 0
                 # Account for indent always (first line gets indent too)
@@ -376,7 +387,7 @@ def _handle_word(token, **kwargs):
                 if _terminal_state.cursor_col + word_len > available_width:
                     emit_f6 = True
                     _terminal_state.cursor_col = _terminal_state.indent
-                    _first_line_after_f6 = False  # After wrapping, use reduced width
+                    _interaction().first_line_after_f6 = False  # After wrapping, use reduced width
 
             _terminal_state.cursor_col += word_len
             emit_token = True
@@ -398,7 +409,7 @@ def _handle_whitespace(token):
         Token(kind="WHITESPACE", value="\n", repeat=3, text="\n\n\n")
     """
     with _raw_lock:
-        raw_now = _raw
+        raw_now = _interaction().raw
     if not raw_now:
         yield from _acs_off()
 
@@ -563,7 +574,7 @@ def _handle_acs(token):
         _terminal_state.cursor_col += repeat
 
     with _raw_lock:
-        raw_now = _raw
+        raw_now = _interaction().raw
     if not raw_now:
         yield from _acs_on()
 
@@ -578,7 +589,7 @@ def _handle_acs(token):
 def _handle_var(token):
     var_name = token.args[0] if token.args else token.value
     with _runtime_vars_lock:
-        var_val = _runtime_vars.get(var_name, "")
+        var_val = _runtime_vars_of(_interaction()).get(var_name, "")
     # recursively tokenize the value of the variable
     for t in tokenize(var_val):
         yield t
@@ -624,7 +635,7 @@ def _handle_curpos(token):
 
 
 def _handle_f6(token):
-    global _cursor_col, _cursor_row, _first_line_after_f6
+    global _cursor_col, _cursor_row
 
     repeat = int(token.args[0]) if token.args else 1
     token.repeat = repeat
@@ -632,7 +643,7 @@ def _handle_f6(token):
     token.kind = "F6"
 
     # Mark that next line is first after F6 (use full width)
-    _first_line_after_f6 = True
+    _interaction().first_line_after_f6 = True
 
     yield token
 
@@ -755,7 +766,7 @@ def _handle_reset(token):
         return iter()
 
     with _raw_lock:
-        raw_now = _raw
+        raw_now = _interaction().raw
     if not raw_now:
         yield from _acs_off()
 
@@ -819,20 +830,22 @@ def _handle_indent(token):
             _terminal_state.indent_char = DEFAULT_INDENT_CHAR
 
 
-options: Dict[str, Any] = {}
+
+
+def _options_of(it) -> Dict[str, Any]:
+    """The options dict of this interaction (created empty on first use)."""
+    return it.options
 
 
 def setoption(opt: str, value: Any) -> Any:
     """Set a global option."""
-    global options
-    options[opt] = value
+    _options_of(_interaction())[opt] = value
     return value
 
 
 def getoption(opt: str, default: Any = None) -> Any:
     """Get a global option, returning default if not found."""
-    global options
-    return options[opt] if opt in options else default
+    return _options_of(_interaction())[opt] if opt in _options_of(_interaction()) else default
 
 
 PARAM_SPLIT_RE = re.compile(r"[:,]")
@@ -985,7 +998,7 @@ def _handle_command(token, **kwargs):  # palette=None, vars=None):
         yield token
         return
 
-    if cmd in _runtime_vars:
+    if cmd in _runtime_vars_of(_interaction()):
         yield from _handle_var(token)
         return
 
@@ -1203,7 +1216,7 @@ def _write_token(token: Token, flush: bool = True, stream=None):
     ##    print(f"_write_token.100: {token.kind=} {token.repeat=} {token.value=}", flush=True)
     repeat = int(token.repeat) or 1
     with _raw_lock:
-        raw_now = _raw
+        raw_now = _interaction().raw
     if not raw_now:
         text = str(token.text) * repeat
     else:
@@ -1227,17 +1240,15 @@ def echo_iter(
     Generator that yields tokens for rendering.
     Handles WORD, WHITESPACE, F6 (hard newline), attributes, and commands.
     """
-    global _runtime_vars, _previous_token
 
     with _raw_lock:
-        _raw = raw
+        _interaction().raw = raw
     _terminal_state.wordwrap = wordwrap
 
     if width is None:
         width = terminal.columns()  # default or queried width
 
     palette = palette or c64_palette
-    _runtime_vars = _runtime_vars or {}
     _term_width = width
 
     for token in tokenize(text):
@@ -1251,8 +1262,7 @@ def echo_iter(
             yield token
             # After newline whitespace, emit indent if set (but not after INDENT to avoid duplicates)
             if "\n" in token.value and _terminal_state.indent > 0:
-                if _previous_token.kind != "INDENT":
-                    global _first_line_after_f6
+                if _interaction().previous_token.kind != "INDENT":
                     indent_str = _terminal_state.indent_char * _terminal_state.indent
                     indent_token = Token(
                         "INDENT",
@@ -1264,10 +1274,10 @@ def echo_iter(
                     yield indent_token
                     with _current_stream_lock:
                         _terminal_state.cursor_col = _terminal_state.indent
-                    _first_line_after_f6 = (
+                    _interaction().first_line_after_f6 = (
                         True  # First line after newline uses full width
                     )
-                    _previous_token = (
+                    _interaction().previous_token = (
                         indent_token  # Track INDENT so next newline doesn't add again
                     )
         elif token.kind == "F6":
@@ -1282,7 +1292,7 @@ def echo_iter(
             # unknown token, yield as-is
             yield token
 
-        _previous_token = token
+        _interaction().previous_token = token
 
 
 def echo(
@@ -1296,7 +1306,7 @@ def echo(
     flush: if True, flush after writing
     """
     with _raw_lock:
-        _raw = kwargs.get("raw", False)
+        _interaction().raw = kwargs.get("raw", False)
 
     palette: dict = kwargs.get("palette", None)
     width: int = kwargs.get("width", terminal.width())
@@ -1322,7 +1332,7 @@ def echo(
         text = prefix + text + "{/all}"
 
     for token in echo_iter(
-        text, width=width, wordwrap=wordwrap, raw=_raw, palette=palette
+        text, width=width, wordwrap=wordwrap, raw=_interaction().raw, palette=palette
     ):
         _write_token(token, flush=flush)
 
@@ -1612,3 +1622,29 @@ def echo_template(name: str, **vars) -> None:
             os.unlink(tmp_path)
     else:
         echo(template, raw=raw, wordwrap=wordwrap)
+
+
+# ---------------------------------------------------------------------------
+# Per-interaction names: read through the current interaction (Phase 3).
+#
+# `echo.options` and `echo._runtime_vars` were module-level dicts. They are now served
+# from the interaction. Attribute access on this module (for example
+# `echo._runtime_vars` in a test) goes through the read-through. The functions above
+# already use the accessors directly.
+# ---------------------------------------------------------------------------
+from ..interaction import install_read_through as _install_read_through  # noqa: E402
+
+_install_read_through(
+    __name__,
+    {
+        "_raw": "raw",
+        "_previous_token": "previous_token",
+        "_first_line_after_f6": "first_line_after_f6",
+        "_runtime_vars": "runtime_vars",
+        "options": "options",
+    },
+    getters={
+        "_runtime_vars": _runtime_vars_of,
+        "options": lambda it: it.options,
+    },
+)

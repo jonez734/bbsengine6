@@ -37,6 +37,13 @@ class Session:
         self.terminal_state_stack: list = []
         self.terminal_state_stack_enabled = False
         self.input_dirty = False
+        # io/echo.py state. Runtime variables start as None: echo builds the default set
+        # (its built-in names and skin) on first read, so each interaction starts the same.
+        self.raw = False
+        self.previous_token = None  # echo's Token("UNKNOWN") on first use
+        self.first_line_after_f6 = False
+        self.runtime_vars = None
+        self.options: dict = {}
 
     def __repr__(self) -> str:
         return f"Session(name={self.name!r}, mode={self.commands.mode!r})"
