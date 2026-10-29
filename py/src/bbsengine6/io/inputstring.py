@@ -1229,10 +1229,12 @@ def _inputstring_body(
     else:
         start_row, start_col = 1, 1
 
-    echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
-    echo(prompt, end="", flush=True)
-
     prompt_len: int = int(rendered_length(prompt))
+    # Draw the prompt with its mode indicator from the first frame, the same text
+    # redraw_line() draws, so the first frame and later redraws agree on the layout.
+    echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
+    echo(f"{prompt} {INPUTSTRING_INSERT_MODE_INDICATOR}", end="", flush=True, wordwrap=False)
+
     input_col_start = start_col + prompt_len
     # The row holds the prompt, the mode indicator and the text. Give the text only the
     # room left after the prompt, so a long paste wraps inside the window instead of
