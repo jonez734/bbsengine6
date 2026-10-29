@@ -17,7 +17,7 @@ code is a bug in the spec; say so in the commit that fixes it.
 | `inputboolean.py` | [inputboolean.md](io_inputboolean.md) | Live. Yes/no prompt. |
 | `inputinteger.py` | [inputinteger.md](io_inputinteger.md) | Live. Integer prompt. |
 | `inputchoice.py` | [inputchoice.md](io_inputchoice.md) | Live. Choice prompt. |
-| `inputcompleter.py` | (no spec yet) | Live. Database-backed readline completer. |
+| `inputcompleter.py` | [inputcompleter.md](io_inputcompleter.md) | Live. Database-backed readline completer. **Has a known import defect; see its spec.** |
 | `getstr.py` | [getstr.md](io_getstr.md) | Live. Plain string prompt. |
 
 ## Output
