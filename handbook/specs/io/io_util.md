@@ -1,47 +1,67 @@
-# asimov.io.util Specification
+# bbsengine6.io.util Specification
 
 ## Overview
 
-`util.py` provides logging utilities, primarily for logging to syslog.
+`util.py` writes log entries. By default it sends them to syslog.
 
 ## Dependencies
 
 - `logging`: Python standard library
-- `logging.handlers`: SysLogHandler
+- `logging.handlers`: `SysLogHandler`
 
 ## Functions
 
 ### `logentry(message, level=logging.INFO, *, handler=None, formatter=None, logger_name="asimov")`
 
-Write a log entry to syslog (by default).
+Writes one log entry.
 
 **Parameters:**
-- `message`: The log message
-- `level`: Logging level (default: `logging.INFO`)
-- `handler`: Custom logging handler (default: SysLogHandler)
-- `formatter`: Custom formatter (default: `'%(name)s[%(process)d]: %(levelname)s %(message)s'`)
-- `logger_name`: Logger name (default: "asimov")
+- `message`: the log message
+- `level`: an `int` logging level, or one of the strings below (default: `logging.INFO`)
+- `handler`: a `logging.Handler` to use instead of the default (default: `None`)
+- `formatter`: a `logging.Formatter` to use instead of the default (default: `None`)
+- `logger_name`: the logger the entry is written to (default: `"asimov"`)
 
-**Level Aliases:**
+**Level strings:**
+
 | String | Level |
 |--------|-------|
-| "debug" | DEBUG |
-| "info" | INFO |
-| "warn"/"warning" | WARNING |
-| "error" | ERROR |
-| "critical"/"crit" | CRITICAL |
+| `"debug"` | DEBUG |
+| `"info"` | INFO |
+| `"warn"`, `"warning"` | WARNING |
+| `"error"` | ERROR |
+| `"critical"`, `"crit"` | CRITICAL |
 
-## Default Configuration
+An unknown string is not an error: the entry is logged at INFO.
 
-- **Handler**: SysLogHandler at `/dev/log`
-- **Format**: `%(name)s[%(process)d]: %(levelname)s %(message)s`
+**Behaviour:**
+- The logger's level is set to DEBUG, so every level is passed to its handlers.
+- The handler is added to the logger only if the logger has no handler of the same
+  type. Repeated calls do not stack handlers.
+- The formatter is set on the handler on every call.
+
+## Defaults
+
+- **Handler:** `SysLogHandler(address="/dev/log")`
+- **Formatter:** `%(name)s[%(process)d]: %(levelname)s %(message)s`
+- **Logger:** `"asimov"`
+
+The logger name `"asimov"` is kept from the module's history. The module's docstring
+says the default is `"myapp"`; the code uses `"asimov"`. The code is correct here.
 
 ## Usage
 
 ```python
-from asimov.io.util import logentry
+from bbsengine6.io.util import logentry
+import logging
 
 logentry("Something happened", "info")
 logentry("An error", "error")
-logentry("Debug info", level=logging.DEBUG)
+logentry("Debug detail", level=logging.DEBUG)
 ```
+
+## Note on syslog
+
+The default handler writes to `/dev/log`. On this system that path is a symlink to the
+systemd journal. The behaviour when no socket is present was not tested, so the spec
+does not state it. Pass `handler=` to write somewhere else.
