@@ -90,7 +90,21 @@ exported from `bbsengine6.io`. The default is not changed to `"utf8"` yet.
 | `\x0d` (Carriage Return) | `KEY_ENTER` |
 | `\x09` (Tab) | `KEY_TAB` |
 | `\x15` (Ctrl+U) | `KEY_CUTTOBOL` |
+| `\x17` (Ctrl+W) | `KEY_CTRL_W` |
+| `\x19` (Ctrl+Y) | `KEY_YANK` |
 | `\x7f` (DEL) | `KEY_BACKSPACE` |
+
+### Bracketed Paste
+
+When the terminal wraps a paste in `ESC[200~` ... `ESC[201~`, the reader collects
+the text between the markers and returns it as one key, `"PASTE:<text>"`. Keys
+after the end marker are returned individually. The body is read from the queue
+first, then the stream, so a paste split across reads is kept whole. A paste with
+no end marker returns what arrived after a short wait. A body is capped at 64 KiB.
+
+`inputstring()` requests this mode with `ESC[?2004h` and turns it off on exit.
+The reader recognises `ESC[200~` whenever it arrives. A terminal sends the markers only
+in bracketed-paste mode, so a `PASTE:` key appears only while that mode is on.
 
 ### Escape Sequences (from keymap.py)
 
@@ -254,6 +268,8 @@ the reader does not stop at the first pause.
 3. No support for application cursor keys (DECCKM mode)
 4. Unknown escape sequences: with `debug=False` (default), returns raw sequence; with `debug=True`, logs and returns `None`
 5. Unmapped control bytes (other than the keys in the key tables) are not filtered by `getch`; `inputstring()` drops them from paste text
+6. A `PASTE:` key carries its text in the key name. Callers that compare key names against
+   a fixed set must treat any value starting with `PASTE:` as text.
 
 ---
 

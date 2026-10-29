@@ -117,8 +117,13 @@ Reads one line with line editing. Returns the entered text. `prompt` and
   `common.MOUSE_STATE_MANAGED = False` disables this.
 
 **Concurrency:** the module-level key table `KEY_ACTIONS` is shared by all
-callers. Key handlers are looked up under `_key_actions_lock`. A redraw runs
-outside `_current_stream_lock` because `echo()` takes that lock.
+callers. Key handlers are looked up under `_key_actions_lock` and run outside it.
+A redraw runs outside `_current_stream_lock` because `echo()` takes that lock.
+
+**Per-call keys.** A prompt installs its own closures for `KEY_ENTER`, `KEY_UP`,
+`KEY_DOWN`, `KEY_DELETE`, `KEY_PAGEUP`, `KEY_PAGEDOWN`, `KEY_F1` and `KEY_F2`-`KEY_F12`.
+It snapshots the entries it replaces and restores them when it returns, raises or is
+interrupted, so a later prompt does not inherit them.
 
 
 ---
@@ -189,8 +194,8 @@ Return the common prefix of a list of strings.
 | `KEY_TAB` | Tab completion (see Tab Completion) |
 
 `KEY_INSERT` toggles insert and overwrite mode; overwrite mode shows the `[OVR]`
-indicator. The toggle is local to each call. `KEY_YANK` is registered, but no byte
-in the reader produces it yet (Ctrl+Y is `\x19`, not mapped in `getch.py`).
+indicator. The toggle is local to each call. Ctrl+W (`\x17`) produces `KEY_CTRL_W`
+and Ctrl+Y (`\x19`) produces `KEY_YANK` in the reader.
 
 ## Handler Functions
 
@@ -277,7 +282,19 @@ A paste delivers several characters at once. When two or more keys are queued,
 - Backspace (`\x7f`, `\x08`) stops the batch and runs as a key.
 - Other control bytes are dropped from paste text.
 - An escape sequence at the head of the queue is a real key; it is not batched.
-- Paste text is truncated at `max_len`.
+- Paste text is truncated at `max_len`; a paste that is cut beeps once.
+
+**Bracketed paste.** For the duration of the prompt, `inputstring()` asks the
+terminal to wrap pastes in `ESC[200~` ... `ESC[201~` (`ESC[?2004h`), and turns the
+mode off on return, exception or Ctrl-C. The reader returns the body between the
+markers as one `PASTE:` key, and the prompt puts that text back on the queue so
+the paste-batch rules above apply. A newline inside a bracketed paste ends the
+entry, as Enter does; the text after it stays queued for the next read. Terminals
+that ignore the mode still paste as plain keys. `common.BRACKETED_PASTE_MANAGED`
+set to False disables the mode request.
+
+**Overflow.** A typed key that cannot fit within `max_len` beeps once and is
+dropped. In overwrite mode a full buffer still accepts keys, so there is no beep.
 
 Pasted tabs become a space unless `insert_tabs=True`.
 
@@ -350,10 +367,8 @@ The main loop manages display:
 ## Known Issues / TODOs
 
 0. **Not built from the plan** (documented so the gaps are visible):
-   - Per-call key table: `KEY_ACTIONS` is still shared (see Concurrency).
-   - Bracketed paste (`ESC[200~`) is not recognized; pastes are detected by burst only.
-   - Typed-overflow beep and an explicit `PASTE` event are not implemented.
-   - Ctrl+Y (`\x19`) is not mapped to `KEY_YANK` in the reader; Ctrl+W (`\x17`) is not mapped to `KEY_CTRL_W` either.
+   - Per-call keys are restored on exit, but the table is still one shared dict; two
+     prompts running at the same time in different threads would still interfere.
    - Asimov has its own copy of `inputstring` and `inputinteger`
      (`asimov/src/asimov/io/`). It is a separate submodule and is not updated here;
      its `noneok` default is still `False`, and it ignores `filter` and `allowed`.
