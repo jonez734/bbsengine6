@@ -1,3 +1,13 @@
+# DEPRECATED: Use bbsengine6.io.inputstring instead. This module is not used.
+# @since 20260429
+import warnings
+
+warnings.warn(
+    "bbsengine6.io.getstr is deprecated. Use bbsengine6.io.inputstring instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 from .echo import echo
 from .getch import getch_str as getch
 
