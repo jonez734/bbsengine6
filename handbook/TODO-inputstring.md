@@ -29,13 +29,13 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 
 - [x] `getch_utf8()`: decodes characters from the stream; drains all available input before waiting. (Uses the text stream, not `os.read`/EAGAIN.)
 - [x] `getch_utf8()`: ESC sequences resolved; split sequences are joined; a lone ESC followed by a key yields `KEY_ESC`.
-- [ ] `getch_utf8()`: bracketed paste `ESC[200~` ... `ESC[201~` emits one `PASTE` event. (Not implemented.)
+- [x] `getch_utf8()`: bracketed paste `ESC[200~` ... `ESC[201~` emits one `PASTE:` key (commit `7bf0c29`). Implemented in the shared reader, so `getch_utf8()` and `getch_str()` both get it.
 - [x] `getch_str()`: signature and return values unchanged.
 - [x] Pre-wait drain of pending input before raw mode; Enter (`\n` from cooked mode) restored to `\r` in `drain_stream_to_queue`.
 - [x] `get_dsr` and the mouse query keep typed keys (non-reply bytes are requeued).
 - [ ] Unmapped control bytes dropped (both readers). (Not implemented.)
 - [ ] Unknown CSI sequences consumed through final byte and dropped. (Partly: CSI sequences are consumed through their final byte; unknown ones are returned as raw text.)
-- [ ] Map `\x17` to `KEY_CTRL_W` and `\x19` to `KEY_YANK` in the reader. (Not implemented.)
+- [x] Map `\x17` to `KEY_CTRL_W` and `\x19` to `KEY_YANK` in the reader (commit `89f8d4d`).
 
 ## Phase 3: selection and exports
 
@@ -44,10 +44,10 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 
 ## Phase 4: `inputstring()` (`py/src/bbsengine6/io/inputstring.py`)
 
-- [ ] Per-call key table instead of mutating global `KEY_ACTIONS`. (Not done.)
+- [x] Per-call keys restored on exit (commit `3f2e3c1`). Table is still one shared dict; concurrent prompts in threads are not supported.
 - [ ] Working INSERT toggle, `[OVR]` indicator, real overwrite. (Not done.)
-- [ ] `PASTE` inserts as one operation. (Not done; paste bursts are handled by the reader, not as a single event.)
-- [ ] Typed overflow beeps. (Not done.)
+- [x] `PASTE` inserts as one operation: a bracketed paste arrives as one `PASTE:` key and is inserted through the paste-batch rules (commit `7bf0c29`).
+- [x] Typed overflow beeps; a paste cut at `max_len` beeps once (commit `8d4ee1a`).
 - [ ] Ctrl+W and Ctrl+Y wired through the per-call table. (Not done.)
 - [x] `noneok` default `True` (`inputstring`, `io_inputstring.spec`).
 - [x] `io/specs/io_inputstring.spec` updated to the code (commit `4cb50db`).
@@ -74,7 +74,7 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [ ] Shared key table: ASCII, multi-byte UTF-8, ESC sequences, bracketed paste, control bytes. (Partly: ESC sequences and UTF-8 covered by probes only.)
 - [ ] Runtime default and per-call `impl=` override. (Not written.)
 - [ ] Pty tests: burst paste, bracketed paste, ESC followed by text, control bytes. (Burst and ESC covered by probes, not by tests in the tree.)
-- [ ] Pty tests: `\x17` and `\x19`, typed overflow beep, INSERT toggle. (Not written.)
+- [x] Pty tests: `\x17`/`\x19`, typed and paste overflow beep, bracketed paste, key restore (`test_inputstring_editing.py`). INSERT toggle not tested.
 - [x] Pty tests: `noneok=False` reprompt, `allowed=`, `filter=`, `inputinteger` (`test_inputstring_validation.py`, 10 tests).
 - [x] Pty tests: mouse state restored on normal return, exception, and fallback (`test_inputstring_mouse_state.py`, 4 tests). Ctrl+C path not tested.
 - [x] `test_inputstring_*`, `test_getch_*`, and `test_echo_*` green (69 tests).
@@ -116,4 +116,14 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Key handlers run outside `_key_actions_lock` (handlers write to the terminal).
 - [ ] Asimov's separate `inputstring`/`inputinteger` copy: not changed (other submodule).
 - [ ] `inputinteger` list entry (`1 2`): the regex still validates a single value. Not changed.
+
+## Phase 11: editing keys, overflow, bracketed paste
+
+- [x] Ctrl-W / Ctrl-Y reach the key table (`89f8d4d`).
+- [x] Typed overflow beeps; overflow in a paste beeps once (`8d4ee1a`).
+- [x] Bracketed paste: `ESC[?2004h` for the prompt; body returned as one `PASTE:` key; newline ends the entry (`7bf0c29`).
+- [x] Per-call key handlers are restored on exit (`3f2e3c1`).
+- [ ] INSERT toggle and `[OVR]` overwrite: not verified by a test.
+- [ ] Asimov copy: unchanged (other submodule).
+- [ ] Concurrent prompts in different threads: not supported; the key table and the terminal are shared.
 
