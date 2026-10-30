@@ -84,7 +84,7 @@ def main(args, **kwargs):
 
     io.echo(f"bbsengine.con.main.400: {kwargs=}", level="debug")
 
-    with database.getpool(args) as pool:
+    with database.context_pool(args) as pool:
         io.echo(f"con.main.main.100: {pool=}", level="debug")
         with database.connect(args, pool=pool, auto_commit=False) as conn:
             io.echo(f"con.main.main.120: {pool=} {conn=}", level="debug")

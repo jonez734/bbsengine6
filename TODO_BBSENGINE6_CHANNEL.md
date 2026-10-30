@@ -4,8 +4,8 @@
 > see `handbook/specs/channel.md` "Migration history" for the
 > canonical record. The remaining unchecked items in this file
 > are deferred test-coverage polish and operator smoke tests,
-> not blocking work. The line 10 docstring update was applied
-> earlier and the remaining "deferred (would need DB)" items
+> not blocking work. Those open items now live in `handbook/todo/channel.md`.
+> The line 10 docstring update was applied earlier and the remaining "deferred (would need DB)" items
 > are marked with strikethrough to indicate deferred status
 > rather than open work.
 

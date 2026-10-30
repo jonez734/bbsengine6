@@ -428,14 +428,14 @@ parser = buildargs()
 def main(args, **kw):
     prompt = "demo_listbox_masterdetail: "
     try:
-        with database.getpool(args, dbname="postgres") as pool:
+        with database.context_pool(args, dbname="postgres") as pool:
             if not database.exists(args, args.databasename, pool=pool):
                 io.echo(f"database '{args.databasename}' does not exist", level="error")
                 return False
             if getattr(args, "debug", False):
                 io.echo(f"postgres database exists", level="debug")
 
-        with database.getpool(args, dbname=args.databasename) as pool:
+        with database.context_pool(args, dbname=args.databasename) as pool:
             if not database.schemaexists(args, "article2", pool=pool):
                 io.echo(f"schema 'article2' does not exist", level="error")
                 return False

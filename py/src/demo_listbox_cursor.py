@@ -85,7 +85,7 @@ def main(args, **kw):
     prompt = "demo_listbox_cursor: "
     try:
         # Check if target database exists (using postgres pool)
-        with database.getpool(args, dbname="postgres") as pool:
+        with database.context_pool(args, dbname="postgres") as pool:
             if not database.exists(args, args.databasename, pool=pool):
                 io.echo(f"database '{args.databasename}' does not exist", level="error")
                 return False
@@ -93,7 +93,7 @@ def main(args, **kw):
                 io.echo(f"postgres database exists", level="debug")
 
         # Check if schema exists and get totalitems (using target database pool)
-        with database.getpool(args, dbname=args.databasename) as pool:
+        with database.context_pool(args, dbname=args.databasename) as pool:
             if not database.schemaexists(args, "article2", pool=pool):
                 io.echo(f"schema 'article2' does not exist", level="error")
                 return False

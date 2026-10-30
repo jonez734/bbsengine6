@@ -40,6 +40,7 @@ The CLI surface is `con channel <verb>` in `bbsengine6.console.channel`.
 - [SQL schema](#sql-schema)
 - [Permission model](#permission-model)
 - [Naming convention](#naming-convention)
+- [Shout and announcements](#shout-and-announcements)
 - [Auto-seed algorithm](#auto-seed)
 - [Namespacing convention](#namespacing)
 - [Configuration](#configuration)
@@ -359,6 +360,40 @@ Cross-app conventions:
 `parse_channel(name)` round-trips the helpers, returning
 `(app, kind, id)`. Non-namespaced names yield `("", "", name)` so
 callers can decide how to handle them.
+
+## Shout and announcements
+
+`<app>:global` is the per-app channel for announcements that every connected player should see.
+Casino's is `casino:global`.
+
+Publishing:
+
+- A **server-originated** message has no sender, so the announce-only check that applies to
+  player messages does not refuse it. Casino's big-win shout is one: the server publishes it
+  after a spin, not a player.
+- `casino:global` is seeded with `announce_only: false`, so a server publish is accepted. It is
+  not subscribe-restricted.
+
+Subscribing:
+
+- Every signed-in session is subscribed to `casino:global` when it authenticates, the same way
+  a seat is subscribed to its table's channels. A publish reaches only subscribed sessions, so
+  without the login subscription a player who is not at the table would not hear it.
+
+Casino's big-win shout, as an example:
+
+- When a spin's payout is at least `multiplier` times the bet, the server publishes a
+  `big_win` message to `casino:global`: `type`, `table_moniker`, `player_moniker`,
+  `game_type`, `bet`, `payout`, `multiplier`.
+- The threshold and on/off switch come from the casino config. In `bed.json` or `zoid6.json`:
+
+  ```json
+  "casino": {"slots": {"big_win": {"enabled": true, "multiplier": 50}}}
+  ```
+
+  Missing or invalid values fall back to the defaults (on, 50). A multiplier below 1 is
+  rejected.
+- A failed publish is logged and does not fail the spin.
 
 ## Auto-seed
 
