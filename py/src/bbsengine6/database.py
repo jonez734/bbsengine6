@@ -527,6 +527,23 @@ def reset_pool_cache() -> None:
         _pool_cache = {}
 
 
+@contextmanager
+def context_pool(args: Any, **kwargs: Any) -> Iterator[ConnectionPool]:
+    """Yield the process's cached pool for ``args``'s database. Does not close it.
+
+    The pool belongs to the process, not to the scope. :func:`getpool` caches one pool per
+    database, and :func:`reset_pool_cache` is the only thing that closes it, called by the
+    owner (a test session, or a daemon at shutdown). Leaving this ``with`` block, normally or
+    by an exception, leaves the pool open for the next caller.
+
+    Use it in place of ``with getpool(...)``. A ``with`` on the pool itself would close the
+    shared cache entry on exit, so the next caller would find it closed and rebuild it.
+
+    ``**kwargs`` are forwarded to :func:`getpool` (``database``/``dbname``, ``config``).
+    """
+    yield getpool(args, **kwargs)
+
+
 def transaction(conn: Any, **kwargs: Any) -> Any:
     """Create a transaction context manager.
 
