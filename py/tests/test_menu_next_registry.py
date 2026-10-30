@@ -1,124 +1,103 @@
 """bbsengine6/tests/test_menu_next_registry.py
 
-Tests for the bbsengine6.menu_next registry primitives:
+Tests for a menu held in a ``bbsengine6.registry.Registry`` instance, using
+``MenuOption`` items scoped by registrar name:
 
-  - ``register_menu_options(name, *options)`` -- append under a
-    registrar name.
-  - ``registered_options(name=None)`` -- flat list sorted by
-    registrar name; or per-registrar in insertion order.
-  - ``clear_registry()`` -- test helper that drops every entry.
+  - ``add(key, option, scope=registrar)`` -- register an option.
+  - ``items(scope)`` -- one registrar's options, in insertion order.
+  - ``items(all_scopes=True)`` -- every option, registrars sorted by name.
 
-Pins the determinism contract (alphabetical-by-registrar ordering)
-and the per-registrar isolation contract (registrar A's options do
-not leak into registrar B's lookup).
+Pins the determinism contract (alphabetical-by-registrar ordering), the
+per-registrar isolation contract, and instance isolation: two menus share
+no state, so there is no process-wide registry to reset between tests.
 """
 
 from __future__ import annotations
 
+import threading
+
 import pytest
 
-from bbsengine6.menu_next import (
-    MenuOption,
-    register_menu_options,
-    registered_options,
-)
-from bbsengine6.menu_next.registry import clear_registry
+from bbsengine6.menu_next import MenuOption, Registry
 
 
 pytestmark = pytest.mark.unit
 
 
-@pytest.fixture(autouse=True)
-def _clean_registry():
-    """Wipe the registry before and after each test so order/state
-    from a prior test cannot leak in."""
-    clear_registry()
-    yield
-    clear_registry()
-
-
-def test_register_single_registrar():
+def test_single_registrar_keeps_insertion_order():
     """A single registrar with multiple options keeps insertion order."""
-    register_menu_options(
-        "test.alpha",
-        MenuOption("a", "Alpha-1"),
-        MenuOption("b", "Alpha-2"),
-    )
-    out = registered_options(name="test.alpha")
+    menu = Registry()
+    menu.add("a", MenuOption("a", "Alpha-1"), scope="test.alpha")
+    menu.add("b", MenuOption("b", "Alpha-2"), scope="test.alpha")
+    out = menu.items("test.alpha")
     assert [o.label for o in out] == ["Alpha-1", "Alpha-2"]
 
 
-def test_register_multiple_registrars_sorted_alphabetically():
-    """``registered_options()`` with no filter returns registrars in
-    alphabetical order so the menu draw is deterministic across
-    processes."""
-    register_menu_options("test.zzz", MenuOption("z", "Z"))
-    register_menu_options("test.aaa", MenuOption("a", "A"))
-    register_menu_options("test.mmm", MenuOption("m", "M"))
-
-    out = registered_options()
-    labels = [o.label for o in out]
+def test_all_scopes_sorted_alphabetically_by_registrar():
+    """``items(all_scopes=True)`` returns registrars in alphabetical order so
+    the menu draw is deterministic across processes."""
+    menu = Registry()
+    menu.add("z", MenuOption("z", "Z"), scope="test.zzz")
+    menu.add("a", MenuOption("a", "A"), scope="test.aaa")
+    menu.add("m", MenuOption("m", "M"), scope="test.mmm")
+    labels = [o.label for o in menu.items(all_scopes=True)]
     assert labels == ["A", "M", "Z"]
 
 
-def test_register_per_registrar_filter():
-    """``registered_options(name="...")`` returns ONLY that registrar's
-    options, in the order they were registered."""
-    register_menu_options("test.x", MenuOption("1", "X-1"))
-    register_menu_options("test.y", MenuOption("2", "Y-1"))
-    register_menu_options("test.x", MenuOption("3", "X-2"))
-
-    x = registered_options(name="test.x")
-    y = registered_options(name="test.y")
-    assert [o.label for o in x] == ["X-1", "X-2"]
-    assert [o.label for o in y] == ["Y-1"]
+def test_per_registrar_filter():
+    """``items(scope)`` returns ONLY that registrar's options, in the order
+    they were registered."""
+    menu = Registry()
+    menu.add("1", MenuOption("1", "X-1"), scope="test.x")
+    menu.add("2", MenuOption("2", "Y-1"), scope="test.y")
+    menu.add("3", MenuOption("3", "X-2"), scope="test.x")
+    assert [o.label for o in menu.items("test.x")] == ["X-1", "X-2"]
+    assert [o.label for o in menu.items("test.y")] == ["Y-1"]
 
 
-def test_register_unknown_registrar_returns_empty():
-    """Asking for a registrar that has not registered returns an empty
-    list (not an error)."""
-    assert registered_options(name="test.never.registered") == []
+def test_unknown_registrar_returns_empty():
+    """Asking for a registrar that has not registered returns an empty list."""
+    menu = Registry()
+    assert menu.items("test.never.registered") == []
 
 
-def test_register_no_options_is_noop():
-    """Calling ``register_menu_options`` with zero options does not
-    create an empty bucket."""
-    register_menu_options("test.empty")
-    assert registered_options(name="test.empty") == []
-    assert "test.empty" not in [o.label for o in registered_options()]
-
-
-def test_registered_options_returns_fresh_list():
-    """Mutating the returned list does not affect the registry."""
-    register_menu_options("test.x", MenuOption("a", "X"))
-    out = registered_options(name="test.x")
+def test_items_returns_fresh_list():
+    """Mutating the returned list does not affect the menu."""
+    menu = Registry()
+    menu.add("a", MenuOption("a", "X"), scope="test.x")
+    out = menu.items("test.x")
     out.append(MenuOption("z", "Z"))
-    assert registered_options(name="test.x") == [MenuOption("a", "X")]
+    assert menu.items("test.x") == [MenuOption("a", "X")]
 
 
-def test_clear_registry_drops_everything():
-    """``clear_registry()`` removes all entries."""
-    register_menu_options("test.a", MenuOption("a", "A"))
-    register_menu_options("test.b", MenuOption("b", "B"))
-    assert len(registered_options()) == 2
-    clear_registry()
-    assert registered_options() == []
+def test_two_menus_share_no_state():
+    """Two menus are independent: options in one are not visible in the other."""
+    first = Registry()
+    second = Registry()
+    first.add("a", MenuOption("a", "A"), scope="test.a")
+    assert second.items(all_scopes=True) == []
+    assert first.items(all_scopes=True) == [MenuOption("a", "A")]
 
 
-def test_register_menu_options_thread_safe_smoke():
-    """Concurrent ``register_menu_options`` calls do not lose entries
-    (smoke test; the lock is an RLock so this should always succeed)."""
-    import threading
+def test_same_letter_in_two_registrars_is_two_options():
+    """Registrars are separate namespaces: the same letter may appear in two
+    registrars (for example two game launchers both using ``p``)."""
+    menu = Registry()
+    menu.add("p", MenuOption("p", "Poker"), scope="casino.poker")
+    menu.add("p", MenuOption("p", "Play"), scope="casino.play")
+    assert [o.label for o in menu.items(all_scopes=True)] == ["Play", "Poker"]
 
+
+def test_concurrent_registration_does_not_lose_options():
+    """Concurrent ``add`` calls from many threads do not lose options."""
+    menu = Registry()
     n_threads = 8
     n_per = 50
 
-    def worker(prefix):
+    def worker(prefix: str) -> None:
         for i in range(n_per):
-            register_menu_options(
-                f"test.thread.{prefix}",
-                MenuOption(f"{prefix}{i}", f"{prefix}-{i}"),
-            )
+            menu.add(f"{prefix}{i}", MenuOption(f"{prefix}{i}", f"{prefix}-{i}"),
+                     scope=f"test.thread.{prefix}")
 
     threads = [threading.Thread(target=worker, args=(str(t),)) for t in range(n_threads)]
     for t in threads:
@@ -126,5 +105,4 @@ def test_register_menu_options_thread_safe_smoke():
     for t in threads:
         t.join()
 
-    out = registered_options()
-    assert len(out) == n_threads * n_per
+    assert len(menu.items(all_scopes=True)) == n_threads * n_per

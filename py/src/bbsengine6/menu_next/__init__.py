@@ -1,13 +1,16 @@
 """
-bbsengine6/menu_next -- menu-option registry for bbsengine6 clients.
+bbsengine6/menu_next -- menu options for bbsengine6 clients.
 
-Exports the four primitives every consumer needs:
+Exports the primitives every consumer needs:
 
-  - ``MenuOption``           -- the dataclass that describes an option.
-  - ``register_menu_options`` -- append options under a registrar name.
-  - ``registered_options``    -- read the full set (sorted by registrar)
-                                or filter by registrar name.
-  - ``visible_options``       -- duck-typed filter against player state.
+  - ``MenuOption``      -- the dataclass that describes an option.
+  - ``Registry``        -- the generic registry (``bbsengine6.registry.Registry``),
+                          used as a menu: items are ``MenuOption``s, scoped by
+                          registrar name.
+  - ``visible_options`` -- duck-typed filter against player state.
+
+There is no process-wide menu registry. A host creates its own ``Registry``
+for each menu, so menus do not share state.
 
 This subpackage is the new registry. The legacy ``bbsengine6.menu``
 module (an interactive bordered ``Menu``/``Item`` UI) is still
@@ -20,31 +23,26 @@ Import policy:
 
 Example:
 
-    # In a game module's __init__.py:
-    from bbsengine6.menu_next import MenuOption, register_menu_options
+    from bbsengine6.menu_next import MenuOption, Registry, visible_options
 
-    def init(args, **kw):
-        register_module(name="casino.blackjack", ...)
-        register_menu_options(
-            "casino.blackjack",
-            MenuOption("b", "Blackjack", "blackjack.play",
-                       hide_if_seated_type=frozenset({"blackjack"})),
-        )
+    menu = Registry()
 
-    # In a consumer (door-mode main menu or WS-client menu):
-    from bbsengine6 import menu_next
+    # A game module registers its options under its registrar name:
+    menu.add("b", MenuOption("b", "Blackjack", "blackjack.play",
+                             hide_if_seated_type=frozenset({"blackjack"})),
+             scope="casino.blackjack")
 
-    options = tuple(menu_next.registered_options())
-    visible = menu_next.visible_options(options, state)
+    # A consumer (door-mode main menu or WS-client menu) reads them:
+    options = menu.items(all_scopes=True)
+    visible = visible_options(options, state)
 """
 
+from ..registry import Registry
 from .options import MenuOption
-from .registry import register_menu_options, registered_options
 from .visibility import visible_options
 
 __all__ = [
     "MenuOption",
-    "register_menu_options",
-    "registered_options",
+    "Registry",
     "visible_options",
 ]

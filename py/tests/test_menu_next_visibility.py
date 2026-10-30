@@ -25,17 +25,9 @@ from types import SimpleNamespace
 import pytest
 
 from bbsengine6.menu_next import MenuOption, visible_options
-from bbsengine6.menu_next.registry import clear_registry
 
 
 pytestmark = pytest.mark.unit
-
-
-@pytest.fixture(autouse=True)
-def _clean_registry():
-    clear_registry()
-    yield
-    clear_registry()
 
 
 def _seat(table: str | None, gt: str | None) -> SimpleNamespace:

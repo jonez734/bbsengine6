@@ -15,15 +15,14 @@ from . import screen
 # from . import input
 # from . import io
 
-# ``menu_next`` is the new menu-option registry (dataclass +
-# in-process registry + visibility filter). The legacy ``menu``
-# module is the bordered terminal ``Menu``/``Item`` UI -- the two
-# coexist because their names differ. ``from bbsengine6 import
-# menu_next`` enables qualified access (``menu_next.registered_options()``);
-# the symbols are also re-exported flat below for callers that prefer
-# ``from bbsengine6 import MenuOption``.
+# ``menu_next`` is the menu-option layer: ``MenuOption``, ``visible_options``,
+# and ``Registry`` (the generic registry, used as a menu). There is no global
+# menu registry; each menu is a ``Registry`` instance. The legacy ``menu``
+# module is the bordered terminal ``Menu``/``Item`` UI -- the two coexist
+# because their names differ.
 from . import menu_next
-from .menu_next import MenuOption, register_menu_options, registered_options, visible_options
+from .menu_next import MenuOption, visible_options
+from .registry import Registry
 from .module import (
     register_module,
     unregister_module,
@@ -51,7 +50,6 @@ __all__ = [
     "folder",
     "menu_next",
     "MenuOption",
-    "register_menu_options",
-    "registered_options",
+    "Registry",
     "visible_options",
 ] 
