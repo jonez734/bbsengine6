@@ -164,6 +164,20 @@ def test_override_drops_the_old_entrys_other_names():
     assert r.lookup("bye").tier == c.TIER_SESSION
 
 
+def test_storage_holds_one_entry_per_name_after_override():
+    """Storage keeps one key per typed name. An override leaves no stale key that
+    points at the replaced entry, and the old entry drops out of entries()."""
+    r = _shell()
+    old = r.lookup("exit")
+    r.register("exit", c.TIER_SESSION, aliases=("bye",))
+    assert r.lookup("exit") is not old
+    assert old not in r.entries()
+    assert [e.name for e in r.entries() if "exit" in e.names()] == ["exit"]
+    # Every typed name in storage resolves to a live entry, with no stale mapping.
+    for typed in r._store.keys(c._SCOPE):
+        assert r._store.get(typed, scope=c._SCOPE) in r.entries()
+
+
 def test_session_overrides_session_entry():
     r = _shell()
     r.register("snake", c.TIER_SESSION, spec={"v": 1})

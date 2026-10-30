@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import io
+from .registry import Registry
 
 TIER_PROTECTED = "protected"
 TIER_DEFAULT = "default"
@@ -71,15 +72,34 @@ class Entry:
         return (self.name,) + tuple(self.aliases)
 
 
+#: The single scope every typed name lives under in the backing ``Registry``.
+_SCOPE = "commands"
+
+
 class CommandRegistry:
-    """The commands visible to one session. Thread-safe for registration and lookup."""
+    """The commands visible to one session. Thread-safe for registration and lookup.
+
+    Storage is a generic ``bbsengine6.registry.Registry``. Each typed name (a command
+    name or an alias) is a key in one scope, mapping to the ``Entry`` it belongs to.
+    This class owns the rules: tiers, modes, override checks, and prefix resolution.
+    """
 
     def __init__(self, mode: str = MODE_EXTEND) -> None:
         if mode not in MODES:
             raise ValueError(f"unknown registry mode {mode!r}")
         self.mode = mode
-        self._entries: Dict[str, Entry] = {}  # typed name (or alias) -> entry
+        self._store = Registry()  # typed name (or alias) -> entry, in _SCOPE
         self._lock = threading.RLock()
+
+    def _find(self, typed: str) -> Optional[Entry]:
+        return self._store.get(typed, scope=_SCOPE)
+
+    def _put(self, typed: str, entry: Entry) -> None:
+        self._store.add(typed, entry, scope=_SCOPE)
+
+    def _drop(self, typed: str) -> None:
+        if self._store.get(typed, scope=_SCOPE) is not None:
+            self._store.remove(typed, scope=_SCOPE)
 
     # ---- registration -------------------------------------------------
 
@@ -105,18 +125,18 @@ class CommandRegistry:
         entry = Entry(name, tier, dict(spec or {}), tuple(aliases), available)
         with self._lock:
             for typed in entry.names():
-                existing = self._entries.get(typed)
+                existing = self._find(typed)
                 if existing is None:
                     continue
                 self._check_replaceable(existing, entry)
             # Replacing: remove every name of each entry being replaced, then add the new one.
             for typed in entry.names():
-                existing = self._entries.get(typed)
+                existing = self._find(typed)
                 if existing is not None:
                     self._remove_entry(existing)
                     _log_override(existing, entry)
             for typed in entry.names():
-                self._entries[typed] = entry
+                self._put(typed, entry)
         return entry
 
     def use_default(self, entries: List[Entry]) -> None:
@@ -142,13 +162,13 @@ class CommandRegistry:
 
     def _remove_entry(self, entry: Entry) -> None:
         for typed in entry.names():
-            if self._entries.get(typed) is entry:
-                del self._entries[typed]
+            if self._find(typed) is entry:
+                self._drop(typed)
 
     def unregister(self, name: str) -> None:
         """Remove the entry that owns ``name``. Protected entries cannot be removed."""
         with self._lock:
-            entry = self._entries.get(name)
+            entry = self._find(name)
             if entry is None:
                 return
             if entry.tier == TIER_PROTECTED:
@@ -160,13 +180,13 @@ class CommandRegistry:
     def lookup(self, name: str) -> Optional[Entry]:
         """The entry for an exact typed name or alias, regardless of availability."""
         with self._lock:
-            return self._entries.get(name)
+            return self._find(name)
 
     def entries(self) -> List[Entry]:
         """Every distinct entry, in registration order, regardless of availability."""
         with self._lock:
             seen: Dict[int, Entry] = {}
-            for entry in self._entries.values():
+            for entry in self._store.items(_SCOPE):
                 seen.setdefault(id(entry), entry)
             return list(seen.values())
 
@@ -194,12 +214,15 @@ class CommandRegistry:
         ``ambiguous`` or ``none`` with ``None``. Nothing is returned for the candidates.
         """
         with self._lock:
-            exact = self._entries.get(text)
+            exact = self._find(text)
             if exact is not None and _available(exact, state):
                 return RESOLVE_EXACT, exact
             matches: Dict[int, Entry] = {}
-            for typed, entry in self._entries.items():
-                if typed.startswith(text) and _available(entry, state):
+            for typed in self._store.keys(_SCOPE):
+                if not typed.startswith(text):
+                    continue
+                entry = self._find(typed)
+                if entry is not None and _available(entry, state):
                     matches.setdefault(id(entry), entry)
         if not text:
             return RESOLVE_NONE, None
