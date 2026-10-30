@@ -180,3 +180,22 @@ def test_concurrent_adds_do_not_lose_items():
     for t in threads:
         t.join()
     assert len(r) == 8 * 200
+
+
+def test_all_scopes_read_does_not_deadlock_on_its_own_lock():
+    """items(all_scopes=True) takes the lock and then calls scopes(), which takes it again on the
+    same thread. The lock is reentrant, so this returns; a plain Lock would block forever.
+    """
+    r = Registry()
+    r.add("a", 1, scope="x")
+    r.add("b", 2, scope="y")
+    result = {}
+
+    def read() -> None:
+        result["items"] = r.items(all_scopes=True)
+
+    t = threading.Thread(target=read, daemon=True)
+    t.start()
+    t.join(timeout=2)
+    assert not t.is_alive(), "items(all_scopes=True) deadlocked on the registry lock"
+    assert result["items"] == [1, 2]

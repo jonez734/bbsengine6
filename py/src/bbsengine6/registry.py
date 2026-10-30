@@ -26,7 +26,7 @@ replaces the item and keeps its original position.
 from __future__ import annotations
 
 import threading
-from typing import Any, Dict, Hashable, List, Optional, Tuple
+from typing import Any, Dict, Hashable, List, Optional
 
 
 class Registry:
