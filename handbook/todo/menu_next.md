@@ -39,16 +39,17 @@ keeps one `Registry` per menu. These items are closed, not carried forward:
 - [ ] **`menu_next/visibility.py` return shape.** The plan had `visible_options` return
       `(option, enabled)` pairs. It returns plain options, and `menu_entries` returns pairs. Decide
       whether to keep both, since the 52 casino call sites use the list form.
-- [ ] **`read_menu` dispatch.** The `bet` route (`game bet` for blackjack, `poker bet` for poker)
-      lives in casino dispatch. Confirm no bbsengine6 caller needs it.
+- [x] **`read_menu` dispatch.** The `bet` route (`game bet` for blackjack, `poker bet` for poker)
+      lives in casino dispatch (`casino c5602b7`, `0e27174`). No bbsengine6 caller needs it.
 
 ## Open (casino and letteredolive, tracked here for the cross-repo picture)
 
-- [ ] **Retire `casino/src/casino/menu_lib.py`.** Seven files still import it. Move each to
-      `bbsengine6.menu_next`, then delete the module.
-- [ ] **Client menu via `read_menu`.** `casino/client/menu.py` still uses its own tuple and
-      `io.inputchoice`. Switch it to `read_menu` with the alias and subcommand entries.
-- [ ] **Hosted `choose`.** `letteredolive/src/shell/menu.py` should delegate to `read_menu`.
+- [x] **Retire `casino/src/casino/menu_lib.py`.** No file imports it. Removed in `ff4aa88`.
+- [x] **Client menu via `read_menu`.** `casino/client/menu.py` reads the word-keyed menu with
+      `read_menu` (`casino 0e27174`), with aliases and subcommands.
+- [x] **Hosted menu input.** Decided differently from the original item: LO's `choose` stays a
+      key-membership reader for the letter submenus. The main menu reads through the `read_line`
+      seam (`letteredolive 5f8dc18`, `casino c26e6e2`), so hosted and standalone share the rules.
 - [ ] **Per-game menu options.** Blackjack, poker, slots, yahtzee, and tictactoe still list their
       actions inline. Decide whether each game's options go into a registry scope
       (`casino.blackjack`, …) that the client menu reads.
