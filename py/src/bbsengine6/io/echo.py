@@ -108,6 +108,8 @@ _skin = {
     "engine.title.color": "{bggray}{white}",
     "engine.title.hrcolor": "{darkgreen}",
     "optioncolor": "{white}{bggray}",
+    "menu.item.enabled": "{white}{bggray}",
+    "menu.item.disabled": "{darkgray}{bggray}",
     "currentoptioncolor": "{bgwhite}{gray}",
     "bottombarcolor": "{bgwhite}{black}",
     "promptcolor": "{/bgcolor}{white}",  # {lightgray}",
