@@ -254,7 +254,7 @@ venv:
 	"$(VENV_DIR)/bin/python" -m build --wheel --outdir "$$wheels" "$$work/src" && \
 	whl="$$(ls "$$wheels"/*.whl)" && \
 	want="$$(unzip -p "$$whl" '*/METADATA' | sed -n 's/^Version: //p' | head -1)" && \
-	"$(VENV_DIR)/bin/python" -m pip install --upgrade --force-reinstall --no-deps "$$whl" && \
+	"$(VENV_DIR)/bin/python" -m pip install --upgrade --force-reinstall "$$whl" && \
 	have="$$("$(VENV_DIR)/bin/python" -m pip show bbsengine6 | sed -n 's/^Version: //p')" && \
 	if [ "$$have" != "$$want" ]; then echo "venv: installed bbsengine6 $$have, but the wheel is $$want" >&2; exit 1; fi && \
 	site="$$("$(VENV_DIR)/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')" && \
