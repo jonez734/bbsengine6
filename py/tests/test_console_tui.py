@@ -160,6 +160,19 @@ def test_cli_maps_success_to_exit_code_0():
 
 
 @pytest.mark.unit
+def test_tui_help_lists_global_flags_and_every_subcommand():
+    """tui.help() is built from the real parser, so its flags and subcommands match what runs."""
+    lines = []
+    with patch.object(tui.io, "echo", side_effect=lambda msg="", **k: lines.append(str(msg))):
+        tui.help()
+    text = "\n".join(lines)
+    assert "--debug" in text
+    assert "--databasename" in text
+    for name in (*lib.CONSOLE_SUBCOMMANDS, *lib.BACKEND_SUBCOMMANDS):
+        assert f"  {name}" in text, name
+
+
+@pytest.mark.unit
 def test_cursor_restore_is_skipped_on_a_non_tty():
     """Writing cursor escapes to a pipe raises in io.echo; the guard must skip them."""
     with patch.object(tui.sys.stdout, "isatty", return_value=False), \

@@ -33,6 +33,22 @@ def access(args: argparse.Namespace, op: str, **kwargs: dict) -> bool | None:
     return True
 
 
+def help(**kwargs: dict) -> None:
+    """Print the TUI's help: the global flags, then every subcommand that can run."""
+    parser = buildargs(None)
+    io.echo(parser.description or "")
+    io.echo("")
+    io.echo("global flags:")
+    for action in parser._actions:
+        if action.option_strings and action.help != argparse.SUPPRESS:
+            flags = ", ".join(action.option_strings)
+            io.echo(f"  {flags}  {action.help or ''}")
+    io.echo("")
+    io.echo("subcommands (run without one for the interactive menu):")
+    for name in sorted({*lib.CONSOLE_SUBCOMMANDS, *lib.BACKEND_SUBCOMMANDS}):
+        io.echo(f"  {name}")
+
+
 def buildargs(args: argparse.Namespace, **kwargs: dict) -> argparse.ArgumentParser | None:
     """Top-level parser: global flags, an optional subcommand, and its raw words."""
     parser = argparse.ArgumentParser(

@@ -626,6 +626,10 @@ def _stub_version(args: argparse.Namespace, **kwargs: dict) -> str | None:
     return None
 
 
+def _stub_help(**kwargs: dict) -> None:
+    pass
+
+
 OP_TO_STUB = {
     "run": _stub_main,
     "init": _stub_init,
@@ -790,6 +794,15 @@ def check(args, modulename, op="run", *, package: Optional[str] = None, **kwargs
         )
         return False
 
+    # Check optional help(); absent is fine, present must match the contract.
+    if hasattr(m, "help"):
+        if not callable(m.help):
+            io.echo("help function is not callable", level="error")
+            return False
+        if not _check_func_signature(m.help, _stub_help):
+            io.echo("help() signature invalid", level="error")
+            return False
+
     # Check for optional version()
     if hasattr(m, "version"):
         if callable(m.version) is False:
@@ -922,6 +935,11 @@ def run(args, modulename, **kwargs):
 
         # Check for help request BEFORE calling buildargs
         if _is_help_request(argv):
+            # A module's own help() replaces the generated help; buildargs() is only used without one.
+            if callable(getattr(m, "help", None)):
+                m.help(**kwargs)
+                return True
+
             prgargparser = runcallback(args, m.buildargs, **kwargs)
 
             if prgargparser is not None:
