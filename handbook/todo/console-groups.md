@@ -57,12 +57,13 @@ When the console saves a new or edited user, it creates or edits the Unix groups
 
 These need root and are not run by the console:
 
-- [ ] Create the `sysop` group and the `letteredolive` group.
-- [ ] Add `lo_test` to `zoid6` for read access to `/home/zoid6/venv`.
-- [ ] Set `/home/zoid6/venv` and `/home/zoid6/dist-wheels` to owner `zoid6`, group `zoid6`, mode `755`.
+- [x] Create the `sysop` group. (No separate `letteredolive` group: access is through `zoid6`.)
+- [x] Add `lo_test` to `zoid6` for read access to `/home/zoid6/venv`.
+- [x] Set `/home/zoid6/venv` and `/home/zoid6/dist-wheels` to owner `zoid6`, group `zoid6`, mode `755`.
       Only `zoid6` writes. `jam` deploys with `sudo -u zoid6`, which prompts for a password.
 - [ ] Install the sudoers drop-in for the group and user commands above.
 - [ ] Symlink `/usr/local/bin/letteredolive` to `/home/zoid6/venv/bin/letteredolive`.
+- [ ] Run `sudo -u zoid6 deploy letteredolive.venv` (or `make venv` as `zoid6`), then check a real `lo_test` login.
 
 ## Open questions
 
