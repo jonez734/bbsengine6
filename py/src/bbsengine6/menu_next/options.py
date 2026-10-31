@@ -10,7 +10,9 @@ options cannot be mutated after construction.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import argparse
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -38,6 +40,24 @@ class MenuOption:
         requires_connected: True when the player must be connected
             (``state.connected`` truthy) for the option to be shown.
             Typical use: hide ``Disconnect`` when no connection exists.
+        aliases: other typed names for this option (e.g. ``("hit",)`` on
+            ``"game"``). An alias resolves to this option; the stored
+            ``letter`` is always what ``read_menu`` returns.
+        alias_subcommand: optional mapping of alias name to subcommand name.
+            An alias listed here runs that subcommand directly, so ``hit``
+            on the ``game`` entry means ``game hit``. Words typed after the
+            alias are the subcommand's arguments. Excluded from equality and
+            hashing.
+        parser: optional ``argparse.ArgumentParser`` built by the owning
+            command's ``buildargs()``. ``None`` means the option takes no
+            arguments, so extra typed text is rejected. Excluded from
+            equality and hashing.
+        sysop_only: True when only a sysop may see the option.
+        op: access operation name passed to the owning module's
+            ``access()`` (e.g. ``"list_tables"``). Used with ``module_path``.
+        subcommands: optional mapping of subcommand name to ``MenuOption``.
+            Each subcommand carries its own gates. Excluded from equality
+            and hashing.
     """
 
     letter: str
@@ -47,3 +67,9 @@ class MenuOption:
     allowed_game_types: Optional[frozenset] = None
     hide_if_seated_type: Optional[frozenset] = None
     requires_connected: bool = False
+    aliases: tuple = ()
+    alias_subcommand: Optional[Mapping] = field(default=None, compare=False)
+    parser: Optional[argparse.ArgumentParser] = field(default=None, compare=False)
+    sysop_only: bool = False
+    op: Optional[str] = None
+    subcommands: Optional[Mapping] = field(default=None, compare=False)
