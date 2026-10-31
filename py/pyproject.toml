@@ -34,6 +34,7 @@ dependencies = [
 ]
 
 [project.scripts]
+console = "bbsengine6.console.tui:cli"
 bbsengine6-auth-checkpassword = "bbsengine6.auth.dovecot:main"
 bbsengine6-auth-pam = "bbsengine6.auth.pam:main"
 
