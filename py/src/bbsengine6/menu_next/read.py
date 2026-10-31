@@ -222,7 +222,9 @@ def read_menu(
 
     table = _index(options, state, check)
 
-    def verify(buffer: str) -> bool:
+    def verify(buffer: str, **_kwargs) -> bool:
+        # inputstring passes its own keyword arguments (_history, pagesize, f1_help, ...) to every
+        # verify call. Menu validation needs none of them, so accept and ignore them.
         if not buffer.strip() and default:
             return True
         return _accept(buffer, table, state, check)

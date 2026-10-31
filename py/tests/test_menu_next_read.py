@@ -343,3 +343,23 @@ class TestReaderParameter(unittest.TestCase):
         read_menu("> ", [MenuOption("q", "Quit")], reader=reader)
         self.assertIn("verify", seen)
         self.assertIn("completer", seen)
+
+    def test_verify_accepts_the_kwargs_inputstring_passes_on_every_call(self):
+        """inputstring calls verify(buffer, **its_kwargs) with _history, pagesize, f1_help, and more.
+
+        A verify that takes only the buffer raised TypeError on the first Enter in the menu.
+        """
+        seen = {}
+
+        def reader(prompt, **kw):
+            seen.update(kw)
+            return "q"
+
+        read_menu("> ", [MenuOption("q", "Quit")], reader=reader)
+        verify = seen["verify"]
+        inputstring_kwargs = {
+            "_history": [], "_history_enabled": True, "_insert_mode": True,
+            "_function_key_callbacks": {}, "f1_help": None, "pagesize": 10,
+        }
+        self.assertTrue(verify("q", **inputstring_kwargs))
+        self.assertFalse(verify("nosuch", **inputstring_kwargs))
