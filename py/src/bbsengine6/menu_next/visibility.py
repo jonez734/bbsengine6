@@ -19,8 +19,8 @@ Import policy:
 
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any
+from collections.abc import Callable, Iterable
+from typing import Any, Optional
 
 from .options import MenuOption
 
@@ -28,8 +28,17 @@ from .options import MenuOption
 def visible_options(
     spec: Iterable[MenuOption],
     state: Any,
+    check: Optional[Callable[[str, str], Any]] = None,
 ) -> list[MenuOption]:
     """Return the subset of ``spec`` the player may currently pick.
+
+    ``check(module_path, op)`` is an optional callable that gates an option
+    through its owning module's ``access()``. It is consulted only for an
+    option that has both ``module_path`` and ``op``; it must return exactly
+    ``True`` for the option to pass. Any other value (``False``, ``None``,
+    or an exception) hides the option.
+
+    ``sysop_only`` options are hidden unless ``state.is_sysop`` is truthy.
 
     The ``state`` object is duck-typed. The helper reads:
 
@@ -60,8 +69,11 @@ def visible_options(
     gt_raw = getattr(state, "current_table_game_type", None)
     gt = (gt_raw.strip() if isinstance(gt_raw, str) else None) or None
     connected = bool(getattr(state, "connected", False))
+    sysop = bool(getattr(state, "is_sysop", False))
     out: list[MenuOption] = []
     for opt in spec:
+        if opt.sysop_only and not sysop:
+            continue
         if opt.requires_seated and not seated:
             continue
         if opt.requires_seated and opt.allowed_game_types and gt not in opt.allowed_game_types:
@@ -70,5 +82,32 @@ def visible_options(
             continue
         if opt.requires_connected and not connected:
             continue
+        if check is not None and opt.module_path and opt.op:
+            if not _passes_check(check, opt.module_path, opt.op):
+                continue
         out.append(opt)
     return out
+
+
+def _passes_check(check: Callable[[str, str], Any], module_path: str, op: str) -> bool:
+    """True only when ``check`` returns exactly ``True``. Exceptions count as denied."""
+    try:
+        return check(module_path, op) is True
+    except Exception:
+        return False
+
+
+def menu_entries(
+    spec: Iterable[MenuOption],
+    state: Any,
+    check: Optional[Callable[[str, str], Any]] = None,
+) -> list[tuple[MenuOption, bool]]:
+    """Return every option with an ``enabled`` flag, for help rendering.
+
+    Unlike :func:`visible_options`, disabled options are kept so a help screen
+    can show them dimmed. ``enabled`` follows the same gates as
+    :func:`visible_options`.
+    """
+    items = list(spec)
+    enabled = {id(o) for o in visible_options(items, state, check)}
+    return [(opt, id(opt) in enabled) for opt in items]
