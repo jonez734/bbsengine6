@@ -1,78 +1,13 @@
-"""Console entry point.
+"""Console entry point: ``python -m bbsengine6.console``.
 
-Routes ``console <subcommand>`` to the right module. Subcommands
-listed in ``bbsengine6.console.lib.BACKEND_SUBCOMMANDS`` are dispatched
-to ``bbsengine6.backend.<subcommand>``; all others go to
-``bbsengine6.console.<subcommand>``. With no subcommand, the
-interactive menu (``bbsengine6.console.main``) is shown.
+Delegates to :mod:`bbsengine6.console.tui`, the console TUI. Kept so the
+package still runs with ``-m``; the TUI itself is ``python -m
+bbsengine6.console.tui`` and the ``console`` script.
 """
 
 import sys
 
-from bbsengine6 import io, bottombar
-
-try:
-    import argcomplete
-
-    ARGCOMPLETE_AVAILABLE = True
-except ImportError:
-    ARGCOMPLETE_AVAILABLE = False
-
-from . import lib
-
-
-def _terminal_height_safe() -> int:
-    getter = getattr(getattr(io, "terminal", None), "height", None)
-    if not callable(getter):
-        return 24
-    try:
-        h = getter()
-    except Exception:
-        return 24
-    return h if isinstance(h, int) and h > 0 else 24
-
+from . import tui
 
 if __name__ == "__main__":
-    parser, subparsers = lib.build_subcommand_parser()
-
-    if ARGCOMPLETE_AVAILABLE:
-        argcomplete.autocomplete(parser)
-
-    # parse_known_args so the tail (anything after the top-level
-    # subcommand) is captured and forwarded to the subcommand's own
-    # parser. Without this, `console channel create foo --announce-only`
-    # would have the `--announce-only` swallowed by the parent parser.
-    args, rest_argv = parser.parse_known_args()
-
-    try:
-        bottombar.init(args)
-        lib.setbottombar(args, "con")
-    except SystemExit:
-        raise
-    except Exception as e:
-        io.echo(f"console init failed: {e}", level="error")
-        sys.exit(2)
-
-    rc = 0
-    try:
-        if args.subcommand:
-            if lib.handle_subcommand(
-                args, args.subcommand, argv=rest_argv
-            ) is False:
-                io.echo(f"error running module {args.subcommand}", level="error")
-                rc = 1
-        else:
-            if lib.runmodule(args, "main") is False:
-                io.echo(f"error running module main", level="error")
-                rc = 1
-    except EOFError:
-        io.echo("**EOF**")
-    except KeyboardInterrupt:
-        io.echo("**INTR**")
-    finally:
-        io.echo(
-            f"{{decsc}}{{curpos:{_terminal_height_safe()},0}}{{el}}{{reset}}{{decrc}}"
-        )
-
-    if rc != 0:
-        sys.exit(rc)
+    sys.exit(tui.cli())

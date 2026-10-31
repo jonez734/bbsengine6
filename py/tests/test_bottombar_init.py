@@ -29,6 +29,6 @@ def test_init_sets_the_scroll_region_above_the_bottom_margin():
 @pytest.mark.unit
 def test_console_entry_does_not_call_the_deprecated_screen_init():
     from pathlib import Path
-    src = (Path(bottombar.__file__).parent / "console" / "__main__.py").read_text()
+    src = (Path(bottombar.__file__).parent / "console" / "tui.py").read_text()
     assert "screen.init(" not in src, "console still calls the deprecated screen.init"
     assert "bottombar.init(" in src
