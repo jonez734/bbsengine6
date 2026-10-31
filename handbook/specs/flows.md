@@ -204,8 +204,9 @@ widget, ready for the next user action.
 ### 1.8 Navigation / menu flow
 
 **Steps.**
-1. `bbsengine6.menu.Menu.display` (or `menu_next.registered_options` /
-   `visible_options`) renders available items.
+1. `bbsengine6.menu.Menu.display` renders available items. A `menu_next`
+   menu filters its `MenuOption`s with `visible_options` (or `menu_entries`,
+   for dimmed disabled entries) and reads a command with `read_menu`.
 2. `io.getch` reads the next keystroke.
 3. `menu.Menu.handle` updates the cursor; the new frame is rendered
    via `io.echo` + `io.screen.setcursor`.

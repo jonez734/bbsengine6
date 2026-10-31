@@ -89,10 +89,11 @@ per load; `access` is the policy hook; `buildargs` parses CLI flags;
 `runcallback` so exceptions surface as a clean `False`/traceback
 rather than a process crash.
 
-The `MenuOption` registry in `bbsengine6.menu_next` is the modern
-way for game submodules to register options against a shared
-menu — see the consumer pattern in `casino/SPEC.md` §3 and the
-description in [`./module.md`](./module.md).
+`bbsengine6.menu_next` is the modern way to build a menu. Each menu is a
+`Registry` of `MenuOption`s, read with `read_menu`, which resolves aliases
+and subcommands and passes arguments to a command's parser. The design is in
+[`./menu_next.md`](./menu_next.md); the consumer pattern is in
+`casino/SPEC.md` §3 and the description in [`./module.md`](./module.md).
 
 ### Alternatives considered
 

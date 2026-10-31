@@ -41,7 +41,7 @@ between `bbsengine6.*` packages / sub-packages.
 | `bbsengine6.blurb` | `bbsengine6.database`, `bbsengine6.util` |
 | `bbsengine6.folder` | `bbsengine6.database`, `bbsengine6.util` |
 | `bbsengine6.menu` | `bbsengine6.util`, `bbsengine6.io`, `bbsengine6.database` |
-| `bbsengine6.menu_next` | (none — pure registry dataclass) |
+| `bbsengine6.menu_next` | `bbsengine6.io` (`read_menu` only; `options` and `visibility` import nothing) |
 | `bbsengine6.bottombar` | `bbsengine6.module`, `bbsengine6.database`, `bbsengine6.io` |
 | `bbsengine6.editor` | `bbsengine6.util`, `bbsengine6.screen`, `bbsengine6.io`, `bbsengine6.member` |
 | `bbsengine6.screen` | `bbsengine6.io` (re-export shim) |

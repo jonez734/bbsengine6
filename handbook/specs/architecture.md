@@ -99,7 +99,7 @@ Packages and modules grouped by responsibility:
 | `bbsengine6.screen` | Shim to `bbsengine6.io.screen`. |
 | `bbsengine6.util` | Terminal, text, range parsing, input helpers, `logentry`, `encryptpassword`. |
 | `bbsengine6.menu` | Bordered terminal `Menu`/`Item` UI (legacy, kept). |
-| `bbsengine6.menu_next` | New `MenuOption` dataclass + `register_menu_options` / `visible_options` registry. |
+| `bbsengine6.menu_next` | `MenuOption` (aliases, subcommands, parser, gates), `visible_options` / `menu_entries`, and `read_menu`. Each menu is a `Registry`. |
 | `bbsengine6.bottombar` | Per-package `registry_for(name)` fragment registry consumed by `io.getch`. |
 | `bbsengine6.common` | Logging setup, shared defaults. |
 | `bbsengine6.conf` | `LOGGER_NAME = "bbsengine6"`. |
@@ -173,7 +173,7 @@ verified against `ls py/src/bbsengine6/`.
 | `io/` | TUI primitives — full module list in [§1.3](#13-presentation-layer). |
 | `member/` | `lib`, `api/handler` — member subsystem. |
 | `message/` | Layered pub/sub. See [§2.4](#24-bbsengine6message-layered-package). |
-| `menu_next/` | New `MenuOption` registry (`MenuOption`, `register_menu_options`, `registered_options`, `visible_options`). |
+| `menu_next/` | `MenuOption`, `visible_options`, `menu_entries`, `read_menu`, `Choice`. See [`menu_next.md`](menu_next.md). |
 | `net/` | `address`, `frame_address`, `frame_types`, `packet`, `packet_types`, `packet_codec`, `crypto`, `transport`, `tcp`, `udp`, `socket`, `router`, `defaultrouter`, `integration`, `registry`. |
 | `password_cipher/` | AES-256-GCM strategy pattern (`manager`, `storage`, `config`, `cipher`); ciphers `aes256gcm`, `plaintext`; storage `postgresql`. |
 | `services/` | `channel`, `invite`, `member` (server-side handlers). |
@@ -325,8 +325,8 @@ The message domain has its own layered package — see
 ### 3.6 Module / plugin domain
 
 - `bbsengine6.module` — module-registry / plugin loader.
-- `bbsengine6.menu_next` — `MenuOption` registry consumed by
-  every game submodule (see `casino/SPEC.md` §3 for the consumer
+- `bbsengine6.menu_next` — `MenuOption` menus, each a `Registry`, read with
+  `read_menu`; used by game submodules (see `casino/SPEC.md` §3 for the consumer
   pattern).
 
 ### 3.7 Terminal I/O domain
