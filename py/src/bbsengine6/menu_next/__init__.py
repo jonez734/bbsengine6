@@ -39,10 +39,14 @@ Example:
 
 from ..registry import Registry
 from .options import MenuOption
-from .visibility import visible_options
+from .read import Choice, read_menu
+from .visibility import menu_entries, visible_options
 
 __all__ = [
+    "Choice",
     "MenuOption",
     "Registry",
+    "menu_entries",
+    "read_menu",
     "visible_options",
 ]
