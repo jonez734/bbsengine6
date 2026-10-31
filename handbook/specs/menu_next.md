@@ -80,8 +80,14 @@ Help screens use it to show disabled entries dimmed with `menu.item.disabled`.
 
 ### `read_menu`
 
-`read_menu(prompt, spec, *, state=None, check=None, default="", help=None) -> Choice` reads one
-command line with `io.inputstring`.
+`read_menu(prompt, spec, *, state=None, check=None, default="", help=None, reader=None) -> Choice`
+reads one command line.
+
+The line is read with `reader`, which is called with the same keyword arguments as
+`io.inputstring` (`verify`, `completer`, `help`). It defaults to `io.inputstring`. A hosting
+program passes its own reader so the menu reads through its terminal. The menu rules are the
+same either way: `verify` decides what is accepted, so a rejected line beeps and re-prompts in
+both cases.
 
 Resolution:
 

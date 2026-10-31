@@ -316,3 +316,30 @@ class TestAliasSubcommand(unittest.TestCase):
     def test_canonical_subcommand_still_works(self):
         r = _Harness("g hit").read([self._game()], state=self._state("blackjack"))
         self.assertEqual((r.key, r.subcommand), ("g", "hit"))
+
+
+class TestReaderParameter(unittest.TestCase):
+    """A hosting program supplies its own line reader; the menu rules are unchanged."""
+
+    def test_supplied_reader_is_used_instead_of_io(self):
+        calls = []
+
+        def reader(prompt, **kw):
+            calls.append(prompt)
+            return "q"
+
+        with patch("bbsengine6.io.inputstring", side_effect=AssertionError("io must not be used")):
+            choice = read_menu("> ", [MenuOption("q", "Quit")], reader=reader)
+        self.assertEqual(calls, ["> "])
+        self.assertEqual(choice.key, "q")
+
+    def test_supplied_reader_receives_verify_and_completer(self):
+        seen = {}
+
+        def reader(prompt, **kw):
+            seen.update(kw)
+            return "q"
+
+        read_menu("> ", [MenuOption("q", "Quit")], reader=reader)
+        self.assertIn("verify", seen)
+        self.assertIn("completer", seen)

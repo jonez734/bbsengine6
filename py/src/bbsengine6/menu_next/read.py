@@ -192,6 +192,7 @@ def read_menu(
     check=None,
     default: str = "",
     help: Any = None,
+    reader: Any = None,
 ) -> Choice:
     """Read one command line and return the chosen option as a :class:`Choice`.
 
@@ -203,11 +204,16 @@ def read_menu(
         default: canonical key returned for an empty line. Must be a key in
             ``spec`` when given.
         help: F1 help, passed through to ``io.inputstring``.
+        reader: the line reader, called with the same keyword arguments as
+            ``io.inputstring``. Defaults to ``io.inputstring``. A hosting program
+            passes its own so the menu reads through its terminal.
 
     Invalid input beeps and re-prompts (``inputstring`` ``verify`` semantics).
     """
-    from ..io import inputstring
+    from ..io import inputstring as _default_reader
     from ..io.inputstring import Completer
+
+    read_line = reader if reader is not None else _default_reader
 
     options = list(spec)
     keys = {o.letter.lower() for o in options}
@@ -225,7 +231,7 @@ def read_menu(
         lambda prefix, **_kw: _completions(prefix, table, state, check)
     )
 
-    line = inputstring(
+    line = read_line(
         prompt,
         verify=verify,
         completer=completer,
