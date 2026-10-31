@@ -4,6 +4,7 @@ Regression tests for the menu item skin variables in io/echo.py.
 ``menu.item.enabled`` and ``menu.item.disabled`` style menu help entries. They
 follow the ``listbox.item.*`` naming, with the same text colors and a gray
 background for menu rows.
+They are the same colors as listbox.item.normal and listbox.item.disabled.
 """
 
 import importlib
@@ -21,18 +22,24 @@ def _echo_module():
 
 def test_menu_item_enabled_is_defined():
     skin = _echo_module()._skin
-    assert skin["menu.item.enabled"] == "{white}{bggray}"
+    assert skin["menu.item.enabled"] == skin["listbox.item.normal"] == "{white}"
 
 
 def test_menu_item_disabled_is_defined():
     skin = _echo_module()._skin
-    assert skin["menu.item.disabled"] == "{darkgray}{bggray}"
+    assert skin["menu.item.disabled"] == skin["listbox.item.disabled"] == "{darkgray}"
 
 
 def test_menu_item_disabled_is_darker_than_enabled():
     skin = _echo_module()._skin
     assert "{darkgray}" in skin["menu.item.disabled"]
     assert "{white}" in skin["menu.item.enabled"]
+
+
+def test_menu_item_matches_listbox_item_colors():
+    skin = _echo_module()._skin
+    assert skin["menu.item.enabled"] == skin["listbox.item.normal"]
+    assert skin["menu.item.disabled"] == skin["listbox.item.disabled"]
 
 
 def test_menu_item_keys_do_not_use_old_names():
