@@ -25,6 +25,7 @@ regressions and its cause is not yet identified.
 - [Public API](#public-api)
 - [Fragment types](#fragment-types)
 - [Lifecycle](#lifecycle)
+- [Prompts and the MODE fragment](#prompts-and-the-mode-fragment)
 - [Registry resolution](#registry-resolution)
 - [Per-connection routing](#per-connection-routing)
 - [Notification fragment](#notification-fragment)
@@ -128,6 +129,26 @@ setbottombar(args, "In casino lobby", **kwargs)
 The bottombar is always emitted to the **default** terminal. The
 truncation math is unchanged from the legacy `io.screen.setbottombar`
 implementation so door-mode output is byte-for-byte identical.
+
+## Prompts and the MODE fragment
+
+`inputstring()` shows the insert/overwrite mode as a fragment in the bottom bar. While a
+prompt is active, it repaints the bar at three points:
+
+1. when the prompt starts (after the prompt text is drawn);
+2. when INSERT is pressed (the mode changes);
+3. when the prompt ends (the fragment is removed).
+
+Pass `bottombar=False` to `inputstring()` to skip all three paints. The mode is still
+tracked and editing is unchanged. The default is `True`, which keeps the bar updated
+during prompts.
+
+```python
+inputstring("name: ", "", bottombar=False)   # the bar is not repainted
+```
+
+`bottombar=False` controls only whether the bar is painted. It does not change what the
+prompt returns, and it does not register or unregister the fragment differently.
 
 ## Registry resolution
 
