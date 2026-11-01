@@ -74,7 +74,7 @@ The module uses a **token-based pipeline**:
 `{decsc}` asks the terminal for its position before it saves it (a DSR query,
 with a one-second timeout; see `io_common.md`). Each save therefore waits for a
 reply. `{decrc}` restores the saved position without a query. The bottom bar avoids
-this cost by emitting the terminal's own ESC 7 / ESC 8 instead.
+this cost by emitting `{savecursor}` / `{restorecursor}` instead, which need no query.
 
 ### 4. Display Control
 

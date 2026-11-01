@@ -145,10 +145,16 @@ during prompts.
 
 ```python
 inputstring("name: ", "", bottombar=False)   # the bar is not repainted
+inputpassword("password: ", bottombar=False) # same; inputpassword passes kwargs through
 ```
 
 `bottombar=False` controls only whether the bar is painted. It does not change what the
 prompt returns, and it does not register or unregister the fragment differently.
+
+Use it when a prompt's colors must not be overwritten by a bar repaint. letteredolive's
+login prompts use it for this reason.
+
+The bar's own update uses `{savecursor}` and `{restorecursor}`, not raw ESC 7 / ESC 8.
 
 ## Registry resolution
 
