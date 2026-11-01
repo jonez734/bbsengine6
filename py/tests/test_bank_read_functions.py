@@ -75,16 +75,22 @@ def test_member_gets_execute_and_loses_view_access():
 
 
 @pytest.mark.unit
-def test_functions_are_installed_by_checkfunctions():
-    src = Path(checkfunctions.__file__).read_text()
-    assert '"bank.get_balance"' in src
-    assert '"bank.get_transactions"' in src
+def test_bank_read_functions_are_installed_by_checkbank():
+    """The bank read functions are installed by checkbank, after the bank schema exists.
+    checkbank runs bank_read_functions.sql directly, so checkfunctions does not list them."""
+    from bbsengine6.backend import checkbank
+
+    src = Path(checkbank.__file__).read_text()
+    assert "bank_read_functions.sql" in src
+
+    cf_src = Path(checkfunctions.__file__).read_text()
+    assert '"bank.get_balance"' not in cf_src
+    assert '"bank.get_transactions"' not in cf_src
 
 
 @pytest.mark.unit
-def test_bank_functions_map_to_their_shared_sql_file():
-    """Both bank read functions live in bank_read_functions.sql, so checkfunctions must map each
-    name to that file. Without the mapping it looks for bank.get_balance.sql, which does not exist."""
-    from bbsengine6.backend import checkfunctions as cf
-    assert cf.SQL_FILE_OVERRIDES.get("bank.get_balance") == "bank_read_functions.sql"
-    assert cf.SQL_FILE_OVERRIDES.get("bank.get_transactions") == "bank_read_functions.sql"
+def test_bank_read_functions_file_defines_both_functions():
+    """Both bank read functions live in bank_read_functions.sql, which checkbank installs."""
+    code = _code(SQL.read_text())
+    assert "bank.get_balance" in code
+    assert "bank.get_transactions" in code

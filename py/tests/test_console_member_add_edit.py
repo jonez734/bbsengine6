@@ -756,6 +756,8 @@ class TestConfigureRoleSuperuserGuard:
                 console_member.database,
                 "manage_secondary_role",
             ) as mock_secondary,
+            # The role is a sysop already, so sysop=False revokes it (the branch under test).
+            patch.object(console_member.database, "is_role_in", return_value=True),
             patch.object(console_member.io, "inputstring", return_value=""),
             patch("bbsengine6.console.member.io.echo"),
             patch("bbsengine6.console.member.io.inputboolean"),
@@ -814,6 +816,8 @@ class TestConfigureRoleSuperuserGuard:
                 console_member.database,
                 "manage_secondary_role",
             ) as mock_secondary,
+            # The role is a sysop already, so sysop=False revokes it (the branch under test).
+            patch.object(console_member.database, "is_role_in", return_value=True),
             patch.object(console_member.io, "inputstring", return_value=""),
             patch("bbsengine6.console.member.io.echo"),
         ):

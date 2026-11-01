@@ -202,9 +202,17 @@ class TestChannelCrud:
         creator = _test_user(1)
 
         channel_service.create_channel(name=name, createdby=creator)
-        channels = channel_service.list_channels()
-        names = [c["name"] for c in channels]
-        assert name in names
+        # list_channels is ordered by name and pages at 100. The test database holds many
+        # more channels, so a fixed first page can miss the new one. Page through the list.
+        found = False
+        offset = 0
+        while not found:
+            page = channel_service.list_channels(limit=100, offset=offset)
+            if not page:
+                break
+            found = any(c["name"] == name for c in page)
+            offset += len(page)
+        assert found, f"{name} not listed by list_channels"
 
 
 # ---------------------------------------------------------------------------

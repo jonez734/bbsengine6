@@ -218,24 +218,23 @@ def test_null_password_column_rejects(db_args, member_factory, now):
     assert outcome == "wrong-password"
 
 
-def test_md5_crypt_hash_returns_ok(db_args, member_factory, now):
+def test_md5_crypt_hash_cannot_be_stored(db_args, member_factory, now):
+    """engine.__member accepts only bcrypt (chk_member_password_bcrypt, manage_password_format.sql).
+    A legacy $1$ MD5-crypt row is therefore refused on insert, and no row can reach the verifier."""
     import crypt as _crypt
+    import psycopg
     h = _crypt.crypt("pw-alice-8", _crypt.mksalt(_crypt.METHOD_MD5))
-    member_factory("test_alice_008", approved=True, password=h)
-    ok, outcome = verify_member("test_alice_008", "pw-alice-8",
-                                args=db_args, now=now)
-    assert ok is True
-    assert outcome == "ok"
+    with pytest.raises(psycopg.errors.CheckViolation):
+        member_factory("test_alice_008", approved=True, password=h)
 
 
-def test_sha512_crypt_hash_returns_ok(db_args, member_factory, now):
+def test_sha512_crypt_hash_cannot_be_stored(db_args, member_factory, now):
+    """Same rule for $6$ SHA-512-crypt: the schema refuses it, so it never reaches the verifier."""
     import crypt as _crypt
+    import psycopg
     h = _crypt.crypt("pw-alice-9", _crypt.mksalt(_crypt.METHOD_SHA512))
-    member_factory("test_alice_009", approved=True, password=h)
-    ok, outcome = verify_member("test_alice_009", "pw-alice-9",
-                                args=db_args, now=now)
-    assert ok is True
-    assert outcome == "ok"
+    with pytest.raises(psycopg.errors.CheckViolation):
+        member_factory("test_alice_009", approved=True, password=h)
 
 
 def test_dispatch_per_user_no_at_sign(db_args, member_factory, now):
