@@ -75,19 +75,16 @@ def init(args=None, topmargin=1, bottommargin=1):
     _warn_shim_deprecated("init")
     echo("{f6:3}{cursorup:3}", end="", flush=True)
     h = terminal.lines() - bottommargin
-    # ESC 7 / ESC 8 save and restore the cursor in the terminal itself. {savecursor}
-    # would ask the terminal for its position first and wait for a reply.
-    echo("\x1b7", end="", raw=True)
+    echo("{savecursor}", end="")
     echo("{decstbm:%s,%s}" % (topmargin, h), end="")
-    echo("\x1b8", flush=True, end="", raw=True)
+    echo("{restorecursor}", flush=True, end="")
     return
 
 
 def updatebottombar(buf: str) -> None:
     """Render the bottom bar on the last terminal line without line wrapping."""
-    # ESC 7 / ESC 8 instead of {savecursor}/{restorecursor}: no cursor query.
     echo(
-        "\x1b7{bottombarcolor}{curpos:%d,0}%s\x1b8"
+        "{savecursor}{bottombarcolor}{curpos:%d,0}%s{restorecursor}"
         % (terminal.lines(), buf),
         wordwrap=False,
         end="",

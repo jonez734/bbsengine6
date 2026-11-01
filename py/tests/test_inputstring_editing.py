@@ -18,6 +18,7 @@ import pytest
 common = importlib.import_module("bbsengine6.io.common")
 inp = importlib.import_module("bbsengine6.io.inputstring")
 getch_mod = importlib.import_module("bbsengine6.io.getch")
+echo_mod = importlib.import_module("bbsengine6.io.echo")
 
 
 @pytest.fixture
@@ -29,6 +30,8 @@ def term(monkeypatch):
     common.set_input_stream(rs)
     common.set_output_stream(ws)
     monkeypatch.setattr(inp, "get_cursor_position", lambda timeout=1.0: (1, 1))
+    # The bottom bar's {savecursor} asks echo for the cursor too; answer it the same way.
+    monkeypatch.setattr(echo_mod, "get_cursor_position", lambda timeout=1.0: (1, 1))
     out = bytearray()
     stop = threading.Event()
 

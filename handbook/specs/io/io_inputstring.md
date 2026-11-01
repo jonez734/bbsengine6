@@ -118,7 +118,7 @@ Reads one line with line editing. Returns the entered text. `prompt` and
 - The INS/OVR mode is a bottom-bar fragment, not part of the input line. The prompt
   registers it when it starts, redraws the bar when the mode changes, and removes it
   and redraws the bar when it returns. A plain bottom-bar update uses `{savecursor}` /
-  `{restorecursor}` to save and restore the cursor, so it does not query the terminal.
+  `{restorecursor}` to save and restore the cursor, which queries the cursor position first.
   Pass `bottombar=False` to skip these repaints (see `bottombar.md`).
 - The tty is held in raw mode for the whole prompt (`begin_raw_session()`), and
   restored on return, exception, and Ctrl-C (see `io_getch.spec`).

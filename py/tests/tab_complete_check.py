@@ -28,6 +28,7 @@ import importlib  # noqa: E402
 
 common = importlib.import_module("bbsengine6.io.common")
 inp_mod = importlib.import_module("bbsengine6.io.inputstring")
+echo_mod = importlib.import_module("bbsengine6.io.echo")
 
 inputstring = inp_mod.inputstring
 
@@ -126,7 +127,10 @@ def run_case(keystrokes, extra, delay=0.25):
     common.set_input_stream(rs)
     common.set_output_stream(ws)
     saved_pos = inp_mod.get_cursor_position
+    saved_echo_pos = echo_mod.get_cursor_position
     inp_mod.get_cursor_position = lambda timeout=1.0: (1, 1)
+    # The bottom bar's {savecursor} asks echo for the cursor too; answer it the same way.
+    echo_mod.get_cursor_position = lambda timeout=1.0: (1, 1)
     try:
         def feed():
             for piece in keystrokes:
@@ -139,6 +143,7 @@ def run_case(keystrokes, extra, delay=0.25):
         return inputstring("> ", **kwargs)
     finally:
         inp_mod.get_cursor_position = saved_pos
+        echo_mod.get_cursor_position = saved_echo_pos
         common.set_input_stream(saved_in)
         common.set_output_stream(saved_out)
         rs.close()

@@ -13,6 +13,8 @@ import pytest
 
 pexpect = pytest.importorskip("pexpect")
 
+from _pty_screen import DSRResponder  # noqa: E402
+
 CODE = (
     "import sys; sys.path.insert(0, 'src')\n"
     "from bbsengine6.io.inputstring import inputstring\n"
@@ -21,7 +23,7 @@ CODE = (
 )
 
 
-def _pump(child, until, buf, timeout=5.0):
+def _pump(child, until, buf, responder, timeout=5.0):
     """Read output into buf, answering cursor-position queries, until `until` appears."""
     end = time.time() + timeout
     while time.time() < end:
@@ -32,9 +34,9 @@ def _pump(child, until, buf, timeout=5.0):
         except pexpect.EOF:
             break
         buf.extend(chunk)
-        # A real terminal answers ESC[6n; answer it so the prompt does not time out.
-        for _ in range(chunk.count(b"\x1b[6n")):
-            child.send(b"\x1b[1;1R")
+        # A real terminal answers ESC[6n with its cursor; answer from the screen the program drew.
+        for reply in responder.feed(chunk):
+            child.send(reply)
         if until in buf:
             return True
     return until in buf
@@ -47,19 +49,20 @@ def prompt():
         env={**os.environ, "TERM": "xterm"}, dimensions=(24, 80),
     )
     buf = bytearray()
-    assert _pump(child, b"name: ", buf), bytes(buf)[-300:]
-    yield child, buf
+    responder = DSRResponder(24, 80)
+    assert _pump(child, b"name: ", buf, responder), bytes(buf)[-300:]
+    yield child, buf, responder
     child.close(force=True)
 
 
 def test_enter_writes_crlf_not_bare_lf(prompt):
-    child, buf = prompt
+    child, buf, responder = prompt
     time.sleep(0.2)
     child.send(b"abc")
     time.sleep(0.2)
     mark = len(buf)
     child.send(b"\r")
-    assert _pump(child, b"RESULT=", buf)
+    assert _pump(child, b"RESULT=", buf, responder)
     after = bytes(buf[mark:])
     # Every LF written after Enter must be preceded by CR.
     bare = [i for i, b in enumerate(after) if b == 0x0A and (i == 0 or after[i - 1] != 0x0D)]
@@ -67,10 +70,10 @@ def test_enter_writes_crlf_not_bare_lf(prompt):
 
 
 def test_result_returned_intact(prompt):
-    child, buf = prompt
+    child, buf, responder = prompt
     time.sleep(0.2)
     child.send(b"abc")
     time.sleep(0.2)
     child.send(b"\r")
-    assert _pump(child, b"RESULT=", buf)
+    assert _pump(child, b"RESULT=", buf, responder)
     assert b"RESULT='abc'" in buf

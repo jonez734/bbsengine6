@@ -2,8 +2,9 @@
 
 ### fix(bottombar): save and restore with `{savecursor}` / `{restorecursor}`
 
-The bar update no longer emits raw ESC 7 / ESC 8. It uses the same tags as the rest of the
-echo output. Docs in `handbook/specs/io/` and `bottombar.md` updated to match, and
+The bar update and `screen.init` / `screen.updatebottombar` use the `{savecursor}` and
+`{restorecursor}` tags instead of hard-coded ESC 7 / ESC 8 sequences. The tags send a cursor
+query (DSR) before saving, so the test harnesses must answer it. Docs and specs updated, and
 `bottombar=False` on `inputpassword` is documented.
 
 ### fix(database): `connect(set_role=False)` keeps the login role

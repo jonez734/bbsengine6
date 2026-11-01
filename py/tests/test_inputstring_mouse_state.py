@@ -17,6 +17,7 @@ import pytest
 
 common = importlib.import_module("bbsengine6.io.common")
 inp = importlib.import_module("bbsengine6.io.inputstring")
+echo_mod = importlib.import_module("bbsengine6.io.echo")
 
 QUERY_RE = re.compile(rb"\x1b\[\?(\d+)\$p")
 SET_RE = re.compile(rb"\x1b\[\?(\d+)([hl])")
@@ -97,6 +98,8 @@ def terminal(monkeypatch):
     common.set_output_stream(out)
     # A pty has no terminal emulator to answer the cursor-position query.
     monkeypatch.setattr(inp, "get_cursor_position", lambda timeout=1.0: (1, 1))
+    # The bottom bar's {savecursor} asks echo for the cursor too; answer it the same way.
+    monkeypatch.setattr(echo_mod, "get_cursor_position", lambda timeout=1.0: (1, 1))
     saved_flag = common.MOUSE_STATE_MANAGED
     common.MOUSE_STATE_MANAGED = True
     holder = {}

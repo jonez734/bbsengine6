@@ -154,7 +154,8 @@ prompt returns, and it does not register or unregister the fragment differently.
 Use it when a prompt's colors must not be overwritten by a bar repaint. letteredolive's
 login prompts use it for this reason.
 
-The bar's own update uses `{savecursor}` and `{restorecursor}`, not raw ESC 7 / ESC 8.
+The bar's own update uses `{savecursor}` and `{restorecursor}`. `{savecursor}` queries the
+cursor position first, so each bar update waits for the terminal's reply.
 
 ## Registry resolution
 

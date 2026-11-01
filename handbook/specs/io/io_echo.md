@@ -73,8 +73,8 @@ The module uses a **token-based pipeline**:
 
 `{decsc}` asks the terminal for its position before it saves it (a DSR query,
 with a one-second timeout; see `io_common.md`). Each save therefore waits for a
-reply. `{decrc}` restores the saved position without a query. The bottom bar avoids
-this cost by emitting `{savecursor}` / `{restorecursor}` instead, which need no query.
+reply. `{decrc}` restores the saved position without a query. `{savecursor}` and `{decsc}`
+are the same tag, so the bottom bar pays this cost on each update.
 
 ### 4. Display Control
 

@@ -23,14 +23,40 @@ COLS = 80
 PREFIX = "import sys; sys.path.insert(0, 'src')\n"
 
 
+class DSRResponder:
+    """Answer cursor-position queries (ESC[6n) with the cursor the program actually has.
+
+    A terminal replies with its real row and column. Feed each chunk of program output to
+    ``feed``; it returns the reply bytes to send for every query in that chunk. The reply is
+    built from a pyte screen that has seen the same output, so it matches the cursor the
+    program left behind.
+    """
+
+    def __init__(self, rows: int = ROWS, cols: int = COLS):
+        self.screen = pyte.Screen(cols, rows)
+        self.stream = pyte.ByteStream(self.screen)
+
+    def feed(self, chunk: bytes) -> list[bytes]:
+        replies: list[bytes] = []
+        segments = chunk.split(b"\x1b[6n")
+        for i, segment in enumerate(segments):
+            self.stream.feed(segment)
+            if i < len(segments) - 1:
+                # A query sits between this segment and the next: reply with the cursor now.
+                row, col = self.screen.cursor.y, self.screen.cursor.x
+                replies.append(f"\x1b[{row + 1};{col + 1}R".encode())
+        return replies
+
+
 class Screen:
     """A program running on a pty, with its output modelled on a pyte screen."""
 
     def __init__(self, body: str, *, rows: int = ROWS, cols: int = COLS, timeout: float = 15.0):
         self.rows = rows
         self.cols = cols
-        self.screen = pyte.Screen(cols, rows)
-        self.stream = pyte.ByteStream(self.screen)
+        self.responder = DSRResponder(rows, cols)
+        self.screen = self.responder.screen
+        self.stream = self.responder.stream
         self.raw = bytearray()
         code = PREFIX + body
         self.child = pexpect.spawn(
@@ -54,9 +80,8 @@ class Screen:
             except pexpect.EOF:
                 return
             self.raw.extend(chunk)
-            self.stream.feed(chunk)
-            for _ in range(chunk.count(b"\x1b[6n")):
-                self.child.send(b"\x1b[1;1R")
+            for reply in self.responder.feed(chunk):
+                self.child.send(reply)
 
     def wait_for(self, text: str, seconds: float = 5.0) -> bool:
         """Pump until ``text`` is on screen (any row) or ``seconds`` pass."""

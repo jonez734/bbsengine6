@@ -5,6 +5,8 @@ import pytest
 from bbsengine6 import subprocess_command as sc
 from bbsengine6.interaction import current_session, new_session, use_session
 
+from _pty_screen import DSRResponder
+
 
 @pytest.fixture
 def calls(monkeypatch):
@@ -218,8 +220,10 @@ class TestRestoreTypedText:
             env={**os.environ, "TERM": "xterm"}, dimensions=(24, 80),
         )
         out = []
-        # A real terminal answers the cursor query (ESC[6n); the harness must too, or the
-        # prompt times out. Answer each query as the output arrives.
+        # A real terminal answers the cursor query (ESC[6n) with its cursor position; the harness
+        # must too, or the prompt times out. The responder tracks what the program drew.
+        responder = DSRResponder(24, 80)
+
         def answer(until, t=10):
             end = time.time() + t
             while time.time() < end:
@@ -230,8 +234,8 @@ class TestRestoreTypedText:
                 except pexpect.EOF:
                     return None
                 out.append(chunk)
-                for _ in range(chunk.count("\x1b[6n")):
-                    child.send("\x1b[1;1R")
+                for reply in responder.feed(chunk.encode("utf-8")):
+                    child.send(reply.decode("ascii"))
                 if until in "".join(out):
                     return True
             return False

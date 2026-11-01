@@ -482,10 +482,8 @@ def _render_bottombar(
         left_buf = left_buf[:truncate_to] + "..."
         left_len = rendered_length(left_buf)
     padding = " " * max(0, terminalwidth - left_len - right_len)
-    # Save and restore the hardware cursor with the terminal's own ESC 7 / ESC 8.
-    # {savecursor} would ask the terminal for its position first (a DSR round-trip on
-    # every redraw), and a terminal that does not answer stalls each bar update.
-    # The terminal keeps the saved position itself, so no query is needed.
+    # {savecursor} asks the terminal for its position (DSR, ESC[6n) before it saves, so each
+    # redraw waits for a reply. Test harnesses must answer that query (see tests/_pty_screen.py).
     echo(
         f"{{savecursor}}{{bottombarcolor}}{{curpos:{terminal.lines()},0}}"
         f"{left_buf}{padding}{right_buf}{{restorecursor}}{{/all}}",
