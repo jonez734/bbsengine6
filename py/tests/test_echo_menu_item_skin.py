@@ -46,3 +46,11 @@ def test_menu_item_keys_do_not_use_old_names():
     skin = _echo_module()._skin
     assert "menuitemenabled" not in skin
     assert "menuitemdisabled" not in skin
+
+
+def test_promptcolor_is_light_gray_on_the_default_background():
+    """The prompt is light gray. A white promptcolor in the skin table (echo.py) overrode the
+    intended value in echovars.py and made every prompt white."""
+    skin = _echo_module()._skin
+    assert skin["promptcolor"] == "{/bgcolor}{lightgray}"
+    assert _echo_module()._default_runtime_vars()["promptcolor"] == "{/bgcolor}{lightgray}"
