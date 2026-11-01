@@ -9,8 +9,16 @@ from bbsengine6.io.common import _terminal_state
 
 @pytest.fixture(autouse=True)
 def reset_state():
+    """Reset indent before each test and restore it after, so no test leaves indent set.
+
+    These tests set _terminal_state.indent directly. Without the restore, later tests
+    in the suite (level_fail, for example) print wrapped, indented output.
+    """
+    saved = _terminal_state.indent
     io.echo("{reset}")
     yield
+    io.echo("{reset}")
+    _terminal_state.indent = saved
 
 
 class TestIndent:

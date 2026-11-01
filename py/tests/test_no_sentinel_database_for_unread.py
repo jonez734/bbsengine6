@@ -8,10 +8,23 @@ from bbsengine6 import bottombar
 from bbsengine6.database import BBSENGINE6_DBNAME_DEFAULT
 
 
-@pytest.mark.unit
-def test_notification_status_with_no_args_uses_registry_args():
-    shell_args = MagicMock(databasename="zoid6", debug=False)
+@pytest.fixture
+def restore_registry_context():
+    """Put back the default registry's args/player/pool after the test.
+
+    set_context stores them on the process-wide registry; leaving them set changes what
+    later tests (screen, for example) see from their bottombar fragments.
+    """
     reg = bottombar._resolve_registry()
+    saved = (getattr(reg, "args", None), getattr(reg, "player", None), getattr(reg, "pool", None))
+    yield reg
+    reg.args, reg.player, reg.pool = saved
+
+
+@pytest.mark.unit
+def test_notification_status_with_no_args_uses_registry_args(restore_registry_context):
+    shell_args = MagicMock(databasename="zoid6", debug=False)
+    reg = restore_registry_context
     reg.set_context(args=shell_args, player=None, pool=None)
     seen = {}
 
