@@ -1,3 +1,4 @@
+import atexit
 import contextvars
 import copy
 import os
@@ -525,6 +526,52 @@ def reset_pool_cache() -> None:
             except Exception:
                 io.echo_traceback("bbsengine6.database.234:")
         _pool_cache = {}
+
+
+def _close_cached_pools_at_exit() -> None:
+    """Close the cached pools while threads still run.
+
+    A ConnectionPool that is still open when the interpreter exits is closed by its
+    __del__ during teardown, which tries to join worker threads that are already gone
+    (PythonFinalizationError). Closing them here, in an explicit atexit hook, avoids that.
+    Pools already closed by reset_pool_cache() are skipped.
+    """
+    with _pool_cache_lock:
+        pools = list(_pool_cache.values())
+    for pool in pools:
+        try:
+            if not pool.closed:
+                pool.close()
+        except Exception:
+            pass
+
+
+atexit.register(_close_cached_pools_at_exit)
+
+
+@contextmanager
+def isolated_pool_cache() -> Iterator[None]:
+    """Give the caller an empty pool cache, then restore the original one unchanged.
+
+    For tests that need their own pools without closing the process's shared pools.
+    Pools created inside the block are closed on exit. Pools that were already in the
+    cache stay open and are back in the cache afterward.
+    """
+    global _pool_cache
+    with _pool_cache_lock:
+        saved = _pool_cache
+        _pool_cache = {}
+    try:
+        yield
+    finally:
+        with _pool_cache_lock:
+            created = _pool_cache
+            _pool_cache = saved
+        for pool in created.values():
+            try:
+                pool.close()
+            except Exception:
+                io.echo_traceback("bbsengine6.database.isolated_pool_cache:")
 
 
 @contextmanager
