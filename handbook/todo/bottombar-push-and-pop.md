@@ -1,6 +1,18 @@
 # TODO: bottombar push() and pop()
 
-Status: planned, not started. Do not build until the user says so.
+Status: done. Built and pushed to `github/main`.
+
+- `949aa7d` feat(bottombar): add `push()` and `pop()`
+- `67a5ac7` refactor(screen): remove `popbottombar`/`poparea` and `bottombarstack`
+- `1e89931` docs(todo): this plan
+
+Resolved questions (no longer open):
+
+- Legacy `poparea`: removed, not delegated to `pop()`.
+- `push()` repaints: yes, including a no-argument push.
+
+The "Current code" and "Implementation steps" sections below describe the state
+before the build. They are kept as the record of the plan.
 
 ## Goal
 
