@@ -1077,7 +1077,7 @@ def inputstring(
     f1_help: Union[str, Callable[[], str], None] = None,
     help: Union[str, Callable[[], str], None] = None,
     function_key_handlers: Optional[dict] = None,
-    show_bottombar: bool = True,
+    bottombar: bool = True,
     **kwargs,
 ) -> str:
     """Read a line of text from the terminal with full line editing support.
@@ -1115,6 +1115,11 @@ def inputstring(
                 )
             Each handler receives: (buffer, curpos, scroll_offset, max_width)
             Can return 3-tuple to modify input.
+        bottombar: Paint the bottom bar while the prompt is active (default: True)
+            True: the INS/OVR mode is shown in the bottom bar, repainted when the prompt
+            starts, when INSERT is pressed, and when it ends.
+            False: the bar is not painted at any of those points. The mode is still
+            tracked and editing is unchanged. Use this to keep the bar as it was.
         **kwargs: Additional options
             verify: Callable[(str) -> bool] for input validation
             completer: Completer instance for tab completion
@@ -1191,11 +1196,11 @@ def inputstring(
             f1_help=f1_help,
             help=help,
             function_key_handlers=function_key_handlers,
-            show_bottombar=show_bottombar,
+            bottombar=bottombar,
             **kwargs,
         )
     finally:
-        _hide_mode(paint=show_bottombar)  # remove the MODE fragment when the prompt ends
+        _hide_mode(paint=bottombar)  # remove the MODE fragment when the prompt ends
         _restore_key_snapshot(key_depth)
         bracketed_paste_off(paste_mode)
         mouse_state_pop(saved_mouse)
@@ -1267,7 +1272,7 @@ def _inputstring_body(
     f1_help: Union[str, Callable[[], str], None] = None,
     help: Union[str, Callable[[], str], None] = None,
     function_key_handlers: Optional[dict] = None,
-    show_bottombar: bool = True,
+    bottombar: bool = True,
     **kwargs,
 ) -> str:
     """Implementation of inputstring(); see inputstring() for the contract."""
@@ -1339,7 +1344,7 @@ def _inputstring_body(
     # redraw_line() draws, so the first frame and later redraws agree on the layout.
     echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
     echo(prompt, end="", flush=True, wordwrap=False)
-    _show_mode(_insert_mode, paint=show_bottombar)
+    _show_mode(_insert_mode, paint=bottombar)
 
     input_col_start = start_col + prompt_len
     # The row holds the prompt, the mode indicator and the text. Give the text only the
@@ -1425,7 +1430,7 @@ def _inputstring_body(
         # bottom bar (see _show_mode), so only the flag changes here.
         nonlocal _insert_mode
         _insert_mode = not _insert_mode
-        _show_mode(_insert_mode, paint=show_bottombar)
+        _show_mode(_insert_mode, paint=bottombar)
         return buffer, curpos, scroll_offset
 
     def help_handler(buffer, curpos, scroll_offset, max_width):
