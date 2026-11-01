@@ -71,15 +71,12 @@ class TestLevelFailVariable:
         assert "{" in value and "}" in value
         assert value == "{bgred}{black}"
 
-    def test_all_levels_consistent_with_deprecated_echovars(self):
-        """The active module should expose every level.* var that echovars.py does."""
-        from bbsengine6.io import echovars
-
-        for name in echovars.variables:
+    def test_level_variables_are_defined_in_the_live_skin(self):
+        """Every level.* color the live skin defines must also be in the runtime variables."""
+        for name in echo_module._skin:
             if name.startswith("level."):
                 assert name in echo_module._runtime_vars, (
-                    f"{name} is defined in echovars but missing from "
-                    f"bbsengine6.io.echo._runtime_vars"
+                    f"{name} is in the skin but missing from bbsengine6.io.echo._runtime_vars"
                 )
 
 
