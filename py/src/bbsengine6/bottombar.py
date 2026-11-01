@@ -487,8 +487,8 @@ def _render_bottombar(
     # every redraw), and a terminal that does not answer stalls each bar update.
     # The terminal keeps the saved position itself, so no query is needed.
     echo(
-        f"\x1b7{{bottombarcolor}}{{curpos:{terminal.lines()},0}}"
-        f"{left_buf}{padding}{right_buf}{{/all}}\x1b8",
+        f"{{savecursor}}{{bottombarcolor}}{{curpos:{terminal.lines()},0}}"
+        f"{left_buf}{padding}{right_buf}{{restorecursor}}{{/all}}",
         wordwrap=False,
         end="",
         flush=True,
