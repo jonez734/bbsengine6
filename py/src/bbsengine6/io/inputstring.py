@@ -881,11 +881,12 @@ def _mode_fragment(**_kwargs) -> str:
     return INPUTSTRING_INSERT_MODE_INDICATOR if _mode_state()["insert"] else INPUTSTRING_OVERWRITE_MODE_INDICATOR
 
 
-def _show_mode(insert_mode: bool) -> None:
+def _show_mode(insert_mode: bool, paint: bool = True) -> None:
     """Register the MODE fragment (if needed), set the mode, and redraw the bottom bar.
 
     Silent when there is no bottom bar to draw on (no tty, or the module is not
-    available): editing behaves the same either way.
+    available): editing behaves the same either way. With ``paint=False`` the mode is
+    still tracked, but the bar is not drawn.
     """
     try:
         from .. import bottombar as _bottombar
@@ -895,12 +896,13 @@ def _show_mode(insert_mode: bool) -> None:
     try:
         if _mode_state()["item"] is None:
             _mode_state()["item"] = _bottombar.register_bottombar_fragment(_mode_fragment)
-        _bottombar.setbottombar(None, "")
+        if paint:
+            _bottombar.setbottombar(None, "")
     except Exception:
         return
 
 
-def _hide_mode() -> None:
+def _hide_mode(paint: bool = True) -> None:
     """Unregister the MODE fragment and redraw the bottom bar without it."""
     try:
         from .. import bottombar as _bottombar
@@ -911,7 +913,8 @@ def _hide_mode() -> None:
     try:
         if item is not None:
             _bottombar.unregister_bottombar_fragment(item)
-        _bottombar.setbottombar(None, "")
+        if paint:
+            _bottombar.setbottombar(None, "")
     except Exception:
         return
 
@@ -1074,6 +1077,7 @@ def inputstring(
     f1_help: Union[str, Callable[[], str], None] = None,
     help: Union[str, Callable[[], str], None] = None,
     function_key_handlers: Optional[dict] = None,
+    show_bottombar: bool = True,
     **kwargs,
 ) -> str:
     """Read a line of text from the terminal with full line editing support.
@@ -1187,10 +1191,11 @@ def inputstring(
             f1_help=f1_help,
             help=help,
             function_key_handlers=function_key_handlers,
+            show_bottombar=show_bottombar,
             **kwargs,
         )
     finally:
-        _hide_mode()  # remove the MODE fragment when the prompt ends
+        _hide_mode(paint=show_bottombar)  # remove the MODE fragment when the prompt ends
         _restore_key_snapshot(key_depth)
         bracketed_paste_off(paste_mode)
         mouse_state_pop(saved_mouse)
@@ -1262,6 +1267,7 @@ def _inputstring_body(
     f1_help: Union[str, Callable[[], str], None] = None,
     help: Union[str, Callable[[], str], None] = None,
     function_key_handlers: Optional[dict] = None,
+    show_bottombar: bool = True,
     **kwargs,
 ) -> str:
     """Implementation of inputstring(); see inputstring() for the contract."""
@@ -1333,7 +1339,7 @@ def _inputstring_body(
     # redraw_line() draws, so the first frame and later redraws agree on the layout.
     echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
     echo(prompt, end="", flush=True, wordwrap=False)
-    _show_mode(_insert_mode)
+    _show_mode(_insert_mode, paint=show_bottombar)
 
     input_col_start = start_col + prompt_len
     # The row holds the prompt, the mode indicator and the text. Give the text only the
@@ -1419,7 +1425,7 @@ def _inputstring_body(
         # bottom bar (see _show_mode), so only the flag changes here.
         nonlocal _insert_mode
         _insert_mode = not _insert_mode
-        _show_mode(_insert_mode)
+        _show_mode(_insert_mode, paint=show_bottombar)
         return buffer, curpos, scroll_offset
 
     def help_handler(buffer, curpos, scroll_offset, max_width):
