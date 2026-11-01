@@ -41,6 +41,8 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 
 - [x] `set_getch_impl()`, `get_getch_impl()`, and per-call `impl=` keyword.
 - [x] Export `getch_utf8`, `set_getch_impl`, `get_getch_impl` from `io/__init__.py` (commit `f7c7356`).
+- [x] Bottom bar `push()` / `pop()` on `bbsengine6.bottombar` (commit `949aa7d`). Legacy
+  `popbottombar` / `poparea` removed (commit `67a5ac7`). Plan: `handbook/todo/bottombar-push-and-pop.md`.
 
 ## Phase 4: `inputstring()` (`py/src/bbsengine6/io/inputstring.py`)
 
@@ -299,14 +301,12 @@ Scope confirmed by the operator: includes letteredolive.
     Verified: full suite at baseline (63 failed, 2283 passed; the same two baseline failures
     fixed); focused getch, bottombar, key-event and inputstring tests green (234); zoidoffice
     and casino io tests match baseline; murdermotel unchanged from clean HEAD.
-  - [x] `bottombar.py` / `screen.py`: `bottombarstack` (the pushed-bar stack, read through
-    `screen.bottombarstack`) lives on the interaction (commit below). Stays process-wide, on
-    purpose: the default registry, the named-registry cache (`registry_for`, shared across
-    packages), the `_active_registry` ContextVar (already per context), and the locks. Dropped
-    `bottombarstack` from `screen.__all__`, since a read-through name is not a module attribute.
-    Verified: full suite at baseline (63 failed, 2283 passed; same two baseline failures fixed);
-    focused screen, bottombar and io tests green (266); zoidoffice and casino io tests match
-    baseline; murdermotel unchanged from clean HEAD.
+  - [x] `bottombar.py` / `screen.py`: the legacy `bottombarstack` (with `popbottombar` /
+    `poparea`) is removed (commit `67a5ac7`). Nothing in the package pushed onto it. Its
+    callers (`testareastack.py`, `testsetarea.py`) use `bottombar.push()` / `pop()` instead.
+    The default registry, named-registry cache (`registry_for`), `_active_registry`
+    ContextVar, and locks stay process-wide; they were never per-interaction state.
+    Verified: `test_bottombar.py`, `test_screen.py`, `test_read_through.py` green (147).
   - [x] Phase 3 complete for the io modules listed above. Remaining io state (bell throttling,
     resize callbacks, event dispatcher) is process-wide by design (see getch entry).
 
