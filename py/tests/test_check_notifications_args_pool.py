@@ -18,6 +18,19 @@ import pytest
 pytestmark = pytest.mark.unit
 
 
+@pytest.fixture(autouse=True)
+def _clear_unread_cache():
+    """Clear message's unread-count cache, which some tests in this file warm and never reset.
+
+    The logged-in moniker is restored suite-wide in conftest.py.
+    """
+    from bbsengine6.message import service
+
+    service.clear_local_unread_cache()
+    yield
+    service.clear_local_unread_cache()
+
+
 class _Args:
     def __init__(self, databasename: str = "zoidbo") -> None:
         self.databasename = databasename
@@ -128,34 +141,42 @@ class TestResolveDbFallsBackToArgs:
 class TestGetUnreadCountAcceptsArgsAndPool:
     def test_pool_is_reused_no_new_getpool_call(self, monkeypatch):
         from bbsengine6 import message
+        from bbsengine6.message import service
 
         class FakePool:
+            """Matches the psycopg-pool contract database.connect uses: getconn/putconn."""
+
             def __init__(self):
                 self.connections = 0
+                self.returned = 0
                 self.last_sql = None
                 self.last_params = None
 
-            def connection(self):
+            def getconn(self):
                 self.connections += 1
                 outer = self
 
-                class Conn:
-                    def cursor(self_inner):
-                        class Cur:
-                            def __enter__(s): return s
-                            def __exit__(s, *a): return False
-                            def execute(s, sql, params):
-                                outer.last_sql = sql
-                                outer.last_params = params
-                            def fetchone(s):
-                                return [11]
-                        return Cur()
-
-                class Ctx:
-                    def __enter__(s): return Conn()
+                class Cur:
+                    def __enter__(s): return s
                     def __exit__(s, *a): return False
+                    def execute(s, sql, params=None):
+                        outer.last_sql = sql
+                        outer.last_params = params
+                    def fetchone(s):
+                        return [11]
 
-                return Ctx()
+                class Conn:
+                    autocommit = False
+                    class pgconn:
+                        transaction_status = 0
+                    def cursor(s, *a, **k): return Cur()
+                    def commit(s): pass
+                    def rollback(s): pass
+
+                return Conn()
+
+            def putconn(self, conn):
+                self.returned += 1
 
         getpool_called = []
 
@@ -163,19 +184,21 @@ class TestGetUnreadCountAcceptsArgsAndPool:
             getpool_called.append((args, kwargs))
             return None  # if we got here, the test fails
 
-        monkeypatch.setattr(message, "getpool", fake_getpool)
+        # get_unread_count calls getpool in bbsengine6.message.service, so patch it there.
+        monkeypatch.setattr(service, "getpool", fake_getpool)
 
         pool = FakePool()
         count = message.get_unread_count("JAM!", pool=pool)
 
         assert count == 11
         assert pool.connections == 1, "expected exactly one connection checkout"
-        assert "engine.__message_recipient" in pool.last_sql
+        assert "engine.bed_count_unread" in pool.last_sql
         assert pool.last_params == ("JAM!",)
         assert getpool_called == [], "should not call getpool when pool is given"
 
     def test_conn_is_used_directly(self, monkeypatch):
         from bbsengine6 import message
+        from bbsengine6.message import service
 
         class Cur:
             def __enter__(s): return s
@@ -189,7 +212,7 @@ class TestGetUnreadCountAcceptsArgsAndPool:
         getpool_called = []
 
         monkeypatch.setattr(
-            message,
+            service,
             "getpool",
             lambda *a, **k: getpool_called.append((a, k)) or None,
         )

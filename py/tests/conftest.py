@@ -295,6 +295,25 @@ def test_users():
 
 
 @pytest.fixture(autouse=True)
+def _restore_threadlocal_moniker():
+    """Restore member._threadlocal.moniker after every test.
+
+    Several tests set the logged-in moniker and never clear it. Later tests then
+    inherit it (for example folder.create records it as the creator), so results
+    depend on test order. Restoring it here keeps each test independent.
+    """
+    from bbsengine6.member import _threadlocal
+
+    had = hasattr(_threadlocal, "moniker")
+    saved = getattr(_threadlocal, "moniker", None)
+    yield
+    if had:
+        _threadlocal.moniker = saved
+    elif hasattr(_threadlocal, "moniker"):
+        del _threadlocal.moniker
+
+
+@pytest.fixture(autouse=True)
 def test_create_test_users(request):
     """
     Populate test users (test_{user}_1..3) for any non-unit test.
