@@ -26,7 +26,7 @@ class TestOwnerLoop(unittest.TestCase):
 
         with patch.object(ms, "subscribe_to_bed", side_effect=fake_subscribe):
             self.assertTrue(ms.subscribe_to_bed_sync(object(), "alice"))
-        loop = ms._owner_loop_get()
+        loop = ms.owner_loop()
         self.assertFalse(loop.is_closed())
         self.assertTrue(loop.is_running())
 
@@ -40,7 +40,7 @@ class TestOwnerLoop(unittest.TestCase):
         self.assertTrue(done.wait(2))
 
     def test_owner_loop_is_a_single_loop(self):
-        self.assertIs(ms._owner_loop_get(), ms._owner_loop_get())
+        self.assertIs(ms.owner_loop(), ms.owner_loop())
 
 
 if __name__ == "__main__":
