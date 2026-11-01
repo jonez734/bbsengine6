@@ -55,6 +55,54 @@ def _make_args(databasename: str = "zoid6_test_missing") -> argparse.Namespace:
     )
 
 
+def _socket_login_works_for_temp_role(admin_conn: psycopg.Connection) -> bool:
+    """Probe whether a freshly created login role can connect over the Unix socket.
+
+    Creates a throwaway role, tries to log in as it, and always drops the role.
+    """
+    role = f"zoid6_probe_{uuid.uuid4().hex[:8]}"
+    try:
+        with admin_conn.cursor() as cur:
+            cur.execute(f'CREATE ROLE "{role}" NOSUPERUSER NOCREATEDB NOCREATEROLE LOGIN')
+        try:
+            psycopg.connect(
+                f"dbname=postgres user={role}", connect_timeout=3
+            ).close()
+            return True
+        except Exception:
+            return False
+    except Exception:
+        return False
+    finally:
+        try:
+            with admin_conn.cursor() as cur:
+                cur.execute(f'DROP ROLE IF EXISTS "{role}"')
+        except Exception:
+            pass
+
+
+def runner_is_sysop_or_superuser(admin_conn: psycopg.Connection, moniker: str) -> bool:
+    """True when startup.main's stage_zero access check would pass for ``moniker``.
+
+    stage_zero requires the sysop flag (engine.checkmemberflag). A PostgreSQL superuser
+    is also accepted by the database itself. Any failure to answer counts as "no".
+    """
+    try:
+        with admin_conn.cursor() as cur:
+            cur.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user")
+            row = cur.fetchone()
+            if row and row[0]:
+                return True
+        with psycopg.connect(
+            f"dbname=zoid6test user={moniker}", connect_timeout=3
+        ) as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT engine.checkmemberflag('sysop', %s)", (moniker,))
+                return bool(cur.fetchone()[0])
+    except Exception:
+        return False
+
+
 def _make_fake_cursor(fetchone_return: Any = None) -> MagicMock:
     cur = MagicMock(name="cursor")
     cur.fetchone = MagicMock(return_value=fetchone_return)
@@ -891,6 +939,12 @@ class TestStartupMainZoid6MissingIntegration:
                 "Mocked test_existing_database_path_is_unchanged covers "
                 "this code path."
             )
+        if not runner_is_sysop_or_superuser(admin_conn, getpass.getuser()):
+            pytest.skip(
+                "startup.main runs stage_zero, which requires the sysop flag on the "
+                "connecting moniker (checkmemberflag). The runner is not a sysop, so "
+                "startup refuses to run DDL. Mocked tests cover this path."
+            )
 
         # Pre-create the database on the admin conn (autocommit=True).
         with admin_conn.cursor() as cur:
@@ -937,12 +991,21 @@ class TestStartupMainZoid6MissingIntegration:
            the runner role directly.
 
         If the runner cannot CREATE ROLE either, this test skips.
+        If a temporary login role cannot connect over the socket (peer authentication
+        matches the OS user name, so a temp role never can), this test skips too.
         """
         from bbsengine6.backend import checkcreatedb
         from bbsengine6 import database
 
         user = getpass.getuser()
         temp_role: str | None = None
+
+        if runner_has_createdb and not _socket_login_works_for_temp_role(admin_conn):
+            pytest.skip(
+                "a temporary login role cannot connect over the Unix socket (peer "
+                "authentication matches the OS user). Needs password TCP auth to run "
+                "the no-CREATEDB scenario."
+            )
 
         if runner_has_createdb:
             # Provision a no-CREATEDB role to test under.
