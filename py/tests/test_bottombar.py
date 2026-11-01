@@ -20,6 +20,13 @@ import pytest
 
 sys.path.insert(0, "py/src")
 
+# The back-compat section below calls the bbsengine6.screen shim on purpose, to test that it
+# still routes through bottombar. The shim's DeprecationWarning is expected there and is
+# ignored for this module only.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:bbsengine6.screen.*back-compat shim:DeprecationWarning"
+)
+
 from bbsengine6 import bottombar
 from bbsengine6.bottombar import (
     FragmentRegistry,

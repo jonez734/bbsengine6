@@ -17,6 +17,13 @@ from unittest.mock import patch
 
 sys.path.insert(0, "py/src")
 
+# These tests pin the back-compat contract of bbsengine6.screen (the shim), so they call it
+# on purpose. The shim's DeprecationWarning is expected here and is ignored for this module
+# only; the shim itself is unchanged and other deprecations still show.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:bbsengine6.screen.*back-compat shim:DeprecationWarning"
+)
+
 from bbsengine6.io import screen
 from bbsengine6.io.screen import (
     register_bottombar_fragment,

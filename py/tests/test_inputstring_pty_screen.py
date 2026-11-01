@@ -9,6 +9,13 @@ Requires pexpect and pyte (dev dependencies). Skipped if either is missing.
 
 import pytest
 
+# These tests run the program in a pty (os.forkpty). The stdlib warns that forking a
+# multi-threaded process can deadlock in the child. The child execs the interpreter at once,
+# so that risk does not apply here. The warning is ignored for this module only.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:This process .* is multi-threaded, use of forkpty\\(\\) may lead to deadlocks:DeprecationWarning"
+)
+
 pytest.importorskip("pexpect")
 pytest.importorskip("pyte")
 
