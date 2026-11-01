@@ -33,7 +33,6 @@ from .module import (
     get_require_registration,
     get_all_modules,
     files,
-    folder,
 )
 
 __all__ = [
@@ -47,7 +46,6 @@ __all__ = [
     "get_require_registration",
     "get_all_modules",
     "files",
-    "folder",
     "menu_next",
     "MenuOption",
     "Registry",
