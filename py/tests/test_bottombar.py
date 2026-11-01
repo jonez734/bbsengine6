@@ -830,7 +830,6 @@ class TestScreenModuleUnification:
             register_bottombar_fragment,
             unregister_bottombar_fragment,
             _render_bottombar_fragments,
-            bottombarstack,
         )
         import bbsengine6.screen as canonical
         # Every legacy import resolves to the canonical symbol.
@@ -840,7 +839,6 @@ class TestScreenModuleUnification:
         assert register_bottombar_fragment is canonical.register_bottombar_fragment
         assert unregister_bottombar_fragment is canonical.unregister_bottombar_fragment
         assert _render_bottombar_fragments is canonical._render_bottombar_fragments
-        assert bottombarstack is canonical.bottombarstack
 
     def test_patch_on_canonical_visible_via_legacy_path(self):
         import bbsengine6
@@ -909,3 +907,144 @@ class TestScreenModuleUnification:
         ]
         assert deprecation, "expected DeprecationWarning from setarea"
         assert "bbsengine6.bottombar" in str(deprecation[0].message)
+
+
+class TestPushPop:
+    """push()/pop(): save original left and fragments, repaint on both."""
+
+    def _reg(self):
+        return FragmentRegistry(name="pp")
+
+    def test_push_no_args_saves_and_repaints(self):
+        reg = self._reg()
+        reg.left = "base"
+        reg.register("frag")
+        with patch("bbsengine6.bottombar._render_bottombar") as mock:
+            reg.push()
+        assert len(reg._stack) == 1
+        assert mock.call_count == 1
+        assert mock.call_args.kwargs["left"] == "base"
+
+    def test_pop_restores_left_and_fragments(self):
+        reg = self._reg()
+        reg.left = "base"
+        reg.register("frag")
+        with patch("bbsengine6.bottombar._render_bottombar"):
+            reg.push()
+            reg.push(left="new", fragments=["other"])
+            assert reg.pop() is True
+        assert reg.left == "base"
+        assert list(reg.items) == ["frag"]
+
+    def test_push_installs_new_values_and_repaints(self):
+        reg = self._reg()
+        reg.left = "base"
+        reg.register("old")
+        with patch("bbsengine6.bottombar._render_bottombar") as mock:
+            reg.push(left="new", fragments=["a", "b"])
+        assert reg.left == "new"
+        assert list(reg.items) == ["a", "b"]
+        assert mock.call_args.kwargs["left"] == "new"
+
+    def test_push_fragments_empty_clears(self):
+        reg = self._reg()
+        reg.register("x")
+        with patch("bbsengine6.bottombar._render_bottombar"):
+            reg.push(fragments=[])
+        assert list(reg.items) == []
+
+    def test_push_none_keeps_current_left(self):
+        reg = self._reg()
+        reg.left = "keep"
+        with patch("bbsengine6.bottombar._render_bottombar") as mock:
+            reg.push(fragments=["z"])
+        assert reg.left == "keep"
+        assert mock.call_args.kwargs["left"] == "keep"
+
+    def test_stores_original_callable_not_rendered_output(self):
+        reg = self._reg()
+        calls = []
+
+        def left(**kw):
+            calls.append(1)
+            return "rendered"
+
+        reg.left = left
+        with patch("bbsengine6.bottombar._render_bottombar"):
+            reg.push()
+            reg.push(left="other")
+            reg.pop()
+        assert reg.left is left
+        assert len(reg._stack) == 1
+
+    def test_pop_calls_callable_left_again(self):
+        reg = self._reg()
+        seen = []
+
+        def left(**kw):
+            seen.append(kw)
+            return "x"
+
+        reg.left = left
+        with patch("bbsengine6.bottombar._render_bottombar") as mock:
+            reg.push(left="other")
+            reg.pop(extra=1)
+        assert mock.call_args.kwargs["left"] is left
+        assert mock.call_args.kwargs["extra"] == 1
+
+    def test_lifo_nesting(self):
+        reg = self._reg()
+        reg.left = "a"
+        with patch("bbsengine6.bottombar._render_bottombar"):
+            reg.push(left="b")
+            reg.push(left="c")
+            reg.pop()
+            assert reg.left == "b"
+            reg.pop()
+            assert reg.left == "a"
+
+    def test_pop_empty_returns_false_and_does_not_repaint(self):
+        reg = self._reg()
+        with patch("bbsengine6.bottombar._render_bottombar") as mock:
+            assert reg.pop() is False
+        assert mock.call_count == 0
+
+    def test_pop_repaints_with_restored_state(self):
+        reg = self._reg()
+        reg.left = "base"
+        with patch("bbsengine6.bottombar._render_bottombar") as mock:
+            reg.push(left="new")
+            mock.reset_mock()
+            reg.pop()
+        assert mock.call_count == 1
+        assert mock.call_args.kwargs["left"] == "base"
+
+    def test_pop_passes_registry_context(self):
+        reg = self._reg()
+        reg.set_context(args="A", pool="P")
+        with patch("bbsengine6.bottombar._render_bottombar") as mock:
+            reg.push()
+            reg.pop()
+        assert mock.call_args.kwargs["args"] == "A"
+        assert mock.call_args.kwargs["pool"] == "P"
+
+    def test_module_push_pop_route_to_contextvar_registry(self):
+        reg = self._reg()
+        reg.left = "ctx"
+        token = bottombar.set_active_registry(reg)
+        try:
+            with patch("bbsengine6.bottombar._render_bottombar"):
+                bottombar.push(left="x")
+                assert reg.left == "x"
+                assert bottombar.pop() is True
+                assert reg.left == "ctx"
+        finally:
+            bottombar.reset_active_registry(token)
+
+    def test_two_registries_have_independent_stacks(self):
+        a = FragmentRegistry(name="a")
+        b = FragmentRegistry(name="b")
+        with patch("bbsengine6.bottombar._render_bottombar"):
+            a.push(left="a1")
+            assert b.pop() is False
+            assert a.pop() is True

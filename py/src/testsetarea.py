@@ -1,7 +1,7 @@
 import argparse
 
 import bbsengine6 as bbsengine
-from bbsengine6 import io
+from bbsengine6 import bottombar, io
 
 
 def buildargs(args=None):
@@ -14,21 +14,18 @@ def buildargs(args=None):
 
 
 def main(args=None):
-    bbsengine.setarea("testsetarea first call", stack=True)
-    io.echo("testsetarea.100: areastack=%r" % (bbsengine.areastack), level="debug")
+    bottombar.push(left="testsetarea first call")
     io.inputboolean("continue? ", "Y")
-    bbsengine.setarea("testsetarea second call", stack=False)
-    io.echo("testsetarea.120: areastack=%r" % (bbsengine.areastack), level="debug")
+    bottombar.push(left="testsetarea second call")
     io.inputboolean("continue? ", "Y")
-    bbsengine.poparea()
+    bottombar.pop()
     io.echo(
-        "testsetarea.140: areastack=%r len=%d"
-        % (bbsengine.areastack, len(bbsengine.areastack)),
+        "testsetarea.140: pop done, left=%r" % (bottombar.default_registry().left),
         level="debug",
     )
 
     io.inputboolean("continue? ", "Y")
-    io.echo("testsetarea.160: areastack=%r" % (bbsengine.areastack), level="debug")
+    io.echo("testsetarea.160: done", level="debug")
 
 
 if __name__ == "__main__":

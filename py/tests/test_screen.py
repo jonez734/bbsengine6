@@ -23,7 +23,6 @@ from bbsengine6.io.screen import (
     unregister_bottombar_fragment,
     _render_bottombar_fragments,
     setbottombar,
-    bottombarstack,
 )
 
 
@@ -664,28 +663,6 @@ class TestThreadSafety:
         assert len(results) == 10
         for result in results:
             assert "from render" in result
-
-
-class TestBottombarstackUnaffected:
-    """Ensure existing bottombarstack is not broken."""
-
-    def test_bottombarstack_still_works(self):
-        """Test that popbottombar still works."""
-        bottombarstack.append("old item")
-
-        with patch("bbsengine6.io.screen.updatebottombar") as mock_update:
-            screen.popbottombar()
-            call_args = mock_update.call_args[0][0]
-            assert "old item" in call_args
-
-    def test_bottombarstack_pop(self):
-        """Test pop from bottombarstack."""
-        bottombarstack.append("first")
-        bottombarstack.append("second")
-
-        popped = bottombarstack.pop()
-        assert popped == "second"
-        assert len(bottombarstack) == 1
 
 
 if __name__ == "__main__":

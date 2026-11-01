@@ -1,13 +1,13 @@
-from bbsengine6 import io, screen
+from bbsengine6 import io, bottombar
 
-screen.init()
+bottombar.init()
 
 for x in ("foo", "bar", "baz", "bing"):
-    screen.setbottombar(x, stack=True)
+    bottombar.push(left=x)
     io.inputboolean("continue? [Yn]: ")
 
 io.echo("blah")
 
 for x in ("foo", "bar", "baz", "bing"):
-    screen.poparea()
+    bottombar.pop()
     io.inputboolean("continue? [Yn]: ")

@@ -20,7 +20,6 @@ this module) keep working.
 | `updatebottombar` | live | no |
 | `setbottombar` | shim | yes |
 | `setarea` | shim, alias of `setbottombar` | yes |
-| `popbottombar` / `poparea` | live, see below | no |
 | `updateprogress` | live | no |
 | `get_notification_status` | shim | yes |
 | `clear_bottombar_fragments` | shim | yes |
@@ -72,15 +71,16 @@ It returns `True`. An exception from the bottom-bar code propagates.
 Alias for `setbottombar`. It emits the deprecation warning itself, then calls
 `setbottombar`.
 
-### `popbottombar()` / `poparea()` (live)
+### `push` / `pop` (moved to `bottombar`)
 
-Pops a string from `bottombarstack` and draws it as the bottom bar. If the stack is
-empty it does nothing.
+`popbottombar`, `poparea`, and `bottombarstack` are removed. Use `bbsengine6.bottombar`:
 
-**Nothing in the package pushes onto `bottombarstack`.** `setbottombar` does not save
-the previous bar. Verified: two `setbottombar` calls leave the stack empty, and
-`popbottombar()` then has no effect. The stack is a public list, so a caller may push
-onto it directly; no code in the repository does.
+- `bottombar.push(left=None, fragments=None)` saves the current left value and fragment
+  items as one frame, installs the new ones, and repaints.
+- `bottombar.pop(**kwargs) -> bool` restores the most recent frame and repaints. It
+  returns `False` and does not repaint if nothing was pushed.
+
+Frames hold the original values, so a callable `left` is called again on pop.
 
 ### `updateprogress(iteration, total, fill="#")` (live)
 
@@ -115,15 +115,12 @@ copies. In the source tree the cache is refreshed by the poll in `getch`, not by
 
 | Name | Description |
 |---|---|
-| `bottombarstack` | Public list read by `popbottombar`. Empty unless a caller appends to it. |
-| `_bottombarstack_lock` | Guards `bottombarstack`. |
 | `_default_registry` | The default `FragmentRegistry` from `bottombar.py`. |
 | `_bottombar_fragments`, `_bottombar_fragments_lock` | Aliases of the default registry's list and lock, kept for callers that read them. They are the default registry only, not the per-connection registry. |
 
 ## Known issues
 
-1. `popbottombar` has no producer in the package (see above). It is a no-op in practice.
-2. The shims are scheduled for removal ("will be removed in a future release"). Their
+1. The shims are scheduled for removal ("will be removed in a future release"). Their
    removal date is not set.
 
 Note: `init`, `updatebottombar`, and `updateprogress` use `{savecursor}`, which queries the

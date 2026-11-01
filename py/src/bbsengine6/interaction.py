@@ -56,8 +56,6 @@ class Session:
         self.getch_impl = "str"
         self.utf8_pending: collections.deque = collections.deque()
         self.bottombar_status = ""
-        # screen.py state: the stack of bottom-bar contents pushed by callers (popbottombar).
-        self.bottombarstack: list = []
         # subprocess_command.py: refuse to launch a full-screen program when TERM cannot
         # drive it. Off only for a session that knows better (for example, a test harness).
         self.subprocess_term_check = True

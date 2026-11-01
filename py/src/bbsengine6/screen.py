@@ -16,7 +16,6 @@ from .io.echo import echo, echo_traceback, rendered_length
 from .io import terminal
 from . import bottombar as _bottombar_mod
 
-import threading
 import warnings
 from typing import List
 
@@ -48,18 +47,6 @@ def _warn_shim_deprecated(name: str) -> None:
 _default_registry = _bottombar_mod.default_registry()
 _bottombar_fragments = _default_registry.items
 _bottombar_fragments_lock = _default_registry.lock
-
-# bottombarstack (the pushed-bar stack) lives on the current interaction; see _stack().
-# Its lock is process-wide, since it only guards list operations.
-_bottombarstack_lock = threading.Lock()
-
-
-def _stack() -> list:
-    """The bottom-bar stack of the current interaction."""
-    from .interaction import current_session
-
-    return current_session().bottombarstack
-
 
 # ------------------------
 # screen related functions
@@ -186,6 +173,7 @@ def setbottombar(left, right=None, **kwargs):
         left_buf = left
 
     registry = _bottombar_mod._resolve_registry()
+    registry.left = left
     if right is None:
         right_buf = registry.render(**kwargs) if len(registry) else ""
     elif callable(right) is True:
@@ -245,20 +233,6 @@ def clear_bottombar_fragments() -> None:
     _bottombar_mod.clear_bottombar_fragments()
 
 
-def popbottombar():
-    with _bottombarstack_lock:
-        stack = _stack()
-        if not stack:
-            return
-        buf = stack.pop()
-    if buf != "":
-        updatebottombar("{var:areacolor}%s{/all}" % buf)
-    return
-
-
-poparea = popbottombar
-
-
 def updateprogress(iteration, total, fill="#"):
     """Back-compat shim — renders a text-mode progress bar on the bottombar."""
     terminalwidth = terminal.width()
@@ -280,8 +254,6 @@ __all__ = [
     "updatebottombar",
     "setbottombar",
     "setarea",
-    "popbottombar",
-    "poparea",
     "get_notification_status",
     "updateprogress",
     "register_bottombar_fragment",
@@ -289,17 +261,3 @@ __all__ = [
     "clear_bottombar_fragments",
     "_render_bottombar_fragments",
 ]
-
-
-# ---------------------------------------------------------------------------
-# Per-interaction names: read through the current interaction (Phase 3).
-#
-# `bottombarstack` is served from the interaction, so `screen.bottombarstack` in
-# existing code and tests is the stack of the interaction in effect.
-# ---------------------------------------------------------------------------
-from .interaction import install_read_through as _install_read_through  # noqa: E402
-
-_install_read_through(
-    __name__,
-    {"bottombarstack": "bottombarstack"},
-)
