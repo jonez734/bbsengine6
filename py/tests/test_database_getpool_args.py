@@ -68,15 +68,17 @@ def _make_args(databasename="zoid6", host="localhost", port=5432, user=None, pas
 
 @pytest.fixture(autouse=True)
 def _reset_pool_cache(monkeypatch):
-    """Wipe the global pool cache and install a fake pool class so no
-    real DB connection is attempted."""
+    """Use an empty pool cache and a fake pool class, so no real DB connection is attempted.
+
+    The cache is isolated rather than reset: resetting would close the session's shared
+    pools, which other tests still hold.
+    """
     from bbsengine6 import database
 
-    database.reset_pool_cache()
     _FakePool.instances = []
     monkeypatch.setattr(database, "ConnectionPool", _FakePool)
-    yield
-    database.reset_pool_cache()
+    with database.isolated_pool_cache():
+        yield
     _FakePool.instances = []
 
 

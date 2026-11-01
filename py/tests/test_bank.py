@@ -35,10 +35,10 @@ def test_args():
 
 @pytest.fixture(scope="function")
 def test_pool(test_args):
-    """Create test pool for bank tests."""
-    pool = database.getpool(test_args, dbname=test_args.databasename)
-    yield pool
-    database.reset_pool_cache()
+    """Create test pool for bank tests, in an isolated cache so the shared pools stay open."""
+    with database.isolated_pool_cache():
+        pool = database.getpool(test_args, dbname=test_args.databasename)
+        yield pool
 
 
 @pytest.fixture(autouse=True)
