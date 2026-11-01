@@ -15,7 +15,6 @@ import fcntl
 import termios
 from argparse import Namespace
 
-###from .output import *
 from .echo import echo
 from .const import *
 
