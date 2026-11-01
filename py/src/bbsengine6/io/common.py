@@ -312,10 +312,14 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
                 row, col = map(int, match.groups())
                 start, end = match.span()
                 leftover = buffer[:start] + buffer[end:]
+                # Keys read alongside the reply were typed after anything already queued
+                # (drain_stream_to_queue ran first), so they go to the back, in order.
                 with _input_queue_lock:
-                    _queue().clear()
                     _queue().extend(leftover)
                 return (row, col)
+            # No reply: the bytes read are typed input. Keep them, after the queued keys.
+            with _input_queue_lock:
+                _queue().extend(buffer)
             raise TimeoutError(
                 f"DSR response not received in {timeout}s: {buffer!r}"
             )
