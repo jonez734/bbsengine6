@@ -83,17 +83,18 @@ def test_auth_login_gate_allows_credential_attempt(args):
     assert auth_access(args, "login", session=sysop, message=msg) is True
 
 
-def test_checkpassword_verifies_actual_setpassword_result(args, pool):
+def test_checkpassword_verifies_actual_setpassword_result(args, pool, create_test_users, test_users):
     """The full hot path:
 
     1. ``auth.access(op="login")`` — gate returns True.
     2. ``setpassword`` writes the password as a bcrypt hash.
     3. ``checkpassword`` verifies the plaintext against that hash.
 
-    Uses the *real* production functions, not mocks.
+    Uses the *real* production functions, not mocks. Writes only to the
+    ``test_{user}_1`` fixture member, never to a real account.
     """
     plaintext = "12345"
-    moniker = "jam"
+    moniker = test_users[0]
 
     # Gate passes.
     msg = {"type": "auth", "moniker": moniker, "password": plaintext}
@@ -140,52 +141,35 @@ def test_checkpassword_verifies_actual_setpassword_result(args, pool):
     )
 
 
-def test_checkpassword_rejects_legacy_md5_hash(args, pool):
-    """Existing rows in the live DB use a mix of hash algorithms:
+def test_checkpassword_rejects_wrong_and_empty_plaintext(args, pool, create_test_users, test_users):
+    """``checkpassword`` must reject a plaintext that does not match the stored hash.
 
-      * ``jam``           — ``$2$`` (bcrypt, written by the current
-                              ``setpassword`` path).
-      * ``__dealer__``    — ``$1$`` (legacy MD5, left over from older
-                              hashing code).
-
-    ``checkpassword`` must reject a plaintext that does not match the
-    stored hash regardless of which algorithm produced it. This is a
-    regression pin against any future change that would make
-    ``checkpassword`` too permissive (e.g. a substring match, a
-    ``LIKE '%plaintext%'`` leak, or a fallback that treats any
-    non-empty stored value as accepted).
+    The schema now allows only bcrypt hashes (``chk_member_password_bcrypt``, from
+    manage_password_format.sql), so a legacy ``$1$`` row cannot be stored. This test
+    pins the bcrypt rejection path and the schema rule. It writes only to a fixture
+    member and restores that member's password afterward.
     """
     import psycopg
-    with psycopg.connect(f"dbname={TEST_DBNAME}") as verify_conn:
-        with verify_conn.cursor() as cur:
-            cur.execute(
-                "select moniker, password from engine.__member "
-                "where moniker in ('jam', '__dealer__')"
-            )
-            rows = dict(cur.fetchall())
 
-    jam_hash = rows["jam"]
-    dealer_hash = rows["__dealer__"]
+    from bbsengine6 import util
 
-    assert jam_hash.startswith(("$2a$", "$2b$", "$2y$")), (
-        f"jam must hold a bcrypt hash (the current setpassword output); "
-        f"got prefix: {jam_hash[:3]!r}"
-    )
-    assert dealer_hash.startswith("$1$"), (
-        f"__dealer__ must hold a legacy MD5 hash; got prefix: "
-        f"{dealer_hash[:3]!r}"
-    )
+    moniker = test_users[1]
+    bcrypt_hash = util.encryptpassword("12345")
+    assert bcrypt_hash.startswith(("$2a$", "$2b$", "$2y$"))
 
-    assert (
-        libmember.checkpassword(args, "anything", "jam", pool=pool) is False
-    ), "no plaintext should match jam's bcrypt hash"
-    assert (
-        libmember.checkpassword(args, "anything", "__dealer__", pool=pool)
-        is False
-    ), "no plaintext should match __dealer__'s legacy MD5 hash"
-    assert (
-        libmember.checkpassword(args, "", "jam", pool=pool) is False
-    ), "empty plaintext must never match a real hash"
-    assert (
-        libmember.checkpassword(args, "", "__dealer__", pool=pool) is False
-    ), "empty plaintext must never match a real MD5 hash"
+    sql = "update engine.__member set password=%s where moniker=%s"
+    with psycopg.connect(f"dbname={TEST_DBNAME}") as conn:
+        with conn.cursor() as cur:
+            cur.execute("select password from engine.__member where moniker = %s", (moniker,))
+            before = cur.fetchone()[0]
+            cur.execute(sql, (bcrypt_hash, moniker))
+        conn.commit()
+
+    try:
+        assert libmember.checkpassword(args, "wrong", moniker, pool=pool) is False
+        assert libmember.checkpassword(args, "", moniker, pool=pool) is False
+    finally:
+        with psycopg.connect(f"dbname={TEST_DBNAME}") as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (before, moniker))
+            conn.commit()
