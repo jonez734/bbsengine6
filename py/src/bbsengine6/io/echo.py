@@ -111,7 +111,7 @@ _skin = {
     "menu.item.enabled": "{white}",
     "menu.item.disabled": "{darkgray}",
     "currentoptioncolor": "{bgwhite}{gray}",
-    "bottombarcolor": "{bgwhite}{black}",
+    "bottombarcolor": "{bggray}{white}",
     "promptcolor": "{/bgcolor}{lightgray}",
     "inputcolor": "{/bgcolor}{green}",
     "normalcolor": "{/bgcolor}{lightgray}",

@@ -54,3 +54,11 @@ def test_promptcolor_is_light_gray_on_the_default_background():
     skin = _echo_module()._skin
     assert skin["promptcolor"] == "{/bgcolor}{lightgray}"
     assert _echo_module()._default_runtime_vars()["promptcolor"] == "{/bgcolor}{lightgray}"
+
+
+def test_bottombarcolor_is_gray_background_not_white():
+    """The live skin (echo.py) overrides echovars.py. A white bottombarcolor in echo.py made the
+    default background white for every screen. The intended value is {bggray}{white}."""
+    skin = _echo_module()._skin
+    assert skin["bottombarcolor"] == "{bggray}{white}"
+    assert _echo_module()._default_runtime_vars()["bottombarcolor"] == "{bggray}{white}"
