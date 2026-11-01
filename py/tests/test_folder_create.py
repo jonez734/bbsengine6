@@ -57,8 +57,9 @@ def test_pool(test_args):
             """)
         conn.commit()
 
+    # The pool is the session-wide cached pool from database.getpool. Other tests hold it,
+    # so closing it here would break them. It stays open for the session.
     yield pool
-    pool.close()
 
 
 @pytest.fixture
