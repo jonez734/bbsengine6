@@ -370,7 +370,7 @@ lambda e: e.processed_key in ("KEY_UP", "KEY_DOWN")
 
 # By source
 lambda e: e.source_func == "inputstring"
-lambda e: e.source_func in ("inputstring", "getstr")
+lambda e: e.source_func in ("inputstring",)
 
 # Combinations
 lambda e: (e.source_func == "inputstring" and 

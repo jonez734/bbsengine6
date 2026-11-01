@@ -144,7 +144,7 @@ The package lives at `py/src/bbsengine6/`.
 | `channel/`                    | Channel WebSocket handlers                         |
 | `console/`                    | Admin CLI: `createdatabase`, `member`, `memberapproval`, `showpgrole`, `session`, interactive menu |
 | `ed/`                         | Terminal visual editor (`common/{buffer,fileops,keys,state,ui}.py`, `line/`, `visual/`) |
-| `io/`                         | TUI primitives: `echo`, `getch`, `getstr`, `input`, `inputstring`, `inputchoice`, `inputboolean`, `inputinteger`, `terminal`, `screen`, `palette`, `keymap`, `common`, `const`, `lib`, `output`, `util` |
+| `io/`                         | TUI primitives: `echo`, `getch`, `input`, `inputstring`, `inputchoice`, `inputboolean`, `inputinteger`, `terminal`, `screen`, `palette`, `keymap`, `common`, `const`, `lib`, `output`, `util` |
 | `member/`                     | `lib`, `api/handler` — member subsystem            |
 | `net/`                        | `address`, `frame_address`, `frame_types`, `packet`, `packet_types`, `packet_codec`, `crypto`, `transport`, `tcp`, `udp`, `socket`, `router`, `defaultrouter`, `integration`, `registry` |
 | `password_cipher/`            | AES-256-GCM strategy pattern (`manager`, `storage`, `config`, `cipher`); ciphers `aes256gcm`, `plaintext`; storage `postgresql` |

@@ -161,11 +161,11 @@ Status key: `[x]` done in the tree and exercised in a pty or the test suite;
 - [x] Specs moved to `handbook/specs/io/` (`git mv`), with an index. Legacy modules
   `input.py`, `output.py`, `lib.py` and `echovars.py` are marked deprecated and left alone.
 - [x] Each live module's spec checked against its code and corrected: getch, inputstring,
-  inputstring enhancements, inputboolean, inputinteger, inputchoice, getstr, inputcompleter
+  inputstring enhancements, inputboolean, inputinteger, inputchoice, inputcompleter
   (new), echo, echo_commands, palette, terminal, common, const, keymap, util, events,
   echovars, best practices.
 - [x] Defects found while checking are recorded in the specs, not fixed: `inputcompleter`
-  import error; `getstr` insert toggle tests `KEY_IC`; `inputchoice` return annotation
+  import error; (`getstr` removed, its insert-toggle defect no longer applies); `inputchoice` return annotation
   promises a list (`inputinteger`); `{settitle}` does not exist; events do not fire during
   `inputstring()`.
 - [x] Handbook index links the io folder; TODO and comment references point at the new paths.

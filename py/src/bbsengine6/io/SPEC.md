@@ -37,7 +37,6 @@ io/
 ├── lib.py                   # Library utilities
 ├── screen.py                # Screen utilities
 ├── getch.py                 # Character input
-├── getstr.py                # String input
 ├── input.py                 # [DEPRECATED] Input handling - use inputstring.py
 ├── inputstring.py           # String input
 ├── inputinteger.py          # Integer input
@@ -171,15 +170,6 @@ Character input (non-blocking):
 | `getch` | `() -> str` | Get single character |
 | `getch_nonblocking` | `() -> Optional[str]` | Non-blocking getch |
 
-### getstr.py
-
-String input with editing:
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `getstr` | `(prompt='', default='', history=None)` | Get string with editing |
-| `getline` | `(prompt='')` | Simple line input |
-
 ### input.py
 
 > **DEPRECATED:** Use `inputstring.py` instead. This module is not used.
@@ -248,13 +238,10 @@ io.echo("{bgblue}{white}Blue background{/all}")
 ### Input
 
 ```python
-from asimov.io import getch, getstr
+from asimov.io import getch
 
 # Single character
 c = getch()
-
-# String input
-name = getstr("Enter name: ")
 ```
 
 ### Terminal Size
