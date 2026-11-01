@@ -77,6 +77,26 @@ class FragmentRegistry:
 | `clear_bottombar_fragments()`     |                                                          | (same routing)                                                         |
 | `setbottombar(args, buf, **kwargs)` | `(Any, str) -> bool`                                   | Central shim: stash context, render with `buf` on the left            |
 | `init(args=None, topmargin=1, bottommargin=1)` | `(Any, int, int) -> None`                   | Set the scroll region so the bar stays on the last line. Call once per screen, before the first `setbottombar`. Replaces `bbsengine6.screen.init` (deprecated shim) |
+| `push(left=None, fragments=None)` | `(Any, Iterable) -> None`                        | Save left and fragments as one frame, install new values (`None` keeps, `[]` clears), repaint |
+| `pop(**kwargs)`                   | `(**kwargs) -> bool`                             | Restore the top frame and repaint. Returns `False` and does not repaint if empty |
+
+### Push and pop
+
+`push` and `pop` save and restore the bar state of the active registry (or the
+ContextVar-routed one in BED):
+
+```python
+bottombar.push(left="Lobby", fragments=["F1: help"])  # save, install, repaint
+...
+bottombar.pop()                                       # restore previous, repaint
+```
+
+- Frames store the original values: the `left` str or callable, and a copy of the
+  fragment items. Rendered output is not stored.
+- A callable `left` is called again on pop, so its value is fresh.
+- `push()` with no arguments saves a frame and repaints the current values.
+- Stacks are per registry, guarded by the registry lock.
+- `popbottombar` / `poparea` / `bottombarstack` are removed; use these instead.
 
 `setbottombar` is the drop-in replacement for the old
 `bbsengine6.io.screen.setbottombar`. It accepts the same args and

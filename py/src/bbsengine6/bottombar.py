@@ -168,6 +168,12 @@ class FragmentRegistry:
         self.args: Any = None
         self.player: Any = None
         self.pool: Any = None
+        # The original left value (str or callable) last drawn on this bar. Stored
+        # as given, not as rendered output, so pop() can call a callable again.
+        self.left: Any = None
+        # Saved (left, items) frames for push()/pop(). Each frame holds the original
+        # values, not rendered output.
+        self._stack: List[tuple] = []
 
     def __contains__(self, item: FragmentItem) -> bool:
         return item in self.items
@@ -201,6 +207,53 @@ class FragmentRegistry:
         """Remove every item from this registry."""
         with self.lock:
             self.items.clear()
+
+    def push(
+        self,
+        left: Any = None,
+        fragments: Optional[Iterable[FragmentItem]] = None,
+        **kwargs,
+    ) -> None:
+        """Save the current bar state, install new values, and repaint.
+
+        Saves the original `left` and a copy of the fragment items as one frame.
+        `left=None` keeps the current left value. `fragments=None` keeps the current
+        fragments; an empty iterable clears them. Repaints the bar afterwards.
+        """
+        with self.lock:
+            self._stack.append((self.left, list(self.items)))
+            if left is not None:
+                self.left = left
+            if fragments is not None:
+                self.items[:] = list(fragments)
+            current_left = self.left
+        _render_bottombar(self, left=current_left, **self._merged(kwargs))
+
+    def pop(self, **kwargs) -> bool:
+        """Restore the most recent frame and repaint. Returns False if the stack is empty.
+
+        A callable saved as `left` is called again on repaint. Registry context
+        (args/player/pool) is passed to callables, with kwargs taking precedence.
+        """
+        with self.lock:
+            if not self._stack:
+                return False
+            self.left, saved_items = self._stack.pop()
+            self.items[:] = saved_items
+            current_left = self.left
+        _render_bottombar(self, left=current_left, **self._merged(kwargs))
+        return True
+
+    def _merged(self, kwargs: dict) -> dict:
+        """Registry context merged under kwargs (kwargs win)."""
+        merged = dict(kwargs)
+        if self.args is not None and "args" not in merged:
+            merged["args"] = self.args
+        if self.player is not None and "player" not in merged:
+            merged["player"] = self.player
+        if self.pool is not None and "pool" not in merged:
+            merged["pool"] = self.pool
+        return merged
 
     def set_context(
         self,
@@ -438,7 +491,25 @@ def setbottombar(args: Any, buf: str, **kwargs) -> bool:
     pool = kwargs.get("pool", None)
     registry.set_context(args=args, player=player, pool=pool)
 
+    registry.left = buf
     return _render_bottombar(registry, left=buf, right=None, **kwargs)
+
+
+def push(left: Any = None, fragments: Optional[Iterable[FragmentItem]] = None, **kwargs) -> None:
+    """Push the active registry's bar state and install new values. Repaints.
+
+    See FragmentRegistry.push. Routes through the ContextVar if one is set.
+    """
+    _resolve_registry().push(left=left, fragments=fragments, **kwargs)
+
+
+def pop(**kwargs) -> bool:
+    """Restore the active registry's most recent pushed state. Repaints.
+
+    Returns False (and does not repaint) if nothing has been pushed.
+    See FragmentRegistry.pop. Routes through the ContextVar if one is set.
+    """
+    return _resolve_registry().pop(**kwargs)
 
 
 def _render_bottombar(
@@ -507,4 +578,6 @@ __all__ = [
     "unregister_bottombar_fragment",
     "clear_bottombar_fragments",
     "setbottombar",
+    "push",
+    "pop",
 ]
