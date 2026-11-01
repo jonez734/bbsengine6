@@ -520,11 +520,13 @@ def get_unread_count(
         args_obj = args if args is not None else _make_args(_resolve_db(database))
 
     try:
-        result = dal_messages.count_unread_for_recipient(args_obj, moniker)
+        # Use the caller's pool when given, so no second pool is opened for the same database.
+        result = dal_messages.count_unread_for_recipient(args_obj, moniker, pool=pool)
         if result == 0:
             from bbsengine6.message.dal._pool import table_exists
 
-            with getpool(args_obj).connection() as c, c.cursor() as cur:
+            probe_pool = pool if pool is not None else getpool(args_obj)
+            with probe_pool.connection() as c, c.cursor() as cur:
                 if not table_exists(cur, "engine", "__message_recipient"):
                     return _missing_table_warning()
         return result

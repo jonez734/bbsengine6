@@ -347,6 +347,7 @@ def count_unread_for_recipient(
     recipient_moniker: str,
     *,
     conn: Any = None,
+    pool: Any = None,
 ) -> int:
     """Count unread rows for a recipient.
 
@@ -370,7 +371,7 @@ def count_unread_for_recipient(
     if conn is not None:
         return _work(conn)
 
-    with _connect_ctx(args, pool=None) as conn:
+    with _connect_ctx(args, pool=pool) as conn:
         return _work(conn)
 
 
