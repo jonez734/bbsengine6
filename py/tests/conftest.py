@@ -19,7 +19,10 @@ Function-scoped fixtures (autouse, integration only):
 import atexit
 import os
 
-os.environ["BBSENGINE6_DBNAME"] = "zoid6"
+# Integration tests run against the test database, never the live zoid6 database.
+# BBSENGINE6_TEST_DBNAME (or BBSENGINE6_TEST_DB) overrides the name (default: zoid6test).
+TEST_DBNAME = os.environ.get("BBSENGINE6_TEST_DBNAME") or os.environ.get("BBSENGINE6_TEST_DB", "zoid6test")
+os.environ["BBSENGINE6_DBNAME"] = TEST_DBNAME
 
 import pytest
 import psycopg
@@ -83,7 +86,7 @@ def db_connection(request):
         pytest.skip("unit-only session: no database required")
 
     user = getpass.getuser()
-    dbname = os.environ.get("BBSENGINE6_TEST_DB", "zoid6test")
+    dbname = TEST_DBNAME
     logger.info(f"Connecting to {dbname} database as {user}...")
     conn = psycopg.connect(f"dbname={dbname} user={user}")
     logger.info(f"✓ Connected to {dbname}")
@@ -103,7 +106,7 @@ def pool(db_connection, schema_init, request):
     """
     from bbsengine6 import database
 
-    pool_obj = database.getpool(None, dbname="zoid6", user=getpass.getuser())
+    pool_obj = database.getpool(None, dbname=TEST_DBNAME, user=getpass.getuser())
 
     def close_pool():
         try:

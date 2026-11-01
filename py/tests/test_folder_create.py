@@ -13,7 +13,7 @@ def test_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", action="store_true", default=False)
     defaults = {
-        "databasename": os.environ.get("BBSENGINE6_TEST_DBNAME", "zoid6"),
+        "databasename": os.environ.get("BBSENGINE6_TEST_DBNAME", "zoid6test"),
         "databasehost": os.environ.get("BBSENGINE6_TEST_DBHOST", "/var/run/postgresql"),
         "databaseport": int(os.environ.get("BBSENGINE6_TEST_DBPORT", "5432")),
         "databaseuser": os.environ.get("BBSENGINE6_TEST_DBUSER", "opencode"),

@@ -1,7 +1,7 @@
 """
 End-to-end test for the auth -> checkpassword hot path.
 
-Exercises the *real* code (no mocks) against the live zoid6 database:
+Exercises the *real* code (no mocks) against the test database (BBSENGINE6_TEST_DB, default zoid6test):
 
   1. ``bbsengine6.auth.access(args, "login", session=..., message=...)``
      — the policy gate that the bed WS handler routes through before
@@ -29,6 +29,7 @@ hash is stored correctly and verifies on retrieval.
 from __future__ import annotations
 
 import getpass
+import os
 
 import pytest
 
@@ -39,7 +40,10 @@ from bbsengine6.auth import access as auth_access
 pytestmark = pytest.mark.requires_db
 
 
-def _make_args(databasename: str = "zoid6") -> "argparse.Namespace":
+TEST_DBNAME = os.environ.get("BBSENGINE6_TEST_DBNAME") or os.environ.get("BBSENGINE6_TEST_DB", "zoid6test")
+
+
+def _make_args(databasename: str = TEST_DBNAME) -> "argparse.Namespace":
     """Build a minimal ``argparse.Namespace`` that matches the conftest pool."""
     import argparse
     from bbsengine6 import database
@@ -103,7 +107,7 @@ def test_checkpassword_verifies_actual_setpassword_result(args, pool):
     # Verify the row was actually written as a bcrypt hash (not
     # plaintext) by reading it back via a fresh cursor.
     import psycopg
-    with psycopg.connect("dbname=zoid6") as verify_conn:
+    with psycopg.connect(f"dbname={TEST_DBNAME}") as verify_conn:
         with verify_conn.cursor() as cur:
             cur.execute(
                 "select password from engine.__member where moniker = %s",
@@ -152,7 +156,7 @@ def test_checkpassword_rejects_legacy_md5_hash(args, pool):
     non-empty stored value as accepted).
     """
     import psycopg
-    with psycopg.connect("dbname=zoid6") as verify_conn:
+    with psycopg.connect(f"dbname={TEST_DBNAME}") as verify_conn:
         with verify_conn.cursor() as cur:
             cur.execute(
                 "select moniker, password from engine.__member "
