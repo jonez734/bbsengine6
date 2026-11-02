@@ -1,11 +1,11 @@
 """
-POSIX ACL helpers for the zoid6 account's install paths.
+Generic POSIX ACL helpers. No paths or groups are fixed here: every caller
+names the path, group and permissions it wants.
 
 Public surface:
 
-  acl_plan() -> list[AclEntry]
-      The ACL entries zoid6 needs: traverse on /home/zoid6, and group write
-      (plus default ACLs) on the venv and dist-wheels. Pure data; no I/O.
+  AclEntry(path, group, perms, default=False)
+      One grant. A plan is a list of these, built by the caller.
 
   grant_acl(path, group, perms, default=False) -> str
       Runs ``setfacl -m`` (``-d`` for a default ACL) and returns the resulting
@@ -32,12 +32,6 @@ import subprocess
 from dataclasses import dataclass
 from typing import Sequence
 
-ZOID6_HOME = "/home/zoid6"
-ZOID6_VENV = "/home/zoid6/venv"
-ZOID6_DIST_WHEELS = "/home/zoid6/dist-wheels"
-ACL_GROUP = "opencode"
-
-
 @dataclass(frozen=True)
 class AclEntry:
     """One ACL to grant: ``group`` gets ``perms`` on ``path``.
@@ -51,21 +45,22 @@ class AclEntry:
     default: bool = False
 
 
-def acl_plan(venv: str = ZOID6_VENV, dist_wheels: str = ZOID6_DIST_WHEELS) -> list[AclEntry]:
-    """The ACL entries for the zoid6 account, in the order they are applied.
+def apply_plan(entries: Sequence[AclEntry]) -> None:
+    """Grant every entry in ``entries``, in order.
 
-    ``/home/zoid6`` only needs traverse (``x``) so the group can reach the
-    venv and dist-wheels without listing the rest of the home directory.
-    ``venv`` and ``dist_wheels`` default to the standard paths; zoid6's
-    ``--prefix`` passes its own venv.
+    Refuses before the first setfacl if any path is missing, so a refusal
+    changes nothing. Raises FileNotFoundError or RuntimeError.
     """
-    return [
-        AclEntry(ZOID6_HOME, ACL_GROUP, "x"),
-        AclEntry(venv, ACL_GROUP, "rwX"),
-        AclEntry(venv, ACL_GROUP, "rwX", default=True),
-        AclEntry(dist_wheels, ACL_GROUP, "rwX"),
-        AclEntry(dist_wheels, ACL_GROUP, "rwX", default=True),
-    ]
+    missing = sorted({e.path for e in entries if not os.path.exists(e.path)})
+    if missing:
+        raise FileNotFoundError(f"apply_plan: missing path(s): {', '.join(missing)}")
+    for entry in entries:
+        grant_acl(entry.path, entry.group, entry.perms, default=entry.default)
+
+
+def check_plan(entries: Sequence[AclEntry]) -> list[tuple[AclEntry, bool]]:
+    """Read-only. Each entry with whether its effective permission is present."""
+    return [(e, check_acl(e.path, e.group, e.perms)) for e in entries]
 
 
 def _require_tool(name: str) -> str:

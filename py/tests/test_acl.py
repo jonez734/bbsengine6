@@ -114,33 +114,31 @@ def test_check_acl_getfacl_failure_is_false(tmp_path, monkeypatch):
     assert acl.check_acl(str(tmp_path), "opencode", "x") is False
 
 
-def test_acl_plan_matches_expected_entries():
-    plan = acl.acl_plan()
-    assert plan == [
-        acl.AclEntry("/home/zoid6", "opencode", "x"),
-        acl.AclEntry("/home/zoid6/venv", "opencode", "rwX"),
-        acl.AclEntry("/home/zoid6/venv", "opencode", "rwX", default=True),
-        acl.AclEntry("/home/zoid6/dist-wheels", "opencode", "rwX"),
-        acl.AclEntry("/home/zoid6/dist-wheels", "opencode", "rwX", default=True),
+def test_apply_plan_refuses_missing_path_before_any_grant(tmp_path, monkeypatch):
+    """A later missing path refuses before an earlier path is granted."""
+    grant = []
+    monkeypatch.setattr(acl, "grant_acl", lambda *a, **k: grant.append(a))
+    plan = [
+        acl.AclEntry(str(tmp_path), "g", "x"),
+        acl.AclEntry(str(tmp_path / "missing"), "g", "x"),
     ]
+    with pytest.raises(FileNotFoundError, match="missing"):
+        acl.apply_plan(plan)
+    assert grant == []
 
 
-def test_acl_plan_grants_only_traverse_on_home():
-    home = [e for e in acl.acl_plan() if e.path == "/home/zoid6"]
-    assert home == [acl.AclEntry("/home/zoid6", "opencode", "x")]
+def test_apply_plan_grants_each_entry_in_order(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(acl, "grant_acl", lambda path, group, perms, default=False: calls.append((path, group, perms, default)))
+    plan = [
+        acl.AclEntry(str(tmp_path), "g1", "x"),
+        acl.AclEntry(str(tmp_path), "g2", "rwX", default=True),
+    ]
+    acl.apply_plan(plan)
+    assert calls == [(str(tmp_path), "g1", "x", False), (str(tmp_path), "g2", "rwX", True)]
 
 
-def test_acl_plan_has_no_zoid6_group_grant():
-    """Grants go to the opencode group only, never to zoid6 (see plan)."""
-    assert all(e.group == "opencode" for e in acl.acl_plan())
-
-
-def test_acl_plan_honors_a_custom_venv_and_dist_wheels():
-    plan = acl.acl_plan(venv="/srv/z/venv", dist_wheels="/srv/z/dist")
-    paths = {e.path for e in plan}
-    assert paths == {"/home/zoid6", "/srv/z/venv", "/srv/z/dist"}
-    assert acl.AclEntry("/srv/z/venv", "opencode", "rwX", default=True) in plan
-
-
-def test_acl_plan_defaults_are_the_standard_paths():
-    assert acl.acl_plan() == acl.acl_plan(venv=acl.ZOID6_VENV, dist_wheels=acl.ZOID6_DIST_WHEELS)
+def test_check_plan_pairs_each_entry_with_its_result(tmp_path, monkeypatch):
+    monkeypatch.setattr(acl, "check_acl", lambda path, group, want: path.endswith("ok"))
+    plan = [acl.AclEntry("/x/ok", "g", "x"), acl.AclEntry("/x/no", "g", "x")]
+    assert acl.check_plan(plan) == [(plan[0], True), (plan[1], False)]
