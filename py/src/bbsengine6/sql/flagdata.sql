@@ -7,6 +7,7 @@ insert into engine.member_flag(name, defaultvalue, description) values ('ASIMOV'
 insert into engine.member_flag(name, defaultvalue, description) values ('NOCALUMNI', 'f', 'NOC Alumni');
 insert into engine.member_flag(name, defaultvalue, description) values ('EMAILVERIFIED', 'f', 'E-Mail Verified');
 insert into engine.member_flag(name, defaultvalue, description) values ('APPROVED', 'f', 'Account Approved');
+insert into engine.member_flag(name, defaultvalue, description) values ('JARGON', 'f', 'May create and update jargon entries');
 
 --insert into engine.member_flag(name, defaultvalue, description) values ('DRAFT',  'f', 'Draft');
 --insert into engine.member_flag(name, defaultvalue, description) values ('FROZEN', 'f', 'Frozen');
