@@ -439,16 +439,29 @@ def _create_registry() -> tuple[
 
 
 # Convenience aliases matching the old function names
-def register_module(
+def register(
     name: str, module_path: str, version: str, apis: dict[str, Callable]
 ) -> None:
     """Register a module with its API. Thread-safe."""
     _register_module(name, module_path, version, apis)
 
 
-def unregister_module(name: str) -> None:
+def unregister(name: str) -> None:
     """Remove module registration. Thread-safe."""
     _unregister_module(name)
+
+
+# Thin aliases kept for existing callers. New code uses register() and unregister().
+def register_module(
+    name: str, module_path: str, version: str, apis: dict[str, Callable]
+) -> None:
+    """Alias of register(). Kept for existing callers."""
+    register(name, module_path, version, apis)
+
+
+def unregister_module(name: str) -> None:
+    """Alias of unregister(). Kept for existing callers."""
+    unregister(name)
 
 
 def is_module_registered(name: str) -> bool:

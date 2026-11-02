@@ -24,6 +24,8 @@ from . import menu_next
 from .menu_next import MenuOption, visible_options
 from .registry import Registry
 from .module import (
+    register,
+    unregister,
     register_module,
     unregister_module,
     is_module_registered,
@@ -37,6 +39,8 @@ from .module import (
 
 __all__ = [
     "screen",
+    "register",
+    "unregister",
     "register_module",
     "unregister_module",
     "is_module_registered",
