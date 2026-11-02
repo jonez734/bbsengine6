@@ -14,3 +14,8 @@ skin/css/*.css
 **/skin/css/*.css
 
 *.egg-info.stale.*/
+
+# build version stamp (rewritten by every build; not tracked)
+_version.py
+# captures: test-run logs, local only
+captures/
