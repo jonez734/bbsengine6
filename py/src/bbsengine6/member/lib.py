@@ -13,6 +13,26 @@ from bbsengine6 import bank, database, io, password, util
 
 _threadlocal = threading.local()
 
+# Time zone a member gets when none is set. The host sets it from its config ("tz" in bed.json or
+# zoid6.json) through configure_default_tz(); America/New_York is used when the host sets nothing.
+_DEFAULT_TZ = "America/New_York"
+
+
+def configure_default_tz(tz: str | None) -> None:
+    """Set the default time zone for members. ``None`` keeps the current value."""
+    global _DEFAULT_TZ
+    if tz is None:
+        return
+    if not isinstance(tz, str) or not tz.strip():
+        raise ValueError("tz must be a non-empty string")
+    _DEFAULT_TZ = tz.strip()
+
+
+def default_tz() -> str:
+    """The configured default member time zone. Read through this function, not a copied name:
+    ``member/__init__`` re-exports with ``import *``, which copies values and would go stale."""
+    return _DEFAULT_TZ
+
 
 # Flat-form monikers reserved for system use.
 #
@@ -300,6 +320,8 @@ def build(args, row={}, **kwargs):
         "ui": [
             "term",
         ],
+        # A member with no zone stored gets the configured default when edited.
+        "tz": default_tz(),
     }
 
     member = {}

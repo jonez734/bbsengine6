@@ -198,6 +198,13 @@ def render_member(args, **kwargs):
         f"  {{var:optioncolor}}[D]{{var:labelcolor}} Data role:{{var:valuecolor}} {psqlrole or '(none)'}"
     )
 
+    # Time zone: the stored value, or the configured default when none is stored (shown as such).
+    tz = member.get("tz")
+    tz_shown = tz if tz else f"{libmember.default_tz()} (default)"
+    io.echo(
+        f"  {{var:optioncolor}}[T]{{var:labelcolor}} Time zone:{{var:valuecolor}} {tz_shown}"
+    )
+
 
 def _load_psql(conn, m: dict) -> None:
     """Put the member's data role into the edit dict (the loginid is the OS login).
@@ -227,6 +234,28 @@ def _stored_psqlrole(conn, moniker: str):
     if row is None:
         return None
     return row["rolname"] if isinstance(row, dict) else row[0]
+
+
+def _ask_tz_menu(stored, *, conn):
+    """[T] menu option: ask for a time zone name and check Postgres knows it. Writes nothing.
+
+    A blank answer clears the stored zone, so the member uses the configured default. A name that
+    Postgres does not list is refused, and the stored value is kept.
+    """
+    shown = stored or f"{libmember.default_tz()} (default)"
+    answer = io.inputstring(
+        f"{{var:promptcolor}}time zone (blank for default, currently {shown}): {{var:inputcolor}}",
+        "",
+    )
+    answer = (answer or "").strip()
+    if answer == "":
+        return None
+    with database.cursor(conn=conn) as cur:
+        cur.execute("select 1 from pg_timezone_names where name = %s", (answer,))
+        if cur.fetchone() is None:
+            io.echo(f"{answer!r} is not a time zone name the database knows; keeping {shown}.", level="error")
+            return stored
+    return answer
 
 
 def _ask_psqlrole_menu(args, moniker: str, stored, *, conn):
@@ -274,8 +303,8 @@ def _edit(args, mode, member, **kwargs):
     while not done:
         render_member(args, member=member, _member=_member)
         ch = io.inputchoice(
-            f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFDURQX]{{var:promptcolor}}: {{var:inputcolor}}",
-            "LMECPFDURQX",
+            f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFDTURQX]{{var:promptcolor}}: {{var:inputcolor}}",
+            "LMECPFDTURQX",
             "",
             help=render_member,
             member=member,
@@ -338,6 +367,11 @@ def _edit(args, mode, member, **kwargs):
             # Alerts not yet implemented; the previous console/alert.py was
             # removed because it referenced undefined names. No DB or UI
             # action here; just acknowledge the choice.
+        elif ch == "T":
+            io.echo("Time zone")
+            member["tz"] = _ask_tz_menu(
+                member.get("tz"), conn=conn
+            )
         elif ch == "R":
             io.echo("Refcode")
             refcode = io.inputstring(
