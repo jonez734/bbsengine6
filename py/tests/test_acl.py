@@ -133,3 +133,14 @@ def test_acl_plan_grants_only_traverse_on_home():
 def test_acl_plan_has_no_zoid6_group_grant():
     """Grants go to the opencode group only, never to zoid6 (see plan)."""
     assert all(e.group == "opencode" for e in acl.acl_plan())
+
+
+def test_acl_plan_honors_a_custom_venv_and_dist_wheels():
+    plan = acl.acl_plan(venv="/srv/z/venv", dist_wheels="/srv/z/dist")
+    paths = {e.path for e in plan}
+    assert paths == {"/home/zoid6", "/srv/z/venv", "/srv/z/dist"}
+    assert acl.AclEntry("/srv/z/venv", "opencode", "rwX", default=True) in plan
+
+
+def test_acl_plan_defaults_are_the_standard_paths():
+    assert acl.acl_plan() == acl.acl_plan(venv=acl.ZOID6_VENV, dist_wheels=acl.ZOID6_DIST_WHEELS)

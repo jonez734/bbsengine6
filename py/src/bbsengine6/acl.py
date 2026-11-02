@@ -51,18 +51,20 @@ class AclEntry:
     default: bool = False
 
 
-def acl_plan() -> list[AclEntry]:
+def acl_plan(venv: str = ZOID6_VENV, dist_wheels: str = ZOID6_DIST_WHEELS) -> list[AclEntry]:
     """The ACL entries for the zoid6 account, in the order they are applied.
 
     ``/home/zoid6`` only needs traverse (``x``) so the group can reach the
     venv and dist-wheels without listing the rest of the home directory.
+    ``venv`` and ``dist_wheels`` default to the standard paths; zoid6's
+    ``--prefix`` passes its own venv.
     """
     return [
         AclEntry(ZOID6_HOME, ACL_GROUP, "x"),
-        AclEntry(ZOID6_VENV, ACL_GROUP, "rwX"),
-        AclEntry(ZOID6_VENV, ACL_GROUP, "rwX", default=True),
-        AclEntry(ZOID6_DIST_WHEELS, ACL_GROUP, "rwX"),
-        AclEntry(ZOID6_DIST_WHEELS, ACL_GROUP, "rwX", default=True),
+        AclEntry(venv, ACL_GROUP, "rwX"),
+        AclEntry(venv, ACL_GROUP, "rwX", default=True),
+        AclEntry(dist_wheels, ACL_GROUP, "rwX"),
+        AclEntry(dist_wheels, ACL_GROUP, "rwX", default=True),
     ]
 
 
