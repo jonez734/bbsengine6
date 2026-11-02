@@ -794,18 +794,6 @@ def issysop(args, moniker: str | None = None, **kwargs) -> bool | None:
     return checkflag(args, "sysop", moniker=moniker, **kwargs)
 
 
-def can_write_jargon(args, moniker: str | None = None, **kwargs) -> bool:
-    """True when the member may create or update jargon entries.
-
-    A member may write if they hold the JARGON flag, or if they are a sysop (the sysop is always
-    allowed). Returns False when the member is unknown or the check cannot be made, so an unknown
-    caller is refused rather than let through.
-    """
-    if issysop(args, moniker=moniker, **kwargs) is True:
-        return True
-    return checkflag(args, "JARGON", moniker=moniker, **kwargs) is True
-
-
 def getflags(args, moniker=None, **kwargs):
     io.echo(f"bbsengine.member.getflags.240: {moniker=}", level="debug")
 
