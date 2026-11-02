@@ -9,6 +9,7 @@ from collections import namedtuple
 import psycopg
 
 from bbsengine6 import bank, database, io, password, util
+from bbsengine6.redact import redact
 
 
 _threadlocal = threading.local()
@@ -342,7 +343,7 @@ def build(args, row={}, **kwargs):
         else:
             member[k] = default_values[k]
 
-    io.echo(f"bbsengine6.member.build.100: {member=}", level="debug")
+    io.echo(f"bbsengine6.member.build.100: member={redact(member)}", level="debug")
     return member
 
 
@@ -668,7 +669,7 @@ def getbymoniker(
         if cur.rowcount == 0:
             return None
         rec = cur.fetchone()
-        io.echo(f"bbsengine.member.getbymoniker.120: {rec=}", level="debug")
+        io.echo(f"bbsengine.member.getbymoniker.120: rec={redact(rec)}", level="debug")
         return build(args, rec, **kwargs)
 
     if moniker is None:
@@ -1735,7 +1736,7 @@ def insert(args, member, **kwargs):
         del cols["password"]
         io.echo(f"bbsengine6.insert.300: removed 'password' from member (set via setpassword)")
 
-    io.echo(f"bbsengine6.member.insert.100: {member=}", level="debug")
+    io.echo(f"bbsengine6.member.insert.100: member={redact(member)}", level="debug")
 
     try:
         # Insert member record (commit=False to keep in same transaction)

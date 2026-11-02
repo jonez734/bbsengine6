@@ -11,6 +11,8 @@ from typing import Any, Generator, Iterator, Literal
 import argparse
 
 from psycopg.rows import dict_row
+
+from bbsengine6.redact import redact
 import psycopg
 import psycopg.sql
 
@@ -601,7 +603,7 @@ def transaction(conn: Any, **kwargs: Any) -> Any:
     Returns:
       Transaction context manager
     """
-    io.echo(f"database.transaction.100: {kwargs=}", level="debug")
+    io.echo(f"database.transaction.100: kwargs={redact(kwargs)}", level="debug")
     return conn.transaction()
 
 
