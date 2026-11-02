@@ -1,3 +1,4 @@
+import json
 import os
 import psycopg
 
@@ -156,6 +157,31 @@ def _select_stage_one_pool(
     return target_pool_factory()
 
 
+def _report_objects_status(args, pool) -> None:
+    """Report bbsengine6's object status from its shipped manifest. Read-only.
+
+    Informational: a partial or not-installed status is printed, not fatal, so
+    startup (which creates these objects) keeps its existing behavior. zoid6's
+    install is the step that refuses when bbsengine6 is not installed.
+    """
+    from importlib import resources
+
+    from bbsengine6.backend import objects
+
+    try:
+        text = resources.files("bbsengine6").joinpath("sql/objects.json").read_text(encoding="utf-8")
+        manifest = objects.load_manifest(json.loads(text))
+        with database.connect(args, pool=pool) as conn:
+            report = objects.check_objects(args, manifest, conn=conn)
+    except Exception as exc:  # noqa: BLE001 - reporting must never stop startup
+        io.echo(f"bbsengine6 object status unavailable: {exc}", level="error")
+        return
+    level = "ok" if report.status == objects.STATUS_INSTALLED else "error"
+    io.echo(f"bbsengine6 objects: {report.status} ({len(report.present)}/{len(manifest.objects)})", level=level)
+    for obj in report.missing:
+        io.echo(f"  missing: {obj.label()}", level="error")
+
+
 def main(args, **kwargs) -> bool:
     def _runstage(args, name, **kwargs):
         pkg = lib.BACKEND_STAGES.get(name)
@@ -280,6 +306,7 @@ def main(args, **kwargs) -> bool:
         return False
 
     io.echo("bbsengine6 startup complete", level="ok")
+    _report_objects_status(args, target_pool)
 
     # --- project-module startup: postoffice ---
     # Mirrors how casino chains into its own schema setup via the
