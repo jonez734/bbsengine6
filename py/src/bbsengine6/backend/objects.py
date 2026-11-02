@@ -160,7 +160,16 @@ def _exists(cur, obj: ObjectRef) -> bool:
         params = (f"{obj.name}({obj.args})",)
     cur.execute(sql, params)
     row = cur.fetchone()
-    return bool(row["present"]) if isinstance(row, dict) else bool(row[0])
+    # Only a real boolean from the catalog counts as present. Anything else (no row, an
+    # unexpected shape, a test double) is treated as absent: a gate must not pass on
+    # a value it did not actually read.
+    if isinstance(row, dict):
+        value = row.get("present")
+    elif isinstance(row, (tuple, list)) and row:
+        value = row[0]
+    else:
+        return False
+    return value is True
 
 
 def _status(present: int, total: int) -> str:

@@ -273,3 +273,32 @@ def test_check_objects_never_runs_ddl(fake_cursor):
     for sql, _ in cur.executed:
         upper = sql.upper()
         assert not any(w in upper for w in ("CREATE", "ALTER", "DROP", "GRANT", "INSERT", "UPDATE", "DELETE"))
+
+
+def test_a_gate_never_passes_on_an_unread_value():
+    """A row the checker cannot read is absent, not present. A Mock cursor must not
+    make every object look installed."""
+    from unittest.mock import MagicMock
+
+    cur = MagicMock()  # fetchone() returns a MagicMock, not a dict or tuple
+    m = _mf([{"kind": "table", "name": "engine.x"}])
+    assert objects._exists(cur, m.objects[0]) is False
+
+
+def test_exists_requires_a_true_boolean_from_the_catalog():
+    class Cur:
+        def __init__(self, row):
+            self.row = row
+
+        def execute(self, sql, params=()):
+            pass
+
+        def fetchone(self):
+            return self.row
+
+    m = _mf([{"kind": "table", "name": "engine.x"}])
+    assert objects._exists(Cur({"present": True}), m.objects[0]) is True
+    assert objects._exists(Cur({"present": "yes"}), m.objects[0]) is False
+    assert objects._exists(Cur(None), m.objects[0]) is False
+    assert objects._exists(Cur((True,)), m.objects[0]) is True
+    assert objects._exists(Cur(()), m.objects[0]) is False
