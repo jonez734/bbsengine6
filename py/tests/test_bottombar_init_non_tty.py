@@ -9,6 +9,13 @@ from unittest.mock import patch
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _reset_init_flag():
+    bottombar._initialized = False
+    yield
+    bottombar._initialized = False
+
 from bbsengine6 import bottombar
 
 

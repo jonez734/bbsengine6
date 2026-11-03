@@ -25,6 +25,8 @@ regressions and its cause is not yet identified.
 - [Public API](#public-api)
 - [Fragment types](#fragment-types)
 - [Lifecycle](#lifecycle)
+- [Object fragments](#object-fragments)
+- [Shutdown](#shutdown)
 - [Prompts and the MODE fragment](#prompts-and-the-mode-fragment)
 - [Registry resolution](#registry-resolution)
 - [Per-connection routing](#per-connection-routing)
@@ -77,6 +79,8 @@ class FragmentRegistry:
 | `clear_bottombar_fragments()`     |                                                          | (same routing)                                                         |
 | `setbottombar(args, buf, **kwargs)` | `(Any, str) -> bool`                                   | Central shim: stash context, render with `buf` on the left            |
 | `init(args=None, topmargin=1, bottommargin=1)` | `(Any, int, int) -> None`                   | Set the scroll region so the bar stays on the last line. Call once per screen, before the first `setbottombar`. Replaces `bbsengine6.screen.init` (deprecated shim) |
+| `is_initialized()` | `() -> bool` | True between `init()` and `shutdown()` |
+| `shutdown()` | `() -> None` | Restore the terminal on exit: shut down object fragments, then clear the bar line, reset colors and margins, restore the cursor. Never raises. See [Shutdown](#shutdown) |
 | `push(left=None, fragments=None)` | `(Any, Iterable) -> None`                        | Save left and fragments as one frame, install new values (`None` keeps, `[]` clears), repaint |
 | `pop(**kwargs)`                   | `(**kwargs) -> bool`                             | Restore the top frame and repaint. Returns `False` and does not repaint if empty |
 
@@ -109,6 +113,15 @@ the deprecated `bbsengine6.screen.init`, which emits a `DeprecationWarning`
 and delegates to nothing new. The console entry, the editor's
 `init_screen`, and `startup/__main__.py` all call `bottombar.init`.
 
+`init` runs once per process. A second call before `shutdown()` does nothing, so
+a tool can call it from several entry points safely. It sets the flag only when
+the scroll region is actually set (a tty), so a non-tty run stays a no-op and a
+later call on a tty still works. `shutdown()` clears the flag, so a later `init()`
+in the same process runs again.
+
+Callers should not keep their own once-per-process flags. Call `bottombar.init()`
+and let this module own the state.
+
 ### Type alias
 
 ```python
@@ -126,6 +139,7 @@ that takes any kwargs and returns a string (or `None`).
 |---------------------|-------------------------------------------------------------------------|
 | `str`               | Rendered verbatim via `str(item)`                                       |
 | `Callable[..., str]`| Invoked with the merged kwargs; result coerced via `str(result)`; traceback caught |
+| Object with `render()` | See [Object fragments](#object-fragments). Optional `init(**kwargs)` runs lazily on the first render; optional `shutdown()` runs when the fragment leaves the bar or the screen is restored |
 | List of fragments   | (Historical; the modern API is `register` one item at a time. The previous list-of-strings contract is preserved by registering each string as its own item, which the renderer joins with `" | "`.) |
 
 The rendered output is always `" | ".join(parts)` with the
@@ -149,6 +163,78 @@ setbottombar(args, "In casino lobby", **kwargs)
 The bottombar is always emitted to the **default** terminal. The
 truncation math is unchanged from the legacy `io.screen.setbottombar`
 implementation so door-mode output is byte-for-byte identical.
+
+## Object fragments
+
+A fragment may be an object with a `render(**kwargs)` method instead of a bare
+callable. It may also define two optional hooks:
+
+```python
+class TableFragment:
+    def init(self, **kwargs):      # optional: acquire resources; kwargs carries args/pool/player
+        self.conn = kwargs["pool"].getconn()
+    def render(self, **kwargs):    # required: return a string or None
+        return f"table: {self.count}"
+    def shutdown(self):            # optional: release what init() acquired
+        self.pool.putconn(self.conn)
+
+bottombar.register_bottombar_fragment(TableFragment())
+```
+
+- **Lazy init.** `register()` only adds the item. `init()` runs on the first `render()`,
+  not at registration, so a fragment that is registered but never painted costs nothing.
+- **Failure policy.** If `init()` raises, the error is reported once and the fragment
+  is skipped for the rest of the process. It is not retried on every repaint, which
+  would flood the log.
+- **Teardown.** `unregister()` calls `shutdown()` on an initialized fragment, and so
+  does `clear()` for every initialized fragment in the registry.
+- **Failure isolation.** Each `shutdown()` runs inside try/except. A raising fragment is
+  reported and the others still run.
+- **Plain callables and strings** are unchanged: no init, no shutdown.
+
+Rules for fragment authors:
+
+1. **Borrow the pool, do not open connections.** Use the `pool` the registry passes in
+   through `init()` and `render()`. Do not call `database.connect()` from a fragment.
+2. **Do not start threads.** A fragment returns a string from state it already holds.
+   Work that needs a thread or I/O runs elsewhere and writes its result into that state.
+3. **Keep `init()` small.** The first `init()` runs on the first redraw, so a slow
+   `init()` delays that redraw. Defer heavy work.
+
+## Shutdown
+
+`shutdown()` is the exit counterpart to `init()`. A tool calls it from a `finally`
+block so the terminal is restored on every exit path, including an exception.
+
+Order, when the screen was initialized:
+
+1. Shut down every initialized object fragment in every registry this process knows
+   about. Fragment teardown runs even when `init()` never set the screen, because a
+   fragment's resources do not depend on the screen.
+2. Clear the bottom bar line: `{savecursor}{curpos:<bottom>,0}{el}`.
+3. Reset colors and margins: `{reset}` emits SGR 0 and then the margin reset.
+4. Restore the cursor: `{restorecursor}`.
+5. Clear the initialized flag.
+
+The screen steps (2 to 5) run only when `init()` set the flag, so an exit before setup
+emits no escape sequences. They also skip without a tty. `shutdown()` never raises.
+
+Put it in a `finally` and do not add a separate cleanup path:
+
+```python
+def main():
+    bottombar.init()
+    try:
+        run()
+    except KeyboardInterrupt:
+        io.echo("{/all}*INTR*")
+    finally:
+        bottombar.shutdown()
+```
+
+Interrupt and EOF messages print `{/all}*INTR*` (or `*EOF*`) with no cursor restore in
+the text. `shutdown()` restores the cursor after the message, so the message lands on
+the screen in default colors.
 
 ## Prompts and the MODE fragment
 

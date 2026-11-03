@@ -138,6 +138,62 @@ class _LockedList(list):
             return list(self)
 
 
+# Object fragments (anything with a render() method) get lazy init() and an optional shutdown(). The
+# state is keyed by identity and holds a reference, so an object cannot be collected while it is tracked.
+#   "ready"   init() ran and returned; shutdown() is owed when the fragment leaves the bar
+#   "failed"  init() raised; the fragment is skipped for the rest of the process (reported once)
+_FRAGMENT_STATE: dict = {}
+_FRAGMENT_STATE_LOCK = threading.Lock()
+
+
+def _is_object_fragment(item: Any) -> bool:
+    return (not callable(item)) and callable(getattr(item, "render", None))
+
+
+def _fragment_ready(item: Any, context: dict) -> bool:
+    """Run the fragment's init() once, lazily. Return True when the fragment may render."""
+    key = id(item)
+    with _FRAGMENT_STATE_LOCK:
+        entry = _FRAGMENT_STATE.get(key)
+        if entry is not None:
+            return entry[1] == "ready"
+        _FRAGMENT_STATE[key] = (item, "pending")
+    init = getattr(item, "init", None)
+    try:
+        if callable(init):
+            init(**context)
+    except Exception:
+        with _FRAGMENT_STATE_LOCK:
+            _FRAGMENT_STATE[key] = (item, "failed")
+        echo_traceback(f"bbsengine6.bottombar: fragment {type(item).__name__}.init() failed; skipping it")
+        return False
+    with _FRAGMENT_STATE_LOCK:
+        _FRAGMENT_STATE[key] = (item, "ready")
+    return True
+
+
+def _fragment_shutdown(item: Any) -> None:
+    """Run the fragment's shutdown() if it was initialized. Never raises; reports a failure."""
+    key = id(item)
+    with _FRAGMENT_STATE_LOCK:
+        entry = _FRAGMENT_STATE.pop(key, None)
+    if entry is None or entry[1] != "ready":
+        return
+    fn = getattr(item, "shutdown", None)
+    if not callable(fn):
+        return
+    try:
+        fn()
+    except Exception:
+        echo_traceback(f"bbsengine6.bottombar: fragment {type(item).__name__}.shutdown() failed")
+
+
+def _shutdown_fragments(items: list) -> None:
+    for item in items:
+        if _is_object_fragment(item):
+            _fragment_shutdown(item)
+
+
 class FragmentRegistry:
     """A thread-safe, named list of bottombar fragment items.
 
@@ -196,17 +252,23 @@ class FragmentRegistry:
         return item
 
     def unregister(self, item: FragmentItem) -> bool:
-        """Remove the first matching item. Returns True if removed."""
+        """Remove the first matching item. Returns True if removed. An object fragment's shutdown() runs."""
         with self.lock:
             if item in self.items:
                 self.items.remove(item)
-                return True
-        return False
+                removed = True
+            else:
+                removed = False
+        if removed and _is_object_fragment(item):
+            _fragment_shutdown(item)
+        return removed
 
     def clear(self) -> None:
-        """Remove every item from this registry."""
+        """Remove every item from this registry. Object fragments' shutdown() runs for each."""
         with self.lock:
+            removed = list(self.items)
             self.items.clear()
+        _shutdown_fragments(removed)
 
     def push(
         self,
@@ -297,7 +359,16 @@ class FragmentRegistry:
         parts: List[str] = []
 
         for item in items_snapshot:
-            if callable(item):
+            if _is_object_fragment(item):
+                if not _fragment_ready(item, merged):
+                    continue
+                try:
+                    result = item.render(**merged)
+                    if result:
+                        parts.append(str(result))
+                except Exception:
+                    echo_traceback(f"bbsengine6.bottombar.render({self.name}):")
+            elif callable(item):
                 try:
                     result = item(**merged)
                     if result:
@@ -363,14 +434,37 @@ def init(args: Any = None, topmargin: int = 1, bottommargin: int = 1) -> None:
     _initialized = True
 
 
-def shutdown() -> None:
-    """Restore the terminal when a tool exits: clear the bottom bar line, reset colors and margins, restore
-    the cursor, then clear the initialized flag so a later init() runs again.
+def _shutdown_all_fragments() -> None:
+    """Shut down every initialized object fragment in every registry this process knows about.
 
-    Does nothing unless init() set the flag, so an exit before setup emits nothing. Skips without a tty.
-    Never raises: this runs on exit paths, where an error would replace the tool's own message.
+    Fragments own their resources, so this runs even when the screen was never initialized.
+    """
+    with _REGISTRY_CACHE_LOCK:
+        registries = list(_REGISTRY_CACHE.values())
+    if _DEFAULT_REGISTRY is not None and _DEFAULT_REGISTRY not in registries:
+        registries.append(_DEFAULT_REGISTRY)
+    for reg in registries:
+        try:
+            with reg.lock:
+                items = list(reg.items)
+        except Exception:
+            continue
+        _shutdown_fragments(items)
+
+
+def shutdown() -> None:
+    """Restore the terminal when a tool exits.
+
+    First shuts down every initialized object fragment (their resources do not depend on the screen). Then,
+    only if init() set the flag, clears the bottom bar line, resets colors and margins, restores the cursor,
+    and clears the flag so a later init() runs again. Never raises: this runs on exit paths, where an error
+    would replace the tool's own message.
     """
     global _initialized
+    try:
+        _shutdown_all_fragments()
+    except Exception:
+        pass
     if not _initialized:
         return
     _initialized = False
