@@ -16,6 +16,7 @@ org:
 		--exclude "html/handbook/handbook-wsgi.conf" \
 		--exclude "html/handbook/modules.adoc" \
 		--exclude "html/handbook/modules.html" \
+		--exclude "templates_c" \
 		--chmod=Dg+rwxs $(ORGSTAGE) $(ORGPROD)
 	# Force templates_c/ to mode 2775 on the receiver.
 	# rsync's --chmod (whether = or +) only applies when the dir
