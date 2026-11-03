@@ -12,6 +12,8 @@ stage:
 	$(RSYNC) config-prod.php $(ORGSTAGEDOCROOT)config.php
 	-$(RSYNC) htpasswd-prod $(ORGSTAGEDOCROOT).htpasswd
 	$(RSYNC) htaccess-prod $(ORGSTAGEDOCROOT).htaccess
+	mkdir -p $(ORGSTAGE)templates_c/
+	touch $(ORGSTAGE)templates_c/.gitkeep
 
 prod: stage
 	$(RSYNC) $(ORGSTAGE) $(ORGPROD)
