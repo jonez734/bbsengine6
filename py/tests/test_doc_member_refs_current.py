@@ -8,7 +8,6 @@ ROOT = Path(__file__).resolve().parents[3]
 
 DOCS = [
     ROOT / "bbsengine6" / "handbook" / "specs" / "console.md",
-    ROOT / "specs" / "PROJECT_ANALYSIS.md",
     ROOT / "mistermcfeely" / "specs" / "PROJECT_ANALYSIS.md",
 ]
 
