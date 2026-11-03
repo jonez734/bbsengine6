@@ -349,6 +349,30 @@ def init(args: Any = None, topmargin: int = 1, bottommargin: int = 1) -> None:
     echo("{restorecursor}", flush=True, end="")
 
 
+def _clear_margins(module) -> None:
+    """Call ``module.clear()`` when the installed bbsengine6 has it; never raise on exit.
+
+    Exit paths use this so an older bbsengine6 without clear() cannot turn a clean exit into a traceback.
+    """
+    fn = getattr(module, "clear", None)
+    if callable(fn):
+        try:
+            fn()
+        except Exception:
+            pass
+
+
+def clear() -> None:
+    """Restore the full screen: reset the scroll region so the margins set by init() are removed.
+
+    Call when a tool exits, so the shell gets back a normal terminal. Like init(), this skips the
+    sequence when there is no terminal.
+    """
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return
+    echo("{decstbm}", end="", flush=True)
+
+
 def default_registry() -> FragmentRegistry:
     """Return the process-global FragmentRegistry, creating it on first use.
 
