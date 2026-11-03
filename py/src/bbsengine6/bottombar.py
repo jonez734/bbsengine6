@@ -626,6 +626,19 @@ def setbottombar(args: Any, buf: str, **kwargs) -> bool:
     return _render_bottombar(registry, left=buf, right=None, **kwargs)
 
 
+def repaint(**kwargs) -> bool:
+    """Redraw the bottom bar from the active registry's current left and fragments.
+
+    Unlike setbottombar(), this does not assign a new left and does not change the stashed
+    args/player/pool. Use it when a fragment or mode changes and the bar must show the same left
+    side it already has (for example the inputstring accept hint, pushed by the caller).
+    """
+    registry = _resolve_registry()
+    # A never-set left is None; draw it as empty, as setbottombar(None, "") did, not as "None".
+    left = "" if registry.left is None else registry.left
+    return _render_bottombar(registry, left=left, right=None, **kwargs)
+
+
 def push(left: Any = None, fragments: Optional[Iterable[FragmentItem]] = None, **kwargs) -> None:
     """Push the active registry's bar state and install new values. Repaints.
 

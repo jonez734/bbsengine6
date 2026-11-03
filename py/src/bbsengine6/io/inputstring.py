@@ -934,7 +934,7 @@ def _show_mode(insert_mode: bool, paint: bool = True) -> None:
         if _mode_state()["item"] is None:
             _mode_state()["item"] = _bottombar.register_bottombar_fragment(_mode_fragment)
         if paint:
-            _bottombar.setbottombar(None, "")
+            _bottombar.repaint()
     except Exception:
         return
 
@@ -951,7 +951,7 @@ def _hide_mode(paint: bool = True) -> None:
         if item is not None:
             _bottombar.unregister_bottombar_fragment(item)
         if paint:
-            _bottombar.setbottombar(None, "")
+            _bottombar.repaint()
     except Exception:
         return
 

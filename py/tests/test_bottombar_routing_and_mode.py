@@ -105,7 +105,7 @@ def test_show_mode_registers_the_fragment_once_and_repaints():
     state = {"insert": True, "item": None}
     reg = bb.default_registry()
     with patch.object(ins, "_mode_state", return_value=state), \
-         patch.object(bb, "setbottombar") as repaint:
+         patch.object(bb, "repaint") as repaint:
         ins._show_mode(True, paint=True)
         ins._show_mode(False, paint=True)
     assert state["item"] is not None
