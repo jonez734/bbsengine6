@@ -98,15 +98,14 @@ def _terminal_height_safe() -> int:
     return h if isinstance(h, int) and h > 0 else 24
 
 
-def _restore_cursor() -> None:
-    """Move the cursor back to the bottom bar and clear it, but only on a real terminal.
+def _exit_bottombar() -> None:
+    """Restore the terminal on exit with bottombar.shutdown(); never raises over the tool's own message."""
+    from bbsengine6 import bottombar
 
-    The escape sequences go through ``io.echo``, which raises on a non-TTY stdout.
-    A piped or scripted run has nothing to restore.
-    """
-    if not sys.stdout.isatty():
-        return
-    io.echo(f"{{decsc}}{{curpos:{_terminal_height_safe()},0}}{{el}}{{reset}}{{decrc}}")
+    try:
+        bottombar.shutdown()
+    except Exception:
+        pass
 
 
 def _dispatch(args: Any, subcommand: Optional[str], subargs: list, **kwargs: Any) -> Optional[bool]:
@@ -133,11 +132,11 @@ def main(args: argparse.Namespace, **kwargs: dict) -> bool | None:
             io.echo(f"error running module {name}", level="error")
             rc = False
     except EOFError:
-        io.echo("**EOF**")
+        io.echo("{/all}*EOF*")
     except KeyboardInterrupt:
-        io.echo("**INTR**")
+        io.echo("{/all}*INTR*")
     finally:
-        _restore_cursor()
+        _exit_bottombar()
     return rc
 
 

@@ -173,20 +173,19 @@ def test_tui_help_lists_global_flags_and_every_subcommand():
 
 
 @pytest.mark.unit
-def test_cursor_restore_is_skipped_on_a_non_tty():
-    """Writing cursor escapes to a pipe raises in io.echo; the guard must skip them."""
-    with patch.object(tui.sys.stdout, "isatty", return_value=False), \
-         patch.object(tui.io, "echo") as echo:
-        tui._restore_cursor()
-    echo.assert_not_called()
+def test_console_exit_calls_bottombar_shutdown():
+    """The console's finally restores the terminal through bottombar.shutdown(), not a local escape."""
+    from bbsengine6 import bottombar
+    with patch.object(bottombar, "shutdown") as shutdown:
+        tui._exit_bottombar()
+    shutdown.assert_called_once()
 
 
 @pytest.mark.unit
-def test_cursor_restore_writes_on_a_tty():
-    with patch.object(tui.sys.stdout, "isatty", return_value=True), \
-         patch.object(tui.io, "echo") as echo:
-        tui._restore_cursor()
-    echo.assert_called_once()
+def test_console_exit_never_raises_when_shutdown_fails():
+    from bbsengine6 import bottombar
+    with patch.object(bottombar, "shutdown", side_effect=OSError("closed")):
+        tui._exit_bottombar()
 
 
 @pytest.mark.unit
@@ -195,7 +194,7 @@ def test_main_handles_ctrl_c_without_raising():
     with patch.object(tui, "run_menu", side_effect=KeyboardInterrupt), \
          patch.object(tui.io, "echo") as echo:
         assert tui.main(args) is True
-    assert any("**INTR**" in str(c.args[0]) for c in echo.call_args_list)
+    assert any("*INTR*" in str(c.args[0]) for c in echo.call_args_list)
 
 
 @pytest.mark.unit
@@ -204,7 +203,7 @@ def test_main_handles_eof_without_raising():
     with patch.object(tui, "run_menu", side_effect=EOFError), \
          patch.object(tui.io, "echo") as echo:
         assert tui.main(args) is True
-    assert any("**EOF**" in str(c.args[0]) for c in echo.call_args_list)
+    assert any("*EOF*" in str(c.args[0]) for c in echo.call_args_list)
 
 
 # --- delegation and launch paths -----------------------------------------

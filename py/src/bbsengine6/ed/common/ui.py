@@ -8,7 +8,6 @@ from bbsengine6 import bottombar
 from .state import EditorState
 
 
-_screen_initialized = False
 
 
 # Per-editor fragment tracking. unregister_bottombar() unregisters only
@@ -18,10 +17,8 @@ _editor_fragments: list = []
 
 
 def init_screen() -> None:
-    global _screen_initialized
-    if not _screen_initialized:
-        bottombar.init()
-        _screen_initialized = True
+    """Set up the bottom bar for an editor. bottombar.init() is once per process, so this is safe to repeat."""
+    bottombar.init()
 
 
 def show_help() -> None:
