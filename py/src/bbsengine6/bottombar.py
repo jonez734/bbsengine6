@@ -332,12 +332,25 @@ _active_registry: "contextvars.ContextVar[Optional[FragmentRegistry]]" = (
 )
 
 
+# Set by init() once the scroll region is set; cleared by shutdown(). shutdown() checks it so an exit
+# before setup emits nothing.
+_initialized: bool = False
+
+
+def is_initialized() -> bool:
+    """True when init() has set the scroll region and shutdown() has not yet restored it."""
+    return _initialized
+
+
 def init(args: Any = None, topmargin: int = 1, bottommargin: int = 1) -> None:
     """Set the terminal scroll region so the bottom bar stays on the last line.
 
-    Call once per screen, before the first setbottombar. Moved here from the deprecated
-    bbsengine6.screen.init; screen.init now delegates to this.
+    Call once per screen, before the first setbottombar. Runs once: a second call before shutdown()
+    does nothing. Moved here from the deprecated bbsengine6.screen.init; screen.init now delegates to this.
     """
+    global _initialized
+    if _initialized:
+        return
     # Without a terminal there is no scroll region to set, and {savecursor} asks the terminal
     # for its cursor position (termios), which fails on a non-TTY. Skip the sequences then.
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
@@ -347,30 +360,30 @@ def init(args: Any = None, topmargin: int = 1, bottommargin: int = 1) -> None:
     echo("{savecursor}", end="")
     echo("{decstbm:%s,%s}" % (topmargin, h), end="")
     echo("{restorecursor}", flush=True, end="")
+    _initialized = True
 
 
-def _clear_margins(module) -> None:
-    """Call ``module.clear()`` when the installed bbsengine6 has it; never raise on exit.
+def shutdown() -> None:
+    """Restore the terminal when a tool exits: clear the bottom bar line, reset colors and margins, restore
+    the cursor, then clear the initialized flag so a later init() runs again.
 
-    Exit paths use this so an older bbsengine6 without clear() cannot turn a clean exit into a traceback.
+    Does nothing unless init() set the flag, so an exit before setup emits nothing. Skips without a tty.
+    Never raises: this runs on exit paths, where an error would replace the tool's own message.
     """
-    fn = getattr(module, "clear", None)
-    if callable(fn):
-        try:
-            fn()
-        except Exception:
-            pass
-
-
-def clear() -> None:
-    """Restore the full screen: reset the scroll region so the margins set by init() are removed.
-
-    Call when a tool exits, so the shell gets back a normal terminal. Like init(), this skips the
-    sequence when there is no terminal.
-    """
+    global _initialized
+    if not _initialized:
+        return
+    _initialized = False
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         return
-    echo("{decstbm}", end="", flush=True)
+    try:
+        # Clear the bottom bar line, then reset colors and margins ({reset} emits SGR 0 and the margin reset),
+        # then restore the cursor saved before the clear.
+        echo("{savecursor}{curpos:%d,0}{el}" % terminal.lines(), end="", flush=True)
+        echo("{reset}", end="", flush=True)
+        echo("{restorecursor}", end="", flush=True)
+    except Exception:
+        pass
 
 
 def default_registry() -> FragmentRegistry:
