@@ -20,3 +20,4 @@ INPUTSTRING_DEFAULT_HISTORY_SIZE = 500  # GNU readline default
 INPUTSTRING_DEFAULT_PAGESIZE = 10  # Characters to jump per page
 INPUTSTRING_INSERT_MODE_INDICATOR = "[INS]"  # Shown when in insert mode
 INPUTSTRING_OVERWRITE_MODE_INDICATOR = "[OVR]"  # Shown when in overwrite mode
+INPUTSTRING_ACCEPT_HINT = "press enter to accept input"  # Bottom-bar left side while a prompt waits

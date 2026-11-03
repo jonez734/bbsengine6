@@ -13,6 +13,7 @@ from .const import (
     INPUTSTRING_DEFAULT_PAGESIZE,
     INPUTSTRING_INSERT_MODE_INDICATOR,
     INPUTSTRING_OVERWRITE_MODE_INDICATOR,
+    INPUTSTRING_ACCEPT_HINT,
 )
 from .echo import echo, rendered_length, echo_traceback
 from .getch import getch_str as getch
@@ -881,6 +882,42 @@ def _mode_fragment(**_kwargs) -> str:
     return INPUTSTRING_INSERT_MODE_INDICATOR if _mode_state()["insert"] else INPUTSTRING_OVERWRITE_MODE_INDICATOR
 
 
+def _show_accept_hint(paint: bool = True) -> bool:
+    """Push the "press enter" left side onto the bottom bar stack, if the bar is up.
+
+    Returns True only when a frame was pushed, so the caller pops exactly what it pushed. Does
+    nothing unless ``paint`` is true and ``bottombar.init()`` has run; push() itself always repaints,
+    so the initialized check has to happen here.
+    """
+    if not paint:
+        return False
+    try:
+        from .. import bottombar as _bottombar
+    except Exception:
+        return False
+    if not _bottombar.is_initialized():
+        return False
+    try:
+        _bottombar.push(left=INPUTSTRING_ACCEPT_HINT)
+    except Exception:
+        return False
+    return True
+
+
+def _hide_accept_hint(pushed: bool) -> None:
+    """Pop the frame that _show_accept_hint pushed. A no-op when this call pushed nothing."""
+    if not pushed:
+        return
+    try:
+        from .. import bottombar as _bottombar
+    except Exception:
+        return
+    try:
+        _bottombar.pop()
+    except Exception:
+        return
+
+
 def _show_mode(insert_mode: bool, paint: bool = True) -> None:
     """Register the MODE fragment (if needed), set the mode, and redraw the bottom bar.
 
@@ -1078,6 +1115,7 @@ def inputstring(
     help: Union[str, Callable[[], str], None] = None,
     function_key_handlers: Optional[dict] = None,
     bottombar: bool = True,
+    accept_hint: bool = True,
     **kwargs,
 ) -> str:
     """Read a line of text from the terminal with full line editing support.
@@ -1120,6 +1158,10 @@ def inputstring(
             starts, when INSERT is pressed, and when it ends.
             False: the bar is not painted at any of those points. The mode is still
             tracked and editing is unchanged. Use this to keep the bar as it was.
+        accept_hint: Show "press enter to accept input" as the bottom bar's left side while the
+            prompt waits (default: True). The hint is pushed onto the bar stack and popped when the
+            prompt ends, by accept or abort. It is painted only when the bar is initialized
+            (bottombar.init()) and ``bottombar`` is True. False: the bar is not touched.
         **kwargs: Additional options
             verify: Callable[(str) -> bool] for input validation
             completer: Completer instance for tab completion
@@ -1186,6 +1228,7 @@ def inputstring(
     begin_raw_session()
     saved_mouse = mouse_state_push()
     paste_mode = bracketed_paste_on()
+    hint_pushed = _show_accept_hint(paint=bottombar and accept_hint)
     try:
         return _inputstring_body(
             prompt,
@@ -1201,6 +1244,7 @@ def inputstring(
         )
     finally:
         _hide_mode(paint=bottombar)  # remove the MODE fragment when the prompt ends
+        _hide_accept_hint(hint_pushed)  # pop the hint this call pushed, on accept or abort
         _restore_key_snapshot(key_depth)
         bracketed_paste_off(paste_mode)
         mouse_state_pop(saved_mouse)
