@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Callable, Optional
 
 
 @dataclass(frozen=True)
@@ -58,6 +58,9 @@ class MenuOption:
         subcommands: optional mapping of subcommand name to ``MenuOption``.
             Each subcommand carries its own gates. Excluded from equality
             and hashing.
+        action: optional callable ``(args, **kwargs)`` run when key mode
+            selects this option. Its return value is ``Choice.result``.
+            Excluded from equality and hashing.
     """
 
     letter: str
@@ -73,3 +76,4 @@ class MenuOption:
     sysop_only: bool = False
     op: Optional[str] = None
     subcommands: Optional[Mapping] = field(default=None, compare=False)
+    action: Optional[Callable[..., Any]] = field(default=None, compare=False)

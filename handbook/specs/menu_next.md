@@ -121,6 +121,42 @@ subcommands and a space, it offers that entry's enabled subcommand names.
 Dispatch (for example, sending `bet` to `game bet` or `poker bet`) is the caller's job. It uses
 `key`, `subcommand`, and the seated table's game type.
 
+### Key mode
+
+`read_menu(..., mode="key")` reads one key instead of a line. It is for single-key menus, the
+same interaction as `io.inputchoice`, so casino and zoidoffice menus can use it.
+
+- The key is read through `reader`, called as `reader(prompt, options, default, help=...)`, the same
+  call shape as `io.inputchoice`. The default reader is `io.inputchoice`. `menu_next` does not
+  otherwise touch the terminal.
+- Keys are uppercased, as `inputchoice` does. Option letters are matched case-insensitively, and
+  `Choice.key` is uppercase in key mode. `default` is uppercased too.
+- Enter alone returns `default`. An unmatched key rings `{bell}` and reads again.
+- A matched option's `action` runs with the player `state`, and its return value is
+  `Choice.result`. An option with no `action` returns `result=None`. An exception from `action`
+  propagates to the caller.
+- Options with `subcommands` are not offered in key mode, because one key cannot carry a verb.
+  A key that names one is refused like an unmatched key.
+- Line mode is unchanged, and returns lowercase keys.
+
+**Protected exits.** Key mode protects `("X", "Q")` by default; a menu may pass its own tuple.
+A protected key is owned by its option, and no other option may use it:
+
+- the spec must define the protected option, or `read_menu` raises `ValueError` at build time;
+- `X` is the exit. `Q` must resolve to it, as an alias. A separate `Q` option is refused;
+- a protected option is never hidden by `visible_options` gating (`requires_*`, `sysop_only`), so
+  the exit is always selectable.
+
+```python
+ROOT = (
+    MenuOption(letter="B", label="Blackjack", action=lambda args: blackjack(args)),
+    MenuOption(letter="S", label="Stats", action=lambda args: stats(args)),
+    MenuOption(letter="X", label="Exit", aliases=("Q",), action=lambda args: None),
+)
+choice = read_menu("casino [BSXQ]: ", ROOT, state=args, mode="key", default="X",
+                   reader=io.inputchoice)
+```
+
 ### Building a menu from a host's commands
 
 `menu_next` does not hold a menu of its own. A host builds the `MenuOption` spec each time it
