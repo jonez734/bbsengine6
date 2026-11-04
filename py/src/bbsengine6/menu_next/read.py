@@ -226,12 +226,14 @@ def _protected_table(options: list, protected: tuple) -> dict[str, MenuOption]:
 
     # Q is an alias of X. Any protected key other than X must resolve to the exit, so a separate Q
     # option is refused even when X does not declare Q as an alias.
-    exit_option = table.get("X")
-    for letter in wanted:
-        if letter == "X":
-            continue
-        if exit_option is None or table[letter] is not exit_option:
-            if letter in by_letter:
+    # The alias rule applies only when X is the exit. A menu that protects Q as its own exit (no X)
+    # keeps Q as an ordinary exit option.
+    if "X" in wanted:
+        exit_option = table["X"]
+        for letter in wanted:
+            if letter == "X":
+                continue
+            if table[letter] is not exit_option and letter in by_letter:
                 raise ValueError(f"protected key {letter!r} belongs to the exit, not an option")
     return table
 
