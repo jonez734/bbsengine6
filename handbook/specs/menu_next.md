@@ -58,7 +58,7 @@ works.
 
 ### `visible_options`
 
-`visible_options(options, state, check=None) -> list[MenuOption]` filters `MenuOption`s against a
+`visible_options(spec, state, check=None) -> list[MenuOption]` filters `MenuOption`s against a
 duck-typed player state. It reads `current_table_moniker`, `current_table_game_type`, `connected`,
 and `is_sysop`. Missing attributes count as false or `None`.
 
@@ -120,6 +120,20 @@ subcommands and a space, it offers that entry's enabled subcommand names.
 
 Dispatch (for example, sending `bet` to `game bet` or `poker bet`) is the caller's job. It uses
 `key`, `subcommand`, and the seated table's game type.
+
+### Building a menu from a host's commands
+
+`menu_next` does not hold a menu of its own. A host builds the `MenuOption` spec each time it
+reads, from the commands it owns, so the menu and the host's dispatch share one source.
+
+`letteredolive`'s `shell` is the reference host. It keeps its commands in a `ShellCommands`
+instance (`shell/lib.py`), a `Registry` under one scope, seeded from the packaged
+`shell/data/commands.json`. `shell/menus.py:build_spec(commands)` turns each active entry into a
+`MenuOption`, skipping disabled entries and adding `logout`, `exit`, and `version` by name. The
+host then calls `read_menu(prompt, menus.build_spec(commands), state=..., check=...)`.
+
+Because the spec is rebuilt from the instance on every read, a command added at runtime appears
+in the menu on the next read, and a removed one leaves it. Two instances give two menus.
 
 ### Skin keys
 
