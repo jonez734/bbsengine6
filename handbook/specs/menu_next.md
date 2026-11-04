@@ -80,8 +80,9 @@ Help screens use it to show disabled entries dimmed with `menu.item.disabled`.
 
 ### `read_menu`
 
-`read_menu(prompt, spec, *, state=None, check=None, default="", help=None, reader=None) -> Choice`
-reads one command line.
+`read_menu(prompt, spec, *, state=None, check=None, default="", help=None, reader=None, mode="line",
+protected=("X", "Q")) -> Choice` reads one command line in line mode (the default), or one key in key
+mode (see [Key mode](#key-mode)).
 
 The line is read with `reader`, which is called with the same keyword arguments as
 `io.inputstring` (`verify`, `completer`, `help`). It defaults to `io.inputstring`. A hosting
@@ -108,15 +109,20 @@ Input rules:
 - A parser that calls `sys.exit` is caught, so a bad argument never ends the session.
 - An empty line returns `default` when one is given. `default` must be a key in the menu, or
   `read_menu` raises `ValueError`.
+- An alias resolves to its key only when the alias is listed on the entry. Exit aliases follow the
+  protected-exit rule in [Key mode](#key-mode): `Q` is an alias of the protected `X` only when `X`
+  is protected. A spec that defines `Q` as its own entry, while `X` is protected, is refused.
 
 Completion (`Tab`) offers the enabled keys and aliases for the first word. After an entry with
 subcommands and a space, it offers that entry's enabled subcommand names.
 
-`Choice(key, args=None, subcommand=None)`:
+`Choice(key, args=None, subcommand=None, result=None)`:
 
-- `key` — the canonical stored key. An alias is never returned.
+- `key` — the canonical stored key. An alias is never returned. In key mode it is uppercase.
 - `subcommand` — the subcommand name, or `None`.
 - `args` — the parsed `argparse.Namespace`, or `None` when no parser applies.
+- `result` — in key mode, the value the matched entry's `action` returned, or `None` when it has no
+  action. Line mode always leaves it `None`.
 
 Dispatch (for example, sending `bet` to `game bet` or `poker bet`) is the caller's job. It uses
 `key`, `subcommand`, and the seated table's game type.
@@ -170,6 +176,11 @@ host then calls `read_menu(prompt, menus.build_spec(commands), state=..., check=
 
 Because the spec is rebuilt from the instance on every read, a command added at runtime appears
 in the menu on the next read, and a removed one leaves it. Two instances give two menus.
+
+**Help (F1).** `help=` may be a callable as well as a string. A host passes one that rebuilds its
+help text from the same spec and gate the menu uses, so F1 lists exactly the entries the user can
+pick and reflects changes made since the menu was built. `letteredolive` does this in
+`shell/menus.py:help_text`.
 
 ### Skin keys
 

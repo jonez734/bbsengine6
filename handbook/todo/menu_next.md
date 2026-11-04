@@ -15,6 +15,23 @@ Finished work is described in the spec, not here.
 - `menu.item.enabled` / `menu.item.disabled` skin keys match `listbox.item.*` (`fd04d09`,
   `a25c76e`).
 
+## Done (key mode, protected exits, F1)
+
+- Key mode: `read_menu(mode="key")`, one key through `reader`, uppercase, `default` on Enter,
+  unmatched keys ring and re-read (`010d07d`).
+- `MenuOption.action` and `Choice.result`: the matched action's return value is returned (`010d07d`).
+- Protected exits: `X` must be defined, `Q` resolves to it as an alias, and a separate `Q` option
+  is refused. The alias rule applies only when `X` is protected (`a2181f6`).
+- F1 help: `help=` as a callable over the visible menu, in letteredolive (`5dcef86`).
+- Casino's root, game, and bank menus read through key mode (`ffe0f4f`, `cfbd047`, `2a99327`).
+
+## Open: `menu_spec` (menu groups)
+
+Not built. A module may declare its verbs as a tree of groups, consumed by the shell and argparse.
+The first consumer is casino (`commands/game`), with the tree types kept in casino. `menu_next`
+stays agnostic, so this item is recorded here only for the cross-repo picture. Argparse generation
+from the tree, and the golden-file help diff, are open within it.
+
 ## Superseded
 
 The earlier plan was a module-based registry: each game's `__init__.py` would declare
