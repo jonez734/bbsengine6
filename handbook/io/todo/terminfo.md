@@ -182,3 +182,5 @@ still refuse full-screen programs (Part C).
 - Extended (user-defined) capabilities. Parsing needs a verified layout, checked against the
   stdlib `curses` oracle with `tic -x` probe entries.
 - Part E docs: `handbook/specs/io/` spec for the terminfo API.
+- ANSI detection (`probe_da`, `has_ansi`, `configure_ansi_probe`, `query_terminal`) is built
+  and documented in `handbook/specs/io/io_terminal.md` and `io_common.md`.

@@ -112,6 +112,17 @@ get_dsr(mode="curpos", timeout=1.0) -> tuple[int, int] | str
 
 The general query behind `get_cursor_position` and `get_terminal_status`.
 
+### Generic query
+
+```python
+query_terminal(request: str, reply_re: re.Pattern, timeout: float = 0.5) -> str | None
+```
+
+Sends `request`, then reads until `reply_re` matches or `timeout` expires. Pending input is
+drained first, the tty is put in raw mode (unless a raw session owns it), and the tty is
+restored in every case. Typed bytes that are not the reply go back on the input queue, in order.
+Returns the matched text, or `None` when nothing matched in time. Used by `probe_da`.
+
 ### Input queue
 
 ```python

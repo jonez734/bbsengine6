@@ -62,6 +62,31 @@ text as-is (see `io_echo.md`).
 - `width` is `columns`
 - `height` is `lines`
 
+## ANSI detection
+
+Config block (bed.json / zoid6.json, under `terminal`):
+
+```json
+"terminal": { "ansi_probe": { "enabled": true, "timeout_seconds": 0.5 } }
+```
+
+`configure_ansi_probe(cfg)` applies it at startup. `cfg` is the `terminal` object, or `None`
+for the defaults. Bad values raise `ValueError`.
+
+```python
+probe_da(timeout=None) -> str | None
+has_ansi() -> bool
+```
+
+- `probe_da` sends DA1 (`ESC[c`). If there is no reply it sends DA2 (`ESC[>c`). It returns the
+  raw reply, or `None`. It returns `None` without writing anything when `enabled` is false. The
+  reply is logged at debug level, for debugging.
+- `has_ansi` returns `True` when the reply is an approved DA1 (`ESC[?...c`) or DA2 (`ESC[>...c`)
+  response. It returns `False` for `None`, empty text, or anything else.
+
+Example DA1 replies: `ESC[?6c` (VT102), `ESC[?1;2c` (VT100 with AVO),
+`ESC[?62;1;2;6;8;9;15;22c` (VT220). The rule accepts any digits and `;` between the marker and `c`.
+
 ## Usage
 
 ```python
