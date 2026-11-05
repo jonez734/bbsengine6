@@ -87,6 +87,7 @@ def run_child(
     bottom_buf: str = "",
     term: Optional[str] = None,
     env: Optional[dict] = None,
+    stored_term: Optional[str] = None,
 ) -> int:
     """Run ``argv`` on the terminal and return its exit status.
 
@@ -99,7 +100,15 @@ def run_child(
     """
     check_term(term)
 
+    from .io import terminal
     from .io.common import end_raw_session
+
+    # The child gets the resolved TERM, not whatever the shell inherited. The member's
+    # stored type is the fallback when the client's TERM has no terminfo entry.
+    value, _source = terminal.resolve(stored=stored_term)
+    child_env = dict(os.environ if env is None else env)
+    child_env["TERM"] = value
+    env = child_env
 
     # The child reads the tty itself, so leave the shell's raw session first. Nothing
     # needs restarting afterwards: the next prompt read starts its own raw session.
