@@ -283,6 +283,16 @@ def getmembersession(
         return _work(conn)
 
 
+def _resolved_term() -> str:
+    """The terminal type to record for the session: the client's TERM when it has a terminfo
+    entry, else xterm. See bbsengine6.io.terminal.resolve.
+    """
+    from ..io import terminal
+
+    value, _source = terminal.resolve()
+    return value
+
+
 def updatelastactivity(args: Namespace, sessionid: str, **kwargs: Any) -> bool:
     def _work(conn: Any) -> bool:
         import os
@@ -295,7 +305,7 @@ def updatelastactivity(args: Namespace, sessionid: str, **kwargs: Any) -> bool:
 
         session["lastactivity"] = "now()"
         session["expiry"] = datetime.now(timezone.utc) + timedelta(minutes=_idle_minutes)
-        session["useragent"] = os.environ.get("TERM", "NEEDINFO")
+        session["useragent"] = _resolved_term()
         write(args, session, sessionid, conn=conn)
         conn.commit()
         return True
@@ -429,7 +439,7 @@ def buildsession(
     session["lastactivity"] = "now()"
     session["data"] = database.Jsonb(data)
     session["datecreated"] = "now()"
-    session["useragent"] = os.environ.get("TERM", "xterm")
+    session["useragent"] = _resolved_term()
 
     if args.debug is True:
         io.echo(f"bbsengine6.session.buildsession.100: {session=}", level="debug")
