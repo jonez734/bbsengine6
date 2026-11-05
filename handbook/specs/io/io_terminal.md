@@ -84,6 +84,12 @@ has_ansi() -> bool
 - `has_ansi` returns `True` when the reply is an approved DA1 (`ESC[?...c`) or DA2 (`ESC[>...c`)
   response. It returns `False` for `None`, empty text, or anything else.
 
+Calling `probe_da` again sends a fresh query each time. Each call waits up to the timeout, then
+`query_terminal` keeps reading for 0.25 s (`QUERY_SETTLE_SECONDS`). A reply inside that window
+is matched and consumed. A reply that arrives after it is not consumed: the tty is restored, the
+kernel echoes the bytes, and the next input read may see them. That case is known and accepted as
+rare. Removing it needs no-echo mode and discarding DA-shaped sequences in the key reader.
+
 Example DA1 replies: `ESC[?6c` (VT102), `ESC[?1;2c` (VT100 with AVO),
 `ESC[?62;1;2;6;8;9;15;22c` (VT220). The rule accepts any digits and `;` between the marker and `c`.
 
