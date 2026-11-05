@@ -140,21 +140,24 @@ _DA_REPLY_QUEUE_RE = re.compile(r"\x1b\[[?>][0-9;]*c")
 def discard_da_replies() -> int:
     """Remove complete DA1/DA2 replies from the input queue. Return how many were removed.
 
-    A reply to a query that has already timed out is not a keypress. The input reader calls
-    this before reading, so such a reply is dropped instead of typed. Only whole replies are
-    removed: a partial sequence is left alone until its final byte arrives.
+    A reply is not a keypress. The input reader calls this before reading, so a reply is kept
+    out of the typed input. Each removed reply is also recorded in the interaction's
+    ``da_replies`` list, so a non-blocking probe can collect its answer later. Only whole
+    replies are removed: a partial sequence is left alone until its final byte arrives.
     """
     with _input_queue_lock:
         queue = _queue()
         if not queue:
             return 0
         text = "".join(queue)
-        cleaned, count = _DA_REPLY_QUEUE_RE.subn("", text)
-        if count == 0:
+        found = _DA_REPLY_QUEUE_RE.findall(text)
+        if not found:
             return 0
+        cleaned = _DA_REPLY_QUEUE_RE.sub("", text)
         queue.clear()
         queue.extend(cleaned)
-        return count
+        _interaction().da_replies.extend(found)
+        return len(found)
 
 
 def _read_current_input_stream(size: int = 1) -> str:

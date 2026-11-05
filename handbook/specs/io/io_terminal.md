@@ -74,9 +74,16 @@ Config block (bed.json / zoid6.json, under `terminal`):
 for the defaults. Bad values raise `ValueError`.
 
 ```python
-probe_da(timeout=None) -> str | None
-has_ansi() -> bool
+probe_da(timeout=None, block=True) -> str | None
+has_ansi(block=True) -> bool
+ansi_reply() -> str | None
 ```
+
+- `block=True` (default) waits up to the timeout for a reply, as above.
+- `block=False` sends DA1 and returns at once (`probe_da` returns `None`; `has_ansi` returns
+  `False`, meaning "not known yet", not "no ANSI"). The reply is taken by the input reader,
+  which keeps it in the session. `ansi_reply()` returns the oldest kept reply and removes it.
+  A reply the reader has not yet taken is not visible to `ansi_reply()`.
 
 - `probe_da` sends DA1 (`ESC[c`). If there is no reply it sends DA2 (`ESC[>c`). It returns the
   raw reply, or `None`. It returns `None` without writing anything when `enabled` is false. The

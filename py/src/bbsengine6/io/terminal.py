@@ -128,12 +128,18 @@ def configure_ansi_probe(cfg) -> None:
     _ANSI_PROBE_TIMEOUT = float(timeout)
 
 
-def probe_da(timeout=None):
+def probe_da(timeout=None, block=True):
     """Send DA1, then DA2 if DA1 gets no reply. Return the raw reply, or None.
 
-    Returns None without writing anything when ``terminal.ansi_probe.enabled`` is false,
-    and None when neither query gets a reply or there is no terminal. The reply is logged
-    at debug level for debugging.
+    ``block=True`` (default): wait up to the timeout for each query and return the reply, or
+    None when neither answers.
+
+    ``block=False``: send DA1 and return None at once, without reading. The reply is taken by
+    the input reader and kept for :func:`ansi_reply`, so the caller does not wait. Use
+    ``ansi_reply()`` later to collect it.
+
+    Returns None without writing anything when ``terminal.ansi_probe.enabled`` is false. The
+    reply is logged at debug level for debugging.
     """
     if not _ANSI_PROBE_ENABLED:
         return None
@@ -141,6 +147,12 @@ def probe_da(timeout=None):
     from .echo import echo
 
     wait = _ANSI_PROBE_TIMEOUT if timeout is None else float(timeout)
+    if not block:
+        try:
+            common.write_current_output_stream(DA1_REQUEST, flush=True)
+        except Exception as exc:  # no terminal
+            echo(f"terminal.probe_da: not sent ({exc})", level="debug")
+        return None
     try:
         reply = common.query_terminal(DA1_REQUEST, _ANY_DA_RE, timeout=wait)
         if reply is None:
@@ -152,9 +164,27 @@ def probe_da(timeout=None):
     return reply
 
 
-def has_ansi() -> bool:
-    """True when the probe_da() reply is an approved DA1 or DA2 response."""
-    reply = probe_da()
+def ansi_reply() -> str | None:
+    """Return the oldest DA reply the input reader has taken, or None. Removes it.
+
+    Pairs with ``probe_da(block=False)``: the reply arrives in the input and is kept by the
+    reader. Call this later, after reading input, to collect it.
+    """
+    from ..interaction import current_session
+
+    replies = current_session().da_replies
+    return replies.pop(0) if replies else None
+
+
+def has_ansi(block=True) -> bool:
+    """True when the probe_da() reply is an approved DA1 or DA2 response.
+
+    ``block=False`` sends the probe and returns False at once. Call ``ansi_reply()`` and
+    ``DA1_REPLY_RE``/``DA2_REPLY_RE`` later to check the answer, or use ``has_ansi()`` again.
+    """
+    reply = probe_da(block=block)
+    if not block:
+        return False
     if not reply:
         return False
     return bool(DA1_REPLY_RE.fullmatch(reply) or DA2_REPLY_RE.fullmatch(reply))

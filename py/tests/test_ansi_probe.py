@@ -40,7 +40,7 @@ def _reset_config():
     ],
 )
 def test_has_ansi_accepts_approved_replies(monkeypatch, reply):
-    monkeypatch.setattr(terminal, "probe_da", lambda timeout=None: reply)
+    monkeypatch.setattr(terminal, "probe_da", lambda timeout=None, block=True: reply)
     assert terminal.has_ansi() is True
 
 
@@ -58,7 +58,7 @@ def test_has_ansi_accepts_approved_replies(monkeypatch, reply):
     ],
 )
 def test_has_ansi_rejects_other_replies(monkeypatch, reply):
-    monkeypatch.setattr(terminal, "probe_da", lambda timeout=None: reply)
+    monkeypatch.setattr(terminal, "probe_da", lambda timeout=None, block=True: reply)
     assert terminal.has_ansi() is False
 
 
@@ -303,3 +303,45 @@ def test_pty_late_reply_then_key_returns_the_key():
     finally:
         child.close(force=True)
     assert "KEY='q'" in out, out
+
+
+def test_nonblocking_probe_returns_at_once(monkeypatch):
+    """probe_da(block=False) sends DA1 and returns without reading the tty."""
+    sent = []
+    monkeypatch.setattr(common, "write_current_output_stream", lambda s, flush=False: sent.append(s))
+    called = []
+    monkeypatch.setattr(common, "query_terminal", lambda *a, **k: called.append(a) or None)
+    assert terminal.probe_da(block=False) is None
+    assert sent == [terminal.DA1_REQUEST]
+    assert called == []
+
+
+def test_has_ansi_nonblocking_is_false_until_reply_is_collected(monkeypatch):
+    monkeypatch.setattr(common, "write_current_output_stream", lambda s, flush=False: None)
+    assert terminal.has_ansi(block=False) is False
+
+
+def test_ansi_reply_pops_recorded_replies():
+    from bbsengine6.interaction import current_session
+
+    sess = current_session()
+    sess.da_replies.clear()
+    sess.da_replies.extend(["\x1b[?62;1;2c", "\x1b[>0c"])
+    assert terminal.ansi_reply() == "\x1b[?62;1;2c"
+    assert terminal.ansi_reply() == "\x1b[>0c"
+    assert terminal.ansi_reply() is None
+
+
+def test_discard_records_replies_in_the_session():
+    from bbsengine6.interaction import current_session
+
+    sess = current_session()
+    sess.da_replies.clear()
+    q = common._queue()
+    q.clear()
+    q.extend("\x1b[?6cx")
+    assert common.discard_da_replies() == 1
+    assert "".join(q) == "x"
+    assert sess.da_replies == ["\x1b[?6c"]
+    sess.da_replies.clear()
+    q.clear()

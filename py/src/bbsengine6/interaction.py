@@ -37,6 +37,9 @@ class Session:
         self.terminal_state_stack: list = []
         self.terminal_state_stack_enabled = False
         self.input_dirty = False
+        # DA1/DA2 replies the input reader took from the tty (see io.common.discard_da_replies).
+        # A non-blocking probe_da() reads its answer from here.
+        self.da_replies: list = []
         # io/echo.py state. Runtime variables start as None: echo builds the default set
         # (its built-in names and skin) on first read, so each interaction starts the same.
         self.raw = False
