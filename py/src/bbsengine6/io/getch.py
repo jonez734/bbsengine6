@@ -736,8 +736,10 @@ _DA_REPLY_SEQ_RE = re.compile(r"\x1b\[[?>][0-9;]*c")
 
 
 def is_da_reply(sequence: str) -> bool:
-    """True when ``sequence`` (a full escape sequence) is a DA1 or DA2 reply."""
-    return _DA_REPLY_SEQ_RE.fullmatch(sequence) is not None
+    """True when ``sequence`` (a full escape sequence) is a DA1/DA2 or XTGETTCAP reply."""
+    return _DA_REPLY_SEQ_RE.fullmatch(sequence) is not None or (
+        sequence.startswith(ESC + "P") and _XTGETTCAP_TAIL_RE.fullmatch(sequence[2:]) is not None
+    )
 
 
 def resolve_escape_sequence(sequence: str, debug: bool = False) -> str | None:
@@ -761,6 +763,45 @@ def resolve_escape_sequence(sequence: str, debug: bool = False) -> str | None:
 
 
 ESC_TAIL_WAIT = 0.05  # seconds to wait for the rest of a split escape sequence
+
+
+#: XTGETTCAP reply body after "ESC P": 0 or 1, "+r", hex name, optional "=hex", then ST.
+_XTGETTCAP_TAIL_RE = re.compile(r"[01]\+r[0-9A-Fa-f]+(?:=[0-9A-Fa-f]*)?\x1b\\")
+
+
+def _read_dcs_tail(deadline: float) -> str | None:
+    """Read a DCS reply body (after ESC P) through its ST. Return None if it is not XTGETTCAP.
+
+    Reads the bytes one at a time while they can still form an XTGETTCAP reply. A byte that
+    cannot be part of one puts the bytes back and returns None, so ordinary input is not
+    lost.
+    """
+    body = ""
+    while len(body) < 80:
+        with _input_queue_lock:
+            queued = _input_queue.popleft() if _input_queue else None
+        if queued is not None:
+            nxt = queued
+        else:
+            try:
+                nxt = _read_current_input_stream()
+            except BlockingIOError:
+                if time.time() >= deadline:
+                    break
+                time.sleep(0.005)
+                continue
+        body += nxt
+        deadline = time.time() + ESC_TAIL_WAIT
+        if _XTGETTCAP_TAIL_RE.fullmatch(body):
+            return body
+        if not _XTGETTCAP_PREFIX_RE.fullmatch(body):
+            break
+    with _input_queue_lock:
+        _input_queue.extendleft(reversed(body))
+    return None
+
+
+_XTGETTCAP_PREFIX_RE = re.compile(r"[01]?(\+(r([0-9A-Fa-f]+(=[0-9A-Fa-f]*)?(\x1b(\\)?)?)?)?)?")
 
 
 def _read_escape_tail() -> str:
@@ -790,6 +831,15 @@ def _read_escape_tail() -> str:
                 continue
         seq += nxt
         deadline = time.time() + ESC_TAIL_WAIT
+        if len(seq) == 2 and nxt == "P":
+            # DCS. Only an XTGETTCAP reply (DCS 0/1 + r) is read as one sequence; it ends at ST.
+            # Other DCS strings keep the old lone-ESC behaviour.
+            dcs = _read_dcs_tail(deadline)
+            if dcs is not None:
+                return ESC + "P" + dcs
+            with _input_queue_lock:
+                _input_queue.appendleft("P")
+            return ESC
         if len(seq) == 2 and nxt not in ("[", "O"):
             # Not a CSI/SS3 sequence: this is a lone ESC followed by a key.
             # Give the key back to the input queue so it is read as its own key.
@@ -904,6 +954,18 @@ def _resolve_queued_escape(
 def _escape_end_queue(chars: list) -> int:
     """Return the length of the escape sequence after a queued ESC (1 = lone ESC)."""
     if not chars:
+        return 1
+    if chars[0] == "P":
+        # A complete XTGETTCAP reply already in the queue: take it through its ST as one
+        # sequence.
+        for end in range(2, min(len(chars), 80) + 1):
+            body = "".join(chars[1:end])
+            if _XTGETTCAP_TAIL_RE.fullmatch(body):
+                # end counts body bytes; the caller's slice is end - 1 after ESC, so add one
+                # for the "P" introducer, matching the CSI return value below.
+                return end + 1
+            if not _XTGETTCAP_PREFIX_RE.fullmatch(body):
+                break
         return 1
     if chars[0] not in ("[", "O"):
         return 1

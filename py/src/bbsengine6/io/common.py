@@ -135,6 +135,8 @@ _input_queue_lock = threading.Lock()
 
 #: A complete DA1 or DA2 reply in the queue: ESC [ ? digits/; c, or ESC [ > digits/; c.
 _DA_REPLY_QUEUE_RE = re.compile(r"\x1b\[[?>][0-9;]*c")
+#: A complete XTGETTCAP reply (DCS 0/1 + r, hex name, optional =hex value, ST).
+_XTGETTCAP_QUEUE_RE = re.compile(r"\x1bP[01]\+r[0-9A-Fa-f]+(?:=[0-9A-Fa-f]*)?\x1b\\")
 
 
 def discard_da_replies() -> int:
@@ -150,10 +152,10 @@ def discard_da_replies() -> int:
         if not queue:
             return 0
         text = "".join(queue)
-        found = _DA_REPLY_QUEUE_RE.findall(text)
+        found = _DA_REPLY_QUEUE_RE.findall(text) + _XTGETTCAP_QUEUE_RE.findall(text)
         if not found:
             return 0
-        cleaned = _DA_REPLY_QUEUE_RE.sub("", text)
+        cleaned = _XTGETTCAP_QUEUE_RE.sub("", _DA_REPLY_QUEUE_RE.sub("", text))
         queue.clear()
         queue.extend(cleaned)
         _interaction().da_replies.extend(found)
