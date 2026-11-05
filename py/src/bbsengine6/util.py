@@ -1208,23 +1208,77 @@ def tobool(value) -> bool:
     return False
 
 
-def getremoteaddr() -> Optional[str]:
-    """Get the remote client IP address from SSH connection environment.
+def _ssh_env_address() -> Optional[str]:
+    """The client address from the SSH environment, or None.
 
-    Extracts the client IP from the SSH_CONNECTION environment variable.
-    This function is designed for SSH-based BBS connections.
-
-    Returns:
-        The remote client IP address, or None if not in an SSH session.
-
-    Example:
-        >>> getremoteaddr()  # When accessed via SSH
-        '192.168.1.100'
+    ``SSH_CLIENT`` and ``SSH_CONNECTION`` both start with the client address. The value is
+    parsed as an IP so a malformed variable is ignored rather than returned.
     """
-    val = os.environ.get("SSH_CONNECTION")
-    if val is not None:
-        return val.split()[0]
+    import ipaddress
+
+    for var in ("SSH_CLIENT", "SSH_CONNECTION"):
+        val = os.environ.get(var)
+        if not val:
+            continue
+        candidate = val.split()[0]
+        try:
+            return str(ipaddress.ip_address(candidate))
+        except ValueError:
+            continue
     return None
+
+
+def _resolve_remoteaddr() -> tuple[Optional[str], Optional[str]]:
+    """``(address, source)``: the utmp address first, else the SSH environment, else ``(None, None)``.
+
+    utmp is checked first because it records every login method, not only SSH. When utmp gives an
+    address and the SSH environment gives a different one, the mismatch is logged and utmp is kept:
+    ``sshd`` wrote the utmp record, the environment is the less direct source.
+    """
+    from . import utmp
+
+    env_addr = _ssh_env_address()
+    utmp_addr = utmp.current_origin()
+    if utmp_addr is not None:
+        if env_addr is not None and env_addr != utmp_addr:
+            io.echo(
+                f"remoteaddr mismatch: utmp={utmp_addr} ssh_env={env_addr}; using utmp",
+                level="warning",
+            )
+        return utmp_addr, "utmp"
+    if env_addr is not None:
+        return env_addr, "ssh_env"
+    return None, None
+
+
+def getremoteaddr() -> Optional[str]:
+    """The remote client address for this session, or None.
+
+    Order: the utmp record for the current terminal (covers every login method), then the SSH
+    environment (``SSH_CLIENT`` / ``SSH_CONNECTION``). Both IPv4 and IPv6 text is returned.
+    ``None`` when neither source has an address (for example, a local console).
+    """
+    return _resolve_remoteaddr()[0]
+
+
+def remoteaddr_source() -> Optional[str]:
+    """Where ``getremoteaddr()`` got its value: ``"utmp"``, ``"ssh_env"``, or ``None``."""
+    return _resolve_remoteaddr()[1]
+
+
+def current_account() -> str | None:
+    """The account name of the running process (its effective uid), or None.
+
+    Unlike ``getcurrentloginid()``, this does not read the login record or the environment.
+    It is what the kernel uses for permission checks, so it can say whether the process is in
+    the ``utmp`` group. Returns None when the uid has no account entry.
+    """
+    import pwd
+
+    try:
+        return pwd.getpwuid(os.geteuid()).pw_name
+    except (KeyError, OSError):
+        return None
 
 
 def getcurrentloginid(args, **kwargs) -> str | None:
