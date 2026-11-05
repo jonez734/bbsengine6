@@ -97,6 +97,16 @@ is matched and consumed. A reply that arrives after it is not consumed: the tty 
 kernel echoes the bytes, and the next input read may see them. That case is known and accepted as
 rare. Removing it needs no-echo mode and discarding DA-shaped sequences in the key reader.
 
+```python
+decode_da(reply) -> dict | None
+```
+
+Splits a `probe_da()` reply. Returns `None` for anything that is not an approved DA1 or DA2 reply
+(the same rule `has_ansi` uses). For DA1 the dict has `kind` (`"DA1"`), `params`, `class` (the
+conformance class, for example 62 for VT220), and `features` (the rest). For DA2 it has `kind`
+(`"DA2"`), `params`, `terminal_type`, and `firmware` (either may be None). Non-numeric parameters
+make the reply invalid.
+
 Example DA1 replies: `ESC[?6c` (VT102), `ESC[?1;2c` (VT100 with AVO),
 `ESC[?62;1;2;6;8;9;15;22c` (VT220). The rule accepts any digits and `;` between the marker and `c`.
 
