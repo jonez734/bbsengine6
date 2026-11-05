@@ -29,6 +29,10 @@ import websockets.asyncio.server
 import websockets.exceptions
 
 from bbsengine6 import io as bbs_io
+from bbsengine6.net.terminal_caps import (
+    forget_terminal_caps,
+    handle_terminal_caps,
+)
 
 if TYPE_CHECKING:
     from .packet import Packet
@@ -913,6 +917,12 @@ class WebSocketServer:
                 self._handle_list_services(), incoming_request_id
             )
 
+        # Built-in: a client reports its terminal capabilities (see net/terminal_caps.py).
+        if msg_type == "terminal_caps":
+            return self._echo_request_id(
+                handle_terminal_caps(websocket, message), incoming_request_id
+            )
+
         # Look up service for this message type
         service = self.get_service(msg_type)
 
@@ -1119,6 +1129,7 @@ class WebSocketServer:
                 # Notify the router so it can clean up channel
                 # subscriptions, session state, and finalize any
                 # in-progress games.
+                forget_terminal_caps(websocket)
                 if self._router is not None:
                     try:
                         self._router.unregister_session(session_id)
