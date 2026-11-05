@@ -46,7 +46,10 @@ with no way to fix it.
 
 ## Status
 
-Open. Not started.
+Implemented (2026-11-04), in the commits listed in `handbook/io/todo/terminfo.md`:
+resolution (`io/terminal.resolve`), the child `TERM` (`subprocess_command.run_child`), the
+session `useragent`, the `engine.__member.terminaltype` column and migration, and the console
+`[Y]` view and edit. Not done: a sysop-only override distinct from the edit key, and telnet TTYPE.
 
 ---
 

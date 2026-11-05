@@ -1,6 +1,7 @@
 # Pure-Python terminfo reader and member terminal type
 
-Status: in progress (2026-11-04).
+Status: in progress (2026-11-04). Standard capabilities and terminal-type integration are done.
+Extended capabilities are not parsed yet (see below).
 
 ## Goal
 
@@ -166,4 +167,18 @@ still refuse full-screen programs (Part C).
 ## Status
 
 - Plan written.
-- Part A: not started.
+- Part A: standard capabilities parsed and cross-checked against `infocmp -1x`. Tests in
+  `py/tests/test_terminfo.py`. Extended capabilities are NOT parsed: the layout was not
+  verified, so they are left out rather than returned wrong.
+- Part B: `io/terminal.resolve` and `resolve_notice` implemented.
+- Part C: `subprocess_command.run_child` sets the child `TERM`; session `useragent` uses the
+  resolved value; `engine.__member.terminaltype` added with migration
+  `sql/migrate_member_terminaltype.sql`; console `[Y]` view and edit (sysop-gated menu).
+- Part D: tests in `test_terminfo.py`, `test_terminal_resolve.py`,
+  `test_subprocess_child_term.py`, `test_console_member_terminaltype.py`. Full suite passes.
+
+## Open
+
+- Extended (user-defined) capabilities. Parsing needs a verified layout, checked against the
+  stdlib `curses` oracle with `tic -x` probe entries.
+- Part E docs: `handbook/specs/io/` spec for the terminfo API.
