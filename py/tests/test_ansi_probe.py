@@ -232,3 +232,37 @@ def test_pty_terminal_that_answers_da1_is_detected():
 def test_pty_terminal_that_stays_silent_is_not_detected():
     out = _run_child_on_pty(None)
     assert "HAS_ANSI=False" in out, out
+
+
+@needs_script
+def test_pty_late_reply_inside_settle_window_is_consumed():
+    """A DA1 reply that arrives after the timeout but inside the settle window is matched,
+    so it is not echoed on screen or left in the tty for the input reader."""
+    import pexpect
+
+    src = textwrap.dedent(
+        """
+        import sys, time
+        sys.path.insert(0, "src")
+        from bbsengine6.io import terminal, common
+        r = terminal.probe_da(timeout=0.3)
+        sys.stdout.write("\\\\nRESULT=" + repr(r) + "\\\\n")
+        time.sleep(0.6)
+        common.drain_stream_to_queue(common._in_stream(), common._queue())
+        sys.stdout.write("QUEUE=" + repr("".join(common._queue())) + "\\\\nDONE\\\\n")
+        sys.stdout.flush()
+        """
+    )
+    child = pexpect.spawn(sys.executable, ["-c", src], timeout=20, encoding="utf-8")
+    try:
+        child.expect_exact("\x1b[c")
+        import time as _t
+        _t.sleep(0.45)  # after the 0.3 s timeout, inside the 0.25 s settle window
+        child.send("\x1b[?62;1;2c")
+        child.expect("DONE")
+        out = child.before
+    finally:
+        child.close(force=True)
+    assert "RESULT='\\x1b[?62;1;2c'" in out, out
+    assert "QUEUE=''" in out, out
+    assert "^[[?62;1;2c" not in out, out

@@ -333,15 +333,23 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 ##    return _read_terminal_response(terminator)
 
 
+#: Extra time after the timeout (or after a match) during which the tty is still read, so a
+#: reply that arrives late is consumed here and is not left in the tty for the input reader.
+QUERY_SETTLE_SECONDS = 0.25
+
+
 def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0.5) -> str | None:
     """Send ``request`` to the terminal and return the first reply matching ``reply_re``.
 
     Same exchange as :func:`get_dsr`: pending input is drained into the queue first, the tty
     is put in raw mode (unless a raw session owns it), the request is written, and the reply
-    is read with ``select`` until ``timeout``. Typed bytes that are not the reply go back on
-    the input queue, in order. The tty is restored in every case.
+    is read with ``select`` until ``timeout``. Then the tty is read for ``QUERY_SETTLE_SECONDS``
+    more, so a late reply is consumed here and does not reach the input reader as keystrokes.
+    Typed bytes that are not the reply go back on the input queue, in order. The tty is
+    restored in every case.
 
-    Returns the matched text, or None when no reply matched in time.
+    Returns the matched text, or None when no reply matched in time. A reply that arrives
+    after the settle window is not consumed here; the caller must treat it as not received.
     """
     with _current_stream_lock:
         drain_stream_to_queue(_in_stream(), _queue())
@@ -355,21 +363,26 @@ def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0
             tty.setraw(fd)
         _write_current_output_stream(request, flush=True)
         encoding = _in_stream().encoding or "utf-8"
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            rlist, _, _ = select.select([fd], [], [], 0.02)
-            if not rlist:
-                continue
-            try:
-                chunk = os.read(fd, 64).decode(encoding, errors="replace")
-            except OSError:
-                break
-            if not chunk:
-                break
-            buffer += chunk
-            match = reply_re.search(buffer)
-            if match:
-                break
+
+        def _read_until(deadline: float) -> None:
+            nonlocal buffer, match
+            while time.time() < deadline and match is None:
+                rlist, _, _ = select.select([fd], [], [], 0.02)
+                if not rlist:
+                    continue
+                try:
+                    chunk = os.read(fd, 64).decode(encoding, errors="replace")
+                except OSError:
+                    return
+                if not chunk:
+                    return
+                buffer += chunk
+                match = reply_re.search(buffer)
+
+        _read_until(time.time() + timeout)
+        # Keep reading briefly even when nothing has matched, to catch a late reply.
+        if match is None:
+            _read_until(time.time() + QUERY_SETTLE_SECONDS)
     finally:
         _restore_cooked(fd, old_settings)
 
