@@ -110,6 +110,45 @@ make the reply invalid.
 Example DA1 replies: `ESC[?6c` (VT102), `ESC[?1;2c` (VT100 with AVO),
 `ESC[?62;1;2;6;8;9;15;22c` (VT220). The rule accepts any digits and `;` between the marker and `c`.
 
+## Terminal report (color and capabilities)
+
+```python
+terminal_report(timeout=None) -> dict
+```
+
+Describes the terminal this process runs in. It is blocking only. It runs the DA probe
+(DA1, then DA2 if DA1 is silent), then the XTGETTCAP `RGB` query. A silent terminal costs up to
+three timeouts. Returns `source: "unknown"` with no tty.
+
+Returned keys:
+
+- `term`: the TERM used.
+- `colors`: terminfo `colors` for that TERM, or None.
+- `true_color`: True, False, or None (unknown).
+- `color_256`: True if `colors >= 256` or `true_color`; False if `colors` is known and smaller;
+  None if neither is known.
+- `source`: `"query"`, `"colorterm"`, or `"unknown"`. It says which step gave `true_color`.
+- `ansi`: the DA reply text, or None.
+
+Order for `true_color`:
+
+1. The XTGETTCAP `RGB` query. The reply is `ESC P 1 + r <hex name> = <hex value> ESC \`
+   (valid) or `ESC P 0 + r ESC \` (invalid). The name and value are hex-encoded. A value of 8 or
+   more means direct color. Verified on VTE (`524742=38`, value 8).
+2. `COLORTERM` set to `truecolor` or `24bit`.
+3. Unknown (None). Silence is not evidence of no color.
+
+Other terminals may not answer the query. xterm in the test sessions answered DA1 but not the
+RGB query, so on xterm the color answer comes from `COLORTERM` or is unknown.
+
+Late replies: a DCS XTGETTCAP reply that arrives after its query is read as one sequence through
+its ST, and the input queue drops it (recording it in the session). It is never typed as keys.
+
+```python
+parse_xtgettcap_reply(reply) -> dict | None   # {"valid", "name", "value"}
+rgb_from_reply(parsed) -> bool | None
+```
+
 ## Usage
 
 ```python
