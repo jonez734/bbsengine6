@@ -72,7 +72,8 @@ create table if not exists engine.__member (
   "tz" citext,
   "attrs" jsonb,
   "refcode" citext,
-  "accountexpires" timestamptz
+  "accountexpires" timestamptz,
+  "terminaltype" text NOT NULL DEFAULT 'xterm'
 );
 
 comment on column engine.__member.accountexpires is
