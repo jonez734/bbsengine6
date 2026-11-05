@@ -182,7 +182,7 @@ def begin_raw_session() -> None:
         # Keys already typed are in the cooked line discipline; setraw() would
         # discard them. Queue them first, in arrival order.
         drain_stream_to_queue(_in_stream(), _queue())
-        tty.setraw(fd)
+        _enter_raw(fd)
         # setraw() also clears OPOST, which turns off the tty's LF-to-CRLF translation.
         # Without it, a bare "\n" (from {f6}, and so from the Enter key) moves the cursor
         # down without returning to column 0. Input stays raw: only the output flag changes.
@@ -204,6 +204,19 @@ def end_raw_session() -> None:
         pass
     _session_raw_fd = None
     _session_raw_settings = None
+
+
+def _enter_raw(fd: int) -> None:
+    """Switch the tty to raw mode without discarding unread input.
+
+    tty.setraw() defaults to TCSAFLUSH, which throws away keys still in the kernel buffer.
+    A keypress typed just before a read was lost that way. TCSANOW changes the mode and keeps
+    the input.
+    """
+    mode = termios.tcgetattr(fd)
+    new = list(mode)
+    tty.cfmakeraw(new)
+    termios.tcsetattr(fd, termios.TCSANOW, new)
 
 
 def _restore_cooked(fd: int, old_settings: Any) -> None:
@@ -280,7 +293,7 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 
     try:
         if not _in_raw_session():
-            tty.setraw(fd)
+            _enter_raw(fd)
         _write_current_output_stream(f"{ESC}[{code}n", flush=True)
 
         buffer = ""
@@ -360,7 +373,7 @@ def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0
     match = None
     try:
         if not _in_raw_session():
-            tty.setraw(fd)
+            _enter_raw(fd)
         _write_current_output_stream(request, flush=True)
         encoding = _in_stream().encoding or "utf-8"
 
@@ -587,7 +600,7 @@ def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:
     replies = ""
     try:
         if not _in_raw_session():
-            tty.setraw(fd)
+            _enter_raw(fd)
         for mode in MOUSE_MODES:
             _write_current_output_stream(f"{CSI}?{mode}$p", flush=True)
         # Read until every mode has answered AND the terminal has gone quiet.

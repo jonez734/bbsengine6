@@ -1063,7 +1063,7 @@ def _getch_core(
     if not _in_raw_session():
         with _current_stream_lock:
             try:
-                tty.setraw(fd)
+                _common._enter_raw(fd)
             except Exception:
                 _restore_cooked(fd, old_settings)
                 raise
