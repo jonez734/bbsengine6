@@ -188,3 +188,44 @@ def has_ansi(block=True) -> bool:
     if not reply:
         return False
     return bool(DA1_REPLY_RE.fullmatch(reply) or DA2_REPLY_RE.fullmatch(reply))
+
+
+def decode_da(reply):
+    """Decode a probe_da() reply into its parts, or return None if it is not a DA reply.
+
+    Returns a dict:
+
+    - ``kind``: ``"DA1"`` for ``ESC[?...c`` or ``"DA2"`` for ``ESC[>...c``.
+    - ``params``: the numbers between the marker and ``c``, as a list of ints. An empty
+      reply (``ESC[?c``) gives an empty list.
+    - ``class``: DA1 only. The first parameter, the conformance class (for example 62 for
+      VT220, 64 for VT420), or None when absent.
+    - ``features``: DA1 only. The remaining parameters, the terminal's feature codes.
+    - ``terminal_type``: DA2 only. The first parameter (the terminal model code), or None.
+    - ``firmware``: DA2 only. The second parameter (the version), or None.
+
+    Parameters that are not numbers are ignored. The reply must match the DA1 or DA2 shape
+    exactly; anything else returns None.
+    """
+    if not reply:
+        return None
+    if DA1_REPLY_RE.fullmatch(reply):
+        kind, body = "DA1", reply[3:-1]
+    elif DA2_REPLY_RE.fullmatch(reply):
+        kind, body = "DA2", reply[3:-1]
+    else:
+        return None
+    params = [int(p) for p in body.split(";") if p.isdigit()] if body else []
+    if kind == "DA1":
+        return {
+            "kind": kind,
+            "params": params,
+            "class": params[0] if params else None,
+            "features": params[1:],
+        }
+    return {
+        "kind": kind,
+        "params": params,
+        "terminal_type": params[0] if params else None,
+        "firmware": params[1] if len(params) > 1 else None,
+    }
