@@ -1,4 +1,5 @@
 import os
+import re
 import signal
 import tty
 import select
@@ -728,6 +729,17 @@ def _show_pending_notifications(moniker: str) -> None:
 #    return _current_input_stream.read(1)
 
 
+#: A terminal's device-attributes reply: ESC [ ? digits/; c (DA1) or ESC [ > digits/; c (DA2).
+#: These answer a query the program sent (see terminal.probe_da), so they are never keys. A
+#: reply that arrives after its query has been abandoned is discarded here, not typed.
+_DA_REPLY_SEQ_RE = re.compile(r"\x1b\[[?>][0-9;]*c")
+
+
+def is_da_reply(sequence: str) -> bool:
+    """True when ``sequence`` (a full escape sequence) is a DA1 or DA2 reply."""
+    return _DA_REPLY_SEQ_RE.fullmatch(sequence) is not None
+
+
 def resolve_escape_sequence(sequence: str, debug: bool = False) -> str | None:
     """Map a complete escape sequence to a key name (shared by both readers).
 
@@ -959,6 +971,10 @@ def _proc_char(
 
         if sequence == PASTE_START:
             processed = _read_bracketed_paste()
+        elif is_da_reply(sequence):
+            # A late DA reply is not a key. The queue filter removes these before they reach
+            # this branch; if one still gets here it is dropped as "no key".
+            processed = None
         # A. Check for plain ESC
         elif len(sequence) == 1:
             processed = (
@@ -1029,6 +1045,7 @@ def _getch_core(
         # tty.setraw() discards them, so take them now, while the tty is cooked.
         # Queued in arrival order; readers consume _input_queue before waiting.
         drain_stream_to_queue(_common._current_input_stream, _input_queue)
+        _common.discard_da_replies()
 
         if _input_queue:
             char = _input_queue.popleft()
@@ -1124,6 +1141,7 @@ def _getch_core(
             # queue first so a key already read from the fd is not left waiting.
             with _current_stream_lock:
                 drain_stream_to_queue(_common._current_input_stream, _input_queue)
+                _common.discard_da_replies()
             if _input_queue:
                 return _getch_from_queue(debug=debug, fire_events=fire_events, source_func=source_func)
             ready, _, _ = select.select(
@@ -1163,10 +1181,27 @@ def _getch_core(
             # Take everything the stream has (a split escape sequence arrives in
             # pieces) into the ordered queue, then consume one key from it.
             drain_stream_to_queue(_common._current_input_stream, _input_queue)
+            discarded = _common.discard_da_replies()
             if not _input_queue:
                 if old_flags is not None:
                     fcntl.fcntl(fd, fcntl.F_SETFL, old_flags)
                 _restore_cooked(fd, old_settings)
+                if discarded:
+                    # Only a stale DA reply was read. That is not a key, so wait again with
+                    # the time left. The recursive call returns None only on a real timeout.
+                    left = None if timeout is None else timeout - (time.time() - start_time)
+                    if left is None or left > 0:
+                        return _getch_core(
+                            reader,
+                            source_func,
+                            pending=pending,
+                            timeout=left if left is not None else 1.0,
+                            debug=debug,
+                            fire_events=fire_events,
+                            check_notifications=check_notifications,
+                            idle=idle,
+                            **kwargs,
+                        )
                 return None
 
             result = _getch_from_queue(
@@ -1288,7 +1323,8 @@ def _read_drained_utf8() -> str:
             _utf8_pending().append("KEY_ESC")
         else:
             seq = "".join(raw[i:end])
-            _utf8_pending().append(resolve_escape_sequence(seq) or seq)
+            if not is_da_reply(seq):  # a late DA reply is dropped, not typed
+                _utf8_pending().append(resolve_escape_sequence(seq) or seq)
         i = end
 
     return _utf8_pending().popleft()

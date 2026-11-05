@@ -133,6 +133,29 @@ def set_input_stream(stream):
 
 _input_queue_lock = threading.Lock()
 
+#: A complete DA1 or DA2 reply in the queue: ESC [ ? digits/; c, or ESC [ > digits/; c.
+_DA_REPLY_QUEUE_RE = re.compile(r"\x1b\[[?>][0-9;]*c")
+
+
+def discard_da_replies() -> int:
+    """Remove complete DA1/DA2 replies from the input queue. Return how many were removed.
+
+    A reply to a query that has already timed out is not a keypress. The input reader calls
+    this before reading, so such a reply is dropped instead of typed. Only whole replies are
+    removed: a partial sequence is left alone until its final byte arrives.
+    """
+    with _input_queue_lock:
+        queue = _queue()
+        if not queue:
+            return 0
+        text = "".join(queue)
+        cleaned, count = _DA_REPLY_QUEUE_RE.subn("", text)
+        if count == 0:
+            return 0
+        queue.clear()
+        queue.extend(cleaned)
+        return count
+
 
 def _read_current_input_stream(size: int = 1) -> str:
     with _input_queue_lock:

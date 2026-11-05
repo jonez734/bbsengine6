@@ -6,6 +6,7 @@ The reply rules are tested directly. The pty tests run a probe on a real pty thr
 """
 
 import shutil
+import time
 import subprocess
 import sys
 import textwrap
@@ -266,3 +267,39 @@ def test_pty_late_reply_inside_settle_window_is_consumed():
     assert "RESULT='\\x1b[?62;1;2c'" in out, out
     assert "QUEUE=''" in out, out
     assert "^[[?62;1;2c" not in out, out
+
+
+@needs_script
+def test_pty_late_reply_then_key_returns_the_key():
+    """A late DA reply in the input is discarded, and the next real keypress is returned.
+
+    getch must not return None (a timeout) because the only bytes were a stale reply.
+    """
+    import pexpect
+
+    src = textwrap.dedent(
+        """
+        import sys, time, importlib
+        sys.path.insert(0, "src")
+        from bbsengine6.io import terminal
+        getch = importlib.import_module("bbsengine6.io.getch")
+        terminal.probe_da(timeout=0.3)
+        time.sleep(0.5)
+        k = getch.getch_str(timeout=3.0)
+        sys.stdout.write("\\\\nKEY=" + repr(k) + "\\\\n")
+        sys.stdout.flush()
+        """
+    )
+    child = pexpect.spawn(sys.executable, ["-c", src], timeout=20, encoding="utf-8")
+    try:
+        child.expect_exact("\x1b[c")
+        child.expect_exact("\x1b[>c")
+        time.sleep(1.0)
+        child.send("\x1b[?62;1;2c")  # late DA1 reply
+        time.sleep(0.3)
+        child.send("q")
+        child.expect(pexpect.EOF)
+        out = child.before
+    finally:
+        child.close(force=True)
+    assert "KEY='q'" in out, out
