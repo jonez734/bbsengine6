@@ -304,6 +304,44 @@ The transport layer raises `PacketDecodeError` / `PacketChecksumError`
 on a malformed envelope; both are caught at the `WebSocketServer`
 boundary so a single bad frame cannot take down the server.
 
+### `terminal_caps` (client terminal report)
+
+Clients report their terminal capabilities once per connection, after connect. The server
+validates, stores the result on the connection, and never probes a remote terminal itself. The
+module is `bbsengine6/net/terminal_caps.py`; the server handles it in `dispatch_message`.
+
+**Request (client → server):**
+
+```json
+{
+    "type": "terminal_caps",
+    "request_id": "r1",
+    "caps": {
+        "term": "xterm-256color",
+        "colors": 256,
+        "true_color": true,
+        "color_256": true,
+        "source": "query",
+        "ansi": "\u001b[?62c"
+    }
+}
+```
+
+Accepted `caps` fields: `term` (string, at most 64 characters), `colors` (integer 0 to
+1,000,000, or null), `true_color` and `color_256` (boolean or null), `source` (`query`,
+`colorterm`, or `unknown`, required), and `ansi` (string, at most 64 characters, or null).
+Any other field is rejected.
+
+**Reply (server → client):**
+
+```json
+{ "type": "terminal_caps_ack", "request_id": "r1", "stored": true }
+{ "type": "terminal_caps_ack", "request_id": "r1", "stored": false, "error": "unknown field: x" }
+```
+
+`request_id` is echoed. A new report on the same connection replaces the old one. The stored
+value is dropped when the connection closes.
+
 ## Error handling
 
 | Failure mode                | Behavior                                                                           |
