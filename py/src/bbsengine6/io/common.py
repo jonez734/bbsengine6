@@ -333,6 +333,58 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 ##    return _read_terminal_response(terminator)
 
 
+def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0.5) -> str | None:
+    """Send ``request`` to the terminal and return the first reply matching ``reply_re``.
+
+    Same exchange as :func:`get_dsr`: pending input is drained into the queue first, the tty
+    is put in raw mode (unless a raw session owns it), the request is written, and the reply
+    is read with ``select`` until ``timeout``. Typed bytes that are not the reply go back on
+    the input queue, in order. The tty is restored in every case.
+
+    Returns the matched text, or None when no reply matched in time.
+    """
+    with _current_stream_lock:
+        drain_stream_to_queue(_in_stream(), _queue())
+        fd = _in_stream().fileno()
+        old_settings = termios.tcgetattr(fd)
+
+    buffer = ""
+    match = None
+    try:
+        if not _in_raw_session():
+            tty.setraw(fd)
+        _write_current_output_stream(request, flush=True)
+        encoding = _in_stream().encoding or "utf-8"
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            rlist, _, _ = select.select([fd], [], [], 0.02)
+            if not rlist:
+                continue
+            try:
+                chunk = os.read(fd, 64).decode(encoding, errors="replace")
+            except OSError:
+                break
+            if not chunk:
+                break
+            buffer += chunk
+            match = reply_re.search(buffer)
+            if match:
+                break
+    finally:
+        _restore_cooked(fd, old_settings)
+
+    if match:
+        leftover = buffer[: match.start()] + buffer[match.end() :]
+        matched = match.group(0)
+    else:
+        leftover = buffer
+        matched = None
+    if leftover:
+        with _input_queue_lock:
+            _queue().extend("\r" if c == "\n" else c for c in leftover)
+    return matched
+
+
 def get_cursor_position(timeout: float = 1.0):
     """
     Return the current cursor position as (row, col) integers.
