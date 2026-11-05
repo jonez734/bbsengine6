@@ -17,6 +17,7 @@
 #   --host HOST      server host (default: $PGHOST, else the local socket)
 #   --port PORT      server port (default: $PGPORT, else 5432)
 #   --apply          really run the files; without it, only print what would run
+#   --legacy-notify  also run the one-time notify-to-message copy (see below)
 #   --list           print the migration files and exit
 #   --sql-dir DIR    directory holding the .sql files (default: py/src/bbsengine6/sql)
 #   -h, --help       show this help
@@ -26,6 +27,9 @@
 #     ADD COLUMN IF NOT EXISTS forms are safe to re-run). Re-running is allowed.
 #   * Owner migrations (owner_zoid6*.sql) must run as a superuser or as the current owner.
 #   * Only .sql files directly in --sql-dir are considered. Pass names to run a subset.
+#   * migrate_notify_to_message.sql is a one-time copy from the legacy __notify_* tables. It
+#     is skipped by default, and it is also skipped when those tables are absent. Pass
+#     --legacy-notify to include it on a database that still has the legacy tables.
 #   * Run order is set in ORDERED (content and schema first, owner transfers last). A new
 #     migration file not listed there runs after them, in name order.
 #   * Each file runs under psql --single-transaction. The two owner migrations also contain
@@ -46,6 +50,7 @@ DBHOST="${PGHOST:-}"
 DBPORT="${PGPORT:-5432}"
 APPLY=0
 LIST_ONLY=0
+LEGACY_NOTIFY=0
 FILES=()
 
 usage() {
@@ -65,6 +70,7 @@ while [[ $# -gt 0 ]]; do
         --port)    [[ $# -ge 2 ]] || die "--port needs a value"; DBPORT="$2"; shift 2 ;;
         --sql-dir) [[ $# -ge 2 ]] || die "--sql-dir needs a value"; SQL_DIR="$2"; shift 2 ;;
         --apply)   APPLY=1; shift ;;
+        --legacy-notify) LEGACY_NOTIFY=1; shift ;;
         --list)    LIST_ONLY=1; shift ;;
         -h|--help) usage; exit 0 ;;
         --)        shift; FILES+=("$@"); break ;;
@@ -101,6 +107,14 @@ for g in "${FOUND[@]}"; do
     for f in "${ORDERED[@]}"; do [[ "$g" == "$f" ]] && known=1; done
     [[ $known -eq 0 ]] && ALL+=("$g")
 done
+
+# The legacy notify copy is opt-in. Keep it out of the default plan.
+LEGACY_FILE=migrate_notify_to_message.sql
+if [[ $LEGACY_NOTIFY -eq 0 ]]; then
+    FILTERED=()
+    for f in "${ALL[@]}"; do [[ "$f" == "$LEGACY_FILE" ]] || FILTERED+=("$f"); done
+    ALL=("${FILTERED[@]}")
+fi
 
 if [[ ${#FILES[@]} -eq 0 ]]; then
     SELECTED=("${ALL[@]}")
