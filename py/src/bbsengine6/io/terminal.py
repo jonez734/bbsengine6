@@ -229,3 +229,140 @@ def decode_da(reply):
         "terminal_type": params[0] if params else None,
         "firmware": params[1] if len(params) > 1 else None,
     }
+
+
+# --------------------------------------------------------------------------
+# XTGETTCAP (DCS + q) capability query, for truecolor detection
+# --------------------------------------------------------------------------
+
+#: Hex of "RGB", the terminfo/ncurses direct-color capability name.
+XTGETTCAP_RGB_NAME = "524742"
+
+#: Request: DCS + q <hex name> ST. ST is written as ESC \ (ESC 0x5c).
+XTGETTCAP_RGB_REQUEST = f"\x1bP+q{XTGETTCAP_RGB_NAME}\x1b\\"
+
+#: Reply: DCS 1 + r <hex name> [= <hex value>] ST  (valid) or DCS 0 + r ST (invalid).
+#: Hex digits are matched case-insensitively. The name is not checked here.
+XTGETTCAP_REPLY_RE = re.compile(
+    r"\x1bP(?P<status>[01])\+r(?P<name>[0-9A-Fa-f]+)(?:=(?P<value>[0-9A-Fa-f]*))?\x1b\\"
+)
+
+
+def _unhex(text: str) -> str | None:
+    """Decode a hex string to text. None when the text is not even-length hex."""
+    if not text:
+        return ""
+    if len(text) % 2:
+        return None
+    return bytes.fromhex(text).decode("latin-1")
+
+
+def parse_xtgettcap_reply(reply):
+    """Parse an XTGETTCAP reply to the RGB query.
+
+    Returns a dict with ``valid`` (bool), ``name`` (the decoded capability name), and
+    ``value`` (the decoded value string, or None when the reply has no ``=value``).
+    Name and value are hex-encoded on the wire (two digits per character), so both are
+    decoded. Returns None when ``reply`` is not an XTGETTCAP reply, or when a name or value
+    is not valid hex.
+    """
+    if not reply:
+        return None
+    m = XTGETTCAP_REPLY_RE.fullmatch(reply)
+    if not m:
+        return None
+    name = _unhex(m.group("name"))
+    raw_value = m.group("value")
+    value = _unhex(raw_value) if raw_value is not None else None
+    if name is None or (raw_value is not None and value is None):
+        return None
+    return {"valid": m.group("status") == "1", "name": name, "value": value}
+
+
+def rgb_from_reply(parsed) -> bool | None:
+    """True/False for the RGB capability from a parsed reply, or None when unknown.
+
+    A valid reply whose value is an integer of 8 or more means direct color (8 bits per
+    component). A valid reply with no numeric value is treated as direct color too, since
+    the capability is present. An invalid reply, or a name other than RGB, gives None.
+    """
+    if not parsed or parsed["name"] != "RGB":
+        return None
+    if not parsed["valid"]:
+        return False
+    value = parsed["value"]
+    if value is None or value == "":
+        return True
+    if value.isdigit():
+        return int(value) >= 8
+    return None
+
+
+def _terminfo_colors(term: str):
+    """The terminfo ``colors`` number for ``term``, or None when it has no entry."""
+    from . import terminfo
+
+    if not term or not terminfo.has_entry(term):
+        return None
+    return terminfo.load(term).nums.get("colors")
+
+
+def terminal_report(timeout=None) -> dict:
+    """Describe the terminal this process runs in: color depth and where it came from.
+
+    Order for ``true_color``:
+    1. The XTGETTCAP RGB query (DCS + q), if the terminal answers it.
+    2. ``COLORTERM`` set to ``truecolor`` or ``24bit``.
+    3. Unknown (None). Silence is not evidence of no color; callers must not treat it as one.
+
+    ``colors`` is the terminfo ``colors`` number for the resolved TERM (None when there is no
+    entry). ``color_256`` is True when ``colors`` is at least 256 or ``true_color`` is True,
+    False when ``colors`` is known and smaller, and None when neither is known.
+
+    ``source`` is ``"query"``, ``"colorterm"``, or ``"unknown"``, and says which step gave
+    ``true_color``. The query uses the same timeout as the DA probe.
+
+    Returns ``source="unknown"`` with no tty. Runs the DA probe first (ansi detection; the
+    result is in ``ansi``), then the RGB query. Blocking only. A silent terminal costs up to
+    three timeouts: DA1, DA2, and the RGB query.
+    """
+    import os
+
+    from . import common
+
+    wait = _ANSI_PROBE_TIMEOUT if timeout is None else float(timeout)
+    term = os.environ.get("TERM", "")
+    colors = _terminfo_colors(term)
+    ansi = probe_da(timeout=wait)
+
+    true_color = None
+    source = "unknown"
+    try:
+        reply = common.query_terminal(XTGETTCAP_RGB_REQUEST, XTGETTCAP_REPLY_RE, timeout=wait)
+    except Exception:  # no terminal
+        reply = None
+    if reply is not None:
+        rgb = rgb_from_reply(parse_xtgettcap_reply(reply))
+        if rgb is not None:
+            true_color, source = rgb, "query"
+
+    if source == "unknown":
+        colorterm = os.environ.get("COLORTERM", "").strip().lower()
+        if colorterm in ("truecolor", "24bit"):
+            true_color, source = True, "colorterm"
+
+    if true_color or (colors is not None and colors >= 256):
+        color_256 = True
+    elif colors is not None:
+        color_256 = False
+    else:
+        color_256 = None
+
+    return {
+        "term": term,
+        "colors": colors,
+        "true_color": true_color,
+        "color_256": color_256,
+        "source": source,
+        "ansi": ansi,
+    }
