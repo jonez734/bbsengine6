@@ -47,7 +47,7 @@ def test_tz_option_is_offered_in_the_menu_keys():
     """The T key is on the menu's input choice set, next to the other single-letter options."""
     import inspect
     src = inspect.getsource(console_member._edit)
-    assert '"LMECPFDTURQX"' in src and "[MECPFDTURQX]" in src
+    assert '"LMECPFDTYURQX"' in src and "[MECPFDTYURQX]" in src
 
 
 @pytest.mark.unit

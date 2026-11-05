@@ -16,7 +16,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 cm = importlib.import_module("bbsengine6.console.member")
 
-ACCEPTED = "LMECPFDTURQX"
+ACCEPTED = "LMECPFDTYURQX"
 
 
 def _member():
@@ -71,7 +71,7 @@ def test_data_role_is_d_and_x_only_exits_with_q():
     from bbsengine6.console import member as cm
 
     src = inspect.getsource(cm._edit)
-    assert '"LMECPFDTURQX"' in src
+    assert '"LMECPFDTYURQX"' in src
     assert 'if ch == "D":' in src
     assert 'elif ch in ("Q", "X"):' in src
     assert 'if ch == "X":' not in src
@@ -109,4 +109,4 @@ def test_edit_menu_lists_exit_as_x_and_not_q():
     text = "\n".join(out)
     assert "[X]" in text and "Exit" in text, text
     assert "[Q]" not in text, text
-    assert '"LMECPFDTURQX"' in inspect.getsource(cm._edit)
+    assert '"LMECPFDTYURQX"' in inspect.getsource(cm._edit)

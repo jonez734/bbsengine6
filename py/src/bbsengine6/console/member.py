@@ -205,6 +205,33 @@ def render_member(args, **kwargs):
         f"  {{var:optioncolor}}[T]{{var:labelcolor}} Time zone:{{var:valuecolor}} {tz_shown}"
     )
 
+    # Terminal type: the stored value, or xterm when none is stored (shown as such).
+    stored_term = member.get("terminaltype")
+    term_shown = stored_term if stored_term else "xterm (default)"
+    io.echo(
+        f"  {{var:optioncolor}}[Y]{{var:labelcolor}} Terminal type:{{var:valuecolor}} {term_shown}"
+    )
+
+
+def _ask_terminaltype_menu(stored):
+    """[Y] menu option: ask for a terminal type and accept only names with a terminfo entry.
+
+    Writes nothing; the caller saves with the member record.
+    """
+    from ..io import terminfo
+
+    shown = stored or "xterm"
+    while True:
+        value = io.inputstring(
+            "{var:promptcolor}terminal type (" + shown + "): {var:inputcolor}"
+        ).strip()
+        if value == "":
+            return stored or "xterm"
+        if terminfo.has_entry(value):
+            return value
+        io.echo(f"{value!r} has no terminfo entry; not changed.", level="error")
+        return stored or "xterm"
+
 
 def _load_psql(conn, m: dict) -> None:
     """Put the member's data role into the edit dict (the loginid is the OS login).
@@ -303,8 +330,8 @@ def _edit(args, mode, member, **kwargs):
     while not done:
         render_member(args, member=member, _member=_member)
         ch = io.inputchoice(
-            f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFDTURQX]{{var:promptcolor}}: {{var:inputcolor}}",
-            "LMECPFDTURQX",
+            f"{{var:promptcolor}}{mode} member {{var:optioncolor}}[MECPFDTYURQX]{{var:promptcolor}}: {{var:inputcolor}}",
+            "LMECPFDTYURQX",
             "",
             help=render_member,
             member=member,
@@ -371,6 +398,11 @@ def _edit(args, mode, member, **kwargs):
             io.echo("Time zone")
             member["tz"] = _ask_tz_menu(
                 member.get("tz"), conn=conn
+            )
+        elif ch == "Y":
+            io.echo("Terminal type")
+            member["terminaltype"] = _ask_terminaltype_menu(
+                member.get("terminaltype")
             )
         elif ch == "R":
             io.echo("Refcode")
