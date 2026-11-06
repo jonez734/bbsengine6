@@ -40,6 +40,10 @@ class Session:
         # DA1/DA2 replies the input reader took from the tty (see io.common.discard_da_replies).
         # A non-blocking probe_da() reads its answer from here.
         self.da_replies: list = []
+        # Where the member connected from, as recorded on the session (util.getremoteaddr). The
+        # source is "utmp", "ssh_env", or None. Set when the session starts.
+        self.remoteaddr: Optional[str] = None
+        self.remoteaddr_source: Optional[str] = None
         # io/echo.py state. Runtime variables start as None: echo builds the default set
         # (its built-in names and skin) on first read, so each interaction starts the same.
         self.raw = False
