@@ -169,3 +169,19 @@ def test_origin_none_on_unsupported_platform(monkeypatch):
 def test_live_utmp_parses_every_record():
     records = utmp.read_utmp(layout=LINUX)
     assert all(r.type in range(0, 10) for r in records)
+
+
+def test_current_tty_and_origin_come_from_one_record(tmp_path):
+    path = _write(
+        tmp_path,
+        _linux_record(line="pts/2", host="::1", sec=100),
+        _linux_record(line="seat0", host="login screen", sec=50),
+    )
+    assert utmp.current_tty("/dev/pts/2", path=path, layout=LINUX) == "pts/2"
+    assert utmp.current_origin("/dev/pts/2", path=path, layout=LINUX) == "::1"
+
+
+def test_current_tty_none_for_dead_or_missing(tmp_path):
+    path = _write(tmp_path, _linux_record(typ=8, line="pts/9", host="198.51.100.1"))
+    assert utmp.current_tty("/dev/pts/9", path=path, layout=LINUX) is None
+    assert utmp.current_tty("/dev/pts/8", path=path, layout=LINUX) is None

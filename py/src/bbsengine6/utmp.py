@@ -35,6 +35,7 @@ __all__ = [
     "layout_for_platform",
     "read_utmp",
     "current_origin",
+    "current_tty",
     "parse_host",
 ]
 
@@ -193,20 +194,13 @@ def _normalise(layout: UtmpLayout, fields: tuple) -> tuple:
     return (typ, pid, line, ident, user, host, 0, 0, 0, sec, usec, (), spare)
 
 
-def current_origin(
-    tty: Optional[str] = None,
+def _live_record(
+    tty: Optional[str],
     *,
-    path: Optional[str] = None,
-    layout: Optional[UtmpLayout] = None,
-) -> Optional[str]:
-    """The remote address recorded for the live login on ``tty``, or None.
-
-    ``tty`` defaults to the terminal on standard input (``os.ttyname(0)``). The match is on the
-    record's ``line`` field (for example ``pts/0``, the tty name without ``/dev/``), and only a
-    ``USER_PROCESS`` record counts, so a stale or dead entry is ignored. The newest matching record
-    wins. Returns None on any failure: no tty, unsupported platform, missing or unreadable file, or
-    no address on the record. A non-address host (a name) is returned as text, as sshd wrote it.
-    """
+    path: Optional[str],
+    layout: Optional[UtmpLayout],
+) -> Optional[UtmpRecord]:
+    """The newest live USER_PROCESS record for ``tty`` (default: this process's terminal), or None."""
     layout = layout or layout_for_platform()
     if layout is None:
         return None
@@ -226,6 +220,35 @@ def current_origin(
             continue
         if best is None or rec.time >= best.time:
             best = rec
-    if best is None or not best.host:
+    return best
+
+
+def current_tty(tty: Optional[str] = None, *, path: Optional[str] = None,
+                layout: Optional[UtmpLayout] = None) -> Optional[str]:
+    """The tty name of the live login, as utmp records it (for example ``pts/2``), or None.
+
+    Returns the same record the address comes from, so the tty and the address always describe one
+    login. None when no live record exists for the terminal.
+    """
+    rec = _live_record(tty, path=path, layout=layout)
+    return rec.line if rec is not None else None
+
+
+def current_origin(
+    tty: Optional[str] = None,
+    *,
+    path: Optional[str] = None,
+    layout: Optional[UtmpLayout] = None,
+) -> Optional[str]:
+    """The remote address recorded for the live login on ``tty``, or None.
+
+    ``tty`` defaults to the terminal on standard input (``os.ttyname(0)``). The match is on the
+    record's ``line`` field (for example ``pts/0``, the tty name without ``/dev/``), and only a
+    ``USER_PROCESS`` record counts, so a stale or dead entry is ignored. The newest matching record
+    wins. Returns None on any failure: no tty, unsupported platform, missing or unreadable file, or
+    no address on the record. A non-address host (a name) is returned as text, as sshd wrote it.
+    """
+    rec = _live_record(tty, path=path, layout=layout)
+    if rec is None or not rec.host:
         return None
-    return best.address if best.address is not None else best.host
+    return rec.address if rec.address is not None else rec.host
