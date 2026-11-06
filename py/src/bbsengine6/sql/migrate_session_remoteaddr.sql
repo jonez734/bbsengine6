@@ -1,7 +1,7 @@
 -- bbsengine6/sql/migrate_session_remoteaddr.sql
 -- Renames the session address column to remoteaddr, and adds remoteaddr_source (the address's
--- origin: utmp or ssh_env) and tty (the login's terminal as utmp records it). Idempotent. Run once per existing database; fresh installs get the
--- same shape from session.sql.
+-- origin: utmp or ssh_env) and tty (the login's terminal as utmp records it). Idempotent. Run once
+-- per existing database as the table owner; fresh installs get the same shape from session.sql.
 --
 -- The address column is dropped and re-added, not renamed. That is only safe when no session has
 -- an address. The guard below stops the migration if any does, so nothing is discarded silently.
@@ -62,6 +62,8 @@ create view engine.session as
     left outer join engine.__member as currentmember on (currentmember.loginid = CURRENT_USER)
 ;
 
+-- The unique index needs table ownership. An "if not exists" makes it safe when it already exists;
+-- when it does not, the run needs the table owner. Run this migration as the owner.
 create unique index if not exists idx_session_sessionid_unique on engine.__session(id);
 
 grant select on engine.session to web, term, sysop, member;
