@@ -1,10 +1,13 @@
 # utmp origin lookup: platforms not yet verified
 
-Status: built for Linux (verified) and FreeBSD (header-derived, not run). Other platforms return
-no origin and fall back to the SSH environment.
+Status: built and in use on Linux. Linux (glibc) is verified on this host. FreeBSD is
+header-derived and not run. OpenBSD, NetBSD, and macOS are not added; they fall back to the SSH
+environment. The unverified platforms are deferred: no access to those systems.
 
-Code: `py/src/bbsengine6/utmp.py` (layouts, `read_utmp`, `current_origin`) and
-`py/src/bbsengine6/util.py` (`getremoteaddr`, `remoteaddr_source`, `current_account`).
+Code: `py/src/bbsengine6/utmp.py` (layouts, `read_utmp`, `_live_record`, `current_origin`,
+`current_tty`) and `py/src/bbsengine6/util.py` (`getremoteaddr`, `remoteaddr_source`,
+`current_account`). The session stores `remoteaddr`, `remoteaddr_source`, and `tty`
+(`engine.__session`, `session/lib.py` `buildsession`).
 
 ## Verify on each platform (no access to these systems yet)
 
@@ -20,21 +23,25 @@ Code: `py/src/bbsengine6/utmp.py` (layouts, `read_utmp`, `current_origin`) and
       man page was unreachable when checked.
 - [ ] Confirm `sys.platform` values for each (`freebsd`, `openbsd`, `netbsd`, `darwin`).
 
-## Linux: verified on this machine
+## Linux: verified
 
 - [x] `struct utmp` is 384 bytes; offsets confirmed with a compiled probe against the glibc header.
 - [x] The live `/run/utmp` parses; the `USER_PROCESS` records match `who`.
-- [ ] A live SSH login record (`pts/N` with a client address) has not been read back yet, because
-      the session in this check was local. Run `python3 -c "from bbsengine6 import utmp; print(utmp.current_origin())"`
-      inside an SSH session to confirm.
+- [x] A local SSH login (`pts/2`, host `::1`) is read back: `current_origin()` returns `::1` and
+      `current_tty()` returns `pts/2`, from the same record. Accepted as the verification in place
+      of a remote test (no second machine). The IPv4 remote path is covered by unit tests only.
 
-## Install and permissions
+## Install and permissions (current method)
 
-- [x] `bed` install guide: `usermod -aG utmp <service-user>` (sudo), with restart note.
-- [x] `zoid6` install guide: same step for the `zoid6` account.
-- [ ] Run the `usermod` step on each host (`bed`'s service account and `zoid6`). Until then the
-      origin lookup gets `PermissionError` and falls back to the SSH environment.
-- [ ] Verify membership after restart: `id <account>` and `sudo -u <account> test -r /run/utmp`.
+- [x] zoid6: the utmp group is granted by the systemd drop-in
+      `/etc/systemd/system/zoid6.service.d/utmp.conf` (`SupplementaryGroups=utmp`), installed with
+      `make -C zoid6/src install-dropin`. The process has group 22. `usermod` is not needed.
+- [x] bed: the same drop-in pattern, named after the instance unit (install guide, section 2).
+- [ ] Optional: remove the earlier account membership, `sudo gpasswd -d zoid6 utmp`. Test first:
+      remove, restart, and confirm the daemon still lists group 22 in `/proc/<pid>/status`.
+- [ ] Run the session migration on each live database (adds `tty`, refreshes `engine.session`):
+      `psql -X -d <db> -f bbsengine6/py/src/bbsengine6/sql/migrate_session_remoteaddr.sql` as the
+      table owner (`jam`). Done on neither `zoid6test` nor `zoid6` yet.
 
 ## Decisions recorded
 
@@ -42,3 +49,5 @@ Code: `py/src/bbsengine6/utmp.py` (layouts, `read_utmp`, `current_origin`) and
 - Address text is kept as sshd wrote it when it is not an IP (for example a hostname), and is
   marked unparsed.
 - Scope: current terminal only. No wtmp history.
+- The session records the tty as utmp names it (`pts/N`, `seat0`, `ttyN`), from the same record as the
+  address.

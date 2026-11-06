@@ -21,7 +21,8 @@ stripping. This document merges the canonical spec with the
 | `checksum()` | Pure function. |
 | `ltree_to_path()`, `chop_last_element()`, `strip_ansi()`, `path_to_ltree()` | Pure string functions. |
 | `serialize_datetimes()`, `tobool()` | Pure functions. |
-| `getremoteaddr()`, `getcurrentloginid()` | Read from process environment; no shared state. |
+| `getremoteaddr()`, `remoteaddr_source()`, `current_account()` | Read utmp (the terminal's login record) and the process environment; no shared state. |
+| `getcurrentloginid()` | Reads the process environment; no shared state. |
 | `verify_dir_exists_writable()`, `verify_file_exists_readable()`, `verify_file_exists_readable_writable()` | Stateless filesystem checks. |
 | `timedeltastr()` | Pure function. |
 | `encryptpassword()` | Pure (no I/O; bcrypt is internally thread-safe). |
@@ -183,8 +184,26 @@ scheduled for removal; new code should use `path_to_ltree`.
 
 ```python
 getremoteaddr() -> Optional[str]
+remoteaddr_source() -> Optional[str]      # "utmp" | "ssh_env" | None
+current_account() -> str | None           # the effective account of this process
 getcurrentloginid(args, **kwargs) -> str | None
 ```
+
+`getremoteaddr()` returns the client address for this session, IPv4 or IPv6 text:
+
+1. The address on the live utmp record for this terminal (`bbsengine6.utmp.current_origin`). This
+   covers every login method sshd handled, and `remoteaddr_source()` returns `"utmp"`.
+2. Otherwise the address in `SSH_CLIENT`, then `SSH_CONNECTION`, validated as an IP address.
+   `remoteaddr_source()` returns `"ssh_env"`. These are client-reported and not verified.
+3. Otherwise `None` (for example a local console has no client address). `remoteaddr_source()`
+   returns `None`.
+
+When utmp and the SSH environment both give an address and they differ, the mismatch is logged at
+warning level and utmp is kept.
+
+`current_account()` returns the account the process runs as (its effective uid), not the login name.
+Use it to reason about group membership. `getcurrentloginid()` reads the login record and the
+environment, so it can report the wrong account under `sudo` or in a service.
 
 ### Path and SQL resource loading
 
@@ -240,7 +259,8 @@ appear in the public surface).
 | `checksum()` | Byte-level hash |
 | `ltree_to_path()`, `path_to_ltree()`, `chop_last_element()` | ltree conversions |
 | `tobool()` | Coerce truthy strings to `bool` |
-| `getremoteaddr()`, `getcurrentloginid()` | Environment reads |
+| `getremoteaddr()`, `remoteaddr_source()` | utmp read, then environment fallback |
+| `current_account()`, `getcurrentloginid()` | Process identity / environment reads |
 | `get_safe_path()`, `load_sql()` | Path / SQL resource loading |
 | `serialize_datetimes()` | JSON-friendly datetime flattening |
 | `strip_ansi()` | ANSI escape stripping |
