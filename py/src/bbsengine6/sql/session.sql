@@ -8,7 +8,11 @@ CREATE TABLE engine.__session (
     expiry timestamptz,
     lastactivity timestamptz,
     data jsonb not null,
-    ipaddress inet,
+    remoteaddr inet,
+    -- Where remoteaddr came from. utmp: sshd's login record (written by sshd). ssh_env: the
+    -- client's SSH environment (client-reported, not verified). NULL when no address was found.
+    remoteaddr_source text constraint remoteaddr_source_check
+        check (remoteaddr_source in ('utmp', 'ssh_env')),
     useragent text,
     datecreated timestamptz,
     dateupdated timestamptz,

@@ -89,6 +89,7 @@ ORDERED=(
     channel_access_migration.sql
     migrate_member_terminaltype.sql
     migrate_nologin.sql
+    migrate_session_remoteaddr.sql
     migrate_notify_to_message.sql
     pgrole_loginid_migration.sql
     owner_zoid6_message_migration.sql
