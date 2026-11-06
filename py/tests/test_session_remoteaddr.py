@@ -11,7 +11,7 @@ session_lib = importlib.import_module("bbsengine6.session.lib")
 def _row(**over):
     row = {
         "id": "s1", "expiry": None, "lastactivity": None, "data": {},
-        "remoteaddr": None, "remoteaddr_source": None, "useragent": "xterm",
+        "remoteaddr": None, "remoteaddr_source": None, "tty": None, "useragent": "xterm",
         "datecreated": None, "dateupdated": None, "moniker": "alice",
     }
     row.update(over)
@@ -32,6 +32,26 @@ def test_build_with_no_address_keeps_both_fields_as_none():
 
 def test_build_has_no_ipaddress_key():
     assert "ipaddress" not in session_lib.build(_row())
+
+
+def test_build_carries_tty():
+    s = session_lib.build(_row(tty="pts/2"))
+    assert s["tty"] == "pts/2"
+
+
+def test_buildsession_records_tty_from_the_same_login(monkeypatch):
+    from argparse import Namespace
+    from unittest.mock import patch
+
+    from bbsengine6 import util
+    from bbsengine6 import utmp
+
+    monkeypatch.setattr(session_lib.member, "getcurrentmoniker", lambda args, **kw: "alice")
+    with patch.object(util, "getremoteaddr", return_value="::1"), \
+         patch.object(util, "remoteaddr_source", return_value="utmp"), \
+         patch.object(utmp, "current_tty", return_value="pts/2"):
+        s = session_lib.buildsession(Namespace(debug=False), sessionid="sid-tty")
+    assert s["tty"] == "pts/2" and s["remoteaddr"] == "::1"
 
 
 def test_buildsession_sets_address_and_source(monkeypatch):
@@ -82,10 +102,10 @@ def test_database_view_exposes_both_fields_and_check_allows_only_known_sources()
         cur.execute(
             "select column_name from information_schema.columns "
             "where table_schema='engine' and table_name='session' "
-            "and column_name in ('remoteaddr','remoteaddr_source')"
+            "and column_name in ('remoteaddr','remoteaddr_source','tty')"
         )
         cols = {r["column_name"] for r in cur.fetchall()}
-        assert cols == {"remoteaddr", "remoteaddr_source"}
+        assert cols == {"remoteaddr", "remoteaddr_source", "tty"}
         cur.execute(
             "select pg_get_constraintdef(oid) as d from pg_constraint "
             "where conrelid='engine.__session'::regclass and contype='c' "

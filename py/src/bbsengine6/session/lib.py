@@ -129,6 +129,7 @@ def build(rec: dict) -> dict:
         "data",
         "remoteaddr",
         "remoteaddr_source",
+        "tty",
         "useragent",
         "datecreated",
         "dateupdated",
@@ -444,9 +445,11 @@ def buildsession(
     # Where the member connected from: utmp first, then the SSH environment, else None. Set once,
     # at creation, so a refresh does not change where the session started.
     from ..util import getremoteaddr, remoteaddr_source
+    from ..utmp import current_tty
 
     session["remoteaddr"] = getremoteaddr()
     session["remoteaddr_source"] = remoteaddr_source()
+    session["tty"] = current_tty()
 
     if args.debug is True:
         io.echo(f"bbsengine6.session.buildsession.100: {session=}", level="debug")

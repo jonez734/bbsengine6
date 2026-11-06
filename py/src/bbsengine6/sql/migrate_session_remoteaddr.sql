@@ -1,6 +1,6 @@
 -- bbsengine6/sql/migrate_session_remoteaddr.sql
--- Renames the session address column to remoteaddr and adds remoteaddr_source (the address's
--- origin: utmp or ssh_env). Idempotent. Run once per existing database; fresh installs get the
+-- Renames the session address column to remoteaddr, and adds remoteaddr_source (the address's
+-- origin: utmp or ssh_env) and tty (the login's terminal as utmp records it). Idempotent. Run once per existing database; fresh installs get the
 -- same shape from session.sql.
 --
 -- The address column is dropped and re-added, not renamed. That is only safe when no session has
@@ -34,6 +34,7 @@ drop view if exists engine.session;
 alter table engine.__session drop column if exists ipaddress;
 alter table engine.__session add column if not exists remoteaddr inet;
 alter table engine.__session add column if not exists remoteaddr_source text;
+alter table engine.__session add column if not exists tty text;
 
 do $$
 begin

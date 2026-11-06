@@ -13,6 +13,9 @@ CREATE TABLE engine.__session (
     -- client's SSH environment (client-reported, not verified). NULL when no address was found.
     remoteaddr_source text constraint remoteaddr_source_check
         check (remoteaddr_source in ('utmp', 'ssh_env')),
+    -- The login's terminal as utmp records it (pts/2, seat0, tty2), from the same record as remoteaddr.
+    -- NULL when no live login record exists for this process.
+    tty text,
     useragent text,
     datecreated timestamptz,
     dateupdated timestamptz,

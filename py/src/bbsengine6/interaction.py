@@ -44,6 +44,7 @@ class Session:
         # source is "utmp", "ssh_env", or None. Set when the session starts.
         self.remoteaddr: Optional[str] = None
         self.remoteaddr_source: Optional[str] = None
+        self.tty: Optional[str] = None
         # io/echo.py state. Runtime variables start as None: echo builds the default set
         # (its built-in names and skin) on first read, so each interaction starts the same.
         self.raw = False
