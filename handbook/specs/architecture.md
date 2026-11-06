@@ -255,13 +255,26 @@ Session record shape (DB row):
   "expiry": datetime,
   "lastactivity": datetime,
   "data": dict,            # JSONB column
-  "ipaddress": str,
+  "remoteaddr": str | None,        # IPv4 or IPv6 text; None when no address was found
+  "remoteaddr_source": str | None, # "utmp" (sshd login record) | "ssh_env" (client SSH env) | None
   "useragent": str,
   "moniker": str,
   "datecreated": datetime,
   "dateupdated": datetime,
 }
 ```
+
+`remoteaddr` is where the member connected from. `remoteaddr_source` says how it was obtained:
+
+- `utmp`: the login record for the session's terminal, written by sshd. Covers every login method
+  that sshd handled.
+- `ssh_env`: the client's `SSH_CLIENT` or `SSH_CONNECTION`, used when utmp had no address. The
+  value comes from the client's environment, so it is client-reported and not verified.
+- `None`: no address was found (for example a local console).
+
+Neither source is verified by the server. The value is set once, when the session is created, and
+a refresh does not change it. The database enforces the two allowed source values with a CHECK.
+
 
 ### 3.2 Member domain
 
