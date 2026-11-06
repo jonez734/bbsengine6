@@ -7,8 +7,13 @@ USER = $(shell whoami)
 
 all:
 
+# VERSION is the full build version (prefix plus timestamp, from scripts/next_version.sh). The default
+# is the 0.4 line; build the 0.5 line with: make version VERSION=$(scripts/next_version.sh 0.5.0.dev <wheels>)
+VERSION_PREFIX ?= 0.4.0.dev
+VERSION ?= $(shell date -u +%Y%m%d%H%M%S)
+
 version:
-	@echo '__version__ = "0.4.0.dev$(VERSION)"' > src/$(PROJECT)/_version.py
+	@echo '__version__ = "$(VERSION_PREFIX)$(VERSION)"' > src/$(PROJECT)/_version.py
 	@echo '__datestamp__ = "$(VERSION)"' >> src/$(PROJECT)/_version.py
 	@echo '__githash__ = "'`git log -1 --format='%H' 2>/dev/null | cut -c 1-16`'"' >> src/$(PROJECT)/_version.py
 	@cat src/$(PROJECT)/_version.py
