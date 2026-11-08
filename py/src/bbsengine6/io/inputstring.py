@@ -552,7 +552,7 @@ def handle_help(
     else:
         text = str(help_text)
 
-    lines = text.split("\n")
+    lines = text.split("\n") if text is not None else []
     for line in lines:
         echo(f"{{var:labelcolor}}{line}{{var:inputcolor}}", flush=True)
 
