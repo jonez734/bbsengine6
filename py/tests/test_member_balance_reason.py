@@ -86,3 +86,15 @@ def test_reason_echo_when_bed_is_down_names_no_bed():
     _, text = _reason(bed_exc=ConnectionError("refused"), local={"balance": 7})
     assert "reason: bed_down: ConnectionError" in text
     assert "bed=" not in text
+
+
+@pytest.mark.unit
+def test_bed_down_prints_the_underlying_cause_at_debug_level():
+    # A bed_down reason hides the cause: 'bed_down: BedUnavailable' says nothing about the
+    # database or auth error behind it. The message is printed on its own debug line; the
+    # reason value stays short so existing matches on it keep working.
+    info, text = _reason(bed_exc=RuntimeError("bank_balance: database_error: permission denied"),
+                         local={"balance": 7})
+    assert info["reason"] == "bed_down: RuntimeError"
+    assert "getbalance.cause" in text
+    assert "permission denied" in text

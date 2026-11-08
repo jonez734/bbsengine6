@@ -2050,6 +2050,9 @@ def getbalance_info(
         except Exception as exc:
             code = getattr(exc, "code", None)
             reason = f"bed_refused: {code}" if code else f"bed_down: {exc.__class__.__name__}"
+            # The reason stays short for callers; the cause is printed at debug level so a
+            # 'bed_down' can be traced to the database or auth error behind it.
+            io.echo(f"bbsengine6.member.getbalance.cause: moniker={moniker} {exc}", level="debug")
         else:
             if reply.get("account"):
                 name = (reply.get("bed_name") or "").strip()
