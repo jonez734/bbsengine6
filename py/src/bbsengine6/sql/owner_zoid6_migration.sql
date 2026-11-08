@@ -65,6 +65,10 @@ alter view engine.member owner to zoid6;
 -- zoid6-owned SECURITY DEFINER wrapper, so zoid6 must own the tables it reads.
 alter table engine.member_flag owner to zoid6;
 alter table engine.map_member_flag owner to zoid6;
+-- checkmemberflag reads these two tables as the definer. Grant the read explicitly: ownership
+-- alone did not give zoid6 SELECT on engine.map_member_flag, and bed_bank_balance failed with
+-- "permission denied for table map_member_flag" on every balance call.
+grant select on engine.member_flag, engine.map_member_flag to zoid6;
 
 -- trigger function created by sql/message.sql (engine schema, zoid6-owned schema)
 alter function engine.__message_recipient_notify() owner to zoid6;
