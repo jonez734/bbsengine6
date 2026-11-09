@@ -660,6 +660,8 @@ def _handle_f6(token):
             raw=indent_text,
         )
     with _current_stream_lock:
+        # An {f6} is a line break: the cursor moves down one row per break, not only back to column 0.
+        _terminal_state.cursor_row += repeat
         _terminal_state.cursor_col = (
             _terminal_state.indent if _terminal_state.indent > 0 else 0
         )

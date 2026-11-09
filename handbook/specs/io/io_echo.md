@@ -71,6 +71,11 @@ The module uses a **token-based pipeline**:
 | `{savecursor}` / `{decsc}` | Save cursor position |
 | `{restorecursor}` / `{decrc}` | Restore cursor position |
 
+`{f6}` is a hard line break. It moves the tracked cursor down one row per break
+(`repeat` breaks move it `repeat` rows) and resets the tracked column to the indent
+(0 by default). The tracked row and column are what `inputstring` reads to place
+input after a prompt (see `io_inputstring.md`, Input origin).
+
 `{decsc}` asks the terminal for its position before it saves it (a DSR query,
 with a one-second timeout; see `io_common.md`). Each save therefore waits for a
 reply. `{decrc}` restores the saved position without a query. `{savecursor}` and `{decsc}`
@@ -163,7 +168,10 @@ Print file contents with paging.
 rendered_length(text, **kwargs) -> int
 ```
 
-Calculate rendered text length (excluding control sequences).
+Calculate rendered text length (excluding control sequences). The length is the
+total visible width of the text: an `{f6}` adds no width, but the text on either side
+of it is counted as if on one line. It is not the column of the cursor after a line
+break; `inputstring` does not use it for that (see `io_inputstring.md`, Input origin).
 
 ---
 

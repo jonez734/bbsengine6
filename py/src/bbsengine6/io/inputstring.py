@@ -32,6 +32,25 @@ from .common import (
 from .getch import begin_raw_session, end_raw_session
 
 
+def _input_origin(start_row: int, start_col: int, prompt: str):
+    """Where the input line starts, read after the prompt has been drawn.
+
+    The engine tracks the cursor as it writes (text, ACS characters, {f6}, {curpos}), so the tracked
+    position after the prompt is the real origin. It is the row below at the tracked column after an
+    {f6} (the indent, 0 by default), and wherever the box drawing left the cursor otherwise. If the
+    tracked position is not usable, fall back to the width count from the start position.
+    """
+    from .common import _terminal_state
+
+    row = getattr(_terminal_state, "cursor_row", None)
+    col = getattr(_terminal_state, "cursor_col", None)
+    if isinstance(row, int) and isinstance(col, int) and row >= 1 and col >= 0:
+        # The tracked column is 0 at the start of a row (after an {f6}); {curpos} takes 1-based
+        # columns. Convert to the 1-based terminal column so the origin means the same to both.
+        return row, max(col, 1)
+    return start_row, start_col + int(rendered_length(prompt))
+
+
 # --- 0. MANDATORY DEFINITIONS & GLOBALS ---
 
 _inputstring_lock = threading.Lock()
@@ -977,10 +996,9 @@ def redraw_line(
     """
     full_prompt = prompt
 
-    input_col_start = start_col + rendered_length(full_prompt)
-
     echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
     echo(full_prompt, end="", flush=True, wordwrap=False)
+    start_row, input_col_start = _input_origin(start_row, start_col, full_prompt)
     echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
 
     display_str = buffer[scroll_offset : scroll_offset + max_width]
@@ -1388,9 +1406,11 @@ def _inputstring_body(
     # redraw_line() draws, so the first frame and later redraws agree on the layout.
     echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
     echo(prompt, end="", flush=True, wordwrap=False)
+    # The input starts where the prompt left the cursor (after an {f6}: the row below). Read it
+    # before the bottom bar is painted: the bar saves and restores the cursor around its paint, so
+    # reading after would give the position before the prompt's last segment.
+    start_row, input_col_start = _input_origin(start_row, start_col, prompt)
     _show_mode(_insert_mode, paint=bottombar)
-
-    input_col_start = start_col + prompt_len
     # The row holds the prompt, the mode indicator and the text. Give the text only the
     # room left after the prompt, so a long paste wraps inside the window instead of
     # past the right edge. "[INS]"/"[OVR]" plus its leading space is 6 columns.

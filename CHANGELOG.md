@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### fix(inputstring): input starts where the prompt left the cursor
+
+`inputstring` placed the input at `start_col + rendered_length(prompt)`: a width count that
+ignores `{f6}`, ACS box drawing and `{curpos}`. A prompt with a status line followed by `{f6}`
+put the input several columns right of the input line. The origin is now the engine's tracked
+cursor after the prompt is drawn (before the bottom bar paints, which saves and restores the
+cursor). `{f6}` advances the tracked row, so input after a break starts on the row below, at the
+tracked column (the indent, 0 by default). The width count remains as the fallback. Tests:
+`tests/test_inputstring_input_origin.py`. Specs: `io_inputstring.md` (Input origin),
+`io_echo.md` (`{f6}`, `rendered_length`).
+
 ### fix(bottombar): save and restore with `{savecursor}` / `{restorecursor}`
 
 The bar update and `screen.init` / `screen.updatebottombar` use the `{savecursor}` and

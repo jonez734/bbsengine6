@@ -240,6 +240,25 @@ Clear and redraw the input line. Handles both regular and masked input. The line
 holds the prompt and the text only; the INS/OVR mode is not drawn on it (see
 Terminal state during the call).
 
+### Input origin
+
+The input starts where the prompt left the cursor. `inputstring` draws the prompt, then
+reads the engine's tracked cursor (`common._terminal_state`) before the bottom bar is
+painted, and uses that position as the origin for the text and the cursor:
+
+- A prompt with no `{f6}`: the origin is the tracked position after the prompt, which
+  includes any `{curpos}`, ACS box drawing, or other cursor moves the prompt makes.
+- A prompt with `{f6}`: the origin is the row below the last break, at the tracked
+  column, which is the indent (0 by default). `{f6}` advances the tracked row (see
+  `io_echo.md`, Cursor Control).
+- The origin is read before the bottom bar paints, because the bar saves and restores the
+  cursor around its paint.
+- If the tracked position is not usable, the origin falls back to the start position
+  plus the prompt's width (`rendered_length(prompt)`).
+
+The tracked column is 0-based at the start of a row, and `{curpos}` takes 1-based
+columns; the origin is returned as a 1-based column.
+
 ---
 
 ```python
