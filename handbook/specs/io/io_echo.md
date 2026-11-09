@@ -81,6 +81,20 @@ with a one-second timeout; see `io_common.md`). Each save therefore waits for a
 reply. `{decrc}` restores the saved position without a query. `{savecursor}` and `{decsc}`
 are the same tag, so the bottom bar pays this cost on each update.
 
+**Colour and attributes are saved too.** Each save also records the SGR state in effect
+at that point: the foreground, the background, and the attributes (bold, italic,
+underline, inverse, strike). The engine keeps this state current as escape text is
+written (`TerminalState.sgr`, parsed by `io/sgr_state.py`). A restore re-emits the saved
+state as one SGR sequence (`ESC[0;...m`) after moving the cursor, so the text written next
+is drawn in the colour that was active at the save, not the colour written last.
+
+- `{red}A{decsc}B{green}{decrc}C`: `C` is drawn red. The restore writes the saved SGR
+  before `C`.
+- A save with no colour or attribute in effect records nothing, and a restore emits
+  nothing extra.
+- The state covers the 16 basic colours, 256-colour and truecolour (`38;5;n`,
+  `38;2;r;g;b`), and the attributes above. `{/all}` clears it.
+
 ### 4. Display Control
 
 | Command | Description |

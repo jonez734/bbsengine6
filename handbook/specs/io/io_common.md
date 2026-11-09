@@ -56,7 +56,7 @@ them stale.
 | `_current_stream_lock` | `threading.Lock` | Serialises stream reads and writes. Not reentrant. |
 | `_terminal_state_lock` | `threading.Lock` | Guards `_terminal_state` |
 | `_terminal_state` | `TerminalState` | Current software terminal state |
-| `_terminal_state_stack` | list | Saved states for `{decsc}` / `{decrc}` |
+| `_terminal_state_stack` | list | Saved states for `{decsc}` / `{decrc}`; each carries the cursor, the flags, and the SGR colour/attribute state (`TerminalState.sgr`) |
 | `_terminal_state_stack_enabled` | bool | `False`: one save slot, restore does not pop |
 | `_input_queue` | deque | Keys read but not yet returned to a caller |
 | `_input_queue_lock` | `threading.Lock` | Guards `_input_queue` |

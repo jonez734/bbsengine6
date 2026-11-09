@@ -242,6 +242,21 @@ Terminal state during the call).
 
 ### Input origin
 
+The input line starts where the prompt left the cursor. `inputstring` draws the prompt, reads the
+engine's tracked cursor, and uses it as the origin for the text and the cursor. The origin is read
+before the bottom bar paints, since the bar saves and restores the cursor around its paint.
+
+- A prompt with no `{f6}`: the tracked position after the prompt, including any `{curpos}`, ACS
+  box drawing, or other cursor move the prompt made.
+- A prompt with `{f6}` (for example `status{f6}input: `): the input starts on the row below the
+  last break, at the tracked column (the indent, 0 by default). `{f6}` advances the tracked row.
+- If the tracked position is not usable, the origin falls back to the start position plus the
+  prompt's width (`rendered_length`). `rendered_length` counts visible text only, so it is not
+  used when the tracked position is available.
+
+The colour and attributes in effect when the prompt is drawn are preserved across the input line,
+and the input is drawn in the colour the caller set (see `io_echo.md`, Colour and attributes).
+
 The input starts where the prompt left the cursor. `inputstring` draws the prompt, then
 reads the engine's tracked cursor (`common._terminal_state`) before the bottom bar is
 painted, and uses that position as the origin for the text and the cursor:

@@ -263,6 +263,11 @@ login prompts use it for this reason.
 The bar's own update uses `{savecursor}` and `{restorecursor}`. `{savecursor}` queries the
 cursor position first, so each bar update waits for the terminal's reply.
 
+A bar paint leaves the caller's colour and attributes alone. The paint sets the bar's own colour
+inside the save and restore, and ends at `{restorecursor}`. Restoring re-emits the caller's saved
+SGR state (see `io_echo.md`), so the text after the paint is drawn in the caller's colour. The
+paint no longer ends with `{/all}`, which used to clear the caller's colour.
+
 ## Registry resolution
 
 `_resolve_registry(name=None)` picks the registry for a given call:
