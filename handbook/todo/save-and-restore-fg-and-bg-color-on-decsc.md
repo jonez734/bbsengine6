@@ -17,17 +17,28 @@ change when the bar repaints. Casino's status line and bottom bar show this.
 
 ## Open
 
-- [ ] Add foreground, background and attribute fields to `TerminalState`
-- [ ] Save them in `_handle_decsc` and restore them in `_handle_decrc`
-- [ ] Decide whether `{savecursor}` emits the saved state as SGR on restore, or only records it
+- [x] Add foreground, background and attribute fields to `TerminalState`
+- [x] Save them in `_handle_decsc` and restore them in `_handle_decrc`
+- [x] Decide whether `{savecursor}` emits the saved state as SGR on restore, or only records it
   internally (the restore must leave the terminal in the saved colour either way)
-- [ ] Make the bottom-bar redraw restore the caller's colour after it paints
-- [ ] Tests: set a colour and attribute, save, change colour, restore, and the colour matches the
+- [x] Make the bottom-bar redraw restore the caller's colour after it paints
+- [x] Tests: set a colour and attribute, save, change colour, restore, and the colour matches the
   save
-- [ ] Test: a bottom-bar redraw between a save and a restore leaves the caller's colour unchanged
+- [x] Test: a bottom-bar redraw between a save and a restore leaves the caller's colour unchanged
 
 ## Done when
 
-- [ ] `{decrc}` restores the saved foreground, background and attributes
-- [ ] The bottom bar redraw does not change the caller's colour
-- [ ] The new tests pass in the full bbsengine6 suite, with no new failures against the baseline
+- [x] `{decrc}` restores the saved foreground, background and attributes
+- [x] The bottom bar redraw does not change the caller's colour
+- [x] The new tests pass in the full bbsengine6 suite, with no new failures against the baseline
+
+## Resolution
+
+- `TerminalState.sgr` (`io/common.py`) records the SGR colour and attributes as escape text is
+  written. The parser and emitter are in `io/sgr_state.py`.
+- `{decsc}` saves the SGR state; `{decrc}` restores it and re-emits it, so the next text is drawn
+  in the saved colour. `{savecursor}`/`{restorecursor}` do the same.
+- The bottom bar no longer ends its paint with `{/all}`, which reset the caller's colour after the
+  restore. The restore now leaves the caller's colour in place.
+- Decision recorded: the restore re-emits SGR (the terminal shows the saved colour), not only the
+  software state.

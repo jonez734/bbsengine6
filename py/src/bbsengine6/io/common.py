@@ -182,7 +182,20 @@ def _write_current_output_stream(s: str, flush=False):
 
 def write_current_output_stream(s: str, flush=False):
     with _current_stream_lock:
+        _record_sgr(s)
         return _write_current_output_stream(s, flush=flush)
+
+
+def _record_sgr(s: str) -> None:
+    """Track the SGR colour and attributes as escape text is written, for {decsc}/{decrc}."""
+    if "\x1b[" not in s:
+        return
+    from . import sgr_state
+
+    st = _get_terminal_state()
+    with _terminal_state_lock:
+        base = st.sgr or sgr_state.EMPTY
+        st.sgr = sgr_state.apply(base, s)
 
 
 # Set by a caller (inputstring) that holds the tty in raw mode for a whole prompt.
@@ -545,6 +558,9 @@ class TerminalState:
     decdwl: bool = False
     indent: int = 0
     indent_char: str = DEFAULT_INDENT_CHAR
+    #: The SGR colour and attributes in effect at the cursor (see sgr_state). Saved and restored
+    #: with the cursor, so {decrc} puts the terminal back in the colour that was active at {decsc}.
+    sgr: Any = None
 
     def __repr__(self):
         return f"TerminalState({self.cursor_row=}, {self.cursor_col=}, {self.wordwrap=}, {self.has_color=}, {self.hidden=}, {self.acs=}, {self.raw=})"

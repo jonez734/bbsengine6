@@ -701,7 +701,7 @@ def _render_bottombar(
     # redraw waits for a reply. Test harnesses must answer that query (see tests/_pty_screen.py).
     echo(
         f"{{savecursor}}{{bottombarcolor}}{{curpos:{terminal.lines()},0}}"
-        f"{left_buf}{padding}{right_buf}{{restorecursor}}{{/all}}",
+        f"{left_buf}{padding}{right_buf}{{restorecursor}}",
         wordwrap=False,
         end="",
         flush=True,

@@ -448,6 +448,7 @@ def _handle_decsc(token):
                 wordwrap=_terminal_state.wordwrap,
                 has_color=_terminal_state.has_color,
                 hidden=_terminal_state.hidden,
+                sgr=_terminal_state.sgr,
             )
         )
 
@@ -471,11 +472,27 @@ def _handle_decrc(token):
         _terminal_state.wordwrap = state.wordwrap
         _terminal_state.has_color = state.has_color
         _terminal_state.hidden = state.hidden
+        _terminal_state.sgr = state.sgr
 
     # restore hardware cursor
     yield from _handle_curpos(
         Token("CURPOS", args=(_terminal_state.cursor_row, _terminal_state.cursor_col))
     )
+
+    # restore the colour and attributes that were active at the save (re-emitted, so the terminal
+    # shows them too, not only the software state)
+    if state.sgr is not None:
+        from . import sgr_state
+
+        yield from _handle_restore_sgr(sgr_state.emit(state.sgr))
+
+
+def _handle_restore_sgr(text: str):
+    """Write the saved SGR text as a token, without recording it twice."""
+    token = Token("COLOR", args=(), text=text)
+    token.repeat = 1
+    token.kind = "COLOR"
+    yield token
 
 
 # ----------------------------
