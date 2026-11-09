@@ -1,5 +1,8 @@
 # save and restore foreground, background and attributes on {decsc}/{decrc}
 
+**Status:** resolved in source (`13de141`, docs `0bf7398`). Not yet live: the running
+programs use the installed engine until bbsengine6 is deployed to the zoid6 venv.
+
 Visible bug. `{savecursor}`/`{decsc}` and `{restorecursor}`/`{decrc}` save and restore the
 cursor, but not the colour. After a restore the text is drawn in whatever colour was written last,
 not the colour that was active when the cursor was saved.
@@ -42,3 +45,10 @@ change when the bar repaints. Casino's status line and bottom bar show this.
   restore. The restore now leaves the caller's colour in place.
 - Decision recorded: the restore re-emits SGR (the terminal shows the saved colour), not only the
   software state.
+
+## Follow-ups
+
+- [ ] Deploy bbsengine6 to the zoid6 venv, then check the saved colour survives a bottom-bar repaint
+  in a running casino or letteredolive client
+- [ ] Remove the `{/all}` reset from any other program's bar or prompt code that restores a cursor
+  after painting (grep for `{restorecursor}{/all}`)
