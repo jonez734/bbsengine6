@@ -245,6 +245,26 @@ def _caller_package() -> str:
 
 
 # @since 20230510 copied from bbsengine5
+
+_DEBUG_TRUE_STRINGS = frozenset({"1", "true", "yes", "on"})
+
+
+def _debug_enabled(value: object) -> bool:
+    """True only for a real debug-on value.
+
+    ``--debug`` without a value parses to ``True``, but a program that declares it without
+    ``action="store_true"`` gets a string, so ``--debug False`` would otherwise be truthy.
+    Only ``True``, a non-zero integer, or one of ``1``/``true``/``yes``/``on`` enables debug.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in _DEBUG_TRUE_STRINGS
+    return False
+
+
 def load(args: object, modulepath: str, package: Optional[str] = None) -> ModuleType:
     """
     Loads a module from a string path.
@@ -267,7 +287,7 @@ def load(args: object, modulepath: str, package: Optional[str] = None) -> Module
     Dotted ``modulepath`` values without a leading dot are always treated
     as absolute imports, and any ``package`` argument is ignored for them.
     """
-    debug = getattr(args, "debug", False) if args else False
+    debug = _debug_enabled(getattr(args, "debug", False) if args else False)
 
     if modulepath in sys.modules and debug:
         io.echo(f"{modulepath=} is in sys.modules. reloading.", level="debug")
