@@ -15,4 +15,4 @@ def inputstring_box(prompt, oldvalue="", *, max_width=25, max_len=255, **kwargs)
     io.echo(f"{{f6}}")
     return buf
 
-io.echo(inputstring_box(f"{{promptcolor}}inputstring_box: {{inputcolor}}", "NEEDINFO"))
+io.echo(inputstring_box(f"{{promptcolor}}moniker: {{inputcolor}}", "NEEDINFO"))
