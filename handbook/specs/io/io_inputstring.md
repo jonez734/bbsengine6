@@ -253,6 +253,10 @@ before the bottom bar paints, since the bar saves and restores the cursor around
 - Relative cursor moves inside a drawing (for example `{cursorup}{cha:1}{cursorright:2}` after a
   box) are tracked (see `io_echo.md`, Cursor Control), so a prompt drawn inside a box starts its
   input inside the box.
+- The text window and the text column use the input origin. Without a break the window is
+  `max_width` minus the prompt's visible width, since the prompt shares the input row. After an
+  `{f6}` the input is on its own row, so the window is the full `max_width` and the text starts at
+  the origin; the prompt above does not shrink it.
 - If the tracked position is not usable, the origin falls back to the start position plus the
   prompt's width (`rendered_length`). `rendered_length` counts visible text only, so it is not
   used when the tracked position is available.

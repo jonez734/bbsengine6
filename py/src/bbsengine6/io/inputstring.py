@@ -1415,10 +1415,13 @@ def _inputstring_body(
     # room left after the prompt, so a long paste wraps inside the window instead of
     # past the right edge. "[INS]"/"[OVR]" plus its leading space is 6 columns.
     indicator_len = 0  # the mode is in the bottom bar, not on the input line
-    max_width = max(1, max_width - (prompt_len + indicator_len))
-    # Column where the text starts: after the prompt and the mode indicator, the same
-    # place redraw_line() draws it.
-    text_col = start_col + prompt_len + indicator_len
+    # The text starts at the input origin (see _input_origin). When the prompt is on the input
+    # row (no {f6}), the prompt takes the start of the row, so the text window is what is left
+    # after it. After an {f6} the input is on a new row, so the whole window is the input's.
+    on_prompt_row = input_col_start == start_col + prompt_len + indicator_len
+    if on_prompt_row:
+        max_width = max(1, max_width - (prompt_len + indicator_len))
+    text_col = input_col_start
 
     def enter_handler(buffer, curpos, scroll_offset, max_width):
         return handle_key_enter(
