@@ -96,3 +96,25 @@ def test_cursor_moved_by_curpos_before_the_prompt_is_followed():
     # A {curpos} written before the prompt moves the origin with it.
     row, col = _input_origin("{curpos:9,20}name: ", start=(5, 1))
     assert (row, col) == (9, 20 + len("name: "))
+
+
+
+def test_box_interior_field_ends_at_the_interior_edge():
+    # The demo box is drawn at column 1 with a 25-wide interior (columns 2-26). The prompt starts
+    # at column 3 and is drawn through echo, so the tracked cursor is where the input follows. The
+    # field is the room from column 3 to column 26: 24 columns. The 17-column prompt leaves a
+    # 7-column window, from column 20 through column 26.
+    import io as _io
+
+    prompt = "inputstring_box: "
+    sink = _io.StringIO()
+    previous = common._current_output_stream
+    common.set_output_stream(sink)
+    try:
+        ins.echo(f"{{curpos:11,3}}{prompt}", end="", flush=True)
+        row, col, window = ins.input_origin(prompt, 11, 3, 24)
+    finally:
+        common.set_output_stream(previous)
+    assert (row, col) == (11, 3 + len(prompt))
+    assert window == 24 - len(prompt) == 7
+    assert col + window - 1 == 26
