@@ -1,6 +1,6 @@
 """Terminal capability reports from clients (the ``terminal_caps`` message).
 
-A client runs :func:`bbsengine6.io.terminal.terminal_report` in the process that owns the
+A client runs :func:`bbsengine6.io.terminal.report` in the process that owns the
 member's terminal, then sends the result here. The server only validates and stores it; it
 never probes a remote terminal, because its own tty and environment describe the server, not
 the member.

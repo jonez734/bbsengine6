@@ -113,7 +113,7 @@ Example DA1 replies: `ESC[?6c` (VT102), `ESC[?1;2c` (VT100 with AVO),
 ## Terminal report (color and capabilities)
 
 ```python
-terminal_report(timeout=None) -> dict
+report(timeout=None) -> dict
 ```
 
 Describes the terminal this process runs in. It is blocking only. It runs the DA probe
@@ -122,7 +122,8 @@ three timeouts. Returns `source: "unknown"` with no tty.
 
 Returned keys:
 
-- `term`: the TERM used.
+- `term`: the terminal type this process uses, from `resolve()`: the client TERM when it has a
+  terminfo entry, else the default (`xterm`). `dumb` (and an empty TERM) is reported as itself.
 - `colors`: terminfo `colors` for that TERM, or None. When `true_color` is True it is 16777216
   (the 24-bit palette), because terminfo often lags behind the terminal.
 - `true_color`: True, False, or None (unknown).

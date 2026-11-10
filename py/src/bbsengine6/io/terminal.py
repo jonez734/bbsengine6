@@ -248,6 +248,17 @@ XTGETTCAP_REPLY_RE = re.compile(
 )
 
 
+def xtgettcap_request(name: str) -> str:
+    """The XTGETTCAP request for capability ``name``: DCS + q <hex of name> ST.
+
+    The name must be printable ASCII (a terminfo capability name); anything else is refused, since
+    it would not encode to a name the terminal can match.
+    """
+    if not name or not all(33 <= ord(c) <= 126 for c in name):
+        raise ValueError(f"capability name must be printable ASCII: {name!r}")
+    return f"\x1bP+q{name.encode('ascii').hex()}\x1b\\"
+
+
 def _unhex(text: str) -> str | None:
     """Decode a hex string to text. None when the text is not even-length hex."""
     if not text:
@@ -277,6 +288,30 @@ def parse_xtgettcap_reply(reply):
     if name is None or (raw_value is not None and value is None):
         return None
     return {"valid": m.group("status") == "1", "name": name, "value": value}
+
+
+def query_cap(name: str, timeout=None):
+    """Ask the terminal for capability ``name`` over XTGETTCAP.
+
+    Returns the value as a str when the terminal gives one, True when it has the capability with no
+    value, False when it says it does not, and None when it does not answer for ``name`` in time.
+    Blocking, like :func:`report`. Terminfo is the static lookup (``terminfo.load(term).get(cap)``);
+    this asks the running terminal.
+    """
+    from . import common
+
+    wait = _ANSI_PROBE_TIMEOUT if timeout is None else float(timeout)
+    try:
+        reply = common.query_terminal(xtgettcap_request(name), XTGETTCAP_REPLY_RE, timeout=wait)
+    except Exception:  # no terminal
+        return None
+    parsed = parse_xtgettcap_reply(reply) if reply is not None else None
+    if not parsed or parsed["name"] != name:
+        return None
+    if not parsed["valid"]:
+        return False
+    value = parsed["value"]
+    return True if value in (None, "") else value
 
 
 def rgb_from_reply(parsed) -> bool | None:
@@ -310,8 +345,12 @@ def _terminfo_colors(term: str):
     return terminfo.load(term).nums.get("colors")
 
 
-def terminal_report(timeout=None) -> dict:
+def report(timeout=None) -> dict:
     """Describe the terminal this process runs in: color depth and where it came from.
+
+    ``term`` is the terminal type this process uses, from :func:`resolve` (the client TERM when it
+    has a terminfo entry, else the default). ``dumb`` (and an empty TERM) is reported as itself, so a
+    test can see it; :func:`resolve` would refuse it.
 
     Order for ``true_color``:
     1. The XTGETTCAP RGB query (DCS + q), if the terminal answers it.
@@ -330,12 +369,12 @@ def terminal_report(timeout=None) -> dict:
     result is in ``ansi``), then the RGB query. Blocking only. A silent terminal costs up to
     three timeouts: DA1, DA2, and the RGB query.
     """
-    import os
-
     from . import common
 
     wait = _ANSI_PROBE_TIMEOUT if timeout is None else float(timeout)
     term = os.environ.get("TERM", "")
+    if term not in UNUSABLE_TERMS:
+        term, _ = resolve()
     colors = _terminfo_colors(term)
     ansi = probe_da(timeout=wait)
 
