@@ -318,7 +318,7 @@ module is `bbsengine6/net/terminal_caps.py`; the server handles it in `dispatch_
     "request_id": "r1",
     "caps": {
         "term": "xterm-256color",
-        "colors": 256,
+        "colors": 16777216,
         "true_color": true,
         "color_256": true,
         "source": "query",

@@ -111,6 +111,21 @@ def test_color_256_unknown_without_terminfo_or_truecolor(stub, monkeypatch):
     assert r["color_256"] is None
 
 
+def test_truecolor_reports_colors_as_24bit_even_with_small_terminfo(stub, monkeypatch):
+    # terminfo's colors for xterm is 8, but the terminal answered the RGB query: the two fields
+    # must agree, so colors reports the 24-bit palette.
+    monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: 8)
+    stub["rgb"] = "\x1bP1+r524742=38\x1b\\"
+    r = terminal.terminal_report()
+    assert r["colors"] == 16777216 and r["true_color"] is True and r["color_256"] is True
+
+
+def test_no_truecolor_keeps_terminfo_colors(stub, monkeypatch):
+    monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: 8)
+    r = terminal.terminal_report()
+    assert r["colors"] == 8 and r["true_color"] is None
+
+
 def test_truecolor_implies_color_256(stub, monkeypatch):
     monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: None)
     stub["rgb"] = "\x1bP1+r524742=38\x1b\\"
@@ -178,7 +193,7 @@ def _run_report(answer_rgb, colorterm=None):
 def test_pty_query_valid_reports_true_color():
     r = _run_report("\x1bP1+r524742=38\x1b\\")
     assert r["source"] == "query" and r["true_color"] is True
-    assert r["colors"] == 256 and r["color_256"] is True
+    assert r["colors"] == 16777216 and r["color_256"] is True
     assert r["ansi"] == "\x1b[?62;1;2c"
 
 

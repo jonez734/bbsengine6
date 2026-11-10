@@ -298,6 +298,9 @@ def rgb_from_reply(parsed) -> bool | None:
     return None
 
 
+TRUECOLOR_COLORS = 1 << 24  # 16777216, the 24-bit palette
+
+
 def _terminfo_colors(term: str):
     """The terminfo ``colors`` number for ``term``, or None when it has no entry."""
     from . import terminfo
@@ -316,7 +319,8 @@ def terminal_report(timeout=None) -> dict:
     3. Unknown (None). Silence is not evidence of no color; callers must not treat it as one.
 
     ``colors`` is the terminfo ``colors`` number for the resolved TERM (None when there is no
-    entry). ``color_256`` is True when ``colors`` is at least 256 or ``true_color`` is True,
+    entry), except that a truecolor terminal reports ``TRUECOLOR_COLORS`` (16777216), since terminfo
+    often lags behind. ``color_256`` is True when ``colors`` is at least 256 or ``true_color`` is True,
     False when ``colors`` is known and smaller, and None when neither is known.
 
     ``source`` is ``"query"``, ``"colorterm"``, or ``"unknown"``, and says which step gave
@@ -350,6 +354,11 @@ def terminal_report(timeout=None) -> dict:
         colorterm = os.environ.get("COLORTERM", "").strip().lower()
         if colorterm in ("truecolor", "24bit"):
             true_color, source = True, "colorterm"
+
+    # A truecolor terminal has a 24-bit palette whatever terminfo says (xterm's entry still says 8),
+    # so colors and true_color agree.
+    if true_color:
+        colors = TRUECOLOR_COLORS
 
     if true_color or (colors is not None and colors >= 256):
         color_256 = True

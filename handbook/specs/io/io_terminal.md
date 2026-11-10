@@ -123,7 +123,8 @@ three timeouts. Returns `source: "unknown"` with no tty.
 Returned keys:
 
 - `term`: the TERM used.
-- `colors`: terminfo `colors` for that TERM, or None.
+- `colors`: terminfo `colors` for that TERM, or None. When `true_color` is True it is 16777216
+  (the 24-bit palette), because terminfo often lags behind the terminal.
 - `true_color`: True, False, or None (unknown).
 - `color_256`: True if `colors >= 256` or `true_color`; False if `colors` is known and smaller;
   None if neither is known.
