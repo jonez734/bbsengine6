@@ -56,6 +56,15 @@ result = inputchoice("Select:", "ABC", args=args, pool=pool)  # with notificatio
 
 ## Key Handling
 
+**Where the answer goes.** `inputchoice` draws its prompt, then reads the origin from the
+shared rule in `bbsengine6/io/inputorigin.py` (`input_origin`). The origin is the end of the
+prompt, so a prompt drawn inside a box the caller drew starts its answer inside the box. The
+answer is echoed at the origin, and `inputboolean` writes `Yes`/`No` there too.
+
+After `help` (or `KEY_F1`) or the F2 handler runs, the prompt is drawn again at the origin, so
+it returns to the box rather than staying where the help text ended. The key echo and `{bell}`
+are unchanged.
+
 | Key | Action |
 |-----|--------|
 | Enter | Return the default; `None` if `noneok=True`; otherwise bell and wait |

@@ -36,11 +36,11 @@ def _input_origin(prompt, start=(5, 1)):
     previous = common._current_output_stream
     common.set_output_stream(sink)
     captured = {}
-    real_origin = ins._input_origin
+    real_origin = ins.input_origin
 
-    def spy_origin(start_row, start_col, prompt_text):
-        result = real_origin(start_row, start_col, prompt_text)
-        captured["origin"] = result
+    def spy_origin(prompt_text, start_row, start_col, max_width):
+        result = real_origin(prompt_text, start_row, start_col, max_width)
+        captured["origin"] = result[:2]
         return result
     with patch.object(ins, "getch", return_value="KEY_ENTER"), \
          patch.object(ins, "begin_raw_session", return_value=None), \
@@ -50,7 +50,7 @@ def _input_origin(prompt, start=(5, 1)):
          patch.object(ins, "bracketed_paste_on", return_value=None), \
          patch.object(ins, "bracketed_paste_off", return_value=None), \
          patch.object(ins, "get_cursor_position", return_value=start), \
-         patch.object(ins, "_input_origin", side_effect=spy_origin):
+         patch.object(ins, "input_origin", side_effect=spy_origin):
         try:
             ins.inputstring(prompt, "")
         finally:

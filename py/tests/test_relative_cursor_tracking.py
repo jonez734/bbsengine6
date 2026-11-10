@@ -99,5 +99,9 @@ def test_box_then_prompt_puts_the_input_inside_the_box(_screen):
     _echo("{acs:llcorner}{acs:hline:5}{acs:lrcorner}")
     _echo("{cursorup}{cha:1}{cursorright:2}")
     assert (_screen.cursor_row, _screen.cursor_col) == (11, 3)
-    origin = INS._input_origin(11, 3, "inputstring_box: ")
-    assert origin == (11, 3)
+    # The origin is read after the prompt is drawn inside the box, so draw it first.
+    _echo("inputstring_box: ")
+    row, col, _window = importlib.import_module("bbsengine6.io.inputorigin").input_origin(
+        "inputstring_box: ", 11, 3, 25
+    )
+    assert (row, col) == (11, 3 + len("inputstring_box: "))

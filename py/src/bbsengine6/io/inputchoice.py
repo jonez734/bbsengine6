@@ -1,5 +1,22 @@
-from .echo import echo
+from .echo import echo, rendered_length
+from .inputorigin import input_origin
 from .getch import getch_str as getch
+
+
+def _choice_origin(prompt: str, width: int):
+    """(row, col) where the answer goes, from the shared input origin rule."""
+    from .common import get_terminal_state
+
+    st = get_terminal_state()
+    row, col, _window = input_origin(prompt, st.cursor_row, st.cursor_col, width)
+    return row, col
+
+
+def _redraw_prompt(prompt: str, origin) -> None:
+    """Draw the prompt again, starting at the origin the answer belongs to."""
+    if origin is not None:
+        echo(f"{{curpos:{origin[0]},{max(1, origin[1] - rendered_length(prompt))}}}", end="", flush=True)
+    echo(prompt, end="", flush=True)
 
 
 def inputchoice(
@@ -23,6 +40,9 @@ def inputchoice(
     #  options = "".join(sorted(options))
 
     echo(prompt, end="", flush=True)
+    # The prompt's end is the origin: where the answer is shown, inside any box the caller drew.
+    # Read it once, then return to it after help or F2 so the prompt stays with the box.
+    origin = _choice_origin(prompt, kwargs.get("width", 80))
 
     done = False
     ch: str | None = None
@@ -45,13 +65,13 @@ def inputchoice(
                 help(**kwargs)
             elif type(help) is str:
                 echo(help)
-            echo(prompt, end="", flush=True)
+            _redraw_prompt(prompt, origin)
         elif ch == "KEY_F2":
             if callable(f2_handler):
                 f2_handler(**kwargs)
             elif type(f2_handler) is str:
                 echo(f2_handler)
-            echo(prompt, end="", flush=True)
+            _redraw_prompt(prompt, origin)
         elif ch is not None:
             if ch[:4] == "KEY_" or ch in options:
                 break

@@ -11,6 +11,9 @@
 
 ## Public API
 
+`inputboolean` calls `inputchoice`, so it has the same origin rule: `Yes`/`No` is echoed at the
+end of the prompt, inside a box drawn by the caller. It adds no drawing of its own.
+
 ### Main Function
 
 ```python

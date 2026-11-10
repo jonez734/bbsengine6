@@ -250,7 +250,12 @@ before the bottom bar paints, since the bar saves and restores the cursor around
   box drawing, or other cursor move the prompt made.
 - A prompt with `{f6}` (for example `status{f6}input: `): the input starts on the row below the
   last break, at the tracked column (the indent, 0 by default). `{f6}` advances the tracked row.
-- Relative cursor moves inside a drawing (for example `{cursorup}{cha:1}{cursorright:2}` after a
+- Relative cursor moves inside a drawing
+- The origin, window and text column are computed by the shared rule in
+  `bbsengine6/io/inputorigin.py` (`input_origin`), which `inputstring`, `inputchoice` and
+  `inputboolean` all use. The rule reads the tracked position before the prompt is measured,
+  since measuring a prompt can move the tracked cursor (an `{f6}` in the prompt).
+ (for example `{cursorup}{cha:1}{cursorright:2}` after a
   box) are tracked (see `io_echo.md`, Cursor Control), so a prompt drawn inside a box starts its
   input inside the box.
 - The text window and the text column use the input origin. Without a break the window is

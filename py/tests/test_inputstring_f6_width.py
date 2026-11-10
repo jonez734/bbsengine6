@@ -23,11 +23,11 @@ E = importlib.import_module("bbsengine6.io.echo")
 def _run(prompt, max_width, start=(5, 1)):
     """Run inputstring with Enter pressed at once. Return (origin, max_width used, text_col)."""
     captured = {}
-    real_origin = INS._input_origin
+    real_origin = INS.input_origin
 
-    def spy_origin(r, c, p):
-        out = real_origin(r, c, p)
-        captured["origin"] = out
+    def spy_origin(p, r, c, w):
+        out = real_origin(p, r, c, w)
+        captured["origin"] = out[:2]
         return out
 
     common._get_terminal_state().sgr = None
@@ -43,7 +43,7 @@ def _run(prompt, max_width, start=(5, 1)):
              patch.object(INS, "mouse_state_push"), patch.object(INS, "mouse_state_pop"), \
              patch.object(INS, "bracketed_paste_on"), patch.object(INS, "bracketed_paste_off"), \
              patch.object(INS, "_show_mode"), \
-             patch.object(INS, "_input_origin", side_effect=spy_origin):
+             patch.object(INS, "input_origin", side_effect=spy_origin):
             INS.inputstring(prompt, "", max_width=max_width, bottombar=False)
     finally:
         common.set_output_stream(prev)
