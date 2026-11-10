@@ -61,19 +61,20 @@ The module uses a **token-based pipeline**:
 
 | Command | Description |
 |---------|-------------|
-| `{curpos:y,x}` | Move cursor to row y, column x |
-| `{cup:n}` | Move cursor up n rows |
-| `{cud:n}` | Move cursor down n rows |
-| `{cuf:n}` | Move cursor forward n columns |
-| `{cub:n}` | Move cursor back n columns |
+| `{curpos:y,x}` | Move cursor to row y, column x (1-based) |
+| `{cuu:n}` / `{cup:n}` / `{cursorup:n}` | Move cursor up n rows |
+| `{cud:n}` / `{cursordown:n}` | Move cursor down n rows |
+| `{cuf:n}` / `{cursorforward:n}` / `{cursorright:n}` | Move cursor forward n columns |
+| `{cub:n}` / `{cursorback:n}` / `{cursorleft:n}` | Move cursor back n columns |
 | `{home}` | Move cursor to home (1,1) |
-| `{cha:n}` | Cursor horizontal absolute (column n) |
-| `{savecursor}` / `{decsc}` | Save cursor position |
-| `{restorecursor}` / `{decrc}` | Restore cursor position |
+| `{cha:n}` | Cursor horizontal absolute (column n, 1-based) |
+| `{savecursor}` / `{decsc}` | Save cursor position, colour and attributes |
+| `{restorecursor}` / `{decrc}` | Restore cursor position, and re-emit the saved colour and attributes |
 
-Relative cursor moves (`{cuu}`/`{cursorup}`, `{cud}`/`{cursordown}`, `{cuf}`/`{cursorright}`,
-`{cub}`/`{cursorleft}`) and `{cha:n}` also update the tracked cursor, so the engine knows where
-the terminal cursor is after them. A relative move changes the tracked row or column by its
+Relative cursor moves (the names in the table above) and `{cha:n}` also update the tracked
+cursor, so the engine knows where the terminal cursor is after them. The moves are recorded on
+the token by their handler and applied once, in the token writer (`_write_token`), so a move
+is never applied twice even though the handler can run more than once per command. A relative move changes the tracked row or column by its
 count. `{cha:n}` sets the tracked column to `n` (1-based, like `{curpos}`). Every move is clamped
 to the terminal's size when that size is known; with no terminal, the position is moved but not
 clamped. The tracked update happens once per written move (in the token writer), so a move is
@@ -233,6 +234,18 @@ getoption(opt, default=None)
 - `palette.py`: Color definitions (ANSI, C64)
 - `const.py`: Terminal constants (ESC, CSI, BEL, etc.)
 - `terminal.py`: Terminal size detection
+
+## Output side effects
+
+Every escape the engine writes passes through `write_current_output_stream`, which records the
+SGR state (`TerminalState.sgr`) from the text. The tracked cursor is updated by the token writer
+for relative moves and `{cha}`, and by `{curpos}`, text, `{f6}` and the save/restore pair. This is
+what lets `inputstring` place input correctly after a prompt that was drawn with cursor moves
+(see `io_inputstring.md`, Input origin).
+
+`{/all}` resets the SGR state (`ESC[0m`) and clears the tracked colour. Code that paints
+temporarily and must leave the caller's colour alone should restore with `{decrc}` (or
+`{restorecursor}`) and not follow it with `{/all}`; the bottom bar's paint was changed for this.
 
 ## Known defects
 
