@@ -70,7 +70,7 @@ from .common import (
     DEFAULT_INDENT_CHAR,
 )
 from .util import logentry
-from .palette import c64_palette, get_current_palette, get_palette_entry, rgb
+from .palette import check_channel, c64_palette, get_current_palette, get_palette_entry, hex_to_rgb, rgb
 
 from . import terminal
 
@@ -616,18 +616,22 @@ def _handle_var(token):
 
 
 def _handle_rgb(token):
-    ##    print(f"_handle_rgb.100: {token=}")
-    if len(token.args) == 2:
-        mode = 38 if token.args[0] == "fg" else 48
-        token.text = rgb(mode, token.args[1])
-        yield token
-        return
-    elif len(token.args) == 1:
-        token.text = rgb(38, token.args[0])
-        yield token
-        return
+    """{rgb:[fg|bg,]HEX}, {rgb:[fg|bg,]r,g,b}: a hex triplet (#RRGGBB or RRGGBB) or three 0-255 ints."""
+    args = list(token.args)
+    mode = 38
+    if args and args[0] in ("fg", "bg"):
+        mode = 38 if args[0] == "fg" else 48
+        args = args[1:]
 
-    raise ValueError("Argument Error")
+    if len(args) == 1:
+        triplet = hex_to_rgb(args[0])
+    elif len(args) == 3:
+        triplet = tuple(check_channel(int(a)) for a in args)
+    else:
+        raise ValueError("Argument Error")
+
+    token.text = rgb(mode, triplet)
+    yield token
 
 
 def _handle_curpos(token):

@@ -8,13 +8,32 @@ def _clamp_int(x):
     return max(0, min(255, int(round(x))))
 
 
+def check_channel(value):
+    """A colour channel: an int (not bool) from 0 to 255."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TypeError(f"RGB channel must be an int, not {value!r}")
+    if not 0 <= value <= 255:
+        raise ValueError(f"RGB channel must be 0-255, not {value!r}")
+    return value
+
+
+def rgb_to_hex(r, g, b):
+    """Return the uppercase hex triplet (no #) for three 0-255 ints: (255, 255, 0) -> 'FFFF00'."""
+    return f"{check_channel(r):02X}{check_channel(g):02X}{check_channel(b):02X}"
+
+
+def hex_to_rgb(text):
+    """Return (r, g, b) for a hex triplet, with or without a leading #, in either case: 'FFFF00' -> (255, 255, 0)."""
+    digits = text[1:] if isinstance(text, str) and text.startswith("#") else text
+    if not isinstance(digits, str) or len(digits) != 6 or any(c not in "0123456789abcdefABCDEF" for c in digits):
+        raise ValueError(f"Invalid hex RGB: {text!r}")
+    return int(digits[0:2], 16), int(digits[2:4], 16), int(digits[4:6], 16)
+
+
 def _parse_rgb(rgb):
-    """Convert either #RRGGBB string or tuple/list to (r,g,b)"""
+    """Convert a #RRGGBB string, or a tuple/list of 0-255 ints, to (r,g,b)"""
     if isinstance(rgb, str) and rgb.startswith("#") and len(rgb) == 7:
-        r = int(rgb[1:3], 16)
-        g = int(rgb[3:5], 16)
-        b = int(rgb[5:7], 16)
-        return r, g, b
+        return hex_to_rgb(rgb)
     elif isinstance(rgb, (tuple, list)) and len(rgb) in (3, 4):
         return rgb[:3]
     else:
