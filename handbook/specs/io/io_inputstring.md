@@ -250,6 +250,9 @@ before the bottom bar paints, since the bar saves and restores the cursor around
   box drawing, or other cursor move the prompt made.
 - A prompt with `{f6}` (for example `status{f6}input: `): the input starts on the row below the
   last break, at the tracked column (the indent, 0 by default). `{f6}` advances the tracked row.
+- Relative cursor moves inside a drawing (for example `{cursorup}{cha:1}{cursorright:2}` after a
+  box) are tracked (see `io_echo.md`, Cursor Control), so a prompt drawn inside a box starts its
+  input inside the box.
 - If the tracked position is not usable, the origin falls back to the start position plus the
   prompt's width (`rendered_length`). `rendered_length` counts visible text only, so it is not
   used when the tracked position is available.

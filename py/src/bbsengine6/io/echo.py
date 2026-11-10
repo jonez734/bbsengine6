@@ -711,23 +711,47 @@ def _handle_elo(token):
     yield token
 
 
-def _handle_cuu(token):
-    if len(token.args) == 0:
-        repeat = 1
-    else:
-        repeat = token.args[0] or 1
+def _track_move(drow: int = 0, dcol: int = 0, *, col: Optional[int] = None) -> None:
+    """Update the tracked cursor for a relative move (or an absolute column, for {cha}).
 
+    The position is clamped to the terminal when its size is known. With no size (no terminal),
+    the position is moved but not clamped: the size is not guessed.
+    """
+    with _current_stream_lock:
+        st = _terminal_state
+        row = st.cursor_row + drow
+        newcol = col if col is not None else st.cursor_col + dcol
+        lines = terminal.lines()
+        columns = terminal.columns()
+        if lines:
+            row = min(max(row, 1), lines)
+        else:
+            row = max(row, 1)
+        if columns:
+            newcol = min(max(newcol, 1), columns)
+        else:
+            newcol = max(newcol, 1)
+        st.cursor_row = row
+        st.cursor_col = newcol
+
+
+def _move_count(token) -> int:
+    if len(token.args) == 0:
+        return 1
+    return int(token.args[0] or 1)
+
+
+def _handle_cuu(token):
+    token.track = {"drow": -_move_count(token)}
+    repeat = _move_count(token)
     token.repeat = 1
     token.text = f"{CSI}{repeat}A"
     yield token
 
 
 def _handle_cud(token):
-    if len(token.args) == 0:
-        repeat = 1
-    else:
-        repeat = token.args[0] or 1
-
+    token.track = {"drow": _move_count(token)}
+    repeat = _move_count(token)
     token.repeat = 1
     token.text = f"{CSI}{repeat}B"
     yield token
@@ -735,22 +759,16 @@ def _handle_cud(token):
 
 
 def _handle_cuf(token):
-    if len(token.args) == 0:
-        repeat = 1
-    else:
-        repeat = int(token.args[0])
-
+    token.track = {"dcol": _move_count(token)}
+    repeat = _move_count(token)
     token.repeat = 1
     token.text = f"{CSI}{repeat}C"
     yield token
 
 
 def _handle_cub(token):
-    if len(token.args) == 0:
-        repeat = 1
-    else:
-        repeat = int(token.args[0])
-
+    token.track = {"dcol": -_move_count(token)}
+    repeat = _move_count(token)
     token.repeat = 1
     token.text = f"{CSI}{repeat}D"
     yield token
@@ -818,6 +836,8 @@ def _handle_slashbgcolor(token):
 
 def _handle_cha(token):
     repeat = token.args[0] if len(token.args) == 1 else 1
+    # {cha:n} is an absolute column, 1-based, like {curpos}.
+    token.track = {"col": int(repeat or 1)}
     token.kind = "CURSOR"
     token.repeat = 1
     token.text = f"{CSI}{repeat}G"
@@ -1236,6 +1256,12 @@ def _write_token(token: Token, flush: bool = True, stream=None):
     global _current_output_stream, _current_stream_lock
     ##    print(f"_write_token.100: {token.kind=} {token.repeat=} {token.value=}", flush=True)
     repeat = int(token.repeat) or 1
+    track = getattr(token, "track", None)
+    if track:
+        if "col" in track:
+            _track_move(col=track["col"])
+        else:
+            _track_move(drow=track.get("drow", 0), dcol=track.get("dcol", 0))
     with _raw_lock:
         raw_now = _interaction().raw
     if not raw_now:

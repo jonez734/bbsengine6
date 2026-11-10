@@ -71,6 +71,14 @@ The module uses a **token-based pipeline**:
 | `{savecursor}` / `{decsc}` | Save cursor position |
 | `{restorecursor}` / `{decrc}` | Restore cursor position |
 
+Relative cursor moves (`{cuu}`/`{cursorup}`, `{cud}`/`{cursordown}`, `{cuf}`/`{cursorright}`,
+`{cub}`/`{cursorleft}`) and `{cha:n}` also update the tracked cursor, so the engine knows where
+the terminal cursor is after them. A relative move changes the tracked row or column by its
+count. `{cha:n}` sets the tracked column to `n` (1-based, like `{curpos}`). Every move is clamped
+to the terminal's size when that size is known; with no terminal, the position is moved but not
+clamped. The tracked update happens once per written move (in the token writer), so a move is
+not applied twice.
+
 `{f6}` is a hard line break. It moves the tracked cursor down one row per break
 (`repeat` breaks move it `repeat` rows) and resets the tracked column to the indent
 (0 by default). The tracked row and column are what `inputstring` reads to place
