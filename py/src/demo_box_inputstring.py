@@ -33,6 +33,6 @@ if io.terminal.has_ansi():
 else:
     io.echo("ANSI disabled")
 
-io.echo(inputstring_box(f"prompt: ", "", title="", max_width=25))
+io.echo(inputstring_box(f"moniker: ", "", title="zoid6 auth", max_width=25))
 
 bottombar.shutdown()
