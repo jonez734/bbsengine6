@@ -533,11 +533,16 @@ class MessageRouter:
         # Best-effort auto-seed; never raises.
         _auto_seed_channels(self.args, self.channel_cfg)
 
-    def unregister_session(self, session_id: int) -> None:
+    def unregister_session(self, session_id: int, websocket_id: Optional[str] = None) -> None:
         """Clean up session on disconnect.
 
-        Unsubscribes from all channels and removes the session record
-        so the connection no longer holds any pub/sub state.
+        Unsubscribes from all channels and removes the session record so the connection no longer
+        holds any pub/sub state. A registry that keys sessions by websocket (BED's SessionRegistry)
+        is dropped by ``websocket_id``; a SessionManager is unregistered by the integer id.
         """
         channel_unsubscribe_all(self.channel_state, session_id)
+        if hasattr(self.sessions, "drop_by_websocket"):
+            if websocket_id is not None:
+                self.sessions.drop_by_websocket(websocket_id)
+            return
         self.sessions.unregister_session(session_id)

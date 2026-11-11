@@ -1132,7 +1132,9 @@ class WebSocketServer:
                 forget_terminal_caps(websocket)
                 if self._router is not None:
                     try:
-                        self._router.unregister_session(session_id)
+                        self._router.unregister_session(
+                            session_id, websocket_id=str(websocket.id)
+                        )
                     except Exception as e:
                         logger.error(f"Router unregister_session error: {e}")
                 logger.info(
