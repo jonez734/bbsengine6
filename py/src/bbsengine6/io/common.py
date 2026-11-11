@@ -413,12 +413,20 @@ QUERY_SETTLE_SECONDS = 0.25
 
 
 def strip_echoed_request(text: str, request: str) -> str:
-    """Remove every copy of ``request`` from ``text``.
+    """Remove every echo of ``request`` from ``text``.
 
-    A terminal that does not answer a query can echo the query's own text back. That text is ours,
-    not typed input, so it is taken out before the rest is kept as keys.
+    A terminal that does not answer a query can echo the query back. That text is ours, not typed
+    input, so it is taken out before the rest is kept as keys. A terminal may draw the request with
+    its control bytes dropped, so the ESC that opens it and the ESC \\ that closes it are optional
+    in the match: "ESC P + q 524742 ESC \\" is removed as well when it is drawn as "P+q524742".
     """
-    return text.replace(request, "")
+    if request.startswith("\x1b") and request.endswith("\x1b\\"):
+        inner = request[1:-2]
+    else:
+        inner = request
+    # The closing ST may be drawn as ESC \\ or as the backslash alone.
+    pattern = re.compile(r"(?:\x1b)?" + re.escape(inner) + r"(?:\x1b?\\)?")
+    return pattern.sub("", text)
 
 
 def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0.5) -> str | None:

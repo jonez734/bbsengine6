@@ -393,3 +393,14 @@ def test_query_terminal_strips_the_request_it_sent(monkeypatch):
     result = common.query_terminal(terminal.DA1_REQUEST, terminal.DA1_REPLY_RE, timeout=0.01)
     assert result is None
     assert "".join(queued) == "z"
+
+
+def test_echo_without_control_bytes_is_removed():
+    # A terminal that draws the request without its ESC and ST bytes echoes "P+q524742": that is
+    # still our request, not typed input.
+    assert common.strip_echoed_request("ab" + "P+q524742" + "cd", terminal.XTGETTCAP_RGB_REQUEST) == "abcd"
+
+
+def test_echo_with_only_the_leading_p_is_removed():
+    # The DCS introducer alone, drawn as a letter, is not a keypress we asked for.
+    assert common.strip_echoed_request("ab" + "P+q524742\\" + "cd", terminal.XTGETTCAP_RGB_REQUEST) == "abcd"
