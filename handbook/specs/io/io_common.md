@@ -121,7 +121,9 @@ query_terminal(request: str, reply_re: re.Pattern, timeout: float = 0.5) -> str 
 Sends `request`, then reads until `reply_re` matches or `timeout` expires. Pending input is
 drained first, the tty is put in raw mode (unless a raw session owns it), and the tty is
 restored in every case. Typed bytes that are not the reply go back on the input queue, in order.
-Returns the matched text, or `None` when nothing matched in time. Used by `probe_da`.
+An echo of `request` in the unmatched bytes (see `strip_echoed_request`, in `io_terminal.md`) is
+removed first, so a terminal that echoes the query does not leak it as keys.
+Returns the matched text, or `None` when nothing matched in time. Used by `probe_da` and `report()`.
 
 ### Input queue
 
@@ -188,6 +190,28 @@ for the prompt and restores them after.
 
 A mode that gave no reply is left off after the prompt, not restored. VTE was observed
 to reply "reset" (`2`) for all four modes during a prompt.
+
+### When the query is sent (DECRQM gate)
+
+A DECRQM query ends in the letter `p`. A terminal that does not implement DECRQM draws that
+`p` as text: retro term showed four `p` characters before the prompt. So the query is sent only
+to a terminal whose DA1 reply is on the list in `io/data/decrqm_terminals.json` (packaged data,
+`da1_replies`). The list is keyed on the DA1 reply, not `TERM`: retro term and a real xterm both
+report `TERM=xterm`, but their DA1 replies differ (retro term `ESC[?1;2c`, xterm
+`ESC[?64;…c`).
+
+- `_decrqm_capable()` is true when the cached DA1 reply (`report()`'s `da.da1.reply`, in the
+  session) is on the list.
+- The gate never probes. Only `report()` sends DA. With no cached report there is no reply to
+  test, so the gate is closed and no query is sent. A probe read in the middle of input consumes
+  the keys that follow it, so `inputstring()` must not send one.
+- A terminal that is not on the list gets no query, and so no `p`. It still gets every managed
+  mode reset on entry, so tracking is off during the prompt. What is lost is restoring a mode
+  that was on before the prompt, since that needs the query.
+
+The list currently holds the replies of gnome-terminal (`ESC[?61;1;21;22;28c`) and xterm
+(`ESC[?64;1;2;6;9;15;17;18;21;22;28c`), both observed. Add a reply only after checking that the
+terminal answers DECRQM.
 
 ### Tracing
 

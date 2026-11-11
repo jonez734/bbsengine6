@@ -122,11 +122,11 @@ Reads one line with line editing. Returns the entered text. `prompt` and
   Pass `bottombar=False` to skip these repaints (see `bottombar.md`).
 - The tty is held in raw mode for the whole prompt (`begin_raw_session()`), and
   restored on return, exception, and Ctrl-C (see `io_getch.spec`).
-- The terminal's mouse-reporting modes (1000, 1002, 1003, 1006) are queried
-  (DECRQM) before editing. Only modes the terminal reports as on are turned off
-  for the prompt, and only those are turned back on at exit. A mode with no reply
-  is never written, so a tab that had mouse tracking enabled keeps it.
-  `common.MOUSE_STATE_MANAGED = False` disables this.
+- The terminal's mouse-reporting modes (1000, 1002, 1003, 1006) are reset for the prompt
+  (tracking is off during editing) and, on exit, only the modes the terminal reported as on
+  are turned back on. The mode query (DECRQM) is sent only to a terminal whose DA1 reply is on
+  the list in `io/data/decrqm_terminals.json`, and never by `inputstring()` itself (see
+  `io_common.md`, Mouse state). `common.MOUSE_STATE_MANAGED = False` disables all of this.
 
 **Concurrency:** the module-level key table `KEY_ACTIONS` is shared by all
 callers. Key handlers are looked up under `_key_actions_lock` and run outside it.

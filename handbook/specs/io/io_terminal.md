@@ -91,7 +91,8 @@ ansi_reply() -> str | None
 - `has_ansi` returns `True` when the reply is an approved DA1 (`ESC[?...c`) or DA2 (`ESC[>...c`)
   response. It returns `False` for `None`, empty text, or anything else.
 
-Calling `probe_da` again sends a fresh query each time. Each call waits up to the timeout, then
+`probe_da` is the raw probe. `report()` and `has_ansi()` do not call it again once a session has a
+cached report (see Terminal report). Each `probe_da` call waits up to the timeout, then
 `query_terminal` keeps reading for 0.25 s (`QUERY_SETTLE_SECONDS`). A reply inside that window
 is matched and consumed. A reply that arrives after it is not consumed: the tty is restored, the
 kernel echoes the bytes, and the next input read may see them. That case is known and accepted as
@@ -113,14 +114,19 @@ Example DA1 replies: `ESC[?6c` (VT102), `ESC[?1;2c` (VT100 with AVO),
 ## Terminal report (color and capabilities)
 
 ```python
-report(timeout=None) -> dict
+report(timeout=None, refresh=False) -> dict
 ```
 
 Renamed from `terminal_report()`. Callers use `report()`.
 
 Describes the terminal this process runs in. It is blocking only. It runs the DA probe
-(DA1, then DA2 if DA1 is silent), then the XTGETTCAP `RGB` query. A silent terminal costs up to
-three timeouts. Returns `source: "unknown"` with no tty.
+(DA1, then DA2 if DA1 is silent), then the XTGETTCAP `RGB` query, unless `COLORTERM` already says
+truecolor (see below). A silent terminal costs up to three timeouts. Returns `source: "unknown"`
+with no tty.
+
+Probed once per session. The result is cached on the current `Session` (`terminal_report`), so a
+second `report()` and `has_ansi()` send nothing. `report(refresh=True)` probes again and replaces
+the cache. A bed connection has its own session, so each connected client is probed for itself.
 
 Returned keys:
 
@@ -132,7 +138,15 @@ Returned keys:
 - `color_256`: True if `colors >= 256` or `true_color`; False if `colors` is known and smaller;
   None if neither is known.
 - `source`: `"query"`, `"colorterm"`, or `"unknown"`. It says which step gave `true_color`.
-- `ansi`: the DA reply text, or None.
+- `ansi`: the DA reply text (DA1, else DA2), or None. Kept for compatibility.
+- `da`: one record per command, nested: `da1`, `da2`, and `rgb`. Each record has:
+  - `sent`: whether that request was written. DA2 is sent only when DA1 got no reply. RGB is not
+    sent when `COLORTERM` says truecolor or 24bit. With the ANSI probe disabled, DA1 and DA2 are
+    not sent.
+  - `reply`: the reply text, or None when there was no reply, it timed out, or it was not sent.
+  - `timed_out`: True when it was sent and no reply came in time.
+  - `late`: True when a reply for that request arrived after it timed out and was dropped from
+    the keys (see Late replies). The reply text is then in `reply`.
 
 Order for `true_color`:
 
@@ -142,11 +156,23 @@ Order for `true_color`:
 2. `COLORTERM` set to `truecolor` or `24bit`.
 3. Unknown (None). Silence is not evidence of no color.
 
+`COLORTERM` is decided first. When it says truecolor or 24bit the RGB query is not sent, so the
+query does not run and its echo cannot reach the keys. Terminals that do not answer the query
+echo its text back; that echo is removed from the input (see Echo of our requests).
+
 Other terminals may not answer the query. xterm in the test sessions answered DA1 but not the
 RGB query, so on xterm the color answer comes from `COLORTERM` or is unknown.
 
-Late replies: a DCS XTGETTCAP reply that arrives after its query is read as one sequence through
-its ST, and the input queue drops it (recording it in the session). It is never typed as keys.
+Late replies: a probe that times out is remembered on the session (`da_timed_out`). A DA or DCS
+reply that then arrives is read by the input reader (`discard_da_replies`), removed from the keys,
+and recorded in `late_da_replies` as `(probe, reply)`. `report()` shows it as `late: True` on that
+record. A reply that arrives after `query_terminal`'s settle window is the case this covers; a
+reply inside the window is the probe's answer, not a late one.
+
+Echo of our requests: a terminal that does not answer a query may echo the request back, with or
+without its control bytes (`ESC P + q …`, `P+q…`, `ESC [ c`). `common.strip_echoed_request(text,
+request)` removes every such echo from unmatched input before the rest is queued as keys. The ESC
+that opens the request, and the ESC or bare backslash that closes it, are optional in the match.
 
 ```python
 parse_xtgettcap_reply(reply) -> dict | None   # {"valid", "name", "value"}
