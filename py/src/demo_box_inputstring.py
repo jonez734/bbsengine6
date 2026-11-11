@@ -33,6 +33,6 @@ if io.terminal.has_ansi():
 else:
     io.echo("ANSI disabled")
 
-io.echo(inputstring_box(f"", "", title="moniker", max_width=14))
+io.echo(inputstring_box(f"prompt: ", "", title="", max_width=25))
 
 bottombar.shutdown()
