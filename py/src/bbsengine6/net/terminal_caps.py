@@ -15,10 +15,8 @@ Wire shapes:
 Accepted ``caps`` fields (all optional except ``source``):
 
   term        str, at most 64 chars, the TERM the client used
-  colors      int 0..1_000_000 or null, the terminfo colors number
-  true_color  bool or null
-  color_256   bool or null
-  source      "query" | "colorterm" | "unknown"
+  color       "truecolor" | "256" | null: the colour level the client can use
+  source      "query" | "colorterm" | "screen" | "unknown"
   ansi        str or null, at most 64 chars, the DA reply text
 
 Anything else is rejected, so an unknown field is an error rather than silently kept.
@@ -32,7 +30,7 @@ from typing import Any, Dict, Optional
 __all__ = [
     "MAX_TERM_LEN",
     "MAX_ANSI_LEN",
-    "MAX_COLORS",
+    "COLOR_LEVELS",
     "SOURCES",
     "TerminalCapsError",
     "validate_terminal_caps",
@@ -44,17 +42,13 @@ __all__ = [
 
 MAX_TERM_LEN = 64
 MAX_ANSI_LEN = 64
-MAX_COLORS = 1_000_000
-SOURCES = ("query", "colorterm", "unknown")
-_FIELDS = {"term", "colors", "true_color", "color_256", "source", "ansi"}
+COLOR_LEVELS = ("truecolor", "256", None)
+SOURCES = ("query", "colorterm", "screen", "unknown")
+_FIELDS = {"term", "color", "source", "ansi"}
 
 
 class TerminalCapsError(ValueError):
     """The terminal_caps payload is malformed. The message is safe to send to the client."""
-
-
-def _is_bool_or_none(value: Any) -> bool:
-    return value is None or isinstance(value, bool)
 
 
 def validate_terminal_caps(caps: Any) -> Dict[str, Any]:
@@ -65,7 +59,7 @@ def validate_terminal_caps(caps: Any) -> Dict[str, Any]:
     if unknown:
         raise TerminalCapsError(f"unknown field: {sorted(unknown)[0]}")
     if caps.get("source") not in SOURCES:
-        raise TerminalCapsError("source must be query, colorterm, or unknown")
+        raise TerminalCapsError("source must be query, colorterm, screen, or unknown")
 
     clean: Dict[str, Any] = {"source": caps["source"]}
 
@@ -74,18 +68,10 @@ def validate_terminal_caps(caps: Any) -> Dict[str, Any]:
         raise TerminalCapsError("term must be a string of at most 64 characters")
     clean["term"] = term
 
-    colors = caps.get("colors")
-    if colors is not None and (
-        isinstance(colors, bool) or not isinstance(colors, int) or not 0 <= colors <= MAX_COLORS
-    ):
-        raise TerminalCapsError("colors must be a non-negative integer or null")
-    clean["colors"] = colors
-
-    for key in ("true_color", "color_256"):
-        value = caps.get(key)
-        if not _is_bool_or_none(value):
-            raise TerminalCapsError(f"{key} must be true, false, or null")
-        clean[key] = value
+    color = caps.get("color")
+    if color not in COLOR_LEVELS:
+        raise TerminalCapsError('color must be "truecolor", "256", or null')
+    clean["color"] = color
 
     ansi = caps.get("ansi")
     if ansi is not None and (not isinstance(ansi, str) or len(ansi) > MAX_ANSI_LEN):

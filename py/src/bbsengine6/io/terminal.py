@@ -356,7 +356,6 @@ def rgb_from_reply(parsed) -> bool | None:
     return None
 
 
-TRUECOLOR_COLORS = 1 << 24  # 16777216, the 24-bit palette
 
 
 def in_screen() -> bool:
@@ -390,13 +389,13 @@ def report(timeout=None, refresh=False) -> dict:
     2. ``COLORTERM`` set to ``truecolor`` or ``24bit``.
     3. Unknown (None). Silence is not evidence of no color; callers must not treat it as one.
 
-    ``colors`` is the terminfo ``colors`` number for the resolved TERM (None when there is no
-    entry), except that a truecolor terminal reports ``TRUECOLOR_COLORS`` (16777216), since terminfo
-    often lags behind. ``color_256`` is True when ``colors`` is at least 256 or ``true_color`` is True,
-    False when ``colors`` is known and smaller, and None when neither is known.
+    ``color`` is the colour level this terminal can use, as one value: ``"truecolor"`` when the
+    answer is 24-bit, ``"256"`` when the terminfo palette is at least 256 colours, and None
+    otherwise (including unknown, a small palette, and screen). It replaces the older
+    ``colors``, ``true_color`` and ``color_256`` fields, which could disagree with each other.
 
-    ``source`` is ``"query"``, ``"colorterm"``, or ``"unknown"``, and says which step gave
-    ``true_color``. The query uses the same timeout as the DA probe.
+    ``source`` is ``"query"``, ``"colorterm"``, ``"screen"``, or ``"unknown"``, and says which step
+    gave the truecolor answer. The query uses the same timeout as the DA probe.
 
     Returns ``source="unknown"`` with no tty. Runs the DA probe first (ansi detection; the
     result is in ``ansi``), then the RGB query. Blocking only. A silent terminal costs up to
@@ -454,20 +453,17 @@ def report(timeout=None, refresh=False) -> dict:
     elif source == "unknown" and not rgb_sent:
         true_color, source = True, "colorterm"
 
-    # A truecolor terminal has a 24-bit palette whatever terminfo says (xterm's entry still says 8),
-    # so colors and true_color agree.
-    if true_color:
-        colors = TRUECOLOR_COLORS
-
+    # The colour level: "truecolor", "256", or None. screen does no colour here, whatever terminfo
+    # says. A 24-bit answer is truecolor; otherwise a terminfo palette of at least 256 is "256".
+    # A truecolor answer always wins, so the level never disagrees with the answer it came from.
     if under_screen:
-        # screen does not do colour here: its terminfo count is not evidence of usable colour.
-        color_256 = False
-    elif true_color or (colors is not None and colors >= 256):
-        color_256 = True
-    elif colors is not None:
-        color_256 = False
+        color = None
+    elif true_color:
+        color = "truecolor"
+    elif colors is not None and colors >= 256:
+        color = "256"
     else:
-        color_256 = None
+        color = None
 
     da["rgb"] = _record(rgb_sent, reply)
     late = {name: text for name, text in current_session().late_da_replies}
@@ -478,9 +474,7 @@ def report(timeout=None, refresh=False) -> dict:
             entry["reply"] = late[name]
     result = {
         "term": term,
-        "colors": colors,
-        "true_color": true_color,
-        "color_256": color_256,
+        "color": color,
         "source": source,
         "ansi": ansi,
         "da": da,

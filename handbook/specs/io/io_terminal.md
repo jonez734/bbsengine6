@@ -132,14 +132,16 @@ Returned keys:
 
 - `term`: the terminal type this process uses, from `resolve()`: the client TERM when it has a
   terminfo entry, else the default (`xterm`). `dumb` (and an empty TERM) is reported as itself.
-- `colors`: terminfo `colors` for that TERM, or None. When `true_color` is True it is 16777216
-  (the 24-bit palette), because terminfo often lags behind the terminal.
-- `true_color`: True, False, or None (unknown).
-- `color_256`: True if `colors >= 256` or `true_color`; False if `colors` is known and smaller;
-  None if neither is known.
-- `source`: `"query"`, `"colorterm"`, `"screen"`, or `"unknown"`. It says which step gave
-  `true_color`. `"screen"` means the process runs under GNU screen (see below), and `true_color`
-  is False.
+- `color`: the colour level this terminal can use, as one value: `"truecolor"`, `"256"`, or None.
+  - `"truecolor"`: the terminal gave a 24-bit answer (the RGB query, or a trusted `COLORTERM`).
+  - `"256"`: the terminfo palette for that TERM has at least 256 colours (8-bit colour), and no
+    truecolor answer was given.
+  - None: unknown, a palette smaller than 256, or GNU screen (see below). Silence is not evidence
+    of no colour.
+  The three older fields (`colors`, `true_color`, `color_256`) are gone: they could disagree with
+  each other, so they were collapsed into this one.
+- `source`: `"query"`, `"colorterm"`, `"screen"`, or `"unknown"`. It says which step gave the
+  truecolor answer. `"screen"` means the process runs under GNU screen (see below).
 - `ansi`: the DA reply text (DA1, else DA2), or None. Kept for compatibility.
 - `da`: one record per command, nested: `da1`, `da2`, and `rgb`. Each record has:
   - `sent`: whether that request was written. DA2 is sent only when DA1 got no reply. RGB is not
@@ -158,11 +160,9 @@ Order for `true_color`:
 2. `COLORTERM` set to `truecolor` or `24bit`.
 3. Unknown (None). Silence is not evidence of no color.
 
-Under GNU screen `color_256` is also False, whatever terminfo's `colors` says, and `colors` is
-still the terminfo count. Under GNU screen the answer for `true_color` is always False
-(`source: "screen"`). screen passes the outer
-terminal's `COLORTERM` through but has no 24-bit colour, and it does not answer the RGB query, so
-neither step is used and the RGB query is not sent. screen is detected by `STY` being set, or a
+Under GNU screen `color` is always None, whatever terminfo says (`source: "screen"`). screen
+passes the outer terminal's `COLORTERM` through but has no 24-bit colour, and it does not answer
+the RGB query, so neither step is used and the RGB query is not sent. screen is detected by `STY` being set, or a
 `TERM` named `screen`, `screen.*`, or `screen-*` (`in_screen()`).
 
 `COLORTERM` is decided first. When it says truecolor or 24bit the RGB query is not sent, so the

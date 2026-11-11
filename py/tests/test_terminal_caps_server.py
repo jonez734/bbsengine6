@@ -15,9 +15,7 @@ class _Socket:
 
 GOOD = {
     "term": "xterm-256color",
-    "colors": 256,
-    "true_color": True,
-    "color_256": True,
+    "color": "truecolor",
     "source": "query",
     "ansi": "\x1b[?62;1;2c",
 }
@@ -45,8 +43,7 @@ def test_good_caps_pass_and_are_copied():
 
 def test_missing_optional_fields_default():
     clean = tc.validate_terminal_caps({"source": "unknown"})
-    assert clean == {"source": "unknown", "term": "", "colors": None, "true_color": None,
-                     "color_256": None, "ansi": None}
+    assert clean == {"source": "unknown", "term": "", "color": None, "ansi": None}
 
 
 @pytest.mark.parametrize(
@@ -58,12 +55,12 @@ def test_missing_optional_fields_default():
         ({}, "source"),
         ({"source": "query", "term": "x" * 65}, "term"),
         ({"source": "query", "term": 5}, "term"),
-        ({"source": "query", "colors": -1}, "colors"),
-        ({"source": "query", "colors": True}, "colors"),
-        ({"source": "query", "colors": 2_000_000}, "colors"),
-        ({"source": "query", "colors": "256"}, "colors"),
-        ({"source": "query", "true_color": "yes"}, "true_color"),
-        ({"source": "query", "color_256": 1}, "color_256"),
+        ({"source": "query", "color": 256}, "color"),
+        ({"source": "query", "color": "16777216"}, "color"),
+        ({"source": "query", "color": "yes"}, "color"),
+        ({"source": "query", "colors": 256}, "unknown field"),
+        ({"source": "query", "true_color": True}, "unknown field"),
+        ({"source": "query", "color_256": True}, "unknown field"),
         ({"source": "query", "ansi": "x" * 65}, "ansi"),
         ({"source": "query", "ansi": 62}, "ansi"),
     ],
@@ -122,7 +119,7 @@ def test_dispatch_round_trip_echoes_request_id():
     ws = _Socket()
     ack = _dispatch(ws, {"type": "terminal_caps", "request_id": "abc", "caps": dict(GOOD)})
     assert ack == {"type": "terminal_caps_ack", "request_id": "abc", "stored": True}
-    assert tc.get_terminal_caps(ws)["true_color"] is True
+    assert tc.get_terminal_caps(ws)["color"] == "truecolor"
 
 
 def test_dispatch_bad_field_is_rejected_with_request_id():
@@ -137,3 +134,9 @@ def test_dispatch_missing_caps_is_rejected():
     ws = _Socket()
     ack = _dispatch(ws, {"type": "terminal_caps", "request_id": "m"})
     assert ack["stored"] is False
+
+
+@pytest.mark.parametrize("value", ["truecolor", "256", None])
+def test_color_accepts_the_three_levels(value):
+    clean = tc.validate_terminal_caps({"source": "query", "color": value})
+    assert clean["color"] == value

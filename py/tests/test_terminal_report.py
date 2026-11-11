@@ -73,7 +73,7 @@ def test_query_answer_wins(stub, monkeypatch):
     monkeypatch.delenv("COLORTERM", raising=False)
     stub["rgb"] = "\x1bP1+r524742=38\x1b\\"
     r = terminal.report()
-    assert r["source"] == "query" and r["true_color"] is True
+    assert r["source"] == "query" and r["color"] == "truecolor"
 
 
 def test_query_invalid_is_false_and_not_overridden_by_colorterm(stub, monkeypatch):
@@ -81,36 +81,36 @@ def test_query_invalid_is_false_and_not_overridden_by_colorterm(stub, monkeypatc
     monkeypatch.delenv("COLORTERM", raising=False)
     stub["rgb"] = "\x1bP0+r524742\x1b\\"
     r = terminal.report()
-    assert r["source"] == "query" and r["true_color"] is False
+    assert r["source"] == "query" and r["color"] == "256"
 
 
 def test_colorterm_used_when_query_silent(stub, monkeypatch):
     monkeypatch.setenv("COLORTERM", "24bit")
     r = terminal.report()
-    assert r["source"] == "colorterm" and r["true_color"] is True
+    assert r["source"] == "colorterm" and r["color"] == "truecolor"
 
 
 def test_unknown_when_silent_and_no_colorterm(stub):
     r = terminal.report()
     assert r["source"] == "unknown"
-    assert r["true_color"] is None  # not False: silence is not evidence
+    assert r["source"] == "unknown" and r["color"] == "256"  # terminfo gives 256; silence is not no colour
 
 
-def test_color_256_from_terminfo_even_without_truecolor(stub):
+def test_color_256_level_from_terminfo_without_truecolor(stub):
     r = terminal.report()
-    assert r["colors"] == 256 and r["color_256"] is True and r["true_color"] is None
+    assert r["color"] == "256"
 
 
-def test_color_256_false_for_small_palette(stub, monkeypatch):
+def test_small_palette_has_no_color_level(stub, monkeypatch):
     monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: 8)
     r = terminal.report()
-    assert r["color_256"] is False
+    assert r["color"] is None
 
 
-def test_color_256_unknown_without_terminfo_or_truecolor(stub, monkeypatch):
+def test_no_terminfo_and_no_truecolor_has_no_color_level(stub, monkeypatch):
     monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: None)
     r = terminal.report()
-    assert r["color_256"] is None
+    assert r["color"] is None
 
 
 def test_truecolor_reports_colors_as_24bit_even_with_small_terminfo(stub, monkeypatch):
@@ -119,31 +119,31 @@ def test_truecolor_reports_colors_as_24bit_even_with_small_terminfo(stub, monkey
     monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: 8)
     stub["rgb"] = "\x1bP1+r524742=38\x1b\\"
     r = terminal.report()
-    assert r["colors"] == 16777216 and r["true_color"] is True and r["color_256"] is True
+    assert r["color"] == "truecolor"
 
 
 def test_no_truecolor_keeps_terminfo_colors(stub, monkeypatch):
     monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: 8)
     r = terminal.report()
-    assert r["colors"] == 8 and r["true_color"] is None
+    assert r["color"] is None
 
 
-def test_truecolor_implies_color_256(stub, monkeypatch):
+def test_truecolor_level_wins_over_terminfo(stub, monkeypatch):
     monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: None)
     stub["rgb"] = "\x1bP1+r524742=38\x1b\\"
-    assert terminal.report()["color_256"] is True
+    assert terminal.report()["color"] == "truecolor"
 
 
 def test_report_has_all_keys(stub):
     r = terminal.report()
-    assert set(r) == {"term", "colors", "true_color", "color_256", "source", "ansi", "da"}
+    assert set(r) == {"term", "color", "source", "ansi", "da"}
 
 
 def test_report_without_tty_is_safe(monkeypatch):
     monkeypatch.delenv("COLORTERM", raising=False)
     monkeypatch.setattr(common, "query_terminal", lambda *a, **k: (_ for _ in ()).throw(OSError("no tty")))
     r = terminal.report(timeout=0.01)
-    assert r["source"] == "unknown" and r["true_color"] is None
+    assert r["source"] == "unknown" and r["color"] is None
 
 
 # --- real pty: a child runs report; the parent answers each query --------
@@ -196,29 +196,29 @@ def _run_report(answer_rgb, colorterm=None):
 @needs_pty
 def test_pty_query_valid_reports_true_color():
     r = _run_report("\x1bP1+r524742=38\x1b\\")
-    assert r["source"] == "query" and r["true_color"] is True
-    assert r["colors"] == 16777216 and r["color_256"] is True
+    assert r["source"] == "query" and r["color"] == "truecolor"
     assert r["ansi"] == "\x1b[?62;1;2c"
 
 
 @needs_pty
 def test_pty_query_invalid_reports_false_even_with_colorterm():
     r = _run_report("\x1bP0+r524742\x1b\\")
-    assert r["source"] == "query" and r["true_color"] is False
+    assert r["source"] == "query" and r["color"] == "256"
 
 
 @needs_pty
 def test_pty_colorterm_answers_without_sending_the_query():
     # COLORTERM=truecolor: the RGB query is not sent, so the child never waits on it.
     r = _run_report(None, colorterm="truecolor")
-    assert r["source"] == "colorterm" and r["true_color"] is True
+    assert r["source"] == "colorterm" and r["color"] == "truecolor"
     assert r["da"]["rgb"]["sent"] is False
 
 
 @needs_pty
 def test_pty_silent_and_no_colorterm_is_unknown():
+    # Silence is unknown for truecolor; the 256 level still comes from terminfo (xterm-256color).
     r = _run_report(None)
-    assert r["source"] == "unknown" and r["true_color"] is None
+    assert r["source"] == "unknown" and r["color"] == "256"
 
 
 
@@ -308,7 +308,7 @@ def test_colorterm_skips_the_rgb_query(stub, monkeypatch):
     # does not answer it echoes the query text back into the input as stray characters.
     monkeypatch.setenv("COLORTERM", "truecolor")
     r = terminal.report()
-    assert r["source"] == "colorterm" and r["true_color"] is True
+    assert r["source"] == "colorterm" and r["color"] == "truecolor"
     assert terminal.XTGETTCAP_RGB_REQUEST not in stub["queries"]
 
 
@@ -421,10 +421,10 @@ def test_screen_ignores_inherited_colorterm(stub, monkeypatch):
     monkeypatch.setenv("TERM", "screen.xterm-256color")
     monkeypatch.setenv("COLORTERM", "truecolor")
     r = terminal.report(timeout=0.01)
-    assert r["true_color"] is False
+    assert r["color"] is None
     assert r["source"] == "screen"
     assert r["da"]["rgb"]["sent"] is False
-    assert r["color_256"] is False
+    assert r["color"] is None
 
 
 def test_screen_detected_by_sty_variable(stub, monkeypatch):
@@ -432,4 +432,4 @@ def test_screen_detected_by_sty_variable(stub, monkeypatch):
     monkeypatch.setenv("STY", "12345.pts-0.host")
     monkeypatch.setenv("COLORTERM", "truecolor")
     r = terminal.report(timeout=0.01)
-    assert r["source"] == "screen" and r["true_color"] is False
+    assert r["source"] == "screen" and r["color"] is None

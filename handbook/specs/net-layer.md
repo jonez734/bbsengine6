@@ -318,19 +318,17 @@ module is `bbsengine6/net/terminal_caps.py`; the server handles it in `dispatch_
     "request_id": "r1",
     "caps": {
         "term": "xterm-256color",
-        "colors": 16777216,
-        "true_color": true,
-        "color_256": true,
+        "color": "truecolor",
         "source": "query",
         "ansi": "\u001b[?62c"
     }
 }
 ```
 
-Accepted `caps` fields: `term` (string, at most 64 characters), `colors` (integer 0 to
-1,000,000, or null), `true_color` and `color_256` (boolean or null), `source` (`query`,
-`colorterm`, or `unknown`, required), and `ansi` (string, at most 64 characters, or null).
-Any other field is rejected.
+Accepted `caps` fields: `term` (string, at most 64 characters), `color` (`"truecolor"`, `"256"`,
+or null), `source` (`query`, `colorterm`, `screen`, or `unknown`, required), and `ansi` (string, at
+most 64 characters, or null). Any other field is rejected, including the older `colors`,
+`true_color`, and `color_256`.
 
 **Reply (server → client):**
 
