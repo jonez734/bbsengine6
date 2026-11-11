@@ -15,7 +15,7 @@ Wire shapes:
 Accepted ``caps`` fields (all optional except ``source``):
 
   term        str, at most 64 chars, the TERM the client used
-  color       "truecolor" | "256" | null: the colour level the client can use
+  color       "truecolor" | "256" | "16" | null: the colour level the client can use
   source      "query" | "colorterm" | "screen" | "unknown"
   ansi        str or null, at most 64 chars, the DA reply text
 
@@ -42,7 +42,7 @@ __all__ = [
 
 MAX_TERM_LEN = 64
 MAX_ANSI_LEN = 64
-COLOR_LEVELS = ("truecolor", "256", None)
+COLOR_LEVELS = ("truecolor", "256", "16", None)
 SOURCES = ("query", "colorterm", "screen", "unknown")
 _FIELDS = {"term", "color", "source", "ansi"}
 
@@ -70,7 +70,7 @@ def validate_terminal_caps(caps: Any) -> Dict[str, Any]:
 
     color = caps.get("color")
     if color not in COLOR_LEVELS:
-        raise TerminalCapsError('color must be "truecolor", "256", or null')
+        raise TerminalCapsError('color must be "truecolor", "256", "16", or null')
     clean["color"] = color
 
     ansi = caps.get("ansi")

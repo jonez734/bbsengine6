@@ -136,8 +136,14 @@ Returned keys:
   - `"truecolor"`: the terminal gave a 24-bit answer (the RGB query, or a trusted `COLORTERM`).
   - `"256"`: the terminfo palette for that TERM has at least 256 colours (8-bit colour), and no
     truecolor answer was given.
-  - None: unknown, a palette smaller than 256, or GNU screen (see below). Silence is not evidence
-    of no colour.
+  - `"16"`: the terminfo palette has at least 16 colours, but fewer than 256 (the ANSI palette,
+    and the C64 palette, which is the 16 classic colours).
+  - None: unknown, fewer than 16 colours, or GNU screen (see below). Silence is not evidence of
+    no colour.
+
+The levels form a ladder, checked from the top: truecolor, then 256, then 16. Each level implies
+the ones below it, so a terminal is always at its highest level and the value cannot disagree with
+the answer it came from.
   The three older fields (`colors`, `true_color`, `color_256`) are gone: they could disagree with
   each other, so they were collapsed into this one.
 - `source`: `"query"`, `"colorterm"`, `"screen"`, or `"unknown"`. It says which step gave the

@@ -433,3 +433,21 @@ def test_screen_detected_by_sty_variable(stub, monkeypatch):
     monkeypatch.setenv("COLORTERM", "truecolor")
     r = terminal.report(timeout=0.01)
     assert r["source"] == "screen" and r["color"] is None
+
+
+# --- the 16-colour level (ANSI, and the C64 palette, which is 16 colours) ---
+
+def test_sixteen_colour_terminfo_gives_the_16_level(stub, monkeypatch):
+    monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: 16)
+    assert terminal.report(timeout=0.01)["color"] == "16"
+
+
+def test_eight_colour_terminfo_has_no_color_level(stub, monkeypatch):
+    monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: 8)
+    assert terminal.report(timeout=0.01)["color"] is None
+
+
+def test_truecolor_still_beats_the_16_level(stub, monkeypatch):
+    monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: 16)
+    monkeypatch.setenv("COLORTERM", "truecolor")
+    assert terminal.report(timeout=0.01)["color"] == "truecolor"

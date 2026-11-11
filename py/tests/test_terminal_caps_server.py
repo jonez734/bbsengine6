@@ -140,3 +140,7 @@ def test_dispatch_missing_caps_is_rejected():
 def test_color_accepts_the_three_levels(value):
     clean = tc.validate_terminal_caps({"source": "query", "color": value})
     assert clean["color"] == value
+
+
+def test_color_accepts_the_16_level():
+    assert tc.validate_terminal_caps({"source": "query", "color": "16"})["color"] == "16"

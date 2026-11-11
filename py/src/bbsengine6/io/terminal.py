@@ -390,8 +390,9 @@ def report(timeout=None, refresh=False) -> dict:
     3. Unknown (None). Silence is not evidence of no color; callers must not treat it as one.
 
     ``color`` is the colour level this terminal can use, as one value: ``"truecolor"`` when the
-    answer is 24-bit, ``"256"`` when the terminfo palette is at least 256 colours, and None
-    otherwise (including unknown, a small palette, and screen). It replaces the older
+    answer is 24-bit, ``"256"`` when the terminfo palette is at least 256 colours, ``"16"`` when it
+    is at least 16 (the ANSI and C64 palettes), and None otherwise (including unknown, fewer than 16
+    colours, and screen). It replaces the older
     ``colors``, ``true_color`` and ``color_256`` fields, which could disagree with each other.
 
     ``source`` is ``"query"``, ``"colorterm"``, ``"screen"``, or ``"unknown"``, and says which step
@@ -453,8 +454,9 @@ def report(timeout=None, refresh=False) -> dict:
     elif source == "unknown" and not rgb_sent:
         true_color, source = True, "colorterm"
 
-    # The colour level: "truecolor", "256", or None. screen does no colour here, whatever terminfo
-    # says. A 24-bit answer is truecolor; otherwise a terminfo palette of at least 256 is "256".
+    # The colour level, from the top: "truecolor", "256", "16", or None. screen does no colour here,
+    # whatever terminfo says. A 24-bit answer is truecolor; otherwise terminfo's palette size picks
+    # the level. The ANSI and C64 palettes are 16 colours, so they take the "16" level.
     # A truecolor answer always wins, so the level never disagrees with the answer it came from.
     if under_screen:
         color = None
@@ -462,6 +464,8 @@ def report(timeout=None, refresh=False) -> dict:
         color = "truecolor"
     elif colors is not None and colors >= 256:
         color = "256"
+    elif colors is not None and colors >= 16:
+        color = "16"
     else:
         color = None
 
