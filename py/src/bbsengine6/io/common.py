@@ -1,3 +1,5 @@
+import functools
+import json
 import os
 import re
 import sys
@@ -669,12 +671,33 @@ MOUSE_STATE_MANAGED = True
 _DECRPM_RE = re.compile(r"\x1b\[\?(\d+);(\d)\$y")
 
 
+@functools.lru_cache(maxsize=1)
+def _decrqm_terms() -> frozenset:
+    """TERM names known to answer DECRQM, from io/data/decrqm_terminals.json."""
+    from importlib import resources
+
+    text = resources.files("bbsengine6").joinpath("io/data/decrqm_terminals.json").read_text(encoding="utf-8")
+    return frozenset(json.loads(text)["terms"])
+
+
+def _decrqm_capable() -> bool:
+    """True when the terminal named by TERM is known to answer DECRQM.
+
+    A terminal not on the list is never sent a mode query: one that does not answer draws the
+    trailing "p" of each query as text. The match is the whole TERM name, exactly as listed.
+    """
+    term = os.environ.get("TERM", "")
+    return term in _decrqm_terms()
+
+
 def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:
     """Ask the terminal which mouse modes are set (DECRQM).
 
     Returns {mode: enabled}. A mode with no reply is reported as disabled,
     which is the fallback the restore logic relies on.
     """
+    if not _decrqm_capable():
+        return {}
     fd = _in_stream().fileno()
     with _current_stream_lock:
         drain_stream_to_queue(_in_stream(), _queue())

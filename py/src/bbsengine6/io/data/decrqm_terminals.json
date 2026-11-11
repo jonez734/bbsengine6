@@ -1,0 +1,16 @@
+{
+  "comment": "Terminal types that answer DECRQM (CSI ? mode $ p). Only these are sent the mode query; any other terminal gets no query, because one that does not answer draws the trailing p. Match is on the whole TERM name, exactly as listed.",
+  "terms": [
+    "xterm",
+    "xterm-256color",
+    "xterm-direct",
+    "vte",
+    "vte-256color",
+    "gnome",
+    "gnome-256color",
+    "tmux",
+    "tmux-256color",
+    "screen",
+    "screen-256color"
+  ]
+}

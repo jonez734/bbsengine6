@@ -31,6 +31,7 @@ class FakeTerminal:
         self.modes = dict(modes)  # mode -> bool, current terminal state
         self.answer_queries = answer_queries
         self.log = []  # ("set"|"reset", mode)
+        self.queries_seen = []  # every DECRQM mode asked for, in order
         self._stop = threading.Event()
         self._buf = b""
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -62,6 +63,7 @@ class FakeTerminal:
                 pos = m.end()
                 mode = int(m.group(1))
                 if m.group(2) == b"$p":
+                    self.queries_seen.append(mode)
                     if self.answer_queries and mode in self.modes:
                         status = 1 if self.modes[mode] else 2
                         os.write(self.master, f"\x1b[?{mode};{status}$y".encode())
@@ -96,6 +98,8 @@ def terminal(monkeypatch):
     out = os.fdopen(os.dup(slave), "w", buffering=1, encoding="utf-8")
     common.set_input_stream(stream)
     common.set_output_stream(out)
+    # The fake answers DECRQM, so it stands in for a terminal on the DECRQM list.
+    monkeypatch.setenv("TERM", "xterm-256color")
     # A pty has no terminal emulator to answer the cursor-position query.
     monkeypatch.setattr(inp, "get_cursor_position", lambda timeout=1.0: (1, 1))
     # The bottom bar's {savecursor} asks echo for the cursor too; answer it the same way.
@@ -204,3 +208,43 @@ def test_managed_flag_false_leaves_mouse_alone(terminal):
     inp.inputstring("> ")
     time.sleep(0.2)
     assert mouse_log(fake) == [], "with the flag off, no mouse modes may be written"
+
+
+def test_decrqm_not_sent_to_a_terminal_not_on_the_list(terminal, monkeypatch):
+    # retro term does not answer DECRQM and draws its trailing "p". A terminal not on the
+    # DECRQM list must get no mode query at all, so nothing is drawn.
+    monkeypatch.setattr(common, "_decrqm_capable", lambda: False)
+    fake = terminal({1000: True, 1002: False, 1003: False, 1006: False})
+    master = fake.master
+    threading.Timer(0.3, _feed, args=(master, b"z\r")).start()
+    result = inp.inputstring("> ")
+    time.sleep(0.2)
+    assert result == "z"
+    assert fake.queries_seen == [], fake.queries_seen
+    # Every managed mode is still reset on entry, so tracking is off during the prompt.
+    assert {m for a, m in mouse_log(fake) if a == "reset"} == {1000, 1002, 1003, 1006}
+
+
+def test_decrqm_sent_to_a_terminal_on_the_list(terminal, monkeypatch):
+    monkeypatch.setattr(common, "_decrqm_capable", lambda: True)
+    fake = terminal({1000: True, 1002: False, 1003: False, 1006: False})
+    master = fake.master
+    threading.Timer(0.3, _feed, args=(master, b"y\r")).start()
+    result = inp.inputstring("> ")
+    time.sleep(0.2)
+    assert result == "y"
+    assert ("set", 1000) in mouse_log(fake)
+
+
+def test_decrqm_list_loads_from_package_data(monkeypatch):
+    monkeypatch.setenv("TERM", "xterm-256color")
+    common._decrqm_terms.cache_clear()
+    assert "xterm-256color" in common._decrqm_terms()
+    assert common._decrqm_capable() is True
+
+
+@pytest.mark.parametrize("term", ["dumb", "", "linux", "retro-term", "xterm-kitty-unknown"])
+def test_decrqm_not_sent_to_unlisted_terms(monkeypatch, term):
+    monkeypatch.setenv("TERM", term)
+    common._decrqm_terms.cache_clear()
+    assert common._decrqm_capable() is False
