@@ -1,7 +1,0 @@
-{
-  "comment": "DA1 replies (the reply to CSI c) of terminals known to answer DECRQM (CSI ? mode $ p). Only a terminal whose DA1 reply is listed is sent the mode query: one that does not answer draws the trailing p of each query as text. The reply is used because TERM does not identify the emulator (retro term and xterm both report TERM=xterm).",
-  "da1_replies": [
-    "\u001b[?61;1;21;22;28c",
-    "\u001b[?64;1;2;6;9;15;17;18;21;22;28c"
-  ]
-}

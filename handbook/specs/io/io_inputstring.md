@@ -124,8 +124,8 @@ Reads one line with line editing. Returns the entered text. `prompt` and
   restored on return, exception, and Ctrl-C (see `io_getch.spec`).
 - The terminal's mouse-reporting modes (1000, 1002, 1003, 1006) are reset for the prompt
   (tracking is off during editing) and, on exit, only the modes the terminal reported as on
-  are turned back on. The mode query (DECRQM) is sent only to a terminal whose DA1 reply is on
-  the list in `io/data/decrqm_terminals.json`, and never by `inputstring()` itself (see
+  are turned back on. The mode query (DECRQM) is withheld from the terminals on the blocklist in
+  `io/data/decrqm_blocklist.json`, and `inputstring()` never sends it or any probe itself (see
   `io_common.md`, Mouse state). `common.MOUSE_STATE_MANAGED = False` disables all of this.
 
 **Concurrency:** the module-level key table `KEY_ACTIONS` is shared by all

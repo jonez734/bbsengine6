@@ -237,21 +237,26 @@ def test_decrqm_sent_to_a_terminal_on_the_list(terminal, monkeypatch):
     assert ("set", 1000) in mouse_log(fake)
 
 
-def test_decrqm_list_loads_from_package_data(monkeypatch):
-    common._decrqm_replies.cache_clear()
-    assert "\x1b[?61;1;21;22;28c" in common._decrqm_replies()
+def test_decrqm_blocklist_loads_from_package_data(monkeypatch):
+    common._decrqm_blocked_replies.cache_clear()
+    assert "\x1b[?1;2c" in common._decrqm_blocked_replies()
 
 
-def test_decrqm_capable_when_the_da1_reply_is_listed(monkeypatch):
-    monkeypatch.setattr(common, "_decrqm_da1_reply", lambda: "\x1b[?61;1;21;22;28c")
+def test_decrqm_sent_when_the_da1_reply_is_not_blocked(monkeypatch):
+    # A DA1 reply that is not on the blacklist (xterm, gnome-terminal) gets the query.
+    monkeypatch.setattr(common, "_decrqm_da1_reply", lambda: "\x1b[?64;1;2;6;9;15;17;18;21;22;28c")
     assert common._decrqm_capable() is True
 
 
-@pytest.mark.parametrize("reply", ["\x1b[?1;2c", "\x1b[?62;1;2c", "", None])
-def test_decrqm_not_sent_when_the_da1_reply_is_not_listed(monkeypatch, reply):
-    # retro term answers DA1 with "?1;2c" and TERM=xterm; a real xterm can share TERM, so the
-    # decision is made on the reply, not on TERM. No reply means no DECRQM either.
-    monkeypatch.setattr(common, "_decrqm_da1_reply", lambda: reply)
+def test_decrqm_not_sent_to_a_blocked_terminal(monkeypatch):
+    # retro term answers DA1 with "?1;2c" and does not answer DECRQM: it gets no query.
+    monkeypatch.setattr(common, "_decrqm_da1_reply", lambda: "\x1b[?1;2c")
+    assert common._decrqm_capable() is False
+
+
+def test_decrqm_not_sent_without_a_known_reply(monkeypatch):
+    # No DA1 reply is known, so there is nothing to test; nothing is sent.
+    monkeypatch.setattr(common, "_decrqm_da1_reply", lambda: None)
     assert common._decrqm_capable() is False
 
 
@@ -268,7 +273,7 @@ def test_gate_without_a_report_sends_no_query(monkeypatch):
     assert sent == []
 
 
-def test_xterm_da1_reply_is_on_the_list():
-    # A real xterm (TERM=xterm-256color) answers DA1 with this reply.
-    common._decrqm_replies.cache_clear()
-    assert "\x1b[?64;1;2;6;9;15;17;18;21;22;28c" in common._decrqm_replies()
+def test_xterm_da1_reply_is_not_blocked():
+    # A real xterm (TERM=xterm-256color) answers DA1 with this reply and does answer DECRQM.
+    common._decrqm_blocked_replies.cache_clear()
+    assert "\x1b[?64;1;2;6;9;15;17;18;21;22;28c" not in common._decrqm_blocked_replies()

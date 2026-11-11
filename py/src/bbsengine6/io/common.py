@@ -672,11 +672,11 @@ _DECRPM_RE = re.compile(r"\x1b\[\?(\d+);(\d)\$y")
 
 
 @functools.lru_cache(maxsize=1)
-def _decrqm_replies() -> frozenset:
-    """DA1 replies of terminals known to answer DECRQM, from io/data/decrqm_terminals.json."""
+def _decrqm_blocked_replies() -> frozenset:
+    """DA1 replies of terminals that do NOT answer DECRQM, from io/data/decrqm_blocklist.json."""
     from importlib import resources
 
-    text = resources.files("bbsengine6").joinpath("io/data/decrqm_terminals.json").read_text(encoding="utf-8")
+    text = resources.files("bbsengine6").joinpath("io/data/decrqm_blocklist.json").read_text(encoding="utf-8")
     return frozenset(json.loads(text)["da1_replies"])
 
 
@@ -693,14 +693,15 @@ def _decrqm_da1_reply():
 
 
 def _decrqm_capable() -> bool:
-    """True when this terminal's DA1 reply is one known to answer DECRQM.
+    """True when the mode query may be sent to this terminal.
 
-    A terminal not on the list is never sent a mode query: one that does not answer draws the
-    trailing "p" of each query as text. TERM is not used: retro term and xterm both report
-    TERM=xterm, so the DA1 reply is what tells them apart.
+    A blacklist: the query is sent when the terminal's DA1 reply is known and is not one of the
+    replies of terminals that do not answer DECRQM (retro term draws the trailing "p" of each query
+    as text). With no reply known there is nothing to check, so nothing is sent. TERM is not used:
+    retro term and xterm both report TERM=xterm, so the DA1 reply is what tells them apart.
     """
     reply = _decrqm_da1_reply()
-    return reply is not None and reply in _decrqm_replies()
+    return reply is not None and reply not in _decrqm_blocked_replies()
 
 
 def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:
