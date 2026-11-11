@@ -158,7 +158,9 @@ Order for `true_color`:
 2. `COLORTERM` set to `truecolor` or `24bit`.
 3. Unknown (None). Silence is not evidence of no color.
 
-Under GNU screen the answer is always False (`source: "screen"`). screen passes the outer
+Under GNU screen `color_256` is also False, whatever terminfo's `colors` says, and `colors` is
+still the terminfo count. Under GNU screen the answer for `true_color` is always False
+(`source: "screen"`). screen passes the outer
 terminal's `COLORTERM` through but has no 24-bit colour, and it does not answer the RGB query, so
 neither step is used and the RGB query is not sent. screen is detected by `STY` being set, or a
 `TERM` named `screen`, `screen.*`, or `screen-*` (`in_screen()`).

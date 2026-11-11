@@ -459,7 +459,10 @@ def report(timeout=None, refresh=False) -> dict:
     if true_color:
         colors = TRUECOLOR_COLORS
 
-    if true_color or (colors is not None and colors >= 256):
+    if under_screen:
+        # screen does not do colour here: its terminfo count is not evidence of usable colour.
+        color_256 = False
+    elif true_color or (colors is not None and colors >= 256):
         color_256 = True
     elif colors is not None:
         color_256 = False

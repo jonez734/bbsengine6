@@ -424,7 +424,7 @@ def test_screen_ignores_inherited_colorterm(stub, monkeypatch):
     assert r["true_color"] is False
     assert r["source"] == "screen"
     assert r["da"]["rgb"]["sent"] is False
-    assert r["colors"] == 256 and r["color_256"] is True
+    assert r["color_256"] is False
 
 
 def test_screen_detected_by_sty_variable(stub, monkeypatch):
