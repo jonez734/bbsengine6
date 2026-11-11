@@ -52,6 +52,34 @@ Returns ANSI SGR sequence for foreground (38) or background (48).
 
 ---
 
+### `rgb_to_hex(r, g, b) -> str`
+
+Returns the uppercase hex triplet, without `#`, for three 0-255 integers: `(255, 255, 0)` gives
+`"FFFF00"`, and `(1, 171, 15)` gives `"01AB0F"`.
+
+Raises `TypeError` for a value that is not an int (floats, strings, and `bool` are refused) and
+`ValueError` for a value outside 0-255.
+
+---
+
+### `hex_to_rgb(text) -> (r, g, b)`
+
+The inverse of `rgb_to_hex`. Accepts a six-digit hex triplet with an optional leading `#`, in
+either case: `"FFFF00"`, `"#ffff00"`, and `"ffff00"` all give `(255, 255, 0)`.
+
+Raises `ValueError` for anything else (wrong length, non-hex digits, or a non-string).
+
+`_parse_rgb` uses `hex_to_rgb` for the `#RRGGBB` branch, so the palette has one hex parser.
+
+---
+
+### `check_channel(value) -> int`
+
+Returns `value` if it is an int (not `bool`) from 0 to 255. Raises `TypeError` or `ValueError`
+otherwise. `rgb_to_hex` and the `{rgb:}` command both validate channels with it.
+
+---
+
 ### `darken(prefix, rgb, percentage) -> str`
 
 Returns darkened version of a color.

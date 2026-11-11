@@ -44,7 +44,7 @@ The module uses a **token-based pipeline**:
 - **ANSI palette**: Standard 8 colors + 8 light colors
 - **C64 palette**: Commodore 64 color scheme (default)
 - Background colors via `bg` prefix: `{bggray}`, `{bgwhite}`, etc.
-- RGB colors: `{rgb:#RRGGBB}` or `{rgb:fg,255,0}`
+- RGB colors: `{rgb:#RRGGBB}`, `{rgb:RRGGBB}`, or `{rgb:r,g,b}`, each optionally prefixed with `fg,` or `bg,`
 
 ### 2. Text Attributes
 

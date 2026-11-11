@@ -116,6 +116,8 @@ Example DA1 replies: `ESC[?6c` (VT102), `ESC[?1;2c` (VT100 with AVO),
 report(timeout=None) -> dict
 ```
 
+Renamed from `terminal_report()`. Callers use `report()`.
+
 Describes the terminal this process runs in. It is blocking only. It runs the DA probe
 (DA1, then DA2 if DA1 is silent), then the XTGETTCAP `RGB` query. A silent terminal costs up to
 three timeouts. Returns `source: "unknown"` with no tty.
@@ -149,7 +151,19 @@ its ST, and the input queue drops it (recording it in the session). It is never 
 ```python
 parse_xtgettcap_reply(reply) -> dict | None   # {"valid", "name", "value"}
 rgb_from_reply(parsed) -> bool | None
+xtgettcap_request(name) -> str                # DCS + q <hex of name> ST
+query_cap(name, timeout=None)                 # value, True, False, or None
 ```
+
+`query_cap(name)` asks the running terminal for any capability by name over XTGETTCAP. It returns
+the value as a str when the terminal gives one, `True` when the capability is present with no value,
+`False` when the terminal says it is absent, and `None` when it does not answer for that name in
+time. A reply for a different name is not the answer, so it gives `None`. `xtgettcap_request` raises
+`ValueError` for a name that is empty or not printable ASCII.
+
+For a static lookup (no terminal round trip), use terminfo instead:
+`terminfo.load(term).get(cap)`. terminfo honours `$TERMINFO` first, then `~/.terminfo`,
+`$TERMINFO_DIRS`, and the system directories.
 
 ## Usage
 

@@ -153,10 +153,14 @@ echo("message", level="info")    # Uses {level.info} prefix
 
 | Command | Description |
 |---------|-------------|
-| `{rgb:#RRGGBB}` | Foreground RGB color |
-| `{bg_rgb:#RRGGBB}` | Background RGB color |
+| `{rgb:#RRGGBB}` | Foreground RGB color (hex, with `#`) |
+| `{rgb:RRGGBB}` | Foreground RGB color (hex, no `#`, either case) |
+| `{rgb:r,g,b}` | Foreground RGB color (three decimal channels, 0-255) |
+| `{rgb:fg,...}` / `{rgb:bg,...}` | Foreground or background, with any of the forms above |
 
-Example: `{rgb:#FF0000}` = bright red foreground
+Examples: `{rgb:#FF0000}` = bright red foreground; `{rgb:bg,255,255,0}` = yellow background.
+`{bg_rgb:...}` is not a command: it is written out as text. Use `{rgb:bg,...}` for background.
+Channels outside 0-255 and non-integer channels are rejected.
 
 ---
 
