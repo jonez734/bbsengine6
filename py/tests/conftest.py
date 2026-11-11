@@ -295,6 +295,26 @@ def test_users():
 
 
 @pytest.fixture(autouse=True)
+def _reset_terminal_probe_state():
+    """Clear the cached terminal report and probe bookkeeping on the default session.
+
+    A probe that times out marks its name on the session, and a cached report is kept there, so
+    one test's probe would otherwise change the next test's result. Reset both sides of each test.
+    """
+    from bbsengine6.interaction import current_session
+
+    def _clear():
+        s = current_session()
+        s.terminal_report = None
+        s.da_timed_out = set()
+        s.late_da_replies = []
+
+    _clear()
+    yield
+    _clear()
+
+
+@pytest.fixture(autouse=True)
 def _restore_threadlocal_moniker():
     """Restore member._threadlocal.moniker after every test.
 

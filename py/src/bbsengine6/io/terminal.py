@@ -128,6 +128,23 @@ def configure_ansi_probe(cfg) -> None:
     _ANSI_PROBE_TIMEOUT = float(timeout)
 
 
+def _note_timeout(name: str) -> None:
+    """Remember that the probe ``name`` got no reply in time, so a late reply for it is recorded."""
+    from ..interaction import current_session
+
+    current_session().da_timed_out.add(name)
+
+
+def _record(sent: bool, reply) -> dict:
+    """One ``report()["da"]`` entry. ``timed_out`` means it was sent and no reply came in time."""
+    return {
+        "sent": bool(sent),
+        "reply": reply if sent else None,
+        "timed_out": bool(sent) and reply is None,
+        "late": False,
+    }
+
+
 def probe_da(timeout=None, block=True):
     """Send DA1, then DA2 if DA1 gets no reply. Return the raw reply, or None.
 
@@ -156,7 +173,10 @@ def probe_da(timeout=None, block=True):
     try:
         reply = common.query_terminal(DA1_REQUEST, _ANY_DA_RE, timeout=wait)
         if reply is None:
+            _note_timeout("da1")
             reply = common.query_terminal(DA2_REQUEST, _ANY_DA_RE, timeout=wait)
+        if reply is None:
+            _note_timeout("da2")
     except Exception as exc:  # no terminal, or the tty refused the mode change
         echo(f"terminal.probe_da: no reply ({exc})", level="debug")
         return None
@@ -182,9 +202,12 @@ def has_ansi(block=True) -> bool:
     ``block=False`` sends the probe and returns False at once. Call ``ansi_reply()`` and
     ``DA1_REPLY_RE``/``DA2_REPLY_RE`` later to check the answer, or use ``has_ansi()`` again.
     """
-    reply = probe_da(block=block)
+    from ..interaction import current_session
+
     if not block:
         return False
+    cached = current_session().terminal_report
+    reply = cached["ansi"] if cached is not None else probe_da(block=True)
     if not reply:
         return False
     return bool(DA1_REPLY_RE.fullmatch(reply) or DA2_REPLY_RE.fullmatch(reply))
@@ -345,7 +368,7 @@ def _terminfo_colors(term: str):
     return terminfo.load(term).nums.get("colors")
 
 
-def report(timeout=None) -> dict:
+def report(timeout=None, refresh=False) -> dict:
     """Describe the terminal this process runs in: color depth and where it came from.
 
     ``term`` is the terminal type this process uses, from :func:`resolve` (the client TERM when it
@@ -369,7 +392,12 @@ def report(timeout=None) -> dict:
     result is in ``ansi``), then the RGB query. Blocking only. A silent terminal costs up to
     three timeouts: DA1, DA2, and the RGB query.
     """
+    from ..interaction import current_session
     from . import common
+
+    cached = current_session().terminal_report
+    if cached is not None and not refresh:
+        return cached
 
     wait = _ANSI_PROBE_TIMEOUT if timeout is None else float(timeout)
     term = os.environ.get("TERM", "")
@@ -377,22 +405,38 @@ def report(timeout=None) -> dict:
         term, _ = resolve()
     colors = _terminfo_colors(term)
     ansi = probe_da(timeout=wait)
+    # probe_da sends DA2 only when DA1 gets no reply, so DA2 was sent exactly when DA1 timed out.
+    # A DA1 reply is "ESC[?"; a DA2 reply is "ESC[>".
+    probing = _ANSI_PROBE_ENABLED
+    da1_reply = ansi if (ansi and ansi.startswith("\x1b[?")) else None
+    da2_reply = ansi if (ansi and ansi.startswith("\x1b[>")) else None
+    da = {
+        "da1": _record(probing, da1_reply),
+        "da2": _record(probing and da1_reply is None, da2_reply),
+    }
 
     true_color = None
     source = "unknown"
-    try:
-        reply = common.query_terminal(XTGETTCAP_RGB_REQUEST, XTGETTCAP_REPLY_RE, timeout=wait)
-    except Exception:  # no terminal
-        reply = None
+    # COLORTERM is decided first. When it already says truecolor the RGB query is not sent: a
+    # terminal that does not answer it echoes the query text back as stray input characters, and
+    # the reply would only confirm what COLORTERM says.
+    colorterm = os.environ.get("COLORTERM", "").strip().lower()
+    rgb_sent = colorterm not in ("truecolor", "24bit")
+    reply = None
+    if rgb_sent:
+        try:
+            reply = common.query_terminal(XTGETTCAP_RGB_REQUEST, XTGETTCAP_REPLY_RE, timeout=wait)
+        except Exception:  # no terminal
+            reply = None
+        if reply is None:
+            _note_timeout("rgb")
     if reply is not None:
         rgb = rgb_from_reply(parse_xtgettcap_reply(reply))
         if rgb is not None:
             true_color, source = rgb, "query"
 
-    if source == "unknown":
-        colorterm = os.environ.get("COLORTERM", "").strip().lower()
-        if colorterm in ("truecolor", "24bit"):
-            true_color, source = True, "colorterm"
+    if source == "unknown" and not rgb_sent:
+        true_color, source = True, "colorterm"
 
     # A truecolor terminal has a 24-bit palette whatever terminfo says (xterm's entry still says 8),
     # so colors and true_color agree.
@@ -406,11 +450,21 @@ def report(timeout=None) -> dict:
     else:
         color_256 = None
 
-    return {
+    da["rgb"] = _record(rgb_sent, reply)
+    late = {name: text for name, text in current_session().late_da_replies}
+    for name, entry in da.items():
+        # Only a probe that was sent can have a late reply.
+        if entry["sent"] and name in late:
+            entry["late"] = True
+            entry["reply"] = late[name]
+    result = {
         "term": term,
         "colors": colors,
         "true_color": true_color,
         "color_256": color_256,
         "source": source,
         "ansi": ansi,
+        "da": da,
     }
+    current_session().terminal_report = result
+    return result

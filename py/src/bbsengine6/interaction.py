@@ -40,6 +40,13 @@ class Session:
         # DA1/DA2 replies the input reader took from the tty (see io.common.discard_da_replies).
         # A non-blocking probe_da() reads its answer from here.
         self.da_replies: list = []
+        # The terminal report for this session, cached after the first probe (io.terminal.report).
+        # None until the probe has run; report(refresh=True) replaces it.
+        self.terminal_report = None
+        # Probes whose reply timed out, by name ("da1", "da2", "rgb"), and any reply that then
+        # arrived late, as (name, reply). See io.common.discard_da_replies.
+        self.da_timed_out: set = set()
+        self.late_da_replies: list = []
         # Where the member connected from, as recorded on the session (util.getremoteaddr). The
         # source is "utmp", "ssh_env", or None. Set when the session starts.
         self.remoteaddr: Optional[str] = None

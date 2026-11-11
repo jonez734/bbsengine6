@@ -69,14 +69,16 @@ def stub(monkeypatch):
 
 
 def test_query_answer_wins(stub, monkeypatch):
-    monkeypatch.setenv("COLORTERM", "truecolor")
+    # COLORTERM is unset, so the query is sent; the query answer must still win over colorterm.
+    monkeypatch.delenv("COLORTERM", raising=False)
     stub["rgb"] = "\x1bP1+r524742=38\x1b\\"
     r = terminal.report()
     assert r["source"] == "query" and r["true_color"] is True
 
 
 def test_query_invalid_is_false_and_not_overridden_by_colorterm(stub, monkeypatch):
-    monkeypatch.setenv("COLORTERM", "truecolor")
+    # COLORTERM is unset, so the query is sent; an invalid answer must still give False.
+    monkeypatch.delenv("COLORTERM", raising=False)
     stub["rgb"] = "\x1bP0+r524742\x1b\\"
     r = terminal.report()
     assert r["source"] == "query" and r["true_color"] is False
@@ -134,7 +136,7 @@ def test_truecolor_implies_color_256(stub, monkeypatch):
 
 def test_report_has_all_keys(stub):
     r = terminal.report()
-    assert set(r) == {"term", "colors", "true_color", "color_256", "source", "ansi"}
+    assert set(r) == {"term", "colors", "true_color", "color_256", "source", "ansi", "da"}
 
 
 def test_report_without_tty_is_safe(monkeypatch):
@@ -179,10 +181,12 @@ def _run_report(answer_rgb, colorterm=None):
     try:
         child.expect_exact("\x1b[c")
         child.send("\x1b[?62;1;2c")
-        child.expect_exact("\x1bP+q524742\x1b\\")
-        if answer_rgb is not None:
-            time.sleep(0.05)
-            child.send(answer_rgb)
+        # The RGB query is sent only when COLORTERM does not already say truecolor or 24bit.
+        if colorterm not in ("truecolor", "24bit"):
+            child.expect_exact("\x1bP+q524742\x1b\\")
+            if answer_rgb is not None:
+                time.sleep(0.05)
+                child.send(answer_rgb)
         child.expect(r"REPORT=(\{[^\r\n]*\})")
         return json.loads(child.match.group(1))
     finally:
@@ -199,14 +203,16 @@ def test_pty_query_valid_reports_true_color():
 
 @needs_pty
 def test_pty_query_invalid_reports_false_even_with_colorterm():
-    r = _run_report("\x1bP0+r524742\x1b\\", colorterm="truecolor")
+    r = _run_report("\x1bP0+r524742\x1b\\")
     assert r["source"] == "query" and r["true_color"] is False
 
 
 @needs_pty
-def test_pty_silent_query_falls_back_to_colorterm():
+def test_pty_colorterm_answers_without_sending_the_query():
+    # COLORTERM=truecolor: the RGB query is not sent, so the child never waits on it.
     r = _run_report(None, colorterm="truecolor")
     assert r["source"] == "colorterm" and r["true_color"] is True
+    assert r["da"]["rgb"]["sent"] is False
 
 
 @needs_pty
@@ -293,3 +299,114 @@ def test_report_colors_follow_the_resolved_term(stub, monkeypatch):
     monkeypatch.setattr(terminal, "_terminfo_colors", lambda term: seen.append(term) or 8)
     terminal.report()
     assert seen and set(seen) == {"xterm"}
+
+
+# --- no XTGETTCAP query when COLORTERM already answers ----------------------
+
+def test_colorterm_skips_the_rgb_query(stub, monkeypatch):
+    # COLORTERM=truecolor already says true_color, so the RGB query is not sent. A terminal that
+    # does not answer it echoes the query text back into the input as stray characters.
+    monkeypatch.setenv("COLORTERM", "truecolor")
+    r = terminal.report()
+    assert r["source"] == "colorterm" and r["true_color"] is True
+    assert terminal.XTGETTCAP_RGB_REQUEST not in stub["queries"]
+
+
+def test_query_still_sent_without_colorterm(stub):
+    terminal.report()
+    assert terminal.XTGETTCAP_RGB_REQUEST in stub["queries"]
+
+
+# --- probe once per session --------------------------------------------------
+
+@pytest.fixture
+def counted(monkeypatch):
+    """Count DA and XTGETTCAP sends. Silent terminal: every query returns None."""
+    from bbsengine6.interaction import current_session
+
+    sent = []
+
+    def fake_query(request, reply_re, timeout=0.5):
+        sent.append(request)
+        return None
+
+    monkeypatch.setattr(common, "query_terminal", fake_query)
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.delenv("COLORTERM", raising=False)
+    current_session().terminal_report = None
+    yield sent
+    current_session().terminal_report = None
+
+
+def test_second_report_sends_nothing(counted):
+    terminal.report(timeout=0.01)
+    first = len(counted)
+    assert first > 0
+    terminal.report(timeout=0.01)
+    assert len(counted) == first
+
+
+def test_report_refresh_probes_again(counted):
+    terminal.report(timeout=0.01)
+    first = len(counted)
+    terminal.report(timeout=0.01, refresh=True)
+    assert len(counted) > first
+
+
+def test_has_ansi_uses_the_cached_probe(counted):
+    terminal.report(timeout=0.01)
+    first = len(counted)
+    terminal.has_ansi()
+    assert len(counted) == first
+
+
+# --- report()["da"]: one record per command --------------------------------
+
+def test_da_dict_has_one_record_per_command(stub):
+    r = terminal.report(timeout=0.01)
+    assert set(r["da"]) == {"da1", "da2", "rgb"}
+    for entry in r["da"].values():
+        assert set(entry) == {"sent", "reply", "timed_out", "late"}
+
+
+def test_da_silent_records_timeouts_and_no_reply(stub, monkeypatch):
+    monkeypatch.setattr(terminal, "probe_da", lambda timeout=None, block=True: None)
+    r = terminal.report(timeout=0.01)
+    da1 = r["da"]["da1"]
+    assert da1["sent"] is True and da1["reply"] is None
+    assert da1["timed_out"] is True and da1["late"] is False
+    assert r["da"]["da2"]["sent"] is True and r["da"]["da2"]["timed_out"] is True
+
+
+def test_da1_answer_records_reply_and_skips_da2(monkeypatch):
+    monkeypatch.setattr(terminal, "_ANSI_PROBE_ENABLED", True)
+    monkeypatch.setattr(common, "query_terminal",
+                        lambda request, reply_re, timeout=0.5:
+                        "\x1b[?62;1;2c" if request == terminal.DA1_REQUEST else None)
+    r = terminal.report(timeout=0.01)
+    assert r["da"]["da1"] == {"sent": True, "reply": "\x1b[?62;1;2c", "timed_out": False, "late": False}
+    assert r["da"]["da2"]["sent"] is False and r["da"]["da2"]["reply"] is None
+
+
+def test_rgb_not_sent_when_colorterm_answers_records_sent_false(stub, monkeypatch):
+    monkeypatch.setenv("COLORTERM", "truecolor")
+    r = terminal.report(timeout=0.01)
+    assert r["da"]["rgb"]["sent"] is False and r["da"]["rgb"]["reply"] is None
+
+
+def test_top_level_ansi_is_kept(stub):
+    # The stub answers DA1; the top-level ansi key still carries that reply.
+    r = terminal.report(timeout=0.01)
+    assert r["ansi"] == "\x1b[?62c"
+
+
+def test_probing_disabled_sends_nothing_and_reports_not_sent(monkeypatch):
+    # With the ANSI probe disabled no DA request is written, and report() says so per record.
+    monkeypatch.setattr(terminal, "_ANSI_PROBE_ENABLED", False)
+    sent = []
+    monkeypatch.setattr(common, "query_terminal", lambda req, *a, **k: sent.append(req) or None)
+    monkeypatch.setenv("COLORTERM", "truecolor")
+    r = terminal.report(timeout=0.01)
+    assert terminal.DA1_REQUEST not in sent and terminal.DA2_REQUEST not in sent
+    assert r["da"]["da1"]["sent"] is False and r["da"]["da2"]["sent"] is False
+    assert terminal.has_ansi() is False

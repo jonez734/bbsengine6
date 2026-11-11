@@ -158,8 +158,28 @@ def discard_da_replies() -> int:
         cleaned = _XTGETTCAP_QUEUE_RE.sub("", _DA_REPLY_QUEUE_RE.sub("", text))
         queue.clear()
         queue.extend(cleaned)
-        _interaction().da_replies.extend(found)
+        session = _interaction()
+        for reply in found:
+            # A reply for a probe that already timed out is late: note it, and it is still dropped.
+            # DA1 and DA2 replies are told apart by their marker ("?" or ">").
+            name = _probe_name_for(reply)
+            if name is not None and name in session.da_timed_out:
+                session.da_timed_out.discard(name)
+                session.late_da_replies.append((name, reply))
+            else:
+                session.da_replies.append(reply)
         return len(found)
+
+
+def _probe_name_for(reply: str) -> str | None:
+    """The probe name a DA or XTGETTCAP reply answers: "da1", "da2", or "rgb". None if unknown."""
+    if reply.startswith("\x1b[?"):
+        return "da1"
+    if reply.startswith("\x1b[>"):
+        return "da2"
+    if reply.startswith("\x1bP"):
+        return "rgb"
+    return None
 
 
 def _read_current_input_stream(size: int = 1) -> str:
@@ -392,6 +412,15 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 QUERY_SETTLE_SECONDS = 0.25
 
 
+def strip_echoed_request(text: str, request: str) -> str:
+    """Remove every copy of ``request`` from ``text``.
+
+    A terminal that does not answer a query can echo the query's own text back. That text is ours,
+    not typed input, so it is taken out before the rest is kept as keys.
+    """
+    return text.replace(request, "")
+
+
 def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0.5) -> str | None:
     """Send ``request`` to the terminal and return the first reply matching ``reply_re``.
 
@@ -446,6 +475,7 @@ def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0
     else:
         leftover = buffer
         matched = None
+    leftover = strip_echoed_request(leftover, request)
     if leftover:
         with _input_queue_lock:
             _queue().extend("\r" if c == "\n" else c for c in leftover)

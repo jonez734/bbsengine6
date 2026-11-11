@@ -345,3 +345,51 @@ def test_discard_records_replies_in_the_session():
     assert sess.da_replies == ["\x1b[?6c"]
     sess.da_replies.clear()
     q.clear()
+
+
+# --- echoed requests are not typed input ------------------------------------
+
+def test_echoed_request_is_removed_from_unmatched_input():
+    # A terminal that does not answer a query can echo its text back. The echo is our own request,
+    # so it must not reach the keys; the keys typed around it stay.
+    echoed = "x" + terminal.XTGETTCAP_RGB_REQUEST + "y"
+    assert common.strip_echoed_request(echoed, terminal.XTGETTCAP_RGB_REQUEST) == "xy"
+
+
+def test_strip_echoed_request_leaves_other_text_alone():
+    assert common.strip_echoed_request("abc", terminal.XTGETTCAP_RGB_REQUEST) == "abc"
+
+
+def test_echoed_da1_request_is_removed_from_unmatched_input():
+    # A terminal that echoes a DA1 request back must not give keys.
+    assert common.strip_echoed_request("a" + terminal.DA1_REQUEST + "b", terminal.DA1_REQUEST) == "ab"
+
+
+def test_echoed_da2_request_is_removed_from_unmatched_input():
+    assert common.strip_echoed_request("a" + terminal.DA2_REQUEST + "b", terminal.DA2_REQUEST) == "ab"
+
+
+def test_query_terminal_strips_the_request_it_sent(monkeypatch):
+    # The echo of the request that was actually sent is removed from the leftover input.
+    queued = []
+    monkeypatch.setattr(common, "_queue", lambda: queued)
+    monkeypatch.setattr(common, "_in_raw_session", lambda: True)
+    monkeypatch.setattr(common, "_write_current_output_stream", lambda *a, **k: None)
+    monkeypatch.setattr(common, "_restore_cooked", lambda *a, **k: None)
+    monkeypatch.setattr(common, "drain_stream_to_queue", lambda *a, **k: None)
+
+    class _Stream:
+        encoding = "utf-8"
+
+        def fileno(self):
+            return 0
+
+    monkeypatch.setattr(common, "_in_stream", lambda: _Stream())
+    monkeypatch.setattr(common.termios, "tcgetattr", lambda fd: [])
+    echoed = terminal.DA1_REQUEST + "z"
+    reads = iter([echoed.encode()])
+    monkeypatch.setattr(common.os, "read", lambda fd, n: next(reads, b""))
+    monkeypatch.setattr(common.select, "select", lambda r, w, x, t: (r, [], []))
+    result = common.query_terminal(terminal.DA1_REQUEST, terminal.DA1_REPLY_RE, timeout=0.01)
+    assert result is None
+    assert "".join(queued) == "z"
