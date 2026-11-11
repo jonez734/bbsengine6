@@ -137,7 +137,9 @@ Returned keys:
 - `true_color`: True, False, or None (unknown).
 - `color_256`: True if `colors >= 256` or `true_color`; False if `colors` is known and smaller;
   None if neither is known.
-- `source`: `"query"`, `"colorterm"`, or `"unknown"`. It says which step gave `true_color`.
+- `source`: `"query"`, `"colorterm"`, `"screen"`, or `"unknown"`. It says which step gave
+  `true_color`. `"screen"` means the process runs under GNU screen (see below), and `true_color`
+  is False.
 - `ansi`: the DA reply text (DA1, else DA2), or None. Kept for compatibility.
 - `da`: one record per command, nested: `da1`, `da2`, and `rgb`. Each record has:
   - `sent`: whether that request was written. DA2 is sent only when DA1 got no reply. RGB is not
@@ -155,6 +157,11 @@ Order for `true_color`:
    more means direct color. Verified on VTE (`524742=38`, value 8).
 2. `COLORTERM` set to `truecolor` or `24bit`.
 3. Unknown (None). Silence is not evidence of no color.
+
+Under GNU screen the answer is always False (`source: "screen"`). screen passes the outer
+terminal's `COLORTERM` through but has no 24-bit colour, and it does not answer the RGB query, so
+neither step is used and the RGB query is not sent. screen is detected by `STY` being set, or a
+`TERM` named `screen`, `screen.*`, or `screen-*` (`in_screen()`).
 
 `COLORTERM` is decided first. When it says truecolor or 24bit the RGB query is not sent, so the
 query does not run and its echo cannot reach the keys. Terminals that do not answer the query

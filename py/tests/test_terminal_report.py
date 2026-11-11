@@ -410,3 +410,26 @@ def test_probing_disabled_sends_nothing_and_reports_not_sent(monkeypatch):
     assert terminal.DA1_REQUEST not in sent and terminal.DA2_REQUEST not in sent
     assert r["da"]["da1"]["sent"] is False and r["da"]["da2"]["sent"] is False
     assert terminal.has_ansi() is False
+
+
+# --- GNU screen: COLORTERM is inherited, and screen has no 24-bit colour ------
+
+def test_screen_ignores_inherited_colorterm(stub, monkeypatch):
+    # screen passes its outer terminal's COLORTERM through, but it does not do 24-bit colour, so
+    # truecolor must not be claimed from it. The RGB query is not sent either: screen does not
+    # answer it, and its echo would be typed as keys.
+    monkeypatch.setenv("TERM", "screen.xterm-256color")
+    monkeypatch.setenv("COLORTERM", "truecolor")
+    r = terminal.report(timeout=0.01)
+    assert r["true_color"] is False
+    assert r["source"] == "screen"
+    assert r["da"]["rgb"]["sent"] is False
+    assert r["colors"] == 256 and r["color_256"] is True
+
+
+def test_screen_detected_by_sty_variable(stub, monkeypatch):
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setenv("STY", "12345.pts-0.host")
+    monkeypatch.setenv("COLORTERM", "truecolor")
+    r = terminal.report(timeout=0.01)
+    assert r["source"] == "screen" and r["true_color"] is False

@@ -359,6 +359,16 @@ def rgb_from_reply(parsed) -> bool | None:
 TRUECOLOR_COLORS = 1 << 24  # 16777216, the 24-bit palette
 
 
+def in_screen() -> bool:
+    """True when this process runs under GNU screen: STY is set, or TERM names screen.
+
+    screen does not carry 24-bit colour, and it passes the outer terminal's COLORTERM through, so
+    the report must not take truecolor from the environment there.
+    """
+    term = os.environ.get("TERM", "")
+    return bool(os.environ.get("STY")) or term == "screen" or term.startswith("screen.") or term.startswith("screen-")
+
+
 def _terminfo_colors(term: str):
     """The terminfo ``colors`` number for ``term``, or None when it has no entry."""
     from . import terminfo
@@ -421,7 +431,11 @@ def report(timeout=None, refresh=False) -> dict:
     # terminal that does not answer it echoes the query text back as stray input characters, and
     # the reply would only confirm what COLORTERM says.
     colorterm = os.environ.get("COLORTERM", "").strip().lower()
-    rgb_sent = colorterm not in ("truecolor", "24bit")
+    under_screen = in_screen()
+    if under_screen:
+        # screen passes the outer terminal's COLORTERM through, but has no 24-bit colour.
+        colorterm = ""
+    rgb_sent = colorterm not in ("truecolor", "24bit") and not under_screen
     reply = None
     if rgb_sent:
         try:
@@ -435,7 +449,9 @@ def report(timeout=None, refresh=False) -> dict:
         if rgb is not None:
             true_color, source = rgb, "query"
 
-    if source == "unknown" and not rgb_sent:
+    if under_screen:
+        true_color, source = False, "screen"
+    elif source == "unknown" and not rgb_sent:
         true_color, source = True, "colorterm"
 
     # A truecolor terminal has a 24-bit palette whatever terminfo says (xterm's entry still says 8),
