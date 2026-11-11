@@ -672,22 +672,35 @@ _DECRPM_RE = re.compile(r"\x1b\[\?(\d+);(\d)\$y")
 
 
 @functools.lru_cache(maxsize=1)
-def _decrqm_terms() -> frozenset:
-    """TERM names known to answer DECRQM, from io/data/decrqm_terminals.json."""
+def _decrqm_replies() -> frozenset:
+    """DA1 replies of terminals known to answer DECRQM, from io/data/decrqm_terminals.json."""
     from importlib import resources
 
     text = resources.files("bbsengine6").joinpath("io/data/decrqm_terminals.json").read_text(encoding="utf-8")
-    return frozenset(json.loads(text)["terms"])
+    return frozenset(json.loads(text)["da1_replies"])
+
+
+def _decrqm_da1_reply():
+    """The DA1 reply from the session's cached terminal report, or None when none has been taken.
+
+    Only report() sends the DA probe. inputstring() never does, because a probe read in the middle
+    of input consumes the keys that follow it.
+    """
+    from ..interaction import current_session
+
+    cached = current_session().terminal_report
+    return cached["da"]["da1"]["reply"] if cached is not None else None
 
 
 def _decrqm_capable() -> bool:
-    """True when the terminal named by TERM is known to answer DECRQM.
+    """True when this terminal's DA1 reply is one known to answer DECRQM.
 
     A terminal not on the list is never sent a mode query: one that does not answer draws the
-    trailing "p" of each query as text. The match is the whole TERM name, exactly as listed.
+    trailing "p" of each query as text. TERM is not used: retro term and xterm both report
+    TERM=xterm, so the DA1 reply is what tells them apart.
     """
-    term = os.environ.get("TERM", "")
-    return term in _decrqm_terms()
+    reply = _decrqm_da1_reply()
+    return reply is not None and reply in _decrqm_replies()
 
 
 def _query_mouse_modes(timeout: float = 0.5) -> dict[int, bool]:

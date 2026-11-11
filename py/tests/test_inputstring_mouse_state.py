@@ -98,8 +98,9 @@ def terminal(monkeypatch):
     out = os.fdopen(os.dup(slave), "w", buffering=1, encoding="utf-8")
     common.set_input_stream(stream)
     common.set_output_stream(out)
-    # The fake answers DECRQM, so it stands in for a terminal on the DECRQM list.
-    monkeypatch.setenv("TERM", "xterm-256color")
+    # The fake answers DECRQM, so it stands in for a terminal on the DECRQM list: its DA1 reply
+    # is one of the listed replies.
+    monkeypatch.setattr(common, "_decrqm_da1_reply", lambda: "\x1b[?61;1;21;22;28c")
     # A pty has no terminal emulator to answer the cursor-position query.
     monkeypatch.setattr(inp, "get_cursor_position", lambda timeout=1.0: (1, 1))
     # The bottom bar's {savecursor} asks echo for the cursor too; answer it the same way.
@@ -237,14 +238,37 @@ def test_decrqm_sent_to_a_terminal_on_the_list(terminal, monkeypatch):
 
 
 def test_decrqm_list_loads_from_package_data(monkeypatch):
-    monkeypatch.setenv("TERM", "xterm-256color")
-    common._decrqm_terms.cache_clear()
-    assert "xterm-256color" in common._decrqm_terms()
+    common._decrqm_replies.cache_clear()
+    assert "\x1b[?61;1;21;22;28c" in common._decrqm_replies()
+
+
+def test_decrqm_capable_when_the_da1_reply_is_listed(monkeypatch):
+    monkeypatch.setattr(common, "_decrqm_da1_reply", lambda: "\x1b[?61;1;21;22;28c")
     assert common._decrqm_capable() is True
 
 
-@pytest.mark.parametrize("term", ["dumb", "", "linux", "retro-term", "xterm-kitty-unknown"])
-def test_decrqm_not_sent_to_unlisted_terms(monkeypatch, term):
-    monkeypatch.setenv("TERM", term)
-    common._decrqm_terms.cache_clear()
+@pytest.mark.parametrize("reply", ["\x1b[?1;2c", "\x1b[?62;1;2c", "", None])
+def test_decrqm_not_sent_when_the_da1_reply_is_not_listed(monkeypatch, reply):
+    # retro term answers DA1 with "?1;2c" and TERM=xterm; a real xterm can share TERM, so the
+    # decision is made on the reply, not on TERM. No reply means no DECRQM either.
+    monkeypatch.setattr(common, "_decrqm_da1_reply", lambda: reply)
     assert common._decrqm_capable() is False
+
+
+def test_gate_without_a_report_sends_no_query(monkeypatch):
+    # No cached report means no DA1 reply is known, so the gate is closed. inputstring must not
+    # send a probe of its own: a probe read mid-input consumes the keys that follow.
+    from bbsengine6.interaction import current_session
+
+    current_session().terminal_report = None
+    sent = []
+    monkeypatch.setattr(common, "_query_mouse_modes", lambda *a, **k: sent.append(1) or {})
+    assert common._decrqm_capable() is False
+    assert common._decrqm_da1_reply() is None
+    assert sent == []
+
+
+def test_xterm_da1_reply_is_on_the_list():
+    # A real xterm (TERM=xterm-256color) answers DA1 with this reply.
+    common._decrqm_replies.cache_clear()
+    assert "\x1b[?64;1;2;6;9;15;17;18;21;22;28c" in common._decrqm_replies()
