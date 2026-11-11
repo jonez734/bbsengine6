@@ -20,7 +20,7 @@ def inputstring_box(prompt, oldvalue="", *, header="", max_width=25, max_len=255
         io.echo(f"{{acscolor}}{{ulcorner}}{{hline}}{{ltee}} {{promptcolor}}{title}{{acscolor}} {{rtee}}{run}{{urcorner}}")
     else:
         io.echo(f"{{acscolor}}{{acs:ulcorner}}{{acs:hline:{max_width}}}{{acs:urcorner}}")
-    io.echo(f"{{acs:vline}}{' '*max_width}{{acs:vline}}")
+    io.echo(f"{{acs:vline}}{' '*max_width}{{acs:vline}}**********")
     io.echo(f"{{acs:llcorner}}{{acs:hline:{max_width}}}{{acs:lrcorner}}", end="")
     io.echo(f"{{cursorup}}{{cha:1}}{{cursorright:2}}", end="")
     buf = io.inputstring(prompt, oldvalue, max_width=max_width - 1, bottombar=bottombar, **kwargs)
@@ -33,6 +33,6 @@ if io.terminal.has_ansi():
 else:
     io.echo("ANSI disabled")
 
-io.echo(inputstring_box(f"moniker: ", "", title="zoid6 auth", max_width=25))
+io.echo(inputstring_box(f"{{promptcolor}}moniker: {{inputcolor}}", "", title="zoid6 auth", max_width=25))
 
 bottombar.shutdown()
