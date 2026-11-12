@@ -93,7 +93,7 @@ ansi_reply() -> str | None
 
 `probe_da` is the raw probe. `report()` and `has_ansi()` do not call it again once a session has a
 cached report (see Terminal report). Each `probe_da` call waits up to the timeout, then
-`query_terminal` keeps reading for 0.25 s (`QUERY_SETTLE_SECONDS`). A reply inside that window
+`query_terminal` keeps reading for `query_settle_seconds` (0.25 s by default, see `io_settings.md`). A reply inside that window
 is matched and consumed. A reply that arrives after it is not consumed: the tty is restored, the
 kernel echoes the bytes, and the next input read may see them. That case is known and accepted as
 rare. Removing it needs no-echo mode and discarding DA-shaped sequences in the key reader.

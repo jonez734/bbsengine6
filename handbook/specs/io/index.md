@@ -27,6 +27,7 @@ code is a bug in the spec; say so in the commit that fixes it.
 | `echo.py` commands | [echo_commands.md](echo_commands.md) | Live. The command vocabulary. |
 | `palette.py` | [palette.md](io_palette.md) | Live. Colour palettes. |
 | `terminal.py` | [terminal.md](io_terminal.md) | Live. Terminal size and title. |
+| `settings.py` | [settings.md](io_settings.md) | Live. Timing and size settings, read from the config's `io` section. |
 
 ## Support
 

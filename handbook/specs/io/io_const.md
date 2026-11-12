@@ -25,13 +25,13 @@ for `inputstring()`. Other io modules import these names.
 | `DEFAULT_PALETTE_NAME` | `"c64"` | Palette used when none is chosen. See `io_palette.md`. |
 | `ECHO_END` | `"\n"` | Line ending `echo()` writes when `end` is not given. |
 
-## inputstring defaults
+## inputstring text
+
+The timing and size defaults that used to be here are now configurable settings. See
+`io_settings.md`. The mode indicators remain constants:
 
 | Constant | Value | Description |
 |----------|-------|-------------|
-| `INPUTSTRING_GETCH_TIMEOUT` | `0.015` | Seconds `inputstring()` waits for a key on each pass of its loop. |
-| `INPUTSTRING_DEFAULT_HISTORY_SIZE` | `500` | Entries kept when `history=True`. Matches GNU readline. |
-| `INPUTSTRING_DEFAULT_PAGESIZE` | `10` | Characters moved by PAGE UP and PAGE DOWN. |
 | `INPUTSTRING_INSERT_MODE_INDICATOR` | `"[INS]"` | Mode marker shown in the bottom bar in insert mode. |
 | `INPUTSTRING_OVERWRITE_MODE_INDICATOR` | `"[OVR]"` | Mode marker shown in the bottom bar in overwrite mode. |
 

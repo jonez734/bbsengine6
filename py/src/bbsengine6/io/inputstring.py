@@ -6,11 +6,9 @@ from typing import Any, Callable, Optional, Tuple, List, Union, Deque
 
 from . import terminal
 
+from . import settings
 from .const import (
     ESC,
-    INPUTSTRING_GETCH_TIMEOUT,
-    INPUTSTRING_DEFAULT_HISTORY_SIZE,
-    INPUTSTRING_DEFAULT_PAGESIZE,
     INPUTSTRING_INSERT_MODE_INDICATOR,
     INPUTSTRING_OVERWRITE_MODE_INDICATOR,
     INPUTSTRING_ACCEPT_HINT,
@@ -72,12 +70,15 @@ class InputHistory:
         next_val = history.get_next()  # Navigate DOWN
     """
 
-    def __init__(self, maxsize: int = INPUTSTRING_DEFAULT_HISTORY_SIZE):
+    def __init__(self, maxsize: int | None = None):
         """Initialize bounded history with max size.
 
         Args:
-            maxsize: Maximum number of entries to keep (default 500, matches GNU readline)
+            maxsize: Maximum number of entries to keep (default: io setting
+                ``inputstring_history_size``, 500 matching GNU readline). Read when called.
         """
+        if maxsize is None:
+            maxsize = settings.get("inputstring_history_size")
         self._history: Deque[str] = deque(maxlen=maxsize)
         self._current_index: int = -1  # -1 = at end (new input position)
         self._lock = threading.Lock()
@@ -1115,7 +1116,7 @@ def inputstring(
     oldvalue: str = "",
     /,
     history: bool = False,
-    pagesize: int = INPUTSTRING_DEFAULT_PAGESIZE,
+    pagesize: int | None = None,
     beep_on_error: bool = True,
     f1_help: Union[str, Callable[[], str], None] = None,
     help: Union[str, Callable[[], str], None] = None,
@@ -1317,7 +1318,7 @@ def _inputstring_body(
     prompt: str = "> ",
     oldvalue: str = "",
     history: bool = False,
-    pagesize: int = INPUTSTRING_DEFAULT_PAGESIZE,
+    pagesize: int | None = None,
     beep_on_error: bool = True,
     f1_help: Union[str, Callable[[], str], None] = None,
     help: Union[str, Callable[[], str], None] = None,
@@ -1348,8 +1349,12 @@ def _inputstring_body(
     _history = None
     if history:
         _history = InputHistory(
-            maxsize=kwargs.pop("history_maxsize", INPUTSTRING_DEFAULT_HISTORY_SIZE)
+            maxsize=kwargs.pop("history_maxsize", None)
         )
+
+    # The page size is read when the call runs (io setting inputstring_pagesize) unless given.
+    if pagesize is None:
+        pagesize = settings.get("inputstring_pagesize")
 
     # NEW: Initialize insert mode tracking
     _insert_mode = True  # Start in insert mode
@@ -1618,7 +1623,7 @@ def _inputstring_body(
             continue
         else:
             ch = getch(
-                timeout=INPUTSTRING_GETCH_TIMEOUT,
+                timeout=settings.get("inputstring_getch_timeout_seconds"),
                 fire_events=True,
                 check_notifications=False,
             )

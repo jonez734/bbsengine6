@@ -180,8 +180,8 @@ def inputstring(
 **File:** `bbsengine6/io/const.py`
 
 ```python
-INPUTSTRING_DEFAULT_HISTORY_SIZE = 500          # GNU readline default
-INPUTSTRING_DEFAULT_PAGESIZE = 10               # Characters per page jump
+# History size and page size are io settings (inputstring_history_size, inputstring_pagesize);
+# see io_settings.md. The constants that remain:
 INPUTSTRING_INSERT_MODE_INDICATOR = "[INS]"    # Visual feedback
 INPUTSTRING_OVERWRITE_MODE_INDICATOR = "[OVR]" # Visual feedback
 ```

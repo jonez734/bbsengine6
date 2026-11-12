@@ -8,6 +8,7 @@ import tty
 import fcntl
 import termios
 import threading
+from . import settings
 import collections
 import time
 
@@ -411,7 +412,6 @@ def get_dsr(mode="curpos", timeout: float = 1.0) -> tuple[int, int] | str:
 
 #: Extra time after the timeout (or after a match) during which the tty is still read, so a
 #: reply that arrives late is consumed here and is not left in the tty for the input reader.
-QUERY_SETTLE_SECONDS = 0.25
 
 
 def strip_echoed_request(text: str, request: str) -> str:
@@ -436,7 +436,7 @@ def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0
 
     Same exchange as :func:`get_dsr`: pending input is drained into the queue first, the tty
     is put in raw mode (unless a raw session owns it), the request is written, and the reply
-    is read with ``select`` until ``timeout``. Then the tty is read for ``QUERY_SETTLE_SECONDS``
+    is read with ``select`` until ``timeout``. Then the tty is read for ``settings.get("query_settle_seconds")``
     more, so a late reply is consumed here and does not reach the input reader as keystrokes.
     Typed bytes that are not the reply go back on the input queue, in order. The tty is
     restored in every case.
@@ -475,7 +475,7 @@ def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0
         _read_until(time.time() + timeout)
         # Keep reading briefly even when nothing has matched, to catch a late reply.
         if match is None:
-            _read_until(time.time() + QUERY_SETTLE_SECONDS)
+            _read_until(time.time() + settings.get("query_settle_seconds"))
     finally:
         _restore_cooked(fd, old_settings)
 

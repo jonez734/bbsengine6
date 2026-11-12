@@ -149,6 +149,7 @@ from .common import (
     drain_stream_to_queue,
 )
 from .echo import echo, echo_traceback
+from . import settings
 from .util import logentry
 from .keymap import KEY_MAP
 from .const import ESC, ETX, EOF
@@ -762,7 +763,6 @@ def resolve_escape_sequence(sequence: str, debug: bool = False) -> str | None:
     return sequence
 
 
-ESC_TAIL_WAIT = 0.05  # seconds to wait for the rest of a split escape sequence
 
 
 #: XTGETTCAP reply body after "ESC P": 0 or 1, "+r", hex name, optional "=hex", then ST.
@@ -791,7 +791,7 @@ def _read_dcs_tail(deadline: float) -> str | None:
                 time.sleep(0.005)
                 continue
         body += nxt
-        deadline = time.time() + ESC_TAIL_WAIT
+        deadline = time.time() + settings.get("esc_tail_wait_seconds")
         if _XTGETTCAP_TAIL_RE.fullmatch(body):
             return body
         if not _XTGETTCAP_PREFIX_RE.fullmatch(body):
@@ -809,12 +809,12 @@ def _read_escape_tail() -> str:
 
     A terminal may deliver ESC [ C in separate wakeups. Reading only what is
     already available would leave "[C" behind as text, so after a lone ESC we
-    wait up to ESC_TAIL_WAIT for each following byte. The sequence ends at the
+    wait up to settings.get("esc_tail_wait_seconds") for each following byte. The sequence ends at the
     first final byte (0x40-0x7e) after a CSI ("[") or SS3 ("O") introducer.
     A bare ESC followed by nothing stays a bare ESC.
     """
     seq = ESC
-    deadline = time.time() + ESC_TAIL_WAIT
+    deadline = time.time() + settings.get("esc_tail_wait_seconds")
     while len(seq) < 10:
         # Bytes already drained into the queue belong to this sequence too.
         with _input_queue_lock:
@@ -830,7 +830,7 @@ def _read_escape_tail() -> str:
                 time.sleep(0.005)
                 continue
         seq += nxt
-        deadline = time.time() + ESC_TAIL_WAIT
+        deadline = time.time() + settings.get("esc_tail_wait_seconds")
         if len(seq) == 2 and nxt == "P":
             # DCS. Only an XTGETTCAP reply (DCS 0/1 + r) is read as one sequence; it ends at ST.
             # Other DCS strings keep the old lone-ESC behaviour.
@@ -853,7 +853,6 @@ def _read_escape_tail() -> str:
 
 PASTE_START = f"{ESC}[200~"
 PASTE_END = f"{ESC}[201~"
-PASTE_MAX = 65536  # bytes of paste body kept; longer pastes are cut here
 
 
 def _read_bracketed_paste() -> str:
@@ -864,8 +863,8 @@ def _read_bracketed_paste() -> str:
     with no end marker is returned with what arrived, after a short wait.
     """
     body = ""
-    deadline = time.time() + max(ESC_TAIL_WAIT, 0.2)
-    while len(body) < PASTE_MAX:
+    deadline = time.time() + max(settings.get("esc_tail_wait_seconds"), 0.2)
+    while len(body) < settings.get("paste_max_bytes"):
         if body.endswith(PASTE_END):
             body = body[: -len(PASTE_END)]
             break
@@ -873,11 +872,11 @@ def _read_bracketed_paste() -> str:
             queued = _input_queue.popleft() if _input_queue else None
         if queued is not None:
             body += queued
-            deadline = time.time() + max(ESC_TAIL_WAIT, 0.2)
+            deadline = time.time() + max(settings.get("esc_tail_wait_seconds"), 0.2)
             continue
         try:
             body += _read_current_input_stream()
-            deadline = time.time() + max(ESC_TAIL_WAIT, 0.2)
+            deadline = time.time() + max(settings.get("esc_tail_wait_seconds"), 0.2)
         except BlockingIOError:
             if time.time() >= deadline:
                 break

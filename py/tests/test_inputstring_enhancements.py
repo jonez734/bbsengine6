@@ -346,16 +346,16 @@ class TestHistoryConstants:
     """Test history-related constants."""
 
     def test_default_history_size_constant(self):
-        """Default history size constant matches GNU readline."""
-        from bbsengine6.io.const import INPUTSTRING_DEFAULT_HISTORY_SIZE
+        """Default history size matches GNU readline."""
+        from bbsengine6.io import settings
 
-        assert INPUTSTRING_DEFAULT_HISTORY_SIZE == 500
+        assert settings.get("inputstring_history_size") == 500
 
     def test_default_pagesize_constant(self):
-        """Default pagesize constant is 10."""
-        from bbsengine6.io.const import INPUTSTRING_DEFAULT_PAGESIZE
+        """Default pagesize is 10."""
+        from bbsengine6.io import settings
 
-        assert INPUTSTRING_DEFAULT_PAGESIZE == 10
+        assert settings.get("inputstring_pagesize") == 10
 
 
 class TestBackwardCompatibility:

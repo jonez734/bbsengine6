@@ -107,7 +107,7 @@ the text between the markers and returns it as one key, `"PASTE:<text>"`. Keys
 after the end marker are returned individually. The body is read from the queue
 first, then the stream, so a paste split across reads is kept whole. A paste with
 no end marker returns what arrived after a short wait. A body is capped at 65536
-characters (`PASTE_MAX`); the cap counts characters, not bytes.
+characters (the io setting `paste_max_bytes`, see `io_settings.md`); the cap counts characters, not bytes.
 
 `inputstring()` requests this mode with `ESC[?2004h` and turns it off on exit.
 The reader recognises `ESC[200~` whenever it arrives. A terminal sends the markers only
@@ -209,7 +209,7 @@ A terminal can deliver one escape sequence (`ESC [ C`) in several reads, so
 the reader does not stop at the first pause.
 
 1. On ESC, `_read_escape_tail()` gathers the rest of the sequence. After each
-   byte it waits up to `ESC_TAIL_WAIT` (50 ms) for the next one.
+   byte it waits up to `esc_tail_wait_seconds` (50 ms by default, see `io_settings.md`) for the next one.
 2. A CSI (`ESC [`) or SS3 (`ESC O`) sequence ends at its first final byte in
    `0x40-0x7e`. The sequence is bounded to 10 characters.
 3. A lone ESC followed by a non-introducer character is the Escape key
