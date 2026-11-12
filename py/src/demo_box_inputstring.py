@@ -17,9 +17,9 @@ def inputstring_box(prompt, oldvalue="", *, header="", max_width=25, max_len=255
         trailing = max_width - len(title) - 5
         # {hline:0} draws one hline (a count of 0 is not "none"), so leave the run out when it is 0.
         run = f"{{hline:{trailing}}}" if trailing > 0 else ""
-        io.echo(f"{{acscolor}}{{ulcorner}}{{hline}}{{ltee}} {{promptcolor}}{title}{{acscolor}} {{rtee}}{run}{{urcorner}}")
+        io.echo(f"{{boxcolor}}{{ulcorner}}{{hline}}{{ltee}} {{promptcolor}}{title}{{boxcolor}} {{rtee}}{run}{{urcorner}}")
     else:
-        io.echo(f"{{acscolor}}{{acs:ulcorner}}{{acs:hline:{max_width}}}{{acs:urcorner}}")
+        io.echo(f"{{boxcolor}}{{acs:ulcorner}}{{acs:hline:{max_width}}}{{acs:urcorner}}")
     io.echo(f"{{acs:vline}}{' '*max_width}{{acs:vline}}**********")
     io.echo(f"{{acs:llcorner}}{{acs:hline:{max_width}}}{{acs:lrcorner}}", end="")
     io.echo(f"{{cursorup}}{{cha:1}}{{cursorright:2}}", end="")
