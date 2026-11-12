@@ -1,9 +1,9 @@
 # bbsengine6 — UI seam specification (generic core)
 
 > **Last updated:** 2026-11-11.
-> **Status:** Draft for review. Part A (this file) is the framework contract. A consuming
-> application (for example casino) keeps its per-game sections in its own handbook. No code
-> changes until this spec is approved.
+> **Status:** Part A is implemented in `py/src/bbsengine6/seam/` (`codes.py`, `results.py`,
+> `events.py`), with tests in `py/tests/test_seam_types.py`. A consuming application (for example
+> casino) keeps its per-game sections in its own handbook.
 > **Structure:** Part A is generic and lives here. Part B is per game and lives with the game.
 > A new game adds a Part B section and does not change Part A.
 
@@ -47,13 +47,14 @@ class ActionResult:
 ## 4. Result codes
 
 **One owner.** The code vocabulary is defined once, as the `ErrorCode` enum in
-`api/messages.py`. No other module defines a code: `api/_auth.py` and `api/handler.py` import
-the enum, and do not repeat string literals. A new code is added to the enum first.
+`bbsengine6.seam.codes`. No other module defines a code. A consuming application imports the
+enum and adds its game codes to its own copy of the vocabulary only by adding them here first.
 
-**Current state, not yet met:** `api/_auth.py` defines its own `CODE_*` constants (for example
-`CODE_NOT_AUTHENTICATED`), and `api/handler.py` repeats string literals (for example
-`"not_at_table"`). Both must move to the enum before a game migrates. That is the first step of
-the migration, and it changes no wire output.
+**Current state, not yet met (in casino):** `api/messages.py` has its own `ErrorCode` enum,
+`api/_auth.py` defines `CODE_*` constants (for example `CODE_NOT_AUTHENTICATED`), and
+`api/handler.py` repeats string literals (for example `"not_at_table"`). Casino moves these to the
+bbsengine6 enum before a game migrates. That is the first step of the migration, and it changes
+no wire output.
 
 **Generic codes** apply to every game and are the same for every game:
 
@@ -77,6 +78,10 @@ A game may not invent a code that duplicates a generic one (for example `no_fund
 `insufficient_funds`).
 
 ## 5. Events
+
+Implemented in `bbsengine6.seam.events`: `Event`, `MESSAGE_KINDS`, `game_kind` /
+`register_game_kind` (a game registers its kinds before it emits them), and `EventQueue`. The
+queue rejects `warn` and any kind that is neither a message kind, `fragment`, nor registered.
 
 A game emits events to a queue. The queue is the only channel for game progress. Events come in
 two groups, and the seam treats them differently.
@@ -135,6 +140,10 @@ a GUI and the TUI show the same values.
   when the TUI adapter is written.
 
 ## 6. Results per method
+
+Implemented in `bbsengine6.seam.results`: `ActionResult` (frozen, with `data` as a read-only
+view), `success(data)`, and `refusal(code, message, data)`. `refusal` rejects an unknown code and
+rejects `ok`.
 
 Every game method returns `ActionResult`. Each method's `data` payload is fixed by that game's
 Part B table. A method that has no payload returns an empty `data`.
