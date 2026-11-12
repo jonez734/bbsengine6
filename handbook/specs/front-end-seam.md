@@ -165,15 +165,30 @@ Prompts, menus, and validation messages belong to the UI.
 
 - A front end calls `Domain.subscribe(debug=False)` to get a subscription id, and `Domain.read(id)`
   to take the events it has not read yet. Reading advances only that subscription's cursor.
-- The log keeps the most recent 1000 events (`capacity`). A subscription that falls further behind
+- The log keeps the most recent `capacity` events (default 1000). A subscription that falls further behind
   gets one `lagged` event first, with `missed` (the count it lost), and then resumes from the oldest
   event still kept. The lag is also written to the log, as a warning.
-- A subscription that has not been read for 300 seconds expires (`Domain.expire_idle`). Its cursor
+- A subscription that has not been read for `idle_seconds` expires (default 300; `Domain.expire_idle`). Its cursor
   is released, so it no longer holds back anything, and a later `read` raises `KeyError`. Expiry is
   also written to the log, as a warning.
 - Lag and expiry warnings go through `bbsengine6.util.logentry()` at `warning` level, with the
-  logger name `bbsengine6.seam`, so an operator can filter them. The event log is not the file log:
-  front ends read events, and operators read the log.
+  logger name `logger_name` (default `bbsengine6.seam`), so an operator can filter them. The event
+  log is not the file log: front ends read events, and operators read the log.
+
+### 7a.1 Configuration
+
+The three settings live in `bbsengine6.seam.config`:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `capacity` | 1000 | Events kept per domain before a slow front end lags. Positive integer. |
+| `idle_seconds` | 300 | Seconds a subscription may go unread before it expires. Positive number. |
+| `logger_name` | `bbsengine6.seam` | Logger for lag and expiry warnings. Non-empty string. |
+
+`config.configure(**settings)` sets any subset of them. It checks each value and rejects an unknown
+key before anything changes. A domain or log built after the call uses the new values; one already
+built keeps the values it was given. A consumer calls `configure` once at startup. Bed does this from
+its config's `bbsengine6.seam` section, and zoid6's packaged `zoid6.json` carries that section.
 
 ## 7b. Thread model
 
