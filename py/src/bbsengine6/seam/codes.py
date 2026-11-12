@@ -15,4 +15,5 @@ class ErrorCode(str, Enum):
     INSUFFICIENT_FUNDS = "insufficient_funds"
     INVALID_ACTION = "invalid_action"
     FORBIDDEN = "forbidden"
+    NOT_AUTHENTICATED = "not_authenticated"
     SERVICE_ERROR = "service_error"

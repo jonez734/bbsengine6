@@ -13,7 +13,7 @@ pytestmark = pytest.mark.unit
 
 GENERIC = {
     "ok", "table_not_found", "not_at_table", "invalid_bet", "insufficient_funds",
-    "invalid_action", "forbidden", "service_error",
+    "invalid_action", "forbidden", "not_authenticated", "service_error",
 }
 
 

@@ -53,11 +53,11 @@ class ActionResult:
 `bbsengine6.seam.codes`. No other module defines a code. A consuming application imports the
 enum and adds its game codes to its own copy of the vocabulary only by adding them here first.
 
-**Current state, not yet met (in casino):** `api/messages.py` has its own `ErrorCode` enum,
-`api/_auth.py` defines `CODE_*` constants (for example `CODE_NOT_AUTHENTICATED`), and
-`api/handler.py` repeats string literals (for example `"not_at_table"`). Casino moves these to the
-bbsengine6 enum before a game migrates. That is the first step of the migration, and it changes
-no wire output.
+**Migration status (casino):** the shared generic codes now take their values from this enum. In
+`api/_auth.py` the `CODE_NOT_AUTHENTICATED`, `CODE_FORBIDDEN`, and `CODE_NOT_AT_TABLE` constants
+import from it, and in `api/messages.py` the five shared `ErrorCode` members do. Casino's own codes
+stay in casino. Not yet done: `api/handler.py` still repeats string literals for the shared codes;
+those move to the enum in a later step. The wire values did not change.
 
 **Generic codes** apply to every game and are the same for every game:
 
@@ -70,6 +70,7 @@ no wire output.
 | `insufficient_funds` | The member cannot pay the amount |
 | `invalid_action` | The action is not allowed in the current state |
 | `forbidden` | Operation not permitted |
+| `not_authenticated` | The request needs a logged-in member and there is none |
 | `service_error` | Unexpected failure inside the service |
 
 **Game codes** are added by a game's section in Part B, and each one goes into the enum. A game
