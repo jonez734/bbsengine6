@@ -1,6 +1,15 @@
-"""The UI seam: the types game code returns and emits (handbook/specs/ui-seam.md).
+"""The seam: the contract between a domain (back end) and any front end.
 
-``codes`` holds the one code vocabulary (section 4), ``results`` the ActionResult (section 3), and
-``events`` the Event and its queue (section 5). A consuming application imports these; it does not
-redefine them.
+Spec: handbook/specs/front-end-seam.md. Modules:
+
+- ``codes``: the one result-code vocabulary.
+- ``results``: ActionResult, what a request returns.
+- ``kinds``: the per-domain registry of event kinds.
+- ``events``: Event, the bounded log, and per-front-end subscriptions.
+- ``requests``: the typed request a front end sends.
+- ``domain``: Domain, which ties the above together.
+- ``wire``: the JSON form of the types.
+
+A consumer imports these. It does not redefine them. Nothing in this package imports the terminal
+layer (``io``) at module level.
 """

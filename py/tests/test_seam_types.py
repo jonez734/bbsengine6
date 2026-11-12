@@ -1,4 +1,4 @@
-"""The UI seam's framework types (handbook/specs/ui-seam.md, sections 3, 4, 5, 10)."""
+"""The UI seam's framework types (handbook/specs/front-end-seam.md, sections 3, 4, 5, 10)."""
 
 import dataclasses
 
@@ -102,62 +102,6 @@ def test_event_is_immutable():
         e.kind = "error"  # type: ignore[misc]
 
 
-def test_game_kind_may_not_reuse_a_message_kind_name():
-    with pytest.raises(ValueError):
-        events.game_kind("info")
-
-
-def test_game_kind_is_accepted_when_distinct():
-    assert events.game_kind("card_dealt") == "card_dealt"
-
-
-def test_queue_keeps_per_table_order():
-    q = events.EventQueue()
-    q.put(events.Event("info", "t1", None, {"text": "a"}))
-    q.put(events.Event("info", "t2", None, {"text": "x"}))
-    q.put(events.Event("info", "t1", None, {"text": "b"}))
-    got = [e.payload["text"] for e in q.drain() if e.table == "t1"]
-    assert got == ["a", "b"]
-
-
-def test_queue_drain_empties_it():
-    q = events.EventQueue()
-    q.put(events.Event("info", "t1", None, {"text": "a"}))
-    assert len(q.drain()) == 1
-    assert q.drain() == []
-
-
-def test_debug_events_are_dropped_when_debug_is_off():
-    q = events.EventQueue(debug=False)
-    q.put(events.Event("debug", "t1", None, {"text": "x", "source": "s"}))
-    assert q.drain() == []
-
-
-def test_debug_events_are_kept_when_debug_is_on():
-    q = events.EventQueue(debug=True)
-    q.put(events.Event("debug", "t1", None, {"text": "x", "source": "s"}))
-    assert len(q.drain()) == 1
-
-
-def test_non_debug_events_are_kept_regardless_of_debug():
-    q = events.EventQueue(debug=False)
-    q.put(events.Event("error", "t1", "bob", {"code": "forbidden", "text": "no"}))
-    assert len(q.drain()) == 1
-
-
-def test_queue_rejects_an_unknown_message_kind_without_game_kind():
-    q = events.EventQueue()
-    with pytest.raises(ValueError):
-        q.put(events.Event("warn", "t1", None, {"text": "x"}))
-
-
-def test_queue_rejects_a_kind_nobody_registered():
-    # A typo must not reach the UI: a kind is a message kind, fragment, or a registered game kind.
-    q = events.EventQueue()
-    with pytest.raises(ValueError):
-        q.put(events.Event("frobnicate", "t1", None, {}))
-
-
 @pytest.fixture
 def registered_kind():
     events.register_game_kind("card_dealt")
@@ -165,13 +109,3 @@ def registered_kind():
     events._GAME_KINDS.discard("card_dealt")
 
 
-def test_queue_accepts_a_registered_game_kind(registered_kind):
-    q = events.EventQueue()
-    q.put(events.Event(registered_kind, "t1", None, {"hand_id": 1}))
-    assert len(q.drain()) == 1
-
-
-def test_queue_accepts_fragment_events():
-    q = events.EventQueue()
-    q.put(events.Event("fragment", "t1", None, {"name": "balance", "value": 5, "level": "ok"}))
-    assert len(q.drain()) == 1

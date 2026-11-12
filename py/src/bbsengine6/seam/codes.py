@@ -1,4 +1,4 @@
-"""The result-code vocabulary (ui-seam.md, section 4). Defined once, here.
+"""The result-code vocabulary (front-end-seam.md, section 4). Defined once, here.
 
 A game adds its own refusal codes to this enum, and nowhere else. The generic codes apply to every
 game. A game code names a refusal, never a message.

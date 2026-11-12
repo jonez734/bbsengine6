@@ -1,4 +1,4 @@
-"""ActionResult: what a game method returns (ui-seam.md, section 3).
+"""ActionResult: what a game method returns (front-end-seam.md, section 3).
 
 ``ok`` and ``code`` are the contract. ``message`` is display text and is never branched on. ``data``
 is the method's typed payload, fixed by the game's section in its own spec.

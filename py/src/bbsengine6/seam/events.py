@@ -1,20 +1,21 @@
-"""Event and the event queue (ui-seam.md, section 5).
+"""Events and the event log (front-end-seam.md, section 5).
 
-The queue is the only channel for game progress. Message kinds are the five generic kinds; a game
-kind is any other name, and may not reuse a message kind. ``debug`` events are kept only when the
-member's debug setting is on, so the queue is quiet by default.
+A domain appends events to one bounded log. Each front end holds a Subscription with its own cursor
+and its own debug flag, so one front end reading never removes events another has not read.
+
+The log keeps the most recent ``capacity`` events. A subscription that falls further behind gets one
+``lagged`` marker, with the count it missed, and then resumes from the oldest event still kept.
 """
 
 from __future__ import annotations
 
 import threading
-from collections import deque
 from dataclasses import dataclass
 from typing import Any, List, Mapping
 
-MESSAGE_KINDS = frozenset({"debug", "info", "ok", "warning", "error"})
-FRAGMENT_KIND = "fragment"
-_GAME_KINDS: set[str] = set()
+from .kinds import FRAGMENT_KIND, LAGGED_KIND, MESSAGE_KINDS
+
+DEFAULT_CAPACITY = 1000
 
 
 @dataclass(frozen=True)
@@ -25,43 +26,47 @@ class Event:
     payload: Mapping[str, Any]
 
 
-def game_kind(name: str) -> str:
-    """Validate a game-specific event kind: it must not reuse a message kind's name."""
-    if name in MESSAGE_KINDS or name == FRAGMENT_KIND:
-        raise ValueError(f"game event kind {name!r} reuses a generic kind")
-    return name
+class EventLog:
+    """Bounded, append-only log. ``base`` is the absolute index of the oldest kept event."""
 
-
-def register_game_kind(name: str) -> str:
-    """Register a game event kind so the queue accepts it. Returns the name."""
-    _GAME_KINDS.add(game_kind(name))
-    return name
-
-
-def _known_kind(kind: str) -> bool:
-    return kind in MESSAGE_KINDS or kind == FRAGMENT_KIND or kind in _GAME_KINDS
-
-
-class EventQueue:
-    """FIFO queue of events. Order is preserved per table, and across tables by arrival."""
-
-    def __init__(self, *, debug: bool = False) -> None:
-        self._debug = debug
-        self._items: deque[Event] = deque()
+    def __init__(self, capacity: int = DEFAULT_CAPACITY) -> None:
+        if capacity < 1:
+            raise ValueError("capacity must be at least 1")
+        self.capacity = capacity
+        self._items: List[Event] = []
+        self._base = 0  # absolute index of self._items[0]
         self._lock = threading.Lock()
 
-    def put(self, event: Event) -> None:
-        if event.kind == "warn":
-            raise ValueError("'warn' is not a message kind; use 'warning'")
-        if not _known_kind(event.kind):
-            raise ValueError(f"unknown event kind: {event.kind!r}")
-        if event.kind == "debug" and not self._debug:
-            return
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._items)
+
+    @property
+    def head(self) -> int:
+        """Absolute index one past the newest event."""
+        with self._lock:
+            return self._base + len(self._items)
+
+    def append(self, event: Event) -> None:
         with self._lock:
             self._items.append(event)
+            overflow = len(self._items) - self.capacity
+            if overflow > 0:
+                del self._items[:overflow]
+                self._base += overflow
 
-    def drain(self) -> List[Event]:
+    def since(self, cursor: int) -> tuple[int, List[Event]]:
+        """Return (missed, events) from ``cursor`` to the head. ``missed`` is how many were dropped."""
         with self._lock:
-            items = list(self._items)
-            self._items.clear()
-        return items
+            missed = max(0, self._base - cursor)
+            start = max(cursor, self._base) - self._base
+            return missed, list(self._items[start:])
+
+
+class Subscription:
+    """One front end's view of a log: its cursor, its debug flag, and when it last read."""
+
+    def __init__(self, cursor: int, *, debug: bool, now: float) -> None:
+        self.cursor = cursor
+        self.debug = debug
+        self.last_read = now

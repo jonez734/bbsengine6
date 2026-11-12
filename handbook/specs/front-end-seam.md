@@ -1,9 +1,12 @@
-# bbsengine6 — UI seam specification (generic core)
+# bbsengine6 — front-end seam specification (generic core)
 
 > **Last updated:** 2026-11-11.
-> **Status:** Part A is implemented in `py/src/bbsengine6/seam/` (`codes.py`, `results.py`,
-> `events.py`), with tests in `py/tests/test_seam_types.py`. A consuming application (for example
-> casino) keeps its per-game sections in its own handbook.
+> **Status:** Part A is implemented in `py/src/bbsengine6/seam/`, with tests in
+> `py/tests/test_seam_types.py` and `py/tests/test_seam_domain.py`. The consuming application
+> (casino, zoidoffice) keeps its per-application sections in its own handbook.
+>
+> **Terms:** the *seam* is this contract. The *domain* is the back end's logic for one application.
+> A *front end* is any presentation (TUI, Tk, GTK, Qt, a mobile app). "Game" is not used here.
 > **Structure:** Part A is generic and lives here. Part B is per game and lives with the game.
 > A new game adds a Part B section and does not change Part A.
 
@@ -72,16 +75,17 @@ no wire output.
 **Game codes** are added by a game's section in Part B, and each one goes into the enum. A game
 code names a refusal the game makes, not a message. The refusal text stays in `message`.
 A game's codes are listed in its own per-game section, which lives with the game (for casino's
-blackjack, see `casino/handbook/specs/ui-seam.md`, section 12).
+blackjack, see `casino/handbook/specs/front-end-seam-casino.md`, section 12).
 
 A game may not invent a code that duplicates a generic one (for example `no_funds` next to
 `insufficient_funds`).
 
 ## 5. Events
 
-Implemented in `bbsengine6.seam.events`: `Event`, `MESSAGE_KINDS`, `game_kind` /
-`register_game_kind` (a game registers its kinds before it emits them), and `EventQueue`. The
-queue rejects `warn` and any kind that is neither a message kind, `fragment`, nor registered.
+Implemented in `bbsengine6.seam.events` (`Event`, `EventLog`, `Subscription`) and
+`bbsengine6.seam.kinds` (`KindRegistry`). Each domain owns one registry, so a kind registered in one
+domain is unknown to another. A domain rejects `warn`, and any kind that is neither a message kind,
+`fragment`, nor registered in that domain.
 
 A game emits events to a queue. The queue is the only channel for game progress. Events come in
 two groups, and the seam treats them differently.
@@ -112,12 +116,12 @@ A game kind may not reuse a message kind's name.
 - Message kinds (`debug`, `info`, `ok`, `warning`, `error`) match the echo levels, so a
   message's level means the same on the echo path and the event path. `warn` is not used;
   `warning` is the only spelling.
-- `debug` events are emitted only when the member's debug setting is on. The queue is quiet
-  by default. Each UI filters on its own debug setting.
+- `debug` events are kept for a subscription only when that subscription has debug on. Debug is
+  off by default and can be changed for a subscription at any time (`Domain.set_debug`).
 - Refusals are the `error` message kind plus the result `code` (section 4). The code is never
   duplicated in a second vocabulary.
-- Events are ordered per table. A UI that drains the queue sees them in the order they
-  happened.
+- Events are ordered in the order they were appended, so the events of any one table keep their
+  order for every subscriber.
 - A game kind's payload is fixed by its Part B table, the same way a method's `data` is.
 - Logging (`logging`) is the file log only. The event queue is the UI channel; a GUI receives
   debug and info text through it, not through the log.
@@ -134,10 +138,8 @@ a GUI and the TUI show the same values.
 - A fragment event is emitted on change only, not on every redraw.
 - The TUI renders the bar from the same values. Its drawing is a UI concern and is not part
   of this seam.
-- **Open question:** the queue's thread model. How the TUI's event loop and the bottom bar
-  share output today is not settled. The queue will be drained by each UI on its own loop
-  (Tk and Qt run their own loops), but the exact drain point for the TUI is to be decided
-  when the TUI adapter is written.
+- The bottom bar is a front-end concern: the front end decides where a fragment is drawn. The
+  domain only emits the `fragment` event.
 
 ## 6. Results per method
 
@@ -150,11 +152,47 @@ Part B table. A method that has no payload returns an empty `data`.
 
 ## 7. Input
 
-A UI sends a typed request to the game. The game never prompts. Each game's requests are listed
-in its Part B section. The generic rule: a request names the table, the member, and the
-game-specific arguments, and nothing else.
+A front end sends a typed request to the domain with `Domain.request(req)`. The request is a
+frozen dataclass that subclasses `bbsengine6.seam.requests.Request` and names the table and the
+member, plus its own fields. The domain dispatches on the request's type, and each type has exactly
+one handler, registered with `Domain.on(RequestType, handler)`. A request with no handler returns
+`invalid_action`. The call is synchronous: it returns the `ActionResult` directly. The domain never
+prompts.
 
 Prompts, menus, and validation messages belong to the UI.
+
+## 7a. Subscriptions, lag, and expiry
+
+- A front end calls `Domain.subscribe(debug=False)` to get a subscription id, and `Domain.read(id)`
+  to take the events it has not read yet. Reading advances only that subscription's cursor.
+- The log keeps the most recent 1000 events (`capacity`). A subscription that falls further behind
+  gets one `lagged` event first, with `missed` (the count it lost), and then resumes from the oldest
+  event still kept. The lag is also written to the log, as a warning.
+- A subscription that has not been read for 300 seconds expires (`Domain.expire_idle`). Its cursor
+  is released, so it no longer holds back anything, and a later `read` raises `KeyError`. Expiry is
+  also written to the log, as a warning.
+- Lag and expiry warnings go through `bbsengine6.util.logentry()` at `warning` level, with the
+  logger name `bbsengine6.seam`, so an operator can filter them. The event log is not the file log:
+  front ends read events, and operators read the log.
+
+## 7b. Thread model
+
+- Any thread may call `emit`, `subscribe`, `read`, `set_debug`, `expire_idle`, and `request`.
+- The log and the subscription table are lock-protected.
+- The domain never calls a front end. There are no callbacks in version 1, so no domain code runs
+  on a front end's thread. A front end drains by calling `read` on its own loop.
+- A handler runs on the thread that called `request`. A handler must not block on a front end.
+
+## 7c. Wire form
+
+A front end on another runtime (a mobile client) uses the JSON form in `bbsengine6.seam.wire`. Only
+JSON types appear: strings, numbers, booleans, null, lists, and objects.
+
+- `ActionResult`: `{"ok": bool, "code": str, "message": str, "data": {...}}`.
+- `Event`: `{"kind": str, "table": str, "moniker": str | null, "payload": {...}}`.
+- `Request`: `{"type": str, "fields": {...}}`, where `type` is the request class name. The receiving
+  side maps the name to its class.
+- The `lagged` event has `kind` `lagged` and `payload` `{"missed": int}`.
 
 ## 8. Compatibility
 
@@ -182,9 +220,12 @@ Generic checks, for every migration:
 
 - The game's existing tests run before and after each method is migrated. They must pass
   unchanged, except where a test asserts a refusal `message` that is deliberately kept.
-- Tests for the framework types: codes are in the enum; the queue preserves per-table order;
-  `ActionResult` is immutable; message kinds are only `debug`, `info`, `ok`, `warning`, `error`;
-  `debug` events are not queued when debug is off.
+- Tests for the framework types (`test_seam_types.py`): codes are in the enum; `ActionResult` is
+  immutable; message kinds are only `debug`, `info`, `ok`, `warning`, `error`; a kind may not reuse
+  a message name.
+- Tests for the domain (`test_seam_domain.py`): kinds are per domain; each subscriber sees every
+  event; debug is per subscription; lag gives one marker and then the head; expiry releases the
+  cursor; requests dispatch to one handler; the wire form round-trips; no seam module imports `io`.
 - A migration test per method: the result's `ok`, `code`, and `data` match the Part B table, and
   the API's wire dict is unchanged.
 
