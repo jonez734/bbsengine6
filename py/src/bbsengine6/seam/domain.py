@@ -11,13 +11,11 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Type
 
-from . import codes, events, kinds
+from . import codes, config, events, kinds
 from .kinds import LAGGED_KIND
 from .requests import Request
 from .results import ActionResult, refusal
 
-IDLE_SECONDS = 300.0
-LOGGER_NAME = "bbsengine6.seam"
 
 
 def _log_warning(message: str) -> None:
@@ -25,7 +23,7 @@ def _log_warning(message: str) -> None:
     from ..util import logentry
     import logging
 
-    logentry(message, level=logging.WARNING, logger_name=LOGGER_NAME)
+    logentry(message, level=logging.WARNING, logger_name=config.get_logger_name())
 
 
 class Domain:
@@ -33,7 +31,7 @@ class Domain:
         self,
         name: str,
         *,
-        capacity: int = events.DEFAULT_CAPACITY,
+        capacity: int | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.name = name
@@ -84,7 +82,9 @@ class Domain:
             out.append(e)
         return out
 
-    def expire_idle(self, idle_seconds: float = IDLE_SECONDS) -> List[int]:
+    def expire_idle(self, idle_seconds: float | None = None) -> List[int]:
+        if idle_seconds is None:
+            idle_seconds = config.get_idle_seconds()
         now = self._clock()
         with self._lock:
             gone = [sid for sid, s in self._subs.items() if now - s.last_read > idle_seconds]

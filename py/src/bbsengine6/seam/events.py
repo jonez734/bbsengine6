@@ -15,7 +15,7 @@ from typing import Any, List, Mapping
 
 from .kinds import FRAGMENT_KIND, LAGGED_KIND, MESSAGE_KINDS
 
-DEFAULT_CAPACITY = 1000
+from . import config as _config
 
 
 @dataclass(frozen=True)
@@ -29,7 +29,9 @@ class Event:
 class EventLog:
     """Bounded, append-only log. ``base`` is the absolute index of the oldest kept event."""
 
-    def __init__(self, capacity: int = DEFAULT_CAPACITY) -> None:
+    def __init__(self, capacity: int | None = None) -> None:
+        if capacity is None:
+            capacity = _config.get_capacity()
         if capacity < 1:
             raise ValueError("capacity must be at least 1")
         self.capacity = capacity
