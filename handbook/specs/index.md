@@ -56,6 +56,9 @@
 
 ## UI, modules, content
 
+- [ui-seam.md](./ui-seam.md) — the seam between game/service code and any
+  UI: `ActionResult`, the generic result codes, message and game events,
+  and the rule that game specs live with their game
 - [console.md](./console.md) — admin CLI: interactive menu,
   subcommand dispatch, member CRUD, member approval, psql role
   display, database creation
