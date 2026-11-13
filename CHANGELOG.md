@@ -1,5 +1,33 @@
 ## [Unreleased]
 
+### feat(seam): the front-end seam: domains, subscriptions, requests, and the wire form
+
+`bbsengine6.seam` is the contract between an application's domain and any front end. A `Domain` owns
+its own kind registry, a bounded event log (1000 events), and per-front-end subscriptions with their
+own cursor and debug flag. A subscription that falls behind gets one `lagged` event, and one that is
+idle for 300 s expires; both are logged through `util.logentry` at warning level, logger
+`bbsengine6.seam`. Requests go through `Domain.request`, which returns an `ActionResult`. `wire.py`
+gives the JSON form of `ActionResult`, `Event`, and `Request`.
+
+The generic codes are one enum (`seam.codes`). Money and table codes are not generic: an application
+defines them. `Event` and `Request` carry a `scope`, the generic unit. The settings (capacity, idle
+seconds, logger name) come from the `bbsengine6.seam` config section, applied by bed at startup.
+Spec: `handbook/specs/front-end-seam.md`. Tests: `tests/test_seam_types.py`,
+`tests/test_seam_domain.py`, `tests/test_seam_config.py`.
+
+### feat(io): timing and size settings come from a config section
+
+Six values in `bbsengine6.io` are settings, read from the `io` section of a config:
+`query_settle_seconds`, `esc_tail_wait_seconds`, `inputstring_getch_timeout_seconds`,
+`inputstring_history_size`, `inputstring_pagesize`, and `paste_max_bytes`. Each keeps its previous
+value as the default. `inputstring` resolves its page size and history size per call. The constants
+`INPUTSTRING_GETCH_TIMEOUT`, `INPUTSTRING_DEFAULT_HISTORY_SIZE`, and `INPUTSTRING_DEFAULT_PAGESIZE`
+are removed from `const.py`. Spec: `handbook/specs/io/io_settings.md`.
+
+### feat(demo): the box edges use the boxcolor token
+
+`demo_box_inputstring.py` colours its edges with `boxcolor` instead of `acscolor`.
+
 ### fix(inputstring): input starts where the prompt left the cursor
 
 `inputstring` placed the input at `start_col + rendered_length(prompt)`: a width count that

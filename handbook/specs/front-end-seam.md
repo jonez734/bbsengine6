@@ -6,7 +6,8 @@
 > (casino, zoidoffice) keeps its per-application sections in its own handbook.
 >
 > **Terms:** the *seam* is this contract. The *domain* is the back end's logic for one application.
-> A *front end* is any presentation (TUI, Tk, GTK, Qt, a mobile app). "Game" is not used here, and neither is "table" for the generic unit of work.
+> A *front end* is any presentation (TUI, Tk, GTK, Qt, a mobile app). "Game" is not used here. "Table" is an
+> application's noun, not a generic one: the generic unit is the *scope*.
 > **Structure:** Part A is generic and lives here. Part B is per application and lives with the application.
 > A new application adds a Part B section and does not change Part A.
 
@@ -53,11 +54,12 @@ class ActionResult:
 `bbsengine6.seam.codes`. No other module defines a code. A consuming application imports the
 enum and adds its application codes to its own copy of the vocabulary only by adding them here first.
 
-**Migration status (casino):** the shared generic codes now take their values from this enum. In
-`api/_auth.py` the `CODE_NOT_AUTHENTICATED`, `CODE_FORBIDDEN`, and `CODE_NOT_AT_TABLE` constants
-import from it, and in `api/messages.py` the five shared `ErrorCode` members do. Casino's own codes
-stay in casino. Not yet done: `api/handler.py` still repeats string literals for the shared codes;
-those move to the enum in a later step. The wire values did not change.
+**Migration status (casino):** the generic codes take their values from this enum. In casino,
+`api/_auth.py` imports `CODE_NOT_AUTHENTICATED` and `CODE_FORBIDDEN` from it, `api/messages.py`
+imports the shared members of `ErrorCode`, and `api/handler.py` uses the enum for its shared
+responses (no literals remain). Casino's table, bet, and balance codes (`not_at_table`,
+`table_not_found`, `invalid_bet`, `insufficient_funds`) are casino's own, defined in casino, with
+their wire values unchanged.
 
 **Generic codes** apply to every application and are the same for every application:
 
