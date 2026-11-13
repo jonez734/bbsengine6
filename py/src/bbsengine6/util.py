@@ -156,6 +156,36 @@ def heading(title: str, **kwargs) -> None:
     )
 
 
+def draw_box(title: str = "", width: int = 25, height: int = 1) -> None:
+    """Draw an input box: a top edge, ``height`` interior rows, and a bottom edge.
+
+    The bottom edge is printed without a trailing newline, so the cursor is left
+    at its end. Callers move the cursor up to reach an interior row.
+
+    Args:
+        title: Optional title drawn into the top edge as "ltee title rtee".
+        width: Interior width in columns. Widened to fit the title if needed.
+        height: Number of interior rows. Values below 1 are clamped to 1.
+
+    Example:
+        >>> draw_box(title="login", width=20, height=2)
+    """
+    height = max(1, height)
+    if title:
+        # A titled top edge is ulcorner, hline, ltee, space, title, space, rtee, hlines, urcorner,
+        # which takes 5 columns beyond the title text.
+        width = max(width, len(title) + 5)
+        trailing = width - len(title) - 5
+        # {hline:0} draws one hline (a count of 0 is not "none"), so leave the run out when it is 0.
+        run = f"{{hline:{trailing}}}" if trailing > 0 else ""
+        io.echo(f"{{boxcolor}}{{ulcorner}}{{hline}}{{ltee}} {{promptcolor}}{title}{{boxcolor}} {{rtee}}{run}{{urcorner}}")
+    else:
+        io.echo(f"{{boxcolor}}{{acs:ulcorner}}{{acs:hline:{width}}}{{acs:urcorner}}")
+    for _ in range(height):
+        io.echo(f"{{acs:vline}}{' ' * width}{{acs:vline}}")
+    io.echo(f"{{acs:llcorner}}{{acs:hline:{width}}}{{acs:lrcorner}}", end="")
+
+
 def pluralize(
     amount: int,
     singular: str,
