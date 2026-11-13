@@ -22,11 +22,11 @@ def result_from_wire(d: Mapping[str, Any]) -> ActionResult:
 
 
 def event_to_wire(e: Event) -> Dict[str, Any]:
-    return {"kind": e.kind, "table": e.table, "moniker": e.moniker, "payload": dict(e.payload)}
+    return {"kind": e.kind, "scope": e.scope, "moniker": e.moniker, "payload": dict(e.payload)}
 
 
 def event_from_wire(d: Mapping[str, Any]) -> Event:
-    return Event(kind=d["kind"], table=d["table"], moniker=d.get("moniker"), payload=d.get("payload", {}))
+    return Event(kind=d["kind"], scope=d["scope"], moniker=d.get("moniker"), payload=d.get("payload", {}))
 
 
 def request_to_wire(req: Request) -> Dict[str, Any]:

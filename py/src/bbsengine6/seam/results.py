@@ -1,7 +1,7 @@
-"""ActionResult: what a game method returns (front-end-seam.md, section 3).
+"""ActionResult: what an application method returns (front-end-seam.md, section 3).
 
 ``ok`` and ``code`` are the contract. ``message`` is display text and is never branched on. ``data``
-is the method's typed payload, fixed by the game's section in its own spec.
+is the method's typed payload, fixed by the application's section in its own spec.
 """
 
 from __future__ import annotations

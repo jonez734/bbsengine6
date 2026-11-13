@@ -21,7 +21,7 @@ from . import config as _config
 @dataclass(frozen=True)
 class Event:
     kind: str
-    table: str
+    scope: str
     moniker: str | None
     payload: Mapping[str, Any]
 

@@ -12,8 +12,8 @@ pytestmark = pytest.mark.unit
 # --- section 4: codes -------------------------------------------------------
 
 GENERIC = {
-    "ok", "table_not_found", "not_at_table", "invalid_bet", "insufficient_funds",
-    "invalid_action", "forbidden", "not_authenticated", "service_error",
+    "ok", "scope_not_found", "not_in_scope", "invalid_action", "forbidden",
+    "not_authenticated", "service_error",
 }
 
 
@@ -33,7 +33,20 @@ def test_code_values_are_lowercase_snake_case():
 
 def test_codes_compare_as_plain_strings():
     # The wire mapping sends codes as strings; the enum must be a str subclass.
-    assert codes.ErrorCode.NOT_AT_TABLE == "not_at_table"
+    assert codes.ErrorCode.NOT_IN_SCOPE == "not_in_scope"
+
+
+def test_money_and_wager_codes_are_not_generic():
+    # A bet or a balance is an application's concept, not every front end's. Those codes live in
+    # the application, not in the seam's enum.
+    values = {c.value for c in codes.ErrorCode}
+    assert "insufficient_funds" not in values
+    assert "invalid_bet" not in values
+
+
+def test_table_codes_are_renamed_to_scope():
+    values = {c.value for c in codes.ErrorCode}
+    assert "table_not_found" not in values and "not_at_table" not in values
 
 
 # --- section 3: ActionResult ------------------------------------------------
@@ -50,7 +63,7 @@ def test_action_result_is_immutable():
 
 
 def test_action_result_defaults_are_empty():
-    r = results.ActionResult(ok=False, code="invalid_bet")
+    r = results.ActionResult(ok=False, code="invalid_action")
     assert r.message == ""
     assert dict(r.data) == {}
 
@@ -67,8 +80,8 @@ def test_success_helper_uses_code_ok():
 
 
 def test_refusal_helper_sets_code_and_message():
-    r = results.refusal("insufficient_funds", "Insufficient funds")
-    assert r.ok is False and r.code == "insufficient_funds" and r.message == "Insufficient funds"
+    r = results.refusal("forbidden", "Operation not permitted")
+    assert r.ok is False and r.code == "forbidden" and r.message == "Operation not permitted"
 
 
 def test_refusal_rejects_an_unknown_code():
@@ -97,15 +110,8 @@ def test_warn_is_not_a_message_kind():
 
 
 def test_event_is_immutable():
-    e = events.Event(kind="info", table="t1", moniker=None, payload={"text": "hi"})
+    e = events.Event(kind="info", scope="t1", moniker=None, payload={"text": "hi"})
     with pytest.raises(dataclasses.FrozenInstanceError):
         e.kind = "error"  # type: ignore[misc]
-
-
-@pytest.fixture
-def registered_kind():
-    events.register_game_kind("card_dealt")
-    yield "card_dealt"
-    events._GAME_KINDS.discard("card_dealt")
 
 

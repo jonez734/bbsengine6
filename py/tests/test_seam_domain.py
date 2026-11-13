@@ -13,8 +13,8 @@ from bbsengine6.seam import codes, domain as dm, events, kinds, requests, result
 pytestmark = pytest.mark.unit
 
 
-def _event(kind="info", table="t1", text="x", moniker=None):
-    return events.Event(kind=kind, table=table, moniker=moniker, payload={"text": text})
+def _event(kind="info", scope="t1", text="x", moniker=None):
+    return events.Event(kind=kind, scope=scope, moniker=moniker, payload={"text": text})
 
 
 # --- per-domain kind registry (approved item 3) ------------------------------
@@ -75,13 +75,13 @@ def test_read_advances_only_its_own_cursor():
     assert [e.payload["text"] for e in d.read(s)] == ["b"]
 
 
-def test_read_keeps_per_table_order():
+def test_read_keeps_per_scope_order():
     d = dm.Domain("casino")
     s = d.subscribe()
-    d.emit(_event(table="t1", text="a"))
-    d.emit(_event(table="t2", text="x"))
-    d.emit(_event(table="t1", text="b"))
-    got = [e.payload["text"] for e in d.read(s) if e.table == "t1"]
+    d.emit(_event(scope="t1", text="a"))
+    d.emit(_event(scope="t2", text="x"))
+    d.emit(_event(scope="t1", text="b"))
+    got = [e.payload["text"] for e in d.read(s) if e.scope == "t1"]
     assert got == ["a", "b"]
 
 
@@ -196,13 +196,13 @@ class Hit(requests.Request):
 def test_request_dispatches_to_its_registered_handler():
     d = dm.Domain("casino")
     d.on(Hit, lambda req: results.success({"hand_id": req.hand_id}))
-    r = d.request(Hit(table="t1", moniker="bob", hand_id=7))
+    r = d.request(Hit(scope="t1", moniker="bob", hand_id=7))
     assert r.ok and r.code == "ok" and dict(r.data) == {"hand_id": 7}
 
 
 def test_unknown_request_returns_invalid_action():
     d = dm.Domain("casino")
-    r = d.request(Hit(table="t1", moniker="bob", hand_id=7))
+    r = d.request(Hit(scope="t1", moniker="bob", hand_id=7))
     assert r.ok is False and r.code == codes.ErrorCode.INVALID_ACTION.value
 
 
@@ -210,7 +210,7 @@ def test_handler_must_return_an_action_result():
     d = dm.Domain("casino")
     d.on(Hit, lambda req: "not a result")
     with pytest.raises(TypeError):
-        d.request(Hit(table="t1", moniker="bob", hand_id=7))
+        d.request(Hit(scope="t1", moniker="bob", hand_id=7))
 
 
 def test_registering_two_handlers_for_one_request_type_is_an_error():
@@ -223,7 +223,7 @@ def test_registering_two_handlers_for_one_request_type_is_an_error():
 # --- wire form (round trip for each type) ------------------------------------
 
 def test_action_result_round_trips_through_json():
-    r = results.refusal("insufficient_funds", "Insufficient funds", {"balance": 3})
+    r = results.refusal("forbidden", "Operation not permitted", {"reason": "session"})
     back = wire.result_from_wire(json.loads(json.dumps(wire.result_to_wire(r))))
     assert back == r
 
@@ -235,13 +235,13 @@ def test_success_result_round_trips_through_json():
 
 
 def test_event_round_trips_through_json():
-    e = events.Event(kind="card_dealt", table="t1", moniker="bob", payload={"hand_id": 1, "total": 17})
+    e = events.Event(kind="card_dealt", scope="t1", moniker="bob", payload={"hand_id": 1, "total": 17})
     back = wire.event_from_wire(json.loads(json.dumps(wire.event_to_wire(e))))
     assert back == e
 
 
 def test_request_round_trips_through_json():
-    req = Hit(table="t1", moniker="bob", hand_id=7)
+    req = Hit(scope="t1", moniker="bob", hand_id=7)
     back = wire.request_from_wire(json.loads(json.dumps(wire.request_to_wire(req))), {"Hit": Hit})
     assert back == req
 
@@ -259,7 +259,7 @@ def test_wire_result_has_the_documented_fields():
 
 def test_wire_event_has_the_documented_fields():
     d = wire.event_to_wire(_event())
-    assert set(d) == {"kind", "table", "moniker", "payload"}
+    assert set(d) == {"kind", "scope", "moniker", "payload"}
 
 
 # --- layering: the seam imports no front-end code -----------------------------
