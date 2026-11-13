@@ -16,7 +16,7 @@ stripping. This document merges the canonical spec with the
 | --- | --- |
 | `logentry()` | Handler registration guarded by `threading.Lock` (`_log_lock`). Default `SysLogHandler` lazily initialized on first call. |
 | `diceroll()` | Uses `random.SystemRandom()` (`_dice_rng`); thread-safe. |
-| `hr()`, `heading()`, `oxfordcomma()`, `pluralize()` | Pure functions. |
+| `hr()`, `heading()`, `draw_box()`, `oxfordcomma()`, `pluralize()` | Pure functions. |
 | `expandrange()`, `collapserange()`, `rangestr()`, `printr()` | Pure functions. |
 | `checksum()` | Pure function. |
 | `ltree_to_path()`, `chop_last_element()`, `strip_ansi()`, `path_to_ltree()` | Pure string functions. |
@@ -59,6 +59,7 @@ dpkg-reconfigure locales
 ```python
 hr(acs=True, width=None, end="\n", color="{boxcolor}") -> bool
 heading(title: str, **kwargs) -> None
+draw_box(title: str = "", width: int = 25, height: int = 1) -> None
 pluralize(amount: int, singular: str, plural: str, quantity=True, emoji="", determiner="a", **kw) -> str
 oxfordcomma(seq, conjunction="and") -> Optional[str]
 filedisplay(res, **kw) -> None
@@ -246,7 +247,7 @@ appear in the public surface).
 
 | Function | Purpose |
 | --- | --- |
-| `hr()`, `heading()`, `pluralize()`, `filedisplay()` | Display formatting |
+| `hr()`, `heading()`, `draw_box()`, `pluralize()`, `filedisplay()` | Display formatting |
 | `datestamp()`, `timedeltastr()` | Date/time |
 | `inputpassword()` | Masked password prompt |
 | `oxfordcomma()` | List-to-prose join |

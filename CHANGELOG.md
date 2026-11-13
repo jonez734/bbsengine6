@@ -28,6 +28,15 @@ are removed from `const.py`. Spec: `handbook/specs/io/io_settings.md`.
 
 `demo_box_inputstring.py` colours its edges with `boxcolor` instead of `acscolor`.
 
+### feat(util): draw_box draws an input box of any height
+
+`util.draw_box(title="", width=25, height=1)` draws the top edge, `height` interior rows, and the
+bottom edge. A title is drawn into the top edge and widens the box to fit it. `height` below 1 is
+clamped to 1. The bottom edge is printed without a newline, so the cursor sits at its end.
+`demo_box_inputstring.py` now calls it; its `inputstring_box()` takes `width` (was `max_width`) and
+`height`, and moves the cursor up `height` rows to the first interior row. The demo's stray
+`**********` suffix is removed.
+
 ### fix(inputstring): input starts where the prompt left the cursor
 
 `inputstring` placed the input at `start_col + rendered_length(prompt)`: a width count that
