@@ -29,11 +29,24 @@ class ActionResult:
         object.__setattr__(self, "data", _frozen(self.data))
 
 
+# Codes an application registered for its own refusals (see register_code). The generic enum is fixed.
+_APP_CODES: set[str] = set()
+
+
+def register_code(code: str) -> str:
+    """Register an application's refusal code. A generic code, or ``ok``, cannot be registered."""
+    if code == ErrorCode.OK.value or code in {c.value for c in ErrorCode}:
+        raise ValueError(f"{code!r} is a generic code and cannot be registered by an application")
+    if not isinstance(code, str) or not code.strip():
+        raise ValueError("a result code must be a non-empty string")
+    _APP_CODES.add(code)
+    return code
+
+
 def _known(code: str) -> str:
-    try:
-        return ErrorCode(code).value
-    except ValueError:
-        raise ValueError(f"unknown result code: {code!r}") from None
+    if code in {c.value for c in ErrorCode} or code in _APP_CODES:
+        return code
+    raise ValueError(f"unknown result code: {code!r}")
 
 
 def success(data: Mapping[str, Any] | None = None) -> ActionResult:

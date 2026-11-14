@@ -115,3 +115,25 @@ def test_event_is_immutable():
         e.kind = "error"  # type: ignore[misc]
 
 
+
+
+def test_an_application_code_is_refused_only_once_registered():
+    # An application registers its own refusal codes; until then the seam does not know them.
+    with pytest.raises(ValueError):
+        results.refusal("no_active_game", "No active game")
+    results.register_code("no_active_game")
+    try:
+        r = results.refusal("no_active_game", "No active game")
+        assert r.code == "no_active_game" and r.ok is False
+    finally:
+        results._APP_CODES.discard("no_active_game")
+
+
+def test_registering_a_generic_code_is_an_error():
+    with pytest.raises(ValueError):
+        results.register_code("forbidden")
+
+
+def test_registering_ok_is_an_error():
+    with pytest.raises(ValueError):
+        results.register_code("ok")
