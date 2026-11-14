@@ -137,3 +137,12 @@ def test_registering_a_generic_code_is_an_error():
 def test_registering_ok_is_an_error():
     with pytest.raises(ValueError):
         results.register_code("ok")
+
+
+def test_success_can_carry_display_text():
+    r = results.success({"total": 17}, message="Hit")
+    assert r.ok is True and r.code == "ok" and r.message == "Hit" and dict(r.data) == {"total": 17}
+
+
+def test_success_message_defaults_to_empty():
+    assert results.success().message == ""

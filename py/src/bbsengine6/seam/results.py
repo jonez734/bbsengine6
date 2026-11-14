@@ -49,9 +49,9 @@ def _known(code: str) -> str:
     raise ValueError(f"unknown result code: {code!r}")
 
 
-def success(data: Mapping[str, Any] | None = None) -> ActionResult:
-    """A successful result. The code is always ``ok``."""
-    return ActionResult(ok=True, code=ErrorCode.OK.value, data=data or {})
+def success(data: Mapping[str, Any] | None = None, message: str = "") -> ActionResult:
+    """A successful result. The code is always ``ok``. ``message`` is optional display text."""
+    return ActionResult(ok=True, code=ErrorCode.OK.value, message=message, data=data or {})
 
 
 def refusal(code: str, message: str = "", data: Mapping[str, Any] | None = None) -> ActionResult:
