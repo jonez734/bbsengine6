@@ -16,6 +16,12 @@ from .tcp import (
     TCPReceiver,
 )
 
+# Fan-out to sessions (one message, or a different message per session)
+from .fanout import (
+    send_per_session,
+    send_to_sessions,
+)
+
 # Socket utilities
 from .socket import (
     recv_all,
@@ -116,6 +122,10 @@ __all__ = [
     # TCP
     "TCPSender",
     "TCPReceiver",
+    # Fan-out to sessions
+    "send_per_session",
+    "send_to_sessions",
+
     # Socket utilities
     "recv_all",
     "recv_udp",
