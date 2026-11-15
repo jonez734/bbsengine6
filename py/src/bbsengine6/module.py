@@ -288,9 +288,13 @@ def load(args: object, modulepath: str, package: Optional[str] = None) -> Module
     as absolute imports, and any ``package`` argument is ignored for them.
     """
     debug = _debug_enabled(getattr(args, "debug", False) if args else False)
+    # The reload is still done in debug mode; only the trace line needs its own switch, since it is
+    # noise for a program that runs with debug on.
+    trace = _debug_enabled(getattr(args, "module_reload_trace", False) if args else False)
 
     if modulepath in sys.modules and debug:
-        io.echo(f"{modulepath=} is in sys.modules. reloading.", level="debug")
+        if trace:
+            io.echo(f"{modulepath=} is in sys.modules. reloading.", level="debug")
         importlib.reload(sys.modules[modulepath])
 
     try:
