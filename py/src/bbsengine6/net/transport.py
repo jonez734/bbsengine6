@@ -1388,16 +1388,18 @@ class WebSocketServer:
                 for ws in websockets_to_close:
                     path_clients.discard(ws)
 
-    async def send_to_session(self, session_id: int, message: Dict[str, Any]) -> None:
-        """Send ``message`` to the live socket bound to ``session_id``, if there is one.
+    async def send_to_session(self, connection_id: Any, message: Dict[str, Any]) -> None:
+        """Send ``message`` to the live socket of ``connection_id``, if there is one.
 
-        A session with no live socket (it disconnected) is a no-op. A socket that fails to send is dropped
-        from the registry, as broadcast does.
+        ``connection_id`` is the connection's websocket id (``str(websocket.id)``, a UUID from the websockets
+        library): the key a session records (bed's ``websocket_id``). It is compared as a string, never converted
+        to an int. A connection with no live socket is a no-op; a socket that fails to send is dropped.
         """
+        key = str(connection_id)
         msg_json = json.dumps(message)
         for path_clients in list(self._clients.values()):
             for ws in list(path_clients):
-                if getattr(ws, "_bbsengine6_session_id", None) != session_id:
+                if str(getattr(ws, "id", "")) != key:
                     continue
                 try:
                     await ws.send(msg_json)
