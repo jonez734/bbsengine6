@@ -1,6 +1,6 @@
 # bbsengine6 — front-end seam specification (generic core)
 
-> **Last updated:** 2026-11-11.
+> **Last updated:** 2026-11-17.
 > **Status:** Part A is implemented in `py/src/bbsengine6/seam/`, with tests in
 > `py/tests/test_seam_types.py` and `py/tests/test_seam_domain.py`. The consuming application
 > (casino, zoidoffice) keeps its per-application sections in its own handbook.
@@ -72,6 +72,8 @@ their wire values unchanged.
 | `forbidden` | Operation not permitted |
 | `not_authenticated` | The request needs a logged-in member and there is none |
 | `service_error` | Unexpected failure inside the service |
+| `invalid_credentials` | A login was refused: the moniker or password is wrong (no detail on which) |
+| `auth_unavailable` | A login could not be checked: the member store cannot be reached |
 
 Money, wagers, and an application's own nouns are not generic. Codes such as `insufficient_funds`,
 `invalid_bet`, or a table's `table_not_found` belong to the application that has them. They are
@@ -164,6 +166,28 @@ prompts.
 
 Prompts, menus, and validation messages belong to the front end.
 
+## 7-auth. Login (scope `auth`)
+
+Login is a request in the generic `auth` scope. There is no table or room before a member is logged in,
+so the scope is not one the application defines.
+
+- **Request:** `LoginRequest(moniker, password)`, a frozen `Request` with `scope = "auth"`. Both fields are
+  required. A blank moniker or a blank password is refused by the handler before any check, so no front end
+  can log in with an empty field.
+- **Handler:** the application's login handler (bed for zoid6) checks the credentials and mints a token. It
+  returns an `ActionResult`, and never prompts, prints, or writes a file.
+- **Success:** `ok` with the token in `data["token"]`, and the member's moniker in `data["moniker"]`.
+- **Refusal:** `invalid_credentials` when the moniker or password is wrong, with no hint about which field
+  was wrong. `auth_unavailable` when the member store cannot be reached. Nothing is minted on a refusal.
+- **Failed logins:** the handler records each failed login as it does today. Lockout is not part of this
+  contract; it is a separate decision.
+- **Storing the token:** the front end that asked stores it. A headless caller (a script or a bot) may keep
+  it in memory. The domain never writes a token.
+
+A front end prompts for the moniker and password (section 7, "Prompts ... belong to the front end"), sends the
+request, and shows the typed result. The prompt, its box, and its blank-field rule are the front end's, not the
+seam's.
+
 ## 7a. Subscriptions, lag, and expiry
 
 - A front end calls `Domain.subscribe(debug=False)` to get a subscription id, and `Domain.read(id)`
@@ -224,7 +248,8 @@ JSON types appear: strings, numbers, booleans, null, lists, and objects.
 ## 9. Package and file layout
 
 - The framework types live in bbsengine6: `ActionResult` (section 3), `Event` and the queue
-  (section 5), and the generic code set (section 4). A consuming application imports them and
+  (section 5), the generic code set (section 4), and the login request for scope `auth` (section 7-auth,
+  `bbsengine6/seam/requests.py`, `LoginRequest`). A consuming application imports them and
   does not redefine them.
 - Each consuming application keeps its services and its wire mapping in its own package.
   Its services return `ActionResult`, and its API layer maps results back to the wire dict

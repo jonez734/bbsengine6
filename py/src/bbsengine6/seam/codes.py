@@ -15,3 +15,6 @@ class ErrorCode(str, Enum):
     FORBIDDEN = "forbidden"
     NOT_AUTHENTICATED = "not_authenticated"
     SERVICE_ERROR = "service_error"
+    # Login (scope "auth"): a wrong moniker or password, and a login that cannot reach the member store.
+    INVALID_CREDENTIALS = "invalid_credentials"
+    AUTH_UNAVAILABLE = "auth_unavailable"

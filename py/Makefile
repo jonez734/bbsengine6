@@ -8,7 +8,7 @@ USER = $(shell whoami)
 all:
 
 # VERSION is the full build version (prefix plus timestamp, from scripts/next_version.sh). The default
-# is the 0.4 line; build the 0.5 line with: make version VERSION=$(scripts/next_version.sh 0.5.0.dev <wheels>)
+# is the 0.4 line; build the 0.5.1 line with: make version VERSION=$(scripts/next_version.sh 0.5.1.dev <wheels>)
 VERSION_PREFIX ?= 0.4.0.dev
 VERSION ?= $(shell date -u +%Y%m%d%H%M%S)
 

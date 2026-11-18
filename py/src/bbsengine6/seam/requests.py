@@ -13,3 +13,13 @@ from dataclasses import dataclass
 class Request:
     scope: str
     moniker: str | None = None
+
+
+@dataclass(frozen=True)
+class LoginRequest(Request):
+    """Log a member in. Scope ``auth``: there is no table or room before a login. Both fields are required; a blank
+    moniker or password is refused by the handler before any check."""
+
+    scope: str = "auth"
+    moniker: str | None = None
+    password: str = ""
