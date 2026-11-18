@@ -184,6 +184,10 @@ def draw_box(title: str = "", width: int = 25, height: int = 1) -> None:
     for _ in range(height):
         io.echo(f"{{acs:vline}}{' ' * width}{{acs:vline}}")
     io.echo(f"{{acs:llcorner}}{{acs:hline:{width}}}{{acs:lrcorner}}", end="")
+    # The box draws in the line-drawing set. Reset to the normal set here, so the text that follows (the prompt,
+    # the typed input, the rest of the screen) is not drawn in line-drawing characters. No newline: the cursor stays
+    # on the bottom edge, where callers move it up into the box.
+    io.echo("{f6}", end="")
 
 
 def pluralize(
