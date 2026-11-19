@@ -21,7 +21,7 @@ class TestFieldFromTheBottomEdge(unittest.TestCase):
         frame = util.Frame(title="auth", width=25, top=0, bottom=2)
         with patch.object(util.io, "echo", side_effect=lambda t="", end="\n", **k: out.append(str(t))):
             frame.place_field()
-        self.assertEqual(out, ["{cursorup:1}{cha:2}", "{f6}"])
+        self.assertEqual(out, ["{cursorup:1}{cha:2}", "{acs:off}"])
         self.assertFalse(any("{curpos" in t for t in out))
 
 

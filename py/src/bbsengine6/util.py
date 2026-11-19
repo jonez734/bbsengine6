@@ -193,7 +193,7 @@ class Frame:
         The character set is reset here, after the move, so the field is typed in normal characters.
         """
         io.echo(f"{{cursorup:{self.field_rows_up()}}}{{cha:{self.interior_column}}}", end="")
-        io.echo("{f6}", end="")
+        io.echo("{acs:off}", end="")
 
     @property
     def interior_row(self) -> int:
