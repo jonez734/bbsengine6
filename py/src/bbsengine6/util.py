@@ -524,12 +524,12 @@ def get_user_tz_offset() -> Optional[int]:
     return _user_tz_offset_minutes
 
 
-def inputpassword(prompt: str = "password: ", mask: str = "X", **kwargs) -> str:
+def inputpassword(prompt: str = "password: ", mask: str = "", **kwargs) -> str:
     """Prompt user for password input with character masking.
 
     Args:
         prompt: The prompt text to display (default: "password: ").
-        mask: Character to display instead of actual input (default: "X").
+        mask: Character to display for each typed character (default: "", nothing is shown).
         **kwargs: Additional arguments passed to io.inputstring().
 
     Returns:
