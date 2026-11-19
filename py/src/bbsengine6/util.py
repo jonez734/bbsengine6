@@ -188,8 +188,12 @@ class Frame:
         return self.bottom - (self.top + 1)
 
     def place_field(self) -> None:
-        """Move the cursor from the bottom edge to the field's first column, inside the frame (relative moves only)."""
+        """Move the cursor from the bottom edge to the field's first column, inside the frame (relative moves only).
+
+        The character set is reset here, after the move, so the field is typed in normal characters.
+        """
         io.echo(f"{{cursorup:{self.field_rows_up()}}}{{cha:{self.interior_column}}}", end="")
+        io.echo("{f6}", end="")
 
     @property
     def interior_row(self) -> int:
@@ -267,7 +271,8 @@ def draw_frame(title: str = "", width: int = 25, *, children: _Iterable[Child] =
     for child in children:
         frame = _append_child(frame, child, at_row=row)
         row = frame.children[-1].bottom
-    io.echo("{f6}", end="")
+    # The cursor is left on the bottom edge: no {f6} here, since the echo layer counts it as a line end and would put the
+    # cursor one row below the frame. The character set is reset where the field is placed (place_field).
     return frame
 
 
