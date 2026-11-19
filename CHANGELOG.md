@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### fix(io): a stray byte read with the DA reply is not typed into the next field
+
+`query_terminal` queued the bytes around a matched reply as typed keys. A stray byte that arrived with the
+terminal's DA reply appeared as a `?` before the next prompt. The DA probe now passes
+`discard_leftover=True`; other callers still queue typed bytes in order (`test_probe_reply_leftovers_are_not_typed.py`;
+spec `io_common.md`).
+
 ### feat(util): draw_frame and extend_frame grow a box with a child below it; inputpassword masks with nothing
 
 `draw_frame` draws a frame with child boxes stacked under its title and returns its geometry. `extend_frame`

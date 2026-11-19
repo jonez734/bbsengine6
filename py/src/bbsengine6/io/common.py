@@ -431,7 +431,8 @@ def strip_echoed_request(text: str, request: str) -> str:
     return pattern.sub("", text)
 
 
-def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0.5) -> str | None:
+def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0.5,
+                   discard_leftover: bool = False) -> str | None:
     """Send ``request`` to the terminal and return the first reply matching ``reply_re``.
 
     Same exchange as :func:`get_dsr`: pending input is drained into the queue first, the tty
@@ -440,6 +441,10 @@ def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0
     more, so a late reply is consumed here and does not reach the input reader as keystrokes.
     Typed bytes that are not the reply go back on the input queue, in order. The tty is
     restored in every case.
+
+    ``discard_leftover=True`` drops the bytes around the reply instead of queuing them. A probe
+    uses it: a stray byte that arrives with the reply is the terminal's, not the user's, and
+    queuing it would type it into the next field.
 
     Returns the matched text, or None when no reply matched in time. A reply that arrives
     after the settle window is not consumed here; the caller must treat it as not received.
@@ -486,7 +491,7 @@ def query_terminal(request: str, reply_re: "re.Pattern[str]", timeout: float = 0
         leftover = buffer
         matched = None
     leftover = strip_echoed_request(leftover, request)
-    if leftover:
+    if leftover and not discard_leftover:
         with _input_queue_lock:
             _queue().extend("\r" if c == "\n" else c for c in leftover)
     return matched

@@ -171,10 +171,10 @@ def probe_da(timeout=None, block=True):
             echo(f"terminal.probe_da: not sent ({exc})", level="debug")
         return None
     try:
-        reply = common.query_terminal(DA1_REQUEST, _ANY_DA_RE, timeout=wait)
+        reply = common.query_terminal(DA1_REQUEST, _ANY_DA_RE, timeout=wait, discard_leftover=True)
         if reply is None:
             _note_timeout("da1")
-            reply = common.query_terminal(DA2_REQUEST, _ANY_DA_RE, timeout=wait)
+            reply = common.query_terminal(DA2_REQUEST, _ANY_DA_RE, timeout=wait, discard_leftover=True)
         if reply is None:
             _note_timeout("da2")
     except Exception as exc:  # no terminal, or the tty refused the mode change

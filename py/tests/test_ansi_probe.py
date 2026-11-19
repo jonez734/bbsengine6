@@ -70,7 +70,7 @@ def test_has_ansi_rejects_other_replies(monkeypatch, reply):
 def test_probe_da_tries_da2_when_da1_has_no_reply(monkeypatch):
     sent = []
 
-    def fake_query(request, reply_re, timeout=0.5):
+    def fake_query(request, reply_re, timeout=0.5, **kwargs):
         sent.append(request)
         return "\x1b[>0c" if request == terminal.DA2_REQUEST else None
 
@@ -82,7 +82,7 @@ def test_probe_da_tries_da2_when_da1_has_no_reply(monkeypatch):
 def test_probe_da_stops_after_da1_reply(monkeypatch):
     sent = []
 
-    def fake_query(request, reply_re, timeout=0.5):
+    def fake_query(request, reply_re, timeout=0.5, **kwargs):
         sent.append(request)
         return "\x1b[?62;1;2c"
 
@@ -117,7 +117,7 @@ def test_probe_da_failure_returns_none(monkeypatch):
 def test_timeout_from_config_is_used(monkeypatch):
     seen = []
 
-    def fake_query(request, reply_re, timeout=0.5):
+    def fake_query(request, reply_re, timeout=0.5, **kwargs):
         seen.append(timeout)
         return None
 
@@ -130,7 +130,7 @@ def test_timeout_from_config_is_used(monkeypatch):
 def test_explicit_timeout_overrides_config(monkeypatch):
     seen = []
     monkeypatch.setattr(
-        common, "query_terminal", lambda r, p, timeout=0.5: seen.append(timeout) or None
+        common, "query_terminal", lambda r, p, timeout=0.5, **kwargs: seen.append(timeout) or None
     )
     terminal.configure_ansi_probe({"ansi_probe": {"timeout_seconds": 1.25}})
     terminal.probe_da(timeout=0.1)

@@ -57,7 +57,7 @@ def stub(monkeypatch):
     state = {"rgb": None, "queries": []}
     monkeypatch.setattr(terminal, "probe_da", lambda timeout=None, block=True: "\x1b[?62c")
 
-    def fake_query(request, reply_re, timeout=0.5):
+    def fake_query(request, reply_re, timeout=0.5, **kwargs):
         state["queries"].append(request)
         return state["rgb"]
 
@@ -239,7 +239,7 @@ def test_query_cap_returns_decoded_value(monkeypatch):
     # The terminal answers "Co" with value "256" (hex 323536).
     seen = {}
 
-    def fake_query(request, reply_re, timeout=0.5):
+    def fake_query(request, reply_re, timeout=0.5, **kwargs):
         seen["request"] = request
         return "\x1bP1+r436f=323536\x1b\\"
 
@@ -326,7 +326,7 @@ def counted(monkeypatch):
 
     sent = []
 
-    def fake_query(request, reply_re, timeout=0.5):
+    def fake_query(request, reply_re, timeout=0.5, **kwargs):
         sent.append(request)
         return None
 
@@ -381,7 +381,7 @@ def test_da_silent_records_timeouts_and_no_reply(stub, monkeypatch):
 def test_da1_answer_records_reply_and_skips_da2(monkeypatch):
     monkeypatch.setattr(terminal, "_ANSI_PROBE_ENABLED", True)
     monkeypatch.setattr(common, "query_terminal",
-                        lambda request, reply_re, timeout=0.5:
+                        lambda request, reply_re, timeout=0.5, **kwargs:
                         "\x1b[?62;1;2c" if request == terminal.DA1_REQUEST else None)
     r = terminal.report(timeout=0.01)
     assert r["da"]["da1"] == {"sent": True, "reply": "\x1b[?62;1;2c", "timed_out": False, "late": False}

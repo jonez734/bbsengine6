@@ -117,12 +117,14 @@ The general query behind `get_cursor_position` and `get_terminal_status`.
 ### Generic query
 
 ```python
-query_terminal(request: str, reply_re: re.Pattern, timeout: float = 0.5) -> str | None
+query_terminal(request: str, reply_re: re.Pattern, timeout: float = 0.5, discard_leftover: bool = False) -> str | None
 ```
 
 Sends `request`, then reads until `reply_re` matches or `timeout` expires. Pending input is
 drained first, the tty is put in raw mode (unless a raw session owns it), and the tty is
-restored in every case. Typed bytes that are not the reply go back on the input queue, in order.
+restored in every case. Typed bytes that are not the reply go back on the input queue, in order, unless
+`discard_leftover=True`, which drops them. `probe_da` passes it: a stray byte that arrives with a DA reply is
+the terminal's, and queuing it typed a `?` into the next field.
 An echo of `request` in the unmatched bytes (see `strip_echoed_request`, in `io_terminal.md`) is
 removed first, so a terminal that echoes the query does not leak it as keys.
 Returns the matched text, or `None` when nothing matched in time. Used by `probe_da` and `report()`.
