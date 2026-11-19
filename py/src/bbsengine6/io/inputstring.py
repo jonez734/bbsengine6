@@ -1007,15 +1007,17 @@ def redraw_line(
 
     display_str = buffer[scroll_offset : scroll_offset + max_width]
 
-    # Blank the whole text window first. Without this, a shorter window drawn over an
-    # earlier, longer one leaves the old tail on the row (the duplicated "shed)").
-    echo(f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}", end="", flush=True, wordwrap=False)
-    echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
+    # An empty mask shows nothing: there is nothing to clear or write, so only the cursor moves below.
+    if mask != "":
+        # Blank the whole text window first. Without this, a shorter window drawn over an
+        # earlier, longer one leaves the old tail on the row (the duplicated "shed)").
+        echo(f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}", end="", flush=True, wordwrap=False)
+        echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
 
-    if mask is not None:
-        echo(f"{mask * len(display_str)}", end="", flush=True, wordwrap=False)
-    else:
-        echo(display_str, end="", flush=True, raw=True, wordwrap=False)
+        if mask is not None:
+            echo(f"{mask * len(display_str)}", end="", flush=True, wordwrap=False)
+        else:
+            echo(display_str, end="", flush=True, raw=True, wordwrap=False)
 
     echo(
         f"{{curpos:{start_row},{input_col_start + (curpos - scroll_offset)}}}",
@@ -1583,18 +1585,19 @@ def _inputstring_body(
             # Holding the lock here would deadlock when echo() tries to acquire it again
             # Blank the text window (not to end of row: a caller may draw a border
             # to the right of the input). Starts where the text starts.
-            echo(
-                f"{{curpos:{start_row},{text_col}}}{' ' * max_width}",
-                end="",
-                flush=True,
-                wordwrap=False,
-            )
+            if mask != "":
+                echo(
+                    f"{{curpos:{start_row},{text_col}}}{' ' * max_width}",
+                    end="",
+                    flush=True,
+                    wordwrap=False,
+                )
 
-            echo(f"{{curpos:{start_row},{text_col}}}", end="")
-            if mask is not None:
-                echo(mask * len(display_str), end="", flush=True, wordwrap=False)
-            else:
-                echo(display_str, end="", flush=True, raw=True, wordwrap=False)
+                echo(f"{{curpos:{start_row},{text_col}}}", end="")
+                if mask is not None:
+                    echo(mask * len(display_str), end="", flush=True, wordwrap=False)
+                else:
+                    echo(display_str, end="", flush=True, raw=True, wordwrap=False)
 
             _current_display_str = display_str
             last_placed_col = None
