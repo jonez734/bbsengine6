@@ -68,11 +68,14 @@ class ChildPlace:  title: str; top: int; bottom: int; column: int
 
 - `Frame.top` and `Frame.bottom` are the frame's rows (0 is the top of the frame). `ChildPlace.top` and
   `bottom` are a child's rows; `column` is where its text starts (2: inside the left edge and one space in).
-- `draw_frame` leaves the cursor at the end of the frame's last row, and the last thing it prints resets the
-  character set (`{f6}`).
+- `draw_frame` leaves the cursor on the frame's bottom edge. It does not end with `{f6}`: a line break there
+  would move the tracked cursor a row below the frame.
+- `Frame.place_child(index)` moves the cursor from the bottom edge to a child's field with relative moves
+  (`{cursorup:n}{cha:col}`), then resets the character set (`{acs:off}`). `Frame.place_field()` does the same
+  for a one-row frame's interior.
 - `extend_frame` writes the join on the frame's bottom row between save (`{decsc}`) and restore (`{decrc}`),
-  at an absolute position (`{curpos}`), so the join does not depend on where the cursor is. It then draws the
-  child directly below. It always draws the join, whatever the child's `gap`.
+  with a relative column reset (`{cha:1}`) and no absolute position. It then draws the child directly below.
+  It always draws the join, whatever the child's `gap`.
 - `Child.gap` applies to `draw_frame`: a gap of `n` puts `n` blank rows between stacked children, and a gap of 0
   stacks a child flush on the previous one. `extend_frame` does not read `gap`.
 - Near the bottom of the screen, `extend_frame` scrolls the screen first when the child will not fit, and moves
@@ -88,6 +91,7 @@ hr(acs=True, width=None, end="\n", color="{boxcolor}") -> bool
 heading(title: str, **kwargs) -> None
 draw_box(title: str = "", width: int = 25, height: int = 1) -> None
 draw_frame(title: str = "", width: int = 25, *, children: Iterable[Child] = ()) -> Frame
+Frame.place_child(index: int) -> None   # relative move to child's field, resets charset
 extend_frame(frame: Frame, child: Child, *, width: int) -> Frame
 pluralize(amount: int, singular: str, plural: str, quantity=True, emoji="", determiner="a", **kw) -> str
 oxfordcomma(seq, conjunction="and") -> Optional[str]

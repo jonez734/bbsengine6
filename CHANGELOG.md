@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### feat(util): Frame.place_child moves the cursor to a child's field with relative moves; demo_authenticate uses it
+
+`demo_authenticate` placed each field with an absolute `{curpos}`, which had the same cursor problems as
+`demo_box_inputstring`. `Frame.place_child(index)` moves from the frame's bottom edge to the child's field with
+`{cursorup:n}{cha:col}` and resets the character set. The demo uses it for the moniker and password fields.
+Spec `util.md` updated: `draw_frame` no longer ends with `{f6}`, and `extend_frame` uses a relative join.
+
 ### fix(io): {acs:on} and {acs:off} switch the character set; they no longer print a '?'
 
 `{acs:off}` fell through to the glyph path, found no glyph named `off`, and printed `?` under the DEC charset.

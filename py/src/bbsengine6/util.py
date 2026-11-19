@@ -195,6 +195,17 @@ class Frame:
         io.echo(f"{{cursorup:{self.field_rows_up()}}}{{cha:{self.interior_column}}}", end="")
         io.echo("{acs:off}", end="")
 
+    def place_child(self, index: int) -> None:
+        """Move the cursor from the frame's bottom edge to child ``index``'s field (relative moves only).
+
+        The cursor is left on the bottom edge by draw_frame and extend_frame, so the move is up to the child's interior
+        row (one row under its top edge), then to its column. The character set is reset after the move.
+        """
+        place = self.children[index]
+        up = self.bottom - (place.top + 1)
+        io.echo(f"{{cursorup:{up}}}{{cha:{place.column}}}", end="")
+        io.echo("{acs:off}", end="")
+
     @property
     def interior_row(self) -> int:
         """The terminal row (1-based, as {curpos} takes it) of the interior, one row under the top edge."""

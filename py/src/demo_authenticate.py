@@ -16,13 +16,11 @@ def main() -> None:
     bottombar.init()
     try:
         frame = draw_frame(TITLE, WIDTH, children=[Child(title="moniker")])
-        moniker_field = frame.children[0]
-        io.echo(f"{{curpos:{moniker_field.top},{moniker_field.column}}}", end="")
+        frame.place_child(0)
         moniker = io.inputstring("{promptcolor}moniker: {inputcolor}", "", max_width=WIDTH - 1, bottombar=False)
 
         frame = extend_frame(frame, Child(title="password"), width=WIDTH)
-        password_field = frame.children[-1]
-        io.echo(f"{{curpos:{password_field.top},{password_field.column}}}", end="")
+        frame.place_child(len(frame.children) - 1)
         inputpassword("{promptcolor}password: {inputcolor}", bottombar=False)
 
         io.echo("{f6}")
