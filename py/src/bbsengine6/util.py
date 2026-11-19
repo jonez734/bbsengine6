@@ -255,7 +255,7 @@ def _append_child(frame: Frame, child: Child, *, at_row: int) -> Frame:
     if child.gap == 0:
         # Overwrite the shared edge: save, move to it, write the join, restore.
         io.echo("{decsc}", end="")
-        io.echo(f"{{cursorup:0}}", end="")
+        io.echo("{cha:1}", end="")
         io.echo(f"{{acs:ltee}}{{acs:hline:{frame.width}}}{{acs:rtee}}", end="")
         io.echo("{decrc}", end="")
     top = at_row + child.gap + (0 if child.gap == 0 else 1)
@@ -284,9 +284,10 @@ def extend_frame(frame: Frame, child: Child, *, width: int) -> Frame:
     for placed in frame.children:
         placed.top -= scroll
         placed.bottom -= scroll
-    # Write the join on the frame's bottom row at an absolute position, so it does not depend on where the cursor is.
+    # The join is written on the frame's bottom edge, which is where the cursor is left: a column reset, then the join.
+    # Relative moves only; no absolute position.
     io.echo("{decsc}", end="")
-    io.echo(f"{{curpos:{frame.bottom + 1},1}}", end="")
+    io.echo("{cha:1}", end="")
     io.echo(f"{{acs:ltee}}{{acs:hline:{width}}}{{acs:rtee}}", end="")
     io.echo("{decrc}", end="")
     frame.width = width

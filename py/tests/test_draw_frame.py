@@ -72,7 +72,7 @@ class TestExtendFrame(unittest.TestCase):
         bottom = frame.bottom
         _, out = _capture(util.extend_frame, frame, util.Child(title="password"), width=25)
         texts = [t for t, _ in out]
-        self.assertIn("{curpos:%d,1}" % (bottom + 1), texts, "the join is placed on the bottom row, column 1")
+        self.assertIn("{cha:1}", texts, "the join starts at column 1 of the bottom edge (relative, no absolute curpos)")
 
     def test_the_join_is_the_frame_width(self):
         frame, _ = _capture(util.draw_frame, "auth", 25)
