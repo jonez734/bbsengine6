@@ -22,8 +22,9 @@ class TestResetDoesNotMoveTheCursor(unittest.TestCase):
             E.echo("{acs:on}x", end="")
             E.echo("{acs:off}", end="")
             after = (st.cursor_row, st.cursor_col)
-        # The x advanced the column once. The reset that follows must not change the row or the column.
-        self.assertEqual(after, (3, 30), "the reset leaves the cursor where the x left it")
+        # The x advances the column once (27 -> 28). The reset must not change the row or the column.
+        # (This was (3, 30) while {acs:on} counted as a glyph and printed a '?' that was tracked as a column.)
+        self.assertEqual(after, (3, 28), "the reset leaves the cursor where the x left it")
 
     def test_place_field_does_not_end_with_a_line_break(self):
         out = []

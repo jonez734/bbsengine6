@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### fix(io): {acs:on} and {acs:off} switch the character set; they no longer print a '?'
+
+`{acs:off}` fell through to the glyph path, found no glyph named `off`, and printed `?` under the DEC charset.
+That `?` showed before the moniker prompt in `demo_box_inputstring` (the field's charset reset). Both are now
+charset commands. The tracked column for a `{acs:on}x` is one column for the `x`; `test_charset_reset_is_not_a_line_break`
+is updated from column 30 to 28 (30 counted the phantom glyph).
+
 ### fix(io): a stray byte read with the DA reply is not typed into the next field
 
 `query_terminal` queued the bytes around a matched reply as typed keys. A stray byte that arrived with the

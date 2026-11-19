@@ -593,6 +593,13 @@ def _handle_acs(token):
         if not token.args:
             raise ValueError("ACS command requires a character name")
         name = token.args[0]
+        # {acs:on} / {acs:off} switch the character set (ESC(0 / ESC(B). They are not glyphs.
+        if name in ("on", "off"):
+            if name == "on":
+                yield from _acs_on()
+            else:
+                yield from _acs_off()
+            return
         repeat = int(token.args[1]) if len(token.args) > 1 else 1
     else:
         name = token.value
@@ -1060,7 +1067,7 @@ def _handle_command(token, **kwargs):  # palette=None, vars=None):
         yield from _handle_attr(token)
         return
 
-    if cmd in _acs_map:
+    if cmd in _acs_map or cmd == "acs":
         yield from _handle_acs(token)
         return
 

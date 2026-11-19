@@ -130,6 +130,10 @@ Box-drawing characters using DEC Alternate Character Set:
 - `{ttee}`, `{btee}`, `{ltee}`, `{rtee}`, `{plus}`
 - `{diamond}`, `{bullet}`, etc.
 
+`{acs:on}` and `{acs:off}` switch the character set (`ESC(0` and `ESC(B`). They write no glyph. Before this
+fix `{acs:off}` fell through to the glyph path and printed a `?` under the DEC charset.
+`{acs:off}` after a `{acs:on}` leaves the tracked cursor where it was.
+
 ### 7. Runtime Variables
 
 ```python
