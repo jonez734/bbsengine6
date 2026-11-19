@@ -964,6 +964,21 @@ def _hide_mode(paint: bool = True) -> None:
         return
 
 
+def _cursor_origin_or_default() -> tuple:
+    """Where the field starts: the terminal's cursor, or row 1, column 1 when the terminal does not answer.
+
+    A terminal that never answers the query (a pipe, a dumb terminal) raises TimeoutError from the query. The field still
+    starts, at the default origin, rather than failing to read input at all.
+    """
+    try:
+        pos = get_cursor_position()
+    except TimeoutError:
+        return (1, 1)
+    if isinstance(pos, tuple) and len(pos) == 2:
+        return (int(pos[0]), int(pos[1]))
+    return (1, 1)
+
+
 def redraw_line(
     prompt: str,
     buffer: str,
@@ -1388,11 +1403,7 @@ def _inputstring_body(
     last_matches = []
     tab_count = 0
 
-    cursor_pos = get_cursor_position()
-    if isinstance(cursor_pos, tuple) and len(cursor_pos) == 2:
-        start_row, start_col = int(cursor_pos[0]), int(cursor_pos[1])
-    else:
-        start_row, start_col = 1, 1
+    start_row, start_col = _cursor_origin_or_default()
 
     prompt_len: int = int(rendered_length(prompt))
     # Draw the prompt with its mode indicator from the first frame, the same text
