@@ -14,7 +14,11 @@ ist = importlib.import_module("bbsengine6.io.inputstring")
 
 class TestNoCursorReply(unittest.TestCase):
     def test_a_timeout_on_the_cursor_query_falls_back_instead_of_raising(self):
-        with patch.object(ist, "get_cursor_position", side_effect=TimeoutError("DSR response not received")):
+        common = importlib.import_module("bbsengine6.io.common")
+        with patch.object(ist, "get_cursor_position", side_effect=TimeoutError("DSR response not received")), \
+             patch.object(common, "_get_terminal_state") as get_state:
+            state = get_state.return_value
+            state.cursor_row, state.cursor_col = None, None
             pos = ist._cursor_origin_or_default()
         self.assertEqual(pos, (1, 1))
 

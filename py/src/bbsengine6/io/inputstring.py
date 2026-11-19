@@ -965,17 +965,25 @@ def _hide_mode(paint: bool = True) -> None:
 
 
 def _cursor_origin_or_default() -> tuple:
-    """Where the field starts: the terminal's cursor, or row 1, column 1 when the terminal does not answer.
+    """Where the field starts: the terminal's cursor, else the cursor the caller left, else row 1, column 1.
 
-    A terminal that never answers the query (a pipe, a dumb terminal) raises TimeoutError from the query. The field still
-    starts, at the default origin, rather than failing to read input at all.
+    A terminal that does not answer the cursor query (a pipe, a dumb terminal) raises TimeoutError. The field then starts
+    where the caller placed the cursor (a frame's {curpos}), read from the tracked cursor, rather than re-homing to the top
+    of the screen. Only when nothing is tracked does it fall back to row 1, column 1.
     """
     try:
         pos = get_cursor_position()
     except TimeoutError:
-        return (1, 1)
+        pos = None
     if isinstance(pos, tuple) and len(pos) == 2:
         return (int(pos[0]), int(pos[1]))
+    from .common import _get_terminal_state
+
+    state = _get_terminal_state()
+    row = getattr(state, "cursor_row", None)
+    col = getattr(state, "cursor_col", None)
+    if isinstance(row, int) and isinstance(col, int) and row >= 1 and col >= 1:
+        return (row, col)
     return (1, 1)
 
 
