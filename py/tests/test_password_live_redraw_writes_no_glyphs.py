@@ -44,3 +44,16 @@ class TestPasswordWritesNoGlyphs(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestEmptyMaskLeavesTheFieldUnchanged(unittest.TestCase):
+    """An empty mask changes nothing on screen: no text, no clear, and no cursor move while typing."""
+
+    def test_no_output_at_all_after_the_prompt_for_typed_keys(self):
+        result, writes = _writes_for_keys(list("abc"), mask="")
+        self.assertEqual(result, "abc")
+        prompt_at = next(i for i, w in enumerate(writes) if "password" in w)
+        after = [w for w in writes[prompt_at + 1:] if w not in ("{f6}",)]
+        # Only the Enter that ends the line is allowed to write anything after the prompt.
+        moves = [w for w in after if w.startswith("{curpos:")]
+        self.assertEqual(moves, [], f"the cursor moved while typing with mask='': {moves}")

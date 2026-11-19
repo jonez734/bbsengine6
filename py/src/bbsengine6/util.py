@@ -568,7 +568,7 @@ def inputpassword(prompt: str = "password: ", *, mask: Optional[str] = "", **kwa
     Args:
         prompt: The prompt text to display (default: "password: ").
         mask: What each typed character shows as (keyword only):
-            ``""`` (default): nothing. The field is not written, only the cursor moves.
+            ``""`` (default): nothing. The field is not written and the cursor stays where the field starts.
             a single character, e.g. ``"*"``: that character per typed character.
             ``None``: the typed text itself, for accessibility (a caller who needs to see the password).
             Any other value raises ValueError.

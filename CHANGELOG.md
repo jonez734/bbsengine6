@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### fix(io): an empty mask keeps the cursor where the field starts
+
+With `mask=""` the live loop and `redraw_line` still moved the cursor to follow each typed key, which
+revealed the length of a password by where the cursor sat. An empty mask now displays nothing and keeps the
+cursor at the field's start. Editing (Backspace, Enter) is unchanged; the tracked position still follows the
+keys. Test: `test_password_live_redraw_writes_no_glyphs.py` (`TestEmptyMaskLeavesTheFieldUnchanged`).
+
 ### refactor(io): one mask rule for the field; inputpassword shows nothing unless asked
 
 The field's redraw had two mask checks per site (`mask != ""`, then `mask is not None` inside), which read as a

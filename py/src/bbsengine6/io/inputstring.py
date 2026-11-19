@@ -1011,7 +1011,7 @@ def _field_text(mask: Optional[str], typed: str) -> Optional[str]:
 
     ``mask`` is the one rule for every redraw:
       * ``None``: the typed text itself (the default for a plain prompt).
-      * ``""``: nothing. The field is not cleared or written; only the cursor moves.
+      * ``""``: nothing. The field is not cleared or written, and the cursor stays at the field's start.
       * a character: that character once per typed character (``"*"`` gives ``"***"``).
     """
     if mask is None:
@@ -1057,11 +1057,13 @@ def redraw_line(
         echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
         echo(shown, end="", flush=True, raw=(mask is None), wordwrap=False)
 
-    echo(
-        f"{{curpos:{start_row},{input_col_start + (curpos - scroll_offset)}}}",
-        end="",
-        flush=True,
-    )
+    # An empty mask displays nothing and keeps the cursor at the field's start, so the cursor does not move.
+    if mask != "":
+        echo(
+            f"{{curpos:{start_row},{input_col_start + (curpos - scroll_offset)}}}",
+            end="",
+            flush=True,
+        )
 
 
 def print_matches(matches: List[str]) -> int:
@@ -1633,7 +1635,8 @@ def _inputstring_body(
         # Place the cursor only when the line was redrawn or the cursor moved. Doing it
         # on every wait timeout repositioned the cursor about 65 times a second while the
         # prompt was idle, which stops a mouse drag from selecting in the terminal.
-        if last_placed_col != cursor_display_col:
+        # An empty mask keeps the cursor at the field's start: nothing is displayed and the cursor does not move.
+        if mask != "" and last_placed_col != cursor_display_col:
             echo(f"{{curpos:{start_row},{cursor_display_col}}}", end="", flush=True)
             last_placed_col = cursor_display_col
 

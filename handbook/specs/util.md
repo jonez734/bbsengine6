@@ -135,7 +135,7 @@ inputpassword(prompt="password: ", *, mask="", **kwargs) -> str
 `inputpassword` shows nothing by default: a typed password is not shown, not even as spaces or `X`
 characters. `mask` is keyword-only and takes three forms:
 
-- `""` (default): nothing. The field is not written; only the cursor moves.
+- `""` (default): nothing. The field is not written and the cursor stays where the field starts.
 - one character (`mask="*"`): that character once per keystroke.
 - `None`: the typed text itself, for accessibility. Use this only when the user needs to see the password.
 
