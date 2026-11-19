@@ -1,9 +1,7 @@
-"""inputstring(accept_hint=...) pushes "press enter to accept input" onto the bottom bar stack.
+"""inputstring() no longer pushes "press enter to accept value" onto the bottom bar.
 
-The hint is pushed only when the bar is initialized (bottombar.init() has run) and bottombar is
-True. The push is popped when the prompt ends, by accept or abort. A call pops only the frame it
-pushed, so an outer caller's pushed state is never removed.
-
+The hint was pushed at every call when the bar was initialized, and popped when the prompt ended. It is disabled
+(the push is commented out in inputstring), so no call touches the bottom bar's left side, whatever the arguments.
 These tests patch the bottombar module and the prompt body, so no terminal is needed.
 """
 
@@ -13,7 +11,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 inp = importlib.import_module("bbsengine6.io.inputstring")
-from bbsengine6.io.const import INPUTSTRING_ACCEPT_HINT  # noqa: E402
 
 
 class FakeBar:
@@ -45,7 +42,6 @@ class FakeBar:
 @pytest.fixture
 def bar(monkeypatch):
     fake = FakeBar(initialized=True)
-    monkeypatch.setattr(inp, "_show_accept_hint", inp._show_accept_hint)
     import bbsengine6.bottombar as bb
     monkeypatch.setattr(bb, "is_initialized", fake.is_initialized)
     monkeypatch.setattr(bb, "push", fake.push)
@@ -55,7 +51,7 @@ def bar(monkeypatch):
 
 @pytest.fixture
 def quiet(monkeypatch):
-    """Skip the tty session plumbing and the prompt itself; only the hint wiring is under test."""
+    """Skip the tty session plumbing and the prompt itself; only the bottom bar wiring is under test."""
     for name in ("begin_raw_session", "end_raw_session", "bracketed_paste_on", "bracketed_paste_off",
                  "mouse_state_push", "mouse_state_pop", "_hide_mode", "_restore_key_snapshot",
                  "_snapshot_stack"):
@@ -69,87 +65,38 @@ def _run(body, **kwargs):
 
 
 @pytest.mark.unit
-def test_hint_is_pushed_when_initialized(bar, quiet):
-    _run(lambda *a, **k: "ok")
-    assert bar.calls[0] == ("push", INPUTSTRING_ACCEPT_HINT)
-
-
-@pytest.mark.unit
-def test_hint_is_not_pushed_when_bar_not_initialized(bar, quiet):
-    bar.initialized = False
-    _run(lambda *a, **k: "ok")
-    assert ("push", INPUTSTRING_ACCEPT_HINT) not in bar.calls
-
-
-@pytest.mark.unit
-def test_accept_hint_false_pushes_nothing(bar, quiet):
-    _run(lambda *a, **k: "ok", accept_hint=False)
+@pytest.mark.parametrize("kwargs", [{}, {"accept_hint": True}, {"accept_hint": False}, {"bottombar": False}])
+def test_no_hint_is_pushed_for_any_arguments(bar, quiet, kwargs):
+    _run(lambda *a, **k: "ok", **kwargs)
     assert bar.calls == []
 
 
 @pytest.mark.unit
-def test_bottombar_false_pushes_nothing(bar, quiet):
-    _run(lambda *a, **k: "ok", bottombar=False)
+def test_nothing_is_pushed_or_popped_when_the_prompt_is_accepted(bar, quiet):
+    assert _run(lambda *a, **k: "typed") == "typed"
     assert bar.calls == []
 
 
 @pytest.mark.unit
-def test_hint_is_popped_on_accept(bar, quiet):
-    _run(lambda *a, **k: "typed")
-    assert bar.calls == [("push", INPUTSTRING_ACCEPT_HINT), ("pop",)]
-
-
-@pytest.mark.unit
-def test_hint_is_popped_on_abort(bar, quiet):
+def test_nothing_is_pushed_or_popped_when_the_prompt_is_aborted(bar, quiet):
     def abort(*a, **k):
         raise KeyboardInterrupt
 
     with pytest.raises(KeyboardInterrupt):
         _run(abort)
-    assert bar.calls == [("push", INPUTSTRING_ACCEPT_HINT), ("pop",)]
+    assert bar.calls == []
 
 
 @pytest.mark.unit
-def test_hint_is_popped_on_exception(bar, quiet):
-    def boom(*a, **k):
-        raise EOFError
-
-    with pytest.raises(EOFError):
-        _run(boom)
-    assert bar.calls[-1] == ("pop",)
-
-
-@pytest.mark.unit
-def test_never_pops_a_frame_it_did_not_push(bar, quiet):
-    """If the hint was never pushed (bar not initialized), the finally must not pop an outer frame."""
-    bar.initialized = False
-    bar.stack.append("outer-left")  # an outer caller's pushed state
+def test_an_outer_bottom_bar_frame_is_left_alone(bar, quiet):
+    """A prompt inside an outer caller's pushed state does not pop that state."""
+    bar.left = "outer prompt"
+    bar.stack.append("outer-left")
     _run(lambda *a, **k: "ok")
     assert ("pop",) not in bar.calls
     assert bar.stack == ["outer-left"]
+    assert bar.left == "outer prompt"
 
 
-@pytest.mark.unit
-def test_nested_prompt_restores_the_outer_frame(bar, quiet):
-    """An inner prompt pushes on top of an outer frame and pops back to it, not past it."""
-    outer_left = "outer prompt"
-    bar.left = outer_left
-
-    def inner(*a, **k):
-        assert bar.left == INPUTSTRING_ACCEPT_HINT
-        return "inner"
-
-    _run(inner)
-    assert bar.left == outer_left
-    assert bar.stack == []
-
-
-@pytest.mark.unit
-def test_push_failure_does_not_break_input(bar, quiet, monkeypatch):
-    import bbsengine6.bottombar as bb
-
-    def fail(**kwargs):
-        raise RuntimeError("bar broke")
-
-    monkeypatch.setattr(bb, "push", lambda *a, **k: fail())
-    assert _run(lambda *a, **k: "still works") == "still works"
+if __name__ == "__main__":
+    pytest.main([__file__])

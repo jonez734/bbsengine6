@@ -1222,10 +1222,8 @@ def inputstring(
             starts, when INSERT is pressed, and when it ends.
             False: the bar is not painted at any of those points. The mode is still
             tracked and editing is unchanged. Use this to keep the bar as it was.
-        accept_hint: Show "press enter to accept input" as the bottom bar's left side while the
-            prompt waits (default: True). The hint is pushed onto the bar stack and popped when the
-            prompt ends, by accept or abort. It is painted only when the bar is initialized
-            (bottombar.init()) and ``bottombar`` is True. False: the bar is not touched.
+        accept_hint: Accepted for compatibility and ignored. The "press enter" hint is no longer put on the
+            bottom bar: inputstring does not push or pop the bar's left side.
         **kwargs: Additional options
             verify: Callable[(str) -> bool] for input validation
             completer: Completer instance for tab completion
@@ -1292,7 +1290,8 @@ def inputstring(
     begin_raw_session()
     saved_mouse = mouse_state_push()
     paste_mode = bracketed_paste_on()
-    hint_pushed = _show_accept_hint(paint=bottombar and accept_hint)
+    # hint_pushed = _show_accept_hint(paint=bottombar and accept_hint)  # disabled: no 'press enter' in the bottom bar
+    hint_pushed = False
     try:
         return _inputstring_body(
             prompt,

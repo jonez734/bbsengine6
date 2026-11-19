@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### change(io): inputstring no longer puts "press enter to accept value" on the bottom bar
+
+Every `inputstring()` call pushed the hint onto the bottom bar when the bar was initialized, and popped it when
+the prompt ended. The push is disabled (commented out in `inputstring`), so the bar is not touched by a prompt.
+`accept_hint` is still accepted and ignored, so existing callers do not break. `test_inputstring_accept_hint.py`
+now pins that no hint is pushed or popped for any arguments; the old push/pop tests are replaced.
+
 ### fix(io): an empty mask keeps the cursor where the field starts
 
 With `mask=""` the live loop and `redraw_line` still moved the cursor to follow each typed key, which
