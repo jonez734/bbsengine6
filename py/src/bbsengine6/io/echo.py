@@ -435,16 +435,27 @@ def _handle_whitespace(token):
 # DECSC / DECRC operate on software-defined TerminalState.
 # All operations occur under _terminal_state_lock and _terminal_state_stack_lock
 # to keep terminal output and state synchronized.
+def _decsc_bytes() -> str:
+    """The terminal's save-cursor sequence (VT10x DECSC). Sent as is; no reply is needed."""
+    return f"{ESC}7"
+
+
+def _decrc_bytes() -> str:
+    """The terminal's restore-cursor sequence (VT10x DECRC)."""
+    return f"{ESC}8"
+
+
 def _handle_decsc(token):
+    """Save the cursor on the terminal (ESC 7). The software stack below is kept for callers that read it back."""
     global _terminal_state_stack, _terminal_state
-    cursor_row, cursor_col = get_cursor_position()
+    token.text = _decsc_bytes()
     with _terminal_state_lock, _terminal_state_stack_lock:
         if not _terminal_state_stack_enabled and len(_terminal_state_stack) >= 1:
             _terminal_state_stack.pop()
         _terminal_state_stack.append(
             TerminalState(
-                cursor_row=cursor_row,
-                cursor_col=cursor_col,
+                cursor_row=_terminal_state.cursor_row,
+                cursor_col=_terminal_state.cursor_col,
                 wordwrap=_terminal_state.wordwrap,
                 has_color=_terminal_state.has_color,
                 hidden=_terminal_state.hidden,
@@ -455,6 +466,9 @@ def _handle_decsc(token):
 
 def _handle_decrc(token):
     global _terminal_state, _terminal_state_stack
+
+    # The terminal restores its own saved cursor (ESC 8). The software state below mirrors it.
+    yield Token("WHITESPACE", value="", repeat=1, text=_decrc_bytes(), raw=_decrc_bytes())
 
     with _terminal_state_stack_lock:
         if not _terminal_state_stack:
@@ -473,11 +487,6 @@ def _handle_decrc(token):
         _terminal_state.has_color = state.has_color
         _terminal_state.hidden = state.hidden
         _terminal_state.sgr = state.sgr
-
-    # restore hardware cursor
-    yield from _handle_curpos(
-        Token("CURPOS", args=(_terminal_state.cursor_row, _terminal_state.cursor_col))
-    )
 
     # restore the colour and attributes that were active at the save (re-emitted, so the terminal
     # shows them too, not only the software state)

@@ -48,12 +48,12 @@ def _run(*steps):
 def test_restore_reemits_the_saved_colour_before_the_next_text():
     out = _run("{red}A{decsc}", "{green}B{decrc}", "C")
     # The text after the restore is drawn in the saved colour, not the colour written last.
-    assert out.endswith("\x1b[3;4H\x1b[0;38;2;136;0;0mC")
+    assert out.endswith("\x1b8\x1b[0;38;2;136;0;0mC")
 
 
 def test_restore_puts_back_the_saved_attributes():
     out = _run("{bold}A{decsc}", "{/bold}B{decrc}", "C")
-    assert "\x1b[0;1" in out.split("\x1b[3;4H")[-1]
+    assert "\x1b[0;1" in out.split("\x1b8")[-1]
 
 
 def test_a_bar_paint_between_save_and_restore_keeps_the_callers_colour():
@@ -65,7 +65,7 @@ def test_a_bar_paint_between_save_and_restore_keeps_the_callers_colour():
     # The bar's own colour is written only inside its paint; the text after the paint is the
     # caller's colour, re-emitted by the restore, with no reset in between.
     tail = out.split("BAR", 1)[1]
-    assert tail == "\x1b[3;4H\x1b[0;38;2;136;0;0mC"
+    assert tail == "\x1b8\x1b[0;38;2;136;0;0mC"
 
 
 def test_sgr_state_tracks_colour_and_attributes():
