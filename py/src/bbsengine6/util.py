@@ -156,38 +156,147 @@ def heading(title: str, **kwargs) -> None:
     )
 
 
-def draw_box(title: str = "", width: int = 25, height: int = 1) -> None:
-    """Draw an input box: a top edge, ``height`` interior rows, and a bottom edge.
+from dataclasses import dataclass, field as _dc_field  # noqa: E402
+from typing import Iterable as _Iterable  # noqa: E402
 
-    The bottom edge is printed without a trailing newline, so the cursor is left
-    at its end. Callers move the cursor up to reach an interior row.
 
-    Args:
-        title: Optional title drawn into the top edge as "ltee title rtee".
-        width: Interior width in columns. Widened to fit the title if needed.
-        height: Number of interior rows. Values below 1 are clamped to 1.
+@dataclass
+class Child:
+    """A box to place inside or below a frame. ``gap`` is the blank rows above it when stacked (0 shares the line)."""
 
-    Example:
-        >>> draw_box(title="login", width=20, height=2)
-    """
+    title: str = ""
+    height: int = 1
+    gap: int = 1
+
+
+@dataclass
+class Frame:
+    """Where a drawn frame is on the screen: its top and bottom rows, its width, and where each child's interior sits."""
+
+    title: str
+    width: int
+    top: int = 0
+    bottom: int = 0
+    children: list = _dc_field(default_factory=list)
+
+
+@dataclass
+class ChildPlace:
+    """A child's interior: the row of its top edge, its bottom row, and the column its text starts in."""
+
+    title: str
+    top: int
+    bottom: int
+    column: int
+
+
+def _terminal_rows() -> int:
+    """The terminal's height in rows (from io/terminal.py)."""
+    from .io import terminal
+
+    return terminal.size()[1]
+
+
+def _titled_top(title: str, width: int) -> str:
+    """The top edge with a title (widened to fit it). Joins use ltee/rtee; corners use ulcorner/urcorner."""
+    width = max(width, len(title) + 5)
+    trailing = width - len(title) - 5
+    run = f"{{hline:{trailing}}}" if trailing > 0 else ""
+    return f"{{boxcolor}}{{ulcorner}}{{hline}}{{ltee}} {{promptcolor}}{title}{{boxcolor}} {{rtee}}{run}{{urcorner}}"
+
+
+def _draw_one(title: str, width: int, height: int) -> int:
+    """Draw one box (top edge, ``height`` interior rows, bottom edge). Returns the width used."""
     height = max(1, height)
     if title:
-        # A titled top edge is ulcorner, hline, ltee, space, title, space, rtee, hlines, urcorner,
-        # which takes 5 columns beyond the title text.
         width = max(width, len(title) + 5)
-        trailing = width - len(title) - 5
-        # {hline:0} draws one hline (a count of 0 is not "none"), so leave the run out when it is 0.
-        run = f"{{hline:{trailing}}}" if trailing > 0 else ""
-        io.echo(f"{{boxcolor}}{{ulcorner}}{{hline}}{{ltee}} {{promptcolor}}{title}{{boxcolor}} {{rtee}}{run}{{urcorner}}")
+        io.echo(_titled_top(title, width))
     else:
         io.echo(f"{{boxcolor}}{{acs:ulcorner}}{{acs:hline:{width}}}{{acs:urcorner}}")
     for _ in range(height):
         io.echo(f"{{acs:vline}}{' ' * width}{{acs:vline}}")
     io.echo(f"{{acs:llcorner}}{{acs:hline:{width}}}{{acs:lrcorner}}", end="")
-    # The box draws in the line-drawing set. Reset to the normal set here, so the text that follows (the prompt,
-    # the typed input, the rest of the screen) is not drawn in line-drawing characters. No newline: the cursor stays
-    # on the bottom edge, where callers move it up into the box.
+    return width
+
+
+def draw_box(title: str = "", width: int = 25, height: int = 1) -> None:
+    """Draw an input box: a top edge, ``height`` interior rows, and a bottom edge.
+
+    The bottom edge is printed without a trailing newline, so the cursor is left at its end. The box is drawn in the
+    line-drawing set, and the last thing printed resets it to the normal set (``{f6}``), so the text after the box is
+    not drawn in line-drawing characters. Callers move the cursor up to reach an interior row.
+    """
+    _draw_one(title, width, height)
     io.echo("{f6}", end="")
+
+
+def draw_frame(title: str = "", width: int = 25, *, children: _Iterable[Child] = ()) -> Frame:
+    """Draw a frame with its children stacked under the title, and return where everything is.
+
+    The frame's first interior row is one row under the top edge. Each child is drawn under the previous one, with its
+    ``gap`` rows between (a gap of 0 shares the line). Returns the geometry, so a caller can place a field or extend
+    the frame later.
+    """
+    frame = Frame(title=title, width=width)
+    frame.top = 0
+    width = _draw_one(title, width, 1)
+    frame.width = width
+    row = 2  # the bottom edge of the frame's own interior
+    frame.bottom = row
+    for child in children:
+        frame = _append_child(frame, child, at_row=row)
+        row = frame.children[-1].bottom
+    io.echo("{f6}", end="")
+    return frame
+
+
+def _append_child(frame: Frame, child: Child, *, at_row: int) -> Frame:
+    """Stack ``child`` below ``at_row`` (the frame's bottom edge). A zero gap overwrites that edge with a join."""
+    if child.gap == 0:
+        # Overwrite the shared edge: save, move to it, write the join, restore.
+        io.echo("{decsc}", end="")
+        io.echo(f"{{cursorup:0}}", end="")
+        io.echo(f"{{acs:ltee}}{{acs:hline:{frame.width}}}{{acs:rtee}}", end="")
+        io.echo("{decrc}", end="")
+    top = at_row + child.gap + (0 if child.gap == 0 else 1)
+    for _ in range(child.gap):
+        io.echo("")
+    _draw_one(child.title, frame.width, child.height)
+    frame.children.append(ChildPlace(title=child.title, top=top, bottom=top + child.height + 1, column=2))
+    frame.bottom = frame.children[-1].bottom
+    return frame
+
+
+def extend_frame(frame: Frame, child: Child, *, width: int) -> Frame:
+    """Add ``child`` below an already drawn frame. The frame's bottom edge is overwritten with the join to the child.
+
+    Save (decsc), move to the frame's bottom row, write the join at the frame's width, restore (decrc), then draw the
+    child directly below. The screen is scrolled first if the child will not fit, and the frame's rows move up by the
+    rows scrolled, so the join still lands on the frame's bottom row.
+    """
+    rows_needed = child.height + 2
+    rows_left = _terminal_rows() - frame.bottom - 1
+    scroll = max(0, rows_needed - rows_left)
+    for _ in range(scroll):
+        io.echo("")
+    frame.top -= scroll
+    frame.bottom -= scroll
+    for placed in frame.children:
+        placed.top -= scroll
+        placed.bottom -= scroll
+    # Write the join on the frame's bottom row at an absolute position, so it does not depend on where the cursor is.
+    io.echo("{decsc}", end="")
+    io.echo(f"{{curpos:{frame.bottom + 1},1}}", end="")
+    io.echo(f"{{acs:ltee}}{{acs:hline:{width}}}{{acs:rtee}}", end="")
+    io.echo("{decrc}", end="")
+    frame.width = width
+    child_top = frame.bottom + 1
+    frame.children.append(ChildPlace(title=child.title, top=child_top,
+                                     bottom=child_top + child.height + 1, column=2))
+    frame.bottom = frame.children[-1].bottom
+    _draw_one(child.title, width, child.height)
+    io.echo("{f6}", end="")
+    return frame
 
 
 def pluralize(
