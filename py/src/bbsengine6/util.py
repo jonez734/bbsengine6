@@ -183,6 +183,14 @@ class Frame:
     bottom: int = 0
     children: list = _dc_field(default_factory=list)
 
+    def field_rows_up(self) -> int:
+        """Rows from the bottom edge up to the interior row. draw_frame leaves the cursor on the bottom edge."""
+        return self.bottom - (self.top + 1)
+
+    def place_field(self) -> None:
+        """Move the cursor from the bottom edge to the field's first column, inside the frame (relative moves only)."""
+        io.echo(f"{{cursorup:{self.field_rows_up()}}}{{cha:{self.interior_column}}}", end="")
+
     @property
     def interior_row(self) -> int:
         """The terminal row (1-based, as {curpos} takes it) of the interior, one row under the top edge."""
