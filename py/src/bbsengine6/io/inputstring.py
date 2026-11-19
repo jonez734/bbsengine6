@@ -964,6 +964,25 @@ def _hide_mode(paint: bool = True) -> None:
         return
 
 
+def _start_field_here(prompt: str, start_row: int, start_col: int, max_width: int) -> tuple:
+    """Draw the prompt where the cursor is now, and return the input origin after it: (row, col, window).
+
+    No absolute move is sent: the caller has already placed the cursor (a frame's relative moves), so the prompt is drawn
+    from there. An absolute move to a row taken from the cursor query lands on the wrong row when the reply is stale.
+    """
+    # The tracked cursor is the start the field was given (the query's reply, or the cursor the caller left), so the origin
+    # read below is the same place. Nothing here sends an absolute position.
+    from .common import _get_terminal_state
+
+    state = _get_terminal_state()
+    state.cursor_row, state.cursor_col = start_row, start_col
+    echo(prompt, end="", flush=True, wordwrap=False)
+    # The input starts where the prompt left the cursor (after an {f6}: the row below). Read it before the bottom
+    # bar is painted, since the bar saves and restores the cursor around its paint.
+    row, col, window = input_origin(prompt, start_row, start_col, max_width)
+    return row, col, window
+
+
 def _cursor_origin_or_default() -> tuple:
     """Where the field starts: the terminal's cursor, else the cursor the caller left, else row 1, column 1.
 
@@ -1414,16 +1433,7 @@ def _inputstring_body(
     tab_count = 0
 
     start_row, start_col = _cursor_origin_or_default()
-
-    prompt_len: int = int(rendered_length(prompt))
-    # Draw the prompt with its mode indicator from the first frame, the same text
-    # redraw_line() draws, so the first frame and later redraws agree on the layout.
-    echo(f"{{curpos:{start_row},{start_col}}}", end="", flush=True)
-    echo(prompt, end="", flush=True, wordwrap=False)
-    # The input starts where the prompt left the cursor (after an {f6}: the row below). Read it
-    # before the bottom bar is painted: the bar saves and restores the cursor around its paint, so
-    # reading after would give the position before the prompt's last segment.
-    start_row, input_col_start, max_width = input_origin(prompt, start_row, start_col, max_width)
+    start_row, input_col_start, max_width = _start_field_here(prompt, start_row, start_col, max_width)
     _show_mode(_insert_mode, paint=bottombar)
     # The text starts at the input origin, and its window is the room left on that row: reduced by
     # the prompt when the prompt shares the row, the full width after an {f6} (see inputorigin).
