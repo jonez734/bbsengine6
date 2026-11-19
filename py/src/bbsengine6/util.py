@@ -562,12 +562,16 @@ def get_user_tz_offset() -> Optional[int]:
     return _user_tz_offset_minutes
 
 
-def inputpassword(prompt: str = "password: ", mask: str = "", **kwargs) -> str:
-    """Prompt user for password input with character masking.
+def inputpassword(prompt: str = "password: ", *, mask: Optional[str] = "", **kwargs) -> str:
+    """Prompt for a password. By default nothing is shown as it is typed.
 
     Args:
         prompt: The prompt text to display (default: "password: ").
-        mask: Character to display for each typed character (default: "", nothing is shown).
+        mask: What each typed character shows as (keyword only):
+            ``""`` (default): nothing. The field is not written, only the cursor moves.
+            a single character, e.g. ``"*"``: that character per typed character.
+            ``None``: the typed text itself, for accessibility (a caller who needs to see the password).
+            Any other value raises ValueError.
         **kwargs: Additional arguments passed to io.inputstring().
 
     Returns:
@@ -576,6 +580,8 @@ def inputpassword(prompt: str = "password: ", mask: str = "", **kwargs) -> str:
     Example:
         >>> pwd = inputpassword("Enter your password: ")
     """
+    if mask is not None and len(mask) > 1:
+        raise ValueError(f"mask must be '', None, or one character, not {mask!r}")
     return io.inputstring(prompt, "", mask=mask, **kwargs)
 
 

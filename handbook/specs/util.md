@@ -129,11 +129,17 @@ fast. String level aliases (`"debug"`, `"info"`, `"warning"`,
 ### Input
 
 ```python
-inputpassword(prompt="password: ", mask="", **kwargs) -> str
+inputpassword(prompt="password: ", *, mask="", **kwargs) -> str
 ```
 
-`inputpassword` masks with nothing by default: a typed password is not shown, not even as
-`X` characters. Pass a character (`mask="*"`) to show one per keystroke.
+`inputpassword` shows nothing by default: a typed password is not shown, not even as spaces or `X`
+characters. `mask` is keyword-only and takes three forms:
+
+- `""` (default): nothing. The field is not written; only the cursor moves.
+- one character (`mask="*"`): that character once per keystroke.
+- `None`: the typed text itself, for accessibility. Use this only when the user needs to see the password.
+
+Any other value (a longer string) raises `ValueError`.
 
 ### Range operations
 

@@ -1006,6 +1006,21 @@ def _cursor_origin_or_default() -> tuple:
     return (1, 1)
 
 
+def _field_text(mask: Optional[str], typed: str) -> Optional[str]:
+    """What the field shows for ``typed``, or None when it shows nothing.
+
+    ``mask`` is the one rule for every redraw:
+      * ``None``: the typed text itself (the default for a plain prompt).
+      * ``""``: nothing. The field is not cleared or written; only the cursor moves.
+      * a character: that character once per typed character (``"*"`` gives ``"***"``).
+    """
+    if mask is None:
+        return typed
+    if mask == "":
+        return None
+    return mask * len(typed)
+
+
 def redraw_line(
     prompt: str,
     buffer: str,
@@ -1034,17 +1049,13 @@ def redraw_line(
 
     display_str = buffer[scroll_offset : scroll_offset + max_width]
 
-    # An empty mask shows nothing: there is nothing to clear or write, so only the cursor moves below.
-    if mask != "":
+    shown = _field_text(mask, display_str)
+    if shown is not None:
         # Blank the whole text window first. Without this, a shorter window drawn over an
         # earlier, longer one leaves the old tail on the row (the duplicated "shed)").
         echo(f"{{curpos:{start_row},{input_col_start}}}{' ' * max_width}", end="", flush=True, wordwrap=False)
         echo(f"{{curpos:{start_row},{input_col_start}}}", end="", flush=True)
-
-        if mask is not None:
-            echo(f"{mask * len(display_str)}", end="", flush=True, wordwrap=False)
-        else:
-            echo(display_str, end="", flush=True, raw=True, wordwrap=False)
+        echo(shown, end="", flush=True, raw=(mask is None), wordwrap=False)
 
     echo(
         f"{{curpos:{start_row},{input_col_start + (curpos - scroll_offset)}}}",
@@ -1603,7 +1614,8 @@ def _inputstring_body(
             # Holding the lock here would deadlock when echo() tries to acquire it again
             # Blank the text window (not to end of row: a caller may draw a border
             # to the right of the input). Starts where the text starts.
-            if mask != "":
+            shown = _field_text(mask, display_str)
+            if shown is not None:
                 echo(
                     f"{{curpos:{start_row},{text_col}}}{' ' * max_width}",
                     end="",
@@ -1612,10 +1624,7 @@ def _inputstring_body(
                 )
 
                 echo(f"{{curpos:{start_row},{text_col}}}", end="")
-                if mask is not None:
-                    echo(mask * len(display_str), end="", flush=True, wordwrap=False)
-                else:
-                    echo(display_str, end="", flush=True, raw=True, wordwrap=False)
+                echo(shown, end="", flush=True, raw=(mask is None), wordwrap=False)
 
             _current_display_str = display_str
             last_placed_col = None

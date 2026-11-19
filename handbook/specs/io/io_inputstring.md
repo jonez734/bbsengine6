@@ -96,9 +96,9 @@ Reads one line with line editing. Returns the entered text. `prompt` and
   The window is what is left of the row after the prompt and the INS/OVR indicator,
   so text never runs past the right edge. A pinned width (for example
   `BBSENGINE_MAX_WIDTH`) is honoured through `terminal.columns()`.
-- `mask`: If set, mask input (e.g., `mask="*"`, one character per typed character). `mask=""` (empty) shows
-  nothing for the typed text: the field is not cleared or written, and only the cursor moves. `mask=None`
-  (the default) shows the text as typed.
+- `mask`: one rule for every redraw (`_field_text`): `None` (the default) shows the text as typed; `""` shows
+  nothing, so the field is not cleared or written and only the cursor moves; a character (e.g. `mask="*"`)
+  shows that character once per typed character.
 - `completer`: Tab completion callback; see Tab Completion
 - `verify`: Validation callback `verify(buffer, **kwargs) -> bool`, run on Enter
 - `args`: Application args namespace (passed to verify and completer)

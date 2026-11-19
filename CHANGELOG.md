@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+### refactor(io): one mask rule for the field; inputpassword shows nothing unless asked
+
+The field's redraw had two mask checks per site (`mask != ""`, then `mask is not None` inside), which read as a
+conflict. `_field_text(mask, typed)` now holds the rule: `None` shows the text, `""` writes nothing, a character
+repeats per keystroke. Both redraw sites use it.
+
+`inputpassword` takes `mask` as keyword-only, defaulting to `""`. It accepts `None` (the typed text, for
+accessibility) and one character, and raises `ValueError` for any longer mask. Tests:
+`test_field_text_and_password_mask.py`, `test_password_live_redraw_writes_no_glyphs.py`.
+
 ### feat(util): Frame.place_child moves the cursor to a child's field with relative moves; demo_authenticate uses it
 
 `demo_authenticate` placed each field with an absolute `{curpos}`, which had the same cursor problems as
