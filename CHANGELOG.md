@@ -1,5 +1,28 @@
 ## [Unreleased]
 
+### feat(util): draw_frame and extend_frame grow a box with a child below it; inputpassword masks with nothing
+
+`draw_frame` draws a frame with child boxes stacked under its title and returns its geometry. `extend_frame`
+adds a child below a drawn frame: it overwrites the frame's bottom edge with a join at an absolute row, between
+save and restore, then draws the child under it. Near the bottom of the screen it scrolls first and moves the
+frame's rows with it. `draw_box` keeps its exact output (`883dbae`; spec `specs/util.md`, Frames).
+
+`inputpassword` masks with nothing by default (`mask=""`): a typed password is not shown, not even as `X`
+(`a91a8ba`). Previously the default was `X`.
+
+### fix(io): {decsc}/{decrc} send the terminal's save and restore; a field starts without a cursor reply
+
+`{decsc}` used to query the terminal for its position and wait for the reply. It now emits `ESC 7`, and
+`{decrc}` emits `ESC 8` and then re-emits the saved colour (`186bb4c`). A save never waits.
+
+`inputstring` falls back to row 1, column 1 when the cursor query times out, instead of failing to read input
+(`6744ff4`).
+
+With `mask=""` the redraw writes nothing for the typed text: it does not clear the field with spaces
+(`52b8fd6`). Specs: `specs/io/io_echo.md`, `io_inputstring.md`, `io_common.md`.
+
+Version base: 0.5.1.dev (set in the auth work; this entry does not change it).
+
 ### feat(seam): the front-end seam: domains, subscriptions, requests, and the wire form
 
 `bbsengine6.seam` is the contract between an application's domain and any front end. A `Domain` owns

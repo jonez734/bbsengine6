@@ -91,7 +91,9 @@ Asks the terminal for its cursor position (DSR `ESC [ 6 n`) and returns `(row, c
 does not answer the query makes every caller wait the full timeout. Observed: 0.50 s
 with `timeout=0.5` and no reply.
 
-`{decsc}` and `inputstring()`'s first draw both call this. See `io_echo.md`.
+`inputstring()`'s first draw calls this. If the query times out, `inputstring` starts the field at row 1,
+column 1 instead of failing (`6744ff4`). `{decsc}` does not call this: it emits `ESC 7` and asks for nothing.
+See `io_echo.md`.
 
 ### Status
 

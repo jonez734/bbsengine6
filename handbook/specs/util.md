@@ -52,6 +52,33 @@ apt install locales
 dpkg-reconfigure locales
 ```
 
+## Frames: a box with boxes inside it
+
+`draw_box` draws one box. `draw_frame` draws a frame with child boxes stacked under its title and returns the
+geometry, so a caller can place a field inside it. `extend_frame` grows a drawn frame with one more child.
+
+```python
+@dataclass
+class Child:    title: str = ""; height: int = 1; gap: int = 1
+@dataclass
+class Frame:    title: str; width: int; top: int; bottom: int; children: list[ChildPlace]
+@dataclass
+class ChildPlace:  title: str; top: int; bottom: int; column: int
+```
+
+- `Frame.top` and `Frame.bottom` are the frame's rows (0 is the top of the frame). `ChildPlace.top` and
+  `bottom` are a child's rows; `column` is where its text starts (2: inside the left edge and one space in).
+- `draw_frame` leaves the cursor at the end of the frame's last row, and the last thing it prints resets the
+  character set (`{f6}`).
+- `extend_frame` writes the join on the frame's bottom row between save (`{decsc}`) and restore (`{decrc}`),
+  at an absolute position (`{curpos}`), so the join does not depend on where the cursor is. It then draws the
+  child directly below. It always draws the join, whatever the child's `gap`.
+- `Child.gap` applies to `draw_frame`: a gap of `n` puts `n` blank rows between stacked children, and a gap of 0
+  stacks a child flush on the previous one. `extend_frame` does not read `gap`.
+- Near the bottom of the screen, `extend_frame` scrolls the screen first when the child will not fit, and moves
+  the frame's rows up by the rows scrolled, so the join still lands on the frame's bottom row. The screen height
+  is read from `io/terminal.py` (`size()`).
+
 ## Public API
 
 ### Display and formatting
@@ -60,6 +87,8 @@ dpkg-reconfigure locales
 hr(acs=True, width=None, end="\n", color="{boxcolor}") -> bool
 heading(title: str, **kwargs) -> None
 draw_box(title: str = "", width: int = 25, height: int = 1) -> None
+draw_frame(title: str = "", width: int = 25, *, children: Iterable[Child] = ()) -> Frame
+extend_frame(frame: Frame, child: Child, *, width: int) -> Frame
 pluralize(amount: int, singular: str, plural: str, quantity=True, emoji="", determiner="a", **kw) -> str
 oxfordcomma(seq, conjunction="and") -> Optional[str]
 filedisplay(res, **kw) -> None
@@ -96,8 +125,11 @@ fast. String level aliases (`"debug"`, `"info"`, `"warning"`,
 ### Input
 
 ```python
-inputpassword(prompt="password: ", mask="X", **kwargs) -> str
+inputpassword(prompt="password: ", mask="", **kwargs) -> str
 ```
+
+`inputpassword` masks with nothing by default: a typed password is not shown, not even as
+`X` characters. Pass a character (`mask="*"`) to show one per keystroke.
 
 ### Range operations
 

@@ -96,7 +96,9 @@ Reads one line with line editing. Returns the entered text. `prompt` and
   The window is what is left of the row after the prompt and the INS/OVR indicator,
   so text never runs past the right edge. A pinned width (for example
   `BBSENGINE_MAX_WIDTH`) is honoured through `terminal.columns()`.
-- `mask`: If set, mask input (e.g., `mask="*"` for password)
+- `mask`: If set, mask input (e.g., `mask="*"`, one character per typed character). `mask=""` (empty) shows
+  nothing for the typed text: the field is not cleared or written, and only the cursor moves. `mask=None`
+  (the default) shows the text as typed.
 - `completer`: Tab completion callback; see Tab Completion
 - `verify`: Validation callback `verify(buffer, **kwargs) -> bool`, run on Enter
 - `args`: Application args namespace (passed to verify and completer)
@@ -240,11 +242,18 @@ Clear and redraw the input line. Handles both regular and masked input. The line
 holds the prompt and the text only; the INS/OVR mode is not drawn on it (see
 Terminal state during the call).
 
+With an empty mask (`mask=""`) the redraw writes nothing for the field: it does not clear it with
+spaces and does not write the masked text. It only moves the cursor to the typed position
+(`6744ff4` and `52b8fd6`). Without this, an empty mask still showed a moving row of spaces.
+
 ### Input origin
 
 The input line starts where the prompt left the cursor. `inputstring` draws the prompt, reads the
 engine's tracked cursor, and uses it as the origin for the text and the cursor. The origin is read
 before the bottom bar paints, since the bar saves and restores the cursor around its paint.
+
+If the terminal does not answer the cursor query (`get_cursor_position`), the origin is row 1, column 1
+and the field still starts. A timeout does not fail the read (`6744ff4`).
 
 - A prompt with no `{f6}`: the tracked position after the prompt, including any `{curpos}`, ACS
   box drawing, or other cursor move the prompt made.

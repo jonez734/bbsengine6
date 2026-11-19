@@ -85,16 +85,18 @@ not applied twice.
 (0 by default). The tracked row and column are what `inputstring` reads to place
 input after a prompt (see `io_inputstring.md`, Input origin).
 
-`{decsc}` asks the terminal for its position before it saves it (a DSR query,
-with a one-second timeout; see `io_common.md`). Each save therefore waits for a
-reply. `{decrc}` restores the saved position without a query. `{savecursor}` and `{decsc}`
-are the same tag, so the bottom bar pays this cost on each update.
+`{decsc}` sends the terminal's own save-cursor sequence (`ESC 7`, VT10x DECSC), and
+`{decrc}` sends its restore (`ESC 8`). Neither asks the terminal for a position, so a save
+never waits for a reply. The engine also keeps its own copy of the cursor and colour
+(`_terminal_state_stack`) so later code can read the saved state back. `{savecursor}` and
+`{decsc}` are the same tag, and so are `{restorecursor}` and `{decrc}`.
 
 **Colour and attributes are saved too.** Each save also records the SGR state in effect
 at that point: the foreground, the background, and the attributes (bold, italic,
 underline, inverse, strike). The engine keeps this state current as escape text is
-written (`TerminalState.sgr`, parsed by `io/sgr_state.py`). A restore re-emits the saved
-state as one SGR sequence (`ESC[0;...m`) after moving the cursor, so the text written next
+written (`TerminalState.sgr`, parsed by `io/sgr_state.py`). A restore sends `ESC 8` (the
+terminal puts the cursor back) and then re-emits the saved state as one SGR sequence
+(`ESC[0;...m`), so the text written next
 is drawn in the colour that was active at the save, not the colour written last.
 
 - `{red}A{decsc}B{green}{decrc}C`: `C` is drawn red. The restore writes the saved SGR
@@ -251,8 +253,8 @@ temporarily and must leave the caller's colour alone should restore with `{decrc
 
 - `{settitle:...}` is documented in earlier versions of this spec. It is not
   implemented; the text is written as-is. `terminal.title()` is the working call.
-- The `{decsc}` query described above makes each save slow when the terminal does not
-  answer. The bottom bar was changed for this; `{decsc}` callers were not.
+- Fixed (`186bb4c`): `{decsc}` no longer queries the terminal, so a save no longer waits for
+  a reply on a terminal that does not answer. It emits `ESC 7` (see above).
 
 The earlier debug-print and dead-code items were fixed in the module and are no longer
 open; they are removed from this list.
