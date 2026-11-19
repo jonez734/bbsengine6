@@ -171,13 +171,26 @@ class Child:
 
 @dataclass
 class Frame:
-    """Where a drawn frame is on the screen: its top and bottom rows, its width, and where each child's interior sits."""
+    """Where a drawn frame is on the screen: its top and bottom rows, its width, and where each child's interior sits.
+
+    ``interior_row`` and ``interior_column`` are where a single field goes inside the frame's own edges (one row under the
+    top edge, two columns in), for a frame drawn with no children.
+    """
 
     title: str
     width: int
     top: int = 0
     bottom: int = 0
     children: list = _dc_field(default_factory=list)
+
+    @property
+    def interior_row(self) -> int:
+        """The terminal row (1-based, as {curpos} takes it) of the interior, one row under the top edge."""
+        return self.top + 2
+
+    @property
+    def interior_column(self) -> int:
+        return 2
 
 
 @dataclass
