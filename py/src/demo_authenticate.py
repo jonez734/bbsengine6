@@ -1,8 +1,8 @@
 """demo_authenticate: the sign-in frame grows from a moniker box to a password box.
 
 A frame is drawn with the moniker field inside it. Enter accepts the moniker, and the frame is grown with a password box
-under it at the same width (the join between the two is written between save and restore). The password is read masked,
-with nothing shown as it is typed.
+under it at the same width. The join replaces the moniker box's bottom border: it is painted from the cursor, which the
+Enter leaves on that border. The password is read masked, with nothing shown as it is typed.
 """
 
 from bbsengine6 import bottombar, io
