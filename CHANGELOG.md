@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### fix(util): extend_frame paints the join from the cursor, not between save and restore
+
+The join was written between `{decsc}` and `{decrc}` at the cursor's row, which after the field's Enter is the
+moniker's bottom border. The join now paints from the cursor (column reset, then the join), with no save,
+restore, or absolute move, and the child's top edge starts on the row below. Tests: `test_extend_join_from_cursor.py`;
+`test_draw_frame.py` updated (the save/restore pin is replaced; the scroll counts exclude the line break after the join).
+
 ### fix(io): {decsc} writes the terminal's save (ESC 7)
 
 `_handle_decsc` set `token.text` but did not yield the token, so `echo("{decsc}")` wrote nothing. Every `{decrc}`

@@ -305,11 +305,11 @@ def _append_child(frame: Frame, child: Child, *, at_row: int) -> Frame:
 
 
 def extend_frame(frame: Frame, child: Child, *, width: int) -> Frame:
-    """Add ``child`` below an already drawn frame. The frame's bottom edge is overwritten with the join to the child.
+    """Add ``child`` below an already drawn frame. The join replaces the frame's bottom border.
 
-    Save (decsc), move to the frame's bottom row, write the join at the frame's width, restore (decrc), then draw the
-    child directly below. The screen is scrolled first if the child will not fit, and the frame's rows move up by the
-    rows scrolled, so the join still lands on the frame's bottom row.
+    The join is painted from the cursor, which is on the bottom border when this is called (the field's Enter leaves
+    it there). The child is drawn on the row below. The screen is scrolled first if the child will not fit, and the
+    frame's rows move up by the rows scrolled.
     """
     rows_needed = child.height + 2
     rows_left = _terminal_rows() - frame.bottom - 1
@@ -321,12 +321,12 @@ def extend_frame(frame: Frame, child: Child, *, width: int) -> Frame:
     for placed in frame.children:
         placed.top -= scroll
         placed.bottom -= scroll
-    # The join is written on the frame's bottom edge, which is where the cursor is left: a column reset, then the join.
-    # Relative moves only; no absolute position.
-    io.echo("{decsc}", end="")
+    # The join is painted from the cursor, which is on the frame's bottom border (after the field's Enter the line break
+    # leaves it there). A column reset, then the join. No save, restore, or absolute move.
     io.echo("{cha:1}", end="")
     io.echo(f"{{acs:ltee}}{{acs:hline:{width}}}{{acs:rtee}}", end="")
-    io.echo("{decrc}", end="")
+    # Move to the row below the join and to column 1, so the child's top edge starts on its own row.
+    io.echo("", end="\n")
     frame.width = width
     child_top = frame.bottom + 1
     frame.children.append(ChildPlace(title=child.title, top=child_top,

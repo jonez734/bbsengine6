@@ -73,9 +73,10 @@ class ChildPlace:  title: str; top: int; bottom: int; column: int
 - `Frame.place_child(index)` moves the cursor from the bottom edge to a child's field with relative moves
   (`{cursorup:n}{cha:col}`), then resets the character set (`{acs:off}`). `Frame.place_field()` does the same
   for a one-row frame's interior.
-- `extend_frame` writes the join on the frame's bottom row between save (`{decsc}`) and restore (`{decrc}`),
-  with a relative column reset (`{cha:1}`) and no absolute position. It then draws the child directly below.
-  It always draws the join, whatever the child's `gap`.
+- `extend_frame` paints the join from the cursor. After the field's Enter the cursor is on the frame's bottom border
+  (the line break leaves it there), so the join replaces that row: a column reset (`{cha:1}`), then the join. No save,
+  restore, or absolute move. The child's top edge is drawn on the row below the join. It always draws the join,
+  whatever the child's `gap`.
 - `Child.gap` applies to `draw_frame`: a gap of `n` puts `n` blank rows between stacked children, and a gap of 0
   stacks a child flush on the previous one. `extend_frame` does not read `gap`.
 - Near the bottom of the screen, `extend_frame` scrolls the screen first when the child will not fit, and moves

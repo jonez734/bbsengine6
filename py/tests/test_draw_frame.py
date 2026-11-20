@@ -56,16 +56,14 @@ class TestDrawFrameGeometry(unittest.TestCase):
 
 
 class TestExtendFrame(unittest.TestCase):
-    def test_the_join_is_written_between_save_and_restore(self):
+    def test_the_join_is_painted_from_the_cursor_with_no_save_or_restore(self):
+        # The cursor is on the bottom border when extend_frame runs, so the join needs no save and restore.
         frame, _ = _capture(util.draw_frame, "auth", 25)
         _, out = _capture(util.extend_frame, frame, util.Child(title="password"), width=25)
         texts = [t for t, _ in out]
-        save = texts.index("{decsc}")
-        restore = texts.index("{decrc}")
-        join = [i for i, t in enumerate(texts) if "{acs:ltee}" in t and "{acs:rtee}" in t]
-        self.assertTrue(join, "a join line is written")
-        self.assertLess(save, join[0])
-        self.assertLess(join[0], restore)
+        self.assertNotIn("{decsc}", texts)
+        self.assertNotIn("{decrc}", texts)
+        self.assertTrue(any("{acs:ltee}" in t and "{acs:rtee}" in t for t in texts), "a join line is written")
 
     def test_the_join_is_written_at_the_frame_bottom_row(self):
         frame, _ = _capture(util.draw_frame, "auth", 25)
@@ -99,7 +97,9 @@ class TestNearTheBottom(unittest.TestCase):
         original_top = frame.top  # extend_frame updates the frame in place, so record the top first
         with patch.object(util, "_terminal_rows", return_value=4):
             extended, out = _capture(util.extend_frame, frame, util.Child(title="password"), width=25)
-        scrolls = [t for t, e in out if t == "" and e == "\n"]
+        # The scroll is the newlines written before the join. The line break after the join is not a scroll.
+        join_at = next(i for i, (t, _) in enumerate(out) if "{acs:ltee}" in t)
+        scrolls = [t for t, e in out[:join_at] if t == "" and e == "\n"]
         self.assertGreater(len(scrolls), 0, "the screen is scrolled to make room")
         # The screen scrolled up by the rows printed, so the frame's top moved up by the same amount. The bottom
         # then grows with the child, so only the top is checked against the scroll.
@@ -109,7 +109,8 @@ class TestNearTheBottom(unittest.TestCase):
         frame, _ = _capture(util.draw_frame, "auth", 25)
         with patch.object(util, "_terminal_rows", return_value=40):
             _, out = _capture(util.extend_frame, frame, util.Child(title="password"), width=25)
-        self.assertEqual([t for t, e in out if t == "" and e == "\n"], [])
+        join_at = next(i for i, (t, _) in enumerate(out) if "{acs:ltee}" in t)
+        self.assertEqual([t for t, e in out[:join_at] if t == "" and e == "\n"], [])
 
 
 if __name__ == "__main__":
