@@ -61,7 +61,7 @@ geometry, so a caller can place a field inside it. `extend_frame` grows a drawn 
 @dataclass
 class Child:    title: str = ""; height: int = 1; gap: int = 1
 @dataclass
-class Frame:    title: str; width: int; top: int; bottom: int; children: list[ChildPlace]
+class Frame:    title: str; width: int; top: int; bottom: int; children: list[ChildPlace]; height: int = 1; cursor_at: int = 0
 @dataclass
 class ChildPlace:  title: str; top: int; bottom: int; column: int
 ```
@@ -71,8 +71,17 @@ class ChildPlace:  title: str; top: int; bottom: int; column: int
 - `draw_frame` leaves the cursor on the frame's bottom edge. It does not end with `{f6}`: a line break there
   would move the tracked cursor a row below the frame.
 - `Frame.place_child(index)` moves the cursor from the bottom edge to a child's field with relative moves
-  (`{cursorup:n}{cha:col}`), then resets the character set (`{acs:off}`). `Frame.place_field()` does the same
-  for a one-row frame's interior.
+  (`{cursorup:n}{cha:col}`), then resets the character set (`{acs:off}`), and records the row it is on in
+  `cursor_at`. `Frame.place_field()` does the same for a one-row frame's interior.
+- `draw_frame(..., height=N)` gives the frame's own interior `N` rows (default 1, which draws exactly the bytes it always
+  did). `Frame.interior_rows()` lists them, top to bottom.
+- `Frame.place_row(i)` moves to interior row `i` with relative moves from `cursor_at`, and records it. The frame reads no
+  terminal state: `cursor_at` is the only input. After `draw_frame` it is the bottom edge.
+- `Frame.after_field()` records that a field's read ended with its line break: the cursor is one row below the field, so
+  `cursor_at` moves down one. Call it after each `inputstring`/`inputpassword` on a frame row.
+- `Frame` fields `height` and `cursor_at` come after `children`, so the positional order of `title, width, top, bottom,
+  children` is unchanged. Golden bytes and geometry for `draw_frame` without `height` are pinned by
+  `test_frame_compatibility.py` (captured from HEAD before this change).
 - `extend_frame` paints the join from the cursor. After the field's Enter the cursor is on the frame's bottom border
   (the line break leaves it there), so the join replaces that row: a column reset (`{cha:1}`), then the join. No save,
   restore, or absolute move. The child's top edge is drawn on the row below the join. It always draws the join,
@@ -91,8 +100,11 @@ class ChildPlace:  title: str; top: int; bottom: int; column: int
 hr(acs=True, width=None, end="\n", color="{boxcolor}") -> bool
 heading(title: str, **kwargs) -> None
 draw_box(title: str = "", width: int = 25, height: int = 1) -> None
-draw_frame(title: str = "", width: int = 25, *, children: Iterable[Child] = ()) -> Frame
-Frame.place_child(index: int) -> None   # relative move to child's field, resets charset
+draw_frame(title: str = "", width: int = 25, *, height: int = 1, children: Iterable[Child] = ()) -> Frame
+Frame.place_child(index: int) -> None   # relative move to child's field, resets charset, records cursor_at
+Frame.place_row(index: int) -> None     # relative move to interior row `index`, from cursor_at
+Frame.after_field() -> None             # a field's read left the cursor one row below the field
+Frame.interior_rows() -> list[int]
 extend_frame(frame: Frame, child: Child, *, width: int) -> Frame
 pluralize(amount: int, singular: str, plural: str, quantity=True, emoji="", determiner="a", **kw) -> str
 oxfordcomma(seq, conjunction="and") -> Optional[str]

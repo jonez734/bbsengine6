@@ -182,6 +182,8 @@ class Frame:
     top: int = 0
     bottom: int = 0
     children: list = _dc_field(default_factory=list)
+    height: int = 1  # the frame's own interior rows (draw_frame(height=)); after children so positional calls still work
+    cursor_at: int = 0  # the frame's own row the cursor is on; the bottom edge after draw_frame
 
     def field_rows_up(self) -> int:
         """Rows from the bottom edge up to the interior row. draw_frame leaves the cursor on the bottom edge."""
@@ -195,6 +197,34 @@ class Frame:
         io.echo(f"{{cursorup:{self.field_rows_up()}}}{{cha:{self.interior_column}}}", end="")
         io.echo("{acs:off}", end="")
 
+    def interior_rows(self) -> list:
+        """The 1-based terminal rows of the frame's own interior, top to bottom."""
+        return [self.top + 2 + i for i in range(self.height)]
+
+    def place_row(self, index: int) -> None:
+        """Move the cursor to interior row ``index`` of the frame, with relative moves from where the frame left it.
+
+        The frame's own rows are the only input: ``cursor_at`` is the row the cursor is on (the bottom edge after
+        draw_frame, or the row after a field's read; see after_field). No terminal query is made.
+        """
+        target = self.top + 1 + index  # the frame row of the interior line; the top edge is self.top
+        delta = target - self.cursor_at
+        if delta < 0:
+            io.echo(f"{{cursorup:{-delta}}}", end="")
+        elif delta > 0:
+            io.echo(f"{{cursordown:{delta}}}", end="")
+        io.echo(f"{{cha:{self.interior_column}}}", end="")
+        io.echo("{acs:off}", end="")
+        self.cursor_at = target
+
+    def after_field(self) -> None:
+        """Record that a field read ended with its line break: the cursor is one row below the field.
+
+        Measured in a pty: after a plain read the field is on one row and the cursor is on the next. The frame's interior
+        field row is the row place_row put the cursor on, so cursor_at moves down one.
+        """
+        self.cursor_at += 1
+
     def place_child(self, index: int) -> None:
         """Move the cursor from the frame's bottom edge to child ``index``'s field (relative moves only).
 
@@ -205,6 +235,7 @@ class Frame:
         up = self.bottom - (place.top + 1)
         io.echo(f"{{cursorup:{up}}}{{cha:{place.column}}}", end="")
         io.echo("{acs:off}", end="")
+        self.cursor_at = place.top + 1  # the interior row the cursor is on now (place_row reads it)
 
     @property
     def interior_row(self) -> int:
@@ -266,22 +297,26 @@ def draw_box(title: str = "", width: int = 25, height: int = 1) -> None:
     io.echo("{f6}", end="")
 
 
-def draw_frame(title: str = "", width: int = 25, *, children: _Iterable[Child] = ()) -> Frame:
-    """Draw a frame with its children stacked under the title, and return where everything is.
+def draw_frame(title: str = "", width: int = 25, *, height: int = 1, children: _Iterable[Child] = ()) -> Frame:
+    """Draw a frame with ``height`` interior rows, then its children stacked under them, and return where everything is.
 
-    The frame's first interior row is one row under the top edge. Each child is drawn under the previous one, with its
+    The frame's own interior is ``height`` rows, one under the top edge (``height=2`` holds two fields in one box, with
+    ``interior_rows()`` and ``place_row()`` addressing each). Each child is drawn under the previous one, with its
     ``gap`` rows between (a gap of 0 shares the line). Returns the geometry, so a caller can place a field or extend
     the frame later.
     """
     frame = Frame(title=title, width=width)
     frame.top = 0
-    width = _draw_one(title, width, 1)
+    width = _draw_one(title, width, height)
     frame.width = width
-    row = 2  # the bottom edge of the frame's own interior
+    frame.height = height
+    row = height + 1  # the bottom edge: the top edge is row 0, then ``height`` interior rows
     frame.bottom = row
+    frame.cursor_at = row  # draw_frame leaves the cursor on the bottom edge
     for child in children:
         frame = _append_child(frame, child, at_row=row)
         row = frame.children[-1].bottom
+    frame.cursor_at = frame.bottom
     # The cursor is left on the bottom edge: no {f6} here, since the echo layer counts it as a line end and would put the
     # cursor one row below the frame. The character set is reset where the field is placed (place_field).
     return frame

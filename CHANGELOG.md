@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+### feat(util): a frame can hold several fields in one box; place_row and after_field move between them
+
+`draw_frame(..., height=N)` gives the frame's own interior `N` rows. `Frame.place_row(i)` moves to interior row `i`
+with relative moves from `cursor_at`, and `Frame.after_field()` records that a field's read left the cursor one row
+below the field. `place_child` now records the row it leaves the cursor on. The frame reads no terminal state.
+
+Compatibility: `height` and `cursor_at` come after `children` in `Frame`, so positional construction is unchanged;
+`draw_frame` without `height` emits the same bytes as before (`test_frame_compatibility.py`, golden bytes from HEAD).
+Tests: `test_frame_interior_rows.py`, `test_place_child_sets_cursor_row.py`, `test_login_layout_one_frame.py`.
+
 ### fix(util): extend_frame paints the join from the cursor, not between save and restore
 
 The join was written between `{decsc}` and `{decrc}` at the cursor's row, which after the field's Enter is the
