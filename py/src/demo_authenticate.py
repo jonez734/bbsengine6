@@ -1,12 +1,12 @@
-"""demo_authenticate: the sign-in frame grows from a moniker box to a password box.
+"""demo_authenticate: one frame holds the moniker and password fields.
 
-A frame is drawn with the moniker field inside it. Enter accepts the moniker, and the frame is grown with a password box
-under it at the same width. The join replaces the moniker box's bottom border: it is painted from the cursor, which the
-Enter leaves on that border. The password is read masked, with nothing shown as it is typed.
+The frame is drawn with two interior rows. The moniker is read on the first row; its Enter leaves the cursor one row below
+the field, which after_field() records, so the password row is reached with a relative move. The password is read masked,
+with nothing shown as it is typed.
 """
 
 from bbsengine6 import bottombar, io
-from bbsengine6.util import Child, draw_frame, extend_frame, inputpassword
+from bbsengine6.util import draw_frame, inputpassword
 
 WIDTH = 25
 TITLE = "zoid6 auth"
@@ -15,16 +15,18 @@ TITLE = "zoid6 auth"
 def main() -> None:
     bottombar.init()
     try:
-        frame = draw_frame(TITLE, WIDTH, children=[Child(title="moniker")])
-        frame.place_child(0)
+        frame = draw_frame(TITLE, WIDTH, height=2)
+        frame.place_row(0)
         moniker = io.inputstring("{promptcolor}moniker: {inputcolor}", "", max_width=WIDTH - 1, bottombar=False)
+        frame.after_field()
+        if moniker != "":
+            frame.place_row(1)
+            inputpassword("{promptcolor}password: {inputcolor}", bottombar=False)
 
-        frame = extend_frame(frame, Child(title="password"), width=WIDTH)
-        frame.place_child(len(frame.children) - 1)
-        inputpassword("{promptcolor}password: {inputcolor}", bottombar=False)
-
-        io.echo("{f6}")
-        io.echo(f"signed in as {moniker.strip()}")
+            io.echo("{f6}")
+            io.echo(f"signed in as {moniker.strip()}")
+        else:
+            io.echo("aborted")
     finally:
         bottombar.shutdown()
 
