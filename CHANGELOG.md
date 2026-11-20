@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### fix(io): {decsc} writes the terminal's save (ESC 7)
+
+`_handle_decsc` set `token.text` but did not yield the token, so `echo("{decsc}")` wrote nothing. Every `{decrc}`
+still wrote ESC 8, so the terminal restored an unset or stale position. The save now yields its bytes, as the
+restore does. Test: `test_decsc_writes_the_save_byte.py`.
+
 ### change(io): inputstring no longer puts "press enter to accept value" on the bottom bar
 
 Every `inputstring()` call pushed the hint onto the bottom bar when the bar was initialized, and popped it when

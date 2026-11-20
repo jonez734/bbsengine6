@@ -448,7 +448,9 @@ def _decrc_bytes() -> str:
 def _handle_decsc(token):
     """Save the cursor on the terminal (ESC 7). The software stack below is kept for callers that read it back."""
     global _terminal_state_stack, _terminal_state
-    token.text = _decsc_bytes()
+    # Yield the save bytes, as _handle_decrc does. Setting token.text alone wrote nothing, so the terminal was never
+    # told to save and the matching restore went to an unset position.
+    yield Token("WHITESPACE", value="", repeat=1, text=_decsc_bytes(), raw=_decsc_bytes())
     with _terminal_state_lock, _terminal_state_stack_lock:
         if not _terminal_state_stack_enabled and len(_terminal_state_stack) >= 1:
             _terminal_state_stack.pop()
