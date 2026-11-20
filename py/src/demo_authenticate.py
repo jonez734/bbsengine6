@@ -21,12 +21,12 @@ def main() -> None:
 
         frame = extend_frame(frame, Child(title="password"), width=WIDTH)
         frame.place_child(len(frame.children) - 1)
-        inputpassword("{promptcolor}password: {inputcolor}", bottombar=False)
+        p = inputpassword("{promptcolor}password: {inputcolor}", bottombar=False)
 
-        io.echo("{f6}")
+        io.echo(f"{p=}")
         io.echo(f"signed in as {moniker.strip()}")
     finally:
-        bottombar.shutdown()
+        pass
 
 
 if __name__ == "__main__":
