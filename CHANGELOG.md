@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### test(datestamp): London and Dallas across the 2026 summer and fall transitions
+
+`test_util_datestamp_dst_transitions.py` checks each switch one second either side: London springs forward 2026-03-29 and
+falls back 2026-10-25; Dallas (`America/Chicago`) springs forward 2026-03-08 and falls back 2026-11-01. It also checks the
+London–Dallas offset through the year (6 h winter, 5 h from March 8 to 29, 6 h from March 29 to October 25, 5 h from October
+25 to November 1, 6 h after). A mutant that ignores DST fails 6 of the 12. `datestamp.md` gets a transition table generated
+from the code.
+
 ### docs(datestamp): the Python examples are pinned and a bed time form is added
 
 `handbook/specs/datestamp.md` Python section: the examples were re-run and corrected (the default `%P` is lowercase; the

@@ -74,6 +74,41 @@ The same UTC instant in other local zones (`datestamp(utc_instant.astimezone(), 
 Zone coverage is pinned by `bed/src/bed/tests/test_authenticate_time_other_zones.py`. Summer time (DST) on a transition
 day is not covered by any test.
 
+#### Summer and fall transitions: London and Dallas
+
+London (`Europe/London`) and Dallas (`America/Chicago`, the zone Dallas keeps) change clocks on different dates, so their
+offset is not constant through the year. The instants below come from the tz database (`zoneinfo`), and each is shown one
+second either side of the switch. Built from aware datetimes, so they do not depend on the server's `TZ`.
+
+| Switch | Instant | Local clock (before → after) |
+|--------|---------|------------------------------|
+| London spring forward | 2026-03-29 01:00 UTC | `2026-03-29 00:59:59 GMT` → `2026-03-29 02:00:00 BST` |
+| Dallas spring forward | 2026-03-08 08:00 UTC | `2026-03-08 01:59:59 CST` → `2026-03-08 03:00:00 CDT` |
+| London fall back | 2026-10-25 01:00 UTC | `2026-10-25 01:59:59 BST` → `2026-10-25 01:00:00 GMT` |
+| Dallas fall back | 2026-11-01 07:00 UTC | `2026-11-01 01:59:59 CDT` → `2026-11-01 01:00:00 CST` |
+
+The clocks are not in step:
+
+- Dallas springs forward **three weeks before** London (March 8 against March 29).
+- Dallas falls back **one week after** London (November 1 against October 25).
+
+So the London–Dallas difference is 6 hours in winter, 5 hours from March 8 to March 29, 6 hours from March 29 to October
+25 (both on summer time), 5 hours from October 25 to November 1 (London on GMT, Dallas still on CDT), and 6 hours after
+November 1. The test `test_util_datestamp_dst_transitions.py` checks each switch and these offsets.
+
+```python
+>>> from zoneinfo import ZoneInfo
+>>> from datetime import datetime, timezone
+>>> instant = datetime(2026, 3, 8, 8, 0, 0, tzinfo=timezone.utc)
+>>> datestamp(instant.astimezone(ZoneInfo("America/Chicago")), format="%Y-%m-%d %H:%M:%S %Z")
+'2026-03-08 03:00:00 CDT'
+>>> datestamp(instant.astimezone(ZoneInfo("Europe/London")), format="%Y-%m-%d %H:%M:%S %Z")
+'2026-03-08 08:00:00 GMT'
+```
+
+The second line is London's clock at the instant Dallas springs forward: London is still on GMT, so the two zones read
+5 hours apart for three weeks.
+
 #### The local time with UTC in parentheses
 
 bed's sign-in debug line (`bed.tools.authenticate.time_line`) shows the local time with its zone name and UTC in
