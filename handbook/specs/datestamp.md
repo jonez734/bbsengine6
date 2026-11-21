@@ -438,6 +438,15 @@ Regression coverage lives at:
   cases).
 - `py/tests/test_parity_php_python.py` — 27 Python-side cases
   pinned against the shared fixture.
+- `py/tests/test_util_datestamp_dst_transitions.py` — 12 tests: London and Dallas
+  (`America/Chicago`) at the 2026 spring and fall switches, one second either side; the
+  London–Dallas offset through the year; a `TZ`/`tzset()` case.
+- `py/tests/test_util_datestamp_midnight_transitions.py` — 5 tests: skipped midnight
+  (Havana 2026, Santiago 2026) and repeated midnight (Havana 2027, Gaza 2015), and a
+  fold-ignoring mutant check.
+- `php/test_util_datestamp_midnight_transitions.php` — 11 checks: the same midnight
+  instants and expected output as the Python file, plus a check that the real formatter
+  differs from a fold-ignoring one.
 
 Run with:
 
@@ -447,6 +456,7 @@ php bbsengine6/php/test_datestamp_modifier.php
 php bbsengine6/php/test_util_datestamp.php
 php bbsengine6/php/test_parity_php_python.php
 php zoid6/php/test_datestamp_modifier.php
+php php/test_util_datestamp_midnight_transitions.php
 
 # Python — util + parity
 cd bbsengine6/py
