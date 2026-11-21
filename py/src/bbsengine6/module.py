@@ -1150,15 +1150,38 @@ def resolve_attr(spec: str) -> object:
     return getattr(mod, attr)
 
 
+def _with_real_annotations(func: Callable) -> Callable:
+    """A copy of ``func`` whose annotations are real types, not strings (PEP 563 modules store strings).
+
+    The shared return check compares annotations as types, so a module with ``from __future__ import annotations`` would
+    otherwise be rejected for a correct return type. Falls back to ``func`` when the hints cannot be resolved.
+    """
+    import typing
+
+    try:
+        hints = typing.get_type_hints(func)
+    except Exception:
+        return func
+    if not hints:
+        return func
+    import types as _types
+
+    clone = _types.FunctionType(func.__code__, func.__globals__, func.__name__, func.__defaults__, func.__closure__)
+    clone.__kwdefaults__ = getattr(func, "__kwdefaults__", None)
+    clone.__annotations__ = hints
+    return clone
+
+
 def check_signature(obj: object, stub: Callable, *, name: str) -> None:
     """Raise TypeError unless ``obj`` matches ``stub``'s contract (the rules used for access() and init()).
 
     This is _check_func_signature with its result turned into an exception, so a caller that resolves a configured
-    callable fails at startup with the contract named.
+    callable fails at startup with the contract named. String annotations are resolved to real types first.
     """
     if not callable(obj):
         raise TypeError(f"{name} is not callable")
-    if not _check_func_signature(obj, stub, name=name):
+    checked = _with_real_annotations(obj) if inspect.isfunction(obj) else obj
+    if not _check_func_signature(checked, stub, name=name):
         raise TypeError(
             f"{name} does not match the contract {name}{inspect.signature(stub)}; "
             f"found {name}{inspect.signature(obj)}"

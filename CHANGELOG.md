@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### fix(module): check_signature resolves string annotations before comparing
+
+A module with `from __future__ import annotations` stores its annotations as strings, so a correct callable was rejected
+against a stub with real types. `check_signature` now reads the real types with `typing.get_type_hints` before the shared
+check. The loader's own checks are unchanged. Test: `test_module_resolve_callable.py` (`TestStringAnnotations`).
+
 ### feat(module): resolve a "module:attr" callable and check it against a contract stub
 
 `resolve_attr(spec)` returns the object named by `"pkg.mod:attr"`. `check_signature(obj, stub, name=)` raises TypeError

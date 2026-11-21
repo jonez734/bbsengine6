@@ -118,3 +118,20 @@ class TestLoaderUsesTheSameCheck(_Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestStringAnnotations(_Base):
+    """A module with `from __future__ import annotations` has string annotations. The contract check must see the real
+    types, or a correct callable is rejected."""
+
+    def test_a_callable_with_string_annotations_matches_the_contract(self):
+        ns = {}
+        src = (
+            "from __future__ import annotations\n"
+            "from typing import Optional\n"
+            "def fn(*, directory: str, title: str = 'login', header: Optional[str] = None, fd: int = 0,\n"
+            "       store_token: bool = True, moniker: str = '', **kwargs) -> tuple[str, str]:\n"
+            "    return ('', '')\n"
+        )
+        exec(compile(src, "<future>", "exec"), ns)
+        self.assertIsNone(module.check_signature(ns["fn"], _stub, name="authenticate"))
