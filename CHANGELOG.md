@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### test(datestamp): switches at local midnight, in Python and PHP
+
+Skipped midnight (Havana 2026-03-08, Santiago 2026-09-06) and repeated midnight (Havana 2027-11-07, Gaza 2015-10-23) are
+checked one second either side, in `py/tests/test_util_datestamp_midnight_transitions.py` and
+`php/test_util_datestamp_midnight_transitions.php` (same instants, same output). A fold-ignoring formatter fails the
+repeated-midnight cases in both languages. PHP's `datestamp` needed no change. `datestamp.md` gets the section, with its
+example re-run against the code.
+
 ### test(datestamp): London and Dallas across the 2026 summer and fall transitions
 
 `test_util_datestamp_dst_transitions.py` checks each switch one second either side: London springs forward 2026-03-29 and

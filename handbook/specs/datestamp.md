@@ -109,6 +109,35 @@ November 1. The test `test_util_datestamp_dst_transitions.py` checks each switch
 The second line is London's clock at the instant Dallas springs forward: London is still on GMT, so the two zones read
 5 hours apart for three weeks.
 
+#### Switches at local midnight (other years)
+
+Some zones switch clocks at midnight. Two cases matter for formatting, and both are tested in Python and PHP
+(`test_util_datestamp_midnight_transitions.py` and `php/test_util_datestamp_midnight_transitions.php`, the same instants
+and expected output):
+
+- **Skipped midnight.** The clock jumps from `23:59:59` straight to `01:00:00`, so `00:00` never occurs that day.
+- **Repeated midnight.** The clock goes back from `00:59:59` to `00:00:00`, so the hour from `00:00` to `00:59` occurs
+  twice (the switch is at `00:00` local, so the second before it is `23:59:59` the previous day). The two occurrences are told apart only by the zone abbreviation and the fold: the second `00:30` on
+  2027-11-07 is `00:30 CST`. A formatter that ignores the fold gives `00:30 CDT` for it, which is the wrong zone.
+
+| Zone | Switch | Local clock, before → after |
+|------|--------|------------------------------|
+| `America/Havana` | 2026-03-08 05:00 UTC, skipped midnight | `2026-03-07 23:59:59 CST` → `2026-03-08 01:00:00 CDT` |
+| `America/Santiago` | 2026-09-06 04:00 UTC, skipped midnight | `2026-09-05 23:59:59 -04` → `2026-09-06 01:00:00 -03` |
+| `America/Havana` | 2027-11-07 05:00 UTC, repeated midnight | `2027-11-07 00:59:59 CDT` → `2027-11-07 00:00:00 CST` |
+| `Asia/Gaza` | 2015-10-22 22:00 UTC, repeated midnight | `2015-10-23 00:59:59 EEST` → `2015-10-23 00:00:00 EET` |
+
+```python
+>>> instant = datetime(2027, 11, 7, 5, 0, 0, tzinfo=timezone.utc)
+>>> datestamp(instant.astimezone(ZoneInfo("America/Havana")) - timedelta(seconds=1), format="%Y-%m-%d %H:%M:%S %Z")
+'2027-11-06 23:59:59 CDT'
+>>> datestamp(instant.astimezone(ZoneInfo("America/Havana")), format="%Y-%m-%d %H:%M:%S %Z")
+'2027-11-07 00:00:00 CST'
+```
+
+Python and PHP agree on every case above. PHP's zone database matches zoneinfo for these instants, and the PHP walker
+formats each epoch in the server zone (`date_default_timezone_set`). No code change was needed to match.
+
 #### The local time with UTC in parentheses
 
 bed's sign-in debug line (`bed.tools.authenticate.time_line`) shows the local time with its zone name and UTC in
