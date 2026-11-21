@@ -1,5 +1,17 @@
 ## [Unreleased]
 
+### feat(module): resolve a "module:attr" callable and check it against a contract stub
+
+`resolve_attr(spec)` returns the object named by `"pkg.mod:attr"`. `check_signature(obj, stub, name=)` raises TypeError
+unless the object matches the stub, using the same rule as the loader's `access()` and `init()` checks.
+`resolve_callable(spec, stub)` combines the two and names the spec in its errors. `_stub_authenticate` is the contract
+for a configured sign-in callable (`auth.authenticate`): keyword-only `directory, title, header, fd, store_token,
+moniker`, returning a tuple.
+
+The loader's own checks are unchanged; `test_module_check_pins_current_output.py` pins their results so a later move onto
+`check_signature` is provably neutral. Known gap: the shared return rule compares a generic's origin and arguments as a
+set, so a `tuple` of other element types passes. Tests: `test_module_resolve_callable.py`.
+
 ### feat(util): a frame can hold several fields in one box; place_row and after_field move between them
 
 `draw_frame(..., height=N)` gives the frame's own interior `N` rows. `Frame.place_row(i)` moves to interior row `i`

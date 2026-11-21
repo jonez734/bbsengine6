@@ -641,6 +641,21 @@ def _check_func_signature(
 # --- Stub Functions ---
 
 
+def _stub_authenticate(
+    *,
+    directory: str,
+    title: str = "login",
+    header: str | None = None,
+    fd: int = 0,
+    store_token: bool = True,
+    moniker: str = "",
+    **kwargs: dict,
+) -> tuple[str, str]:
+    """Contract for a configured sign-in callable (``auth.authenticate`` in the JSON config). Never called; it defines
+    the keywords a callable must accept and its return type."""
+    raise NotImplementedError
+
+
 def _stub_access(args: argparse.Namespace, op: str, **kwargs: dict) -> bool | None:
     pass
 
@@ -1115,6 +1130,52 @@ def check_func(
         return False
 
     return True
+
+
+def resolve_attr(spec: str) -> object:
+    """Return the object named by ``"pkg.mod:attr"``. Errors name the spec.
+
+    No signature check here: resolve_callable() and check_signature() do that. A spec without ``:``, a module that does
+    not import, and a missing attribute each raise ValueError with the spec in the message.
+    """
+    if ":" not in spec:
+        raise ValueError(f"{spec!r} is not 'module:attribute'")
+    modname, _, attr = spec.partition(":")
+    try:
+        mod = importlib.import_module(modname)
+    except Exception as exc:
+        raise ValueError(f"{spec!r}: cannot import {modname!r} ({exc})") from exc
+    if not hasattr(mod, attr):
+        raise ValueError(f"{spec!r}: {modname!r} has no attribute {attr!r}")
+    return getattr(mod, attr)
+
+
+def check_signature(obj: object, stub: Callable, *, name: str) -> None:
+    """Raise TypeError unless ``obj`` matches ``stub``'s contract (the rules used for access() and init()).
+
+    This is _check_func_signature with its result turned into an exception, so a caller that resolves a configured
+    callable fails at startup with the contract named.
+    """
+    if not callable(obj):
+        raise TypeError(f"{name} is not callable")
+    if not _check_func_signature(obj, stub, name=name):
+        raise TypeError(
+            f"{name} does not match the contract {name}{inspect.signature(stub)}; "
+            f"found {name}{inspect.signature(obj)}"
+        )
+
+
+def resolve_callable(spec: str, stub: Callable) -> Callable:
+    """Resolve ``"pkg.mod:attr"`` to a callable that matches ``stub``. Used for configured callables (e.g. auth.authenticate).
+
+    Raises ValueError (bad spec or import) or TypeError (not callable, or the signature does not match), naming the spec.
+    """
+    obj = resolve_attr(spec)
+    try:
+        check_signature(obj, stub, name=stub.__name__.removeprefix("_stub_"))
+    except TypeError as exc:
+        raise TypeError(f"{spec!r}: {exc}") from exc
+    return obj
 
 
 # @since 20250316
