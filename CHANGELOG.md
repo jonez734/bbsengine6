@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### docs(datestamp): the Python examples are pinned and a bed time form is added
+
+`handbook/specs/datestamp.md` Python section: the examples were re-run and corrected (the default `%P` is lowercase; the
+epoch is printed in the server's zone). Adds a table of one UTC instant across six local zones, the form bed uses for its
+debug time line, and a note on daemon timestamps. `util.md` points to it.
+
 ### feat(module): the sign-in contract declares debug
 
 `_stub_authenticate` gains a keyword `debug: bool = False`, so a configured sign-in callable that echoes the bed URL and

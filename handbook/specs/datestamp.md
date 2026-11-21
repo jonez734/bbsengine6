@@ -1,6 +1,6 @@
 # datestamp Specification
 
-> Status: canonical. Updated 2026-10-15.
+> Status: canonical. Updated 2026-11-21 (Python examples pinned; bed debug time form added).
 
 ## Summary
 
@@ -38,15 +38,65 @@ datestamp(t=None, format: str = "%Y-%m-%d %I:%M%P %Z (%a)") -> str
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `t` | `None \| int \| float \| str \| datetime` | The value to format. `None` uses the current time. `int`/`float` are interpreted as Unix epoch seconds. `str` is parsed via `bbsengine6.io.input.getdate()`. `datetime` is used as-is. |
-| `format` | `str` | strftime format string. Default: `"%Y-%m-%d %I:%M%P %Z (%a)"`. |
+| `t` | `None \| int \| float \| str \| datetime` | The value to format. `None` uses the current time. `int`/`float` are interpreted as Unix epoch seconds, in the server's local zone. `str` is parsed via `bbsengine6.io.input.getdate()`. `datetime` is used as-is: an aware datetime keeps its own zone, a naive one is printed without a zone name. |
+| `format` | `str` | strftime format string. Default: `"%Y-%m-%d %I:%M%P %Z (%a)"`. Note `%P` is lowercase (`am`/`pm`). |
+
+`datestamp` calls `time.tzset()` on every call, so the server's `TZ` is read fresh each time.
+
+#### Examples
+
+The examples below were run with `TZ` set as shown. The instant used throughout is
+2026-11-21 13:49:07 UTC (the same instant the bed tests pin).
 
 ```python
->>> datestamp()  # Current time
-'2026-05-19 02:30PM EDT (Mon)'
->>> datestamp(0)  # Unix epoch
-'1970-01-01 12:00AM EST (Thu)'
+>>> # TZ=America/New_York  (EST, UTC-5 in November)
+>>> datestamp(0)                     # Unix epoch, in local time
+'1969-12-31 07:00pm EST (Wed)'
+>>> datestamp(utc_instant, format="%Y-%m-%d %H:%M:%S %Z")       # utc_instant: an aware UTC datetime
+'2026-11-21 13:49:07 UTC'
+>>> datestamp(utc_instant.astimezone(), format="%Y-%m-%d %H:%M:%S %Z")   # converted to local
+'2026-11-21 08:49:07 EST'
+>>> datestamp("2026-11-21 08:49", format="%Y-%m-%d %H:%M")      # string via getdate()
+'2026-11-21 08:49'
 ```
+
+The same UTC instant in other local zones (`datestamp(utc_instant.astimezone(), format="%Y-%m-%d %H:%M:%S %Z")`):
+
+| `TZ` | Output | Offset |
+|------|--------|--------|
+| `America/Los_Angeles` | `2026-11-21 05:49:07 PST` | UTC-8 |
+| `America/New_York` | `2026-11-21 08:49:07 EST` | UTC-5 |
+| `Europe/London` | `2026-11-21 13:49:07 GMT` | UTC+0 |
+| `Asia/Kolkata` | `2026-11-21 19:19:07 IST` | UTC+5:30 (half-hour) |
+| `Pacific/Chatham` | `2026-11-22 03:34:07 +1345` | UTC+13:45 (numeric abbreviation; no letters) |
+| `UTC` | `2026-11-21 13:49:07 UTC` | UTC |
+
+Zone coverage is pinned by `bed/src/bed/tests/test_authenticate_time_other_zones.py`. Summer time (DST) on a transition
+day is not covered by any test.
+
+#### The local time with UTC in parentheses
+
+bed's sign-in debug line (`bed.tools.authenticate.time_line`) shows the local time with its zone name and UTC in
+parentheses. It is built from two `datestamp` calls with the 24-hour format `%Y-%m-%d %H:%M:%S`:
+
+```python
+local = datetime.now().astimezone()
+utc = local.astimezone(timezone.utc)
+f"{datestamp(local, format=FMT)} {local.tzname()} ({datestamp(utc, format=FMT)} UTC)"
+# FMT = "%Y-%m-%d %H:%M:%S"
+```
+
+For `TZ=America/New_York` at the instant above:
+
+```
+2026-11-21 08:49:07 EST (2026-11-21 13:49:07 UTC)
+```
+
+#### Timestamps from the daemon
+
+A value that comes from the daemon (for example the `timestamp` in a `pong`) is an ISO-8601 string with `+00:00`.
+`datestamp` does not reformat it, since it is a value this process did not produce. Callers that want it in local time
+parse it to a `datetime` first.
 
 ### Smarty — `|datestamp` modifier
 
@@ -383,6 +433,9 @@ then a single-letter `%X`, then a literal `%`.
 
 ## Historical
 
+- **2026-11-21** — Python examples rewritten from runs, not from memory. The earlier `datestamp(0)` example
+  (`1970-01-01 12:00AM EST (Thu)`) was wrong: the default `%P` is lowercase and the epoch is printed in the server's zone.
+  Added the UTC-instant table across five local zones and the bed debug time form.
 - **2026-10-15** — Extracted the Smarty modifier body to a single
   canonical source. The `|datestamp` modifier function is now
   defined in `bbsengine6/php/smarty_modifier_datestamp.php` and

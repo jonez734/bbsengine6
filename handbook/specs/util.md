@@ -118,6 +118,9 @@ datestamp(t=None, format="%Y-%m-%d %I:%M%P %Z (%a)") -> str
 timedeltastr(delta) -> str
 ```
 
+The full specification, with examples run across local zones, is `datestamp.md` (`datestamp` is the canonical formatter for
+Python, PHP, and Smarty).
+
 `timedeltastr` (formerly `timedelta_`) converts a `datetime.timedelta`
 to a compact duration string with only the non-zero units, zero-padded
 to two digits:
