@@ -135,3 +135,14 @@ class TestStringAnnotations(_Base):
         )
         exec(compile(src, "<future>", "exec"), ns)
         self.assertIsNone(module.check_signature(ns["fn"], _stub, name="authenticate"))
+
+
+class TestContractDeclaresDebug(unittest.TestCase):
+    """The sign-in contract declares ``debug``, so a callable that echoes the bed URL and terminal report at debug level
+    matches the stub by name, not only through **kwargs."""
+
+    def test_the_stub_declares_debug_as_a_keyword(self):
+        import inspect as _inspect
+        params = _inspect.signature(module._stub_authenticate).parameters
+        self.assertIn("debug", params)
+        self.assertEqual(params["debug"].default, False)

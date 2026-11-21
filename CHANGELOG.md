@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### feat(module): the sign-in contract declares debug
+
+`_stub_authenticate` gains a keyword `debug: bool = False`, so a configured sign-in callable that echoes the bed URL and
+the terminal report at debug level matches the contract by name. Test: `test_module_resolve_callable.py`
+(`TestContractDeclaresDebug`).
+
 ### fix(module): check_signature resolves string annotations before comparing
 
 A module with `from __future__ import annotations` stores its annotations as strings, so a correct callable was rejected

@@ -649,6 +649,7 @@ def _stub_authenticate(
     fd: int = 0,
     store_token: bool = True,
     moniker: str = "",
+    debug: bool = False,
     **kwargs: dict,
 ) -> tuple[str, str]:
     """Contract for a configured sign-in callable (``auth.authenticate`` in the JSON config). Never called; it defines
