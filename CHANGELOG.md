@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### feat(module): the login presentation has a contract stub
+
+`_stub_prompt_credentials(*, title, header, width) -> (moniker, password)` defines what a configured login presentation
+(`auth.presentation`) must accept and return. Checked with `check_signature`, the same rule as `auth.authenticate`. Tests:
+`test_module_prompt_credentials_contract.py`.
+
 ### BREAKING: datestamp formats a Unix epoch as UTC, not the server's local zone (Python and PHP)
 
 POSIX.1-2017 §4.16 defines seconds since the Epoch in terms of Coordinated Universal Time, so an epoch is a UTC instant.
