@@ -16,8 +16,9 @@ holds its registry in an `Interaction` (`py/src/bbsengine6/interaction.py`); see
 | `default` | The shell's own command list. | yes | yes, by a session entry (extend mode only) |
 | `session` | Added by a host for its session. | yes | yes, by another session entry |
 
-`message` and `logout` are protected. `exit` is a default entry, so a host may replace
-it (casino makes `exit` leave casino and return to the shell).
+`message`, `logout`, and `exit` are protected. `logout` ends the whole session, as Ctrl-D does. `exit` is the
+protected leave word: casino's root menu takes it to leave casino and return to the shell, so a host cannot replace
+it by name or alias.
 
 ## Modes
 
@@ -132,7 +133,7 @@ Candidates are shown only by tab completion (double Tab) and by the help key (F1
 
 Letteredolive builds its registry with `lib.build_registry()` from the `commands` dict. The
 dict stays the single list. `logout` (with aliases `lo`, `quit`, `q`, `o`, `o!`) and
-`message` are protected. `exit` is a default entry. Availability is the dict's `disabled`
+`message` are protected. `exit` is protected too. Availability is the dict's `disabled`
 flag only; visibility does not call `module.check()`.
 
 Known gap: `visible_commands()` (help and completion) still uses `module.check()` to hide
