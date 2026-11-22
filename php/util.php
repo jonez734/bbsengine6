@@ -1121,6 +1121,25 @@ function env_bool(string $key, bool $default = false): bool
  */
 function datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $format = null): string
 {
+    // A Unix epoch (int, float, numeric string, or null for "now") is a UTC instant (POSIX.1-2017 §4.16), so it is
+    // formatted under UTC whatever the server zone. A DateTimeInterface keeps its own zone, as in Python: it is
+    // formatted in that zone, not converted to UTC. The server zone is restored afterwards.
+    $saved = date_default_timezone_get();
+    if ($t instanceof \DateTimeInterface) {
+        // date() formats the epoch in the server zone, so the server zone is set to the object's own zone for the call.
+        date_default_timezone_set($t->getTimezone()->getName());
+    } else {
+        date_default_timezone_set('UTC');
+    }
+    try {
+        return datestamp_in_current_zone($t, $format);
+    } finally {
+        date_default_timezone_set($saved);
+    }
+}
+
+function datestamp_in_current_zone(int|float|string|\DateTimeInterface|null $t = null, ?string $format = null): string
+{
     // Pin the C locale for time/date formatting so PHP date()
     // emits the same day/month names as Python's strftime on the
     // same epoch. PHP's date() reads LC_TIME for these names

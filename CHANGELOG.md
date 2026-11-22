@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+### BREAKING: datestamp formats a Unix epoch as UTC, not the server's local zone (Python and PHP)
+
+POSIX.1-2017 §4.16 defines seconds since the Epoch in terms of Coordinated Universal Time, so an epoch is a UTC instant.
+`datestamp(epoch)` now prints it as UTC in every server zone: `datestamp(0)` is `1970-01-01 00:00:00 UTC`. Before, the same
+call printed the server's local clock (for example `1969-12-31 19:00:00 EST` in New York).
+
+Unchanged: a `datetime` / `DateTime` keeps its own zone. A caller that needs a local clock for an epoch must convert it
+first (`datetime.fromtimestamp(epoch, tz=...)`, or a `DateTime` in that zone).
+
+Callers that pass epochs and expected local output are listed in `handbook/todo/datestamp-epoch-callers.md`. No caller in
+this repo changed. Tests: `test_util_datestamp_epoch_utc.py`, `php/test_util_datestamp_epoch_utc.php`. Updated because they
+pinned local output: `test_util_datestamp.py::test_unix_epoch_int`, `test_util_datestamp_dst_transitions.py::TestServerTimezone`,
+and the midnight-transition PHP helper, which now converts the instant to the zone explicitly.
+
 ### test(datestamp): switches at local midnight, in Python and PHP
 
 Skipped midnight (Havana 2026-03-08, Santiago 2026-09-06) and repeated midnight (Havana 2027-11-07, Gaza 2015-10-23) are

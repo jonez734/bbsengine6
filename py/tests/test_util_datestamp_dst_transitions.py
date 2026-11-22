@@ -99,7 +99,8 @@ class TestTheGapBetweenThemIsTheSpecCase(unittest.TestCase):
 
 
 class TestServerTimezone(unittest.TestCase):
-    """datestamp(epoch) reads the server TZ, so the transition is checked through TZ as well."""
+    """An epoch is a UTC instant (POSIX.1-2017 §4.16), so the server TZ does not change its output. The local clock of a
+    zone is taken by converting the instant to that zone explicitly."""
 
     def setUp(self):
         self._saved = os.environ.get("TZ")
@@ -112,14 +113,18 @@ class TestServerTimezone(unittest.TestCase):
             os.environ["TZ"] = self._saved
         time.tzset()
 
-    def test_datestamp_of_an_epoch_across_the_dallas_switch_follows_tz(self):
+    def test_an_epoch_across_the_dallas_switch_is_utc_whatever_the_server_zone(self):
         epoch = _utc(2026, 3, 8, 8, 0, 0).timestamp()
-        os.environ["TZ"] = "America/Chicago"
-        time.tzset()
-        self.assertEqual(datestamp(epoch, format=FMT), "2026-03-08 03:00:00 CDT")
-        os.environ["TZ"] = "Europe/London"
-        time.tzset()
-        self.assertEqual(datestamp(epoch, format=FMT), "2026-03-08 08:00:00 GMT")
+        for zone in ("America/Chicago", "Europe/London"):
+            with self.subTest(server=zone):
+                os.environ["TZ"] = zone
+                time.tzset()
+                self.assertEqual(datestamp(epoch, format=FMT), "2026-03-08 08:00:00 UTC")
+
+    def test_the_dallas_local_clock_is_taken_by_converting_the_instant(self):
+        epoch = _utc(2026, 3, 8, 8, 0, 0).timestamp()
+        local = dt.datetime.fromtimestamp(epoch, tz=ZoneInfo("America/Chicago"))
+        self.assertEqual(datestamp(local, format=FMT), "2026-03-08 03:00:00 CDT")
 
 
 if __name__ == "__main__":

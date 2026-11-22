@@ -52,13 +52,10 @@ function utc(int $y, int $mo, int $d, int $h, int $mi, int $s = 0): int
 /** Format $epoch as the local clock of $zone, with the zone set for the call and restored after. */
 function at(string $zone, int $epoch): string
 {
-    $saved = date_default_timezone_get();
-    date_default_timezone_set($zone);
-    try {
-        return datestamp($epoch, FMT);
-    } finally {
-        date_default_timezone_set($saved);
-    }
+    // An epoch is UTC. The local clock of $zone is taken by converting the instant to a DateTime in that zone, which
+    // datestamp then formats in its own zone (the explicit-zone rule, as in the Python tests).
+    $local = (new \DateTimeImmutable('@' . $epoch))->setTimezone(new \DateTimeZone($zone));
+    return datestamp(\DateTime::createFromImmutable($local), FMT);
 }
 
 echo "--- skipped midnight ---\n";

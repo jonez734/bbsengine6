@@ -41,7 +41,7 @@ import re
 import sys
 import threading
 import warnings
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from . import input, io  # type: ignore
@@ -486,7 +486,9 @@ def datestamp(
     tzset()
 
     if isinstance(t, (int, float)):
-        t = datetime.fromtimestamp(t, tz=tzlocal())  # type: ignore
+        # POSIX.1-2017 §4.16: seconds since the Epoch are related to Coordinated Universal Time, so an epoch is a UTC
+        # instant in every server zone. A caller that wants a local clock passes an aware datetime in its own zone.
+        t = datetime.fromtimestamp(t, tz=timezone.utc)  # type: ignore
     elif t is None:
         t = datetime.now(tzlocal())
     elif isinstance(t, str):

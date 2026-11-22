@@ -38,7 +38,7 @@ datestamp(t=None, format: str = "%Y-%m-%d %I:%M%P %Z (%a)") -> str
 
 | Argument | Type | Description |
 |----------|------|-------------|
-| `t` | `None \| int \| float \| str \| datetime` | The value to format. `None` uses the current time. `int`/`float` are interpreted as Unix epoch seconds, in the server's local zone. `str` is parsed via `bbsengine6.io.input.getdate()`. `datetime` is used as-is: an aware datetime keeps its own zone, a naive one is printed without a zone name. |
+| `t` | `None \| int \| float \| str \| datetime` | The value to format. `None` uses the current time. `int`/`float` are Unix epoch seconds, a UTC instant (POSIX.1-2017 §4.16), so they print as UTC in every server zone. `str` is parsed via `bbsengine6.io.input.getdate()`. `datetime` is used as-is: an aware datetime keeps its own zone, a naive one is printed without a zone name. |
 | `format` | `str` | strftime format string. Default: `"%Y-%m-%d %I:%M%P %Z (%a)"`. Note `%P` is lowercase (`am`/`pm`). |
 
 `datestamp` calls `time.tzset()` on every call, so the server's `TZ` is read fresh each time.
@@ -50,8 +50,8 @@ The examples below were run with `TZ` set as shown. The instant used throughout 
 
 ```python
 >>> # TZ=America/New_York  (EST, UTC-5 in November)
->>> datestamp(0)                     # Unix epoch, in local time
-'1969-12-31 07:00pm EST (Wed)'
+>>> datestamp(0, format="%Y-%m-%d %H:%M:%S %Z")   # Unix epoch: UTC in every server zone
+'1970-01-01 00:00:00 UTC'
 >>> datestamp(utc_instant, format="%Y-%m-%d %H:%M:%S %Z")       # utc_instant: an aware UTC datetime
 '2026-11-21 13:49:07 UTC'
 >>> datestamp(utc_instant.astimezone(), format="%Y-%m-%d %H:%M:%S %Z")   # converted to local
@@ -205,8 +205,8 @@ datestamp(int|float|string|\DateTimeInterface|null $t = null, ?string $format = 
 ```php
 >>> datestamp()  // Current time
 '2026-10-13 14:30'
->>> datestamp(0)  // Unix epoch
-'1970-01-01 00:00'
+>>> datestamp(0, '%Y-%m-%d %H:%M %Z')  // Unix epoch: UTC in every server zone
+'1970-01-01 00:00 UTC'
 >>> datestamp(time(), '%Y-%m-%d %I:%M%P %Z (%a)')
 '2026-10-13 02:30pm EDT (Tue)'
 ```
@@ -507,6 +507,10 @@ then a single-letter `%X`, then a literal `%`.
 
 ## Historical
 
+- **2026-11-21 (epochs are UTC)** — An int, float, or numeric-string epoch is a UTC instant, per POSIX.1-2017 §4.16
+  (seconds since the Epoch are related to Coordinated Universal Time). `datestamp(0)` prints `1970-01-01 00:00:00 UTC` in
+  every server zone, in Python and PHP. A `DateTime`/`datetime` keeps its own zone, as before. Callers that passed epochs
+  expecting local output are listed in `handbook/todo/datestamp-epoch-callers.md`.
 - **2026-11-21** — Python examples rewritten from runs, not from memory. The earlier `datestamp(0)` example
   (`1970-01-01 12:00AM EST (Thu)`) was wrong: the default `%P` is lowercase and the epoch is printed in the server's zone.
   Added the UTC-instant table across five local zones and the bed debug time form.

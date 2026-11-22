@@ -273,12 +273,10 @@ class TestDatestampEdgeCases:
     """Datetime argument parsing and edge cases."""
 
     def test_unix_epoch_int(self):
-        # Unix epoch (0) is the canonical Unix timestamp. Server-local
-        # year depends on TZ: 1970 in UTC and most positive-offset TZs,
-        # 1969 in negative-offset TZs (e.g. America/New_York at -0500
-        # renders 1969-12-31 19:00 EST). Either year is acceptable.
+        # Unix epoch (0) is a UTC instant (POSIX.1-2017 §4.16), so it is 1970 in every server zone. Updated from the
+        # earlier "1969 or 1970" check, which accepted local output, when datestamp began formatting epochs as UTC.
         result = util.datestamp(0, "%Y")
-        assert result in ("1969", "1970")
+        assert result == "1970"
 
     def test_none_returns_current_time(self):
         result = util.datestamp(None, "%Y")
