@@ -55,18 +55,18 @@ class TestPlaceRow(unittest.TestCase):
     def test_the_first_row_is_two_up_from_the_bottom_edge(self):
         frame, _ = _draw(2)
         moves = _moves(lambda: frame.place_row(0))
-        self.assertEqual(moves[:2], ["{cursorup:2}", "{cha:2}"])
+        self.assertEqual(moves[:2], ["{cursorup:2}", "{cha:3}"])
 
     def test_the_last_row_is_one_up_from_the_bottom_edge(self):
         frame, _ = _draw(2)
         moves = _moves(lambda: frame.place_row(1))
-        self.assertEqual(moves[:2], ["{cursorup:1}", "{cha:2}"])
+        self.assertEqual(moves[:2], ["{cursorup:1}", "{cha:3}"])
 
     def test_placing_the_same_row_twice_moves_nothing_vertically(self):
         frame, _ = _draw(2)
         _moves(lambda: frame.place_row(0))
         moves = _moves(lambda: frame.place_row(0))
-        self.assertEqual(moves[0], "{cha:2}", moves)
+        self.assertEqual(moves[0], "{cha:3}", moves)
 
 
 class TestAfterAField(unittest.TestCase):
@@ -83,7 +83,7 @@ class TestAfterAField(unittest.TestCase):
         _moves(lambda: frame.place_row(0))
         _moves(lambda: frame.after_field())  # cursor is now on interior row 1
         moves = _moves(lambda: frame.place_row(1))
-        self.assertEqual(moves[0], "{cha:2}", moves)
+        self.assertEqual(moves[0], "{cha:3}", moves)
 
 
 class TestFrameAtAnyRow(unittest.TestCase):

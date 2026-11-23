@@ -42,7 +42,7 @@ class TestDrawFrameGeometry(unittest.TestCase):
     def test_a_frame_with_one_child_reports_the_child_interior(self):
         frame, _ = _capture(util.draw_frame, "auth", 25, children=[util.Child(title="moniker")])
         self.assertEqual(len(frame.children), 1)
-        self.assertEqual(frame.children[0].column, 2)  # inside the left edge and one space in
+        self.assertEqual(frame.children[0].column, 3)  # inside the left edge, one space after it
 
     def test_stacked_children_are_placed_one_under_another(self):
         frame, _ = _capture(util.draw_frame, "auth", 25,

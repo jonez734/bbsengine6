@@ -16,6 +16,9 @@ def main() -> None:
     bottombar.init()
     try:
         frame = draw_frame(TITLE, WIDTH, height=2)
+        # Paint every child's label before the first read, then move back to the first child.
+        frame.paint_label(0, "moniker:")
+        frame.paint_label(1, "password:")
         frame.place_row(0)
         moniker = io.inputstring("{promptcolor}moniker: {inputcolor}", "", max_width=WIDTH - 1, bottombar=False)
         frame.after_field()

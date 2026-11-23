@@ -201,6 +201,24 @@ class Frame:
         """The 1-based terminal rows of the frame's own interior, top to bottom."""
         return [self.top + 2 + i for i in range(self.height)]
 
+    def paint_label(self, index: int, text: str) -> None:
+        """Write ``text`` on interior row ``index`` at the field column, then return the cursor to where it was.
+
+        Relative moves only: up or down to the row, the label, then back by the same moves. ``cursor_at`` is unchanged.
+        """
+        target = self.top + 1 + index
+        delta = target - self.cursor_at
+        if delta < 0:
+            io.echo(f"{{cursorup:{-delta}}}", end="")
+        elif delta > 0:
+            io.echo(f"{{cursordown:{delta}}}", end="")
+        io.echo(f"{{cha:{self.interior_column}}}{text}{{acs:off}}", end="")
+        if delta < 0:
+            io.echo(f"{{cursordown:{-delta}}}", end="")
+        elif delta > 0:
+            io.echo(f"{{cursorup:{delta}}}", end="")
+        io.echo(f"{{cha:{self.interior_column}}}", end="")
+
     def place_row(self, index: int) -> None:
         """Move the cursor to interior row ``index`` of the frame, with relative moves from where the frame left it.
 
@@ -244,7 +262,8 @@ class Frame:
 
     @property
     def interior_column(self) -> int:
-        return 2
+        # Column 1 is the left border, column 2 is the space after it, so content starts at column 3.
+        return 3
 
 
 @dataclass
@@ -334,7 +353,7 @@ def _append_child(frame: Frame, child: Child, *, at_row: int) -> Frame:
     for _ in range(child.gap):
         io.echo("")
     _draw_one(child.title, frame.width, child.height)
-    frame.children.append(ChildPlace(title=child.title, top=top, bottom=top + child.height + 1, column=2))
+    frame.children.append(ChildPlace(title=child.title, top=top, bottom=top + child.height + 1, column=3))
     frame.bottom = frame.children[-1].bottom
     return frame
 
@@ -365,7 +384,7 @@ def extend_frame(frame: Frame, child: Child, *, width: int) -> Frame:
     frame.width = width
     child_top = frame.bottom + 1
     frame.children.append(ChildPlace(title=child.title, top=child_top,
-                                     bottom=child_top + child.height + 1, column=2))
+                                     bottom=child_top + child.height + 1, column=3))
     frame.bottom = frame.children[-1].bottom
     _draw_one(child.title, width, child.height)
     io.echo("{f6}", end="")

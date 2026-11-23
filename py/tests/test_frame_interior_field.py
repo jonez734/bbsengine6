@@ -31,7 +31,7 @@ class TestInteriorField(unittest.TestCase):
         frame, _ = _writes(util.draw_frame, "zoid6 auth", 25)
         # The frame's rows are 0-based; {curpos} is 1-based, so the interior is two rows under the frame's 0-based top.
         self.assertEqual(frame.interior_row, frame.top + 2)
-        self.assertEqual(frame.interior_column, 2)
+        self.assertEqual(frame.interior_column, 3)
 
 
 if __name__ == "__main__":

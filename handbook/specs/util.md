@@ -67,7 +67,7 @@ class ChildPlace:  title: str; top: int; bottom: int; column: int
 ```
 
 - `Frame.top` and `Frame.bottom` are the frame's rows (0 is the top of the frame). `ChildPlace.top` and
-  `bottom` are a child's rows; `column` is where its text starts (2: inside the left edge and one space in).
+  `bottom` are a child's rows; `column` is where its text starts (3: the left edge is column 1, one space is column 2, text starts at column 3).
 - `draw_frame` leaves the cursor on the frame's bottom edge. It does not end with `{f6}`: a line break there
   would move the tracked cursor a row below the frame.
 - `Frame.place_child(index)` moves the cursor from the bottom edge to a child's field with relative moves
@@ -75,6 +75,8 @@ class ChildPlace:  title: str; top: int; bottom: int; column: int
   `cursor_at`. `Frame.place_field()` does the same for a one-row frame's interior.
 - `draw_frame(..., height=N)` gives the frame's own interior `N` rows (default 1, which draws exactly the bytes it always
   did). `Frame.interior_rows()` lists them, top to bottom.
+- `Frame.paint_label(i, text)` writes a label on interior row `i` at the field column and returns the cursor to where it was.
+  A form paints every child's label before the first read, then `place_row(0)` moves back to the first child.
 - `Frame.place_row(i)` moves to interior row `i` with relative moves from `cursor_at`, and records it. The frame reads no
   terminal state: `cursor_at` is the only input. After `draw_frame` it is the bottom edge.
 - `Frame.after_field()` records that a field's read ended with its line break: the cursor is one row below the field, so

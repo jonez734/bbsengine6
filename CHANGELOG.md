@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### feat(util): the auth form paints its labels first; text starts one space after the border
+
+`Frame.paint_label(i, text)` writes a child's label on its row. The sign-in (bed `prompt_credentials` and the demo) paints
+`moniker:` and `password:` before the first read, then moves back to the first child. Interior and child text start at
+column 3 (one space after the left border), not column 2. The golden child geometry is updated to match
+(`tests/golden_frame_head.py`); the byte golden for a frame with no text column is unchanged.
+
 ### feat(module): the login presentation has a contract stub
 
 `_stub_prompt_credentials(*, title, header, width) -> (moniker, password)` defines what a configured login presentation

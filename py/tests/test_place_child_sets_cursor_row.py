@@ -45,7 +45,7 @@ class TestPlaceChildRecordsTheRow(unittest.TestCase):
     def test_place_child_emits_the_same_moves_as_before(self):
         frame = self._frame()
         moves = _moves(lambda: frame.place_child(0))
-        self.assertEqual(moves[0], f"{{cursorup:{frame.bottom - (frame.children[0].top + 1)}}}{{cha:2}}")
+        self.assertEqual(moves[0], f"{{cursorup:{frame.bottom - (frame.children[0].top + 1)}}}{{cha:3}}")
 
 
 if __name__ == "__main__":
