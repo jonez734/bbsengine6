@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### fix(demo): demo_authenticate's labels are one width, as bed's sign-in
+
+`LABEL_MONIKER` and `LABEL_PASSWORD` in `demo_authenticate.py` are both 10 characters, so the values start in column 13.
+
 ### feat(util): the auth form paints its labels first; text starts one space after the border
 
 `Frame.paint_label(i, text)` writes a child's label on its row. The sign-in (bed `prompt_credentials` and the demo) paints

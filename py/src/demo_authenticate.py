@@ -9,6 +9,9 @@ from bbsengine6 import bottombar, io
 from bbsengine6.util import draw_frame, inputpassword
 
 WIDTH = 25
+#: Labels padded to one width so the values start in the same column (same as bed's sign-in).
+LABEL_MONIKER = "moniker:  "
+LABEL_PASSWORD = "password: "
 TITLE = "zoid6 auth"
 
 
@@ -17,14 +20,14 @@ def main() -> None:
     try:
         frame = draw_frame(TITLE, WIDTH, height=2)
         # Paint every child's label before the first read, then move back to the first child.
-        frame.paint_label(0, "moniker:")
-        frame.paint_label(1, "password:")
+        frame.paint_label(0, LABEL_MONIKER)
+        frame.paint_label(1, LABEL_PASSWORD)
         frame.place_row(0)
-        moniker = io.inputstring("{promptcolor}moniker: {inputcolor}", "", max_width=WIDTH - 1, bottombar=False)
+        moniker = io.inputstring("{promptcolor}" + LABEL_MONIKER + "{inputcolor}", "", max_width=WIDTH - 1, bottombar=False)
         frame.after_field()
         if moniker != "":
             frame.place_row(1)
-            inputpassword("{promptcolor}password: {inputcolor}", bottombar=False)
+            inputpassword("{promptcolor}" + LABEL_PASSWORD + "{inputcolor}", bottombar=False)
 
             io.echo("{f6}")
             io.echo(f"signed in as {moniker.strip()}")
