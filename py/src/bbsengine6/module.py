@@ -662,10 +662,16 @@ def _stub_prompt_credentials(
     title: str = "login",
     header: str | None = None,
     width: int = 25,
+    form: Any = None,
     **kwargs: dict,
 ) -> tuple[str, str]:
-    """Contract for a configured login presentation (``auth.presentation`` in the JSON config). Never called. It asks for
-    a moniker and a password and returns them; it raises CredentialsCancelled when the user cancels."""
+    """Contract for a configured login presentation (``auth.presentation`` in the JSON config). Never called.
+
+    ``title``, ``header`` and ``width`` are the original keywords and stay first: the contract is matched by position, so
+    a presentation written for them still matches. ``form`` is appended. It describes the fields (bed's sign-in is a moniker
+    textbox and a password textbox); a presentation that reads it declares ``form`` last. It asks for the fields and returns
+    the moniker and password; it raises CredentialsCancelled when the user cancels.
+    """
     raise NotImplementedError
 
 

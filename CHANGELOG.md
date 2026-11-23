@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+### feat(form): FormItemTextbox has a label, a name and a mask; the presentation contract takes a form
+
+`FormItemTextbox(label=, name=, mask="")` describes one labelled text field. The mask uses the inputpassword rule: `""`
+(show nothing, the default, so a password is hidden unless a form asks otherwise), one character, or `None` (show the text).
+Any other mask is refused. A `Form` keeps its items in order.
+
+The login presentation contract (`_stub_prompt_credentials`) appends `form` after the original `title`, `header`, `width`.
+The contract is matched by position, so a presentation must declare `form` last and accept `**kwargs`. A presentation that
+only declares title/header/width no longer matches; it must be updated. bed's presentations are updated in the next commit.
+Tests: `test_form_textbox.py`, `test_module_prompt_credentials_contract.py`.
+
 ### fix(demo): demo_authenticate's labels are one width, as bed's sign-in
 
 `LABEL_MONIKER` and `LABEL_PASSWORD` in `demo_authenticate.py` are both 10 characters, so the values start in column 13.
