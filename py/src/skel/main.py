@@ -18,5 +18,5 @@ def access(args: argparse.Namespace, op: str, **kwargs) -> bool | None:
 
 
 def main(args: argparse.Namespace, **kwargs) -> bool | None:
-    util.heading("HEADER")
+    util.heading("HEADING")
     return True
