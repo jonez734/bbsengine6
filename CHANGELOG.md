@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### fix(menu): an idle read timeout no longer rings the bell
+
+`Menu.handle` rang `{bell}` every time `io.getch()` timed out with no key, so a menu sitting idle beeped about every
+timeout (about every second or two). An idle timeout is not a wrong key: the menu now reads again silently. A real
+unrecognised key still rings the bell. The `noneok=` argument, which the reader never honoured, is dropped. Test:
+`test_menu_idle_no_bell.py`.
+
 ### change(util): util is project agnostic
 
 `ltree_to_path` no longer drops a leading `top` label: which label is a project's root is the project's convention, so every

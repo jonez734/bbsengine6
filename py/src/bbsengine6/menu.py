@@ -203,9 +203,9 @@ class Menu(object):
         while not done:
             #      self.currentmenuitem = self.items[self.pos]
 
-            ch = io.getch(noneok=False)
+            ch = io.getch()
             if ch is None:
-                io.echo("{bell}", end="", flush=True)
+                # No key within the read timeout: an idle second, not a wrong key. Read again without a bell.
                 continue
             ch = ch.upper()
             io.setvar("cic", "{var:itemcolor}")
