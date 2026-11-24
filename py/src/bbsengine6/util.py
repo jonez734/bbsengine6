@@ -641,6 +641,19 @@ def inputpassword(prompt: str = "password: ", *, mask: Optional[str] = "", **kwa
     return io.inputstring(prompt, "", mask=mask, **kwargs)
 
 
+def inputfilename(
+    args: Any, prompt: str, default: str, verify: Any = None, **kw: Any
+) -> Optional[str]:
+    """Prompt for a file name, with ``default`` shown and checked by ``verify``.
+
+    ``verify`` is called as ``verify(buffer, **kwargs)`` by inputstring; see
+    ``verify_file_exists_readable``. The working directory is not changed.
+
+    Returns the typed name, or None when the prompt is cancelled.
+    """
+    return io.inputstring(prompt, default, verify=verify, args=args, **kw)
+
+
 def oxfordcomma(seq, conjunction: str = "and") -> Optional[str]:
     """Return a grammatically correct human readable string (with an Oxford comma).
 

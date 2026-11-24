@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### fix(util): inputfilename works with inputstring; verifiers come from util, not copies
+
+`inputfilename` was copied from bbsengine5. It called an undefined `ttyio`, and its verifiers took `(args, filename)`, but
+inputstring calls `verify(buffer, **kwargs)`, so every call failed. It now calls `io.inputstring` with the verifier and `args`,
+and no longer changes the process working directory. The duplicate `verifyFileExistsReadable*` copies are removed; the
+deprecated aliases remain. Tests: `test_inputfilename_verifiers.py`.
+
 ### feat(form): FormItemTextbox has a label, a name and a mask; the presentation contract takes a form
 
 `FormItemTextbox(label=, name=, mask="")` describes one labelled text field. The mask uses the inputpassword rule: `""`
