@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### change(util): util is project agnostic
+
+`ltree_to_path` no longer drops a leading `top` label: which label is a project's root is the project's convention, so every
+label is kept. Comments and docstrings that named one project's wrappers, CLIs, call sites or example modules are reworded to
+describe the behaviour. Tests: `test_util_project_agnostic.py`.
+
 ### fix(util): inputfilename works with inputstring; verifiers come from util, not copies
 
 `inputfilename` was copied from bbsengine5. It called an undefined `ttyio`, and its verifiers took `(args, filename)`, but

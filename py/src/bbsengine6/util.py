@@ -734,7 +734,7 @@ def logentry(
         handler: Custom logging handler. If None, uses default syslog handler.
         formatter: Custom log formatter. If None, uses handler's formatter.
         logger_name: Name of the logger to use (default: "bbsengine6").
-        module: Source module name (e.g., "bank", "casino"). Bracketed in output.
+        module: Source module name (e.g., "billing", "reports"). Bracketed in output.
         action: Event action name (e.g., "add_funds", "transfer_request").
         moniker: Member moniker.
         loginid: Login session ID.
@@ -1299,8 +1299,8 @@ def getencryptedpassword(args, plaintextpassword: str) -> Optional[str]:
     """Encrypt a plaintext password using the database crypt() function.
 
     Thin compatibility wrapper around ``encryptpassword``. ``args`` is
-    accepted (and ignored) so existing call sites in bbsengine5,
-    mistermcfeely, etc. keep working without modification. The hash is
+    accepted (and ignored) so existing callers from before the rename
+    keep working without modification. The hash is
     now produced locally by ``encryptpassword`` rather than via a
     PostgreSQL ``crypt(..., gen_salt('bf'))`` round-trip.
 
@@ -1367,25 +1367,22 @@ def checksum(data: bytes) -> str:
 def ltree_to_path(ltree: str) -> str:
     """Convert a PostgreSQL ltree string to a forward-slash delimited path.
 
-    An ltree is a dot-separated hierarchical label format used in PostgreSQL.
-    If the first label is "top", it is removed (as it's the implicit root).
+    An ltree is a dot-separated label path. Every label is kept: which label, if any, is a project's root is that
+    project's convention, so it is handled by the project.
 
     Args:
         ltree: A dot-separated ltree string (e.g., "top.users.admin").
 
     Returns:
-        A forward-slash delimited path (e.g., "users/admin").
+        A forward-slash delimited path (e.g., "top/users/admin").
 
     Example:
         >>> ltree_to_path("top.users.admin")
-        'users/admin'
+        'top/users/admin'
         >>> ltree_to_path("users.admin")
         'users/admin'
     """
     labels = ltree.split(".")
-
-    if labels[0] == "top":
-        labels.pop(0)
 
     return "/".join(labels)
 
@@ -1859,7 +1856,7 @@ def decrypt_password(ciphertext_b64: str) -> str:
 # ---------------------------------------------------------------------------
 # Sanitize args for bin wrappers
 #
-# Background: every zoidoffice bin wrapper is a thin shell script that
+# Background: a common bin wrapper is a thin shell script that
 # does ``python -W all -m <module> "$@"``. Passing "$@" verbatim means
 # a user-supplied argv can subvert python startup in three ways:
 #
@@ -1889,8 +1886,8 @@ def decrypt_password(ciphertext_b64: str) -> str:
 #   * Bare ``-``              -> reject (stdin sentinel; python single-letter
 #                                flags are also a single ``-X`` etc., see
 #                                next rule).
-#   * Any token starting with ``-`` but not ``--`` -> reject. zoidoffice's
-#                                CLIs use long opts only; refusing the
+#   * Any token starting with ``-`` but not ``--`` -> reject. Long-option CLIs
+#                                use ``--`` only; refusing the
 #                                whole single-dash class closes the
 #                                python-flag-injection hole without
 #                                breaking any legitimate invocation.
