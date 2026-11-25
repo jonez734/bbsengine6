@@ -39,6 +39,7 @@
 - [bestpractices.md](./bestpractices.md) — `io.echo` f-string rule
   and JSONB-at-the-database-boundary rule
 - [auth-bank.md](./auth-bank.md) — WS login + bank authorization flow
+- [bank.md](./bank.md) — bank ledger, units, the `exchange` operation, and the multi-currency requirements
 - [pg-ident-auth.md](./pg-ident-auth.md) — per-member `l_<loginid>`
   / `m_<moniker>` roles, `pg_hba.conf` + `pg_ident.conf`, `[P]`
   psql credentials flow
