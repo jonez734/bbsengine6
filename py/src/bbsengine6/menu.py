@@ -22,9 +22,7 @@ class Item(object):
         self.disabled = False
         self.description = None
         self.requires = kw["requires"] if "requires" in kw else None
-        self.width = io.getterminalwidth()
-        if self.width > 100:
-            self.width = 100
+        self.width = io.terminal.width()
 
     def display(self):
         buf = f"[{self.key}] {self.label}"
@@ -94,9 +92,7 @@ class Menu(object):
         return True
 
     def display(self):
-        terminalwidth = io.getterminalwidth()
-        if terminalwidth > 100:
-            terminalwidth = 100
+        terminalwidth = io.terminal.width()
         w = terminalwidth - 7
 
         #    setarea(self.area)

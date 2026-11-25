@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### change(menu): menus use terminal.width(), clamped to 120 columns
+
+`Item` and `Menu.display` take their width from `io.terminal.width()` (120 columns by default, or `BBSENGINE_MAX_WIDTH`)
+instead of `io.getterminalwidth()` with a separate 100-column cap. A wide terminal gets wider items; a narrow one keeps its own
+width. Test: `test_menu_width.py`.
+
 ### fix(menu): an idle read timeout no longer rings the bell
 
 `Menu.handle` rang `{bell}` every time `io.getch()` timed out with no key, so a menu sitting idle beeped about every
