@@ -1,8 +1,8 @@
 """BankService.exchange: convert between coins and tokens at a whole-number ratio, in one transaction.
 
-  exchange(moniker, amount, *, to, ratio=(num, den))
-    to="tokens": tokens = amount * num / den; coins are debited, tokens credited.
-    to="coins":  coins  = amount * den / num; tokens are debited, coins credited.
+  exchange(moniker, amount, *, to, ratio=(num, den), token_moniker)
+    to="tokens": tokens = amount * num / den; credits are debited, tokens credited.
+    to="credits":  coins  = amount * den / num; tokens are debited, coins credited.
 
 Tokens are a second balance. The token account is named by the caller through ``token_moniker`` so bbsengine6 does not
 depend on any project's table. Amounts are positive integers. A conversion that is not a whole number is refused with no
@@ -78,7 +78,7 @@ class TestRefusals:
     def test_insufficient_tokens_is_refused_with_no_change(self, bank, accounts):
         coin, token = accounts
         before = (_balance(bank, coin), _balance(bank, token))
-        result = bank.exchange(token, 10_000, to="coins", ratio=(1, 1), token_moniker=coin)
+        result = bank.exchange(token, 10_000, to="credits", ratio=(1, 1), token_moniker=coin)
         assert result["success"] is False
         assert (_balance(bank, coin), _balance(bank, token)) == before
 
@@ -97,9 +97,9 @@ class TestSuccess:
         coin, token = accounts
         bank.exchange(coin, 4, to="tokens", ratio=(3, 2), token_moniker=token)  # seed tokens
         c0, t0 = _balance(bank, coin), _balance(bank, token)
-        result = bank.exchange(token, 6, to="coins", ratio=(3, 2), token_moniker=coin)  # 6 * 2 / 3 = 4
+        result = bank.exchange(token, 6, to="credits", ratio=(3, 2), token_moniker=coin)  # 6 * 2 / 3 = 4
         assert result["success"] is True
-        assert result["coins"] == 4
+        assert result["credits"] == 4
         assert _balance(bank, token) == t0 - 6
         assert _balance(bank, coin) == c0 + 4
 
@@ -130,7 +130,7 @@ class TestLockOrder:
         def backward():
             try:
                 for _ in range(10):
-                    bank.exchange(token, 1, to="coins", ratio=(1, 1), token_moniker=coin)
+                    bank.exchange(token, 1, to="credits", ratio=(1, 1), token_moniker=coin)
                 done.append("b")
             except Exception as exc:  # noqa: BLE001
                 errors.append(exc)

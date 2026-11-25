@@ -138,10 +138,10 @@ class BankService:
         ratio: tuple,
         token_moniker: str,
     ) -> Dict[str, Any]:
-        """Convert ``amount`` between coins and tokens at ``ratio`` = (num, den) tokens per den coins, in one transaction.
+        """Convert ``amount`` between credits and tokens at ``ratio`` = (num, den) tokens per den credits, in one transaction.
 
-        ``to="tokens"``: coins are debited from ``moniker``, tokens credited to ``token_moniker``.
-        ``to="coins"``:  tokens are debited from ``moniker``, coins credited to ``token_moniker``.
+        ``to="tokens"``: credits are debited from ``moniker``, tokens credited to ``token_moniker``.
+        ``to="credits"``: tokens are debited from ``moniker``, credits credited to ``token_moniker``.
 
         ``amount`` must be a positive integer. The conversion must be a whole number; otherwise the call is refused with no
         change. Both account rows are locked ``FOR UPDATE`` in ascending id order, so two opposing exchanges cannot deadlock.
@@ -149,8 +149,8 @@ class BankService:
         """
         from bbsengine6 import database
 
-        if to not in ("tokens", "coins"):
-            return {"success": False, "message": "to must be 'tokens' or 'coins'"}
+        if to not in ("tokens", "credits"):
+            return {"success": False, "message": "to must be 'tokens' or 'credits'"}
         if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0:
             return {"success": False, "message": "Amount must be a positive whole number"}
         num, den = ratio
@@ -216,11 +216,11 @@ class BankService:
 
         result: Dict[str, Any] = {
             "success": True,
-            "message": f"Exchanged {amount} {'coins' if to == 'tokens' else 'tokens'} for {received} "
-                       f"{'tokens' if to == 'tokens' else 'coins'}",
+            "message": f"Exchanged {amount} {'credits' if to == 'tokens' else 'tokens'} for {received} "
+                       f"{'tokens' if to == 'tokens' else 'credits'}",
             "new_balance": outcome["out_new"],
         }
-        result["tokens" if to == "tokens" else "coins"] = received
+        result["tokens" if to == "tokens" else "credits"] = received
         return result
 
     def remove_funds(

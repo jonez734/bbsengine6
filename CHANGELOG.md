@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+### change(bank): exchange names its sides credits and tokens, not coins
+
+The bank's ledger holds credits (`bank.__account.balance`). `exchange`'s `to=` value is now `"credits"` (was `"coins"`), and its
+result key is `credits`. Games keep their own currency (empyre's coins, priced in credits). `bank.md` records the ledger's unit.
+Tests: `test_bank_exchange.py`.
+
 ### feat(bank): BankService.exchange converts between coins and tokens in one transaction
 
 `exchange(moniker, amount, *, to, ratio=(num, den), token_moniker)` converts coins to tokens (`to="tokens"`) or tokens to

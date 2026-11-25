@@ -16,9 +16,10 @@ in [auth-bank.md](./auth-bank.md).
   `description`, `membermoniker`.
 - `bank.__transfer`: a transfer **request** that needs approval before anything moves.
 
-**A balance has no unit.** `balance` is one implicit currency. The ledger cannot hold two
-currencies today. Every operation that changes `balance` writes a `__transaction` row, with the
-amount as a positive number and the direction in `transactiontype`.
+**A balance is in credits.** `balance` is the system bank's credit balance, one implicit currency.
+The ledger cannot hold two currencies today. Every operation that changes `balance` writes a
+`__transaction` row, with the amount as a positive number and the direction in `transactiontype`.
+Games keep their own currency (empyre's coins, priced in credits) outside the ledger.
 
 ## Operations
 
@@ -26,7 +27,7 @@ amount as a positive number and the direction in `transactiontype`.
 |---|---|---|
 | `add_funds` / `remove_funds` | yes, one account | Writes one transaction row. Refuses non-positive amounts. |
 | `transfer` | no, creates a request | Needs `approve_transfer`. Never moves tokens by itself. |
-| `exchange` | yes, two accounts | Converts coins to tokens (or back) at a fixed ratio, in one transaction. |
+| `exchange` | yes, two accounts | Converts between credits and tokens at a fixed ratio, in one transaction. |
 
 ### `exchange`
 
@@ -34,11 +35,11 @@ amount as a positive number and the direction in `transactiontype`.
 BankService.exchange(moniker, amount, *, to, ratio=(num, den), token_moniker)
 ```
 
-- `to="tokens"`: debit `amount` coins from `moniker`; credit `amount * num / den` tokens to
+- `to="tokens"`: debit `amount` credits from `moniker`; credit `amount * num / den` tokens to
   `token_moniker`.
-- `to="coins"`: debit `amount` tokens from `moniker`; credit `amount * den / num` coins to
+- `to="coins"`: debit `amount` tokens from `moniker`; credit `amount * den / num` credits to
   `token_moniker`.
-- `ratio` is `(num, den)`: `num` tokens for every `den` coins. Both are positive integers, and the
+- `ratio` is `(num, den)`: `num` tokens for every `den` credits. Both are positive integers, and the
   **caller** supplies the ratio. The bank does not hold a rate.
 - `amount` must be a positive integer.
 - The result must be a whole number. If `amount * num` (or `amount * den`) is not divisible, the call
@@ -47,8 +48,9 @@ BankService.exchange(moniker, amount, *, to, ratio=(num, den), token_moniker)
   deadlock. Every check runs before any write. Both sides log an `exchange_out` / `exchange_in` row.
 - The token side is named by `token_moniker`. The bank does not depend on any project's table.
 
-Callers own their rates. `empyre.player.EXCHANGE_RATIO` is empyre's coin-to-token rate; casino's
-per-player rate is `casino.__bank_player.ratio_num / ratio_den` (see the casino CHANGELOG).
+Callers own their rates. `empyre.player.EXCHANGE_RATIO` is empyre's rate for its coins against
+the bank's tokens; casino's per-player rate is `casino.__bank_player.ratio_num / ratio_den`.
+The ledger side of every exchange is a credit balance, so "credits" is the name the bank uses.
 
 ## Why exchange is not a transfer
 
@@ -92,8 +94,8 @@ Each step is independently shippable and testable. Step 3 must not change any ex
 
 ## Open questions
 
-- Which currency is the base unit for `balance` today: coins, or a neutral unit? Naming it makes the
-  migration in step 1 explicit.
+- The ledger's unit is credits (recorded here). Naming it `currency = 'credits'` is step 1 of the
+  currency migration.
 - Should a conversion to crypto be a separate operation (`convert`) or the same `exchange` with a
   currency argument? Using one operation keeps the audit trail in one place.
 - Who may set a fixed rate, and where is that authority recorded? Today empyre's constant is code,
