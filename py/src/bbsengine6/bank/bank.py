@@ -129,6 +129,100 @@ class BankService:
             "new_balance": new_balance,
         }
 
+    def exchange(
+        self,
+        moniker: str,
+        amount: int,
+        *,
+        to: str,
+        ratio: tuple,
+        token_moniker: str,
+    ) -> Dict[str, Any]:
+        """Convert ``amount`` between coins and tokens at ``ratio`` = (num, den) tokens per den coins, in one transaction.
+
+        ``to="tokens"``: coins are debited from ``moniker``, tokens credited to ``token_moniker``.
+        ``to="coins"``:  tokens are debited from ``moniker``, coins credited to ``token_moniker``.
+
+        ``amount`` must be a positive integer. The conversion must be a whole number; otherwise the call is refused with no
+        change. Both account rows are locked ``FOR UPDATE`` in ascending id order, so two opposing exchanges cannot deadlock.
+        Each side writes a transaction row (``exchange_out`` / ``exchange_in``).
+        """
+        from bbsengine6 import database
+
+        if to not in ("tokens", "coins"):
+            return {"success": False, "message": "to must be 'tokens' or 'coins'"}
+        if not isinstance(amount, int) or isinstance(amount, bool) or amount <= 0:
+            return {"success": False, "message": "Amount must be a positive whole number"}
+        num, den = ratio
+        if not (isinstance(num, int) and isinstance(den, int) and num > 0 and den > 0):
+            return {"success": False, "message": "ratio must be two positive whole numbers"}
+
+        if to == "tokens":
+            scaled, out_side, in_side = amount * num, moniker, token_moniker
+        else:
+            scaled, out_side, in_side = amount * den, moniker, token_moniker
+        if scaled % (den if to == "tokens" else num):
+            return {
+                "success": False,
+                "message": f"{amount} does not convert to a whole number at ratio {num}:{den}",
+            }
+        received = scaled // (den if to == "tokens" else num)
+
+        def _work(conn: Any) -> Dict[str, Any]:
+            with database.cursor(conn) as cur:
+                cur.execute(
+                    "INSERT INTO bank.__account (moniker, balance) VALUES (%s, 0), (%s, 0) "
+                    "ON CONFLICT (moniker) DO NOTHING",
+                    (out_side, in_side),
+                )
+                # Lock both rows in ascending id order so opposing exchanges cannot deadlock.
+                cur.execute(
+                    "SELECT id, moniker, balance FROM bank.__account "
+                    "WHERE moniker IN (%s, %s) ORDER BY id FOR UPDATE",
+                    (out_side, in_side),
+                )
+                rows = {r["moniker"]: r for r in cur.fetchall()}
+                if out_side not in rows or in_side not in rows:
+                    raise RuntimeError("exchange account missing after upsert")
+                out_row, in_row = rows[out_side], rows[in_side]
+                if out_row["balance"] < amount:
+                    return {"success": False, "message": "Insufficient funds"}
+
+                cur.execute(
+                    "UPDATE bank.__account SET balance = balance - %s WHERE id = %s RETURNING balance",
+                    (amount, out_row["id"]),
+                )
+                out_new = int(cur.fetchone()["balance"])
+                cur.execute(
+                    "UPDATE bank.__account SET balance = balance + %s WHERE id = %s RETURNING balance",
+                    (received, in_row["id"]),
+                )
+                in_new = int(cur.fetchone()["balance"])
+                cur.execute(
+                    """INSERT INTO bank.__transaction
+                       (accountid, amount, transactiontype, description, membermoniker)
+                       VALUES (%s, %s, 'exchange_out', %s, %s), (%s, %s, 'exchange_in', %s, %s)""",
+                    (
+                        out_row["id"], amount, f"exchange to {to}", moniker,
+                        in_row["id"], received, f"exchange from {moniker}", moniker,
+                    ),
+                )
+                return {"success": True, "out_new": out_new, "in_new": in_new}
+
+        with database.connect(self.args) as conn:
+            outcome = _work(conn)
+        if not outcome.get("success"):
+            return outcome
+
+        result: Dict[str, Any] = {
+            "success": True,
+            "message": f"Exchanged {amount} {'coins' if to == 'tokens' else 'tokens'} for {received} "
+                       f"{'tokens' if to == 'tokens' else 'coins'}",
+            "new_balance": outcome["out_new"],
+        }
+        result["tokens" if to == "tokens" else "coins"] = received
+        return result
+
     def remove_funds(
         self,
         moniker: str,

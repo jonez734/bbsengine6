@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+### feat(bank): BankService.exchange converts between coins and tokens in one transaction
+
+`exchange(moniker, amount, *, to, ratio=(num, den), token_moniker)` converts coins to tokens (`to="tokens"`) or tokens to
+coins (`to="coins"`) at a whole-number ratio. The amount must be a positive integer, and a conversion that is not a whole
+number is refused with no change. Both accounts are locked `FOR UPDATE` in ascending id order, so opposing exchanges cannot
+deadlock. Each side logs an `exchange_out` / `exchange_in` transaction row with a positive amount, matching `add_funds` and
+`remove_funds`. `transfer` is unchanged. Tests: `test_bank_exchange.py` (11, against the test database).
+
 ### change(menu): menus use terminal.width(), clamped to 120 columns
 
 `Item` and `Menu.display` take their width from `io.terminal.width()` (120 columns by default, or `BBSENGINE_MAX_WIDTH`)
